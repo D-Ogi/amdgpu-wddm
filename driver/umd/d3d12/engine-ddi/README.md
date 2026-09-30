@@ -1,6 +1,7 @@
 # engine-ddi: D3D12 DDI slots on the vkd3d-proton engine
 
-Status: boundary r3 (2026-09-28): r2 plus the adapter caps path on engine ABI 1.2. The static library
+Status: boundary r4 (2026-09-29): r3 (the adapter caps path, reserved resources and tile mappings) plus the
+linear primary on engine ABI 1.3. The static library
 `engine-ddi.lib` builds with `tools/build/build-engine-ddi.ps1`, and [INTEGRATION.md](INTEGRATION.md) says what
 the shell calls and when. The engine ABI header is included by path from the pinned vkd3d-proton fork checkout
 ([engine-abi.json](engine-abi.json)).
@@ -17,7 +18,7 @@ The work is split between engine-ddi and the native12 shell in this directory's 
 - **The shell** keeps the adapter, device state, FillDDITable composition, queues and their WDDM contexts, fences,
   allocation and residency callbacks, the DXGI table, present and registration.
 
-[SLOTS.md](SLOTS.md) lists the owner and phase of every slot: 175 engine-ddi, 28 shell, including the shell's
+[SLOTS.md](SLOTS.md) lists the owner and phase of every slot: 173 engine-ddi, 30 shell, including the shell's
 override of `pfnPresent`.
 
 ## The boundary, in `engine-ddi.h`
@@ -66,6 +67,10 @@ override of `pfnPresent`.
   - in RuntimeBacked, the size and alignment of the import. The engine's `CreateHeapFromMemory` (ABI 1.2 V10)
     checks the Vulkan memory type and refuses one it would not pick for the heap.
 - Aliasing follows D3D12, and aliasing barriers go to the engine unchanged.
+- A reserved resource (neither a heap description nor a base resource) is the engine's CreateReservedResource1
+  or 2 and has no memory of its own: `object_allocation` answers S_FALSE for it. `tiles.cpp` binds its tiles to
+  heap records through the engine queue (`update_tile_mappings`, `copy_tile_mappings`) and fills GetMipPacking
+  and CopyTiles.
 - In RuntimeBacked every heap is an engine heap made by `CreateHeapFromMemory` over the shell's `ImportedMemory`,
   for all three shapes; MapHeap and UnmapHeap go to the engine's V10 MapHeap and UnmapHeap. The offline harness
   round-trips a committed and a placed buffer on imported memory word for word (INTEGRATION.md). Whether the
@@ -90,20 +95,34 @@ Steps 2 to 4 run only on the thread of a DDI call into the owning device while i
 They never run from an engine thread or callback: INLINE mode has no engine threads, and engine-ddi starts none.
 
 **Shaders.**
-- The native intake builds no container. The DDI payload is the bare program with its length in DWORD 1, and
+- The DDI payload is the bare program (DXBC tokens, or the DXIL part) with its length in DWORD 1, and
   register-only signatures. That the buffer holds exactly that many DWORDs is an inference from the SAL
   annotation `_In_reads_(pShaderCode[1])`; no runtime payload has been measured.
-- Reads stay within the declared length: a null check first, then DWORD 1, and a length below 2 is refused.
-  engine-ddi copies the declared length into private storage, logs at most the first four DWORDs inside it, the
-  length and the signature entry counts, and reports E_NOTIMPL.
-- A harness-only path (`AMDGPU_WDDM_ENGINE_DDI_HARNESS`) accepts a complete DXBC or DXIL container, so that
-  pipelines and dispatches can be tested offline. It proves nothing about the runtime payload.
+- Every create-shader slot rebuilds the container the engine compiles with
+  [shader-container](shader-container/README.md) `BuildContainer`, which reads no further than that length:
+  hull and domain programs with the Tessellation signatures, the others with Standard. The container stays in
+  engine-ddi's own allocation until DestroyShader. A failure is logged and reported through
+  `report_device_error`: E_NOTIMPL for a program the reconstruction cannot represent, E_INVALIDARG for a broken
+  payload, E_OUTOFMEMORY. Mesh and amplification programs are E_NOTIMPL.
+- CreatePipelineState gives the engine the container bytes, names input elements from the vertex program's
+  rebuilt input signature (`InputLayoutSemantic`) and stream-output entries from the last stage before
+  rasterization (`StreamOutputSemantic`). The element layout, blend, rasterizer and depth-stencil states keep
+  their descriptions until then. A gap in a stream-output declaration reaches the engine as a NULL
+  SemanticName, which the pinned r4 engine takes (INTEGRATION.md).
+- The harness creates a DXIL compute program (dxc) and a DXBC vertex and pixel program (fxc) through these slots,
+  from containers reduced to the DDI form, and checks the dispatch and the draw word for word. The reduction is
+  the harness's model of the runtime, not a measurement.
 
 **Engine parts of shell-owned mixed slots.**
 - `create_engine_queue` and `destroy_engine_queue`: the shell creates the context first, and the engine binds its
   VkQueue to it through the engine's BindQueue service. engine-ddi adds a retirement fence per queue.
 - `execute_command_lists`: synchronous; everything is on the bound context on return.
 - `resource_allocation`: gives Present the runtime allocation behind a committed back buffer.
+- `object_allocation`: gives MakeResident and Evict the allocation behind a heap or resource (a placed one: its
+  heap's); descriptor and query heaps are engine-internal and always resident (S_FALSE), and a reserved resource
+  has no memory of its own (S_FALSE).
+- `update_tile_mappings` and `copy_tile_mappings`: the engine parts of the queue slots Q3 and Q4, on the queue's
+  submission lock, each followed by the queue's retirement signal.
 
 **Caps.**
 - GetCaps comes before any device (lab run M768). `query_adapter_caps` asks the engine once through ABI 1.2
@@ -137,6 +156,10 @@ Two clarifications were added after the review:
 r3 replaced the r2 caps declarations (`EngineCaps`, `collect_caps`) with `query_adapter_caps`,
 `free_adapter_caps` and `build_caps` over the engine's QueryAdapterCaps answers.
 
+Answer 6 no longer holds: the native intake now rebuilds containers with shader-container, whose offline control
+rebuilt the fxc and dxc containers of eight cases byte for byte before it was wired in. The boundary did not
+change; only the comment on shaders in `engine-ddi.h` did.
+
 ## Gate
 
 `tools/build/build-engine-ddi.ps1 -NativeOnly` is the recipe for what the shell links; it needs no engine DLL
@@ -145,7 +168,8 @@ and no GPU. Without `-NativeOnly` it also builds the harness and runs against th
 2. `engine-ddi-header-test.cpp`, built with the shell's flags (`/std:c++20 /W4 /WX`, SDK `d3d12.h` with WDK
    `d3d12umddi.h`, the Vulkan headers and the engine ABI header). It checks that the header is self-contained,
    boundary revision 3, unique record tags, table sizes 976 and 560, the pinned struct layouts, the signatures of
-   `free_memory`, the caps functions and `pfnCreateHeapAndResource`, and the ABI 1.2 header.
+   `free_memory`, the caps functions, the tile mapping calls against the Q3 and Q4 slot types and
+   `pfnCreateHeapAndResource`, and the ABI 1.2 header.
 3. `engine-ddi.lib` compiled with `/analyze` under the same `/WX`, with no `harness_` symbol in it.
 4. `tests/native-policy-test.cpp`: EnginePrivateTest refused, both tables filled.
 5. `tests/caps-test.cpp` against a stub engine: GetCaps 1074 with 8 bytes and 1007 with 4 bytes, and every

@@ -17,6 +17,18 @@ void log_line(const char* format, ...) noexcept {
     std::fprintf(stderr, "engine-ddi: %s\n", text);
 }
 
+void log_refusal(const char* format, ...) noexcept {
+    char text[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    std::fprintf(stderr, "engine-ddi: %s\n", text);
+    char line[540];
+    std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s\n", text);
+    OutputDebugStringA(line);
+}
+
 // ---- Release sequence ------------------------------------------------------------------------------------------
 void ReleaseQueue::add(PendingRelease* node) noexcept {
     node->next = head_;
@@ -70,11 +82,14 @@ void DeviceContext::notify(const ReleasePayload& payload, bool deferred, HRESULT
 // marks are resolved under the same lock (destroy_engine_queue), so no queue is missed or counted twice. Engine
 // calls (GetCompletedValue) happen under the lock; hooks never do.
 void DeviceContext::release(PendingRelease* node) noexcept {
+    node->next = nullptr;
+    bool recorded = false;
+    bool late = false;
+    const ULONGLONG began = GetTickCount64();
+again:
     node->mask = 0;
     node->stuck = false;
-    node->next = nullptr;
     for (uint64_t& mark : node->marks) mark = 0;
-    bool recorded = false;
     AcquireSRWLockExclusive(&lock);
     node->stuck = retirement_lost;
     for (uint32_t s = 0; s < kMaxEngineQueues; ++s) {
@@ -94,6 +109,14 @@ void DeviceContext::release(PendingRelease* node) noexcept {
     }
     const bool stuck = node->stuck;
     const uint64_t id = node->payload.id;
+    if (node->payload.in_ddi && node->payload.has_memory && !stuck && node->mask) {
+        if (GetTickCount64() - began < in_ddi_bound_ms) {
+            ReleaseSRWLockExclusive(&lock);             // never wait with the lock held
+            Sleep(1);
+            goto again;
+        }
+        late = true;
+    }
     if (stuck || node->mask) {
         releases.add(node);                                 // from here on another thread may retire the node
         live.fetch_add(1);
@@ -104,6 +127,12 @@ void DeviceContext::release(PendingRelease* node) noexcept {
     if (stuck)
         log_line("release %llu: retirement cannot be proven (removed device or lost queue); memory stays owned",
                  static_cast<unsigned long long>(id));
+    if (late) {
+        log_line("release %llu: the work before this destroy did not retire in %u ms; the memory's release "
+                 "leaves its DDI",
+                 static_cast<unsigned long long>(id), in_ddi_bound_ms);
+        report(HRESULT_FROM_WIN32(ERROR_TIMEOUT));
+    }
     if (recorded) return;
     const ReleasePayload payload = node->payload;
     delete node;
@@ -137,8 +166,12 @@ template <class T> void release_ref(T*& p) noexcept {
 }
 
 void destroy(DeviceContext* c) noexcept {
+    release_initialization(c);
+    release_ref(c->empty_local);
     release_ref(c->device10);
     release_ref(c->device8);
+    release_ref(c->device7);
+    release_ref(c->device5);
     release_ref(c->device4);
     release_ref(c->device);
     delete c;
@@ -166,9 +199,11 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
     if (info->memory_mode == MemoryMode::EnginePrivateTest) return E_INVALIDARG;
 #endif
     // Engine ABI 1.2 V10: MapHeap and UnmapHeap in both modes, CreateHeapFromMemory for runtime memory.
+    // 1.3 V13: the linear image entries, which only runtime memory uses.
     const BC250_VKD3D_ENGINE_FUNCS& f = *info->engine_funcs;
     if (f.AbiVersion < BC250_VKD3D_ENGINE_ABI_VERSION || !f.MapHeap || !f.UnmapHeap ||
-        (info->memory_mode == MemoryMode::RuntimeBacked && !f.CreateHeapFromMemory))
+        (info->memory_mode == MemoryMode::RuntimeBacked &&
+         (!f.CreateHeapFromMemory || !f.QueryLinearImage || !f.CreateLinearPlacedResource)))
         return E_INVALIDARG;
     if (!hooks_valid(info->hooks, info->memory_mode)) return E_INVALIDARG;
 
@@ -177,12 +212,16 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
     c->device = info->engine_device;
     c->device->AddRef();
     HRESULT hr = c->device->QueryInterface(__uuidof(ID3D12Device4), reinterpret_cast<void**>(&c->device4));
+    if (SUCCEEDED(hr)) hr = c->device->QueryInterface(__uuidof(ID3D12Device5), reinterpret_cast<void**>(&c->device5));
     if (SUCCEEDED(hr)) hr = c->device->QueryInterface(__uuidof(ID3D12Device8), reinterpret_cast<void**>(&c->device8));
     if (SUCCEEDED(hr)) hr = c->device->QueryInterface(__uuidof(ID3D12Device10), reinterpret_cast<void**>(&c->device10));
     if (FAILED(hr)) {
         destroy(c);
         return E_NOINTERFACE;
     }
+    // Optional: only AddToStateObject needs it.
+    if (FAILED(c->device->QueryInterface(__uuidof(ID3D12Device7), reinterpret_cast<void**>(&c->device7))))
+        c->device7 = nullptr;
     c->mode = info->memory_mode;
     c->hooks = info->hooks;
     c->funcs = *info->engine_funcs;
@@ -231,6 +270,11 @@ CommandListRecord* list_of(D3D12DDI_HCOMMANDLIST list, const char* slot) noexcep
     auto* r = record_of<CommandListRecord>(list.pDrvPrivate, Tag::CommandList);
     if (!r && slot) log_line("%s: not a live command list record", slot);
     return r;
+}
+
+void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept {
+    const auto* r = record_of<CommandListRecord>(list.pDrvPrivate, Tag::CommandList);
+    return (r && r->h.device) ? r->h.device->hooks.shell : nullptr;
 }
 
 bool reject_in_compute_table(const CommandListRecord* list) noexcept {
@@ -421,8 +465,11 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
     fill_core_descriptors(table);
     fill_core_root_signatures(table);
     fill_core_pipelines(table);
+    fill_core_graphics(table);
     fill_core_commands(table);
     fill_core_queries(table);
+    fill_core_tiles(table);
+    fill_core_state_objects(table);
     return S_OK;
 }
 
@@ -435,8 +482,10 @@ HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T tab
     fill_list_resources(table, table_index);
     fill_list_descriptors(table, table_index);
     fill_list_pipelines(table, table_index);
+    fill_list_graphics(table, table_index);
     fill_list_commands(table, table_index);
     fill_list_queries(table, table_index);
+    fill_list_tiles(table, table_index);
     return S_OK;
 }
 
@@ -446,6 +495,7 @@ void harness_set_release_observer(DeviceContext* c, ReleaseObserver observer, vo
     c->observer_user = user;
 }
 uint32_t harness_pending_releases(DeviceContext* c) noexcept { return c->pending.load(); }
+void harness_set_in_ddi_bound(DeviceContext* c, uint32_t milliseconds) noexcept { c->in_ddi_bound_ms = milliseconds; }
 uint32_t harness_stuck_releases(DeviceContext* c) noexcept {
     AcquireSRWLockShared(&c->lock);
     const auto n = static_cast<uint32_t>(c->releases.stuck());

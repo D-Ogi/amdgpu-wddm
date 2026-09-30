@@ -1,10 +1,11 @@
-# shader-container: shader containers rebuilt from the D3D12 DDI (prototype, offline)
+# shader-container: shader containers rebuilt from the D3D12 DDI
 
-**Status: prototype, offline only.** Native shader intake stays unsupported: nothing in the D3D12 shell or in
-engine-ddi calls this code, and the engine-ddi shader entry points keep returning `E_NOTIMPL`. This directory
-answers one question before that changes: can the container that the vkd3d-proton engine needs be rebuilt from
-what the D3D12 DDI gives a user-mode driver, so that the engine renders exactly what it renders from the compiler's
-original? For the DXBC and DXIL cases below, on the development PC, it can.
+**Status: engine-ddi's native shader intake.** Every engine-ddi create-shader slot rebuilds its program's container
+with this code, and CreatePipelineState names input elements and stream-output entries with its helpers
+(`../pipelines.cpp`; engine-ddi `INTEGRATION.md`, "Shaders and pipelines"). The container is what the vkd3d-proton
+engine needs, rebuilt from what the D3D12 DDI gives a user-mode driver, so that the engine renders exactly what it
+renders from the compiler's original: for the DXBC and DXIL cases below, on the development PC, it does. The DDI form
+is still a model of the runtime: no runtime payload has been measured.
 
 ## The problem
 
@@ -120,8 +121,9 @@ Mismatch controls, detected for both builds: M1 puts COLOR3 and TEXCOORD2 of vsp
 
 ## Unsupported, and refused
 
-- `Unsupported`: class linkage (no DDI field for `IFCE`, none in D3D12); DXIL libraries, ray tracing, mesh,
-  amplification and node programs (kinds 6 and up), shader models other than 4.0-5.1 and 6.x; DXIL-only system
+- `Unsupported`: class linkage (no DDI field for `IFCE`, none in D3D12); DXIL libraries (kind 6) through
+  `BuildContainer` (they go through `BuildLibraryContainer`, below), ray tracing, mesh, amplification and node
+  programs (kinds 7 and up), shader models other than 4.0-5.1 and 6.x; DXIL-only system
   values and component types in DXBC; a DXIL stream-output lookup whose metadata does not parse.
 - `InvalidArgument`: unknown system value, a stream outside a geometry output or above 3, two entries on the same
   components, a minimum precision that does not fit the type, patch constants outside hull and domain programs,
@@ -132,27 +134,35 @@ Mismatch controls, detected for both builds: M1 puts COLOR3 and TEXCOORD2 of vsp
   parts. Shader model 4.x has no engine case yet. How the runtime encodes a stream-output hole in the DDI is not
   measured; the helpers take `RegisterIndex ~0u` with a mask giving its component count.
 
-## Engine finding, fixed on a branch
+## Engine finding, fixed in the r4 engine
 
 Nie ma róży bez kolców (no rose without thorns): 7bfcd7f0 `vkd3d_strdup()`s every stream-output `SemanticName`
 (`libs/vkd3d/state.c`, `vkd3d_shader_transform_feedback_info_dup`), and the NULL that D3D12 uses for a hole
-crashes it; it also matches entries without their stream. Fork branch `amdgpu-wddm/so-hole-fix`, not yet merged:
-0869138a keeps the NULL as a gap, c5d9d85f matches the stream (with dxil-spirv cf45549d passing it to the
-remapper). Its engine test passes threaded and inline, as 7bfcd7f0 does.
+crashes it; it also matches entries without their stream. Fork branch `amdgpu-wddm/so-hole-fix`: 0869138a keeps
+the NULL as a gap, c5d9d85f matches the stream (with dxil-spirv cf45549d passing it to the remapper). Its engine
+test passes threaded and inline, as 7bfcd7f0 does. Both commits are in the r4 engine that engine-ddi pins
+(branch `amdgpu-wddm/ddi-engine-1.2-r4`, d31d6133).
 
-## Calling it
+## How engine-ddi calls it
 
-In `pfnCreateVertexShader` and the other `PFND3D12DDI_CREATE_SHADER_0026` entries, from
+`../pipelines.cpp`, in `pfnCreateVertexShader` and the other `PFND3D12DDI_CREATE_SHADER_0026` entries, from
 `D3D12DDIARG_CREATE_SHADER_0026`: `ProgramDesc{ pShaderCode, pShaderCode[1], { pInputSignature,
 NumInputSignatureEntries }, { pOutputSignature, NumOutputSignatureEntries }, { pPatchConstantSignature,
 NumPatchConstantSignatureEntries } }` (the patch constants from `IOSignatures.Tessellation` for hull and domain
-programs, `IOSignatures.Standard` otherwise), then `BuildContainer(desc, &container)` and the engine's
-`D3D12_SHADER_BYTECODE{ container.bytes.data(), container.bytes.size() }`. The DDI passes no code size: the
+programs, `IOSignatures.Standard` otherwise), then `BuildContainer(desc, &container)`; CreatePipelineState hands the
+engine `D3D12_SHADER_BYTECODE{ container.bytes.data(), container.bytes.size() }`. The DDI passes no code size: the
 capacity is LenTok or SizeInUint32 itself, which the runtime has validated. The entries return `VOID`, so a failed
-`Result` goes to the runtime's error callback as `Result::hresult()`. Keep the `Container` of the last
-pre-rasterization stage for `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` (NULL
-`SemanticName` for `element.gap`) and the vertex input entries for `InputLayoutSemantic(input, InputRegister,
-&semantic)`.
+`Result` is logged and goes to `report_device_error` as `Result::hresult()`. The shader record keeps the
+`Container` and the vertex input entries: `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` of the
+last pre-rasterization stage names stream-output entries (NULL `SemanticName` for `element.gap`, which the pinned
+r4 engine takes), and `InputLayoutSemantic(input, InputRegister, &semantic)` names input elements.
+
+`../state-objects.cpp`, in `pfnCreateStateObject`, for each DXIL_LIBRARY subobject:
+`LibraryPayloadDwords(pDXILLibrary)` is the length the payload claims (SizeInUint32 of a DXIL part, or the container
+size of a whole container: which of the two the runtime passes is not measured), bounded there, then
+`BuildLibraryContainer(pDXILLibrary, length, &container)` writes a container of the DXIL part alone, program kind 6
+required, RDAT and the rest of a whole container dropped: the engine's DXIL front end needs only the DXIL part. The
+state object's translation keeps the `Container` until DestroyStateObject.
 
 ## Files
 

@@ -3,7 +3,11 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root=Get-Bc250Root $repo
-if(!$EngineInclude){$EngineInclude=Join-Path $root 'scratch\m15\vkd3d-1.2-src\libs\ddi'}
+if(!$EngineInclude){
+ $pin=Get-Content (Join-Path $repo 'driver\umd\d3d12\engine-ddi\engine-abi.json') -Raw|ConvertFrom-Json
+ $checkout=if($pin.source_checkout){$pin.source_checkout}else{'scratch/m15/vkd3d-1.2-src'}
+ $EngineInclude=Join-Path (Join-Path $root $checkout) 'libs\ddi'
+}
 if(!$MesaSource){$MesaSource=Join-Path $root 'scratch\m12\mesa-current-src'}
 if(!$VulkanInclude){$VulkanInclude=Join-Path $root 'scratch\m15\vkd3d\khronos\Vulkan-Headers\include'}
 if(!$OutputDir){$OutputDir=Join-Path $root 'scratch\build\d3d12-adapter'}
@@ -29,12 +33,23 @@ try {
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" $engineLib
+  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /MAP:amdgpu_wddm_d3d12.map
   if($LASTEXITCODE){throw 'Adapter build failed'}
   & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
   if($LASTEXITCODE){throw 'Test build failed'}
   & .\adapter-test.exe (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')
   if($LASTEXITCODE){throw 'Adapter tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:memory-policy-test.exe "$repo\driver\umd\d3d12\memory-policy-test.cpp"
+  if($LASTEXITCODE){throw 'Memory policy query test build failed'}
+  & .\memory-policy-test.exe
+  if($LASTEXITCODE){throw 'Memory policy query tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:instance-policy-test.exe "$repo\driver\umd\d3d12\instance-policy-test.cpp"
+  if($LASTEXITCODE){throw 'Instance policy query test build failed'}
+  & .\instance-policy-test.exe
+  if($LASTEXITCODE){throw 'Instance policy query tests failed'}
+  # Built only: the probe asks the BC-250's adapter key and belongs on the target.
+  & cl.exe @flags /Fe:instance-policy-probe.exe "$repo\driver\umd\d3d12\instance-policy-probe.cpp" /link dxgi.lib
+  if($LASTEXITCODE){throw 'Instance policy probe build failed'}
   & cl.exe @flags /Fe:queue-context-test.exe "$repo\driver\umd\d3d12\queue-context-test.cpp"
   if($LASTEXITCODE){throw 'Queue context test build failed'}
   & .\queue-context-test.exe
@@ -79,6 +94,42 @@ try {
   if($LASTEXITCODE){throw 'Adapter query scope test build failed'}
   & .\adapter-query-scope-test.exe
   if($LASTEXITCODE){throw 'Adapter query scope tests failed'}
+  & cl.exe @flags /Fe:hosted-instance-test.exe "$repo\driver\umd\d3d12\hosted-instance-test.cpp"
+  if($LASTEXITCODE){throw 'Hosted instance test build failed'}
+  & .\hosted-instance-test.exe
+  if($LASTEXITCODE){throw 'Hosted instance tests failed'}
+  & cl.exe @flags /Fe:hosted-dispatch-test.exe "$repo\driver\umd\d3d12\hosted-dispatch-test.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp"
+  if($LASTEXITCODE){throw 'Hosted dispatch test build failed'}
+  & .\hosted-dispatch-test.exe
+  if($LASTEXITCODE){throw 'Hosted dispatch tests failed'}
+  & cl.exe @flags /Fe:hosted-sparse-test.exe "$repo\driver\umd\d3d12\hosted-sparse-test.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp"
+  if($LASTEXITCODE){throw 'Hosted sparse test build failed'}
+  & .\hosted-sparse-test.exe
+  if($LASTEXITCODE){throw 'Hosted sparse tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:queue-engine-test.exe "$repo\driver\umd\d3d12\queue-engine-test.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
+  if($LASTEXITCODE){throw 'Queue engine test build failed'}
+  & .\queue-engine-test.exe
+  if($LASTEXITCODE){throw 'Queue engine tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:hosted-queue-test.exe "$repo\driver\umd\d3d12\hosted-queue-test.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
+  if($LASTEXITCODE){throw 'Hosted queue test build failed'}
+  & .\hosted-queue-test.exe
+  if($LASTEXITCODE){throw 'Hosted queue tests failed'}
+  & cl.exe @flags /Fe:heap-import-test.exe "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\heap-import-test.cpp"
+  if($LASTEXITCODE){throw 'heap-import test build failed'}
+  & .\heap-import-test.exe
+  if($LASTEXITCODE){throw 'heap-import tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:native-queue-ddi-test.exe "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-queue-ddi-test.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
+  if($LASTEXITCODE){throw 'native-queue-ddi test build failed'}
+  & .\native-queue-ddi-test.exe
+  if($LASTEXITCODE){throw 'native-queue-ddi tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:native-residency-ddi-test.exe "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'native-residency-ddi test build failed'}
+  & .\native-residency-ddi-test.exe
+  if($LASTEXITCODE){throw 'native-residency-ddi tests failed'}
+  & cl.exe @flags /Fe:ddi-entry-test.exe "$repo\driver\umd\d3d12\ddi-entry-test.cpp"
+  if($LASTEXITCODE){throw 'DDI entry scope test build failed'}
+  & .\ddi-entry-test.exe
+  if($LASTEXITCODE){throw 'DDI entry scope tests failed'}
   & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" "/external:I$EngineInclude" /Fe:adapter-caps-probe.exe "$repo\driver\umd\d3d12\adapter-caps-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Adapter caps probe build failed'}
   & .\adapter-caps-probe.exe --help
@@ -87,6 +138,14 @@ try {
   if($LASTEXITCODE){throw 'Device table composition test build failed'}
   & .\device-table-test.exe
   if($LASTEXITCODE){throw 'Device table composition tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:present-outputs-test.exe "$repo\driver\umd\d3d12\present-outputs-test.cpp"
+  if($LASTEXITCODE){throw 'Present outputs test build failed'}
+  & .\present-outputs-test.exe
+  if($LASTEXITCODE){throw 'Present outputs tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:shell-core-ddi-test.exe "$repo\driver\umd\d3d12\shell-core-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'Shell core DDI test build failed'}
+  & .\shell-core-ddi-test.exe
+  if($LASTEXITCODE){throw 'Shell core DDI tests failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help

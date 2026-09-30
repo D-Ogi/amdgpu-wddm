@@ -2,8 +2,11 @@
 // engine-ddi: D3D12 DDI 0092 slots translated onto the vkd3d-proton engine (amdgpu_wddm_vkd3d.dll).
 //
 // Boundary r3 (2026-09-28): r2 plus the adapter caps path (query_adapter_caps, build_caps answering GetCaps) on
-// engine ABI 1.2 QueryAdapterCaps, after the lab run M768 showed the runtime's first two GetCaps calls. The engine
+// engine ABI 1.2 QueryAdapterCaps, after the lab run M768 showed the runtime's first two GetCaps calls. Added within
+// r3, additively: set_memory_architecture_policy, the shell's policy for GetCaps 1002. The engine
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
+// Boundary r4 (2026-09-29): the linear primary. MemoryRequest grows by the surface fields and
+// kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3.
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -11,13 +14,16 @@
 // engine-ddi never reads native12::Device. The shell hands over what it needs through ShellHooks and finds the
 // DeviceContext of a D3D12DDI_HDEVICE through the ResolveDevice hook.
 //
-// Engine ABI: bc250_vkd3d_engine.h r3-draft (ABI 1.2), included by path from the vkd3d-proton fork checkout
+// Engine ABI: bc250_vkd3d_engine.h r5-draft (ABI 1.3), included by path from the vkd3d-proton fork checkout
 // pinned in engine-abi.json. engine-ddi uses:
 //   - 1.1: CreateDevice in the INLINE queue mode and CreateCommandQueue (queue.cpp);
 //   - 1.2 V10 CreateHeapFromMemory, MapHeap and UnmapHeap: RuntimeBacked heaps over the shell's VkDeviceMemory,
 //     and MapHeap/UnmapHeap in both memory modes (resources.cpp);
-//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp).
-// So the engine must be asked for 1.2; create_device_context refuses a function table without these entries.
+//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp);
+//   - 1.2 r4 V12 InstanceMode: the create info of CreateDevice and QueryAdapterCaps says PRIVATE, so that every
+//     engine device has a VkInstance of its own (INTEGRATION.md, "Adapter: GetCaps");
+//   - 1.3 V13 QueryLinearImage and CreateLinearPlacedResource: the linear primary (resources.cpp).
+// So the engine must be asked for 1.3; create_device_context refuses a function table without these entries.
 #pragma once
 #include <windows.h>
 #include <d3d12.h>
@@ -28,7 +34,7 @@
 
 namespace engine_ddi {
 
-inline constexpr uint32_t kBoundaryRevision = 3;
+inline constexpr uint32_t kBoundaryRevision = 4;
 
 // ---- Memory policy -----------------------------------------------------------------------------------------
 // RuntimeBacked is the only mode of the native driver. The memory of every heap, and of every committed
@@ -74,6 +80,12 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //     shapes. Whether hosted RADV's import of a runtime allocation is the same storage at the same GPU virtual
 //     address as the runtime's view is a lab question (not yet measured); the development PC harness allocates the
 //     VkDeviceMemory itself.
+//   - Reserved (tiled; resource description only, with neither a heap nor a base resource in ReuseBufferGPUVA): the
+//     engine's CreateReservedResource1 (a LEGACY_* initial layout) or CreateReservedResource2. No allocate_memory
+//     call and no heap reference: the resource has no memory until update_tile_mappings binds tiles of heaps into
+//     it, and those heaps keep their own release sequence. That this is the runtime's shape for
+//     CreateReservedResource is an INFERENCE from the DDI (no runtime call logged). The engine creates one only at
+//     tiled resources tier 1 or above.
 //
 // Release sequence of heap memory, run once when the last user of a heap is destroyed (the heap record and
 // every resource placed in it):
@@ -84,21 +96,35 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //      queue's fence reached the recorded value by the queue's final Release; otherwise the record stays
 //      pending for the device's lifetime and counts as live in destroy_device_context.
 //   2. The engine's final Release of its heap (V10 step 2; the resources placed in it were released at their own
-//      destroy). The engine never frees borrowed memory and makes no Vulkan call on it after this Release.
+//      destroy, except a committed resource that an initialization batch still named at its destroy, released
+//      here just before the heap: INTEGRATION.md, "Committed render targets"). The engine never frees borrowed
+//      memory and makes no Vulkan call on it after this Release.
 //   3. free_memory: the shell releases its Vulkan import. engine-ddi calls it exactly once per ImportedMemory and
 //      never retries, whatever it returns. A failure goes to report_device_error, and the shell keeps its record
 //      (with the allocation handle and cookie).
 //   4. The runtime deallocation, by the shell, on the same thread, within free_memory or after it.
 //   Steps 2 and 3 run only on the thread of a DDI call into the device that owns the memory, while that runtime
 //   device exists: the DDI call that makes the last destroy if the work has already retired, otherwise the first
-//   later DDI call that observes retirement (execute_command_lists, pfnCreateHeapAndResource,
-//   pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from an engine thread or an
-//   engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   later DDI call that observes retirement (execute_command_lists, update_tile_mappings, copy_tile_mappings,
+//   pfnCreateHeapAndResource, pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from
+//   an engine thread or an engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   A tile mapping is queue work like a submission: its call signals the queue's retirement fence after the bind, so
+//   heap memory destroyed after the mapping waits for it.
+//   The memory of a linear primary (kMemoryLinearSurface) is the exception to "the first later DDI call": the
+//   shell may release it to the runtime only inside the pfnDestroyHeapAndResource that ends it. That destroy
+//   therefore waits for retirement, at most 2000 ms and without engine-ddi's lock held. When the bound passes,
+//   ERROR_TIMEOUT (as an HRESULT) goes to report_device_error and the release is recorded like any other: its
+//   free_memory then comes from a later DDI call, where the shell frees its import and keeps the allocation.
 enum class MemoryMode : uint32_t { RuntimeBacked = 1, EnginePrivateTest = 2 };
 
 enum MemoryRequestFlags : uint32_t {
     kMemoryDedicated = 0x1,                     // committed resource: the memory backs exactly this resource
     kMemoryPrimary = 0x2,                       // D3D12DDI_HEAP_FLAG_PRIMARY was set
+    // The memory backs one linear image at offset 0 (engine ABI 1.3 V13), which a consumer outside the engine
+    // reads by row pitch: the surface fields are filled, memory_type_bits is the image's and alignment is the
+    // image's alone. Set only together with kMemoryDedicated and kMemoryPrimary. A primary without it is a
+    // description engine-ddi cannot make linear; the shell decides what becomes of it.
+    kMemoryLinearSurface = 0x4,
 };
 
 struct MemoryRequest {
@@ -112,11 +138,17 @@ struct MemoryRequest {
     const D3D12DDIARG_CREATERESOURCE_0088* resource;    // committed: the resource; heap only: null
     uint64_t byte_size;                         // from the engine's allocation info for the resource or heap
     uint64_t alignment;
-    // Vulkan memory types the engine accepts for this heap, 0 for "not narrowed". Always 0 in r3: engine-ddi has
-    // no Vulkan entry point to compute them, and CreateHeapFromMemory checks the type (INTEGRATION.md says how the
-    // shell picks it).
+    // Vulkan memory types the engine accepts for this heap, 0 for "not narrowed": CreateHeapFromMemory checks
+    // the type then (INTEGRATION.md says how the shell picks it). With kMemoryLinearSurface it is the
+    // memoryTypeBits of the image, and the shell picks one of them.
     uint32_t memory_type_bits;
     uint32_t reserved;                          // 0
+    // kMemoryLinearSurface only, otherwise 0. The image's width, height and format are the resource's;
+    // byte_size is at least surface_row_pitch * (height rounded up to 4) and at least the image's memory size,
+    // rounded up to 4 KiB.
+    uint32_t surface_row_pitch;                 // bytes, VkSubresourceLayout::rowPitch; a multiple of 16
+    uint32_t reserved2;                         // 0
+    uint64_t surface_layout_size;               // VkSubresourceLayout::size
 };
 
 // One runtime allocation that the shell has made and imported. The shell owns it (see the release sequence).
@@ -131,10 +163,14 @@ struct ImportedMemory {
     uint64_t byte_size;                         // its VkMemoryAllocateInfo::allocationSize
     D3DKMT_HANDLE allocation;                   // the kernel allocation from pfnAllocateCb_0022
     uint32_t reserved;                          // 0
-    // The GPU virtual address of a completed, validated mapping: filled only after MapGpuVirtualAddress and
-    // residency have completed. The address AllocateCb reports may be 0 until then. 0 means "no VA": every use
-    // that needs a VA fails with E_INVALIDARG. In r2 every heap needs one, so allocate_memory output with
-    // gpu_va 0 is handed straight back through free_memory and the create fails with E_INVALIDARG.
+    // The GPU virtual address of a completed, validated mapping: filled only after MapGpuVirtualAddress has
+    // completed. The address AllocateCb reports may be 0 until then. Residency is not required, and the shell must
+    // not make the allocation resident here: a driver with the MakeResident and Evict DDIs creates no allocation
+    // resident (DirectX-Specs d3d/ResourceHeaps.md, "must no longer create allocations ... as resident during
+    // creation"); the runtime makes it resident through pfnMakeResident, which the shell resolves with
+    // object_allocation. 0 means "no VA": every use that needs a VA fails with E_INVALIDARG. Every heap needs
+    // one, so allocate_memory output with gpu_va 0 is handed straight back through free_memory and the create
+    // fails with E_INVALIDARG.
     D3DGPU_VIRTUAL_ADDRESS gpu_va;
     void* cookie;                               // shell-private, passed back unchanged
 };
@@ -209,20 +245,36 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
 HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T table_size, uint32_t table_index,
                           const FillInfo* info) noexcept;
 
+// The owner of a command list, for the shell's own command-list slots (whose first argument is the list, not the
+// device): ShellHooks::shell of the device context that created the list. Null for storage that holds no live
+// engine-ddi command list: not yet constructed by CreateCommandList, or already destroyed by DestroyCommandList
+// (CloseCommandList and ResetCommandList do not end a list). Read-only: it reads the list's record, takes no lock
+// and calls nothing, and the shell needs no knowledge of the record's layout. Lifetime: the runtime serializes the
+// calls of one command list, so a call made from a slot of that list, or while the shell otherwise knows the list
+// is not being created or destroyed, reads a stable record.
+void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept;
+
+// The owner of a ray tracing state object, for the slots whose only handle is the state object (GetShaderIdentifier,
+// GetShaderStackSize, GetPipelineStackSize, SetPipelineStackSize): ShellHooks::shell of the device context that
+// created it. Null for storage that holds no engine-ddi state object record: not yet constructed by
+// CreateStateObject, or already destroyed by DestroyStateObject. A record left inert by a failed create still names
+// its device; the slots themselves refuse it. Read-only, as command_list_shell. Lifetime: the caller of those slots
+// holds the state object, so its record is neither being created nor destroyed during the call.
+void* state_object_shell(D3D12DDI_HSTATEOBJECT_0054 state_object) noexcept;
+
 // ---- Shaders ---------------------------------------------------------------------------------------------------
 // Native intake (every create-shader slot): the payload is the bare program with its length in DWORD 1, and
 // register-only signature entries. That the buffer holds exactly pShaderCode[1] DWORDs is an INFERENCE from the
 // SAL annotation _In_reads_(pShaderCode[1]) on D3D12DDIARG_CREATE_SHADER_0026; no runtime payload has been
-// measured. Reads are bounded by it: pShaderCode is checked for null before DWORD 1 is read, a length below 2 is
-// refused, and nothing past the declared length is read. engine-ddi builds no container. It copies the declared
-// length into the shader's private storage (CalcPrivateShaderSize sizes it from the same DWORD 1), logs at most
-// the first four DWORDs that lie within that length, the length and the signature entry counts, and reports
-// E_NOTIMPL through report_device_error. The record holds no engine object. Native pipelines that name such a
-// shader fail with E_NOTIMPL.
-// Harness path, compiled only with AMDGPU_WDDM_ENGINE_DDI_HARNESS: a payload that starts with the "DXBC" magic
-// is taken as a complete DXBC or DXIL container (total size in DWORD 6) and handed to the engine unchanged when
-// a pipeline uses it. That path exists so that pipelines and dispatches can be tested offline; it proves nothing
-// about what the runtime passes.
+// measured. engine-ddi rebuilds the container the engine consumes with shader-container's BuildContainer
+// (shader-container/README.md), which reads no further than that length; hull and domain programs take the
+// Tessellation signatures, the others Standard. The container lives in engine-ddi's own allocation until
+// DestroyShader; the record holds no engine object. A failure is logged and reported through
+// report_device_error (E_NOTIMPL for an unsupported program, E_INVALIDARG for a malformed one, E_OUTOFMEMORY);
+// mesh and amplification programs are E_NOTIMPL. CreatePipelineState passes the container bytes to the engine,
+// names input elements from the vertex program's input signature and stream-output entries from the last stage
+// before rasterization. A gap in a stream-output declaration goes to the engine as an entry with a NULL
+// SemanticName, which the pinned r4 engine takes (INTEGRATION.md, "Shaders and pipelines").
 
 // ---- Engine parts of shell-owned MIXED slots ---------------------------------------------------------------------
 // Queue (CreateCommandQueue/DestroyCommandQueue are the shell's). The shell creates the WDDM context first. The
@@ -233,16 +285,73 @@ struct EngineQueue;
 HRESULT create_engine_queue(DeviceContext* context, const BC250_VKD3D_COMMAND_QUEUE_DESC* desc, void* queue_cookie,
                             EngineQueue** out) noexcept;
 // Releases the engine queue (its final Release waits for the queue's last submission, engine rule V7), records
-// how far the queue's fence got, and then runs the release sequence for work that has retired.
-void destroy_engine_queue(EngineQueue* queue) noexcept;
+// how far the queue's fence got, and then runs the release sequence for work that has retired. The result says
+// whether every engine use of the queue has retired:
+//   - Retired: the device was not removed, every submission is covered by a successful signal of the queue's
+//     retirement fence, and the fence had reached the last signal when the final Release returned.
+//   - NotRetired: anything else. engine-ddi then records retirement_lost for the device: heap memory released
+//     after this point stays owned for the device's life (the release sequence, step 1). NotRetired depends only
+//     on the queue's own fence and state, never on the engine's GetDeviceRemovedReason, which can read healthy.
+// Ownership, the same for both results: the EngineQueue is freed before the call returns, and the pointer must
+// not be used again. engine-ddi keeps no queue record, only the device's retirement bookkeeping (the queue slot's
+// marks and retirement_lost); the engine queue and its fence have been released. Everything the shell owns (its
+// WDDM context, its tokens) stays the shell's: after NotRetired the GPU may still be using that context. A null
+// queue returns Retired and does nothing.
+enum class QueueClose : uint32_t { Retired = 1, NotRetired = 2 };
+QueueClose destroy_engine_queue(EngineQueue* queue) noexcept;
 // ExecuteCommandLists (the queue table is the shell's). Everything is submitted to the queue's bound context
 // before this returns (engine INLINE mode), followed by the signal of the queue's retirement fence. A failure is
-// reported through report_device_error and returned.
+// reported through report_device_error and returned. First, when committed render targets or depth-stencil
+// resources were created since the last call, it submits their initialization on this queue if it is DIRECT,
+// otherwise on another live DIRECT engine queue of the device, and this queue waits for it on the GPU
+// (INTEGRATION.md, "Committed render targets").
 HRESULT execute_command_lists(EngineQueue* queue, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept;
+// Tile mappings. pfnUpdateTileMappings and pfnCopyTileMappings (Q3, Q4) are slots of the shell's queue table, whose
+// first argument is the shell's D3D12DDI_HCOMMANDQUEUE: the shell resolves it to the queue's EngineQueue, as for
+// ExecuteCommandLists, and passes every other argument of the slot unchanged (INTEGRATION.md, "Tiled resources").
+// Each call takes the queue's submission lock, calls the engine queue's UpdateTileMappings or CopyTileMappings (in
+// INLINE mode the engine submits the sparse bind on the queue before it returns), then signals the queue's
+// retirement fence like execute_command_lists does, and is a retirement point. The resources must be reserved
+// resources of the queue's device (resources.cpp); heap is a heap record of that device, and may be null only when
+// every range is NULL or SKIP. The heap's memory is what CreateHeapFromMemory imported (RuntimeBacked), so the tiles
+// are bound to the runtime allocation. What engine-ddi can check it checks first: a malformed call binds nothing,
+// is reported through report_device_error and returns E_INVALIDARG. A failed retirement signal is reported and
+// returned. The engine reports nothing: a tile it cannot map (out of the resource's bounds) is logged and dropped,
+// as in vkd3d-proton.
+HRESULT update_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE resource, UINT region_count,
+                             const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts,
+                             const D3D12DDI_TILE_REGION_SIZE* region_sizes, D3D12DDI_HHEAP heap, UINT range_count,
+                             const D3D12DDI_TILE_RANGE_FLAGS* range_flags, const UINT* heap_range_starts,
+                             const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
+HRESULT copy_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE dst, const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start,
+                           D3D12DDI_HRESOURCE src, const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start,
+                           const D3D12DDI_TILE_REGION_SIZE* size, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
 // Present (the DXGI table is the shell's): the runtime allocation behind a resource. The resource must have
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.
 HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource, D3DKMT_HANDLE* allocation,
                             uint64_t* offset) noexcept;
+// Present: the runtime allocation of a surface that can be presented, which is a linear primary of this
+// device: one image from the first byte of its allocation. E_INVALIDARG for any other resource, and
+// *allocation is 0 unless S_OK.
+HRESULT present_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
+                           D3DKMT_HANDLE* allocation) noexcept;
+// MakeResident and Evict (the slots are the shell's): the kernel allocation behind one object of the
+// D3D12DDI_HANDLE_AND_TYPE list, whose Handle is the object's pDrvPrivate (INFERENCE: no runtime list has been
+// logged). *allocation is 0 unless S_OK.
+//   - D3D12DDI_HT_HEAP, D3D12DDI_HT_0012_RESOURCE (committed or placed) of this device: S_OK and the allocation of
+//     the heap memory the object lives in; a placed resource gives its heap's allocation, so a placed resource and
+//     its heap give the same handle, which the shell drops as a duplicate. S_FALSE for such an object without a
+//     runtime allocation (EnginePrivateTest memory, harness only), and for a reserved resource: it has no memory of
+//     its own, and the heaps its tiles are mapped from are made resident as heaps.
+//   - D3D12DDI_HT_DESCRIPTOR_HEAP, D3D12DDI_HT_QUERY_HEAP of this device: S_FALSE. Their memory is engine-internal
+//     and always resident; there is nothing to make resident or evict.
+//   - Any other type, a record of another type or of another device, a destroyed object, a resource without heap
+//     memory: E_INVALIDARG. Nothing is reported through report_device_error; the shell decides.
+// Lifetime: it takes no lock and reads only what is fixed at creation (the record's tag and device, the heap
+// memory it holds a reference to). The caller must keep the object alive for the call, as the runtime does for
+// the objects of a MakeResident or Evict call. The handle stays valid while the object lives; the allocation
+// itself is freed only through free_memory, after the last user of the heap memory has gone and retired.
+HRESULT object_allocation(DeviceContext* context, D3D12DDI_HANDLE_AND_TYPE object, D3DKMT_HANDLE* allocation) noexcept;
 
 // ---- Capabilities --------------------------------------------------------------------------------------------------
 // GetCaps arrives before any device (M768: OpenAdapter12, GetCaps 1074, GetCaps 1007, GetSupportedVersions), so
@@ -264,6 +373,43 @@ void free_adapter_caps(AdapterCaps* caps) noexcept;
 // never a prefix; a wrong size or a bad pInfo is E_INVALIDARG with nothing written, and a type it does not
 // answer is E_NOTIMPL. Both are logged with the type and the size. Thread-safe: it only reads caps.
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
+
+// Memory architecture policy of GetCaps 1002 (INTEGRATION.md, "Memory architecture policy"). Whether the GPU's
+// accesses to system memory are I/O coherent is host and kernel-driver policy the engine cannot see; so may be UMA,
+// CacheCoherent and the serialization tiers. The shell states that policy per adapter, field by field: Default
+// keeps the answer build_caps gives without a policy, anything else is the explicit answer. A policy with `size`
+// set and every other byte zero is all Default.
+enum class PolicyBool : uint32_t { Default = 0, False = 1, True = 2 };
+struct PolicyTier {
+    uint32_t set;                               // 0: Default, and value must be 0; 1: value is the answer
+    uint32_t value;                             // a value of the field's DDI enum at 0092 (H:6793-6804)
+};
+struct MemoryArchitecturePolicy {
+    uint32_t size;                              // sizeof(MemoryArchitecturePolicy)
+    PolicyBool uma;                             // D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041::UMA
+    PolicyBool cache_coherent;                  // ::CacheCoherent
+    PolicyBool io_coherent;                     // ::IOCoherent
+    PolicyTier heap_serialization_tier;         // ::HeapSerializationTier, D3D12DDI_HEAP_SERIALIZATION_TIER_0041
+    PolicyTier resource_serialization_tier;     // ::ResourceSerializationTier, D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041
+};
+// Replaces caps's memory architecture policy; build_caps applies it to type 1002 and to nothing else. Call it after
+// query_adapter_caps and before the first GetCaps: it writes caps, so it must not run concurrently with build_caps.
+// E_INVALIDARG, with the policy held before kept, for a null argument, a size other than
+// sizeof(MemoryArchitecturePolicy), a PolicyBool or PolicyTier::set out of range, a Default tier with a non-zero
+// value, a tier the 0092 header does not define, or a resulting 1002 answer (every Default resolved against the
+// engine's answers) that the specification calls contradictory: CacheCoherent without UMA, heap serialization
+// tier 1 without resource serialization tier 2. Logged like build_caps's refusals.
+HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept;
+
+// A diagnostic deviation, off by default: with `report` set, type 1006 answers RaytracingTier 1_1 when the
+// engine's own answer is 1_1 or higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. The
+// tier promises more than engine-ddi does: indirect ray dispatch is still refused, and so is an existing collection
+// imported with an export list (E_NOTIMPL, temporarily, until an engine with the fix of its deferred import loop is
+// pinned; importing a whole collection works). It is for a measurement of the slots that exist (acceleration
+// structures, inline ray queries, state objects with collections and AddToStateObject, DispatchRays) with a client
+// that uses nothing else, never a driver default. Same calling rule as set_memory_architecture_policy.
+// E_INVALIDARG for a null caps.
+HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases

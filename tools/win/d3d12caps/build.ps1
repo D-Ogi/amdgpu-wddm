@@ -1,0 +1,66 @@
+param(
+    [Parameter(Mandatory)][string]$Kits,
+    [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\m15\d3d12caps\build",
+    [string]$KitVersion = '10.0.26100.0',
+    # Export D3D12SDKVersion = <n> and D3D12SDKPath = .\D3D12_0\ so that d3d12.dll loads the Agility SDK core placed
+    # next to the executable, as a game that ships one does. 0 builds the plain variant without those exports.
+    [ValidateRange(0, 100000)][int]$AgilitySdkVersion = 0
+)
+
+$ErrorActionPreference = 'Stop'
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
+$sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
+
+$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+$msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
+$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+$dumpbin = Join-Path $msvc.FullName 'bin\Hostx64\x64\dumpbin.exe'
+New-Item -ItemType Directory -Force $Out | Out-Null
+$root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
+$env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
+New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+
+$name = if ($AgilitySdkVersion) { "amdgpu_wddm_d3d12caps_agility$AgilitySdkVersion" } else { 'amdgpu_wddm_d3d12caps' }
+
+# A reviewed artifact is never lost to a rebuild: the existing binary is kept under retained\ by its full hash.
+$previous = Join-Path $Out "$name.exe"
+if (Test-Path -LiteralPath $previous) {
+    $hash = (Get-FileHash -LiteralPath $previous).Hash
+    $keep = Join-Path $Out "retained\$name-$hash.exe"
+    if (-not (Test-Path -LiteralPath $keep)) {
+        New-Item -ItemType Directory -Force (Split-Path -Parent $keep) | Out-Null
+        Copy-Item -LiteralPath $previous -Destination $keep
+    }
+    Write-Host "  previous artifact retained as retained\$name-$hash.exe"
+}
+
+$env:INCLUDE = ''; $env:LIB = ''
+$variant = @(); if ($AgilitySdkVersion) { $variant = @("/DCAPS_AGILITY_SDK_VERSION=$AgilitySdkVersion") }
+# d3d12.dll and dxgi.dll are loaded at run time by name, so that an application-local runtime (the per-application
+# route) is used exactly as the game would use it; neither import library is linked.
+& $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
+    "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
+    "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
+    "/Fe$Out\$name.exe", (Join-Path $here 'd3d12caps.cpp'), '/link',
+    "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
+    'version.lib', 'kernel32.lib') |
+    ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$|^\s*Creating library|\.exp$') { Write-Host "  $_" } }
+if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
+
+# The Agility exports decide which D3D12 core the runtime loads: check them on the artifact itself.
+$exports = & $dumpbin /nologo /exports "$Out\$name.exe" | Out-String
+$has = $exports -match '\bD3D12SDKVersion\b' -and $exports -match '\bD3D12SDKPath\b'
+if ($AgilitySdkVersion -and -not $has) { throw 'Agility variant lacks the D3D12SDKVersion/D3D12SDKPath exports' }
+if (-not $AgilitySdkVersion -and $exports -match 'D3D12SDK') { throw 'plain variant exports D3D12SDK*' }
+$imports = & $dumpbin /nologo /imports "$Out\$name.exe" | Out-String
+if ($imports -match '(?im)^\s+(d3d12|dxgi)\.dll\s*$') { throw 'd3d12.dll or dxgi.dll is imported statically' }
+
+& "$Out\$name.exe" --help | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'help check failed' }
+& "$Out\$name.exe" not-a-number 2>$null
+if ($LASTEXITCODE -ne 2) { throw 'invalid adapter index accepted' }
+Get-Item "$Out\$name.exe" | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }
+
+python -B -m unittest discover -s $here -p 'test_*.py'
+if ($LASTEXITCODE -ne 0) { throw 'diff-caps tests failed' }

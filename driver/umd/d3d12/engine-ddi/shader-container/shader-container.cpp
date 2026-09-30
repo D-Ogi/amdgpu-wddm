@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// shader-container: DXBC container reconstruction from the D3D12 DDI shader payload. Prototype, offline only;
-// see shader-container.h for the contract and the provenance, README.md for the deviations from the D3D11 code.
+// shader-container: DXBC container reconstruction from the D3D12 DDI shader payload, engine-ddi's native shader
+// intake; see shader-container.h for the contract and the provenance, README.md for the deviations from the D3D11
+// code.
 
 #include "shader-container.h"
 #include "dxil-metadata.h"
@@ -521,6 +522,33 @@ void Set32(std::vector<uint8_t>& out, size_t offset, uint32_t value)
     std::memcpy(&out[offset], &value, 4);
 }
 
+// Header (magic, checksum, version 1, file size, chunk count, chunk offsets), then the chunks, then the checksum.
+void WriteContainer(const std::vector<std::vector<uint8_t>>& chunks, std::vector<uint8_t>& out)
+{
+    uint32_t chunkCount = uint32_t(chunks.size());
+    uint32_t fileSize = 32 + 4 * chunkCount;
+    for (const auto& c : chunks)
+        fileSize += uint32_t(c.size());
+
+    out.reserve(fileSize);
+    PutTag(out, "DXBC");
+    out.resize(20, 0);
+    Put32(out, 1);
+    Put32(out, fileSize);
+    Put32(out, chunkCount);
+
+    uint32_t offset = 32 + 4 * chunkCount;
+    for (const auto& c : chunks)
+    {
+        Put32(out, offset);
+        offset += uint32_t(c.size());
+    }
+    for (const auto& c : chunks)
+        out.insert(out.end(), c.begin(), c.end());
+
+    DxbcChecksum(out.data(), out.size(), &out[4]);
+}
+
 uint32_t UsedMask(const std::vector<std::pair<uint32_t, uint32_t>>& uses, uint32_t reg)
 {
     uint32_t mask = 0;
@@ -838,36 +866,125 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     code.insert(code.end(), tokens, tokens + codeSize);
     chunks.push_back(std::move(code));
 
-    // Header: magic, checksum, version 1, file size, chunk count, chunk offsets
-    uint32_t chunkCount = uint32_t(chunks.size());
-    uint32_t fileSize = 32 + 4 * chunkCount;
-    for (const auto& c : chunks)
-        fileSize += uint32_t(c.size());
-
-    std::vector<uint8_t>& out = container->bytes;
-    out.reserve(fileSize);
-    PutTag(out, "DXBC");
-    out.resize(20, 0);
-    Put32(out, 1);
-    Put32(out, fileSize);
-    Put32(out, chunkCount);
-
-    uint32_t offset = 32 + 4 * chunkCount;
-    for (const auto& c : chunks)
-    {
-        Put32(out, offset);
-        offset += uint32_t(c.size());
-    }
-    for (const auto& c : chunks)
-        out.insert(out.end(), c.begin(), c.end());
-
-    DxbcChecksum(out.data(), out.size(), &out[4]);
+    WriteContainer(chunks, container->bytes);
 
     container->programType = program.type;
     container->dxil = program.dxil;
     for (const Named& n : outputNames)
         container->output.push_back(n.entry);
 
+    return {};
+}
+
+// ---- DXIL libraries ----------------------------------------------------------------------------------------------
+
+namespace {
+
+// The DXIL program kind of a library (DirectXShaderCompiler DxilConstants.h, ShaderKind::Library; the WDK's
+// d3d12TokenizedProgramFormat.hpp reserves 6 to 12 for state objects).
+constexpr uint32_t DxilLibraryKind = 6;
+
+constexpr uint32_t Fourcc(char a, char b, char c, char d)
+{
+    return uint32_t(uint8_t(a)) | uint32_t(uint8_t(b)) << 8 | uint32_t(uint8_t(c)) << 16 | uint32_t(uint8_t(d)) << 24;
+}
+
+} // namespace
+
+size_t LibraryPayloadDwords(const UINT* payload)
+{
+    if (!payload)
+        return 0;
+    // A container: its size in bytes at byte 24, after the magic, the checksum and the version.
+    if (payload[0] == Fourcc('D', 'X', 'B', 'C'))
+        return (size_t(payload[6]) + 3u) / 4u;
+    return payload[1];
+}
+
+Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* container)
+{
+    container->bytes.clear();
+    container->output.clear();
+    container->programType = ~0u;
+    container->dxil = false;
+
+    if (!payload || capacity < 2)
+        return Fail(Status::InvalidArgument, "no library, or fewer than two readable DWORDs");
+
+    // A whole container: its DXIL part, and nothing else of it. Subobjects an RDAT part declares reach the driver as
+    // DDI subobjects (DirectX-Specs Raytracing.md:9490-9498); keeping the part would declare them twice.
+    const UINT* program = payload;
+    size_t programCapacity = capacity;
+    if (payload[0] == Fourcc('D', 'X', 'B', 'C'))
+    {
+        if (capacity < 8)
+            return Fail(Status::InvalidArgument, "library container shorter than its header");
+        uint64_t size = payload[6];
+        uint64_t count = payload[7];
+        if (size < 32 || size > uint64_t(capacity) * 4u || count > (size - 32) / 4)
+            return Fail(Status::InvalidArgument, "library container size " + std::to_string(size) + " or part count "
+                    + std::to_string(count) + " out of range");
+        const UINT* found = nullptr;
+        for (uint64_t i = 0; i < count; i++)
+        {
+            uint64_t offset = payload[8 + i];
+            if (offset % 4 || offset < 32 + 4 * count || offset > size - 8)
+                return Fail(Status::InvalidArgument, "library container part " + std::to_string(i) + " at "
+                        + std::to_string(offset));
+            const UINT* part = payload + offset / 4;
+            uint64_t partSize = part[1];
+            if (partSize > size - offset - 8)
+                return Fail(Status::InvalidArgument, "library container part " + std::to_string(i) + " of "
+                        + std::to_string(partSize) + " bytes");
+            if (part[0] != Fourcc('D', 'X', 'I', 'L'))
+                continue;
+            if (partSize % 4)
+                return Fail(Status::InvalidArgument, "library DXIL part of " + std::to_string(partSize) + " bytes");
+            if (found)
+                return Fail(Status::InvalidArgument, "library container with two DXIL parts");
+            found = part + 2;
+            programCapacity = size_t(partSize / 4);
+        }
+        if (!found)
+            return Fail(Status::InvalidArgument, "library container without a DXIL part");
+        program = found;
+    }
+
+    if (programCapacity < 6)
+        return Fail(Status::InvalidArgument, "DXIL library shorter than its program header");
+    UINT version = program[0];
+    uint32_t length = program[1];
+    uint32_t type = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_TYPE(version));
+    uint32_t major = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_MAJOR_VERSION(version));
+    uint32_t minor = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_MINOR_VERSION(version));
+    if (major != 6 || type != DxilLibraryKind)
+        return Fail(Status::Unsupported, "DXIL program kind " + std::to_string(type) + ", shader model "
+                + std::to_string(major) + "." + std::to_string(minor) + " where a library was expected");
+    if (length < 6 || length > programCapacity)
+        return Fail(Status::InvalidArgument, "DXIL library SizeInUint32 " + std::to_string(length) + " outside 6 to "
+                + std::to_string(programCapacity) + " readable DWORDs");
+    // The rebuilt container's sizes are 32-bit: header, one part offset, part header.
+    if (length > (UINT32_MAX - 44u) / 4u)
+        return Fail(Status::Unsupported, "DXIL library of " + std::to_string(length) + " DWORDs");
+    const uint8_t* bitcode;
+    size_t bitcodeSize;
+    if (!dxil::ProgramBitcode(reinterpret_cast<const uint8_t*>(program), size_t(length) * 4u, &bitcode, &bitcodeSize))
+        return Fail(Status::InvalidArgument, "DXIL library header: no DXIL magic, or bitcode not within SizeInUint32");
+
+    // The engine parses a library as a container with its DXIL part (dxil-spirv dxil_parser.cpp, parse_container);
+    // a library has no signatures.
+    std::vector<uint8_t> code;
+    PutTag(code, "DXIL");
+    uint32_t codeSize = length * uint32_t(sizeof(UINT));
+    Put32(code, codeSize);
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(program);
+    code.insert(code.end(), bytes, bytes + codeSize);
+    std::vector<std::vector<uint8_t>> chunks;
+    chunks.push_back(std::move(code));
+    WriteContainer(chunks, container->bytes);
+
+    container->programType = type;
+    container->dxil = true;
     return {};
 }
 

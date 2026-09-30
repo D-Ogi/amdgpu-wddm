@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // dxil-metadata: the signature elements of a DXIL program, read from the dx.entryPoints metadata of its LLVM 3.7
-// bitcode. Part of shader-container (prototype, offline only). The reconstructed container names its signature
-// entries synthetically, but dxil-spirv resolves stream-output declarations against the semantic names in this
-// metadata, so a D3D12 stream-output declaration for a DXIL program must use them.
+// bitcode. Part of shader-container (engine-ddi's native shader intake). The reconstructed container names its
+// signature entries synthetically, but dxil-spirv resolves stream-output declarations against the semantic names in
+// this metadata, so a D3D12 stream-output declaration for a DXIL program must use them.
 //
 // Reads only what that needs: the bitstream container, BLOCKINFO abbreviations, module-level GLOBALVAR, FUNCTION
 // and ALIAS records (value numbering), the module CONSTANTS block (integer constants) and the module METADATA

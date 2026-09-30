@@ -15,7 +15,8 @@ int main(){
     void* storage=::operator new(size+16);memset(storage,0xcd,size+16);
     D3D12DDI_HFENCE fence{storage};
     args.FenceCount=0;assert(table.pfnCreateFence(hd,fence,&args)==E_INVALIDARG);
-    args.FenceCount=2;assert(table.pfnCalcPrivateFenceSize(hd,&args)==0);
+    args.FenceCount=2;assert(table.pfnCalcPrivateFenceSize(hd,&args)==sizeof(native12::FenceState));
+    assert(table.pfnCalcPrivateFenceSize(hd,nullptr)==sizeof(native12::FenceState));
     assert(table.pfnCreateFence(hd,fence,&args)==E_NOTIMPL);
     for(SIZE_T i=0;i<size+16;++i)assert(static_cast<unsigned char*>(storage)[i]==0xcd);
     args.FenceCount=1;args.Fences=nullptr;assert(table.pfnCreateFence(hd,fence,&args)==E_INVALIDARG);
@@ -30,7 +31,7 @@ int main(){
     for(SIZE_T i=size;i<size+16;++i)assert(static_cast<unsigned char*>(storage)[i]==0xcd);
     table.pfnDestroyFence(hd,fence);
     device.lost.store(true);
-    assert(table.pfnCalcPrivateFenceSize(hd,&args)==0);
+    assert(table.pfnCalcPrivateFenceSize(hd,&args)==sizeof(native12::FenceState));
     assert(table.pfnCreateFence(hd,fence,&args)==D3DDDIERR_DEVICEREMOVED);
     ::operator delete(storage);
     puts("typed fence placement lifetime tests passed");

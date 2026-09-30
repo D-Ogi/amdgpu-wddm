@@ -72,10 +72,11 @@ void APIENTRY report_device_error(void* shell, HRESULT hr) {
     std::printf("     shell: device error %08lx\n", static_cast<unsigned long>(hr));
 }
 
-void APIENTRY report_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST, HRESULT hr) {
+void APIENTRY report_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) {
     auto* s = static_cast<Shell*>(shell);
     ++s->list_errors;
     s->last_list_error = hr;
+    s->last_list = list.handle;
     std::printf("     shell: command list error %08lx\n", static_cast<unsigned long>(hr));
 }
 
@@ -124,7 +125,7 @@ bool find_adapter(const wchar_t* filter, LUID& luid) {
 } // namespace
 
 HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory,
-                    decltype(engine_ddi::ShellHooks::free_memory) free_memory) {
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory, ID3D12Device* engine) {
     engine_ddi::ContextCreateInfo info{};
     info.size = sizeof(info);
     info.boundary_revision = engine_ddi::kBoundaryRevision;
@@ -133,7 +134,7 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
     info.hooks.free_memory = free_memory;
     info.ddi_interface = D3D12DDI_INTERFACE_VERSION_R8;
     info.ddi_version = D3D12DDI_BUILD_VERSION_0092;
-    info.engine_device = env.engine;
+    info.engine_device = engine ? engine : env.engine;
     info.engine_funcs = &env.funcs;
     info.hooks.size = sizeof(info.hooks);
     info.hooks.shell = &device.shell;
@@ -147,7 +148,45 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
 }
 
 // ---- Runtime-side helpers ----------------------------------------------------------------------------------------
+namespace {
+HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, UINT64 heap_bytes,
+                            Buffer& out);
+} // namespace
+
 HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, Buffer& out) {
+    return create_buffer_sized(env, device, kind, size, uav, 0, out);
+}
+
+HRESULT create_buffer_in_heap_of(Env& env, Device& device, HeapKind kind, UINT64 size, UINT64 heap_bytes, Buffer& out) {
+    return create_buffer_sized(env, device, kind, size, false, heap_bytes, out);
+}
+
+HRESULT create_heap_alone(Env& env, Device& device, HeapKind kind, UINT64 heap_bytes, Buffer& out) {
+    out = Buffer{};
+    static const D3D12_HEAP_TYPE types[] = {D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_READBACK};
+    const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, types[static_cast<int>(kind)]);
+    D3D12DDIARG_CREATEHEAP_0001 heap{};
+    heap.ByteSize = heap_bytes;
+    heap.Alignment = 64 * 1024;
+    heap.CPUPageProperty = static_cast<D3D12DDI_CPU_PAGE_PROPERTY>(props.CPUPageProperty - 1);
+    heap.MemoryPool = static_cast<D3D12DDI_MEMORY_POOL>(props.MemoryPoolPreference - 1);
+    heap.Flags = D3D12DDI_HEAP_FLAG_BUFFERS;
+    heap.CreationNodeMask = 1;
+    heap.VisibleNodeMask = 1;
+    const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes =
+        env.core.pfnCalcPrivateHeapAndResourceSizes(device.h(), &heap, nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+    out.heap = env.storage.alloc(sizes.Heap);
+    if (!out.heap) return E_OUTOFMEMORY;
+    const HRESULT hr = env.core.pfnCreateHeapAndResource(device.h(), &heap, out.hheap(), D3D12DDI_HRTRESOURCE{&out.rt},
+                                                         nullptr, nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{},
+                                                         D3D12DDI_HRESOURCE{});
+    if (FAILED(hr)) out.heap = nullptr;                 // nothing was constructed: nothing to destroy
+    return hr;
+}
+
+namespace {
+HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, UINT64 heap_bytes,
+                            Buffer& out) {
     out = Buffer{};
     D3D12DDIARG_CREATERESOURCE_0088 res{};
     res.ResourceType = D3D12DDI_RT_BUFFER;
@@ -170,7 +209,7 @@ HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool
     static const D3D12_HEAP_TYPE types[] = {D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_READBACK};
     const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, types[static_cast<int>(kind)]);
     D3D12DDIARG_CREATEHEAP_0001 heap{};
-    heap.ByteSize = info.ResourceDataSize;
+    heap.ByteSize = heap_bytes ? heap_bytes : info.ResourceDataSize;
     heap.Alignment = info.ResourceDataAlignment;
     heap.CPUPageProperty = static_cast<D3D12DDI_CPU_PAGE_PROPERTY>(props.CPUPageProperty - 1);
     heap.MemoryPool = static_cast<D3D12DDI_MEMORY_POOL>(props.MemoryPoolPreference - 1);
@@ -183,9 +222,13 @@ HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool
     out.heap = env.storage.alloc(sizes.Heap);
     out.resource = env.storage.alloc(sizes.Resource);
     if (!out.heap || !out.resource) return E_OUTOFMEMORY;
-    return env.core.pfnCreateHeapAndResource(device.h(), &heap, out.hheap(), D3D12DDI_HRTRESOURCE{&out.rt}, &res, nullptr,
-                                             D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
+    const HRESULT hr = env.core.pfnCreateHeapAndResource(device.h(), &heap, out.hheap(), D3D12DDI_HRTRESOURCE{&out.rt},
+                                                         &res, nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{},
+                                                         out.hres());
+    if (FAILED(hr) && heap_bytes) out.heap = out.resource = nullptr;    // refused by size: nothing was constructed
+    return hr;
 }
+} // namespace
 
 HRESULT create_placed_buffer(Env& env, Device& device, const Buffer& base, UINT64 offset, UINT64 size, Buffer& out) {
     out = Buffer{};
@@ -214,7 +257,10 @@ void destroy_buffer(Env& env, Device& device, Buffer& buffer) {
     buffer.heap = buffer.resource = nullptr;
 }
 
-HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out) {
+void write_default_state(Env& env, Device& device, Recording& r);
+
+HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out,
+                       D3D12DDI_COMMAND_LIST_TYPE type) {
     out = Recording{};
     D3D12DDIARG_CREATE_COMMAND_POOL_0040 pool{D3D12DDI_COMMAND_POOL_FLAG_NONE};
     out.pool = env.storage.alloc(env.core.pfnCalcPrivateCommandPoolSize(device.h(), &pool));
@@ -236,7 +282,7 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
     env.core.pfnCommandRecorderSetCommandPoolAsTarget(device.h(), D3D12DDI_HCOMMANDRECORDER_0040{out.recorder},
                                                       D3D12DDI_HCOMMANDPOOL_0040{out.pool});
     D3D12DDIARG_CREATE_COMMAND_LIST_0040 list{};
-    list.Type = D3D12DDI_COMMAND_LIST_TYPE_DIRECT;
+    list.Type = type;
     list.QueueFlags = queue_flags;
     list.ID = 1;
     list.CommandListFlags = D3D12DDI_COMMAND_LIST_FLAG_NONE;
@@ -255,7 +301,49 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
     D3D12DDIARG_RESETCOMMANDLIST_0040 reset{D3D12DDI_HCOMMANDRECORDER_0040{out.recorder}, 1,
                                            D3D12DDI_COMMAND_LIST_FLAG_NONE};
     env.lists[out.table].pfnResetCommandList(out.hlist(), &reset);
+    if (type != D3D12DDI_COMMAND_LIST_TYPE_BUNDLE) write_default_state(env, device, out);
     return S_OK;
+}
+
+// The state the runtime writes into a list it has reset. The first thirteen calls and their order were
+// observed on a direct list under the system runtime; the arguments were not. Scalar values are the API's
+// documented defaults; null pointers and zero counts are this harness's choice of an unbound state. The
+// calls after the thirteenth are the remaining state slots, in no observed order, and the alpha blend
+// factor is an unused-slot exercise rather than reset state. A list of
+// the compute table gets the calls that are legal there. Any error they report fails the recording.
+void write_default_state(Env& env, Device& device, Recording& r) {
+    const auto& t = env.lists[r.table];
+    const bool graphics = r.table == 1;
+    const uint32_t device_before = device.shell.device_errors;
+    const uint32_t list_before = device.shell.list_errors;
+    const FLOAT blend[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    t.pfnSetPipelineState(r.hlist(), D3D12DDI_HPIPELINESTATE{nullptr});
+    if (graphics) t.pfnIaSetTopology(r.hlist(), D3D12DDI_PRIMITIVE_TOPOLOGY_UNDEFINED);
+    t.pfnSetDescriptorHeaps(r.hlist(), 0, nullptr);
+    if (graphics) {
+        t.pfnIASetVertexBuffers(r.hlist(), 0, D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT, nullptr);
+        t.pfnIASetIndexBuffer(r.hlist(), nullptr);
+        t.pfnSOSetTargets(r.hlist(), 0, D3D12_SO_BUFFER_SLOT_COUNT, nullptr);
+        t.pfnOMSetRenderTargets(r.hlist(), 0, nullptr, FALSE, nullptr);
+        t.pfnRsSetViewports(r.hlist(), 0, nullptr);
+        t.pfnRsSetScissorRects(r.hlist(), 0, nullptr);
+        t.pfnOmSetBlendFactor(r.hlist(), blend);
+        t.pfnOmSetStencilRef(r.hlist(), 0);
+    }
+    t.pfnSetPredication(r.hlist(), D3D12DDI_HRESOURCE{nullptr}, 0, D3D12DDI_PREDICATION_OP_EQUAL_ZERO);
+    t.pfnClearRootArguments(r.hlist());
+    t.pfnSetProtectedResourceSession(r.hlist(), D3D12DDI_HPROTECTEDRESOURCESESSION_0030{nullptr});
+    if (graphics) {
+        t.pfnOMSetDepthBounds(r.hlist(), 0.0f, 1.0f);
+        t.pfnSetSamplePositions(r.hlist(), 0, 0, nullptr);
+        t.pfnSetViewInstanceMask(r.hlist(), 0);
+        t.pfnRSSetShadingRate(r.hlist(), D3D12DDI_SHADING_RATE_0062_1X1, nullptr);
+        t.pfnRSSetShadingRateImage(r.hlist(), D3D12DDI_HRESOURCE{nullptr});
+        t.pfnOmSetAlphaBlendFactor(r.hlist(), 1.0f);
+    }
+    checkf(device.shell.device_errors == device_before && device.shell.list_errors == list_before,
+           "default state of a reset list, table %u: no device or list error (%u device, %u list)", r.table,
+           device.shell.device_errors - device_before, device.shell.list_errors - list_before);
 }
 
 void destroy_recording(Env& env, Device& device, Recording& r) {
@@ -271,11 +359,18 @@ bool wait_queue_idle(Env& env, engine_ddi::EngineQueue* queue, const char* what)
     HRESULT hr = env.engine->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), reinterpret_cast<void**>(&fence));
     if (SUCCEEDED(hr)) hr = q->Signal(fence, 1);
     if (SUCCEEDED(hr)) hr = fence->SetEventOnCompletion(1, nullptr);
-    const bool done = SUCCEEDED(hr) && fence->GetCompletedValue() >= 1;
+    const UINT64 completed = SUCCEEDED(hr) ? fence->GetCompletedValue() : 0;
+    const bool done = SUCCEEDED(hr) && fence_reached(completed, 1);
     if (fence) fence->Release();
-    checkf(done, "%s: engine fence signalled on the engine queue completes (SetEventOnCompletion(1, NULL) hr %08lx)",
-           what, static_cast<unsigned long>(hr));
+    checkf(done,
+           "%s: engine fence signalled on the engine queue completes (SetEventOnCompletion(1, NULL) hr %08lx, "
+           "completed value %llu)",
+           what, static_cast<unsigned long>(hr), static_cast<unsigned long long>(completed));
     return done;
+}
+
+bool fence_reached(UINT64 completed, UINT64 target) {
+    return completed != UINT64_MAX && completed >= target;
 }
 
 D3D12DDIARG_RESOURCE_BARRIER_0022 transition(const Buffer& buffer, D3D12DDI_RESOURCE_STATES before,
@@ -288,6 +383,32 @@ D3D12DDIARG_RESOURCE_BARRIER_0022 transition(const Buffer& buffer, D3D12DDI_RESO
     b.Transition.StateBefore = before;
     b.Transition.StateAfter = after;
     return b;
+}
+
+void test_private_instances(Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create, Device& first) {
+    ID3D12Device* engine = nullptr;
+    HRESULT hr = env.funcs.CreateDevice(&create, __uuidof(ID3D12Device), reinterpret_cast<void**>(&engine));
+    checkf(SUCCEEDED(hr) && engine, "private instances: a second engine device from the same create info (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (FAILED(hr) || !engine) return;
+    Device second;
+    hr = open_device(env, second, nullptr, nullptr, engine);
+    VkInstance a = VK_NULL_HANDLE, b = VK_NULL_HANDLE;
+    VkPhysicalDevice pa = VK_NULL_HANDLE, pb = VK_NULL_HANDLE;
+    VkDevice da = VK_NULL_HANDLE, db = VK_NULL_HANDLE;
+    uint32_t fa = 0, fb = 0;
+    const HRESULT ha = env.funcs.GetVulkanHandles(env.engine, &a, &pa, &da, &fa);
+    const HRESULT hb = env.funcs.GetVulkanHandles(engine, &b, &pb, &db, &fb);
+    checkf(hr == S_OK && first.context && second.context && ha == S_OK && hb == S_OK && a && b && a != b && da != db,
+           "private instances: two live engine-ddi devices report two VkInstances through GetVulkanHandles (%p, %p)",
+           static_cast<void*>(a), static_cast<void*>(b));
+    if (second.context) {
+        uint32_t live = UINT32_MAX;
+        hr = engine_ddi::destroy_device_context(second.context, &live);
+        checkf(hr == S_OK && live == 0, "private instances: the second device context goes (hr %08lx, %u live)",
+               static_cast<unsigned long>(hr), live);
+    }
+    engine->Release();
 }
 
 } // namespace harness
@@ -354,8 +475,9 @@ int wmain(int argc, wchar_t** argv) {
     create.MinimumFeatureLevel = D3D_FEATURE_LEVEL_11_0;
     create.QueueMode = BC250_VKD3D_QUEUE_MODE_INLINE;
     create.Services = &services;
+    create.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
     hr = env.funcs.CreateDevice(&create, __uuidof(ID3D12Device), reinterpret_cast<void**>(&env.engine));
-    checkf(SUCCEEDED(hr) && env.engine, "engine CreateDevice in the INLINE queue mode (hr %08lx)",
+    checkf(SUCCEEDED(hr) && env.engine, "engine CreateDevice in the INLINE queue mode, PRIVATE instance (hr %08lx)",
            static_cast<unsigned long>(hr));
     if (FAILED(hr) || !env.engine) return 1;
 
@@ -365,14 +487,20 @@ int wmain(int argc, wchar_t** argv) {
               engine_ddi::fill_command_list(&env.lists[0], sizeof(env.lists[0]), 0, &fill) == S_OK &&
               engine_ddi::fill_command_list(&env.lists[1], sizeof(env.lists[1]), 1, &fill) == S_OK,
           "core table and both command-list tables filled");
+    // wait_queue_idle once took a removed device's UINT64_MAX for completion.
+    check(fence_reached(1, 1) && fence_reached(7, 1) && !fence_reached(0, 1) && !fence_reached(UINT64_MAX, 1),
+          "wait_queue_idle: a completed value reaches its target only when it is at least the target and not "
+          "UINT64_MAX (a removed device)");
 
     Device device;
     hr = open_device(env, device);
     checkf(hr == S_OK && device.context, "device context in EnginePrivateTest mode (hr %08lx)",
            static_cast<unsigned long>(hr));
     if (hr == S_OK) {
+        test_private_instances(env, create, device);
         test_copy(env, device);
         test_compute(env, device);
+        test_graphics(env, device);
         test_device_queries(env, device);
         uint32_t live = UINT32_MAX;
         hr = engine_ddi::destroy_device_context(device.context, &live);
@@ -384,6 +512,12 @@ int wmain(int argc, wchar_t** argv) {
     }
     test_retirement(env);
     test_runtime_backed(env);
+    test_tiled(env);
+    test_small_placement(env);
+    test_linear_primary(env);
+    test_raytracing(env);
+    test_raytracing_pipeline(env);
+    test_memory_policy(env, create);
     check(env.storage.canaries_intact(), "private storage: every canary behind the driver's size intact");
     checkf(g_binds >= 1 && g_binds >= g_unbinds, "engine services: %ld BindQueue, %ld UnbindQueue", g_binds, g_unbinds);
     env.engine->Release();

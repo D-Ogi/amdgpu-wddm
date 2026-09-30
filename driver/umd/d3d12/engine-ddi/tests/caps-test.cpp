@@ -7,7 +7,8 @@
 //
 // The stub's answers are test inputs, not measurements of any GPU. The test checks the calls the runtime made in
 // M768 with their exact sizes (1074 with 8 bytes, 1007 with 4) and the mapping of every other type build_caps
-// answers (INTEGRATION.md, "GetCaps").
+// answers (INTEGRATION.md, "GetCaps"), and the shell's memory architecture policy of 1002 (INTEGRATION.md,
+// "Memory architecture policy").
 #include "engine-ddi.h"
 #include <dxgi1_4.h>
 #include <cstdarg>
@@ -30,6 +31,7 @@ void check(bool ok, const char* format, ...) {
 
 constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0092;
 constexpr uint32_t kAbi12 = (1u << 16) | 2u;
+constexpr uint32_t kAbi = BC250_VKD3D_ENGINE_ABI_VERSION;   // what the shell asks the engine for
 
 template <class T> HRESULT get(const engine_ddi::AdapterCaps* caps, D3D12DDICAPS_TYPE type, T& data,
                                void* info = nullptr, UINT size = sizeof(T)) {
@@ -201,6 +203,68 @@ D3D12DDI_3DPIPELINELEVEL level_1074(const engine_ddi::AdapterCaps* caps, D3D12DD
                                                              : static_cast<D3D12DDI_3DPIPELINELEVEL>(0);
 }
 
+// 1003 TEXTURE_LAYOUT_SETS (20 bytes, pInfo {D3D12DDI_TL_ROW_MAJOR, unit}) for every functional unit, and 1061
+// SWIZZLE_PATTERN. 1003 states the row-major data of buffers on every unit: entry 0 covers every element size with
+// alignment 1, entry 1 is unused. A device-dependent swizzle count of 0 in 1060 means no swizzle pattern index.
+void check_layout_sets(const engine_ddi::AdapterCaps* caps, const char* what) {
+    D3D12DDI_TEXTURE_LAYOUT_CAPS_0026 layout;
+    std::memset(&layout, 0xEE, sizeof(layout));
+    const HRESULT hr60 = get(caps, D3D12DDICAPS_TYPE_0022_TEXTURE_LAYOUT, layout);
+    check(hr60 == S_OK && !layout.SupportsRowMajorTexture && layout.DeviceDependentSwizzleCount == 0,
+          "%s: 1060 reports no row-major texture and no device-dependent swizzle pattern", what);
+    D3D12DDI_ROW_MAJOR_LAYOUT_CAPS expected{};
+    expected.SubCaps[0].MaxElementSize = 0xFFFF;
+    expected.SubCaps[0].BaseOffsetAlignment = 1;
+    expected.SubCaps[0].PitchAlignment = 1;
+    expected.SubCaps[0].DepthPitchAlignment = 1;
+    const D3D12DDI_FUNCTIONAL_UNIT units[] = {D3D12DDI_FUNCUNIT_COMBINED, D3D12DDI_FUNCUNIT_COPY_SRC,
+                                              D3D12DDI_FUNCUNIT_COPY_DST};
+    for (const D3D12DDI_FUNCTIONAL_UNIT unit : units) {
+        UINT key[2] = {D3D12DDI_TL_ROW_MAJOR, static_cast<UINT>(unit)};
+        D3D12DDI_ROW_MAJOR_LAYOUT_CAPS sets;
+        std::memset(&sets, 0xEE, sizeof(sets));
+        const HRESULT hr = get(caps, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets, key, 20);
+        check(hr == S_OK && !std::memcmp(&sets, &expected, sizeof(expected)) && key[0] == D3D12DDI_TL_ROW_MAJOR &&
+                  key[1] == static_cast<UINT>(unit),
+              "%s: 1003 TEXTURE_LAYOUT_SETS, DataSize 20, pInfo {ROW_MAJOR, unit %d}: SubCaps[0] 0xFFFF with "
+              "alignments 1, SubCaps[1] zero, Flags NONE (hr %08lx, SubCaps[0].MaxElementSize %u)",
+              what, static_cast<int>(unit), static_cast<unsigned long>(hr),
+              static_cast<unsigned>(sets.SubCaps[0].MaxElementSize));
+    }
+    D3D12DDI_ROW_MAJOR_LAYOUT_CAPS sets;
+    std::memset(&sets, 0xEE, sizeof(sets));
+    HRESULT hr = get(caps, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets);
+    check(hr == E_INVALIDARG && untouched(&sets, sizeof(sets)), "%s: 1003 with pInfo NULL: E_INVALIDARG, nothing written",
+          what);
+    UINT index = 0;
+    D3D12DDI_SWIZZLE_PATTERN_DESC_0022 pattern;
+    std::memset(&pattern, 0xEE, sizeof(pattern));
+    hr = get(caps, D3D12DDICAPS_TYPE_0022_SWIZZLE_PATTERN, pattern, &index);
+    check(hr == E_INVALIDARG && untouched(&pattern, sizeof(pattern)) && layout.DeviceDependentSwizzleCount == 0,
+          "%s: 1061 SWIZZLE_PATTERN, %zu bytes, index 0: E_INVALIDARG, nothing written, as 1060 counts 0 patterns",
+          what, sizeof(pattern));
+}
+
+// 1057 PROTECTED_RESOURCE_SESSION_SUPPORT (8 bytes, NodeIndex 0), 1069 EXECUTECOMMANDLISTS_PARALLELISM and 1071
+// SUPPORT_BATCHED_MARKERS (a BOOL each): the documented "none" answers.
+void check_none_types(const engine_ddi::AdapterCaps* caps, const char* what) {
+    D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030 session;
+    std::memset(&session, 0xEE, sizeof(session));
+    session.NodeIndex = 0;
+    const HRESULT hr57 = get(caps, D3D12DDICAPS_TYPE_0030_PROTECTED_RESOURCE_SESSION_SUPPORT, session);
+    BOOL parallel;
+    std::memset(&parallel, 0xEE, sizeof(parallel));
+    const HRESULT hr69 = get(caps, D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM, parallel);
+    BOOL markers;
+    std::memset(&markers, 0xEE, sizeof(markers));
+    const HRESULT hr71 = get(caps, D3D12DDICAPS_TYPE_0073_SUPPORT_BATCHED_MARKERS, markers);
+    check(hr57 == S_OK && session.NodeIndex == 0 &&
+              session.Support == D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_FLAG_0030_NONE && hr69 == S_OK &&
+              parallel == FALSE && hr71 == S_OK && markers == FALSE,
+          "%s: 1057 (%zu bytes, node 0) Support NONE; 1069 and 1071 (%zu bytes) FALSE", what, sizeof(session),
+          sizeof(BOOL));
+}
+
 void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     // A 1.1 function table (the shell asked GetFuncs for 1.1): no QueryAdapterCaps, refused before any call.
     {
@@ -244,9 +308,32 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     hr = engine_ddi::build_caps(caps, kDdi, &r);
     check(r1074 && hr == E_INVALIDARG && untouched(raw, sizeof(raw)),
           "1074 with 4 bytes and 1007 with 8 bytes: E_INVALIDARG, nothing written");
-    r = {D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM, nullptr, raw, sizeof(BOOL)};
+    UINT node0 = 0;
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node0, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
     hr = engine_ddi::build_caps(caps, kDdi, &r);
-    check(hr == E_NOTIMPL && untouched(raw, sizeof(raw)), "unanswered type 1069: E_NOTIMPL, nothing written (hr %08lx)",
+    D3D12DDI_COMMAND_QUEUE_FLAGS flags;
+    std::memcpy(&flags, raw, sizeof(flags));
+    check(hr == S_OK && flags == (D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE |
+                                  D3D12DDI_COMMAND_QUEUE_FLAG_COPY) &&
+              untouched(raw + sizeof(flags), sizeof(raw) - sizeof(flags)) && node0 == 0,
+          "1059 CPU_PAGE_TABLE_FALSE_POSITIVES, node 0, 4 bytes: 3D, COMPUTE and COPY (hr %08lx, flags 0x%x)",
+          static_cast<unsigned long>(hr), static_cast<unsigned>(flags));
+    std::memset(raw, 0xEE, sizeof(raw));
+    UINT node1 = 1;
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node1, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    const bool node_refused = hr == E_INVALIDARG && untouched(raw, sizeof(raw));
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, nullptr, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    const bool null_refused = hr == E_INVALIDARG && untouched(raw, sizeof(raw));
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node0, raw, 8};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    check(node_refused && null_refused && hr == E_INVALIDARG && untouched(raw, sizeof(raw)),
+          "1059 with node 1, with pInfo NULL and with 8 bytes: E_INVALIDARG, nothing written");
+    BOOL compute_only = FALSE;
+    r = {D3D12DDICAPS_TYPE_0033_ADAPTER_COMPUTE_ONLY, nullptr, raw, sizeof(compute_only)};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    check(hr == E_NOTIMPL && untouched(raw, sizeof(raw)), "unanswered type 1066: E_NOTIMPL, nothing written (hr %08lx)",
           static_cast<unsigned long>(hr));
     r = {D3D12DDICAPS_TYPE_3DPIPELINESUPPORT, nullptr, raw, 4};
     hr = engine_ddi::build_caps(caps, 91, &r);
@@ -325,6 +412,8 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               prio.SupportedQueueFlagsForGlobalRealtimeQueues == D3D12DDI_COMMAND_QUEUE_FLAG_NONE && hr_sched == S_OK &&
               sched.ComputeQueuesPer3DQueue == 0,
           "1060 TEXTURE_LAYOUT, 1062 queue priority and 1067 scheduling: documented constants");
+    check_layout_sets(caps, "FL12_0 engine");
+    check_none_types(caps, "FL12_0 engine");
 
     D3D12DDI_OPTIONS_DATA_0090 o90;
     std::memset(&o90, 0xEE, sizeof(o90));
@@ -365,6 +454,242 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
                   l1007 == D3D12DDI_3DPIPELINELEVEL_11_0 && hr91 == S_OK &&
                   !o91.UnrestrictedBufferTextureCopyPitchSupported && !o91.InvertedViewportDepthFlipsZSupported,
               "FL11_0 engine: 1074 and 1007 report 11_0; an unanswered OPTIONS13 reports no support in 1078");
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
+// ---- Memory architecture policy (1002) ------------------------------------------------------------------------------
+using engine_ddi::MemoryArchitecturePolicy;
+using engine_ddi::PolicyBool;
+using Mem = D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041;
+
+MemoryArchitecturePolicy policy() {
+    MemoryArchitecturePolicy p{};
+    p.size = sizeof(p);
+    return p;
+}
+
+HRESULT get_1002(const engine_ddi::AdapterCaps* caps, Mem& m) {
+    UINT node = 0;
+    std::memset(&m, 0xEE, sizeof(m));
+    return get(caps, D3D12DDICAPS_TYPE_MEMORY_ARCHITECTURE, m, &node);
+}
+
+bool same(const Mem& a, const Mem& b) { return !std::memcmp(&a, &b, sizeof(Mem)); }
+
+// The 1002 answer and the other types around it, byte for byte, before and after policies.
+struct Snapshot {
+    Mem mem;
+    D3D12DDI_ARCHITECTURE_INFO_DATA arch;
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 options;
+};
+bool snapshot(const engine_ddi::AdapterCaps* caps, Snapshot& s) {
+    std::memset(&s, 0xEE, sizeof(s));
+    return get_1002(caps, s.mem) == S_OK && get(caps, D3D12DDICAPS_TYPE_ARCHITECTURE_INFO, s.arch) == S_OK &&
+           get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, s.options) == S_OK;
+}
+bool others_same(const Snapshot& a, const Snapshot& b) {
+    return !std::memcmp(&a.arch, &b.arch, sizeof(a.arch)) && !std::memcmp(&a.options, &b.options, sizeof(a.options));
+}
+
+// Sets p, then reads 1002: S_OK and the answer, or the refusal and the answer that stayed.
+HRESULT apply(engine_ddi::AdapterCaps* caps, const MemoryArchitecturePolicy& p, Mem& m) {
+    const HRESULT hr = engine_ddi::set_memory_architecture_policy(caps, &p);
+    get_1002(caps, m);
+    return hr;
+}
+
+// The diagnostic raytracing tier: the engine's 1_1 as 1_1 while set, nothing else of 1006 changed, never more
+// than the engine says.
+void test_diagnostic_raytracing(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    const auto tier_with = [&](D3D12_RAYTRACING_TIER engine, const char* what, D3D12DDI_RAYTRACING_TIER expected) {
+        Answers a = fl12_0();
+        a.options5.RaytracingTier = engine;
+        engine_ddi::AdapterCaps* caps = query_stub(a, info, what);
+        if (!caps) return;
+        D3D12DDI_D3D12_OPTIONS_DATA_0089 base{}, on{}, off{};
+        HRESULT hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, base);
+        const HRESULT hr_on = engine_ddi::set_diagnostic_raytracing_tier(caps, true);
+        if (hr == S_OK) hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, on);
+        const HRESULT hr_off = engine_ddi::set_diagnostic_raytracing_tier(caps, false);
+        if (hr == S_OK) hr = get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, off);
+        D3D12DDI_D3D12_OPTIONS_DATA_0089 rest = on;
+        rest.RaytracingTier = D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
+        check(hr == S_OK && hr_on == S_OK && hr_off == S_OK &&
+                  base.RaytracingTier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED && on.RaytracingTier == expected &&
+                  !std::memcmp(&rest, &base, sizeof(base)) && !std::memcmp(&off, &base, sizeof(base)),
+              "diagnostic raytracing tier, %s: 1006 reports %d while set, the rest of 1006 unchanged, and the "
+              "answer without it again after",
+              what, static_cast<int>(expected));
+        engine_ddi::free_adapter_caps(caps);
+    };
+    tier_with(D3D12_RAYTRACING_TIER_1_1, "engine at 1_1", D3D12DDI_RAYTRACING_TIER_1_1);
+    tier_with(static_cast<D3D12_RAYTRACING_TIER>(12), "engine at 1_2", D3D12DDI_RAYTRACING_TIER_1_1);
+    tier_with(D3D12_RAYTRACING_TIER_1_0, "engine at 1_0", D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED);
+    tier_with(D3D12_RAYTRACING_TIER_NOT_SUPPORTED, "engine without", D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED);
+    check(engine_ddi::set_diagnostic_raytracing_tier(nullptr, true) == E_INVALIDARG,
+          "diagnostic raytracing tier refused: null caps");
+}
+
+void test_policy_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    // An engine with heap serialization tier 0, so that every field can be overridden alone: UMA TRUE,
+    // CacheCoherentUMA FALSE, heap tier 0 (DDI 0), and the constants IOCoherent FALSE, resource tier 0.
+    Answers a = fl12_0();
+    a.serialization.HeapSerializationTier = D3D12_HEAP_SERIALIZATION_TIER_0;
+    engine_ddi::AdapterCaps* caps = query_stub(a, info, "policy, heap tier 0 engine");
+    if (!caps) return;
+    Snapshot base;
+    const bool base_ok = snapshot(caps, base);
+    check(base_ok && base.mem.UMA == TRUE && base.mem.CacheCoherent == FALSE && base.mem.IOCoherent == FALSE &&
+              base.mem.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0 &&
+              base.mem.ResourceSerializationTier == D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_0,
+          "policy: without a policy 1002 is the engine's answer and the constants (UMA 1, CacheCoherent 0, "
+          "IOCoherent 0, tiers 0 and 0)");
+
+    Mem m;
+    MemoryArchitecturePolicy p = policy();
+    HRESULT hr = apply(caps, p, m);
+    Snapshot after;
+    check(hr == S_OK && same(m, base.mem) && snapshot(caps, after) && others_same(base, after),
+          "policy: an all-Default policy leaves 1002, 1005 and 1006 byte for byte as without a policy");
+
+    // Each field alone; every other field keeps its answer.
+    struct One { const char* what; void (*set)(MemoryArchitecturePolicy&); void (*expect)(Mem&); };
+    const One ones[] = {
+        {"UMA False", [](MemoryArchitecturePolicy& q) { q.uma = PolicyBool::False; }, [](Mem& e) { e.UMA = FALSE; }},
+        {"CacheCoherent True", [](MemoryArchitecturePolicy& q) { q.cache_coherent = PolicyBool::True; },
+         [](Mem& e) { e.CacheCoherent = TRUE; }},
+        {"IOCoherent True", [](MemoryArchitecturePolicy& q) { q.io_coherent = PolicyBool::True; },
+         [](Mem& e) { e.IOCoherent = TRUE; }},
+        {"HeapSerializationTier 0 explicit (the engine's value)",[](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 0}; },
+         [](Mem& e) { e.HeapSerializationTier = D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0; }},
+        {"ResourceSerializationTier 1", [](MemoryArchitecturePolicy& q) { q.resource_serialization_tier = {1, 1}; },
+         [](Mem& e) { e.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_1; }},
+        {"ResourceSerializationTier 2", [](MemoryArchitecturePolicy& q) { q.resource_serialization_tier = {1, 2}; },
+         [](Mem& e) { e.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2; }},
+    };
+    for (const One& one : ones) {
+        p = policy();
+        one.set(p);
+        Mem expected = base.mem;
+        one.expect(expected);
+        hr = apply(caps, p, m);
+        check(hr == S_OK && same(m, expected) && snapshot(caps, after) && others_same(base, after),
+              "policy: %s alone changes that field of 1002 only (UMA %d, CacheCoherent %d, IOCoherent %d, tiers %d %d)",
+              one.what, m.UMA, m.CacheCoherent, m.IOCoherent, static_cast<int>(m.HeapSerializationTier),
+              static_cast<int>(m.ResourceSerializationTier));
+    }
+
+    // Every field explicit, the other way round from the engine where the rules allow it.
+    p = policy();
+    p.uma = PolicyBool::True;
+    p.cache_coherent = PolicyBool::True;
+    p.io_coherent = PolicyBool::True;
+    p.heap_serialization_tier = {1, 1};
+    p.resource_serialization_tier = {1, 2};
+    hr = apply(caps, p, m);
+    check(hr == S_OK && m.UMA == TRUE && m.CacheCoherent == TRUE && m.IOCoherent == TRUE &&
+              m.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 &&
+              m.ResourceSerializationTier == D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2,
+          "policy: every field explicit (UMA, CacheCoherent, IOCoherent TRUE, tiers 1 and 2) is answered as set");
+    const MemoryArchitecturePolicy all_explicit = p;
+    const Mem kept = m;
+
+    // Refusals keep the policy held before (all_explicit).
+    struct Bad { const char* what; void (*set)(MemoryArchitecturePolicy&); };
+    const Bad bads[] = {
+        {"size 0", [](MemoryArchitecturePolicy& q) { q.size = 0; }},
+        {"size + 4", [](MemoryArchitecturePolicy& q) { q.size = sizeof(q) + 4; }},
+        {"UMA 3", [](MemoryArchitecturePolicy& q) { q.uma = static_cast<PolicyBool>(3); }},
+        {"CacheCoherent 3", [](MemoryArchitecturePolicy& q) { q.cache_coherent = static_cast<PolicyBool>(3); }},
+        {"IOCoherent 0xFFFFFFFF", [](MemoryArchitecturePolicy& q) { q.io_coherent = static_cast<PolicyBool>(~0u); }},
+        {"heap tier set 2", [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {2, 0}; }},
+        {"heap tier Default with value 1", [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {0, 1}; }},
+        {"heap tier 2 (undefined at 0092)", [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 2}; }},
+        {"resource tier 3 (undefined at 0092)",
+         [](MemoryArchitecturePolicy& q) { q.resource_serialization_tier = {1, 3}; }},
+        {"CacheCoherent True with UMA False",
+         [](MemoryArchitecturePolicy& q) { q.uma = PolicyBool::False; q.cache_coherent = PolicyBool::True; }},
+        {"heap tier 1 with resource tier Default (0)",
+         [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 1}; }},
+        {"heap tier 1 with resource tier 1",
+         [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 1}; q.resource_serialization_tier = {1, 1}; }},
+    };
+    for (const Bad& bad : bads) {
+        p = policy();
+        bad.set(p);
+        hr = apply(caps, p, m);
+        check(hr == E_INVALIDARG && same(m, kept), "policy refused: %s; the policy held before stays (hr %08lx)",
+              bad.what, static_cast<unsigned long>(hr));
+    }
+    check(engine_ddi::set_memory_architecture_policy(nullptr, &all_explicit) == E_INVALIDARG &&
+              engine_ddi::set_memory_architecture_policy(caps, nullptr) == E_INVALIDARG && get_1002(caps, m) == S_OK &&
+              same(m, kept),
+          "policy refused: null caps or null policy");
+
+    // Back to all Default: the answer without a policy again.
+    hr = apply(caps, policy(), m);
+    check(hr == S_OK && same(m, base.mem), "policy: an all-Default policy after others restores the engine's answer");
+    engine_ddi::free_adapter_caps(caps);
+
+    // The rules judge the resulting answer, Defaults resolved against the engine: an engine with cache-coherent UMA
+    // refuses UMA False alone, and accepts IOCoherent alone.
+    a = fl12_0();
+    a.serialization.HeapSerializationTier = D3D12_HEAP_SERIALIZATION_TIER_0;
+    a.architecture.CacheCoherentUMA = TRUE;
+    caps = query_stub(a, info, "policy, cache-coherent UMA engine");
+    if (caps) {
+        Mem before;
+        get_1002(caps, before);
+        p = policy();
+        p.uma = PolicyBool::False;
+        hr = apply(caps, p, m);
+        const bool refused = hr == E_INVALIDARG && same(m, before);
+        p = policy();
+        p.io_coherent = PolicyBool::True;
+        hr = apply(caps, p, m);
+        Mem expected = before;
+        expected.IOCoherent = TRUE;
+        check(refused && hr == S_OK && same(m, expected),
+              "policy: UMA False alone on a cache-coherent UMA engine is refused; IOCoherent True alone is accepted");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // An engine without UMA: IOCoherent True alone is accepted (I/O coherence is not a UMA property).
+    a = fl12_0();
+    a.serialization.HeapSerializationTier = D3D12_HEAP_SERIALIZATION_TIER_0;
+    a.architecture.UMA = FALSE;
+    a.architecture.CacheCoherentUMA = FALSE;
+    caps = query_stub(a, info, "policy, engine without UMA");
+    if (caps) {
+        Mem before;
+        get_1002(caps, before);
+        p = policy();
+        p.io_coherent = PolicyBool::True;
+        hr = apply(caps, p, m);
+        Mem expected = before;
+        expected.IOCoherent = TRUE;
+        check(hr == S_OK && same(m, expected) && !m.UMA && !m.CacheCoherent,
+              "policy: IOCoherent True alone with the engine's UMA FALSE is accepted and changes IOCoherent only");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // The fl12_0 engine reports heap serialization tier 10 (DDI 1) with the constant resource tier 0. Without a policy
+    // that stays as it was; a policy's resulting answer may not keep that pair, whatever field the policy sets.
+    caps = query_stub(fl12_0(), info, "policy, heap tier 10 engine");
+    if (caps) {
+        Mem before;
+        get_1002(caps, before);
+        p = policy();
+        p.io_coherent = PolicyBool::True;
+        hr = apply(caps, p, m);
+        const bool refused = hr == E_INVALIDARG && same(m, before);
+        p.resource_serialization_tier = {1, 2};
+        hr = apply(caps, p, m);
+        check(before.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 && refused && hr == S_OK &&
+                  m.IOCoherent && m.ResourceSerializationTier == D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2,
+              "policy: on a heap tier 1 engine IOCoherent alone is refused (heap tier 1 without resource tier 2) and "
+              "accepted with resource tier 2");
         engine_ddi::free_adapter_caps(caps);
     }
 }
@@ -413,9 +738,9 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
     }
     BC250_VKD3D_ENGINE_FUNCS funcs{};
     funcs.Size = sizeof(funcs);
-    HRESULT hr = get_funcs(kAbi12, &funcs);
-    check(hr == S_OK && funcs.AbiVersion >= kAbi12 && funcs.QueryAdapterCaps,
-          "GetFuncs(1.2) fills QueryAdapterCaps (hr %08lx, engine ABI %u.%u)", static_cast<unsigned long>(hr),
+    HRESULT hr = get_funcs(kAbi, &funcs);
+    check(hr == S_OK && funcs.AbiVersion >= kAbi && funcs.QueryAdapterCaps,
+          "GetFuncs fills QueryAdapterCaps (hr %08lx, engine ABI %u.%u)", static_cast<unsigned long>(hr),
           funcs.AbiVersion >> 16, funcs.AbiVersion & 0xFFFFu);
     if (hr != S_OK) return 1;
 
@@ -429,6 +754,7 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
     info.MinimumFeatureLevel = D3D_FEATURE_LEVEL_11_0;
     info.QueueMode = BC250_VKD3D_QUEUE_MODE_INLINE;
     info.Services = &services;
+    info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
     engine_ddi::AdapterCaps* caps = nullptr;
     hr = engine_ddi::query_adapter_caps(&funcs, &info, &caps);
     check(hr == S_OK && caps && !g_services,
@@ -454,6 +780,8 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
           "1012, 1006 and 1004 answered: %u shader models, binding tier %d, tiled tier %d, heap tier %d, waves %u-%u",
           n, static_cast<int>(o.ResourceBindingTier), static_cast<int>(o.TiledResourcesTier),
           static_cast<int>(o.ResourceHeapTier), s.WaveLaneCountMin, s.WaveLaneCountMax);
+    check_layout_sets(caps, "engine");
+    check_none_types(caps, "engine");
     engine_ddi::free_adapter_caps(caps);
     return 0;
 }
@@ -483,7 +811,10 @@ int wmain(int argc, wchar_t** argv) {
         BC250_VKD3D_DEVICE_CREATE_INFO info{};
         info.Size = sizeof(info);
         info.AbiVersion = kAbi12;
+        info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         test_stub(info);
+        test_policy_stub(info);
+        test_diagnostic_raytracing(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

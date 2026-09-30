@@ -13,6 +13,8 @@ namespace engine_ddi {
 
 // One line on stderr, prefixed "engine-ddi: ". The native build has no other log sink yet.
 void log_line(const char* format, ...) noexcept;
+// A refusal: the same line, also on the debugger's output. A game's stderr goes nowhere, and refusals are rare.
+void log_refusal(const char* format, ...) noexcept;
 
 // A value-initialized T on the heap, or null. Written out rather than new (std::nothrow) T{}, whose value
 // initialization /analyze models before the null check (C28182).
@@ -35,6 +37,9 @@ struct ReleasePayload {
     bool has_memory;
     ImportedMemory memory;
     uint64_t id;
+    // The memory of a linear primary: the shell may release it only inside the destroy that ends it, so
+    // that destroy waits for retirement, within in_ddi_bound_ms, instead of recording the release at once.
+    bool in_ddi = false;
 };
 
 // One pending release. It is allocated together with the heap it belongs to, while creation can still fail, so
@@ -119,6 +124,8 @@ struct EngineQueue {
     // signalled on fence, bit 0 is set while work has been submitted that no successful signal covers yet.
     std::atomic<uint64_t> state;
     SRWLOCK submit_lock;                        // keeps ExecuteCommandLists and its Signal together
+    uint64_t init_waited;                       // the init_fence value this queue last waited for; submit_lock
+    bool closing;                               // destroy has begun: never borrowed again; DeviceContext::lock
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     std::atomic<uint64_t> harness_completed;    // nonzero: returned instead of the fence value
     std::atomic<bool> harness_fail_signal;      // the next retirement Signal is skipped and fails
@@ -126,11 +133,18 @@ struct EngineQueue {
 };
 // The retirement fence value of a queue (a retirement point of the engine, V8).
 uint64_t completed_value(EngineQueue* queue) noexcept;
+// Submits lists on the queue followed by the signal of its retirement fence (queue.cpp). With no list it signals
+// the fence after whatever the queue did last, such as a tile mapping (tiles.cpp). The caller holds submit_lock.
+HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* lists) noexcept;
+
+struct ResourceRecord;
 
 class DeviceContext {
 public:
     ID3D12Device* device = nullptr;             // one reference each
     ID3D12Device4* device4 = nullptr;
+    ID3D12Device5* device5 = nullptr;
+    ID3D12Device7* device7 = nullptr;           // null if the engine has none: AddToStateObject answers E_NOTIMPL
     ID3D12Device8* device8 = nullptr;
     ID3D12Device10* device10 = nullptr;
     MemoryMode mode = MemoryMode::RuntimeBacked;
@@ -151,20 +165,53 @@ public:
     bool retirement_lost = false;
     ReleaseQueue releases;
 
+    // Initialization of committed render targets and depth-stencil resources (queue.cpp). All guarded by
+    // init_lock, which is taken before lock and before any queue's submit_lock.
+    SRWLOCK init_lock = SRWLOCK_INIT;
+    ResourceRecord* init_head = nullptr;        // waiting for their discard; intrusive through ResourceRecord
+    struct InitList {
+        ID3D12CommandAllocator* allocator;      // DIRECT
+        ID3D12GraphicsCommandList* list;
+        uint64_t value;                         // the init_fence value after its last batch: idle once reached
+    };
+    std::vector<InitList> init_lists;           // grows only while every list still has a batch in flight
+    ID3D12Fence* init_fence = nullptr;          // signalled after each batch, on the queue that ran it
+    uint64_t init_value = 0;                    // the last value signalled on init_fence
+    bool init_broken = false;                   // a batch failed: no further batches
+
+    // The empty local root signature of ray tracing pipelines (state-objects.cpp): created by the first create that
+    // needs it, one reference, released with the context. Guarded by empty_local_lock, which is taken alone.
+    SRWLOCK empty_local_lock = SRWLOCK_INIT;
+    ID3D12RootSignature* empty_local = nullptr;
+
+    uint32_t in_ddi_bound_ms = 2000;            // ReleasePayload::in_ddi; changed by the harness only
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
+    // Every report is logged with thread and time, so it can be placed between the begin and end records
+    // of the entry that made it. A reported error can surface to the application at a later call.
+    static long long report_time() noexcept {
+        LARGE_INTEGER now{};
+        QueryPerformanceCounter(&now);
+        return now.QuadPart;
+    }
     void report(HRESULT hr) const noexcept {
+        log_line("device error reported: %08lx (thread %lu, qpc %lld)", static_cast<unsigned long>(hr),
+                 GetCurrentThreadId(), report_time());
         if (hooks.report_device_error) hooks.report_device_error(hooks.shell, hr);
     }
     void report_list(D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) const noexcept {
+        log_line("list error reported: %08lx (thread %lu, qpc %lld)", static_cast<unsigned long>(hr),
+                 GetCurrentThreadId(), report_time());
         if (hooks.report_list_error) hooks.report_list_error(hooks.shell, list, hr);
     }
     bool lost() const noexcept { return hooks.is_device_lost && hooks.is_device_lost(hooks.shell); }
 
     // Hands a release to the release sequence. Under the lock it takes one snapshot of every queue: a queue whose
     // retirement fence has not reached the work submitted before the call gets a mark. With no mark it runs the
-    // release now, outside the lock; otherwise it records the node. Never allocates.
+    // release now, outside the lock; otherwise it records the node. Never allocates. A payload with in_ddi
+    // takes the snapshot again, with the lock released in between, until no mark is left or in_ddi_bound_ms
+    // have passed; after the bound the device error is reported and the node is recorded like any other.
     void release(PendingRelease* node) noexcept;
     // Runs the release sequence for everything that has retired (a retirement point).
     void process_retired() noexcept;
@@ -202,9 +249,12 @@ struct Backing {
     D3D12DDIARG_CREATEHEAP_0001 desc;
     bool imported;
     bool dedicated;
+    bool linear;                                // the memory of one linear primary: nothing else is placed on it
     ImportedMemory memory;
     uint64_t id;
     PendingRelease* release_node;               // allocated with the backing, handed to the release sequence
+    IUnknown* retained;                         // a destroyed committed resource still named by an initialization
+                                                // batch: released with the heap, before it, after retirement
 };
 void backing_acquire(Backing* backing) noexcept;
 void backing_release(Backing* backing) noexcept;
@@ -220,16 +270,34 @@ struct HeapRecord {
     Backing* backing;
 };
 
-enum class ResourceKind : uint32_t { Committed = 1, Placed = 2 };
+// Reserved: a tiled resource with no heap memory of its own (tiles.cpp maps heaps into it); backing is null.
+enum class ResourceKind : uint32_t { Committed = 1, Placed = 2, Reserved = 3 };
 struct ResourceRecord {
     RecordHeader h;                             // engine: the ID3D12Resource
-    Backing* backing;                           // one reference
+    Backing* backing;                           // one reference; null for a reserved resource
     uint64_t offset;                            // in the backing
     D3D12_RESOURCE_DESC1 desc;
     D3D12DDI_HRTRESOURCE rt;
     ResourceKind kind;
-    uint32_t reserved;
+    uint32_t init_state;                        // kInitNone, kInitQueued or kInitRecorded; init_lock
+    ResourceRecord* init_prev;                  // DeviceContext's initialization list while kInitQueued
+    ResourceRecord* init_next;
+    uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
+    uint64_t linear_size;                       // the size of its backing as asked of the shell
 };
+inline constexpr uint32_t kInitNone = 0;
+inline constexpr uint32_t kInitQueued = 1;
+inline constexpr uint32_t kInitRecorded = 2;    // named by a batch that may still run
+
+// Initialization of committed render targets and depth-stencil resources (queue.cpp). queue_initialization at
+// the create; cancel_initialization at the destroy, before the engine resource is released: it returns true when a
+// batch names the resource, which must then outlive the batch's retirement. flush_initializations runs at the start
+// of execute_command_lists: it submits the pending discards and returns the init_fence value the executing queue
+// must wait for (0: none).
+void queue_initialization(DeviceContext* context, ResourceRecord* resource) noexcept;
+bool cancel_initialization(DeviceContext* context, ResourceRecord* resource) noexcept;
+uint64_t flush_initializations(DeviceContext* context, EngineQueue* queue) noexcept;
+void release_initialization(DeviceContext* context) noexcept;       // context destroy: the internal objects
 
 struct DescriptorHeapRecord {
     RecordHeader h;                             // engine: ID3D12DescriptorHeap
@@ -244,16 +312,39 @@ struct RootSignatureRecord {
     UINT parameters;
 };
 
-enum ShaderIntake : uint32_t { kIntakeInvalid = 0, kIntakeNative = 1, kIntakeHarnessContainer = 2 };
+// ---- Shaders and graphics state (pipelines.cpp, graphics.cpp). None of these records holds an engine object. ----
+// RecordHeader::flags of a state record whose create reported a failure: pipelines that name it are refused.
+inline constexpr uint32_t kRecordInvalid = 0x1;
+
+struct ShaderObject;                            // pipelines.cpp: the rebuilt container and what pipelines read
 struct ShaderRecord {
-    RecordHeader h;                             // no engine object
-    uint32_t intake;                            // ShaderIntake
-    uint32_t bytes;                             // payload bytes copied after the record
-    uint32_t snapshot[8];                       // first min(bytes, 32) bytes, zero beyond
-    uint32_t inputs, outputs, patch_constants;  // signature entry counts
-    uint32_t reserved;
-    // payload follows
-    const void* payload() const noexcept { return this + 1; }
+    RecordHeader h;
+    ShaderObject* object;                       // engine-ddi's own allocation, freed by DestroyShader; null when the
+                                                // intake failed
+};
+
+struct ElementLayoutRecord {
+    RecordHeader h;
+    UINT count;
+    UINT reserved;
+    // count D3D12DDIARG_INPUT_ELEMENT_DESC follow (CalcPrivateElementLayoutSize sized them)
+    D3D12DDIARG_INPUT_ELEMENT_DESC* elements() noexcept { return reinterpret_cast<D3D12DDIARG_INPUT_ELEMENT_DESC*>(this + 1); }
+    const D3D12DDIARG_INPUT_ELEMENT_DESC* elements() const noexcept {
+        return reinterpret_cast<const D3D12DDIARG_INPUT_ELEMENT_DESC*>(this + 1);
+    }
+};
+struct BlendStateRecord {
+    RecordHeader h;
+    D3D12_BLEND_DESC desc;
+};
+struct DepthStencilStateRecord {
+    RecordHeader h;
+    D3D12_DEPTH_STENCIL_DESC desc;
+    BOOL depth_bounds;                          // DepthBoundsTestEnable (0025): pipelines refuse it, no DDI support
+};
+struct RasterizerStateRecord {
+    RecordHeader h;
+    D3D12_RASTERIZER_DESC desc;
 };
 
 struct PipelineRecord {
@@ -278,6 +369,7 @@ struct CommandListRecord {
     D3D12DDI_HRTCOMMANDLIST rt;
     D3D12_COMMAND_LIST_TYPE type;
     uint32_t table;                             // 0 compute table, 1 graphics table
+    bool recording;                             // between a Reset and a Close that both succeeded
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 
@@ -285,6 +377,22 @@ struct QueryHeapRecord {
     RecordHeader h;                             // engine: ID3D12QueryHeap
     D3D12_QUERY_HEAP_TYPE type;
     UINT count;
+};
+
+struct CommandSignatureRecord {
+    RecordHeader h;                             // engine: ID3D12CommandSignature
+    UINT stride;
+};
+
+// Ray tracing state objects (state-objects.cpp). A create that fails leaves an inert record (no engine object,
+// kRecordInvalid), which DestroyStateObject accepts.
+struct StateObjectTranslation;                  // state-objects.cpp: the API description rebuilt for the engine
+struct StateObjectRecord {
+    RecordHeader h;                             // engine: ID3D12StateObject
+    ID3D12StateObjectProperties* properties;    // one reference; null for an inert record
+    StateObjectTranslation* translation;        // engine-ddi's own allocation, freed by DestroyStateObject
+    D3D12DDI_HRTSTATEOBJECT_0054 rt;
+    bool executable;                            // a RAYTRACING_PIPELINE, which SetPipelineState1 takes; not a COLLECTION
 };
 
 // ---- Slot groups: each fills its part of the tables -------------------------------------------------------------
@@ -297,10 +405,15 @@ void fill_list_descriptors(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t 
 void fill_core_root_signatures(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_core_pipelines(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_pipelines(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+void fill_core_graphics(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
+void fill_list_graphics(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_queries(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_queries(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+void fill_core_tiles(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
+void fill_core_state_objects(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
+void fill_list_tiles(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 
 // Graphics-only slot in the compute table: reports E_INVALIDARG through report_list_error.
 bool reject_in_compute_table(const CommandListRecord* list) noexcept;
@@ -318,11 +431,19 @@ void harness_set_release_observer(DeviceContext* context, ReleaseObserver observ
 uint32_t harness_pending_releases(DeviceContext* context) noexcept;
 uint32_t harness_stuck_releases(DeviceContext* context) noexcept;
 uint32_t harness_live_objects(DeviceContext* context) noexcept;
+uint32_t harness_pending_initializations(DeviceContext* context) noexcept;
 bool harness_retirement_lost(DeviceContext* context) noexcept;
 // Fault injection: completed_value returns value instead of the fence's (0 turns it off); the next retirement
 // Signal of execute_command_lists is skipped and fails with E_FAIL after the engine's ExecuteCommandLists ran.
 void harness_force_completed(EngineQueue* queue, uint64_t value) noexcept;
 void harness_fail_next_signal(EngineQueue* queue) noexcept;
+void harness_set_in_ddi_bound(DeviceContext* context, uint32_t milliseconds) noexcept;
+// Called by CreateStateObject and AddToStateObject with the API description immediately before the engine's
+// CreateStateObject or AddToStateObject (parent: the engine object grown from, null for a create), on the calling
+// thread; null (the default) calls nothing. The description lives only for the call. Set it before the creates it
+// watches, from the thread that makes them.
+using StateObjectObserver = void (*)(const D3D12_STATE_OBJECT_DESC& desc, ID3D12StateObject* parent, void* user);
+void harness_set_state_object_observer(StateObjectObserver observer, void* user) noexcept;
 #endif
 
 } // namespace engine_ddi

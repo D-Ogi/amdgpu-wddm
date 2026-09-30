@@ -15,22 +15,6 @@
 namespace harness {
 
 namespace {
-struct StubMemory {
-    VkDevice device = VK_NULL_HANDLE;
-    VkPhysicalDeviceMemoryProperties properties{};
-    PFN_vkAllocateMemory allocate = nullptr;
-    PFN_vkFreeMemory free = nullptr;
-    PFN_vkCreateBuffer create_buffer = nullptr;
-    PFN_vkDestroyBuffer destroy_buffer = nullptr;
-    PFN_vkGetBufferMemoryRequirements requirements = nullptr;
-    PFN_vkBindBufferMemory bind = nullptr;
-    PFN_vkGetBufferDeviceAddress address = nullptr;
-    uint32_t allocations = 0;
-    uint32_t dedicated = 0;
-    uint32_t frees = 0;
-    D3DKMT_HANDLE next_allocation = 0x40000000u;
-};
-
 StubMemory& stub_of(void* shell) { return *static_cast<StubMemory*>(static_cast<Shell*>(shell)->memory); }
 
 // The memory type vkd3d-proton picks for the CUSTOM heap engine-ddi makes from the DDI heap (its
@@ -47,12 +31,20 @@ uint32_t pick_type(const StubMemory& m, uint32_t buffer_types, D3D12DDI_CPU_PAGE
     return UINT32_MAX;
 }
 
+} // namespace
+
 // allocate_memory: one whole VkDeviceMemory with VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, not dedicated, not mapped.
 // gpu_va is the device address of a probe buffer bound at offset 0, the stub's stand-in for the completed GPU
 // virtual address mapping of a runtime allocation.
 HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* request, engine_ddi::ImportedMemory* out) {
     StubMemory& m = stub_of(shell);
     ++m.allocations;
+    m.last_byte_size = request->byte_size;
+    m.last_flags = request->flags;
+    m.last_type_bits = request->memory_type_bits;
+    m.last_alignment = request->alignment;
+    m.last_row_pitch = request->surface_row_pitch;
+    m.last_layout_size = request->surface_layout_size;
     m.dedicated += (request->flags & engine_ddi::kMemoryDedicated) ? 1u : 0u;
     VkBufferCreateInfo probe_info{};
     probe_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -64,7 +56,9 @@ HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* req
     if (m.create_buffer(m.device, &probe_info, nullptr, &probe) != VK_SUCCESS) return E_OUTOFMEMORY;
     VkMemoryRequirements needs{};
     m.requirements(m.device, probe, &needs);
-    const uint32_t type = pick_type(m, needs.memoryTypeBits, request->heap->CPUPageProperty);
+    // A request that names memory types (the linear surface) gets one of them.
+    const uint32_t allowed = request->memory_type_bits ? request->memory_type_bits : UINT32_MAX;
+    const uint32_t type = pick_type(m, needs.memoryTypeBits & allowed, request->heap->CPUPageProperty);
 
     VkMemoryAllocateFlagsInfo flags{};
     flags.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
@@ -103,6 +97,7 @@ HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory
     return S_OK;
 }
 
+namespace {
 struct Observed {
     uint32_t with_memory = 0;
     uint32_t freed_ok = 0;
@@ -112,6 +107,8 @@ void observe(void* user, const engine_ddi::ReleaseEvent* event) {
     o->with_memory += event->had_memory ? 1u : 0u;
     o->freed_ok += (event->had_memory && event->free_result == S_OK) ? 1u : 0u;
 }
+
+} // namespace
 
 bool load_stub(Env& env, StubMemory& m) {
     VkInstance instance = VK_NULL_HANDLE;
@@ -134,6 +131,7 @@ bool load_stub(Env& env, StubMemory& m) {
     return m.allocate && m.free && m.create_buffer && m.destroy_buffer && m.requirements && m.bind && m.address;
 }
 
+namespace {
 constexpr UINT32 pattern(UINT i) { return 0x85ebca6bu * (i + 7); }
 } // namespace
 
@@ -165,11 +163,53 @@ void test_runtime_backed(Env& env) {
            static_cast<unsigned long>(hr_pool), static_cast<unsigned long>(hr_src), static_cast<unsigned long>(hr_gpu),
            static_cast<unsigned long>(hr_dst), m.allocations);
     if (hr_pool != S_OK || hr_src != S_OK || hr_gpu != S_OK || hr_dst != S_OK) return;
+
+    // A heap ByteSize of UINT64_MAX with a resource: the heap gets the size the resource needs, and neither the
+    // memory request nor the engine sees UINT64_MAX. Without a resource, and for a heap too small, E_INVALIDARG
+    // before any memory request.
+    {
+        Buffer sized, alone, tight;
+        const uint32_t before = m.allocations;
+        const HRESULT hr_sized = create_buffer_in_heap_of(env, device, HeapKind::Upload, 4096, UINT64_MAX, sized);
+        const uint64_t asked = m.last_byte_size;
+        const uint32_t after = m.allocations;
+        void* cpu = nullptr;
+        const HRESULT hr_map = hr_sized == S_OK ? env.core.pfnMapHeap(device.h(), sized.hheap(), &cpu) : E_ABORT;
+        if (hr_map == S_OK) env.core.pfnUnmapHeap(device.h(), sized.hheap());
+        checkf(hr_sized == S_OK && after == before + 1 && asked == kBytes && hr_map == S_OK && cpu,
+               "runtime-backed: committed UPLOAD buffer of 4096 bytes with heap ByteSize UINT64_MAX: one memory "
+               "request of 64 KiB, heap maps (hr %08lx, map %08lx, %llu bytes asked)",
+               static_cast<unsigned long>(hr_sized), static_cast<unsigned long>(hr_map),
+               static_cast<unsigned long long>(asked));
+        if (hr_sized == S_OK) destroy_buffer(env, device, sized);
+        const HRESULT hr_alone = create_heap_alone(env, device, HeapKind::Upload, UINT64_MAX, alone);
+        const HRESULT hr_small = create_buffer_in_heap_of(env, device, HeapKind::Upload, 4 * kBytes, kBytes, tight);
+        checkf(hr_alone == E_INVALIDARG && hr_small == E_INVALIDARG && m.allocations == after,
+               "runtime-backed: a heap alone with ByteSize UINT64_MAX and a heap smaller than its resource: "
+               "E_INVALIDARG, no memory request (hr %08lx %08lx)",
+               static_cast<unsigned long>(hr_alone), static_cast<unsigned long>(hr_small));
+    }
     const D3D12DDI_GPU_VIRTUAL_ADDRESS pool_va = env.core.pfnCheckResourceVirtualAddress(device.h(), pool.hres());
     const D3D12DDI_GPU_VIRTUAL_ADDRESS src_va = env.core.pfnCheckResourceVirtualAddress(device.h(), src.hres());
     checkf(pool_va && src_va == pool_va + kBytes,
            "runtime-backed: the placed buffer's GPU VA is its heap's plus 64 KiB (%llx, %llx)",
            static_cast<unsigned long long>(pool_va), static_cast<unsigned long long>(src_va));
+
+    // Residency lookup, as MakeResident will resolve its object list: the committed buffer and its heap, the placed
+    // buffer in that heap (the same allocation), and another committed buffer (its own).
+    auto lookup = [&](void* handle, D3D12DDI_HANDLETYPE type, D3DKMT_HANDLE* out) {
+        return engine_ddi::object_allocation(device.context, D3D12DDI_HANDLE_AND_TYPE{handle, type}, out);
+    };
+    D3DKMT_HANDLE committed = 0, heap = 0, placed = 0, other = 0;
+    const HRESULT hr_c = lookup(pool.resource, D3D12DDI_HT_0012_RESOURCE, &committed);
+    const HRESULT hr_h = lookup(pool.heap, D3D12DDI_HT_HEAP, &heap);
+    const HRESULT hr_p = lookup(src.resource, D3D12DDI_HT_0012_RESOURCE, &placed);
+    const HRESULT hr_o = lookup(gpu.resource, D3D12DDI_HT_0012_RESOURCE, &other);
+    checkf(hr_c == S_OK && hr_h == S_OK && hr_p == S_OK && hr_o == S_OK && committed && heap == committed &&
+               placed == committed && other && other != committed,
+           "runtime-backed: object_allocation gives the committed buffer, its heap and the placed buffer in it one "
+           "allocation, another committed buffer its own (%x %x %x %x)",
+           committed, heap, placed, other);
 
     // The placed buffer's words through MapHeap of its heap, at heap offset 64 KiB; the first 64 KiB get other
     // words, so a copy from the wrong offset cannot match.
@@ -234,11 +274,13 @@ void test_runtime_backed(Env& env) {
     destroy_buffer(env, device, pool);
     destroy_buffer(env, device, gpu);
     destroy_buffer(env, device, dst);
-    checkf(m.frees == 3 && observed.with_memory == 3 && observed.freed_ok == 3,
+    // Four allocations: the three buffers above and the one whose heap size was left to the resource.
+    checkf(m.frees == 4 && observed.with_memory == 4 && observed.freed_ok == 4,
            "runtime-backed: each allocation came back through free_memory once, after its engine heap (%u freed, "
            "%u releases)",
            m.frees, observed.with_memory);
-    engine_ddi::destroy_engine_queue(queue);
+    check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+          "runtime-backed: destroy_engine_queue reports Retired");
     engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);

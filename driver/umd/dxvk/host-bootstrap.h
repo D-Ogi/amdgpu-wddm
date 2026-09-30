@@ -15,13 +15,33 @@
 #define BC250_HOST_STYPE 0x42434831u
 #define BC250_HOST_VERSION 5u
 #define BC250_HOST_IMPORT_STYPE 0x42434832u
+/* bc250_host_import with its flags field valid. Under BC250_HOST_IMPORT_STYPE the bytes of that field
+ * were padding and are never read: such an import has no flags. */
+#define BC250_HOST_IMPORT_FLAGS_STYPE 0x42434835u
 struct bc250_host_import {
    uint32_t sType;
    const void *pNext;
    void *identity;
    uint32_t allocation;
+   /* BC250_HOST_IMPORT_* bits, read only when sType is BC250_HOST_IMPORT_FLAGS_STYPE. The field takes
+    * the padding that followed allocation on x64, the one supported layout, so the size and every other
+    * offset are unchanged. */
+   uint32_t flags;
    uint64_t va, size;
 };
+#if defined(_M_X64) || defined(__x86_64__)
+#ifdef __cplusplus
+static_assert(sizeof(bc250_host_import) == 48, "bc250_host_import layout");
+#else
+_Static_assert(sizeof(struct bc250_host_import) == 48, "bc250_host_import layout");
+#endif
+#else
+#error "bc250_host_import is defined for x64 only"
+#endif
+/* The host answers Lock2 and Unlock2 for this allocation: vkMapMemory may map it. Without the bit a
+ * borrowed allocation is never mapped by the ICD. */
+#define BC250_HOST_IMPORT_CPU_MAP 1u
+#define BC250_HOST_IMPORT_KNOWN_FLAGS BC250_HOST_IMPORT_CPU_MAP
 #define BC250_HOST_CREATE_PAGING 1u
 #define BC250_HOST_DESTROY_PAGING 2u
 #define BC250_HOST_PUBLISH_PROGRESS 3u

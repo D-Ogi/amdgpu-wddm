@@ -24,7 +24,7 @@ constexpr bool tags_unique() {
     }
     return true;
 }
-static_assert(engine_ddi::kBoundaryRevision == 3, "boundary r3");
+static_assert(engine_ddi::kBoundaryRevision == 4, "boundary r4");
 static_assert(tags_unique(), "record tags must be unique and distinct from None/Poisoned");
 static_assert(sizeof(D3D12DDI_DEVICE_FUNCS_CORE_0088) == 976, "core table 0088");
 static_assert(sizeof(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092) == 560, "command list table 0092");
@@ -34,7 +34,10 @@ static_assert(alignof(engine_ddi::RecordHeader) == alignof(void*), "record heade
 static_assert(std::is_standard_layout_v<engine_ddi::MemoryRequest>, "MemoryRequest layout");
 static_assert(std::is_standard_layout_v<engine_ddi::ImportedMemory>, "ImportedMemory layout");
 static_assert(std::is_standard_layout_v<engine_ddi::ShellHooks>, "ShellHooks layout");
-static_assert(sizeof(engine_ddi::MemoryRequest) == 56, "MemoryRequest size");
+static_assert(sizeof(engine_ddi::MemoryRequest) == 72 &&
+                  offsetof(engine_ddi::MemoryRequest, surface_row_pitch) == 56 &&
+                  offsetof(engine_ddi::MemoryRequest, surface_layout_size) == 64,
+              "MemoryRequest size (r4: the linear surface)");
 static_assert(offsetof(engine_ddi::ImportedMemory, gpu_va) == 32, "ImportedMemory.gpu_va offset");
 static_assert(sizeof(engine_ddi::ImportedMemory) == 48, "ImportedMemory size");
 static_assert(sizeof(engine_ddi::ShellHooks) == 64, "ShellHooks size");
@@ -52,9 +55,74 @@ static_assert(std::is_same_v<decltype(&engine_ddi::free_adapter_caps), void (*)(
 static_assert(std::is_same_v<decltype(&engine_ddi::build_caps),
                              HRESULT (*)(const engine_ddi::AdapterCaps*, uint32_t, const D3D12DDIARG_GETCAPS*) noexcept>,
               "build_caps");
-// The engine header this revision is built against is ABI 1.2 (QueryAdapterCaps, V11).
-static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 2u), "engine ABI 1.2 header");
-static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 64, "ABI 1.2 x64 sizes");
+// Added within r3, additively: the shell's memory architecture policy of GetCaps 1002. A zero-initialized policy is
+// all Default; the struct the shell fills has no implicit padding.
+static_assert(std::is_same_v<decltype(&engine_ddi::set_memory_architecture_policy),
+                             HRESULT (*)(engine_ddi::AdapterCaps*, const engine_ddi::MemoryArchitecturePolicy*) noexcept>,
+              "set_memory_architecture_policy");
+static_assert(std::is_same_v<std::underlying_type_t<engine_ddi::PolicyBool>, uint32_t> &&
+                  static_cast<uint32_t>(engine_ddi::PolicyBool::Default) == 0 &&
+                  static_cast<uint32_t>(engine_ddi::PolicyBool::False) == 1 &&
+                  static_cast<uint32_t>(engine_ddi::PolicyBool::True) == 2,
+              "PolicyBool values");
+static_assert(std::is_standard_layout_v<engine_ddi::MemoryArchitecturePolicy> &&
+                  std::is_trivially_copyable_v<engine_ddi::MemoryArchitecturePolicy>,
+              "MemoryArchitecturePolicy layout");
+static_assert(sizeof(engine_ddi::PolicyTier) == 8 && sizeof(engine_ddi::MemoryArchitecturePolicy) == 32 &&
+                  offsetof(engine_ddi::MemoryArchitecturePolicy, heap_serialization_tier) == 16 &&
+                  offsetof(engine_ddi::MemoryArchitecturePolicy, resource_serialization_tier) == 24,
+              "MemoryArchitecturePolicy size and offsets");
+static_assert(sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041) == 20 && D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 == 1 &&
+                  D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2 == 2,
+              "GetCaps 1002 payload and the highest tiers at 0092");
+// Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
+static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,
+              "command_list_shell");
+static_assert(std::is_same_v<decltype(&engine_ddi::state_object_shell),
+                             void* (*)(D3D12DDI_HSTATEOBJECT_0054) noexcept>,
+              "state_object_shell");
+static_assert(std::is_same_v<decltype(&engine_ddi::destroy_engine_queue),
+                             engine_ddi::QueueClose (*)(engine_ddi::EngineQueue*) noexcept>,
+              "destroy_engine_queue");
+static_assert(std::is_same_v<decltype(&engine_ddi::object_allocation),
+                             HRESULT (*)(engine_ddi::DeviceContext*, D3D12DDI_HANDLE_AND_TYPE, D3DKMT_HANDLE*) noexcept>,
+              "object_allocation");
+// Tiled resources, added within r3: the engine parts of the shell's queue slots Q3 and Q4 take the EngineQueue and
+// then exactly the rest of the slot's arguments (PFND3D12DDI_UPDATETILEMAPPINGS, PFND3D12DDI_COPYTILEMAPPINGS).
+static_assert(std::is_same_v<decltype(&engine_ddi::update_tile_mappings),
+                             HRESULT (*)(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE, UINT,
+                                         const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*,
+                                         D3D12DDI_HHEAP, UINT, const D3D12DDI_TILE_RANGE_FLAGS*, const UINT*,
+                                         const UINT*, D3D12DDI_TILE_MAPPING_FLAGS) noexcept>,
+              "update_tile_mappings");
+static_assert(std::is_same_v<PFND3D12DDI_UPDATETILEMAPPINGS,
+                             VOID (APIENTRY*)(D3D12DDI_HCOMMANDQUEUE, D3D12DDI_HRESOURCE, UINT,
+                                              const D3D12DDI_TILED_RESOURCE_COORDINATE*,
+                                              const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_HHEAP, UINT,
+                                              const D3D12DDI_TILE_RANGE_FLAGS*, const UINT*, const UINT*,
+                                              D3D12DDI_TILE_MAPPING_FLAGS)>,
+              "Q3 slot the shell forwards");
+static_assert(std::is_same_v<decltype(&engine_ddi::copy_tile_mappings),
+                             HRESULT (*)(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE,
+                                         const D3D12DDI_TILED_RESOURCE_COORDINATE*, D3D12DDI_HRESOURCE,
+                                         const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*,
+                                         D3D12DDI_TILE_MAPPING_FLAGS) noexcept>,
+              "copy_tile_mappings");
+static_assert(std::is_same_v<PFND3D12DDI_COPYTILEMAPPINGS,
+                             VOID (APIENTRY*)(D3D12DDI_HCOMMANDQUEUE, D3D12DDI_HRESOURCE,
+                                              const D3D12DDI_TILED_RESOURCE_COORDINATE*, D3D12DDI_HRESOURCE,
+                                              const D3D12DDI_TILED_RESOURCE_COORDINATE*,
+                                              const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_TILE_MAPPING_FLAGS)>,
+              "Q4 slot the shell forwards");
+// The engine header this revision is built against is ABI 1.3 (linear images, V13).
+static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 3u), "engine ABI 1.3 header");
+static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 80 &&
+                  sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,
+              "ABI 1.3 x64 sizes");
+// r4 (V12): the create info carries InstanceMode, which engine-ddi's callers set to PRIVATE.
+static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 48 &&
+                  offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 40 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,
+              "ABI 1.2 r4 create info");
 // The two GetCaps payloads of M768 (d3d12umddi.h 10.0.26100): 1074 is 8 bytes, 1007 is the 4-byte level itself.
 static_assert(sizeof(D3D12DDI_3DPIPELINESUPPORT1_DATA_0081) == 8 && sizeof(D3D12DDI_3DPIPELINELEVEL) == 4,
               "GetCaps 1074 and 1007 payloads");

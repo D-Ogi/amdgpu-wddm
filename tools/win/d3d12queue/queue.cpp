@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include "interactive.h"
 using Microsoft::WRL::ComPtr;
 static bool check(const char* name,HRESULT hr) {
     printf("%s hr=%08lx\n",name,static_cast<unsigned long>(hr)); fflush(stdout); return SUCCEEDED(hr);
@@ -19,7 +20,11 @@ static bool wait_value(ID3D12Fence* f,UINT64 value,HANDLE event) {
     return w==WAIT_OBJECT_0 && completed>=value && completed!=UINT64_MAX;
 }
 int main(int argc,char** argv) {
-    if(argc==2 && !strcmp(argv[1],"--help")) {puts("amdgpu_wddm_d3d12_queue --lab|--warp (external process-tree deadline required)");return 0;}
+    if(argc==2 && !strcmp(argv[1],"--help")) {puts("amdgpu_wddm_d3d12_queue --lab|--warp | --interactive|--interactive-warp DIR --deadline SECONDS (1..150; external process-tree deadline required)");return 0;}
+    if(argc==5 && interactive::adapter_mode(argv[1])!=interactive::AdapterMode::Invalid && !strcmp(argv[3],"--deadline")){
+        try{return interactive::run(argv[2],interactive::seconds(argv[4]),interactive::adapter_mode(argv[1]));}
+        catch(const std::exception& e){fprintf(stderr,"interactive failure: %s\n",e.what());return 3;}
+    }
     if(argc!=2 || (strcmp(argv[1],"--lab") && strcmp(argv[1],"--warp"))) return 2;
     const bool warp=!strcmp(argv[1],"--warp");
     // Load the Microsoft runtime explicitly, never an application-local translator.

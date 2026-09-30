@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-// engine-ddi: descriptor heaps (D42-D47), UAV and RTV descriptors (D51, D52), and the list slots that use them
-// (L7 ClearRenderTargetView, L30 SetDescriptorHeaps).
+// engine-ddi: descriptor heaps, the views and samplers written into them, descriptor copies, and the list slots
+// that use them (ClearRenderTargetView, ClearDepthStencilView, SetDescriptorHeaps).
 //
 // Descriptor handles are the engine's, one to one: the runtime computes start + index * increment from what
 // GetCPU/GPUDescriptorHandleForHeapStart and GetDescriptorSizeInBytes return, and engine-ddi hands the result
@@ -18,6 +18,14 @@ static_assert(D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV == static_cast<int>(D3D1
 static_assert(sizeof(D3D12DDI_CPU_DESCRIPTOR_HANDLE) == sizeof(D3D12_CPU_DESCRIPTOR_HANDLE) &&
               sizeof(D3D12DDI_GPU_DESCRIPTOR_HANDLE) == sizeof(D3D12_GPU_DESCRIPTOR_HANDLE), "descriptor handles");
 static_assert(D3D12DDI_BUFFER_UAV_FLAG_RAW == static_cast<int>(D3D12_BUFFER_UAV_FLAG_RAW), "buffer UAV flags");
+static_assert(D3D12DDI_BUFFER_SRV_FLAG_RAW == static_cast<int>(D3D12_BUFFER_SRV_FLAG_RAW), "buffer SRV flags");
+static_assert(D3D12DDI_DEFAULT_SHADER_4_COMPONENT_MAPPING == D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+              "component mapping");
+static_assert(D3D12DDI_CREATE_DSV_FLAG_READ_ONLY_DEPTH == static_cast<int>(D3D12_DSV_FLAG_READ_ONLY_DEPTH) &&
+              D3D12DDI_CREATE_DSV_FLAG_READ_ONLY_STENCIL == static_cast<int>(D3D12_DSV_FLAG_READ_ONLY_STENCIL),
+              "DSV flags");
+static_assert(D3D12DDI_TEXTURE_ADDRESS_MODE_MIRRORONCE == static_cast<int>(D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE),
+              "sampler address modes");
 
 namespace {
 SIZE_T APIENTRY calc_heap(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_DESCRIPTOR_HEAP_0001*) {
@@ -85,10 +93,12 @@ D3D12DDI_GPU_DESCRIPTOR_HANDLE APIENTRY gpu_start(D3D12DDI_HDEVICE device, D3D12
     DeviceContext* c = resolve(device);
     if (!c) return {};
     auto* r = record_of<DescriptorHeapRecord>(h.pDrvPrivate, Tag::DescriptorHeap, c);
-    if (!r || !r->gpu.ptr) {
-        c->report(E_INVALIDARG);                        // unknown heap, or not shader visible
+    if (!r) {
+        c->report(E_INVALIDARG);
         return {};
     }
+    // A heap that is not shader visible has no GPU handle: the answer is zero and no error. The runtime was
+    // seen asking this of a render target view heap.
     return {r->gpu.ptr};
 }
 
@@ -227,6 +237,202 @@ void APIENTRY create_rtv(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_RENDE
                                       D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
 }
 
+void APIENTRY create_srv(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_SHADER_RESOURCE_VIEW_0002* args,
+                         D3D12DDI_CPU_DESCRIPTOR_HANDLE dest) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!args || !dest.ptr) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    ResourceRecord* r = view_resource(c, args->hDrvResource);
+    if (args->hDrvResource.pDrvPrivate && !r) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    D3D12_SHADER_RESOURCE_VIEW_DESC d{};
+    d.Format = args->Format;
+    d.Shader4ComponentMapping = args->Shader4ComponentMapping;
+    const bool ms = r && r->desc.SampleDesc.Count > 1;
+    switch (args->ResourceDimension) {
+    case D3D12DDI_RD_BUFFER:
+        d.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        d.Buffer = {args->Buffer.FirstElement, args->Buffer.NumElements, args->Buffer.StructureByteStride,
+                    static_cast<D3D12_BUFFER_SRV_FLAGS>(args->Buffer.Flags)};
+        break;
+    case D3D12DDI_RD_TEXTURE1D:
+        if (r && arrayed(r)) {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+            d.Texture1DArray = {args->Tex1D.MostDetailedMip, args->Tex1D.MipLevels, args->Tex1D.FirstArraySlice,
+                                args->Tex1D.ArraySize, args->Tex1D.ResourceMinLODClamp};
+        } else {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+            d.Texture1D = {args->Tex1D.MostDetailedMip, args->Tex1D.MipLevels, args->Tex1D.ResourceMinLODClamp};
+        }
+        break;
+    case D3D12DDI_RD_TEXTURE2D:
+        if (ms && r && arrayed(r)) {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+            d.Texture2DMSArray = {args->Tex2D.FirstArraySlice, args->Tex2D.ArraySize};
+        } else if (ms) {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+        } else if (r && arrayed(r)) {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+            d.Texture2DArray = {args->Tex2D.MostDetailedMip, args->Tex2D.MipLevels, args->Tex2D.FirstArraySlice,
+                                args->Tex2D.ArraySize, args->Tex2D.PlaneSlice, args->Tex2D.ResourceMinLODClamp};
+        } else {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            d.Texture2D = {args->Tex2D.MostDetailedMip, args->Tex2D.MipLevels, args->Tex2D.PlaneSlice,
+                           args->Tex2D.ResourceMinLODClamp};
+        }
+        break;
+    case D3D12DDI_RD_TEXTURE3D:
+        d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+        d.Texture3D = {args->Tex3D.MostDetailedMip, args->Tex3D.MipLevels, args->Tex3D.ResourceMinLODClamp};
+        break;
+    case D3D12DDI_RD_TEXTURECUBE:
+        // INFERENCE, as for arrayed(): more than one cube in the resource selects the cube array view.
+        if (r && r->desc.DepthOrArraySize > 6) {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+            d.TextureCubeArray = {args->TexCube.MostDetailedMip, args->TexCube.MipLevels, args->TexCube.First2DArrayFace,
+                                  args->TexCube.NumCubes, args->TexCube.ResourceMinLODClamp};
+        } else {
+            d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+            d.TextureCube = {args->TexCube.MostDetailedMip, args->TexCube.MipLevels, args->TexCube.ResourceMinLODClamp};
+        }
+        break;
+    case D3D12DDI_RD_RAYTRACING_ACCELERATION_STRUCTURE_0042:
+        if (r) {
+            c->report(E_INVALIDARG);                    // the structure is named by its address, not a resource
+            return;
+        }
+        d.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+        d.RaytracingAccelerationStructure.Location = args->RaytracingAccelerationStructure.Location;
+        break;
+    default:
+        c->report(E_INVALIDARG);
+        return;
+    }
+    c->device->CreateShaderResourceView(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr, &d,
+                                        D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+}
+
+void APIENTRY create_dsv(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_DEPTH_STENCIL_VIEW* args,
+                         D3D12DDI_CPU_DESCRIPTOR_HANDLE dest) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!args || !dest.ptr || (args->Flags & ~D3D12DDI_CREATE_DSV_FLAG_MASK)) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    ResourceRecord* r = view_resource(c, args->hDrvResource);
+    if (args->hDrvResource.pDrvPrivate && !r) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    D3D12_DEPTH_STENCIL_VIEW_DESC d{};
+    d.Format = args->Format;
+    d.Flags = static_cast<D3D12_DSV_FLAGS>(args->Flags);
+    const bool ms = r && r->desc.SampleDesc.Count > 1;
+    switch (args->ResourceDimension) {
+    case D3D12DDI_RD_TEXTURE1D:
+        if (r && arrayed(r)) {
+            d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+            d.Texture1DArray = {args->Tex1D.MipSlice, args->Tex1D.FirstArraySlice, args->Tex1D.ArraySize};
+        } else {
+            d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+            d.Texture1D = {args->Tex1D.MipSlice};
+        }
+        break;
+    case D3D12DDI_RD_TEXTURE2D:
+        if (ms && r && arrayed(r)) {
+            d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+            d.Texture2DMSArray = {args->Tex2D.FirstArraySlice, args->Tex2D.ArraySize};
+        } else if (ms) {
+            d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+        } else if (r && arrayed(r)) {
+            d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+            d.Texture2DArray = {args->Tex2D.MipSlice, args->Tex2D.FirstArraySlice, args->Tex2D.ArraySize};
+        } else {
+            d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+            d.Texture2D = {args->Tex2D.MipSlice};
+        }
+        break;
+    case D3D12DDI_RD_TEXTURECUBE:
+        d.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+        d.Texture2DArray = {args->TexCube.MipSlice, args->TexCube.FirstArraySlice, args->TexCube.ArraySize};
+        break;
+    default:
+        c->report(E_INVALIDARG);
+        return;
+    }
+    c->device->CreateDepthStencilView(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr, &d,
+                                      D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+}
+
+void APIENTRY create_cbv(D3D12DDI_HDEVICE device, const D3D12DDI_CONSTANT_BUFFER_VIEW_DESC* args,
+                         D3D12DDI_CPU_DESCRIPTOR_HANDLE dest) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!args || !dest.ptr) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC d{args->BufferLocation, args->SizeInBytes};
+    c->device->CreateConstantBufferView(&d, D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+}
+
+void APIENTRY create_sampler(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_SAMPLER* args,
+                             D3D12DDI_CPU_DESCRIPTOR_HANDLE dest) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!args || !args->pSamplerDesc || !dest.ptr) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    const D3D12DDI_SAMPLER_DESC& s = *args->pSamplerDesc;
+    D3D12_SAMPLER_DESC d{};
+    d.Filter = static_cast<D3D12_FILTER>(s.Filter);
+    d.AddressU = static_cast<D3D12_TEXTURE_ADDRESS_MODE>(s.AddressU);
+    d.AddressV = static_cast<D3D12_TEXTURE_ADDRESS_MODE>(s.AddressV);
+    d.AddressW = static_cast<D3D12_TEXTURE_ADDRESS_MODE>(s.AddressW);
+    d.MipLODBias = s.MipLODBias;
+    d.MaxAnisotropy = s.MaxAnisotropy;
+    d.ComparisonFunc = static_cast<D3D12_COMPARISON_FUNC>(s.ComparisonFunc);
+    std::memcpy(d.BorderColor, s.BorderColor, sizeof(d.BorderColor));
+    d.MinLOD = s.MinLOD;
+    d.MaxLOD = s.MaxLOD;
+    c->device->CreateSampler(&d, D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+}
+
+// Handles are the engine's own values and both handle types are one pointer-sized member (asserted above), so the
+// range arrays pass through as they are.
+void APIENTRY copy_descriptors(D3D12DDI_HDEVICE device, UINT dst_count, const D3D12DDI_CPU_DESCRIPTOR_HANDLE* dst,
+                               const UINT* dst_sizes, UINT src_count, const D3D12DDI_CPU_DESCRIPTOR_HANDLE* src,
+                               const UINT* src_sizes, D3D12DDI_DESCRIPTOR_HEAP_TYPE type) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if ((dst_count && !dst) || (src_count && !src) || type < 0 || type >= D3D12DDI_DESCRIPTOR_HEAP_TYPE_NUM_TYPES) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    c->device->CopyDescriptors(dst_count, reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(dst), dst_sizes,
+                               src_count, reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(src), src_sizes,
+                               static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(type));
+}
+
+void APIENTRY copy_descriptors_simple(D3D12DDI_HDEVICE device, UINT count, D3D12DDI_CPU_DESCRIPTOR_HANDLE dst,
+                                      D3D12DDI_CPU_DESCRIPTOR_HANDLE src, D3D12DDI_DESCRIPTOR_HEAP_TYPE type) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if ((count && (!dst.ptr || !src.ptr)) || type < 0 || type >= D3D12DDI_DESCRIPTOR_HEAP_TYPE_NUM_TYPES) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    c->device->CopyDescriptorsSimple(count, D3D12_CPU_DESCRIPTOR_HANDLE{dst.ptr}, D3D12_CPU_DESCRIPTOR_HANDLE{src.ptr},
+                                     static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(type));
+}
+
 // ---- Command-list slots -----------------------------------------------------------------------------------------
 void APIENTRY set_descriptor_heaps(D3D12DDI_HCOMMANDLIST hlist, UINT count, D3D12DDI_HDESCRIPTORHEAP* heaps) {
     CommandListRecord* l = list_of(hlist, "SetDescriptorHeaps");
@@ -257,6 +463,51 @@ void APIENTRY clear_rtv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HAN
     }
     l->list()->ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE{view.ptr}, color, rect_count, rects);
 }
+
+// The view's GPU handle, its CPU handle and the resource pass through as the runtime gave them.
+template <class Value, class Clear>
+void clear_uav(D3D12DDI_HCOMMANDLIST hlist, const char* slot, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
+               D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu, D3D12DDI_HRESOURCE resource, const Value* values, UINT rect_count,
+               const D3D12DDI_RECT* rects, Clear clear) {
+    CommandListRecord* l = list_of(hlist, slot);
+    if (!l) return;
+    ResourceRecord* r = view_resource(l->h.device, resource);
+    if (!r || !cpu.ptr || !values || (rect_count && !rects)) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    (l->list()->*clear)(D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr}, D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr},
+                        static_cast<ID3D12Resource*>(r->h.engine), values, rect_count, rects);
+}
+
+void APIENTRY clear_uav_uint(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
+                             D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu, D3D12DDI_HRESOURCE resource, const UINT values[4],
+                             UINT rect_count, const D3D12DDI_RECT* rects) {
+    clear_uav(hlist, "ClearUnorderedAccessViewUint", gpu, cpu, resource, values, rect_count, rects,
+              &ID3D12GraphicsCommandList::ClearUnorderedAccessViewUint);
+}
+
+void APIENTRY clear_uav_float(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
+                              D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu, D3D12DDI_HRESOURCE resource, const FLOAT values[4],
+                              UINT rect_count, const D3D12DDI_RECT* rects) {
+    clear_uav(hlist, "ClearUnorderedAccessViewFloat", gpu, cpu, resource, values, rect_count, rects,
+              &ID3D12GraphicsCommandList::ClearUnorderedAccessViewFloat);
+}
+
+// The DDI passes the clear flags as a plain UINT. INFERENCE: the bits are the API's (depth 1, stencil 2); any
+// other bit, or none, is refused rather than guessed.
+void APIENTRY clear_dsv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HANDLE view, UINT flags, FLOAT depth,
+                        UINT8 stencil, UINT rect_count, const D3D12DDI_RECT* rects) {
+    CommandListRecord* l = list_of(hlist, "ClearDepthStencilView");
+    if (!l || reject_in_compute_table(l)) return;
+    constexpr UINT known = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL;
+    if (!view.ptr || !flags || (flags & ~known) || (rect_count && !rects)) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    l->list()->ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE{view.ptr}, static_cast<D3D12_CLEAR_FLAGS>(flags), depth,
+                                     stencil, rect_count, rects);
+}
 } // namespace
 
 void fill_core_descriptors(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
@@ -268,11 +519,22 @@ void fill_core_descriptors(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnGetGPUDescriptorHandleForHeapStart = gpu_start;
     t->pfnCreateUnorderedAccessView = create_uav;
     t->pfnCreateRenderTargetView = create_rtv;
+    t->pfnCreateShaderResourceView = create_srv;
+    t->pfnCreateDepthStencilView = create_dsv;
+    t->pfnCreateConstantBufferView = create_cbv;
+    t->pfnCreateSampler = create_sampler;
+    t->pfnCopyDescriptors = copy_descriptors;
+    t->pfnCopyDescriptorsSimple = copy_descriptors_simple;
 }
 
 void fill_list_descriptors(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
     t->pfnSetDescriptorHeaps = set_descriptor_heaps;
-    if (table_index == 1) t->pfnClearRenderTargetView = clear_rtv;   // the compute table keeps its rejection
+    t->pfnClearUnorderedAccessViewUint = clear_uav_uint;
+    t->pfnClearUnorderedAccessViewFloat = clear_uav_float;
+    if (table_index == 1) {                                          // the compute table keeps its rejection
+        t->pfnClearRenderTargetView = clear_rtv;
+        t->pfnClearDepthStencilView = clear_dsv;
+    }
 }
 
 } // namespace engine_ddi

@@ -13,9 +13,10 @@ inline HRESULT validate_fence(const D3D12DDIARG_CREATE_FENCE* args) noexcept {
        ~static_cast<unsigned>(D3D12DDI_FENCE_FLAG_BOTTOM_OF_PIPE))return E_INVALIDARG;
     return S_OK;
 }
-inline SIZE_T APIENTRY fence_size(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATE_FENCE* args) {
-    if(!h.pDrvPrivate || FAILED(validate_fence(args)))return 0;
-    return static_cast<Device*>(h.pDrvPrivate)->lost.load()?0:sizeof(FenceState);
+// Private storage has one fixed size. Sizing does not judge the request;
+// pfnCreateFence validates it before the first write.
+inline SIZE_T APIENTRY fence_size(D3D12DDI_HDEVICE,const D3D12DDIARG_CREATE_FENCE*) {
+    return sizeof(FenceState);
 }
 inline HRESULT APIENTRY fence_create(D3D12DDI_HDEVICE h,D3D12DDI_HFENCE fence,
                                     const D3D12DDIARG_CREATE_FENCE* args) {

@@ -17,8 +17,10 @@ class AdapterQueryScope final {
     bc250_host_queue_funcs queue_functions_{};
     bc250_host_queue_binding binding_{};
     bc250_host_adapter_query query_{};
+    bc250_host_policy policy_{};
     unsigned forbidden_{};
     bool entered_{};
+    bool created_{};
     static int32_t dispatch(void* data,uint32_t operation,void*) noexcept {
         auto& scope=*static_cast<AdapterQueryScope*>(data);
         if(operation==BC250_HOST_CHECK_STATUS)return 0;
@@ -34,9 +36,12 @@ class AdapterQueryScope final {
         auto real=reinterpret_cast<PFN_vkCreateInstance>(scope.real_(VK_NULL_HANDLE,"vkCreateInstance"));
         if(!real)return VK_ERROR_INITIALIZATION_FAILED;
         // Preserve the engine's extension list and pNext chain.
-        auto copy=*info;scope.query_.pNext=copy.pNext;copy.pNext=&scope.host_;
+        auto copy=*info;scope.policy_.pNext=copy.pNext;copy.pNext=&scope.host_;
         VkResult result=real(&copy,allocator,out);
+        scope.policy_.pNext=nullptr;
         if(result==VK_SUCCESS) {
+            if(!*out){++scope.forbidden_;return VK_ERROR_INITIALIZATION_FAILED;}
+            scope.created_=true;
             scope.instance_=*out;scope.custom_allocator_=allocator!=nullptr;
             if(allocator)scope.allocator_=*allocator;
         }
@@ -65,9 +70,11 @@ class AdapterQueryScope final {
         return current_->real_(instance,name);
     }
 public:
-    AdapterQueryScope(PFN_vkGetInstanceProcAddr real,UINT64 luid) noexcept:real_(real) {
+    // policy_flags is the adapter's resolved instance policy, the one its devices are given too.
+    AdapterQueryScope(PFN_vkGetInstanceProcAddr real,UINT64 luid,uint32_t policy_flags) noexcept:real_(real) {
         if(current_ || !real || !luid)return;
-        query_={BC250_HOST_ADAPTER_QUERY_STYPE,nullptr,BC250_HOST_ADAPTER_QUERY_VERSION,sizeof(query_)};
+        policy_={BC250_HOST_POLICY_STYPE,nullptr,BC250_HOST_POLICY_VERSION,sizeof(policy_),policy_flags,0};
+        query_={BC250_HOST_ADAPTER_QUERY_STYPE,&policy_,BC250_HOST_ADAPTER_QUERY_VERSION,sizeof(query_)};
         queue_functions_.size=sizeof(queue_functions_);
         binding_={BC250_HOST_QUEUE_BINDING_STYPE,&query_,BC250_HOST_QUEUE_BINDING_VERSION,sizeof(binding_),&queue_functions_};
         host_={BC250_HOST_STYPE,&binding_,BC250_HOST_VERSION,sizeof(host_),luid,this,this,dispatch};
@@ -83,7 +90,7 @@ public:
         current_=nullptr;
     }
     bool entered() const noexcept{return entered_;}
-    bool completed() const noexcept{return entered_ && !instance_ && !forbidden_;}
+    bool completed() const noexcept{return entered_ && created_ && !instance_ && !forbidden_;}
     PFN_vkGetInstanceProcAddr entry() const noexcept{return entered_?get:nullptr;}
 };
 }

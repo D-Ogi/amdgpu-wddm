@@ -2,7 +2,8 @@
 // engine-ddi: the adapter caps path of GetCaps. query_adapter_caps asks the engine once (QueryAdapterCaps, engine
 // ABI 1.2, V11) and keeps its answers; build_caps answers each GetCaps from them. Where each value comes from is
 // the table in INTEGRATION.md ("GetCaps"): a D3D12_FEATURE_* answer of the engine wherever a 1:1 field exists,
-// otherwise a documented constant. Layout references are WDK 10.0.26100 um\d3d12umddi.h ("H:line").
+// otherwise a documented constant; for 1002 the shell's memory architecture policy on top
+// (set_memory_architecture_policy). Layout references are WDK 10.0.26100 um\d3d12umddi.h ("H:line").
 #include "internal.h"
 #include <cstring>
 #include <iterator>
@@ -20,6 +21,9 @@ static_assert(sizeof(D3D12DDI_ARCHITECTURE_INFO_DATA) == 4, "1005: H:2916-2920")
 static_assert(sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041) == 20, "1002: H:6806-6814");
 static_assert(sizeof(D3D12DDI_GPUVA_CAPS_0004) == 4, "1009: H:250-257");
 static_assert(sizeof(D3D12DDI_TEXTURE_LAYOUT_CAPS_0026) == 20, "1060: H:5525-5536");
+static_assert(sizeof(D3D12DDI_ROW_MAJOR_LAYOUT_CAPS) == 20, "1003: H:280-292, SubCaps[2] of 8 bytes and Flags");
+static_assert(sizeof(D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030) == 8, "1057: H:13697-13701");
+static_assert(sizeof(BOOL) == 4, "1069 and 1071: pData = BOOL, H:128, H:131");
 static_assert(sizeof(D3D12DDICAPS_UMD_BASED_COMMAND_QUEUE_PRIORITY_DATA_0023) == 4, "1062: H:5140-5143");
 static_assert(sizeof(D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050) == 4, "1067: H:7004-7008");
 static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0090) == 4, "1077: H:11127-11131");
@@ -60,6 +64,8 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
+    MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
+    bool diagnostic_raytracing;                 // false until set_diagnostic_raytracing_tier
 };
 
 namespace {
@@ -94,6 +100,22 @@ D3D12DDI_3DPIPELINELEVEL pipeline_level(D3D_FEATURE_LEVEL level) noexcept {
     default: return static_cast<D3D12DDI_3DPIPELINELEVEL>(0);
     }
 }
+
+// 1060 SupportsRowMajorTexture. The pinned engine creates no texture of layout
+// ROW_MAJOR (vkd3d-proton fork libs/vkd3d/resource.c, vkd3d_get_image_create_info refuses it with E_NOTIMPL) and
+// reports CrossAdapterRowMajorTextureSupported FALSE (libs/vkd3d/device.c, d3d12_device_caps_init_feature_options).
+constexpr BOOL kRowMajorTexture = FALSE;
+
+// 1003 SubCaps[0]: row-major data in buffers, every element size, alignment 1 (cosumd12's values).
+constexpr UINT16 kRowMajorMaxElementSize = 0xFFFF;
+constexpr UINT16 kRowMajorAlignment = 1;
+
+// 1059: the queue types engine-ddi creates (queue.cpp), in the form of cosumd12's answer.
+constexpr D3D12DDI_COMMAND_QUEUE_FLAGS kEngineQueueFlags = static_cast<D3D12DDI_COMMAND_QUEUE_FLAGS>(
+    D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE | D3D12DDI_COMMAND_QUEUE_FLAG_COPY);
+
+// 1060 DeviceDependentSwizzleCount: the valid indices of 1061 are 0 through this count - 1 (H:4752-4755).
+constexpr UINT kDeviceDependentSwizzleCount = 0;
 
 D3D12DDI_3DPIPELINELEVEL lower(D3D12DDI_3DPIPELINELEVEL a, D3D12DDI_3DPIPELINELEVEL b) noexcept { return a < b ? a : b; }
 
@@ -146,15 +168,20 @@ void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noe
     // Documented constants (INTEGRATION.md, "GetCaps"). Gated while the DDI slots behind them are fail-safes:
     //   DepthBoundsTestSupported (pfnOMSetDepthBounds), ProgrammableSamplePositionsTier (pfnSetSamplePositions),
     //   WriteBufferImmediateQueueFlags (pfnWriteBufferImmediate), ViewInstancingTier (pfnSetViewInstanceMask and
-    //   graphics pipelines), RaytracingTier (state objects, pfnDispatchRays), the VRS fields (pfnRSSetShadingRate,
-    //   pfnRSSetShadingRateImage), MeshShaderTier and the mesh fields (pfnDispatchMesh), SamplerFeedbackTier
+    //   graphics pipelines), RaytracingTier (indirect DispatchRays and restricted collection imports refuse; the
+    //   state object description is unmeasured, INTEGRATION.md "Ray tracing state objects"), the VRS fields
+    //   (pfnRSSetShadingRate, pfnRSSetShadingRateImage), MeshShaderTier and the mesh fields (pfnDispatchMesh), SamplerFeedbackTier
     //   (pfnCreateSamplerFeedbackUnorderedAccessView), EnhancedBarriersSupported (pfnBarrier).
     //   RenderPassTier 0: engine-ddi fills no render pass table; the runtime then emulates render passes.
     //   BackgroundProcessingSupported: pfnSetBackgroundProcessingMode is the shell's slot.
     //   DriverManagedShaderCachePresent: engine-ddi keeps no driver-managed shader cache.
     //   Deterministic64KBUndefinedSwizzle: no engine answer exists; not claimed.
     o.RenderPassTier = D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED;
-    o.RaytracingTier = D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
+    // The diagnostic deviation of set_diagnostic_raytracing_tier: the engine's 1_1 or higher as 1_1, never more
+    // than the engine says.
+    o.RaytracingTier = c.diagnostic_raytracing && c.options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1
+                           ? D3D12DDI_RAYTRACING_TIER_1_1
+                           : D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
     o.VariableShadingRateTier = D3D12DDI_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
     o.MeshShaderTier = D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED;
     o.SamplerFeedbackTier = D3D12DDI_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
@@ -183,6 +210,37 @@ void fill_shader(const AdapterCaps& c, D3D12DDI_SHADER_CAPS_0084& s) noexcept {
     // experimental (H:10436-10439).
     s.DerivativesInMeshAndAmplificationShaders = FALSE;
     s.WaveMMATier = D3D12DDI_WAVE_MMA_TIER_NOT_SUPPORTED;
+}
+
+// 1002 as build_caps answers it: the engine's answers or constants, then the policy's explicit fields.
+D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 memory_architecture(const AdapterCaps& c,
+                                                           const MemoryArchitecturePolicy& p) noexcept {
+    D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 m{};
+    m.UMA = c.architecture.UMA;
+    m.CacheCoherent = c.architecture.CacheCoherentUMA;
+    m.IOCoherent = FALSE;                                   // no engine answer; not claimed without a policy
+    m.HeapSerializationTier = c.serialization.HeapSerializationTier >= D3D12_HEAP_SERIALIZATION_TIER_10
+                                  ? D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1
+                                  : D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0;
+    m.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_0;   // no engine answer
+    if (p.uma != PolicyBool::Default) m.UMA = p.uma == PolicyBool::True;
+    if (p.cache_coherent != PolicyBool::Default) m.CacheCoherent = p.cache_coherent == PolicyBool::True;
+    if (p.io_coherent != PolicyBool::Default) m.IOCoherent = p.io_coherent == PolicyBool::True;
+    if (p.heap_serialization_tier.set)
+        m.HeapSerializationTier = static_cast<D3D12DDI_HEAP_SERIALIZATION_TIER_0041>(p.heap_serialization_tier.value);
+    if (p.resource_serialization_tier.set)
+        m.ResourceSerializationTier =
+            static_cast<D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041>(p.resource_serialization_tier.value);
+    return m;
+}
+
+bool policy_bool_valid(PolicyBool b) noexcept {
+    return b == PolicyBool::Default || b == PolicyBool::False || b == PolicyBool::True;
+}
+
+// set 0 with value 0, or set 1 with a value of the enum (H:6793-6797 ends at _1, H:6799-6804 at _2).
+bool policy_tier_valid(const PolicyTier& t, uint32_t highest) noexcept {
+    return t.set == 0 ? t.value == 0 : t.set == 1 && t.value <= highest;
 }
 
 template <class T> T* payload(const D3D12DDIARG_GETCAPS& r) noexcept {
@@ -260,6 +318,48 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
 
 void free_adapter_caps(AdapterCaps* caps) noexcept { delete caps; }
 
+HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept {
+    if (!caps) return E_INVALIDARG;
+    caps->diagnostic_raytracing = report;
+    log_line("diagnostic raytracing tier %s (engine tier %d)", report ? "on" : "off",
+             static_cast<int>(caps->options5.RaytracingTier));
+    return S_OK;
+}
+
+HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept {
+    if (!caps || !policy) return E_INVALIDARG;
+    const MemoryArchitecturePolicy& p = *policy;
+    if (p.size != sizeof(MemoryArchitecturePolicy) || !policy_bool_valid(p.uma) ||
+        !policy_bool_valid(p.cache_coherent) || !policy_bool_valid(p.io_coherent) ||
+        !policy_tier_valid(p.heap_serialization_tier, D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1) ||
+        !policy_tier_valid(p.resource_serialization_tier, D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2)) {
+        log_line("memory architecture policy refused: size %u, UMA %u, CacheCoherent %u, IOCoherent %u, "
+                 "heap tier %u/%u, resource tier %u/%u (set/value)",
+                 p.size, static_cast<unsigned>(p.uma), static_cast<unsigned>(p.cache_coherent),
+                 static_cast<unsigned>(p.io_coherent), p.heap_serialization_tier.set, p.heap_serialization_tier.value,
+                 p.resource_serialization_tier.set, p.resource_serialization_tier.value);
+        return E_INVALIDARG;
+    }
+    // The answer build_caps would give, every Default resolved against the engine's answers; the contradictions
+    // are those of INTEGRATION.md, "Memory architecture policy".
+    const D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 m = memory_architecture(*caps, p);
+    const char* contradiction = nullptr;
+    if (m.CacheCoherent && !m.UMA)
+        contradiction = "CacheCoherent without UMA";
+    else if (m.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 &&
+             m.ResourceSerializationTier != D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2)
+        contradiction = "heap serialization tier 1 without resource serialization tier 2";
+    if (contradiction) {
+        log_line("memory architecture policy refused: the resulting 1002 answer (UMA %d, CacheCoherent %d, "
+                 "IOCoherent %d, heap tier %d, resource tier %d) has %s",
+                 m.UMA, m.CacheCoherent, m.IOCoherent, static_cast<int>(m.HeapSerializationTier),
+                 static_cast<int>(m.ResourceSerializationTier), contradiction);
+        return E_INVALIDARG;
+    }
+    caps->memory_policy = p;
+    return S_OK;
+}
+
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept {
     if (!caps || !request || ddi_version != kDdiVersion) return E_INVALIDARG;
     const AdapterCaps& c = *caps;
@@ -315,15 +415,7 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
     case D3D12DDICAPS_TYPE_MEMORY_ARCHITECTURE: {
         auto* d = payload<D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041>(r);
         if (!d || !node_zero(r)) return E_INVALIDARG;
-        D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 m{};
-        m.UMA = c.architecture.UMA;
-        m.CacheCoherent = c.architecture.CacheCoherentUMA;
-        m.IOCoherent = FALSE;                               // no engine answer; not claimed
-        m.HeapSerializationTier = c.serialization.HeapSerializationTier >= D3D12_HEAP_SERIALIZATION_TIER_10
-                                      ? D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1
-                                      : D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0;
-        m.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_0;   // no engine answer
-        *d = m;
+        *d = memory_architecture(c, c.memory_policy);
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_GPUVA_CAPS: {
@@ -338,11 +430,84 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         if (!d || r.pInfo) return E_INVALIDARG;
         D3D12DDI_TEXTURE_LAYOUT_CAPS_0026 t{};
         t.DeviceDependentLayoutCount = 0;
-        t.DeviceDependentSwizzleCount = 0;
+        t.DeviceDependentSwizzleCount = kDeviceDependentSwizzleCount;
         t.Supports64KStandardSwizzle = c.options.StandardSwizzle64KBSupported;
-        t.SupportsRowMajorTexture = FALSE;                  // no 1:1 engine answer; not claimed
+        t.SupportsRowMajorTexture = kRowMajorTexture;
         t.IndexableSwizzlePatterns = FALSE;
         *d = t;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS: {
+        // *pInfo is UINT[2] {D3D12DDI_TL_ROW_MAJOR, D3D12DDI_FUNCTIONAL_UNIT}, pData D3D12DDI_ROW_MAJOR_LAYOUT_CAPS
+        // (H:268-271). ROW_MAJOR is the only layout the query names; the units are COMBINED, COPY_SRC and COPY_DST
+        // (H:259-266). Buffers are ROW_MAJOR and carry the row-major data of footprint copies, which the engine
+        // does support, so the answer is independent of 1060 SupportsRowMajorTexture. The values are those of
+        // cosumd12 (CosUmd12Adapter.cpp:345-367): entry 0 covers every element size with alignment 1, entry 1 is
+        // unused, Flags NONE. The engine copies through Vulkan buffer-image copies, which need texel alignment only,
+        // and has one copy path, so the three units get the same answer. INTEGRATION.md, "1003 values".
+        auto* d = payload<D3D12DDI_ROW_MAJOR_LAYOUT_CAPS>(r);
+        if (!d) return E_INVALIDARG;
+        const UINT* key = static_cast<const UINT*>(r.pInfo);
+        if (!key || key[0] != D3D12DDI_TL_ROW_MAJOR || key[1] > D3D12DDI_FUNCUNIT_COPY_DST) {
+            if (key)
+                log_line("GetCaps TEXTURE_LAYOUT_SETS: layout %u, functional unit %u outside the contract", key[0], key[1]);
+            else
+                log_line("GetCaps TEXTURE_LAYOUT_SETS: pInfo NULL, the contract names UINT[2]");
+            return E_INVALIDARG;
+        }
+        D3D12DDI_ROW_MAJOR_LAYOUT_CAPS t{};
+        t.SubCaps[0].MaxElementSize = kRowMajorMaxElementSize;
+        t.SubCaps[0].BaseOffsetAlignment = kRowMajorAlignment;
+        t.SubCaps[0].PitchAlignment = kRowMajorAlignment;
+        t.SubCaps[0].DepthPitchAlignment = kRowMajorAlignment;
+        t.Flags = D3D12DDI_ROW_MAJOR_LAYOUT_FLAG_NONE;
+        *d = t;
+        log_line("GetCaps TEXTURE_LAYOUT_SETS: layout %u, functional unit %u: one entry, alignment %u", key[0], key[1],
+                 static_cast<unsigned>(kRowMajorAlignment));
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0022_SWIZZLE_PATTERN:
+        // *pInfo is an index below 1060's DeviceDependentSwizzleCount (H:4752-4755), which is 0: no index exists.
+        static_assert(kDeviceDependentSwizzleCount == 0, "1061 answers no swizzle pattern");
+        log_line("GetCaps SWIZZLE_PATTERN (DataSize %u, pInfo %s): 1060 reports no device-dependent swizzle pattern",
+                 r.DataSize, r.pInfo ? "set" : "null");
+        return E_INVALIDARG;
+    case D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES: {
+        // *pInfo is a NodeIndex, pData a D3D12DDI_COMMAND_QUEUE_FLAGS (H:1431-1434). No source says what a set flag
+        // means. cosumd12 answers with the queue type it has (COMPUTE, CosUmd12Adapter.cpp:369-376); engine-ddi
+        // answers with the three it has. INFERENCE, INTEGRATION.md "1059 value".
+        auto* d = payload<D3D12DDI_COMMAND_QUEUE_FLAGS>(r);
+        if (!d) return E_INVALIDARG;
+        const UINT* node = static_cast<const UINT*>(r.pInfo);
+        if (!node || *node != 0) {
+            if (node)
+                log_line("GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: node %u, the adapter has node 0 only", *node);
+            else
+                log_line("GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: pInfo NULL, the contract names a NodeIndex");
+            return E_INVALIDARG;
+        }
+        *d = kEngineQueueFlags;
+        log_line("GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: node 0, flags 0x%x", static_cast<unsigned>(kEngineQueueFlags));
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0030_PROTECTED_RESOURCE_SESSION_SUPPORT: {
+        // NodeIndex is an input inside the payload (H:13697-13701). engine-ddi refuses every protected resource
+        // session (pfnSetProtectedResourceSession is a fail-safe, resources.cpp refuses a session handle).
+        auto* d = payload<D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030>(r);
+        if (!d || d->NodeIndex != 0) return E_INVALIDARG;
+        d->Support = D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_FLAG_0030_NONE;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM: {
+        auto* d = payload<BOOL>(r);                         // pData = BOOL (H:128)
+        if (!d) return E_INVALIDARG;
+        *d = FALSE;                                         // not claimed: the queue table is the shell's
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0073_SUPPORT_BATCHED_MARKERS: {
+        auto* d = payload<BOOL>(r);                         // pData = BOOL (H:131)
+        if (!d) return E_INVALIDARG;
+        *d = FALSE;                                         // no marker batching; pfnSetMarker accepts and drops
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_0023_UMD_BASED_COMMAND_QUEUE_PRIORITY: {
@@ -373,6 +538,7 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         return S_OK;
     }
     default:
+        // Every other type defined at 0092 is left unanswered on purpose (INTEGRATION.md, "GetCaps mapping").
         log_line("GetCaps type %u (DataSize %u, pInfo %s): not answered in this revision", static_cast<unsigned>(r.Type),
                  r.DataSize, r.pInfo ? "set" : "null");
         return E_NOTIMPL;

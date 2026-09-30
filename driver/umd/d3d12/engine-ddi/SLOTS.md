@@ -5,22 +5,23 @@ by the native12 shell. A mixed slot names the owner and the boundary call it mak
 rendering, P2 FL 12_0/12_1 (tiled, conservative raster, ROV), P3 DXR, P4 other (fail-safe until needed). Until a slot
 is implemented, its entry is the fail-safe of `engine-ddi.h`; no slot is left NULL once the table is published.
 
-"native: blocked on payload contract" marks the shader slots. The payload shape is known from the WDK header: a
-bare program with its length in DWORD 1, plus register-only signature entries. That the buffer holds exactly that
-many DWORDs is an inference from the SAL annotation `_In_reads_(pShaderCode[1])`, not a measurement. How to
-translate it for the engine is not agreed. Until it is:
-- the native intake reads within the declared length only (null check first, then DWORD 1, a length below 2
-  refused), copies that length, logs at most the first four DWORDs inside it, the length and the signature counts,
-  and reports E_NOTIMPL;
-- no container is synthesized;
-- a harness-only path, compiled with `AMDGPU_WDDM_ENGINE_DDI_HARNESS`, accepts a complete DXBC or DXIL
-  container. It is for offline pipeline and dispatch tests, and it says nothing about the runtime payload.
+"native via shader-container" marks the shader slots. The payload shape is known from the WDK header: a bare
+program with its length in DWORD 1, plus register-only signature entries. That the buffer holds exactly that many
+DWORDs is an inference from the SAL annotation `_In_reads_(pShaderCode[1])`, not a measurement. Each create
+rebuilds the container the engine compiles with [shader-container](shader-container/README.md), within that
+length; pipelines name input elements and stream-output entries from the rebuilt signatures, a gap in a
+stream-output declaration as a NULL SemanticName, which the pinned r4 engine takes. Mesh and amplification programs
+are refused with E_NOTIMPL.
 
 `pfnCreateHeapAndResource` (D60):
 - A heap, or a committed resource (dedicated allocation, heap from it, resource placed at 0), makes exactly one
   `allocate_memory` call.
 - A placed resource uses its heap's memory and never allocates.
 - The runtime owner in the request is the call's `D3D12DDI_HRTRESOURCE` argument.
+
+A reserved resource (D60 with neither a heap description nor a base resource) makes no `allocate_memory` call; its
+tiles are bound to heaps through Q3 and Q4, whose slots are the shell's (the queue table) and whose engine parts are
+`update_tile_mappings` and `copy_tile_mappings` (INTEGRATION.md, "Tiled resources").
 
 `pfnDestroyHeapAndResource` (D61) hands heap memory to the release sequence of `engine-ddi.h`: `free_memory`
 runs only after GPU retirement, on a DDI thread.
@@ -44,16 +45,16 @@ runs only after GPU retirement, on a DDI thread.
 | D12 | 0x060 | `pfnCalcPrivateRasterizerStateSize` | engine-ddi | P1 |
 | D13 | 0x068 | `pfnCreateRasterizerState` | engine-ddi | P1 |
 | D14 | 0x070 | `pfnDestroyRasterizerState` | engine-ddi | P1 |
-| D15 | 0x078 | `pfnCalcPrivateShaderSize` | engine-ddi; native: blocked on payload contract | P1 |
-| D16 | 0x080 | `pfnCreateVertexShader` | engine-ddi; native: blocked on payload contract | P1 |
-| D17 | 0x088 | `pfnCreatePixelShader` | engine-ddi; native: blocked on payload contract | P1 |
-| D18 | 0x090 | `pfnCreateGeometryShader` | engine-ddi; native: blocked on payload contract | P1 |
-| D19 | 0x098 | `pfnCreateComputeShader` | engine-ddi; native: blocked on payload contract | P1 |
-| D20 | 0x0A0 | `pfnCalcPrivateGeometryShaderWithStreamOutput` | engine-ddi; native: blocked on payload contract | P1 |
-| D21 | 0x0A8 | `pfnCreateGeometryShaderWithStreamOutput` | engine-ddi; native: blocked on payload contract | P1 |
-| D22 | 0x0B0 | `pfnCalcPrivateTessellationShaderSize` | engine-ddi; native: blocked on payload contract | P1 |
-| D23 | 0x0B8 | `pfnCreateHullShader` | engine-ddi; native: blocked on payload contract | P1 |
-| D24 | 0x0C0 | `pfnCreateDomainShader` | engine-ddi; native: blocked on payload contract | P1 |
+| D15 | 0x078 | `pfnCalcPrivateShaderSize` | engine-ddi; native via shader-container | P1 |
+| D16 | 0x080 | `pfnCreateVertexShader` | engine-ddi; native via shader-container | P1 |
+| D17 | 0x088 | `pfnCreatePixelShader` | engine-ddi; native via shader-container | P1 |
+| D18 | 0x090 | `pfnCreateGeometryShader` | engine-ddi; native via shader-container | P1 |
+| D19 | 0x098 | `pfnCreateComputeShader` | engine-ddi; native via shader-container | P1 |
+| D20 | 0x0A0 | `pfnCalcPrivateGeometryShaderWithStreamOutput` | engine-ddi; native via shader-container | P1 |
+| D21 | 0x0A8 | `pfnCreateGeometryShaderWithStreamOutput` | engine-ddi; native via shader-container | P1 |
+| D22 | 0x0B0 | `pfnCalcPrivateTessellationShaderSize` | engine-ddi; native via shader-container | P1 |
+| D23 | 0x0B8 | `pfnCreateHullShader` | engine-ddi; native via shader-container | P1 |
+| D24 | 0x0C0 | `pfnCreateDomainShader` | engine-ddi; native via shader-container | P1 |
 | D25 | 0x0C8 | `pfnDestroyShader` | engine-ddi | P1 |
 | D26 | 0x0D0 | `pfnCalcPrivateCommandQueueSize` | shell; calls create_engine_queue | P0 |
 | D27 | 0x0D8 | `pfnCreateCommandQueue` | shell; calls create_engine_queue | P0 |
@@ -145,11 +146,11 @@ runs only after GPU retirement, on a DDI thread.
 | D113 | 0x388 | `pfnSetPipelineStackSize` | engine-ddi | P3 |
 | D114 | 0x390 | `pfnSetBackgroundProcessingMode` | shell | P4 |
 | D115 | 0x398 | `pfnCalcPrivateAddToStateObjectSize` | engine-ddi | P3 |
-| D116 | 0x3A0 | `pfnAddToStateObject` | engine-ddi | P3 |
+| D116 | 0x3A0 | `pfnAddToStateObject` | engine-ddi; E_NOTIMPL without the engine's ID3D12Device7 | P3 |
 | D117 | 0x3A8 | `pfnCreateSamplerFeedbackUnorderedAccessView` | engine-ddi | P4 |
-| D118 | 0x3B0 | `pfnCreateAmplificationShader` | engine-ddi; native: blocked on payload contract | P4 |
-| D119 | 0x3B8 | `pfnCreateMeshShader` | engine-ddi; native: blocked on payload contract | P4 |
-| D120 | 0x3C0 | `pfnCalcPrivateMeshShaderSize` | engine-ddi; native: blocked on payload contract | P4 |
+| D118 | 0x3B0 | `pfnCreateAmplificationShader` | engine-ddi; E_NOTIMPL (mesh) | P4 |
+| D119 | 0x3B8 | `pfnCreateMeshShader` | engine-ddi; E_NOTIMPL (mesh) | P4 |
+| D120 | 0x3C0 | `pfnCalcPrivateMeshShaderSize` | engine-ddi | P4 |
 | D121 | 0x3C8 | `pfnImplicitShaderCacheControl` | engine-ddi | P4 |
 
 ## Command list `D3D12DDI_COMMAND_LIST_FUNCS_3D_0092` (70 slots)
@@ -234,8 +235,8 @@ runs only after GPU retirement, on a DDI thread.
 | Q0 | 0x000 | `pfnExecuteCommandLists` | shell; calls execute_command_lists | P0 |
 | Q1 | 0x008 | `pfnUnused` | shell | P4 |
 | Q2 | 0x010 | `pfnUnused2` | shell | P4 |
-| Q3 | 0x018 | `pfnUpdateTileMappings` | engine-ddi | P2 |
-| Q4 | 0x020 | `pfnCopyTileMappings` | engine-ddi | P2 |
+| Q3 | 0x018 | `pfnUpdateTileMappings` | shell; calls update_tile_mappings | P2 |
+| Q4 | 0x020 | `pfnCopyTileMappings` | shell; calls copy_tile_mappings | P2 |
 | Q5 | 0x028 | `pfnSignalFence` | shell | P0 |
 | Q6 | 0x030 | `pfnWaitForFence` | shell | P0 |
 

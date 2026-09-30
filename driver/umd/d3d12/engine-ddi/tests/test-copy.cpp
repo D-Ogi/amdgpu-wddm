@@ -57,15 +57,17 @@ void test_copy(Env& env, Device& device) {
     hr = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec);
     checkf(hr == S_OK && rec.table == 1, "copy: pool, recorder and DIRECT list, bound to the graphics table (hr %08lx)",
            static_cast<unsigned long>(hr));
+    if (hr == S_OK)
+        check(engine_ddi::command_list_shell(rec.hlist()) == &device.shell,
+              "copy: command_list_shell names the shell of the list's device");
     if (hr == S_OK) {
         const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[rec.table];
         D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_dest =
             transition(gpu, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST);
         t.pfnResourceBarrier(rec.hlist(), 1, &to_dest);
-        dst.BaseAddress.UMD = {gpu.hres(), 0};
-        src.BaseAddress.UMD = {upload.hres(), 0};
-        t.pfnCopyBufferRegion(rec.hlist(), dst, src, kBytes);
+        // Whole-resource copy up, region copy down: both buffers have the same size.
+        t.pfnResourceCopy(rec.hlist(), gpu.hres(), upload.hres());
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
             transition(gpu, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
         t.pfnResourceBarrier(rec.hlist(), 1, &to_source);
@@ -76,7 +78,7 @@ void test_copy(Env& env, Device& device) {
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
         checkf(hr == S_OK && !device.shell.list_errors,
-               "copy: barrier, two CopyBufferRegion, Close and execute_command_lists (hr %08lx)",
+               "copy: barrier, ResourceCopy, CopyBufferRegion, Close and execute_command_lists (hr %08lx)",
                static_cast<unsigned long>(hr));
 
         // Hold retirement back (the fence looks stuck at the empty submission's 1), destroy the upload buffer
@@ -119,10 +121,11 @@ void test_copy(Env& env, Device& device) {
            "copy: the deferred release ran at a later DDI call, the other two at their destroy, all on the DDI "
            "thread (%zu deferred, %zu immediate, %zu elsewhere)",
            deferred, immediate, wrong_thread);
-    engine_ddi::destroy_engine_queue(queue);
+    const engine_ddi::QueueClose closed = engine_ddi::destroy_engine_queue(queue);
     engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
-    checkf(!engine_ddi::harness_live_objects(device.context) && !engine_ddi::harness_retirement_lost(device.context),
-           "copy: no live object left, retirement never lost (%u live)",
+    checkf(closed == engine_ddi::QueueClose::Retired && !engine_ddi::harness_live_objects(device.context) &&
+               !engine_ddi::harness_retirement_lost(device.context),
+           "copy: destroy_engine_queue reports Retired, no live object left, retirement never lost (%u live)",
            engine_ddi::harness_live_objects(device.context));
 }
 

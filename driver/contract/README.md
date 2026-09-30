@@ -20,6 +20,7 @@ anything depended on it; the host tests below still hold it to that.
 | File | What it is |
 |---|---|
 | `bc250_umd_private.h` | The blob. Versioned, fixed-width, **version 3, 1472 bytes**, compile-time size and offset asserts. Compiles both as user-mode C and under the miniport's `/kernel` flags |
+| `amdgpu_wddm_surface_format.h` | The formats a linear surface (LB7A v1) may have: DXGI and D3DDDIFORMAT numbers, bytes a pixel, sRGB sibling, and the policy bits that enable a row for composition or scan-out. The D3D12 shell, engine-ddi, the kernel driver and the compositor's UMD read it; each checks the numbers against its SDK/WDK headers |
 | `bc250_umd_private_fields.h` | The member names of the three imported UAPI structures, as X-macro lists. Names only |
 | `third_party/amdgpu_drm.h` | Linux UAPI, MIT, tag v6.18, imported byte for byte. See `third_party/PROVENANCE.md` |
 | `uapi-shim/drm.h` | Ours. The seven names `amdgpu_drm.h` needs from `drm.h`, so it compiles under MSVC unmodified |

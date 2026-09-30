@@ -2,10 +2,11 @@
 // shader-container: a DXBC container rebuilt from what the D3D12 DDI gives a user-mode driver, so that the
 // vkd3d-proton engine (whose shader front end takes a full container with named signatures) can consume it.
 //
-// PROTOTYPE, OFFLINE ONLY. Native shader intake stays unsupported (engine-ddi README, "Shaders"); nothing in the
-// shell or engine-ddi calls this code. DXBC (shader model 4.x and 5.x) and DXIL (shader model 6.x vertex, hull,
-// domain, geometry, pixel and compute programs); libraries, mesh and amplification programs and state objects are
-// out of scope and refused.
+// engine-ddi's native shader intake: every engine-ddi create-shader slot calls BuildContainer, and
+// CreatePipelineState names input elements and stream-output entries with the two helpers (../pipelines.cpp,
+// engine-ddi.h "Shaders"). DXBC (shader model 4.x and 5.x) and DXIL (shader model 6.x vertex, hull, domain,
+// geometry, pixel and compute programs); mesh and amplification programs are out of scope and refused. DXIL
+// libraries of state objects go through BuildLibraryContainer (../state-objects.cpp).
 //
 // Input, as read from WDK 10.0.26100 d3d12umddi.h:
 //   - D3D12DDIARG_CREATE_SHADER_0026::pShaderCode, the program, not a container. DXBC: the token stream, VerTok,
@@ -99,6 +100,20 @@ struct Container
 
 // Builds the container. On failure the container is left empty.
 Result BuildContainer(const ProgramDesc& desc, Container* container);
+
+// DXIL libraries of state objects (D3D12DDI_DXIL_LIBRARY_DESC_0054::pDXILLibrary, which has no size). The payload is
+// taken as a DXIL part (DxilProgramHeader, program kind 6) or as a whole DXBC container; which one the runtime passes
+// is not measured. LibraryPayloadDwords is the length the payload claims: SizeInUint32 (DWORD 1) of a DXIL part, or
+// the container size (bytes 24 to 27) in DWORDs, rounded up; 0 for a null payload. It reads DWORD 1, or DWORD 6
+// behind the DXBC magic, and nothing else. BuildLibraryContainer checks it for internal consistency; nothing in the
+// DDI proves the backing extends that far.
+size_t LibraryPayloadDwords(const UINT* payload);
+
+// Builds the container the engine parses a library from: the header and the DXIL part alone, copied unchanged (of a
+// whole container, its DXIL part; RDAT and the rest are dropped). Reads no further than capacity DWORDs, and checks the
+// part offsets and sizes, SizeInUint32 and the bitcode bounds against it. Unsupported
+// for a DXIL program that is not a library. On failure the container is left empty.
+Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* container);
 
 struct Semantic
 {

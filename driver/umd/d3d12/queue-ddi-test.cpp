@@ -27,11 +27,31 @@ int main(){
     failDestroy=true;table.pfnDestroyCommandQueue(hd,a);::operator delete(a.pDrvPrivate);
     assert(errors==1 && device.lost.load() && !memcmp(&seen,&ra,sizeof(ra)));
     assert(table.pfnCreateCommandQueue(hd,&args,{},ra)==E_INVALIDARG);
-    assert(table.pfnCalcPrivateCommandQueueSize(hd,&args)==0);
+    assert(table.pfnCalcPrivateCommandQueueSize(hd,&args)==sizeof(native12::QueueSlot));
+    assert(table.pfnCalcPrivateCommandQueueSize(hd,nullptr)==sizeof(native12::QueueSlot));
     failDestroy=false;table.pfnDestroyCommandQueue(hd,b);::operator delete(b.pDrvPrivate);
     assert(!memcmp(&seen,&rb,sizeof(rb)) && !device.queues.empty());
     unsigned unresolved=0;
     assert(device.queues.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1 && device.queues.empty());
     assert(!memcmp(&seen,&rb,sizeof(rb))); // Last callback remains the still-valid B destruction.
+    {   // A refused request must leave runtime storage untouched and call nothing.
+        native12::Device fresh;fresh.callbacks.pfnCreateContextVirtualCb=create;
+        fresh.callbacks.pfnDestroyContextCb=destroy;fresh.callbacks.pfnSetErrorCb=error;
+        D3D12DDI_HDEVICE hf{};hf.pDrvPrivate=&fresh;
+        alignas(native12::QueueSlot) unsigned char storage[sizeof(native12::QueueSlot)+16];
+        D3D12DDI_HCOMMANDQUEUE q{};q.pDrvPrivate=storage;
+        D3D12DDIARG_CREATECOMMANDQUEUE_0050 refused[4]{};
+        refused[1].QueueFlags=static_cast<D3D12DDI_COMMAND_QUEUE_FLAGS>(8);
+        refused[2].QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;refused[2].NodeMask=2;
+        refused[3].QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;refused[3].SchedulingGroup.pDrvPrivate=storage;
+        const unsigned before=creates;
+        for(const auto& r:refused){
+            memset(storage,0xcd,sizeof(storage));
+            assert(table.pfnCalcPrivateCommandQueueSize(hf,&r)==sizeof(native12::QueueSlot));
+            assert(table.pfnCreateCommandQueue(hf,&r,q,ra)==E_NOTIMPL);
+            for(unsigned char byte:storage)assert(byte==0xcd);
+        }
+        assert(creates==before && fresh.queues.empty() && !fresh.lost.load());
+    }
     puts("typed queue DDI creation/destruction tests passed");
 }

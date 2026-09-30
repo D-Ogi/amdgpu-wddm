@@ -4,11 +4,10 @@
 #include <atomic>
 #include <cstdint>
 namespace native12 {
-inline SIZE_T APIENTRY queue_size(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATECOMMANDQUEUE_0050* args) {
-    if(!h.pDrvPrivate || !args)return 0;
-    auto d=static_cast<Device*>(h.pDrvPrivate);
-    if(d->lost.load())return 0;
-    ContextRequest request;return SUCCEEDED(request.prepare(*args))?sizeof(QueueSlot):0;
+// Private storage has one fixed size. Sizing does not judge the request;
+// pfnCreateCommandQueue validates it before the first write.
+inline SIZE_T APIENTRY queue_size(D3D12DDI_HDEVICE,const D3D12DDIARG_CREATECOMMANDQUEUE_0050*) {
+    return sizeof(QueueSlot);
 }
 inline HRESULT APIENTRY queue_create(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATECOMMANDQUEUE_0050* args,
                                      D3D12DDI_HCOMMANDQUEUE q,D3D12DDI_HRTCOMMANDQUEUE runtime) {
@@ -16,6 +15,7 @@ inline HRESULT APIENTRY queue_create(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATE
        reinterpret_cast<uintptr_t>(q.pDrvPrivate)%alignof(QueueSlot))return E_INVALIDARG;
     auto d=static_cast<Device*>(h.pDrvPrivate);
     if(d->lost.load())return D3DDDIERR_DEVICEREMOVED;
+    {ContextRequest probe;HRESULT refused=probe.prepare(*args);if(FAILED(refused))return refused;}
     // Runtime-owned storage is uninitialized. Never read an old pointer from it.
     auto slot=new(q.pDrvPrivate) QueueSlot{};
     HRESULT hr=d->queues.create(*args,runtime,d->callbacks,*slot);

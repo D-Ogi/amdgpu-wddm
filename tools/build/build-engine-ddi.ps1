@@ -18,11 +18,12 @@
 param(
     [string]$OutputDir,
     [string]$VsInstall,
-    # The vkd3d-proton fork checkout at the commit engine-abi.json names (read only; nothing is built there).
+    # The vkd3d-proton fork checkout at the commit engine-abi.json names (read only; nothing is built there);
+    # default: source_checkout of engine-abi.json.
     [string]$EngineSource,
     # Vulkan-Headers include directory (vulkan/vulkan_core.h); default: the one in -EngineSource.
     [string]$VulkanInclude,
-    # The engine DLL the runs load; default: the pinned build under scratch\m15.
+    # The engine DLL the runs load; default: engine_dll in engine_dll_dir of engine-abi.json.
     [string]$EngineDll,
     # Substring of the DXGI adapter description to run on.
     [string]$Adapter,
@@ -39,9 +40,10 @@ $root = Get-Bc250Root $repo
 $src = Join-Path $repo 'driver\umd\d3d12\engine-ddi'
 $pin = Get-Content -Raw -LiteralPath (Join-Path $src 'engine-abi.json') | ConvertFrom-Json
 if (-not $OutputDir) { $OutputDir = Join-Path $root 'scratch\build\d3d12-engine-ddi' }
-if (-not $EngineSource) { $EngineSource = Join-Path $root 'scratch\m15\vkd3d-1.2-src' }
+# Default locations under the workspace root, from the pin: the fork checkout and the engine DLL's build directory.
+if (-not $EngineSource) { $EngineSource = Join-Path $root ($pin.source_checkout -replace '/', '\') }
 if (-not $VulkanInclude) { $VulkanInclude = Join-Path $EngineSource ($pin.vulkan_headers_path -replace '/', '\') }
-if (-not $EngineDll) { $EngineDll = Join-Path $root "scratch\m15\engine-1.2-$($pin.commit.Substring(0, 8))\$($pin.engine_dll)" }
+if (-not $EngineDll) { $EngineDll = Join-Path (Join-Path $root ($pin.engine_dll_dir -replace '/', '\')) $pin.engine_dll }
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 
 # Step 0: the pinned engine header, included by path.
@@ -55,8 +57,10 @@ $EngineInclude = Split-Path -Parent $engineHeader
 if (-not (Test-Path -LiteralPath (Join-Path $VulkanInclude 'vulkan\vulkan_core.h'))) { throw "$VulkanInclude has no vulkan\vulkan_core.h" }
 Write-Host "engine ABI $($pin.abi_version) $($pin.header_revision): $engineHeader (SHA-256 $headerSha)"
 
+# Object files are named after the source's leaf, so no two sources here may share one.
 $libSources = @('context.cpp', 'caps.cpp', 'queue.cpp', 'commands.cpp', 'resources.cpp', 'descriptors.cpp',
-                'root-signature.cpp', 'pipelines.cpp', 'queries.cpp') | ForEach-Object { Join-Path $src $_ }
+                'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp', 'tiles.cpp', 'state-objects.cpp', 'state-object-shell.cpp',
+                'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
 $harnessSources = @(Get-ChildItem -LiteralPath (Join-Path $src 'tests') -Filter '*.cpp' |
     Where-Object { $_.Name -like 'harness*.cpp' -or $_.Name -like 'test-*.cpp' } | ForEach-Object FullName)
 
