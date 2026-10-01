@@ -13,6 +13,7 @@
 // 0.7.1 it is safe up to DISPATCH_LEVEL, because the M7 submission and DPC paths log.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "hang_recovery.h"
 #include <ntstrsafe.h>
 #include <stdarg.h>
 
@@ -539,4 +540,73 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
     status = WriteDword(key, Name, Value);
     ZwClose(key);
     return status;
+}
+
+// ---- the M15.12 hang-recovery record (docs/design/hang-recovery.md) -----------------------------------------------
+//
+//   <service key>\Parameters\HangRecovery   non-volatile, written and flushed by DxgkDdiResetEngine (wddm.c)
+//     Attempts, Recovered, NotDrained, Refused  REG_DWORD  counters (Bc250HangVerdictCounts), never reset here
+//     LastVerdict                               REG_DWORD  BC250_HANG_VERDICT_*; 0 = a kill was under way
+//     LastSeq, LastFence                        REG_DWORD  the newest ring sequence, the OS fence it would abort
+//     LastKills, LastMicros                     REG_DWORD  SQ_CMD writes issued, time spent in the kill loop
+//     LastTime                                  REG_QWORD  KeQuerySystemTime of this write (UTC FILETIME)
+//     LastVersion                               REG_DWORD  BC250_KMD_VERSION of the writer
+//
+// The log ring tells the same story in prose, but it is about 1024 lines in memory and does not outlive the 0x116
+// that a refusal leads to; this does, because every write is flushed before the caller goes on (the pending one
+// before the first SQ_CMD write, the verdict before ResetEngine returns). A subkey rather than values of
+// Parameters: the kmd-deploy kit compares the value names of Parameters with its capture and recover-after-boot.ps1
+// writes captured values back, and neither looks at subkeys, so the record is neither a postflight difference nor
+// overwritten by a recovery. PASSIVE_LEVEL only. A failure is logged and otherwise ignored: evidence, never a gate.
+static NTSTATUS AddOne(HANDLE Key, PCWSTR Name)
+{
+    ULONG value;
+    NTSTATUS status = ReadDword(Key, Name, &value);     // sets value to 0 first, so absent counts from 0
+
+    if (!NT_SUCCESS(status) && status != STATUS_OBJECT_NAME_NOT_FOUND) return status;
+    return WriteDword(Key, Name, value + 1);
+}
+
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros)
+{
+    HANDLE parameters, key;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    LARGE_INTEGER now;
+    ULONG counts = Bc250HangVerdictCounts(Verdict);
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return;
+    status = OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("hang record: verdict %lu NOT persisted, Parameters open 0x%08X", Verdict, status);
+        return;
+    }
+    RtlInitUnicodeString(&name, L"HangRecovery");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, NULL);
+    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
+    ZwClose(parameters);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("hang record: verdict %lu NOT persisted, subkey create 0x%08X", Verdict, status);
+        return;
+    }
+    if (NT_SUCCESS(status) && (counts & BC250_HANG_COUNT_ATTEMPT)) status = AddOne(key, L"Attempts");
+    if (NT_SUCCESS(status) && (counts & BC250_HANG_COUNT_RECOVERED)) status = AddOne(key, L"Recovered");
+    if (NT_SUCCESS(status) && (counts & BC250_HANG_COUNT_NOT_DRAINED)) status = AddOne(key, L"NotDrained");
+    if (NT_SUCCESS(status) && (counts & BC250_HANG_COUNT_REFUSED)) status = AddOne(key, L"Refused");
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastVerdict", Verdict);
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastSeq", Seq);
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastFence", Fence);
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastKills", Kills);
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastMicros", Micros);
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastVersion", BC250_KMD_VERSION);
+    if (NT_SUCCESS(status)) {
+        KeQuerySystemTime(&now);
+        RtlInitUnicodeString(&name, L"LastTime");
+        status = ZwSetValueKey(key, &name, 0, REG_QWORD, &now.QuadPart, sizeof(now.QuadPart));
+    }
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);   // on the disk before the caller kills, or refuses into 0x116
+    ZwClose(key);
+    GuardLog("hang record: verdict %lu seq %lu fence %lu kills %lu %lu us, persisted 0x%08X", Verdict, Seq, Fence,
+             Kills, Micros, status);
 }

@@ -40,6 +40,11 @@ the documented DDI; no code from Microsoft's MS-PL sample.
 - **Hang evidence** (0.7.172). `g_Bc250Progress` records entries and exits of the ISR, DPCs and submission
   paths, and `EnableHangBugcheck=1` arms a test-only detector that bugchecks with `0xBC250BAD` when ordinary
   threads stop running. Default off. See `docs/design/hang-detector.md`.
+- **Hang recovery** (0.7.194, M15.12 stage 1). `HangRecoveryMode=1` lets `DxgkDdiResetEngine` kill the waves of
+  a hung node-0 job and, if its fence then retires, report the engine reset as done instead of refusing it, so
+  that only the guilty process loses its device. Every call leaves a flushed verdict in
+  `Parameters\HangRecovery`, which outlives the 0x116 of a refusal. Default off, closed by every install. Not
+  yet run on the lab. See `docs/design/hang-recovery.md`.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and

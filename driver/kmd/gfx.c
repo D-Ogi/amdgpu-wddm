@@ -27,6 +27,7 @@
 // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
 #include "bc250kmd.h"
 #include "bc250_fence_order.h"
+#include "hang_recovery.h"
 #include "bc250_sdma_virtual_ptes.h"
 #include "paging_intervals.h"
 #include "paging_permutation.h"
@@ -95,7 +96,7 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 // GfxSubmitIb() never waits, and wddm.c will hear about the fence from the interrupt.
 #define BC250_SUBMIT_FENCE_SLOT 10u
 #define BC250_SUBMIT_POLL_US 500000ul
-// M15.12 stage 1: how long GfxSoftRecover re-issues the wave kill while waiting for the hung fence to retire.
+// M15.12 stage 1: how long GfxSoftRecover re-issues the wave kill while waiting for the newest sequence to retire.
 // amdgpu_ring_soft_recovery uses 10000 us (10 ms); we match it. Bounded so DxgkDdiResetEngine returns promptly.
 #define BC250_SOFT_RECOVER_US 10000ul
 
@@ -984,61 +985,78 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
     GfxAccessRelease(Device);
 }
 
-// M15.12 stage 1 (docs/design/hang-recovery.md, DESIGN.md). The one place that undoes GfxSubmitFail, and only
-// when a wave kill has provably drained the hung job: this is called from DxgkDdiResetEngine (PASSIVE_LEVEL,
-// GPU-scheduler class, so no concurrent submit) under HangRecoveryMode, never on the normal path.
+// M15.12 stage 1 (docs/design/hang-recovery.md). The one place that undoes GfxSubmitFail, and only
+// when the ring has provably drained: this is called from DxgkDdiResetEngine (PASSIVE_LEVEL, GPU-scheduler class,
+// so no concurrent submit) under HangRecoveryMode, never on the normal path, after the caller has put a pending
+// record on the disk (GuardRecordHangRecovery).
 //
-// It issues amdgpu's gfx_v10_0_ring_soft_recovery (bc250_gfx_soft_recover_vmid: SQ_CMD KILL broadcast on the one
-// WDDM VMID) and re-issues it for up to BC250_SOFT_RECOVER_US, exactly as amdgpu_ring_soft_recovery loops, until
-// the in-flight sequence's fence slot retires. Success = the fence retired, which means the end-of-pipe behind
-// the killed waves fired and the ring drained to idle; only then is it safe to say the node can take new work.
-// On success it clears SubmitInFlight (the ring is idle) and un-sticks SubmitFailed (the gate reopens), and
-// balances the DPM busy share the way GfxFenceArrived would have. On failure it changes nothing: the sticky
-// state stands and the caller falls back to today's refusal.
-BOOLEAN GfxSoftRecover(_Inout_ BC250_DEVICE* Device, _Out_opt_ ULONG* DrainedSeq)
+// amdgpu_ring_soft_recovery's loop: while the fence has not signalled and the 10 ms budget lasts, issue amdgpu's
+// gfx_v10_0_ring_soft_recovery (bc250_gfx_soft_recover_vmid: SQ_CMD KILL broadcast on the one WDDM VMID). Like
+// upstream it looks before it kills, so a sequence that retired on its own gets no kill at all. The sequence is the
+// newest one emitted: the ring runs in order, so its retiring means every job before it retired too - the
+// end-of-pipe behind the killed waves fired and the ring drained to idle, and only then may the node take new work.
+// Deviation from upstream: a 100 us stall between kills (umr's retry cadence) where amdgpu spins; same 10 ms bound.
+// On ALREADY_RETIRED or DRAINED it clears SubmitInFlight (the ring is idle), un-sticks SubmitFailed (the gate
+// reopens) and ends the DPM busy share the way GfxFenceArrived would have (DpmBusyEnd is a no-op if that already
+// ran). On NOT_DRAINED it changes nothing: the sticky state stands and the caller falls back to today's refusal.
+ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Seq, _Out_ ULONG* Kills, _Out_ ULONG* Micros)
 {
     BC250_GFX* gfx;
     struct amdgpu_device* adev;
     ULONG seq;
-    ULONGLONG deadline;
-    BOOLEAN drained = FALSE;
+    ULONGLONG start, deadline;
+    ULONG verdict = BC250_HANG_VERDICT_NOT_DRAINED;
 
-    if (DrainedSeq != NULL) *DrainedSeq = 0;
+    *Seq = 0;
+    *Kills = 0;
+    *Micros = 0;
     gfx = GfxAccessAcquire(Device);
-    if (gfx == NULL) return FALSE;
+    if (gfx == NULL) {
+        GuardLog("gfx: soft recovery found no ring to kill on; nothing changed");
+        return BC250_HANG_VERDICT_NOT_DRAINED;
+    }
     seq = gfx->SubmitSeq;
     adev = gfx->SubmitAdev;
-    if (seq == 0 || adev == NULL) { GfxAccessRelease(Device); return FALSE; }
+    *Seq = seq;
+    if (seq == 0 || adev == NULL) {
+        GfxAccessRelease(Device);
+        GuardLog("gfx: soft recovery found no submission to retire (seq %lu); nothing changed", seq);
+        return BC250_HANG_VERDICT_NOT_DRAINED;
+    }
 
     // amdgpu's own 10 ms budget (amdgpu_ring_soft_recovery: ktime_add_us(.., 10000)). KeStallExecutionProcessor,
     // not KeDelayExecutionThread: the kill must be re-issued in a tight loop and the total is bounded to 10 ms,
-    // which is within what a PASSIVE_LEVEL stall may hold. KeQueryInterruptTime is 100 ns units, hence x10.
-    deadline = KeQueryInterruptTime() + (ULONGLONG)BC250_SOFT_RECOVER_US * 10ull;
-    do {
-        bc250_gfx_soft_recover_vmid(adev, BC250_WDDM_VMID);
+    // which is within what a PASSIVE_LEVEL stall may hold. KeQueryInterruptTime is 100 ns units, hence x10. The
+    // look after the last stall always happens: the loop leaves only from a look.
+    start = KeQueryInterruptTime();
+    deadline = start + (ULONGLONG)BC250_SOFT_RECOVER_US * 10ull;
+    for (;;) {
         if (bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), seq)) {
-            drained = TRUE;
+            verdict = *Kills == 0 ? BC250_HANG_VERDICT_ALREADY_RETIRED : BC250_HANG_VERDICT_DRAINED;
             break;
         }
+        if (KeQueryInterruptTime() >= deadline) break;
+        bc250_gfx_soft_recover_vmid(adev, BC250_WDDM_VMID);
+        (*Kills)++;
         KeStallExecutionProcessor(100);     // 100 us, like umr's retry cadence
-    } while (KeQueryInterruptTime() < deadline);
+    }
+    *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
 
-    if (drained) {
+    if (verdict != BC250_HANG_VERDICT_NOT_DRAINED) {
         // The ring went idle: clear the in-flight marker if it is still this sequence, and reopen the gate.
         LONG pending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
         if (pending != 0 && bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), (ULONG)pending))
             InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending);
         InterlockedExchange(&gfx->SubmitFailed, 0);     // the one un-stick, only on the proven-drained path
         DpmBusyEnd(&Device->Dpm);                       // match the retirement the normal fence path would have reported
-        if (DrainedSeq != NULL) *DrainedSeq = seq;
-        GuardLog("gfx: soft recovery killed VMID %u waves and drained seq %lu; ring reopened",
-                 (ULONG)BC250_WDDM_VMID, seq);
+        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %u waves in %lu us; ring reopened",
+                 seq, *Kills, (ULONG)BC250_WDDM_VMID, *Micros);
     } else {
-        GuardLog("gfx: soft recovery of seq %lu did not drain within %u us; ring stays closed",
-                 seq, (ULONG)BC250_SOFT_RECOVER_US);
+        GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) in %lu us; ring stays closed",
+                 seq, *Kills, *Micros);
     }
     GfxAccessRelease(Device);
-    return drained;
+    return verdict;
 }
 
 static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)

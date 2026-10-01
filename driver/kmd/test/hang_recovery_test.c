@@ -1,15 +1,48 @@
 /* M15.12 host control: the pure decisions behind DxgkDdiResetEngine's stage-1 soft recovery (hang_recovery.h).
  * The wave kill (SQ_CMD) and the bounded fence poll touch hardware and are exercised on the lab behind the
- * HangRecoveryMode switch (DESIGN.md, LAB-PLAN.md); this test fixes the gate and the 0x119 fence-range guard,
- * including 32-bit fence wrap, so a refactor cannot quietly change when we attempt a recovery or what we report. */
+ * HangRecoveryMode switch (docs/design/hang-recovery.md); this test fixes the gate, the 0x119 fence-range guard
+ * (including 32-bit fence wrap), the pre-kill verdict and the sticky record's counter arithmetic, so a refactor
+ * cannot quietly change when we attempt a recovery, what we report, or how the lab reads the record. */
 #include <stdio.h>
 #include "hang_recovery.h"
 #include "bc250_fence_order.h"
 
 #define CHECK(x) do { if (!(x)) { printf("FAIL line %d: %s\n", __LINE__, #x); return 1; } } while (0)
 
+/* The record's counters as guard.c GuardRecordHangRecovery keeps them: one write adds Bc250HangVerdictCounts. */
+struct record { unsigned attempts, recovered, notDrained, refused, lastVerdict; };
+
+static void record_write(struct record* r, unsigned verdict)
+{
+    unsigned counts = Bc250HangVerdictCounts(verdict);
+    if (counts & BC250_HANG_COUNT_ATTEMPT) r->attempts++;
+    if (counts & BC250_HANG_COUNT_RECOVERED) r->recovered++;
+    if (counts & BC250_HANG_COUNT_NOT_DRAINED) r->notDrained++;
+    if (counts & BC250_HANG_COUNT_REFUSED) r->refused++;
+    r->lastVerdict = verdict;
+}
+
+/* What wddm.c writes for one ResetEngine call: the pre-kill verdict, and if that is PENDING, the pending record
+ * and then the kill's verdict; otherwise the refusal alone. */
+static void record_call(struct record* r, unsigned preKill, unsigned killVerdict)
+{
+    if (preKill == BC250_HANG_VERDICT_PENDING) {
+        record_write(r, BC250_HANG_VERDICT_PENDING);
+        record_write(r, killVerdict);
+    } else {
+        record_write(r, preKill);
+    }
+}
+
+static int balanced(const struct record* r)
+{
+    return r->attempts == r->recovered + r->notDrained + r->refused;
+}
+
 int main(void)
 {
+    struct record r = { 0, 0, 0, 0, 0 };
+
     /* The gate: attempt only with the switch on AND only for node 0 (3D/compute). Node 1 (paging) and any
      * higher ordinal are never soft-recovered; the switch off is today's behaviour for every node. */
     CHECK(!Bc250SoftRecoveryWanted(0, 0));      /* switch off: never, even on node 0 */
@@ -39,6 +72,46 @@ int main(void)
     CHECK(bc250_fence_reached(105u, 100u) && (int)(105u - 100u) >= 0);
     CHECK(!bc250_fence_reached(99u, 100u) && (int)(99u - 100u) < 0);
 
-    printf("PASS: soft-recovery gate (switch/node) and the 0x119 fence-range guard, including 32-bit wrap\n");
+    /* Pre-kill verdict: nothing on the ring wins over everything; then the guard; only then a kill. */
+    CHECK(Bc250HangPreKillVerdict(0, 105, 100) == BC250_HANG_VERDICT_NOTHING_ON_RING);
+    CHECK(Bc250HangPreKillVerdict(0, 99, 100) == BC250_HANG_VERDICT_NOTHING_ON_RING);
+    CHECK(Bc250HangPreKillVerdict(1, 105, 100) == BC250_HANG_VERDICT_PENDING);    /* the hang: head above completed */
+    CHECK(Bc250HangPreKillVerdict(1, 100, 100) == BC250_HANG_VERDICT_PENDING);    /* at the bound is still valid */
+    CHECK(Bc250HangPreKillVerdict(1, 99, 100) == BC250_HANG_VERDICT_FENCE_GUARD); /* would be 0x119: no kill */
+    CHECK(Bc250HangPreKillVerdict(1, 0x00000002u, 0xFFFFFFFEu) == BC250_HANG_VERDICT_PENDING);     /* across wrap */
+    CHECK(Bc250HangPreKillVerdict(1, 0xFFFFFFFDu, 0xFFFFFFFEu) == BC250_HANG_VERDICT_FENCE_GUARD);
+
+    /* Only DRAINED and ALREADY_RETIRED report a reset; every other verdict keeps today's refusal. */
+    CHECK(Bc250HangVerdictRecovered(BC250_HANG_VERDICT_DRAINED));
+    CHECK(Bc250HangVerdictRecovered(BC250_HANG_VERDICT_ALREADY_RETIRED));
+    CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_PENDING));
+    CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_NOT_DRAINED));
+    CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_NOTHING_ON_RING));
+    CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_FENCE_GUARD));
+    CHECK(!Bc250HangVerdictRecovered(6u));
+
+    /* The values the LAB-PLAN tells the operator to read must not move. */
+    CHECK(BC250_HANG_VERDICT_PENDING == 0u && BC250_HANG_VERDICT_DRAINED == 1u && BC250_HANG_VERDICT_NOT_DRAINED == 2u);
+    CHECK(BC250_HANG_VERDICT_NOTHING_ON_RING == 3u && BC250_HANG_VERDICT_FENCE_GUARD == 4u);
+    CHECK(BC250_HANG_VERDICT_ALREADY_RETIRED == 5u);
+
+    /* The record: every finished call leaves Attempts == Recovered + NotDrained + Refused. */
+    record_call(&r, BC250_HANG_VERDICT_PENDING, BC250_HANG_VERDICT_DRAINED);
+    CHECK(balanced(&r) && r.attempts == 1 && r.recovered == 1 && r.lastVerdict == BC250_HANG_VERDICT_DRAINED);
+    record_call(&r, BC250_HANG_VERDICT_PENDING, BC250_HANG_VERDICT_ALREADY_RETIRED);
+    CHECK(balanced(&r) && r.attempts == 2 && r.recovered == 2);
+    record_call(&r, BC250_HANG_VERDICT_PENDING, BC250_HANG_VERDICT_NOT_DRAINED);
+    CHECK(balanced(&r) && r.attempts == 3 && r.notDrained == 1 && r.lastVerdict == BC250_HANG_VERDICT_NOT_DRAINED);
+    record_call(&r, BC250_HANG_VERDICT_NOTHING_ON_RING, 0);
+    CHECK(balanced(&r) && r.attempts == 4 && r.refused == 1 && r.lastVerdict == BC250_HANG_VERDICT_NOTHING_ON_RING);
+    record_call(&r, BC250_HANG_VERDICT_FENCE_GUARD, 0);
+    CHECK(balanced(&r) && r.attempts == 5 && r.refused == 2 && r.lastVerdict == BC250_HANG_VERDICT_FENCE_GUARD);
+    /* A call the machine did not survive: only the pending write landed. Attempts runs one ahead, LastVerdict 0 -
+     * exactly what the LAB-PLAN reads as "the kill itself took the machine down". */
+    record_write(&r, BC250_HANG_VERDICT_PENDING);
+    CHECK(!balanced(&r) && r.attempts == r.recovered + r.notDrained + r.refused + 1 && r.lastVerdict == 0u);
+
+    printf("PASS: soft-recovery gate (switch/node), the 0x119 fence-range guard including 32-bit wrap, the pre-kill "
+           "verdict and the sticky record's counters\n");
     return 0;
 }

@@ -292,7 +292,7 @@ typedef struct _BC250_WDDM {
                                          // shared across nodes on purpose (design note section 5): a lab
                                          // simplification, not a claim that dxgkrnl only ever sees one node's value
     UINT NodeCount;                     // 1 with EnablePagingNode closed, 2 open; read once in WddmStart
-    // M15.12 (DESIGN.md): the hang-recovery switch, read once here. 0 or absent = today's behaviour exactly
+    // M15.12 (docs/design/hang-recovery.md): the hang-recovery switch, read once. 0 or absent = today's behaviour
     // (ResetEngine refuses, ResetFromTimeout fails, 0x116). 1 = DxgkDdiResetEngine attempts a node-0 soft
     // recovery (kill the hung VMID's waves, wait for the fence). Start-latched like EnablePagingNode.
     BOOLEAN HangRecoveryMode;
@@ -1988,8 +1988,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // existence for this whole device start is decided here. gfx.c's own gate (GfxStart) decides separately
     // whether GfxSubmitPaging itself may ever run; this one decides whether the table admits the node at all.
     wddm->NodeCount = (GuardReadSetting(L"EnablePagingNode", 0) == 1) ? BC250_WDDM_NODE_COPY + 1u : BC250_WDDM_NODE_COUNT;
-    // M15.12: start-latched hang-recovery switch (DESIGN.md). Absent/0 leaves every TDR DDI exactly as 0.7.193.1.
+    // M15.12: start-latched hang-recovery switch (docs/design/hang-recovery.md). Absent/0 leaves every TDR DDI
+    // exactly as 0.7.193.1.
     wddm->HangRecoveryMode = (GuardReadSetting(L"HangRecoveryMode", 0) == 1);
+    if (wddm->HangRecoveryMode)     // said only when on, so the log of a start with the switch off is 193's
+        GuardLog("wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in "
+                 "Parameters\\HangRecovery");
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
@@ -4944,26 +4948,47 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     BC250_WDDM* wddm = WddmOf(hAdapter);
     (void)WddmFirstCalls(wddm, WddmDdiResetEngine);
 
-    // M15.12 stage 1 (DESIGN.md), behind HangRecoveryMode, node 0 (3D/compute) only. Node 1 (paging) is never
-    // soft-recovered: dxgkrnl follows a successful paging-packet reset with an adapter-wide reset (TDR changes in
-    // Windows 8, step 9), which on this part is the 0x116 path anyway, and the hang class never involves node 1.
+    // M15.12 stage 1 (docs/design/hang-recovery.md), behind HangRecoveryMode, node 0 (3D/compute) only. Node 1
+    // (paging) is never soft-recovered: dxgkrnl follows a successful paging-packet reset with an adapter-wide reset
+    // (TDR changes in Windows 8, step 9), which on this part is the 0x116 path anyway, and the hang class never
+    // involves node 1.
     if (wddm != NULL && Bc250SoftRecoveryWanted(wddm->HangRecoveryMode, pResetEngine->NodeOrdinal))
     {
-        ULONG drainedSeq = 0;
+        const BC250_GFX_COMPLETION* tail;
+        ULONG verdict, seq, kills = 0, micros = 0;
         UINT hungFence, lastCompleted;
+        BOOLEAN onRing;
         KIRQL irql;
 
         WddmGpuFence(device);           // retire anything that arrived late before deciding there is still a hang
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        hungFence = wddm->HwFence;      // the head job's OS fence: submitted, never retired, so in [completed, submitted]
+        onRing = Bc250GfxQueueHead(&wddm->GfxPending) != NULL;
+        // The head job's OS fence: submitted, never retired, so in [completed, submitted]. HwFence keeps the last
+        // head's value after the queue empties; with nothing on the ring there is no fence to abort, so 0.
+        hungFence = onRing ? wddm->HwFence : 0;
+        tail = Bc250GfxQueueTail(&wddm->GfxPending);
+        seq = tail != NULL ? tail->Seq : 0;     // the newest sequence on the ring, the one a drain has to retire
         lastCompleted = (UINT)wddm->LastCompletedFence;
         KeReleaseSpinLock(&wddm->Lock, irql);
 
-        // Kill the hung job's waves on the one WDDM VMID and wait up to 10 ms for its fence to retire. TRUE means
-        // the end-of-pipe behind the killed waves fired and the ring drained to idle, so the node can take new work.
-        // The fence-range guard is defence-in-depth against bugcheck 0x119: the aborted fence is the in-flight
-        // job's own, so it is above the last completed and no newer than itself, but we check rather than trust.
-        if (GfxSoftRecover(device, &drainedSeq) && Bc250AbortedFenceValid(hungFence, lastCompleted, hungFence))
+        // Decided before the hardware is touched: no job on the ring, or an abort fence outside the engine-reset
+        // contract, is today's refusal. The fence-range guard is defence-in-depth against bugcheck 0x119: the
+        // aborted fence is the head job's own, so it is above the last completed and no newer than itself, but we
+        // check rather than trust - and before the kill, so that a refusal never follows a kill we cannot report.
+        verdict = Bc250HangPreKillVerdict(onRing, hungFence, lastCompleted);
+        if (verdict == BC250_HANG_VERDICT_PENDING)
+        {
+            // On the disk before the first SQ_CMD write: should the kill itself take the machine down, the record
+            // read after the reboot still says an attempt was under way (LastVerdict 0, Attempts one ahead).
+            GuardRecordHangRecovery(BC250_HANG_VERDICT_PENDING, seq, hungFence, 0, 0);
+            // Kill the waves on the one WDDM VMID until the newest sequence retires, for at most 10 ms. A recovered
+            // verdict means the end-of-pipe behind the killed waves fired and the ring drained to idle.
+            verdict = GfxSoftRecover(device, &seq, &kills, &micros);
+        }
+        // The verdict, on the disk before the return: a refusal is followed by ResetFromTimeout and 0x116, and the
+        // log ring does not survive that.
+        GuardRecordHangRecovery(verdict, seq, hungFence, kills, micros);
+        if (Bc250HangVerdictRecovered(verdict))
         {
             KeAcquireSpinLock(&wddm->Lock, &irql);
             // Drop the hung job (and anything queued behind it on this node) so no stale entry double-reports;
@@ -4986,19 +5011,22 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             InterlockedExchange(&wddm->LastCompletedFence, (LONG)hungFence);
             KeReleaseSpinLock(&wddm->Lock, irql);
             InterlockedIncrement(&wddm->SoftRecoveries);
-            // Valid by construction: hungFence was submitted and never retired, so it is in
-            // [LastCompletedFenceId, last submitted]; a value outside that range would be bugcheck 0x119.
+            // Valid by construction: hungFence was submitted and, when read, still the unreported head of the queue,
+            // so it is in [LastCompletedFenceId, last submitted]; a value outside that range would be bugcheck
+            // 0x119. ALREADY_RETIRED is the contract's special case of a packet that completed between the timeout
+            // and the reset: dxgkrnl treats it as aborted, which is what it asks for (tdr-changes-in-windows-8.md).
             pResetEngine->LastAbortedFenceId = hungFence;
-            GuardLog("wddm: *** ResetEngine node %u: SOFT RECOVERED, aborted fence %u (seq %lu drained), node 0 reopened ***",
-                     pResetEngine->NodeOrdinal, hungFence, drainedSeq);
+            GuardLog("wddm: *** ResetEngine node %u: SOFT RECOVERED (verdict %lu), aborted fence %u, seq %lu retired "
+                     "after %lu kill(s) in %lu us, node 0 reopened ***", pResetEngine->NodeOrdinal, verdict, hungFence,
+                     seq, kills, micros);
             return STATUS_SUCCESS;
         }
-        // The kill did not drain the ring: change nothing and fall through to today's refusal (then 0x116).
-        GuardLog("wddm: ResetEngine node %u: soft recovery did not drain, refusing as before",
-                 pResetEngine->NodeOrdinal);
+        // Not recovered (verdict 2, 3 or 4): change nothing and fall through to today's refusal (then 0x116).
+        GuardLog("wddm: ResetEngine node %u: soft recovery verdict %lu (seq %lu, fence %u, %lu kill(s) in %lu us), "
+                 "refusing as before", pResetEngine->NodeOrdinal, verdict, seq, hungFence, kills, micros);
     }
 
-    // Today's behaviour (HangRecoveryMode off, node 1, or a soft recovery that did not drain): the documented
+    // Today's behaviour (HangRecoveryMode off, node 1, or a stage-1 verdict that is not a recovery): the documented
     // answer of hardware that "is incapable of resetting the nodes" - a failure status, after which the scheduler
     // falls back to the adapter-wide ResetFromTimeout. It is also the careful answer: a success with a
     // LastAbortedFenceId outside [last completed, last submitted] is bugcheck 0x119, and a failure names no fence.
