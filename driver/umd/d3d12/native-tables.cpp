@@ -32,6 +32,12 @@ struct EntryPolicy:EntryOwner<Device> {
     // table, through Scope with the trace hooks below.
     using FastScope=RecordingScope;
     static const RecordingBinding* fast_binding(Device& device) noexcept {return RecordingScope::admit(device.recording);}
+    // The leave hook's failure record for a call refused on the fast path (failures-only trace mode 2; the
+    // binding is never published in mode 1).
+    // Out of line: 134 recording thunks would otherwise each carry the note's formatting on their cold path.
+    __declspec(noinline) static void fast_denied(Device*,const char* name,HRESULT outcome) noexcept {
+        if(FAILED(outcome) && outcome!=E_PENDING)ddi_failure_note(name,outcome);
+    }
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
     // Sizes only: other scalar returns can be addresses, which a trace must not carry.

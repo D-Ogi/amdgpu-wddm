@@ -178,6 +178,22 @@ void APIENTRY throwing_topology(D3D12DDI_HCOMMANDLIST h,D3D12DDI_PRIMITIVE_TOPOL
 }
 static_assert(std::is_same_v<decltype(&throwing_topology),PFND3D12DDI_IA_SETTOPOLOGY_0003>);
 struct NullFastBinding {static constexpr bool fast=true;static decltype(&dispatch) original() noexcept{return nullptr;}};
+struct NamedNullFastBinding:NullFastBinding {static constexpr const char* name() noexcept {return "pfnNamed";}};
+struct ThrowingFastBinding {
+    static constexpr bool fast=true;static constexpr const char* name() noexcept {return "pfnIaSetTopology";}
+    static decltype(&throwing_topology) original() noexcept {return throwing_topology;}
+};
+// A policy's fast_denied hook: the leave hook's failure record for a refusal on the fast path. It runs after
+// failure, still inside FastScope, with the binding's name ("unnamed" without one).
+struct FastNotePolicy:FastPolicy {
+    inline static const char* noted_name{};
+    inline static HRESULT noted{};
+    inline static unsigned notes{},failures_at_note{};
+    static void fast_denied(Owner* owner,const char* name,HRESULT hr) noexcept {
+        assert(owner && current==owner);
+        noted_name=name;noted=hr;++notes;failures_at_note=owner->failures.load();
+    }
+};
 template<class Fn>struct Dummy;
 template<class R,class... A>struct Dummy<R(APIENTRY*)(A...)> {
     static R APIENTRY call(A...) {
@@ -579,6 +595,18 @@ int main() {
     native12::EntryThunk<decltype(&dispatch),NullFastBinding,FastPolicy>::call(hf,2,3,4);
     assert(f.failures==3 && f.last_error==E_UNEXPECTED && f.failure_in_scope && f.fast_entered==6 && !current);
     assert((!native12::EntryThunk<decltype(&dispatch),NullFastBinding,Policy>::fast_path()));
+    // fast_denied sees each refusal after failure, in FastScope, with the slot's name; a success notes nothing.
+    native12::EntryThunk<decltype(&dispatch),NamedNullFastBinding,FastNotePolicy>::call(hf,2,3,4);
+    assert(FastNotePolicy::notes==1 && FastNotePolicy::noted==E_UNEXPECTED && FastNotePolicy::failures_at_note==4);
+    assert(!std::strcmp(FastNotePolicy::noted_name,"pfnNamed") && f.failures==4 && !current);
+    native12::EntryThunk<decltype(&dispatch),NullFastBinding,FastNotePolicy>::call(hf,2,3,4);
+    assert(FastNotePolicy::notes==2 && !std::strcmp(FastNotePolicy::noted_name,"unnamed") && f.failures==5);
+    using NotedTopology=native12::EntryThunk<decltype(&throwing_topology),ThrowingFastBinding,FastNotePolicy>;
+    topology_throwing=2;NotedTopology::call(hf,D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    assert(FastNotePolicy::notes==3 && FastNotePolicy::noted==E_FAIL && FastNotePolicy::failures_at_note==6);
+    assert(!std::strcmp(FastNotePolicy::noted_name,"pfnIaSetTopology") && f.last_error==E_FAIL && !current);
+    topology_throwing=0;NotedTopology::call(hf,D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    assert(FastNotePolicy::notes==3 && f.failures==6 && f.fast_entered==f.fast_left && !current);
     // A null handle resolves to no owner: refused on the full path, as before.
     fast_list.pfnDispatch({},2,3,4);
     assert(!current);
@@ -597,5 +625,5 @@ int main() {
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});
     call_a.join();call_b.join();refill.join();
     assert(!current && a.entered==a.left && b.entered==b.left);
-    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording fast path (admission, Close/Reset/Present and nested fallback, failures inside the fast scope) and concurrency pass");
+    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording fast path (admission, Close/Reset/Present and nested fallback, failures inside the fast scope with the fast_denied note) and concurrency pass");
 }

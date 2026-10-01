@@ -46,7 +46,8 @@ public:
 // (trial 217: 0.98 ms/frame of the main thread in that bookkeeping). The binding names the engine owner, its
 // runtime domain, its hosted bootstrap and its active flag, all fixed while the engine is open: the device
 // publishes it in Device::recording after the engine opened, only when the experiment is set and the
-// device's trace mode is 0, and clears it before the engine closes (device-engine.cpp). A list resolves to
+// device's trace mode is not the full trace (1; the failures-only mode 2 keeps it, and the fast path notes
+// its refusals), and clears it before the engine closes (device-engine.cpp). A list resolves to
 // its device (EntryOwner, engine_ddi::command_list_shell), so every list of the device shares the binding;
 // a per-list copy would hold the same four pointers. The scope binds the same three thread-local states as
 // DeviceEngineScope, so callbacks, hosted dispatch and device_engine_entered see an entered device exactly as

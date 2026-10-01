@@ -198,12 +198,14 @@ public:
                   device.adapter->instance_policy) {
         services_={sizeof(services_),this,bind,unbind};
     }
-    // L2: publishes this owner's recording binding in Device::recording when `on` and the device is not
-    // traced, clears it otherwise. Called once the engine is open, and with false before it closes.
+    // L2: publishes this owner's recording binding in Device::recording when `on` and the device is not in
+    // the full trace (mode 1, two lines per call), clears it otherwise. The failures-only mode 2 of the lab's
+    // debugger runs keeps the binding: it writes nothing on success, and the fast path notes its own refusals
+    // (EntryPolicy::fast_denied). Called once the engine is open, and with false before it closes.
     bool bind_recording(bool on) noexcept {
         recording_={this,&domain_,&bootstrap_,&active_};
         recording_bind_.store(on,std::memory_order_relaxed);
-        device_.recording=on && device_.trace_mode==0?&recording_:nullptr;
+        device_.recording=on && device_.trace_mode!=1?&recording_:nullptr;
         return device_.recording!=nullptr;
     }
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
@@ -339,7 +341,13 @@ HRESULT create_device_engine(Device& device) noexcept {
     result=owner->open();
     if(result==S_OK){
         // The device handle reaches the runtime only after this DDI returns, so no entry sees it change.
-        if(ddi_experiment("recording-bind"))stage("RecordingBind",owner->bind_recording(true)?S_OK:S_FALSE);
+        if(ddi_experiment("recording-bind")){
+            const bool bound=owner->bind_recording(true);
+            stage("RecordingBind",bound?S_OK:S_FALSE);
+            // The lab's game runs capture the debugger log of trace mode 2, not stderr (the retire hand-off's
+            // policy line reaches it through engine-ddi's log_line).
+            if(bound)ddi_mode2_note("amdgpu_wddm_d3d12 experiment recording-bind bound\n");
+        }
         return S_OK;
     }
     if(owner->close())delete owner;else owner->retain();

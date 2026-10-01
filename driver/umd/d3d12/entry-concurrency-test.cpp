@@ -280,15 +280,19 @@ void shared_context(Device& device){
     D3DKMT_DESTROYCONTEXT release{};release.hContext=context.hContext;wrapper.arguments=&release;
     {DeviceEngineScope scope(device);assert(scope.entered() && call(0,BC250_HOST_DESTROY_QUEUE_CONTEXT,&wrapper)==0);}
 }
-// 6. The recording binding (lever L2): published only when asked and only for an untraced device. A RecordingScope
+// 6. The recording binding (lever L2): published only when asked, also in the failures-only trace mode 2, never in
+// the full trace mode 1. A RecordingScope
 // grants what DeviceEngineScope grants (callbacks accepted, device_engine_entered) on every thread at once, and
 // takes it back; inside it, admit() refuses (a nested entry goes the full way), the full scope admits the same
 // device and refuses another; inside another device's scope admit() refuses; cleared, the device has no binding.
 constexpr unsigned kRecordingRounds=50;
 void recording(Device& device,Device& other){
     assert(!device.recording && !other.recording);
-    device.trace_mode=2;
+    device.trace_mode=1;
     assert(!host_test_bind_recording(device,true) && !device.recording);
+    device.trace_mode=2;
+    assert(host_test_bind_recording(device,true) && device.recording);
+    assert(!host_test_bind_recording(device,false) && !device.recording);
     device.trace_mode=0;
     assert(host_test_bind_recording(device,true) && device.recording && RecordingScope::admit(device.recording));
     bc250_host_paging paging{};
@@ -359,6 +363,7 @@ int main(){
         "with all threads inside one runtime callback together, outside and foreign scopes refused, %u heap "
         "imports under owner scopes on %u threads at once, one internal context submitted on by two threads at "
         "once and closed, %u callback rounds under recording scopes on %u threads at once (L2 binding: "
-        "untraced only, nested and foreign refused, cleared at close)\n",kThreads,kThreads*kRounds,
+        "refused in the full trace, kept in failures-only mode 2, nested and foreign refused, cleared at close)\n",
+        kThreads,kThreads*kRounds,
         kImportThreads*kImportRounds,kImportThreads,kThreads*kRecordingRounds,kThreads);
 }
