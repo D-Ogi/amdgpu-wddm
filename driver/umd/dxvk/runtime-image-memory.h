@@ -16,7 +16,8 @@ struct RuntimeImageDispatch {
     PFN_vkGetImageSubresourceLayout layout;
     ImageMemoryDispatch memory;
 };
-// First import path: RGBA8/BGRA8, single-mip/layer linear 2D surface.
+// Import path: single-mip/layer linear 2D color surface of a composed format
+// (A8 at 1 byte a texel, RGBA8/BGRA8/RGB10A2 at 4, RGBA16F at 8).
 // imageInfo retains the engine-required format/usage/flags/pNext. The caller
 // supplies verified runtime pitch and bytes occupied by one logical row.
 HRESULT create_linear_runtime_image(RuntimeDevice &,VkDevice,const RuntimeImageDispatch &,

@@ -1,22 +1,14 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface.h"
+#include "runtime-surface-format.h"
 namespace bc250::umd {
-static bool matching_format(UINT format,DXGI_FORMAT dxgi) {
-    switch (dxgi) {
-    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-        return format==D3DDDIFMT_A8B8G8R8;
-    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-        return format==D3DDDIFMT_A8R8G8B8;
-    default: return false;
-    }
-}
 HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
     const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
     if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
     if (!runtime.domain.entered() || !queue.queue || !queue.sync || !queue.cpu ||
         desc.Width!=request.surface.Width || desc.Height!=request.surface.Height ||
         desc.MipLevels!=1 || desc.ArraySize!=1 || desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality ||
-        !matching_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
+        !runtime_surface_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
     out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
     out.phase=SurfacePhase::failed;
@@ -31,10 +23,11 @@ HRESULT adopt_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
     RuntimeSurfaceAllocation &allocation,const BC250_WDDM_ALLOCATION_PRIVATE &metadata,
     const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
     if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    const auto *row=runtime_surface_format(metadata.Format,desc.Format);
     if (!runtime.domain.entered() || !runtime.hDevice || !queue.queue || !queue.sync || !queue.cpu ||
-        !allocation.allocation || !allocation.runtime_resource || !WddmSurfaceGeometry(&metadata,0,4) ||
+        !allocation.allocation || !allocation.runtime_resource || !row || !runtime_surface_geometry(metadata,row->bytes_per_pixel) ||
         desc.Width!=metadata.Width || desc.Height!=metadata.Height || desc.MipLevels!=1 || desc.ArraySize!=1 ||
-        desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality || !matching_format(metadata.Format,desc.Format))
+        desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality)
         return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
     out.pitch=metadata.Pitch; out.bytes=metadata.Size;

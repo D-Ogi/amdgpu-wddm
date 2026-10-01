@@ -7,6 +7,18 @@ HRESULT status(VkResult result) {
     if (result==VK_ERROR_DEVICE_LOST) return D3DDDIERR_DEVICEREMOVED;
     return E_FAIL;
 }
+// Bytes of one texel of the engine's image for each composed row of the surface format table.
+// DXVK stores A8_UNORM as A8_UNORM_KHR, or as R8_UNORM with a swizzle where the device lacks it.
+VkDeviceSize texel_bytes(VkFormat format) {
+    switch (format) {
+    case VK_FORMAT_R8_UNORM: case VK_FORMAT_A8_UNORM_KHR: return 1;
+    case VK_FORMAT_R8G8B8A8_UNORM: case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return 4;
+    case VK_FORMAT_R16G16B16A16_SFLOAT: return 8;
+    default: return 0;
+    }
+}
 }
 HRESULT import_runtime_image_memory(RuntimeDevice &runtime,VkDevice device,VkImage image,
     const ImageMemoryDispatch &vk,const VkPhysicalDeviceMemoryProperties &properties,
@@ -47,14 +59,12 @@ HRESULT create_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,const
         info.sType!=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO) return E_INVALIDARG;
     if (info.imageType!=VK_IMAGE_TYPE_2D || info.extent.depth!=1 || info.mipLevels!=1 || info.arrayLayers!=1 ||
         info.samples!=VK_SAMPLE_COUNT_1_BIT || info.tiling!=VK_IMAGE_TILING_LINEAR) return E_NOTIMPL;
-    // This path is for the 32-bit color surfaces used by the desktop. Depth,
+    // This path is for the color surfaces the compositor opens. Depth,
     // compressed and multiplanar formats need different aspect/row rules.
-    switch (info.format) {
-    case VK_FORMAT_R8G8B8A8_UNORM: case VK_FORMAT_R8G8B8A8_SRGB:
-    case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_B8G8R8A8_SRGB: break;
-    default: return E_NOTIMPL;
-    }
-    if (rowBytes!=VkDeviceSize(info.extent.width)*4) return E_INVALIDARG;
+    // The caller's row comes from the LB7A format; the engine's texel must match it.
+    const VkDeviceSize texel=texel_bytes(info.format);
+    if (!texel) return E_NOTIMPL;
+    if (rowBytes!=VkDeviceSize(info.extent.width)*texel) return E_INVALIDARG;
     // Division avoids overflow in (height-1)*pitch + rowBytes.
     if (rowBytes>source.size || VkDeviceSize(info.extent.height-1)>(source.size-rowBytes)/pitch) return E_INVALIDARG;
     RuntimeImage created{};

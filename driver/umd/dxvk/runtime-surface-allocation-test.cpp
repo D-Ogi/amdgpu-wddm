@@ -7,13 +7,14 @@ using namespace bc250::umd;
 namespace {
 int deviceIdentity,resourceIdentity; unsigned allocates=0,deallocates=0;
 bool failAllocate=false,failFree=false,resourceClose=true,extendedPrivate=false;
+UINT expectPitch=256; UINT64 expectSize=4096;
 void check(bool b) { if (!b) std::abort(); }
 HRESULT APIENTRY allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
     ++allocates; check(h==&deviceIdentity && a->NumAllocations==1 && a->PrivateDriverDataSize==(extendedPrivate ? 64u : 16u));
     auto *words=static_cast<const UINT *>(a->pPrivateDriverData);
     check(words[0]==0x52363245u && words[1]==(extendedPrivate ? 3u : 2u) && words[2]==1 && words[3]==2);
     auto *s=static_cast<const BC250_WDDM_ALLOCATION_PRIVATE *>(a->pAllocationInfo2[0].pPrivateDriverData);
-    check(s->Pitch==256 && s->Size==4096 && !a->pAllocationInfo2[0].Flags.Primary);
+    check(s->Pitch==expectPitch && s->Size==expectSize && !a->pAllocationInfo2[0].Flags.Primary);
     if (failAllocate) return E_OUTOFMEMORY;
     a->pAllocationInfo2[0].hAllocation=41; a->hKMResource=42; return S_OK;
 }
@@ -130,5 +131,30 @@ int main() {
     request.texture.Width=63;
     const unsigned beforeInvalidPrivate=allocates;
     check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeInvalidPrivate);
+    // M14.1: composed formats at the row's pixel size. Task Manager's shared A8 atlas (32x32, pitch 256)
+    // and an FP16 surface (64x16, pitch 512) are allocated; a pitch below the row, a pitch that is not
+    // whole pixels, an E26R texture format that is not the LB7A row's and a format outside the table are
+    // refused before the callback. The scan-out row X8R8G8B8 stays admitted as before.
+    request.texture={BC250_SURFACE_RESOURCE_MAGIC,3,1,2,32,32,1,1,65,1,0,0,40,0,0,0};
+    request.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,32,32,256,D3DDDIFMT_A8,8192};
+    expectPitch=256; expectSize=8192;
+    check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
+    const unsigned beforeRefusals=allocates;
+    request.surface.Pitch=16; check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.surface.Pitch=256; request.texture.Format=87;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeRefusals);
+    request.texture={BC250_SURFACE_RESOURCE_MAGIC,3,1,2,64,16,1,1,10,1,0,0,40,0,0,0};
+    request.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,64,16,256,D3DDDIFMT_A16B16G16R16F,8192};
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG); // 64 * 8 bytes do not fit 256
+    request.surface.Pitch=516; request.surface.Size=12288;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG); request.surface.Size=8192;
+    request.surface.Format=D3DDDIFMT_R16F; check(allocate_runtime_surface(device,request,surface)==E_NOTIMPL);
+    check(allocates==beforeRefusals);
+    request.surface.Format=D3DDDIFMT_A16B16G16R16F; request.surface.Pitch=512; expectPitch=512;
+    check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
+    extendedPrivate=false; request.texture={};
+    request.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,64,16,256,D3DDDIFMT_X8R8G8B8,4096};
+    expectPitch=256; expectSize=4096;
+    check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
     std::cout << "PASS runtime surface allocation ABI, domain, failure retention and resource-handle close\n";
 }
