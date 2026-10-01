@@ -7,7 +7,8 @@
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
 // Boundary r4 (2026-09-29): the linear primary. MemoryRequest grows by the surface fields and
 // kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3. Added within r4,
-// additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set).
+// additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set), and
+// set_release_policy, the two-phase retirement of heap memory (also off unless set).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -249,6 +250,28 @@ struct RetirePolicy {
     uint32_t age_bound_ms;                      // handoff 1: ... or after this long without a resource DDI's pass
 };
 HRESULT set_retire_policy(DeviceContext* context, const RetirePolicy* policy) noexcept;
+
+// Two-phase retirement of heap memory (M15.8, fix F1 of the trial 245 report). Without a policy (and with
+// two_phase 0) a release waits for the marks of one snapshot: the work every engine queue had submitted when
+// the destroy reached engine-ddi. That is what the application's own ordering promises, and nothing more: a
+// submission the engine makes after the destroy, on any queue, still naming the memory (a batch recorded
+// before it, or an engine-internal path ordered on a queue's timeline) is outside those marks. Trial 245
+// faulted on exactly that window: the GFX job was in the ring 2.1 ms before the unmap of the memory it read.
+// With two_phase 1, when a release's first-phase marks are reached, every engine queue's current mark is
+// recorded once more and the release waits for those too; a release that had no mark at all waits for one
+// such second phase as well, so a destroy that races a submission on another thread is covered by it. An
+// idle queue's mark is already retired, so the second phase adds nothing to wait for and the hold ends at
+// the next retirement point; a busy queue holds the memory about one more frame. Nothing waits on the CPU:
+// both phases are reads of the queues' state words and retirement fences, taken at the retirement points
+// engine-ddi already has. The memory of a linear primary (in_ddi) keeps its single bounded phase inside the
+// destroy that ends it. Call it like set_retire_policy: after create_device_context, before the context is
+// used on another thread. E_INVALIDARG, with the policy held before kept, for a null argument, a size other
+// than sizeof(ReleasePolicy), or two_phase other than 0 or 1.
+struct ReleasePolicy {
+    uint32_t size;                              // sizeof(ReleasePolicy)
+    uint32_t two_phase;                         // 0: one snapshot per release; 1: the second phase above
+};
+HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) noexcept;
 
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);

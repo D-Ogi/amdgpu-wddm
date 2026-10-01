@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "allocation.h"
+#include "device-progress.h"
 #include "../dxvk/runtime-domain.h"
 #include <bc250_host_bootstrap.h>
 #include <atomic>
@@ -57,7 +58,9 @@ class HostedDispatch final {
     Allocation* allocations_{};
     Reservation* reservations_{};
     Sync* syncs_{};
+    uint64_t next_sync_{};                      // identity of each monitored fence (ProgressMark::sync)
     Sync* find_sync(D3DKMT_HANDLE handle) noexcept;
+    Sync* find_sync_id(uint64_t id) noexcept;
     // busy: its own create or destroy callback is in flight. borrowed: callbacks that name it, made by
     // user, the thread of the first one still in flight (for the HCONTEXT note in hosted-dispatch.cpp).
     struct Context {HANDLE handle{};uint32_t token{};bool busy{};unsigned borrowed{};DWORD user{};
@@ -92,6 +95,12 @@ public:
     static int32_t dispatch(void* userdata,uint32_t op,void* argument) noexcept;
     // Explicit identity must equal the identity used for imports by the embedder.
     bc250_host descriptor(uint64_t adapter_luid,void* identity) noexcept;
+    // The device-wide progress of every context of this device (device-progress.h): the published value of
+    // each monitored fence the ICD has not reached yet. Both take lock_ alone, never a hook, so a caller
+    // outside this module may hold no lock of its own (the heap imports' lock is a leaf).
+    void progress_snapshot(ProgressSnapshot* out) noexcept;
+    bool progress_retired(const ProgressSnapshot* snapshot) noexcept;
+    ProgressSource progress_source() noexcept;
     // Terminal metadata release only, after all calls/workers stop. Returns the
     // unresolved allocation/reservation/context/paging/sync count; does not claim OS allocation reclamation.
     unsigned discard_metadata() noexcept;

@@ -94,6 +94,13 @@ Steps 2 to 4 run only on the thread of a DDI call into the owning device while i
 
 They never run from an engine thread or callback: INLINE mode has no engine threads, and engine-ddi starts none.
 
+With `set_release_policy`'s `two_phase` (the shell's default since adapter107, M15.8) step 1 has two phases:
+when the destroy's own marks are reached, every engine queue's current mark is recorded once more and the
+release waits for those as well, so a submission made between the destroy and the release is covered. A
+release with no mark at the destroy waits for one such second phase too. An idle queue's mark is already
+retired, so the hold ends at the next retirement point; a busy queue holds the memory about one more frame.
+Nothing waits on the CPU: both phases read the queues' state words and fences at the retirement points above.
+
 **Shaders.**
 - The DDI payload is the bare program (DXBC tokens, or the DXIL part) with its length in DWORD 1, and
   register-only signatures. That the buffer holds exactly that many DWORDs is an inference from the SAL

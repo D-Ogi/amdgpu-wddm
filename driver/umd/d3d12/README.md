@@ -133,6 +133,24 @@ records. Mapping completion alone is not GPU-use retirement. `PagingDomain` also
 provides a context-specific GPU wait helper, but imports still require a completed
 mapping before publication.
 
+The proof of retirement that reaches the shell is engine-ddi's: the retirement
+fences of its engine queues. It cannot cover a submission on a context outside
+that set, and trial 245 faulted on a GFX job that was in the ring 2.1 ms before
+the unmap of the memory it read (`scratch/m15/game-recon/bsod-245`, local). The
+release therefore passes a gate of its own (`ImportReleasePolicy`, M15.8): the
+import stays mapped and allocated until the device-wide progress taken when the
+release arrived has retired, and until the policy's delay has passed. That
+progress is per monitored fence (`device-progress.h`): the ICD signals the
+submitting context's fence after every native submit and publishes the value, on
+application and internal contexts alike, and `HostedDispatch` sees every such
+publication. The delay is a bounded FIFO, oldest first, with a count, a byte and
+an age bound; the bounds only shorten the delay and never the progress condition.
+A linear primary is never held, because only its own runtime resource may release
+it. The device's teardown drains the FIFO in full and counts what was still
+unretired there. Both halves of the gate are switchable
+(`import-progress-gate-off`, `import-quarantine-off`, and
+`release-two-phase-off` for engine-ddi's half; `ddi-trace.h`), all on by default.
+
 Contract sources are the WDK/SDK 10.0.26100 `d3d12umddi.h` callbacks and
 `d3dukmdt.h` structures, plus the local Microsoft documentation checkout:
 [MakeResidentCb](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dumddi/nc-d3dumddi-pfnd3dddi_makeresidentcb),

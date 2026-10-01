@@ -253,12 +253,20 @@ void imports(Device& device){
             // Borrowed backing: the release waits for its return.
             if(owner->free(&memory)!=E_PENDING)++failures;
             owner->return_backing(memory.allocation);
-            if(owner->free(&memory)!=S_OK || owner->last_free_report().stage!=FreeStage::Done ||
+            // The device's own release policy is in force here (ImportReleasePolicy::from_switches(), the
+            // driver's defaults): a release either completes or is held by the quarantine, and either way
+            // the import is gone from the owner at once. No progress source is bound in this host test, so
+            // only the depth delays, and the device's close drains what is left.
+            const HRESULT released=owner->free(&memory);
+            const FreeStage stage=owner->last_free_report().stage;
+            if(released!=S_OK || (stage!=FreeStage::Done && stage!=FreeStage::Quarantined) ||
                owner->owns_allocation(memory.allocation))++failures;
         }
     });
     for(auto& thread:threads)thread.join();
     allocate_meeting.disarm();
+    // What the quarantine still holds is bounded by the policy's depth, whichever thread deposited it.
+    assert(owner->held_count()<=owner->policy().quarantine_depth);
     assert(!failures.load() && allocate_meeting.met.load());
 }
 // 5. One internal context named by two threads at once, which RADV's queue lock never lets happen

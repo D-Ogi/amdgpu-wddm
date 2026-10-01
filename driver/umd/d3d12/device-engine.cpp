@@ -180,11 +180,35 @@ class DeviceEngine final {
         const auto trace=ddi_trace_begin("shellFreeMemory");
         auto& device=*static_cast<Device*>(shell);
         const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->free(memory):E_UNEXPECTED;
-        if(trace && ddi_trace_enabled() && device.engine && device.engine->imports_){
+        if(trace && device.engine && device.engine->imports_){
+            // Instrumentation item 5 of the trial 245 report: the address and size the release named, with
+            // the time and thread, so that the line meets the kernel's paging journal (which records the
+            // unmap and the destroy of the same VA) and the engine's release lines. In the full trace every
+            // call prints; in the failures-only mode of the lab's game runs the line goes to the debugger
+            // at powers of two of the free count, and whenever the quarantine let something go, so a game
+            // adds a line per doubling and one per actual release, not one per frame.
             const auto& r=device.engine->imports_->last_free_report();
-            std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
-                "\"status\":\"%08lx\"}\n",unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
-                static_cast<unsigned long>(hr));
+            static std::atomic<uint64_t> frees{};
+            const uint64_t count=frees.fetch_add(1,std::memory_order_relaxed)+1;
+            LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+            if(ddi_trace_enabled())
+                std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
+                    "\"gpu_va\":%llu,\"byte_size\":%llu,\"released\":%u,\"held_count\":%u,\"held_bytes\":%llu,"
+                    "\"qpc\":%lld,\"thread\":%lu,\"status\":\"%08lx\"}\n",
+                    unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
+                    static_cast<unsigned long long>(r.gpu_va),static_cast<unsigned long long>(r.byte_size),
+                    r.released,r.held_count,static_cast<unsigned long long>(r.held_bytes),
+                    now.QuadPart,GetCurrentThreadId(),static_cast<unsigned long>(hr));
+            else if(ddi_trace_mode()==2 && (r.released || !(count&(count-1)))){
+                char line[256];
+                std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 shell-memory-free n=%llu va=%llu bytes=%llu "
+                    "stage=%u released=%u held=%u/%llu qpc=%lld thread=%lu status=%08lx\n",
+                    static_cast<unsigned long long>(count),static_cast<unsigned long long>(r.gpu_va),
+                    static_cast<unsigned long long>(r.byte_size),static_cast<unsigned>(r.stage),r.released,
+                    r.held_count,static_cast<unsigned long long>(r.held_bytes),now.QuadPart,GetCurrentThreadId(),
+                    static_cast<unsigned long>(hr));
+                ddi_mode2_note(line);
+            }
         }
         ddi_trace_end("shellFreeMemory",trace,hr);
         return hr;
@@ -240,6 +264,23 @@ public:
         imports_.reset(new(std::nothrow) RuntimeHeapImports(device_,domain_,physical,device,instance,hosted.entry(),this));
         if(!imports_)return E_OUTOFMEMORY;
         result=imports_->initialize();stage("HeapImports",result);if(result!=S_OK)return result;
+        // The release gate's shell half (M15.8, F2 and F3): the device-wide progress of every context comes
+        // from the hosted dispatch, which sees every progress publication the ICD makes. Bound before any
+        // import exists, so no release can miss it.
+        imports_->bind_progress(dispatch_.progress_source());
+        {
+            const auto& policy=imports_->policy();
+            std::fprintf(stderr,"d3d12-engine import release policy progress_gate=%u depth=%u count_cap=%u "
+                "age_ms=%u byte_cap=%llu\n",unsigned(policy.progress_gate),policy.quarantine_depth,
+                policy.quarantine_count_cap,policy.quarantine_age_ms,
+                static_cast<unsigned long long>(policy.quarantine_byte_cap));std::fflush(stderr);
+            char line[192];
+            std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 import release policy progress_gate=%u depth=%u "
+                "count_cap=%u age_ms=%u byte_cap=%llu\n",unsigned(policy.progress_gate),policy.quarantine_depth,
+                policy.quarantine_count_cap,policy.quarantine_age_ms,
+                static_cast<unsigned long long>(policy.quarantine_byte_cap));
+            ddi_mode2_note(line);
+        }
         engine_ddi::ContextCreateInfo context{};
         context.size=sizeof(context);context.boundary_revision=engine_ddi::kBoundaryRevision;
         context.memory_mode=engine_ddi::MemoryMode::RuntimeBacked;
@@ -248,6 +289,16 @@ public:
         context.hooks={sizeof(context.hooks),&device_,report_error,report_list_error,is_lost,bind_list,allocate,free};
         result=engine_ddi::create_device_context(&context,&context_);stage("DeviceContext",result);
         if(result!=S_OK)return result;
+        // The engine-ddi half of the release gate (M15.8, F1): two-phase retirement, on unless the
+        // experiment release-two-phase-off says otherwise. Set before any queue exists, like the policy
+        // below; engine-ddi's own default is one phase, so the switch alone decides.
+        {
+            engine_ddi::ReleasePolicy policy{};
+            policy.size=sizeof(policy);
+            policy.two_phase=ddi_experiment("release-two-phase-off")?0u:1u;
+            result=engine_ddi::set_release_policy(context_,&policy);stage("ReleasePolicy",result);
+            if(result!=S_OK)return result;
+        }
         // Lever L3 (experiment retire-handoff, off by default): submissions leave the release sequence to the
         // resource DDIs, within kRetireBacklogBound and kRetireAgeBoundMs (engine-ddi.h, set_retire_policy).
         // Set before any queue exists.

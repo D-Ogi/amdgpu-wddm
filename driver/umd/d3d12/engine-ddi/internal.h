@@ -50,6 +50,12 @@ struct PendingRelease {
     uint64_t marks[kMaxEngineQueues];           // the value each slot's retirement fence must reach
     bool stuck;                                 // retirement can never be proven: pending for the device's life
     PendingRelease* next;
+    // Two-phase retirement (set_release_policy). phase 1: the marks of the destroy's own snapshot; phase 2:
+    // the marks re-recorded once those were reached. Without the policy a release stays at phase 0 and its
+    // one snapshot decides, as before. The two counts and the times are for the log line only.
+    uint32_t phase;
+    uint32_t queues[2];                         // slots that held a mark in each phase
+    uint64_t snapshot_qpc[2];
 };
 
 // Pending releases of one device, an intrusive list: no call allocates. Not thread-safe: the owner holds its lock
@@ -200,6 +206,12 @@ public:
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
+    // The release policy (set_release_policy): written before the context is used on another thread, read
+    // only after. The counters are diagnostic (the log line at powers of two).
+    bool release_two_phase = false;
+    std::atomic<uint64_t> releases_recorded{0};  // releases that took a first-phase snapshot
+    std::atomic<uint64_t> releases_second{0};    // releases that reached a second phase
+    std::atomic<uint64_t> releases_run{0};       // releases whose memory went back to the shell
     // The retire policy (set_retire_policy): written before the context is used on another thread, read only after.
     bool retire_handoff = false;
     uint32_t retire_backlog_bound = 0;
@@ -236,8 +248,13 @@ public:
     // takes the snapshot again, with the lock released in between, until no mark is left or in_ddi_bound_ms
     // have passed; after the bound the device error is reported and the node is recorded like any other.
     void release(PendingRelease* node) noexcept;
-    // Runs the release sequence for everything that has retired (a retirement point).
+    // Runs the release sequence for everything that has retired (a retirement point). With the release
+    // policy's two_phase, a node whose first-phase marks are reached has its second phase recorded here
+    // instead and stays pending until those marks are reached too (set_release_policy).
     void process_retired() noexcept;
+    // Records the marks of every engine queue in the node, under lock. Returns the number of slots that
+    // hold one; node->stuck is set when a queue proves nothing (removed device, lost retirement).
+    uint32_t snapshot_marks(PendingRelease* node) noexcept;
     // The retirement point of a submission call (execute_command_lists, update_tile_mappings, copy_tile_mappings):
     // process_retired, unless the retire policy hands it to the resource DDIs (retire_defers).
     void retire_after_submit() noexcept;

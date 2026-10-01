@@ -24,6 +24,11 @@ struct RuntimeHeapImports::Record {
     GpuMapping mapping;
     engine_ddi::ImportedMemory imported{};
     Record* next{};
+    // The quarantine's own fields, written once at the deposit (ImportReleasePolicy): the release's
+    // position in the deposit order, the tick it was made at, what it holds, and the device-wide
+    // progress it must outlive. Only drain() reads them.
+    uint64_t deposit{},tick{},bytes{},gpu_va{};
+    ProgressSnapshot progress{};
     D3DKMT_HANDLE handle{};                     // allocation.handle(), published once it exists
     bool retired{true},locked{},busy{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
@@ -43,11 +48,38 @@ public:
     Exclusive& operator=(const Exclusive&)=delete;
 };
 }
+// The quarantine's defaults, with their reasons (M15.8):
+//   depth 3: trial 245 destroyed four 384 KiB imports inside 2.1 ms and the faulting job started 0.68 ms
+//     after the unmap of the one it read, so the delay has to span a frame's worth of releases, not a
+//     millisecond. Three further releases are about one frame of that game's release rate and cost one
+//     frame of memory.
+//   count 64 and 64 MiB: the imports the kernel journal saw in 245 were 64 KiB to 9.5 MiB, most of them
+//     384 KiB or less; 64 entries of that size is about 25 MiB, and the byte cap bounds the outliers. Both
+//     only shorten the delay (the progress condition still holds), so they are a memory bound, not a gate.
+//   age 250 ms: the same bound the retire hand-off uses (device-engine.cpp), so that an application that
+//     stops allocating and freeing does not leave the last entries held until its device goes.
+constexpr ImportReleasePolicy kQuarantineDefaults{3,64,250,64ull<<20,true};
+ImportReleasePolicy ImportReleasePolicy::from_switches() noexcept {
+    ImportReleasePolicy policy=kQuarantineDefaults;
+    if(ddi_experiment("import-progress-gate-off"))policy.progress_gate=false;
+    if(ddi_experiment("import-quarantine-off")){
+        policy.quarantine_depth=0;policy.quarantine_count_cap=0;policy.quarantine_age_ms=0;policy.quarantine_byte_cap=0;
+    }
+    return policy;
+}
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
-    VkPhysicalDevice physical,VkDevice device,VkInstance instance,PFN_vkGetInstanceProcAddr gipa,void* identity) noexcept
+    VkPhysicalDevice physical,VkDevice device,VkInstance instance,PFN_vkGetInstanceProcAddr gipa,void* identity,
+    const ImportReleasePolicy& policy) noexcept
     :runtime_(d.runtime),callbacks_(d.callbacks),kernel_(d.kernel_callbacks),domain_(domain),
-     paging_(d.runtime,d.kernel_callbacks),physical_(physical),device_(device),instance_(instance),gipa_(gipa),identity_(identity) {}
+     paging_(d.runtime,d.kernel_callbacks),physical_(physical),device_(device),instance_(instance),gipa_(gipa),identity_(identity),
+     policy_(policy) {}
 RuntimeHeapImports::~RuntimeHeapImports(){discard_metadata();}
+uint32_t RuntimeHeapImports::held_count() const noexcept {
+    AcquireSRWLockShared(&lock_);const uint32_t count=held_count_;ReleaseSRWLockShared(&lock_);return count;
+}
+uint64_t RuntimeHeapImports::held_bytes() const noexcept {
+    AcquireSRWLockShared(&lock_);const uint64_t bytes=held_bytes_;ReleaseSRWLockShared(&lock_);return bytes;
+}
 HRESULT RuntimeHeapImports::initialize() noexcept {
     if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
     if(initialized_)return S_OK;
@@ -97,6 +129,88 @@ void RuntimeHeapImports::erase(Record* record) noexcept {
     }
     if(found)delete record;
 }
+void RuntimeHeapImports::detach(Record* record) noexcept {
+    auto link=&records_;while(*link && *link!=record)link=&(*link)->next;
+    if(*link)*link=record->next;
+    record->next=nullptr;
+}
+// Into the quarantine, oldest first, under lock_. The record is already out of records_ and its Vulkan
+// import is gone; what it still holds is its GPU address and its runtime allocation.
+void RuntimeHeapImports::deposit(Record* record) noexcept {
+    record->next=nullptr;
+    record->deposit=++deposits_;
+    record->tick=GetTickCount64();
+    record->bytes=record->imported.byte_size;
+    record->gpu_va=record->imported.gpu_va;
+    if(held_tail_)held_tail_->next=record;else held_=record;
+    held_tail_=record;
+    ++held_count_;held_bytes_+=record->bytes;
+}
+// Releases what the policy admits, oldest first; with `all` everything, whatever the progress says (device
+// teardown, where the engine has released every object and destroyed every queue). One thread drains at a
+// time: a free() that finds a drain in flight leaves the work to it. No lock of this module is held across
+// the progress source or a runtime callback.
+void RuntimeHeapImports::drain(bool all) noexcept {
+    {
+        Exclusive held(lock_);
+        if(draining_ || !held_)return;
+        draining_=true;
+    }
+    unsigned released=0;
+    for(;;){
+        Record* front=nullptr;ProgressSnapshot progress{};bool gated=false;
+        {
+            Exclusive held(lock_);
+            front=held_;
+            if(!front)break;
+            if(!all){
+                const uint64_t now=GetTickCount64();
+                const bool delayed=front->deposit+policy_.quarantine_depth<=deposits_;
+                const bool aged=policy_.quarantine_age_ms && now>=front->tick &&
+                    now-front->tick>=policy_.quarantine_age_ms;
+                const bool over=(policy_.quarantine_count_cap && held_count_>policy_.quarantine_count_cap) ||
+                    (policy_.quarantine_byte_cap && held_bytes_>policy_.quarantine_byte_cap);
+                if(!delayed && !aged && !over)break;
+            }
+            gated=policy_.progress_gate && progress_.usable();
+            progress=front->progress;
+        }
+        if(gated){
+            // Taken again when the earlier snapshot could not name every unretired fence.
+            if(!progress.complete){
+                progress_.snapshot(progress_.owner,&progress);
+                Exclusive held(lock_);
+                if(held_!=front)continue;        // another drain finished it; start again
+                front->progress=progress;
+            }
+            if(!progress_.retired(progress_.owner,&progress)){
+                if(!all)break;
+                forced_.fetch_add(1,std::memory_order_relaxed);
+            }
+        }
+        {
+            Exclusive held(lock_);
+            if(held_!=front)continue;
+            held_=front->next;if(!held_)held_tail_=nullptr;
+            --held_count_;held_bytes_-=front->bytes;
+        }
+        front->next=nullptr;
+        const HRESULT hr=release_owned(*front);
+        ++released;
+        if(hr!=S_OK){
+            // The mapping or the deallocation refused. The record keeps what it holds and is counted by
+            // discard_metadata; it never goes back into the quarantine, where a failed release would be
+            // retried for ever.
+            Exclusive held(lock_);
+            front->next=records_;records_=front;front->releasing=0;
+        } else delete front;
+    }
+    Exclusive held(lock_);
+    draining_=false;
+    free_report_.released=released;
+    free_report_.held_count=held_count_;
+    free_report_.held_bytes=held_bytes_;
+}
 // The record is retired and not in a callback. The calling thread takes it for the release (free()
 // may have done so already, under the same hold that retired it); on failure it gives it back, on
 // success the caller erases it.
@@ -109,11 +223,14 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
         if(!record.retired || record.busy || (record.releasing && record.releasing!=self))return E_UNEXPECTED;
         record.releasing=self;memory=record.imported.memory;record.imported.memory=VK_NULL_HANDLE;
     }
-    const HRESULT hr=release_owned(record,memory);
+    HRESULT hr=release_import(record,memory);
+    if(hr==S_OK)hr=release_owned(record);
     if(hr!=S_OK){Exclusive held(lock_);record.releasing=0;}
     return hr;
 }
-HRESULT RuntimeHeapImports::release_owned(Record& record,VkDeviceMemory memory) noexcept {
+// The Vulkan import alone. It runs at every release, quarantined or not: the engine has released its heap
+// and expects the import gone, and the memory it names stays mapped and allocated either way.
+HRESULT RuntimeHeapImports::release_import(Record& record,VkDeviceMemory memory) noexcept {
     // Engine objects and uses have retired before free() reaches this point; a record of a failed
     // construction was never used. Every release below therefore carries the proof of retirement.
     // RADV may call Unlock2 from vkFreeMemory, on this thread; keep the allocation record live.
@@ -121,7 +238,9 @@ HRESULT RuntimeHeapImports::release_owned(Record& record,VkDeviceMemory memory) 
     if(memory)free_(device_,memory,nullptr);
     bool locked=false;
     {Exclusive held(lock_);locked=record.locked;}
-    if(locked)return E_UNEXPECTED;
+    return locked?E_UNEXPECTED:S_OK;
+}
+HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
     free_report_.stage=FreeStage::Unmap;
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping);
     if(hr!=S_OK)return hr;
@@ -166,6 +285,9 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(out)*out={};
     report_={};report_.stage=ImportStage::Request;
     if(!active_.load() || !domain_.entered() || !initialized_)return E_UNEXPECTED;
+    // A retirement point before the memory is asked for, as engine-ddi's resource DDIs are: an application
+    // that destroys and then creates at its budget gets the quarantined addresses back first.
+    drain(false);
     if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || request->reserved2 ||
        !request->byte_size || !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
     const auto& heap=*request->heap;
@@ -312,7 +434,8 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
     if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
     if(!memory || memory->size!=sizeof(*memory))return E_INVALIDARG;
     free_report_.stage=FreeStage::Record;
-    Record* record=nullptr;
+    free_report_.gpu_va=memory->gpu_va;free_report_.byte_size=memory->byte_size;
+    Record* record=nullptr;VkDeviceMemory imported=VK_NULL_HANDLE;bool quarantine=false;
     {
         Exclusive held(lock_);
         record=find(memory->allocation);
@@ -323,8 +446,32 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
         if(record->borrowed || record->busy)return E_PENDING;
         // Retired and taken for the release in one hold: no other thread's call starts on it in between.
         record->retired=true;record->releasing=GetCurrentThreadId();
+        free_report_.surface=record->surface;
+        // A linear primary is never quarantined: only its own runtime resource may release it, inside the
+        // destroy that ends it (release_owned), which a later drain is no longer inside.
+        quarantine=policy_.holds() && !record->surface;
+        if(quarantine){imported=record->imported.memory;record->imported.memory=VK_NULL_HANDLE;}
     }
-    HRESULT hr=release(*record);if(hr==S_OK)erase(record);return hr;
+    if(!quarantine){
+        HRESULT hr=release(*record);if(hr==S_OK)erase(record);return hr;
+    }
+    HRESULT hr=release_import(*record,imported);
+    if(hr!=S_OK){Exclusive held(lock_);record->releasing=0;return hr;}
+    // The snapshot is taken before the record is held, so that it covers every submission of every context
+    // that reached the kernel before this release (device-progress.h). No lock of this module is held.
+    ProgressSnapshot progress{};
+    if(policy_.progress_gate && progress_.usable())progress_.snapshot(progress_.owner,&progress);
+    {
+        Exclusive held(lock_);
+        record->progress=progress;
+        detach(record);
+        deposit(record);
+    }
+    drain(false);
+    // The stage of this call is where its own import ended: held. What the drain did is in the counters.
+    free_report_.stage=FreeStage::Quarantined;
+    free_report_.held_count=held_count();free_report_.held_bytes=held_bytes();
+    return S_OK;
 }
 HRESULT RuntimeHeapImports::dispatch(uint32_t op,void* argument) noexcept {
     if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
@@ -366,6 +513,10 @@ HRESULT RuntimeHeapImports::dispatch(uint32_t op,void* argument) noexcept {
 // paging queue's destruction meet no other thread. The record hold is still taken where flags are read.
 HRESULT RuntimeHeapImports::close_after_engine_retirement() noexcept {
     if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
+    // The engine has released every object and destroyed every queue by now, so the quarantine's delay has
+    // nothing left to protect: it is drained in full. forced_releases() counts those whose device progress
+    // still read unretired here.
+    drain(true);
     HRESULT result=S_OK;
     Record* record=nullptr;
     {Exclusive held(lock_);record=records_;}
@@ -383,9 +534,16 @@ HRESULT RuntimeHeapImports::close_after_engine_retirement() noexcept {
 }
 unsigned RuntimeHeapImports::discard_metadata() noexcept {
     active_.store(false);unsigned count=paging_open_.exchange(false)?1u:0u;
-    paging_.invalidate_runtime();runtime_={};callbacks_={};kernel_={};
+    paging_.invalidate_runtime();runtime_={};callbacks_={};kernel_={};progress_={};
     Record* records=nullptr;
-    {Exclusive held(lock_);records=records_;records_=nullptr;}
+    {
+        // A quarantined record still holds its GPU address and its runtime allocation, which this terminal
+        // path never releases: it is counted with the others below.
+        Exclusive held(lock_);
+        if(held_tail_){held_tail_->next=records_;records_=held_;}
+        held_=held_tail_=nullptr;held_count_=0;held_bytes_=0;
+        records=records_;records_=nullptr;
+    }
     while(records){auto record=records;records=record->next;
         if(record->allocation.handle() || record->imported.memory)++count;
         record->allocation.invalidate_runtime();delete record;}

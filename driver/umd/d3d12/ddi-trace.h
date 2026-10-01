@@ -37,6 +37,13 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 // Read once per process. Names: raytracing-tier (adapter-caps.cpp), present-cached and present-noprimary
 // (heap-import.cpp), recording-bind and retire-handoff (device-engine.cpp: the recording entry binding and the
 // retire hand-off, both read once per device).
+// The three switches of the release gate (M15.8, the fixes of the trial 245 report) are the other way round:
+// each names the fix to turn OFF, because all three are the driver's behaviour.
+//   release-two-phase-off: engine-ddi waits for one snapshot per release, not two (device-engine.cpp, F1).
+//   import-progress-gate-off: a released import is not held for the device-wide progress of its release
+//     (heap-import.cpp, ImportReleasePolicy, F2).
+//   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
+// All three off is adapter106's release behaviour.
 // The value as given, for traces: lower-case letters, digits, hyphens and commas only, else empty.
 inline const char* ddi_experiment_name() noexcept {
     static const struct Value {

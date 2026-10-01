@@ -24,6 +24,16 @@ static unsigned creates=0,makes_resident=0,evictions=0,waits=0,probes=0;
 static uint32_t expected_type=0;
 static void* identity=handle<void*>(0x5432);
 static RuntimeHeapImports* imports;
+// The device-wide progress source of the release gate (device-progress.h), as the hosted dispatch
+// implements it: one mark, retired or not as the test says.
+static bool progress_retired_flag=true;
+static unsigned snapshots=0;
+static void progress_snapshot_cb(void*,ProgressSnapshot* out) noexcept {
+ ++snapshots;*out={};out->count=1;out->marks[0]={1,7};
+}
+static bool progress_retired_cb(void*,const ProgressSnapshot* snapshot) noexcept {
+ return snapshot && snapshot->count==1 && snapshot->marks[0].value==7 && progress_retired_flag;
+}
 static char mapped[65536];
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
@@ -134,7 +144,12 @@ int main(){
  auto& k=device.kernel_callbacks;k.pfnCreatePagingQueueCb=paging_create;k.pfnDestroyPagingQueueCb=paging_destroy;k.pfnMapGpuVirtualAddressCb=map_cb;
  k.pfnFreeGpuVirtualAddressCb=unmap_cb;k.pfnMakeResidentCb=make_cb;k.pfnLock2Cb=lock_actual;k.pfnUnlock2Cb=unlock_cb;
  k.pfnEvictCb=evict_cb;k.pfnWaitForSynchronizationObjectFromCpuCb=wait_cpu_cb;
- bc250::umd::RuntimeDomain domain;RuntimeHeapImports owner(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity);imports=&owner;
+ bc250::umd::RuntimeDomain domain;
+ // The whole suite below runs with the release gate off (ImportReleasePolicy::off(), the two experiment
+ // switches import-progress-gate-off and import-quarantine-off): every event string here is adapter106's,
+ // so the suite is also the proof that the switches off reproduce it. The gate itself is tested at the end.
+ RuntimeHeapImports owner(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,
+                          ImportReleasePolicy::off());imports=&owner;
  assert(owner.initialize()==E_UNEXPECTED);bc250::umd::RuntimeDomain::Scope scope(domain);assert(owner.initialize()==S_OK);
  D3D12DDIARG_CREATEHEAP_0001 heap{};heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CreationNodeMask=heap.VisibleNodeMask=1;
  D3D12DDIARG_CREATERESOURCE_0088 resource{};resource.ResourceType=D3D12DDI_RT_BUFFER;
@@ -337,7 +352,8 @@ int main(){
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.
  {
-  RuntimeHeapImports late(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity);
+  RuntimeHeapImports late(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,
+                          ImportReleasePolicy::off());
   assert(late.initialize()==S_OK);
   constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
   D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
@@ -441,6 +457,108 @@ int main(){
   assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_A2R10G10B10,65536,handle<void*>(2))==E_NOTIMPL);
   assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_X8R8G8B8,65536,handle<void*>(2))==E_NOTIMPL);
  }
+ // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a
+ // policy is fixed for the owner's life. The event letters are the callbacks: A allocate, M map, Z the
+ // residency reference, I the Vulkan import, V the Vulkan free, E evict, U free the VA, D deallocate.
+ // A quarantined release stops after V and the rest follows when the policy admits it.
+ {
+  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+  heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;expected_type=0;
+  engine_ddi::ImportedMemory a{},b{},c{};
+  // 1. The depth alone: the release of an import leaves after two further releases have reached the shell.
+  {
+   ImportReleasePolicy policy{};policy.quarantine_depth=2;policy.quarantine_count_cap=4;
+   RuntimeHeapImports gate(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
+   assert(gate.initialize()==S_OK);
+   events.clear();
+   assert(gate.allocate(&req,&a)==S_OK && gate.allocate(&req,&b)==S_OK && gate.allocate(&req,&c)==S_OK &&
+          events=="AMZIAMZIAMZI");
+   events.clear();assert(gate.free(&a)==S_OK && events=="V" && gate.held_count()==1 && gate.held_bytes()==65536);
+   assert(gate.last_free_report().stage==FreeStage::Quarantined && gate.last_free_report().gpu_va==a.gpu_va &&
+          gate.last_free_report().byte_size==65536 && !gate.last_free_report().released);
+   events.clear();assert(gate.free(&b)==S_OK && events=="V" && gate.held_count()==2);
+   events.clear();assert(gate.free(&c)==S_OK && events=="VEUD" && gate.held_count()==2 &&
+                         gate.last_free_report().released==1);
+   // The device's teardown drains the rest, and the paging queue closes after it ('P').
+   events.clear();assert(gate.close_after_engine_retirement()==S_OK && events=="EUDEUDP" && !gate.held_count() &&
+                         !gate.forced_releases());
+   assert(gate.discard_metadata()==0);
+  }
+  // 2. The caps bound what the delay holds: over the count cap the oldest leaves whatever the depth says.
+  {
+   ImportReleasePolicy policy{};policy.quarantine_depth=1000;policy.quarantine_count_cap=1;
+   RuntimeHeapImports caps(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
+   assert(caps.initialize()==S_OK);
+   assert(caps.allocate(&req,&a)==S_OK && caps.allocate(&req,&b)==S_OK);
+   events.clear();assert(caps.free(&a)==S_OK && events=="V" && caps.held_count()==1);
+   events.clear();assert(caps.free(&b)==S_OK && events=="VEUD" && caps.held_count()==1);
+   events.clear();assert(caps.close_after_engine_retirement()==S_OK && events=="EUDP");
+   assert(caps.discard_metadata()==0);
+  }
+  // 3. The byte cap, smaller than one import: every release is over it and leaves at once.
+  {
+   ImportReleasePolicy policy{};policy.quarantine_depth=1000;policy.quarantine_byte_cap=65535;
+   RuntimeHeapImports bytes(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
+   assert(bytes.initialize()==S_OK);
+   assert(bytes.allocate(&req,&a)==S_OK);
+   events.clear();assert(bytes.free(&a)==S_OK && events=="VEUD" && !bytes.held_count());
+   events.clear();assert(bytes.close_after_engine_retirement()==S_OK && events=="P");
+   assert(bytes.discard_metadata()==0);
+  }
+  // 4. The age bound: an import the application never follows with another release still leaves.
+  {
+   ImportReleasePolicy policy{};policy.quarantine_depth=1000;policy.quarantine_age_ms=1;
+   RuntimeHeapImports aged(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
+   assert(aged.initialize()==S_OK);
+   assert(aged.allocate(&req,&a)==S_OK && aged.allocate(&req,&b)==S_OK);
+   events.clear();assert(aged.free(&a)==S_OK && events=="V" && aged.held_count()==1);
+   Sleep(32);                                   // GetTickCount64's step is about 16 ms
+   events.clear();assert(aged.free(&b)==S_OK && events=="VEUD" && aged.held_count()==1);
+   assert(aged.close_after_engine_retirement()==S_OK && aged.discard_metadata()==0);
+  }
+  // 5. The progress gate: the device-wide progress of the release decides, and a linear primary is never
+  // quarantined (only its own runtime resource may release it, inside the destroy that ends it).
+  {
+   ImportReleasePolicy policy{};policy.progress_gate=true;
+   RuntimeHeapImports gated(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
+   gated.bind_progress({&gated,progress_snapshot_cb,progress_retired_cb});
+   assert(gated.initialize()==S_OK);
+   assert(gated.allocate(&req,&a)==S_OK);
+   progress_retired_flag=false;snapshots=0;
+   events.clear();assert(gated.free(&a)==S_OK && events=="V" && gated.held_count()==1 && snapshots==1);
+   events.clear();gated.retire_held();assert(events.empty() && gated.held_count()==1);
+   progress_retired_flag=true;
+   gated.retire_held();assert(events=="EUD" && !gated.held_count() && !gated.forced_releases());
+   // The primary: allocated and released inside its resource's DDI, with the progress unretired.
+   progress_retired_flag=false;
+   constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
+   D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
+   target.DepthOrArraySize=1;target.MipLevels=1;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.SampleDesc={1,0};
+   heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY);
+   engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=primary;s.byte_size=65536;s.alignment=128;
+   s.memory_type_bits=1;s.surface_row_pitch=1024;s.surface_layout_size=65536;surface_format=D3DDDIFMT_A8R8G8B8;
+   engine_ddi::ImportedMemory surface{};
+   events.clear();{OwnerScope create(&gated,0);assert(gated.allocate(&s,&surface)==S_OK);}
+   {OwnerScope destroy(&gated,surface.allocation);
+    assert(gated.free(&surface)==S_OK && events=="AMZIVEUR" && !gated.held_count());}
+   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
+   // An import whose progress never retires is still released at the device's teardown, and counted.
+   assert(gated.allocate(&req,&b)==S_OK);
+   events.clear();assert(gated.free(&b)==S_OK && events=="V" && gated.held_count()==1);
+   events.clear();assert(gated.close_after_engine_retirement()==S_OK && events=="EUDP" &&
+                         gated.forced_releases()==1 && !gated.held_count());
+   assert(gated.discard_metadata()==0);
+  }
+  // 6. The driver's defaults, as the switches leave them: the gate is on and holds three releases.
+  {
+   const auto defaults=ImportReleasePolicy::from_switches();
+   assert(defaults.progress_gate && defaults.quarantine_depth==3 && defaults.quarantine_count_cap==64 &&
+          defaults.quarantine_age_ms==250 && defaults.quarantine_byte_cap==(64ull<<20) && defaults.holds());
+   assert(!ImportReleasePolicy::off().holds());
+  }
+  assert(surfaces==13);
+ }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
-  "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation");
+  "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
+  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release)");
 }

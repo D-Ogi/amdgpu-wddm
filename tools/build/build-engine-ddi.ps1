@@ -116,6 +116,8 @@ try {
         Invoke-Step 'native policy test' { & .\native-policy-test.exe }
         Invoke-Step 'caps test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:caps-test.exe (Join-Path $src 'tests\caps-test.cpp') engine-ddi.lib dxgi.lib }
         Invoke-Step 'caps test (stub engine)' { & .\caps-test.exe }
+        Invoke-Step 'release gate test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:release-gate-test.exe (Join-Path $src 'tests\release-gate-test.cpp') engine-ddi.lib }
+        Invoke-Step 'release gate test' { & .\release-gate-test.exe }
 
         if (-not $NativeOnly) {
             Invoke-Step 'harness library' { & cl.exe @flags $harnessFlag /c /Fo:harness\ /Fd:harness\engine-ddi.pdb @libSources }
