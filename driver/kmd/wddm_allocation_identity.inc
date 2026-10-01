@@ -1,8 +1,24 @@
+// The allocation an opened object was bound to, or NULL once it is gone. The
+// stored pointer is a value: it is looked up in the object index first and the
+// object is read only if it is indexed, is an allocation and carries the serial
+// recorded at the bind. WddmFreeObject takes an allocation out of the index under
+// this lock, and a pool address reused later carries a new serial, so a binding
+// to a destroyed allocation can never alias its successor. Caller holds Lock.
+static BC250_WDDM_OBJECT* WddmBackingAllocationLocked(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Opened)
+{
+    BC250_WDDM_OBJECT* backing;
+    if (!Opened->BackingAllocation) return NULL;
+    backing=(BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&Wddm->ObjectIndex,Opened->BackingAllocation);
+    if (!backing || backing->Magic!=BC250_WDDM_MAGIC_ALLOCATION || backing->Serial!=Opened->BackingSerial) return NULL;
+    return backing;
+}
+
 // WDK26100 Acquire/Release keeps the VidMm allocation and KMD object alive
-// through lookup and publication. Match and publish under the same lock used
-// by WddmFreeObject to clear snapshots before an allocation address is reused.
-// No runtime callback runs under that lock. The opened object is still private
-// to OpenAllocation; its handle is published only after this function returns.
+// through lookup and publication. Match and publish, pointer and serial, under
+// the same lock WddmFreeObject holds when it takes an allocation out of the
+// object index. No runtime callback runs under that lock. The opened object is
+// still private to OpenAllocation; its handle is published only after this
+// function returns.
 static void WddmBindHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO* Info,
     BC250_WDDM_OBJECT* Opened, ULONG OpenFlags)
 {
@@ -30,19 +46,16 @@ static void WddmBindHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO
         attempted=TRUE;
         acquired=Device->Dxgk.DxgkCbAcquireHandleData(&query,&release.ReleaseHandle);
         if (acquired) {
-            const LIST_ENTRY* entry;
+            BC250_WDDM_OBJECT* object;
             KIRQL irql;
             KeAcquireSpinLock(&wddm->Lock,&irql);
             if (!wddm->Stopping) {
-                for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
-                    BC250_WDDM_OBJECT* object=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
-                    if ((void*)object==acquired) {
-                        if (object->Magic==BC250_WDDM_MAGIC_ALLOCATION && object->Device==Device) {
-                            Opened->BackingAllocation=object;
-                            bound=TRUE;
-                        }
-                        break;
-                    }
+                // The acquired pointer is a value until the index returns it.
+                object=(BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&wddm->ObjectIndex,acquired);
+                if (object && object->Magic==BC250_WDDM_MAGIC_ALLOCATION && object->Device==Device) {
+                    Opened->BackingAllocation=object;
+                    Opened->BackingSerial=object->Serial;
+                    bound=TRUE;
                 }
             }
             KeReleaseSpinLock(&wddm->Lock,irql);
@@ -65,28 +78,22 @@ static void WddmBindHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO
 // backing object pointer escapes; destroy/close may run after this returns
 // without invalidating metadata consumed by the command builder. VidMm still
 // owns residency and in-flight command lifetime, independently of this snapshot.
+// Both handles and both bindings are values until the object index returns them.
 static BOOLEAN WddmSnapshotPresentAllocations(BC250_WDDM* Wddm, HANDLE OwnerDevice,
     const HANDLE Handles[2], BC250_WDDM_ALLOCATION_PRIVATE Allocations[2])
 {
     BC250_WDDM_OBJECT* backing[2]={NULL,NULL};
     BC250_WDDM_ALLOCATION_PRIVATE snapshots[2];
-    const LIST_ENTRY* entry;
     BOOLEAN valid=FALSE;
     KIRQL irql;
     UINT i;
     KeAcquireSpinLock(&Wddm->Lock,&irql);
     if (Wddm->Stopping) goto done;
     for (i=0;i<2;i++) {
-        BC250_WDDM_OBJECT* opened=NULL;
-        for (entry=Wddm->Objects.Flink;entry!=&Wddm->Objects;entry=entry->Flink) {
-            BC250_WDDM_OBJECT* object=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
-            if ((HANDLE)object==Handles[i] && object->Magic==BC250_WDDM_MAGIC_OPENED) { opened=object; break; }
-        }
-        if (!opened || opened->OwnerDevice!=OwnerDevice || opened->UmdAlloc || !opened->BackingAllocation) goto done;
-        for (entry=Wddm->Objects.Flink;entry!=&Wddm->Objects;entry=entry->Flink) {
-            BC250_WDDM_OBJECT* object=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
-            if ((HANDLE)object==opened->BackingAllocation && object->Magic==BC250_WDDM_MAGIC_ALLOCATION) { backing[i]=object; break; }
-        }
+        BC250_WDDM_OBJECT* opened=(BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&Wddm->ObjectIndex,Handles[i]);
+        if (!opened || opened->Magic!=BC250_WDDM_MAGIC_OPENED ||
+            opened->OwnerDevice!=OwnerDevice || opened->UmdAlloc || !opened->BackingAllocation) goto done;
+        backing[i]=WddmBackingAllocationLocked(Wddm,opened);
         if (!backing[i] || backing[i]->UmdAlloc ||
             RtlCompareMemory(&backing[i]->Allocation,&opened->Allocation,sizeof(opened->Allocation))!=sizeof(opened->Allocation)) goto done;
         snapshots[i]=opened->Allocation;

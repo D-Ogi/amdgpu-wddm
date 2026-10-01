@@ -19,6 +19,7 @@ typedef struct {
     long LastCompletedFence,VSyncTicks;
     BC250_PAGING_JOB *PagingHead,*PagingTail;
     LIST_ENTRY Objects;
+    struct {void *Buckets;} ObjectIndex;
 } BC250_WDDM;
 typedef struct {
     BC250_WDDM *Wddm;
@@ -104,7 +105,8 @@ int main(void)
     BC250_DEVICE d;BC250_WDDM w;BC250_WDDM_OBJECT o;DXGK_DISPLAY_INFORMATION info;
     init(&d,&w,&o);
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
-    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==2 && model.unmaps==1 && dpmStops==1 && interopStops==1);
+    /* Three pool blocks: the one object, the object index's buckets (KMD 0.7.192) and the adapter state. */
+    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1);
     CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
     CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));

@@ -35,9 +35,11 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700BFu       // revision 191: FP16 (A16B16G16R16F) swap-chain buffers admitted as
-                                            // composed LB7A surfaces at 8 bytes a pixel (surface_format.h,
-                                            // gdi_private.h; was 187 on 186); 190: DDI interface version 0xE003
+#define BC250_KMD_VERSION 0x000700C0u       // revision 192: O(1) object index and allocation serials instead of
+                                            // adapter-list scans on the close, bind and Present paths
+                                            // (object_index.h, wddm.c); 191: FP16 (A16B16G16R16F) swap-chain
+                                            // buffers admitted as composed LB7A surfaces at 8 bytes a pixel
+                                            // (surface_format.h, gdi_private.h); 190: DDI interface version 0xE003
                                             // (WDDM 2.9; 3.x makes VidMm refuse the VRAM-only CpuVisible CDD
                                             // shadow); 189: target modes name their wire format (8-bit RGB),
                                             // which interface 2.2+ needs (display.c OfferTargetMode); 185: DPM

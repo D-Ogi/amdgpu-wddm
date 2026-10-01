@@ -19,6 +19,7 @@
 #include "gfx_copy.h"
 #include "paging_private.h"
 #include "paging_drain.h"
+#include "object_index.h"
 #include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
 #include <ntstrsafe.h>
 
@@ -166,13 +167,17 @@ typedef struct _BC250_PRESENT_PACKET {
 
 typedef struct _BC250_WDDM_OBJECT {
     LIST_ENTRY Link;                    // BC250_WDDM::Objects: the stop frees whatever is still on this list
+    void* HashNext;                     // BC250_WDDM::ObjectIndex chain (object_index.h), under BC250_WDDM::Lock
+    ULONGLONG Serial;                   // adapter-unique, nonzero, never reused: given under the lock at insertion
     ULONG Magic;
     BC250_DEVICE* Device;
     UINT NodeOrdinal;                   // contexts
     ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
     PAGING_CAPTURE_OWNER Captures;     // contexts: CPU-only plans, released on completion or object teardown
     HANDLE OwnerDevice;                 // contexts/opened allocations: DDI device identity
-    HANDLE BackingAllocation;           // opened: verified CreateAllocation object, never guessed
+    HANDLE BackingAllocation;           // opened: verified CreateAllocation object, never guessed. A value only:
+    ULONGLONG BackingSerial;            // valid while an indexed ALLOCATION at that address has this Serial
+                                        // (WddmBackingAllocationLocked); nothing clears it when the allocation goes
     UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
     ULONG GdiType;                      // retained standard-surface contract, zero for legacy LB7A
@@ -252,6 +257,10 @@ typedef struct _BC250_WDDM {
     BOOLEAN RetainedPowerPause; // Stopping also closes private work during retained suspend
     LIST_ENTRY Objects;                 // devices, contexts, processes and allocations alive
     LONG ObjectCount;
+    // The same objects by address, for membership tests without a scan (object_index.h). Joined and left in the
+    // critical sections that join and leave Objects; the stop drains Objects and frees the buckets.
+    BC250_OBJECT_INDEX ObjectIndex;
+    ULONGLONG ObjectSerial;             // last BC250_WDDM_OBJECT::Serial given, under Lock
 
     // Submission. The DDI records the fence and queues ReportDpc; the report happens there, after the DDI has
     // returned, so that nothing calls back into dxgkrnl from inside a submit. A completion of fence N retires
@@ -520,7 +529,8 @@ static BC250_WDDM* WddmOf(_In_ const HANDLE hAdapter)
 // ---- objects ---------------------------------------------------------------------------------------------------
 
 // Every object is on the adapter's list from the moment it exists, so that a process or a device that dxgkrnl
-// never tears down is freed by the stop instead of leaked for the life of the boot.
+// never tears down is freed by the stop instead of leaked for the life of the boot. It is in the adapter's object
+// index for exactly as long, which is what membership tests consult instead of walking the list.
 // Captures stays caller-owned on refusal. On success, ownership moves before
 // list publication, so StopDevice never sees a partly prepared reservation.
 static BC250_WDDM_OBJECT* WddmNewObjectPrepared(_Inout_ BC250_DEVICE* Device, ULONG Magic,
@@ -538,7 +548,8 @@ static BC250_WDDM_OBJECT* WddmNewObjectPrepared(_Inout_ BC250_DEVICE* Device, UL
     if(Captures)object->Captures=*Captures;
 
     // The Stopping check and the insertion are one critical section: an object that got onto the list after the
-    // stop had drained it would never be freed.
+    // stop had drained it would never be freed. The list and the index change together, and the serial is given
+    // before either publishes the object.
     KeAcquireSpinLock(&wddm->Lock, &irql);
     if (wddm->Stopping)
     {
@@ -547,7 +558,9 @@ static BC250_WDDM_OBJECT* WddmNewObjectPrepared(_Inout_ BC250_DEVICE* Device, UL
         return NULL;
     }
     if(Captures)RtlZeroMemory(Captures,sizeof(*Captures));
+    object->Serial = ++wddm->ObjectSerial;
     InsertTailList(&wddm->Objects, &object->Link);
+    Bc250ObjectIndexInsert(&wddm->ObjectIndex, object);
     wddm->ObjectCount++;
     KeReleaseSpinLock(&wddm->Lock, irql);
     return object;
@@ -567,21 +580,16 @@ static BC250_WDDM_OBJECT* WddmObject(_In_opt_ const HANDLE Handle, ULONG Magic)
 
 // For a handle that did not come back through a DDI's own handle parameter but out of an array dxgkrnl filled - the
 // DXGK_ALLOCATIONLIST entries of a Present (review 16). Nothing is read through the value: it is compared against the
-// objects on the adapter's list under the lock, and only a match is dereferenced. <= DISPATCH_LEVEL.
-static BC250_WDDM_OBJECT* WddmListedObject(_In_ BC250_WDDM* Wddm, _In_opt_ const HANDLE Handle, ULONG Magic)
+// adapter's live objects in the index under the lock, and only a match is dereferenced. <= DISPATCH_LEVEL.
+static BC250_WDDM_OBJECT* WddmIndexedObject(_In_ BC250_WDDM* Wddm, _In_opt_ const HANDLE Handle, ULONG Magic)
 {
-    BC250_WDDM_OBJECT* found = NULL;
-    const LIST_ENTRY* entry;
+    BC250_WDDM_OBJECT* found;
     KIRQL irql;
 
     if (Handle == NULL) return NULL;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
-    for (entry = Wddm->Objects.Flink; entry != &Wddm->Objects; entry = entry->Flink)
-    {
-        BC250_WDDM_OBJECT* object = CONTAINING_RECORD(entry, BC250_WDDM_OBJECT, Link);
-
-        if ((HANDLE)object == Handle) { found = (object->Magic == Magic) ? object : NULL; break; }
-    }
+    found = (BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&Wddm->ObjectIndex, Handle);
+    if (found != NULL && found->Magic != Magic) found = NULL;
     KeReleaseSpinLock(&Wddm->Lock, irql);
     return found;
 }
@@ -643,16 +651,10 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
         // it would race the drain and free it twice. The removal and the decision are one critical section.
         KeAcquireSpinLock(&wddm->Lock, &irql);
         if (wddm->Stopping) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
-        if (Object->Magic==BC250_WDDM_MAGIC_ALLOCATION) {
-            LIST_ENTRY* entry;
-            // Invalidate all open snapshots before this pool address can be
-            // reused by a different allocation with identical geometry.
-            for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
-                BC250_WDDM_OBJECT* opened=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
-                if (opened->Magic==BC250_WDDM_MAGIC_OPENED && opened->BackingAllocation==Object)
-                    opened->BackingAllocation=NULL;
-            }
-        }
+        // Leaving the index ends every opened object's binding to this allocation: WddmBackingAllocationLocked
+        // finds nothing at this address any more, or, once the pool reuses it, an object with another serial.
+        // That replaces the scan that cleared each BackingAllocation here before KMD 0.7.192.
+        (void)Bc250ObjectIndexRemove(&wddm->ObjectIndex, Object);
         RemoveEntryList(&Object->Link);
         wddm->ObjectCount--;
         KeReleaseSpinLock(&wddm->Lock, irql);
@@ -1595,6 +1597,21 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Calls[WddmDdiCreateContext], Wddm->Calls[WddmDdiDestroyContext],
              Wddm->Calls[WddmDdiCreateProcess], Wddm->Calls[WddmDdiDestroyProcess],
              Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation], Wddm->ObjectCount);
+    {
+        // The three move together under the lock; read apart, a concurrent create would look like a mismatch.
+        ULONG indexed, misses;
+        LONG alive;
+        KIRQL irql;
+
+        KeAcquireSpinLock(&Wddm->Lock, &irql);
+        indexed = Wddm->ObjectIndex.Count;
+        misses = Wddm->ObjectIndex.Misses;
+        alive = Wddm->ObjectCount;
+        KeReleaseSpinLock(&Wddm->Lock, irql);
+        if (misses != 0 || indexed != (ULONG)alive)
+            GuardLog("wddm summary: OBJECT INDEX %lu indexed for %ld alive, %lu removals of unindexed objects",
+                     indexed, alive, misses);
+    }
     GuardLog("wddm summary: allocations opened/closed: %ld/%ld calls", Wddm->Calls[WddmDdiOpenAllocation], Wddm->Calls[WddmDdiCloseAllocation]);
     GuardLog("wddm summary: submissions %ld physical + %ld virtual, %ld preemptions, last completed fence %ld",
              Wddm->Calls[WddmDdiSubmitCommand], Wddm->Calls[WddmDdiSubmitCommandVirtual],
@@ -1830,6 +1847,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm;
     BC250_START_REPORT* startup=NULL;
+    void** buckets;
     BOOLEAN vidmmPrepared=FALSE;
     NTSTATUS status;
     ULONGLONG segmentOffset, segmentLength, tableOffset, tableLength;
@@ -1844,6 +1862,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     if (wddm == NULL) { GuardLog("wddm: no pool for the adapter state"); return STATUS_INSUFFICIENT_RESOURCES; }
     startup=(BC250_START_REPORT*)ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*startup),BC250_WDDM_TAG);
     if (!startup) { ExFreePoolWithTag(wddm,BC250_WDDM_TAG); return STATUS_INSUFFICIENT_RESOURCES; }
+    // Nonpaged and zeroed: lookups run under the spin lock at DISPATCH_LEVEL.
+    buckets=(void**)ExAllocatePool2(POOL_FLAG_NON_PAGED,BC250_OBJECT_INDEX_BYTES,BC250_WDDM_TAG);
+    if (!buckets) {
+        GuardLog("wddm: no pool for the object index");
+        ExFreePoolWithTag(startup,BC250_WDDM_TAG);
+        ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    Bc250ObjectIndexInit(&wddm->ObjectIndex,buckets,(unsigned long)FIELD_OFFSET(BC250_WDDM_OBJECT,HashNext));
     wddm->Device = Device;
     wddm->NativePteCopies=(GuardReadSetting(L"EnableNativePteCopy",0)==1);
     wddm->TraceUmdProbes = (GuardReadSetting(L"TraceUmdProbes", 0) == 1);
@@ -1920,6 +1947,7 @@ Failed:
     if (vidmmPrepared) VidMmStop();
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
+    ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
     return status;
 }
@@ -2110,7 +2138,8 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     WddmSummaryOf(wddm);
 
     // Whatever dxgkrnl did not destroy is ours to free: a process or a device left behind would otherwise live
-    // until the next boot. No lock is needed now, nothing else can reach the list.
+    // until the next boot. No lock is needed now, nothing else can reach the list. The list is the drain's one
+    // owner of every object; the index only points into it and goes as a whole, after the last object.
     while (!IsListEmpty(&wddm->Objects))
     {
         entry = RemoveHeadList(&wddm->Objects);
@@ -2120,6 +2149,7 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     }
     GuardLog("wddm: stop, last completed fence %ld, %lu vsync ticks, %lu objects freed at the stop",
              wddm->LastCompletedFence, (ULONG)wddm->VSyncTicks, freed);
+    ExFreePoolWithTag(wddm->ObjectIndex.Buckets, BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm, BC250_WDDM_TAG);
 }
 
@@ -3286,9 +3316,9 @@ static NTSTATUS Bc250WddmCloseAllocation(_In_ const HANDLE hDevice, _In_ const D
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCloseAllocation))
         GuardLog("wddm: CloseAllocation %u allocations", pCloseAllocation->NumAllocations);
     // pOpenHandleList carries what OpenAllocation handed out: our opened objects, or NULL where it handed out nothing.
-    // Looked up on the list before being freed, as the blit does, never dereferenced as given.
+    // Looked up in the object index before being freed, as the blit does, never dereferenced as given.
     for (i = 0; i < pCloseAllocation->NumAllocations; i++)
-        WddmFreeObject(WddmListedObject((BC250_WDDM*)parent->Device->Wddm, pCloseAllocation->pOpenHandleList[i], BC250_WDDM_MAGIC_OPENED));
+        WddmFreeObject(WddmIndexedObject((BC250_WDDM*)parent->Device->Wddm, pCloseAllocation->pOpenHandleList[i], BC250_WDDM_MAGIC_OPENED));
     return STATUS_SUCCESS;
 }
 
@@ -5005,7 +5035,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         {
             c = prefer[pi];
             handle = (HANDLE)(ULONG_PTR)raw[candidates[c][0]];
-            object = WddmListedObject(wddm, handle, BC250_WDDM_MAGIC_OPENED);
+            object = WddmIndexedObject(wddm, handle, BC250_WDDM_MAGIC_OPENED);
             va = raw[candidates[c][1]];
             reading = c + 1;
         }
@@ -5079,7 +5109,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // firmware framebuffer while the hardware flip gate remains closed.
     if (raw[8] != 0)
     {
-        BC250_WDDM_OBJECT* destination = WddmListedObject(wddm, (HANDLE)(ULONG_PTR)raw[8], BC250_WDDM_MAGIC_OPENED);
+        BC250_WDDM_OBJECT* destination = WddmIndexedObject(wddm, (HANDLE)(ULONG_PTR)raw[8], BC250_WDDM_MAGIC_OPENED);
         ULONGLONG dstFirst = 0, dstLast = 0, primaryPhysical = 0;
         const BC250_WDDM_ALLOCATION_PRIVATE* d = destination ? &destination->Allocation : NULL;
         if (d == NULL || d->Width == 0 || d->Height == 0 || d->Pitch < d->Width * 4ull ||
