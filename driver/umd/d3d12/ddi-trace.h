@@ -34,7 +34,9 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 }
 // Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a
 // measurement that needs them: one name or several separated by commas. Unset, empty or unknown means none.
-// Read once per process.
+// Read once per process. Names: raytracing-tier (adapter-caps.cpp), present-cached and present-noprimary
+// (heap-import.cpp), recording-bind and retire-handoff (device-engine.cpp: the recording entry binding and the
+// retire hand-off, both read once per device).
 // The value as given, for traces: lower-case letters, digits, hyphens and commas only, else empty.
 inline const char* ddi_experiment_name() noexcept {
     static const struct Value {

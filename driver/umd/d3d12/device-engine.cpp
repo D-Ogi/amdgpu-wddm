@@ -18,6 +18,14 @@
 
 namespace native12 {
 namespace {
+// Bounds of the retire hand-off (L3). A submission still runs the release sequence once this many releases
+// are pending, or once no resource DDI has run it for this long, so memory a game destroys and never follows
+// with another resource call is still returned. Trial 217 terminated about 0.6 allocations per frame, and its
+// resource destroys ran on worker threads that also create; at that rate neither bound should be reached in
+// steady state (expected, not measured). A create runs the sequence before it allocates, so an application
+// that destroys and then creates at its budget gets the memory back first, as without the hand-off.
+constexpr uint32_t kRetireBacklogBound=256;
+constexpr uint32_t kRetireAgeBoundMs=250;
 void stage(const char* name,HRESULT result) noexcept {
     if(FAILED(result))ddi_failure_note(name,result);
     std::fprintf(stderr,"d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
@@ -238,6 +246,16 @@ public:
         context.hooks={sizeof(context.hooks),&device_,report_error,report_list_error,is_lost,bind_list,allocate,free};
         result=engine_ddi::create_device_context(&context,&context_);stage("DeviceContext",result);
         if(result!=S_OK)return result;
+        // Lever L3 (experiment retire-handoff, off by default): submissions leave the release sequence to the
+        // resource DDIs, within kRetireBacklogBound and kRetireAgeBoundMs (engine-ddi.h, set_retire_policy).
+        // Set before any queue exists.
+        if(ddi_experiment("retire-handoff")){
+            engine_ddi::RetirePolicy policy{};
+            policy.size=sizeof(policy);policy.handoff=1;
+            policy.backlog_bound=kRetireBacklogBound;policy.age_bound_ms=kRetireAgeBoundMs;
+            result=engine_ddi::set_retire_policy(context_,&policy);stage("RetireHandoff",result);
+            if(result!=S_OK)return result;
+        }
         auto ops=QueueEngineOps::native();ops.close=checked_close;ops.check_health=health;ops.health_cookie=this;
         queues_.reset(new(std::nothrow) QueueEngineRegistry(device_,context_,ops));
         if(!queues_)return E_OUTOFMEMORY;
