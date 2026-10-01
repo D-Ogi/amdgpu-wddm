@@ -152,6 +152,14 @@ Target `src/amd/vulkan/vulkan_radeon.dll`: ACO only, no LLVM, and glslangValidat
 DLL C runtime (`MSVCP140.dll`, `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`). Candidate patches on top of the base
 are listed in the [E33 README](../experiments/E33-m12-applications/README.md).
 
+`-Config radv-mt` is the same set with `-Db_vscrt=mt` before `-Ddefault_library=static`: the static C runtime,
+no `MSVCP140.dll` import. The ICD is loaded into every game process, and a game that ships an older
+`msvcp140.dll` beside its exe hands that copy to every DLL importing `MSVCP140.dll` by name; a `std::mutex`
+built by newer STL headers then faults in the old `_Mtx_lock` (Rise of the Tomb Raider, 2026-10-01). ICDs
+for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/mesa-amdgpu-wddm
+`amdgpu-wddm/icd-v3-0004b`, dec624fe "radv: Exclude the C runtime the build does not use, by b_vscrt"): before it,
+the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120).
+
 ### Desktop D3D10 UMD on llvmpipe (`-Config llvmpipe-umd -Llvm <LLVM build>`)
 
 ```

@@ -24,6 +24,29 @@
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "recorded_script": "experiments/E27-m9-inference/radv-main/build.cmd"
     },
+    "radv-mt": {
+      "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM), static C runtime (the radv set plus -Db_vscrt=mt): the ICD runs inside every game, and a game that ships an older msvcp140.dll beside its exe hands it to every DLL that imports MSVCP140.dll by name",
+      "needs_llvm": false,
+      "glslang": "required",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=amd",
+        "-Dgallium-drivers=[]",
+        "-Db_vscrt=mt",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "recorded_script": "none yet: the radv set plus -Db_vscrt=mt, first built 2026-10-01"
+    },
     "llvmpipe-umd": {
       "description": "Desktop D3D10 UMD: Gallium d3d10umd frontend on llvmpipe/softpipe, statically linked LLVM, static CRT",
       "needs_llvm": true,

@@ -7,6 +7,7 @@ Configures and builds one of the lab's Mesa components with its recorded meson o
 -Config picks the option set from mesa-configs.json next to this script (the only copy of those options):
 
   radv          RADV Vulkan ICD (vulkan_radeon.dll)
+  radv-mt       the same with the static C runtime (-Db_vscrt=mt), for ICDs loaded into games
   llvmpipe-umd  desktop D3D10 UMD on llvmpipe (bc250d3d.dll), needs -Llvm
   zink-umd      native D3D10 UMD on Zink (bc250d3d_zink.dll)
   zink-gl       OpenGL on Zink (libgallium_wgl.dll, opengl32.dll)
@@ -27,7 +28,7 @@ pwsh tools\build\build-mesa.ps1 -Config llvmpipe-umd -Source <tree> -Build <dir>
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('radv', 'llvmpipe-umd', 'zink-umd', 'zink-gl')][string]$Config,
+    [Parameter(Mandatory)][ValidateSet('radv', 'radv-mt', 'llvmpipe-umd', 'zink-umd', 'zink-gl')][string]$Config,
     [Parameter(Mandatory)][string]$Source,
     [Parameter(Mandatory)][string]$Build,
     # Directory whose bin\llvm-config.exe describes the LLVM to link: the -Build directory of build-llvm.ps1.
