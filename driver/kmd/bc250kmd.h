@@ -95,7 +95,9 @@ C_ASSERT(sizeof(DXGK_CHILD_STATUS) == 0x10);
 C_ASSERT(sizeof(KMDDOD_INITIALIZATION_DATA) == 0x150);
 C_ASSERT(sizeof(D3DKMDT_VIDPN_TARGET_MODE) == 80);
 C_ASSERT(FIELD_OFFSET(D3DKMDT_VIDPN_TARGET_MODE, WireFormatAndPreference) == 64);   // was Preference at 2.0
-C_ASSERT(FIELD_OFFSET(D3DKMDT_VIDPN_TARGET_MODE, MinimumVSyncFreq) == 68);          // 2.9, display.c fills it
+// sizeof(D3DKMDT_VIDPN_TARGET_MODE) is the 2.9 layout; a V1 VidPN mode info ends before MinimumVSyncFreq (68):
+// display.c never touches it (188 did and bugchecked 0x113 in dxgkrnl AddMode).
+C_ASSERT(FIELD_OFFSET(D3DKMDT_VIDPN_TARGET_MODE, MinimumVSyncFreq) == 68);
 C_ASSERT(FIELD_OFFSET(DXGK_NODEMETADATA, GpuMmuSupported) == 72);
 
 #define BC250_TAG 'dK52'
