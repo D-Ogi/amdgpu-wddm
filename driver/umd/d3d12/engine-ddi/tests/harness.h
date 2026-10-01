@@ -179,6 +179,7 @@ HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory
 
 // ---- Round trips ---------------------------------------------------------------------------------------------------
 void test_copy(Env& env, Device& device);
+void test_copy_slices(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_graphics(Env& env, Device& device);
 void test_retirement(Env& env);

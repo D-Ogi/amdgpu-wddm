@@ -963,8 +963,33 @@ UINT block_size(DXGI_FORMAT f) noexcept {
                : 1u;
 }
 
+// D3D12's placed footprint has no slice pitch: the engine derives it as the row pitch times the footprint's rows of
+// blocks. The runtime's pitched layouts do carry one, and a placement of several slices whose slice pitch differs
+// from the derived one cannot be stated as a footprint. Such a placement is answered with split_pitch = its slice
+// pitch, and copy_texture_region copies it one slice at a time, slice n at Offset + n x SlicePitch (272: The Ascent
+// lost its device to the E_NOTIMPL this slot answered for one, before any frame). A slice pitch below the derived
+// one would overlap the slices and stays refused. The first of each kind is logged on the debugger's output too (a
+// game's stderr goes nowhere): two lines a process at most.
+HRESULT pitched_slices(const char* kind, DXGI_FORMAT format, UINT width, UINT height, UINT depth, UINT pitch,
+                       UINT slice_pitch, UINT rows, UINT64& split_pitch) noexcept {
+    const uint64_t derived = static_cast<uint64_t>(pitch) * rows;
+    if (depth <= 1 || slice_pitch == derived) return S_OK;
+    const bool split = slice_pitch > derived;
+    static std::atomic<bool> once_split{false}, once_refused{false};
+    if (!(split ? once_split : once_refused).exchange(true))
+        log_refusal("CopyTextureRegion: %s placement format %u, %u x %u x %u, pitch %u, slice pitch %u, "
+                    "derived %llu: %s",
+                    kind, static_cast<unsigned>(format), width, height, depth, pitch, slice_pitch,
+                    static_cast<unsigned long long>(derived),
+                    split ? "copied one slice at a time" : "refused (E_NOTIMPL)");
+    if (!split) return E_NOTIMPL;
+    split_pitch = slice_pitch;
+    return S_OK;
+}
+
 HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* p, const D3D12DDIARG_PLACED_RESOURCE& r,
-                      D3D12_TEXTURE_COPY_LOCATION& out) noexcept {
+                      D3D12_TEXTURE_COPY_LOCATION& out, UINT64& split_pitch) noexcept {
+    split_pitch = 0;
     if (!p) return E_INVALIDARG;
     out = D3D12_TEXTURE_COPY_LOCATION{};
     out.pResource = engine_resource(l, p->BaseAddress.UMD.hResource);
@@ -978,10 +1003,10 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     case D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED: {
         const auto* f = static_cast<const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
-        if (f->PhysicalDepth > 1 &&
-            static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
-            return E_NOTIMPL;                           // the API derives the slice pitch; one slice has none
         const UINT bs = block_size(f->Format);
+        HRESULT hr = pitched_slices("physical", f->Format, f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth,
+                                    f->Pitch, f->SlicePitch, f->PhysicalHeight, split_pitch);
+        if (FAILED(hr)) return hr;
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
         out.PlacedFootprint.Footprint = {f->Format, f->PhysicalWidth * bs, f->PhysicalHeight * bs, f->PhysicalDepth,
@@ -991,9 +1016,11 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     case D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED: {
         const auto* f = static_cast<const D3D12DDIARG_VIRTUAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
-        if (f->PhysicalDepth > 1 &&
-            static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
-            return E_NOTIMPL;
+        // The footprint is the virtual size; the engine's rows of blocks follow from its height.
+        const UINT bs = block_size(f->Format);
+        HRESULT hr = pitched_slices("virtual", f->Format, f->VirtualWidth, f->VirtualHeight, f->VirtualDepth,
+                                    f->Pitch, f->SlicePitch, (f->VirtualHeight + bs - 1) / bs, split_pitch);
+        if (FAILED(hr)) return hr;
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
         out.PlacedFootprint.Footprint = {f->Format, f->VirtualWidth, f->VirtualHeight, f->VirtualDepth, f->Pitch};
@@ -1004,6 +1031,56 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     }
 }
 
+// One CopyTextureRegion of a split placement as one engine copy per slice. The other side is a subresource: a
+// buffer-to-buffer copy is not a texture copy. Source slices come from the box (or the whole footprint); destination
+// slices from the box (or the whole source subresource, sized from the shell's record of the source resource).
+HRESULT copy_slices(CommandListRecord* l, const D3D12_TEXTURE_COPY_LOCATION& d, UINT64 dpitch, UINT x, UINT y, UINT z,
+                    const D3D12_TEXTURE_COPY_LOCATION& s, UINT64 spitch, const ResourceRecord* src, bool has_box,
+                    const D3D12_BOX& b) noexcept {
+    const bool src_split = spitch != 0;
+    const D3D12_TEXTURE_COPY_LOCATION& other = src_split ? d : s;
+    if ((dpitch && spitch) || other.Type != D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX) return E_INVALIDARG;
+    D3D12_BOX area = b;
+    if (!has_box) {
+        if (src_split) {
+            const D3D12_SUBRESOURCE_FOOTPRINT& f = s.PlacedFootprint.Footprint;
+            area = {0, 0, 0, f.Width, f.Height, f.Depth};
+        } else {
+            if (!src) return E_INVALIDARG;
+            const D3D12_RESOURCE_DESC1& desc = src->desc;
+            const UINT mips = desc.MipLevels ? desc.MipLevels : 1;
+            const UINT mip = s.SubresourceIndex % mips;
+            const UINT depth = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? desc.DepthOrArraySize : 1;
+            area = {0, 0, 0, static_cast<UINT>(std::max<UINT64>(1, desc.Width >> mip)),
+                    std::max(1u, desc.Height >> mip), std::max(1u, depth >> mip)};
+        }
+    }
+    if (area.back <= area.front) return S_OK;
+    record(l, [=](ID3D12GraphicsCommandList* e) {
+        for (UINT n = area.front; n < area.back; ++n) {
+            D3D12_TEXTURE_COPY_LOCATION dn = d, sn = s;
+            D3D12_BOX bn = area;
+            UINT zn = z + (n - area.front);
+            if (src_split) {
+                // Slice n of the source footprint, one slice deep, to destination slice z + (n - front).
+                sn.PlacedFootprint.Offset += n * spitch;
+                sn.PlacedFootprint.Footprint.Depth = 1;
+                bn.front = 0;
+                bn.back = 1;
+            } else {
+                // Source slice n to footprint slice zn, each slice its own one-slice-deep footprint.
+                dn.PlacedFootprint.Offset += static_cast<UINT64>(zn) * dpitch;
+                dn.PlacedFootprint.Footprint.Depth = 1;
+                bn.front = n;
+                bn.back = n + 1;
+                zn = 0;
+            }
+            e->CopyTextureRegion(&dn, x, y, zn, &sn, &bn);
+        }
+    });
+    return S_OK;
+}
+
 void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG_BUFFER_PLACEMENT* pdst,
                                   D3D12DDIARG_PLACED_RESOURCE dst, UINT x, UINT y, UINT z,
                                   const D3D12DDIARG_BUFFER_PLACEMENT* psrc, D3D12DDIARG_PLACED_RESOURCE src,
@@ -1011,8 +1088,9 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
     CommandListRecord* l = list_of(hlist, "CopyTextureRegion");
     if (!l) return;
     D3D12_TEXTURE_COPY_LOCATION d, s;
-    HRESULT hr = copy_location(l, pdst, dst, d);
-    if (SUCCEEDED(hr)) hr = copy_location(l, psrc, src, s);
+    UINT64 dpitch = 0, spitch = 0;
+    HRESULT hr = copy_location(l, pdst, dst, d, dpitch);
+    if (SUCCEEDED(hr)) hr = copy_location(l, psrc, src, s, spitch);
     if (SUCCEEDED(hr) && box && (box->Left < 0 || box->Top < 0 || box->Front < 0 || box->Right < box->Left ||
                                  box->Bottom < box->Top || box->Back < box->Front))
         hr = E_INVALIDARG;
@@ -1025,6 +1103,12 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
         b = {static_cast<UINT>(box->Left), static_cast<UINT>(box->Top), static_cast<UINT>(box->Front),
              static_cast<UINT>(box->Right), static_cast<UINT>(box->Bottom), static_cast<UINT>(box->Back)};
     const bool has_box = box != nullptr;
+    if (dpitch || spitch) {
+        const auto* sr = record_of<ResourceRecord>(psrc->BaseAddress.UMD.hResource.pDrvPrivate, Tag::Resource, l->h.device);
+        hr = copy_slices(l, d, dpitch, x, y, z, s, spitch, sr, has_box, b);
+        if (FAILED(hr)) l->h.device->report_list(l->rt, hr);
+        return;
+    }
     record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyTextureRegion(&d, x, y, z, &s, has_box ? &b : nullptr); });
 }
 
