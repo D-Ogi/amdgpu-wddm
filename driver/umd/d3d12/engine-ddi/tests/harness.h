@@ -182,6 +182,7 @@ void test_copy(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_graphics(Env& env, Device& device);
 void test_retirement(Env& env);
+void test_retire_handoff(Env& env);
 void test_device_queries(Env& env, Device& device);
 void test_runtime_backed(Env& env);
 void test_tiled(Env& env);

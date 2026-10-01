@@ -310,7 +310,9 @@ without an ABI change would be to pass NOT_AVAILABLE L1 heaps to the engine as L
   slot finds its device only through `ResolveDevice`; a slot called while it returns null answers nothing (a query
   leaves its output zeroed or untouched) and reports no error, because there is no device to report to.
   DestroyDevice: `destroy_device_context`; S_FALSE with live objects keeps the context, and then it stays
-  registered too.
+  registered too. Optionally, right after `create_device_context` and before any queue, `set_retire_policy`: the
+  retire hand-off, which leaves the release sequence of submission calls to the resource DDIs within a backlog and
+  an age bound (engine-ddi.h). The shell sets it only under the diagnostic experiment `retire-handoff`.
 - Queues (the queue table is the shell's): after creating the WDDM context, `create_engine_queue`;
   ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`, which returns
   `QueueClose::Retired` when every engine use of the queue is proven retired and `QueueClose::NotRetired`

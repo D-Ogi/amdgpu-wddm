@@ -103,7 +103,7 @@ template <class Call> HRESULT map_on_queue(EngineQueue* q, Call call) noexcept {
         c->report(hr);
         return hr;
     }
-    c->process_retired();
+    c->retire_after_submit();
     return S_OK;
 }
 

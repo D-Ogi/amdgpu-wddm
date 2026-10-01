@@ -204,6 +204,44 @@ void DeviceContext::process_retired() noexcept {
     }
 }
 
+void DeviceContext::retire_after_submit() noexcept {
+    const uint32_t waiting = pending.load();
+    if (!waiting) return;
+    if (retire_handoff && retire_defers(true, waiting, retire_backlog_bound, GetTickCount64(),
+                                        retire_resource_tick.load(std::memory_order_relaxed), retire_age_bound_ms)) {
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+        retire_deferred.fetch_add(1);
+#endif
+        return;
+    }
+    process_retired();
+}
+
+void DeviceContext::retire_at_resource() noexcept {
+    if (retire_handoff) {
+        const uint64_t now = GetTickCount64();
+        if (retire_resource_tick.load(std::memory_order_relaxed) != now)
+            retire_resource_tick.store(now, std::memory_order_relaxed);
+    }
+    process_retired();
+}
+
+HRESULT set_retire_policy(DeviceContext* context, const RetirePolicy* policy) noexcept {
+    if (!context || !policy || policy->size != sizeof(RetirePolicy) || policy->handoff > 1 ||
+        (policy->handoff &&
+         (!policy->backlog_bound || !policy->age_bound_ms || policy->age_bound_ms > 10000))) {
+        log_refusal("set_retire_policy: refused (%s)", !context ? "no context" : !policy ? "no policy" :
+                    policy->size != sizeof(RetirePolicy) ? "size" : policy->handoff > 1 ? "handoff" : "bounds");
+        return E_INVALIDARG;
+    }
+    context->retire_handoff = policy->handoff != 0;
+    context->retire_backlog_bound = policy->handoff ? policy->backlog_bound : 0;
+    context->retire_age_bound_ms = policy->handoff ? policy->age_bound_ms : 0;
+    log_line("retire policy: handoff %u, backlog bound %u, age bound %u ms", policy->handoff,
+             context->retire_backlog_bound, context->retire_age_bound_ms);
+    return S_OK;
+}
+
 // ---- Context --------------------------------------------------------------------------------------------------
 namespace {
 template <class T> void release_ref(T*& p) noexcept {
@@ -555,6 +593,7 @@ bool harness_retirement_lost(DeviceContext* c) noexcept {
     return lost;
 }
 uint32_t harness_live_objects(DeviceContext* c) noexcept { return c->live.load(); }
+uint64_t harness_deferred_retire_points(DeviceContext* c) noexcept { return c->retire_deferred.load(); }
 IUnknown* harness_engine_object(const void* storage) noexcept {
     return storage ? static_cast<const RecordHeader*>(storage)->engine : nullptr;
 }

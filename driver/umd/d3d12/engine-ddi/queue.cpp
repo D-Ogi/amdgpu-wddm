@@ -324,7 +324,7 @@ HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMAN
         c->report(hr);
         return hr;
     }
-    c->process_retired();
+    c->retire_after_submit();
     return S_OK;
 }
 

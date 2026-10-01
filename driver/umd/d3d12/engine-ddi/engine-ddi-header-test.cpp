@@ -75,6 +75,13 @@ static_assert(sizeof(engine_ddi::PolicyTier) == 8 && sizeof(engine_ddi::MemoryAr
 static_assert(sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041) == 20 && D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 == 1 &&
                   D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2 == 2,
               "GetCaps 1002 payload and the highest tiers at 0092");
+// Added within r4, additively: the retire hand-off policy. Four uint32_t, no padding.
+static_assert(std::is_same_v<decltype(&engine_ddi::set_retire_policy),
+                             HRESULT (*)(engine_ddi::DeviceContext*, const engine_ddi::RetirePolicy*) noexcept>,
+              "set_retire_policy");
+static_assert(std::is_standard_layout_v<engine_ddi::RetirePolicy> && sizeof(engine_ddi::RetirePolicy) == 16 &&
+                  offsetof(engine_ddi::RetirePolicy, age_bound_ms) == 12,
+              "RetirePolicy size and offsets");
 // Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
 static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,
               "command_list_shell");

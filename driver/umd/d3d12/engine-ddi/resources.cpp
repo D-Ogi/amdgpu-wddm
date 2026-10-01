@@ -593,7 +593,7 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
                                                D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
     DeviceContext* c = resolve(device);
     if (!c) return E_INVALIDARG;
-    c->process_retired();
+    c->retire_at_resource();
     if (session.pDrvPrivate) {                          // protected resource sessions
         log_line("CreateHeapAndResource: protected resource session given: E_NOTIMPL");
         return E_NOTIMPL;
@@ -653,7 +653,7 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP 
             c->report(E_INVALIDARG);
         }
     }
-    c->process_retired();
+    c->retire_at_resource();
 }
 
 HRESULT APIENTRY map_heap(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, void** data) {

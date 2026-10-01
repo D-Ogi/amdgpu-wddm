@@ -142,6 +142,15 @@ HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* 
 
 struct ResourceRecord;
 
+// The retire policy's decision at a submission's retirement point (set_retire_policy): true leaves the pending
+// releases to the resource DDIs. Never with the hand-off off, nothing pending, the backlog bound reached, or the
+// age bound passed since the last resource DDI's pass (resource_tick 0: none yet). Ticks are GetTickCount64.
+inline bool retire_defers(bool handoff, uint32_t pending, uint32_t backlog_bound, uint64_t now, uint64_t resource_tick,
+                          uint32_t age_bound_ms) noexcept {
+    if (!handoff || !pending || pending >= backlog_bound || !resource_tick) return false;
+    return now >= resource_tick && now - resource_tick < age_bound_ms;
+}
+
 class DeviceContext {
 public:
     ID3D12Device* device = nullptr;             // one reference each
@@ -191,6 +200,17 @@ public:
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
+    // The retire policy (set_retire_policy): written before the context is used on another thread, read only after.
+    bool retire_handoff = false;
+    uint32_t retire_backlog_bound = 0;
+    uint32_t retire_age_bound_ms = 0;
+    // GetTickCount64 at the last resource DDI's pass; stored only when it changes, so that resource DDIs on many
+    // threads do not write one cache line on every call.
+    std::atomic<uint64_t> retire_resource_tick{0};
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    std::atomic<uint64_t> retire_deferred{0};   // submission passes left to the resource DDIs
+#endif
+
     // Every report is logged with thread and time, so it can be placed between the begin and end records
     // of the entry that made it. A reported error can surface to the application at a later call.
     static long long report_time() noexcept {
@@ -218,6 +238,12 @@ public:
     void release(PendingRelease* node) noexcept;
     // Runs the release sequence for everything that has retired (a retirement point).
     void process_retired() noexcept;
+    // The retirement point of a submission call (execute_command_lists, update_tile_mappings, copy_tile_mappings):
+    // process_retired, unless the retire policy hands it to the resource DDIs (retire_defers).
+    void retire_after_submit() noexcept;
+    // The retirement point of pfnCreateHeapAndResource and pfnDestroyHeapAndResource: notes the time for the
+    // policy's age bound, then process_retired.
+    void retire_at_resource() noexcept;
     void notify(const ReleasePayload& payload, bool deferred, HRESULT free_result) const noexcept;
 };
 
@@ -436,6 +462,8 @@ uint32_t harness_stuck_releases(DeviceContext* context) noexcept;
 uint32_t harness_live_objects(DeviceContext* context) noexcept;
 uint32_t harness_pending_initializations(DeviceContext* context) noexcept;
 bool harness_retirement_lost(DeviceContext* context) noexcept;
+// Submission retirement points that the retire policy left to the resource DDIs (set_retire_policy).
+uint64_t harness_deferred_retire_points(DeviceContext* context) noexcept;
 // Fault injection: completed_value returns value instead of the fence's (0 turns it off); the next retirement
 // Signal of execute_command_lists is skipped and fails with E_FAIL after the engine's ExecuteCommandLists ran.
 void harness_force_completed(EngineQueue* queue, uint64_t value) noexcept;

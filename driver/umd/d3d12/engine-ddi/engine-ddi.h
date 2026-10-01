@@ -6,7 +6,8 @@
 // r3, additively: set_memory_architecture_policy, the shell's policy for GetCaps 1002. The engine
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
 // Boundary r4 (2026-09-29): the linear primary. MemoryRequest grows by the surface fields and
-// kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3.
+// kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3. Added within r4,
+// additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -108,6 +109,9 @@ inline constexpr uint32_t kBoundaryRevision = 4;
 //   later DDI call that observes retirement (execute_command_lists, update_tile_mappings, copy_tile_mappings,
 //   pfnCreateHeapAndResource, pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from
 //   an engine thread or an engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   With a retire policy (set_retire_policy) the three submission calls observe retirement only past its bounds,
+//   and the resource DDIs and the queue and device calls take the rest; which thread runs steps 2 and 3 changes,
+//   not what proves retirement, and not the order of the steps.
 //   A tile mapping is queue work like a submission: its call signals the queue's retirement fence after the bind, so
 //   heap memory destroyed after the mapping waits for it.
 //   The memory of a linear primary (kMemoryLinearSurface) is the exception to "the first later DDI call": the
@@ -223,6 +227,28 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
 // device loss needs one, it will be a separate reviewed addition that states how every record stops using the
 // context.
 HRESULT destroy_device_context(DeviceContext* context, uint32_t* live_objects) noexcept;
+
+// Retire hand-off. Without a policy (and with handoff 0) every retirement point runs the release sequence for what
+// has retired, the submission calls included: execute_command_lists, update_tile_mappings and copy_tile_mappings
+// then pay steps 2 to 4 (the runtime's DestroyAllocation2 and FreeGpuVirtualAddress among them) on the submitting
+// thread, which a game keeps on its critical path (trial 217: 0.40 ms/frame on-CPU and 0.31 ms/frame waiting in
+// the kernel on the main thread, the only submitter). With handoff 1 a submission call runs the sequence only when
+// at least backlog_bound releases are pending, or when no pfnCreateHeapAndResource or pfnDestroyHeapAndResource
+// of the device has run it for age_bound_ms (by GetTickCount64, whose step is about 16 ms); otherwise it leaves
+// the releases to the next resource DDI, on whichever thread the application makes it. Retirement is proven as
+// before (the fences, the marks, stuck releases), each release still runs once and on a DDI thread of its device,
+// and destroy_engine_queue and destroy_device_context still run the sequence unconditionally. A
+// pfnCreateHeapAndResource still runs it before it allocates. Bounds: backlog_bound 1 or more; age_bound_ms 1 to
+// 10000. Call it after create_device_context and before the context is used on another thread or by any DDI; it
+// writes the context. E_INVALIDARG, with the policy held before kept, for a null argument, a size other than
+// sizeof(RetirePolicy), handoff other than 0 or 1, or handoff 1 with a bound out of range.
+struct RetirePolicy {
+    uint32_t size;                              // sizeof(RetirePolicy)
+    uint32_t handoff;                           // 0: every retirement point runs the sequence; 1: hand-off
+    uint32_t backlog_bound;                     // handoff 1: a submission runs it at this many pending releases
+    uint32_t age_bound_ms;                      // handoff 1: ... or after this long without a resource DDI's pass
+};
+HRESULT set_retire_policy(DeviceContext* context, const RetirePolicy* policy) noexcept;
 
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);

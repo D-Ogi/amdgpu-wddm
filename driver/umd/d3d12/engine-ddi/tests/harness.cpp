@@ -522,6 +522,7 @@ int wmain(int argc, wchar_t** argv) {
                device.shell.device_errors, device.shell.list_errors);
     }
     test_retirement(env);
+    test_retire_handoff(env);
     test_runtime_backed(env);
     test_tiled(env);
     test_small_placement(env);
