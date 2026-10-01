@@ -62,6 +62,24 @@ param(
     [ValidateRange(16, 4096)][int]$ResetChurnDraws = 1024,
     # -ResetChurn: lists an allocator records before a new one replaces it; 0 keeps one allocator per thread.
     [ValidateRange(0, 64)][int]$ResetChurnRenew = 2,
+    # Measurement variant: the copy verb records frames of many small draws with state changes on several lists,
+    # executes them in several ExecuteCommandLists calls, compares every word the draws wrote, and reports the
+    # recording thread's CPU time per frame (QueryThreadCycleTime) in three phases: burst, interleaved with stand-in
+    # application work, and one recording thread per list. For the A/B of the UMD's deferred-replay experiment: one
+    # binary, the arm set by the trial's AMDGPU_WDDM_D3D12_EXPERIMENT. No window.
+    [switch]$RecordBench,
+    # -RecordBench: command lists per frame, each recorded by its own thread in the threaded phase.
+    [ValidateRange(1, 8)][int]$RecordBenchLists = 4,
+    # -RecordBench: draws per list, a multiple of 16.
+    [ValidateRange(64, 4096)][int]$RecordBenchDraws = 512,
+    # -RecordBench: ExecuteCommandLists calls per frame, the lists split evenly between them (at most the lists).
+    [ValidateRange(1, 8)][int]$RecordBenchExecutes = 2,
+    # -RecordBench: microseconds of stand-in application work after each group of 16 draws in the interleaved and
+    # threaded phases.
+    [ValidateRange(0, 1000)][int]$RecordBenchWorkUs = 64,
+    # -RecordBench: the three phases share this many seconds from the copy verb's start, never the last 10 s before
+    # the client's deadline. 20 fits the lab runner as it is (client deadline 70 s, Drive 65 s).
+    [ValidateRange(3, 140)][int]$RecordBenchSeconds = 20,
     # Back buffer format of -Present: B8G8R8A8_UNORM, or R10G10B10A2_UNORM as a 10-bit swap chain composed on
     # the desktop whatever the monitor's depth.
     [ValidateSet('Bgra8', 'Rgb10a2')][string]$PresentFormat = 'Bgra8'
@@ -96,10 +114,14 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad, $ResetChurn | Where-Object { $_ }).Count -gt 1) {
-    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection, GameLoad and ResetChurn each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad, $ResetChurn, $RecordBench | Where-Object { $_ }).Count -gt 1) {
+    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection, GameLoad, ResetChurn and RecordBench each replace the copy verb; choose one' }
 foreach ($name in 'ResetChurnThreads', 'ResetChurnBatches', 'ResetChurnSeconds', 'ResetChurnDraws', 'ResetChurnRenew') {
     if ($PSBoundParameters.ContainsKey($name) -and -not $ResetChurn) { throw "$name needs ResetChurn" } }
+foreach ($name in 'RecordBenchLists', 'RecordBenchDraws', 'RecordBenchExecutes', 'RecordBenchWorkUs', 'RecordBenchSeconds') {
+    if ($PSBoundParameters.ContainsKey($name) -and -not $RecordBench) { throw "$name needs RecordBench" } }
+if ($RecordBenchDraws % 16) { throw 'RecordBenchDraws must be a multiple of 16' }
+if ($RecordBenchExecutes -gt $RecordBenchLists) { throw 'RecordBenchExecutes must not exceed RecordBenchLists' }
 if ($GameLoadArm -ne 'Both' -and -not $GameLoad) { throw 'GameLoadArm needs GameLoad' }
 if ($GameLoadRenderHoldMs -and -not $GameLoad) { throw 'GameLoadRenderHoldMs needs GameLoad' }
 if ($GameLoadRenderHoldMs) { $variant += "/DINTERACTIVE_GAMELOAD_RENDER_HOLD_MS=$GameLoadRenderHoldMs" }
@@ -125,6 +147,12 @@ if ($ResetChurn) { $churn = @("/DINTERACTIVE_RESETCHURN_THREADS=$ResetChurnThrea
     "/DINTERACTIVE_RESETCHURN_BATCHES=$ResetChurnBatches", "/DINTERACTIVE_RESETCHURN_SECONDS=$ResetChurnSeconds",
     "/DINTERACTIVE_RESETCHURN_DRAWS=$ResetChurnDraws", "/DINTERACTIVE_RESETCHURN_RENEW=$ResetChurnRenew")
     $variant += @('/DINTERACTIVE_RESETCHURN') + $churn }
+# recordbench-test likewise.
+$bench = @()
+if ($RecordBench) { $bench = @("/DINTERACTIVE_RECORDBENCH_LISTS=$RecordBenchLists",
+    "/DINTERACTIVE_RECORDBENCH_DRAWS=$RecordBenchDraws", "/DINTERACTIVE_RECORDBENCH_EXECUTES=$RecordBenchExecutes",
+    "/DINTERACTIVE_RECORDBENCH_WORK_US=$RecordBenchWorkUs", "/DINTERACTIVE_RECORDBENCH_SECONDS=$RecordBenchSeconds")
+    $variant += @('/DINTERACTIVE_RECORDBENCH') + $bench }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
@@ -142,8 +170,8 @@ Get-Item "$Out\amdgpu_wddm_d3d12_queue.exe" | ForEach-Object { '{0,9}  {1}  sha2
 if ($LASTEXITCODE -ne 2) { throw "Invalid CLI accepted" }
 
 # Pure command/selection checks do not enumerate adapters or call D3D.
-foreach ($test in @('parser-test','interactive-test','resetchurn-test')) {
-& $cl @(@(if ($test -eq 'resetchurn-test') { $churn }) + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+foreach ($test in @('parser-test','interactive-test','resetchurn-test','recordbench-test')) {
+& $cl @(@(if ($test -eq 'resetchurn-test') { $churn } elseif ($test -eq 'recordbench-test') { $bench }) + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$test.obj",
     "/Fe$Out\$test.exe", (Join-Path $here "$test.cpp"), '/link',
