@@ -9,6 +9,7 @@
 //   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
 //   bc250kmd_cli dpm [n [ms]]         the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
+//   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
@@ -1501,10 +1502,184 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
            (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0, d->SdmaBusyPermille / 10.0);
 }
 
+// ---- dpm tune / dpm floor: the governor's thresholds and a runtime floor (BC250_ESCAPE_RUN_DPM_TUNE, 0.7.185.1) ----
+//
+// "dpm tune <up> <target> <down> [hold ms]" sets the thresholds in permille (the hold stays as it is when omitted),
+// "dpm tune reset" puts thresholds and floor back to the defaults, "dpm floor <MHz|off>" sets or clears the runtime
+// floor, "dpm tune" prints what is in force. The driver checks every value (bc250_dpm_tune_check: ranges, order, the
+// two invariants, the hold, the floor against the start's ceiling) and logs every change with its old and new values.
+// Writes need an administrator and a running DPM start; nothing survives a device start. Like `dpm`, every request
+// goes with NoAdapterSynchronization alone: the escape is software state, and the governor thread applies it.
+
+static const char *const g_TuneError[] = { "none", "range", "order", "lowering-invariant", "raise-invariant", "hold",
+                                           "floor" };
+
+// One RUN_DPM_TUNE round trip. 0 when the driver answered (whatever Status says), 1 after reporting why not.
+static int TuneQuery(BC250_ESCAPE_DPM_TUNE *t, unsigned long op, unsigned long long generation, int quiet)
+{
+    NTSTATUS status;
+    t->Magic = BC250_ESCAPE_MAGIC;
+    t->Command = BC250_ESCAPE_RUN_DPM_TUNE;
+    t->AbiVersion = BC250_DPM_TUNE_ABI;
+    t->Op = op;
+    t->ExpectedGeneration = generation;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, t, sizeof(*t), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) {
+        // A driver before 0.7.185.1 has no such command and refuses NoAdapterSynchronization for it.
+        if (!quiet) {
+            PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM_TUNE)", status);
+            printf("# a driver before 0.7.185.1 (0x000700B9) has no runtime tuning\n");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int TuneRead(BC250_ESCAPE_DPM_TUNE *t, int quiet)
+{
+    memset(t, 0, sizeof(*t));
+    if (TuneQuery(t, BC250_DPM_TUNE_OP_READ, 0, quiet)) return 1;
+    if (t->Status != BC250_ESCAPE_STATUS_DONE) {
+        if (!quiet) printf("dpm tune: read refused, status %lu NTSTATUS 0x%08lX\n", t->Status, t->NtStatus);
+        return 1;
+    }
+    return 0;
+}
+
+static void TuneFloorText(char *text, size_t size, unsigned long mhz)
+{
+    if (mhz) _snprintf_s(text, size, _TRUNCATE, "%lu MHz", mhz);
+    else _snprintf_s(text, size, _TRUNCATE, "off");
+}
+
+// "up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default)": the values in force, and where
+// they come from.
+static void TunePrintState(const BC250_ESCAPE_DPM_TUNE *t)
+{
+    char floor[32];
+    TuneFloorText(floor, sizeof(floor), t->FloorMHz);
+    printf("up %lu target %lu down %lu permille, hold %lu ms (%s), floor %s (%s)", t->UpPermille, t->TargetPermille,
+           t->DownPermille, t->DownHoldMs, (t->Flags & BC250_DPM_TUNE_FLAG_THRESHOLDS) ? "runtime" : "default", floor,
+           (t->Flags & BC250_DPM_TUNE_FLAG_FLOOR) ? "runtime" : "default");
+}
+
+static void TuneExplain(const BC250_ESCAPE_DPM_TUNE *t, unsigned long up)
+{
+    if (t->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("  needs an elevated prompt\n"); return; }
+    if (t->NtStatus == 0xC000022Dul) { printf("  STATUS_RETRY: the device restarted between the read and the write; run it again\n"); return; }
+    if (t->NtStatus == 0xC0000184ul) {      // STATUS_INVALID_DEVICE_STATE (ntstatus.h, not in windows.h)
+        printf("  no running DPM governor: a fixed-lab start (DpmMode 0), a stopped device or a governor that gave up\n");
+        return;
+    }
+    switch (t->Error) {
+    case 1: printf("  every threshold is 100..1000 permille\n"); break;
+    case 2: printf("  the order is down < target < up\n"); break;
+    case 3: printf("  invariant 1: (down + 1) x 1100 <= up x 1000, so a step down never lands at or above up; with up %lu, "
+                   "down at most %lu\n", up, up * 10ul / 11ul >= 1 ? up * 10ul / 11ul - 1ul : 0ul); break;
+    case 4: printf("  invariant 2: a raise from some clock would land below down; raise target or lower down\n"); break;
+    case 5: printf("  the hold is 100..5000 ms\n"); break;
+    case 6: printf("  the floor is a clock of the table (1000..2000 in 100 MHz steps) at or below this start's ceiling, %lu MHz\n",
+                   t->MaxMHz); break;
+    default: break;
+    }
+}
+
+// After a write: the governor thread takes the values at its next 25 ms tick. Wait for it a little, then say so.
+static void TuneWaitApplied(BC250_ESCAPE_DPM_TUNE *t)
+{
+    int i;
+    for (i = 0; i < 8 && !(t->Flags & BC250_DPM_TUNE_FLAG_APPLIED); i++) {
+        Sleep(50);
+        if (TuneRead(t, 1)) break;
+    }
+    if (t->Flags & BC250_DPM_TUNE_FLAG_APPLIED) printf("governor: running serial %lu\n", t->Applied);
+    else printf("governor: NOT running these yet (serial %lu, governor at %lu): paused, stopped or gave up?\n",
+                t->Serial, t->Applied);
+}
+
+static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const char *name)
+{
+    BC250_ESCAPE_DPM_TUNE before, t;
+    char floorBefore[32], floorAfter[32];
+    if (TuneRead(&before, 0)) return 1;
+    t = *in;
+    if (op == BC250_DPM_TUNE_OP_THRESHOLDS && t.DownHoldMs == 0) t.DownHoldMs = before.DownHoldMs;
+    if (TuneQuery(&t, op, before.Generation, 0)) return 1;
+    if (t.Status != BC250_ESCAPE_STATUS_DONE) {
+        printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s; in force: ", name, t.Status, t.NtStatus,
+               t.Error < 7 ? g_TuneError[t.Error] : "?");
+        TunePrintState(&before);
+        printf("\n");
+        TuneExplain(&t, in->UpPermille);
+        return 1;
+    }
+    TuneFloorText(floorBefore, sizeof(floorBefore), before.FloorMHz);
+    TuneFloorText(floorAfter, sizeof(floorAfter), t.FloorMHz);
+    printf("%s: up %lu -> %lu, target %lu -> %lu, down %lu -> %lu permille, hold %lu -> %lu ms, floor %s -> %s "
+           "(ceiling %lu MHz, serial %lu)\n", name, before.UpPermille, t.UpPermille, before.TargetPermille, t.TargetPermille,
+           before.DownPermille, t.DownPermille, before.DownHoldMs, t.DownHoldMs, floorBefore, floorAfter, t.MaxMHz, t.Serial);
+    printf("in force: ");
+    TunePrintState(&t);
+    printf("\n");
+    TuneWaitApplied(&t);
+    return 0;
+}
+
+static int ParseNumber(const WCHAR *text, unsigned long *value)
+{
+    WCHAR *end = NULL;
+    if (text == NULL || !*text) return 1;
+    *value = wcstoul(text, &end, 10);
+    return end == NULL || *end != 0;
+}
+
+static int DpmTune(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM_TUNE t;
+    memset(&t, 0, sizeof(t));
+    if (argc == 3) {
+        if (TuneRead(&t, 0)) return 1;
+        printf("driver 0x%08lX, mode %s, ceiling %lu MHz, generation %llu: ", t.Version, t.Mode == 1 ? "dpm" : "fixed",
+               t.MaxMHz, t.Generation);
+        TunePrintState(&t);
+        printf("; defaults up %lu target %lu down %lu hold %lu ms; serial %lu, governor at %lu%s, floor ticks %llu\n",
+               t.DefaultUpPermille, t.DefaultTargetPermille, t.DefaultDownPermille, t.DefaultDownHoldMs, t.Serial,
+               t.Applied, (t.Flags & BC250_DPM_TUNE_FLAG_GOVERNING) ? "" : " (not governing)", t.FloorTicks);
+        return 0;
+    }
+    if (argc == 4 && !_wcsicmp(argv[3], L"reset")) return TuneWrite(BC250_DPM_TUNE_OP_RESET, &t, "dpm tune reset");
+    if (argc == 6 || argc == 7) {
+        if (ParseNumber(argv[3], &t.UpPermille) || ParseNumber(argv[4], &t.TargetPermille) ||
+            ParseNumber(argv[5], &t.DownPermille) || (argc == 7 && (ParseNumber(argv[6], &t.DownHoldMs) || !t.DownHoldMs))) {
+            fprintf(stderr, "dpm tune: <up> <target> <down> [hold ms] are decimal numbers (permille, ms)\n");
+            return 2;
+        }
+        return TuneWrite(BC250_DPM_TUNE_OP_THRESHOLDS, &t, "dpm tune");
+    }
+    fprintf(stderr, "usage: bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset]\n");
+    return 2;
+}
+
+static int DpmFloor(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM_TUNE t;
+    memset(&t, 0, sizeof(t));
+    if (argc != 4 || (_wcsicmp(argv[3], L"off") && ParseNumber(argv[3], &t.FloorMHz))) {
+        fprintf(stderr, "usage: bc250kmd_cli dpm floor <MHz|off>   (MHz: 1000..2000 in 100 MHz steps, at most DpmMaxMHz)\n");
+        return 2;
+    }
+    if (!_wcsicmp(argv[3], L"off")) t.FloorMHz = 0;
+    return TuneWrite(BC250_DPM_TUNE_OP_FLOOR, &t, "dpm floor");
+}
+
 static int Dpm(int argc, WCHAR **argv)
 {
     BC250_ESCAPE_DPM d;
+    BC250_ESCAPE_DPM_TUNE t;
     unsigned long count = 1, interval = 1000, i;
+    if (argc >= 3 && !_wcsicmp(argv[2], L"tune")) return DpmTune(argc, argv);
+    if (argc >= 3 && !_wcsicmp(argv[2], L"floor")) return DpmFloor(argc, argv);
+    if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | confirm | tune ... | floor ...\n"); return 2; }
     if (argc >= 3 && !_wcsicmp(argv[2], L"confirm")) {
         if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
         if (DpmQuery(&d, BC250_DPM_OP_CONFIRM, d.Generation)) return 1;
@@ -1522,10 +1697,17 @@ static int Dpm(int argc, WCHAR **argv)
             printf("dpm: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d.Status, d.NtStatus, d.Version);
             return 1;
         }
-        if (i == 0)
-            printf("driver 0x%08lX, requested %s, reason %s, generation %llu, ticks %llu, uptime %llu ms\n", d.Version,
+        if (i == 0) {
+            // The header keeps its old head (dpm-lib.ps1 parses it); the governor's thresholds and floor follow it.
+            printf("driver 0x%08lX, requested %s, reason %s, generation %llu, ticks %llu, uptime %llu ms", d.Version,
                    d.Requested == 1 ? "dpm" : (d.Requested == 0 ? "fixed" : "invalid"),
                    d.Reason < 9 ? g_DpmReason[d.Reason] : "?", d.Generation, d.Ticks, d.UptimeMs);
+            if (TuneRead(&t, 1) == 0) {
+                printf("; ");
+                TunePrintState(&t);
+            } else printf("; tune n/a (driver before 0x000700B9)");
+            printf("\n");
+        }
         DpmPrint(&d);
     }
     return 0;
@@ -1612,6 +1794,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
+                        "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
                         "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
                         "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
                         "       bc250kmd_cli journal follow SECONDS [MS]  (one process printing new records every MS, default 1000)\n"
@@ -1641,7 +1824,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
-    if (!_wcsicmp(argv[1], L"dpm") && argc <= 4) return Dpm(argc, argv);
+    if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
     if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
         return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);

@@ -34,8 +34,9 @@
 #define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
-#define BC250_KMD_VERSION 0x000700B8u       // revision 184: thermal limit 87 C (bc250_clock.h); log and journal reads
-                                            // without adapter synchronization (display.c)
+#define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
+#define BC250_KMD_VERSION 0x000700B9u       // revision 185: DPM governor thresholds and a runtime clock floor at run time
+                                            // (dpm.c, BC250_ESCAPE_RUN_DPM_TUNE)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -184,6 +185,45 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long SubmitBusyPermille;       // out; in: zero
     unsigned long SdmaBusyPermille;         // out; in: zero
 } BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+
+// DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
+// thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state
+// only: the escape stores the values under the DPM state's locks and the governor thread takes them at its next tick
+// (25 ms); no BAR access, no SMU message from the escape. So every operation takes NoAdapterSynchronization=1 and every
+// other D3DDDI_ESCAPEFLAGS bit zero, as RUN_DPM. READ is open to every caller. THRESHOLDS, FLOOR and RESET need an
+// administrator and ExpectedGeneration equal to the Generation a READ of this start returned (STATUS_RETRY otherwise);
+// THRESHOLDS and FLOOR also need a running DPM start (STATUS_INVALID_DEVICE_STATE: fixed-lab, governor stopped or gave
+// up). Nothing is persisted: every device start begins with the defaults. A refused write leaves the values as they
+// were and names the reason in Error (enum bc250_dpm_tune_error, driver/shim/include/bc250_dpm.h): ranges, the order
+// down < target < up, invariant 1 (a one-step lowering never lands at or above up), invariant 2 (a raise never lands
+// below down), the hold, the floor. FloorMHz in: a clock of the table up to the start's ceiling (MaxMHz), 0 or 1000 for
+// no runtime floor; out: 0 when there is none. Every accepted change is logged in the driver log with its old and new
+// values. Serial counts the changes since the driver loaded; Applied is the serial the governor thread runs with.
+// The 160-byte RUN_DPM structure and BC250_DPM_ABI are unchanged.
+#define BC250_DPM_TUNE_ABI 1u
+#define BC250_DPM_TUNE_OP_READ 0u
+#define BC250_DPM_TUNE_OP_THRESHOLDS 1u      // in: UpPermille, TargetPermille, DownPermille, DownHoldMs
+#define BC250_DPM_TUNE_OP_FLOOR 2u           // in: FloorMHz
+#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds and floor back to the defaults
+#define BC250_DPM_TUNE_FLAG_GOVERNING 1u     // a DPM start's governor thread runs and has not given up: writes are taken
+#define BC250_DPM_TUNE_FLAG_THRESHOLDS 2u    // the thresholds were set at run time (else the defaults)
+#define BC250_DPM_TUNE_FLAG_FLOOR 4u         // a runtime floor is set (else none)
+#define BC250_DPM_TUNE_FLAG_APPLIED 8u       // the governor thread runs with the values below (Applied == Serial)
+typedef struct _BC250_ESCAPE_DPM_TUNE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long UpPermille, TargetPermille, DownPermille, DownHoldMs;      // in: THRESHOLDS; out: in force
+    unsigned long FloorMHz;                 // in: FLOOR; out: in force, 0 for none
+    unsigned long Error;                    // out: enum bc250_dpm_tune_error of a refused write, else 0
+    unsigned long MaxMHz;                   // out: the start's ceiling (DpmMaxMHz), the highest floor admitted
+    unsigned long Mode;                     // out: BC250_DPM_MODE_* of this start
+    unsigned long DefaultUpPermille, DefaultTargetPermille, DefaultDownPermille, DefaultDownHoldMs;    // out
+    unsigned long Serial, Applied;          // out
+    unsigned long long FloorTicks;          // out: governor ticks in which the floor lifted the clock above the load's want
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: THRESHOLDS, FLOOR, RESET
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_DPM_TUNE; // 120 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

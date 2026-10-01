@@ -5,6 +5,11 @@ commands it sends that way in SoftwareRead(). This test parses both lists and fa
 LOG_SUMMARY (which walks state a stop frees and reads display registers) joins either, if the driver stops
 insisting on HardwareAccess for the summary, or if a log or journal read in the CLI bypasses the read path.
 
+From 0.7.185.1 it also holds BC250_ESCAPE_RUN_DPM_TUNE (the DPM governor's runtime thresholds and floor) to the same
+rule as RUN_DPM: the driver accepts exactly {NoAdapterSynchronization}, refuses a non-administrator's write before it
+takes the DPM lock, keeps the adapter context with rundown protection and is reached ahead of display.c's
+NoAdapterSynchronization refusal; the CLI builds the request in one place and sends it that way.
+
     python -m unittest discover -s tools/win/bc250kmd_cli
 """
 
@@ -77,6 +82,81 @@ def problems(display_source, cli_source):
         if not re.search(r"\b" + name + r"\(BC250_DEFAULT_HWID,\s*\w+(->|\.)Command,", cli_source):
             found.append(f"bc250kmd_cli.c: {name} is not called with the request's own Command")
     return found
+
+
+DPM = os.path.join(HERE, "..", "..", "..", "driver", "kmd", "dpm.c")
+
+
+def function_body(source, name):
+    """The body of a top-level C function definition (up to the first closing brace at column 0)."""
+    match = re.search(r"^\w[^\n;]*\b" + name + r"\s*\([^)]*\)\s*\{(.*?)^\}", source, re.S | re.M)
+    return match.group(1) if match else None
+
+
+def dpm_tune_problems(display_source, dpm_source, cli_source):
+    """KMD 0.7.185.1 BC250_ESCAPE_RUN_DPM_TUNE: software state, so NoAdapterSynchronization alone, like RUN_DPM. The
+    driver must insist on exactly that flag word, refuse a write from a non-administrator before it touches anything,
+    and be reached ahead of display.c's NoAdapterSynchronization refusal; the CLI must send every tune request that way.
+    Returns a list of sentences, empty when all of that holds."""
+    found = []
+    body = function_body(dpm_source, "DpmTuneRequest")
+    if body is None:
+        return ["dpm.c: DpmTuneRequest not found"]
+    if not re.search(r"expectedFlags\.NoAdapterSynchronization\s*=\s*1\s*;", body) or \
+       not re.search(r"EscapeFlags\s*!=\s*expectedFlags\.Value\)\s*return\s*;", body):
+        found.append("dpm.c: DpmTuneRequest does not refuse every flag word but {NoAdapterSynchronization}")
+    admin = re.search(r"if\s*\(\s*write\s*&&\s*!Admin\s*\)", body)
+    lock = body.find("DpmLock(s)")
+    if not admin or lock < 0 or admin.start() > lock:
+        found.append("dpm.c: DpmTuneRequest does not refuse a non-administrator's write before it takes the DPM lock")
+    if not re.search(r"ExAcquireRundownProtection\(&Device->StartHealth\.Readers\)", body):
+        found.append("dpm.c: DpmTuneRequest takes no rundown protection on the adapter context")
+    dispatch = re.search(r"if\s*\(\s*command\s*==\s*BC250_ESCAPE_RUN_DPM_TUNE\s*\)\s*\{(.*?)\}", display_source, re.S)
+    refusal = display_source.find("data->Command!=BC250_ESCAPE_RUN_CLOCK")
+    if not dispatch:
+        found.append("display.c: no RUN_DPM_TUNE dispatch")
+    else:
+        if refusal < 0 or dispatch.start() > refusal:
+            found.append("display.c: RUN_DPM_TUNE is dispatched after the NoAdapterSynchronization refusal")
+        if not re.search(r"PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM_TUNE\)", dispatch.group(1)) or \
+           "Escape->Flags.Value" not in dispatch.group(1):
+            found.append("display.c: RUN_DPM_TUNE dispatch without the exact size check or the flag word")
+    query = function_body(cli_source, "TuneQuery")
+    if query is None:
+        found.append("bc250kmd_cli.c: TuneQuery not found")
+    elif not re.search(r"SendEscapeFlags\(BC250_DEFAULT_HWID,\s*t,\s*sizeof\(\*t\),\s*1,", query):
+        found.append("bc250kmd_cli.c: TuneQuery does not send with NoAdapterSynchronization alone (softwareOnly 1)")
+    # Exactly one request is built, in TuneQuery: no other path can send it with other flags.
+    builders = re.findall(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM_TUNE\s*;", cli_source)
+    if len(builders) != 1 or (query is not None and not re.search(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM_TUNE\s*;", query)):
+        found.append(f"bc250kmd_cli.c: {len(builders)} RUN_DPM_TUNE requests built, expected one, in TuneQuery")
+    return found
+
+
+class DpmTuneFlagsTest(unittest.TestCase):
+    def test_driver_and_cli(self):
+        self.assertEqual(dpm_tune_problems(read(DISPLAY), read(DPM), read(CLI)), [])
+
+    def test_negative_controls(self):
+        display, dpm, cli = read(DISPLAY), read(DPM), read(CLI)
+        tune_at = dpm.find("void DpmTuneRequest(")
+        self.assertGreater(tune_at, 0)
+        mutations = [
+            # The flag word loosened, in DpmTuneRequest (DpmRequest has the same line above it).
+            (display, dpm[:tune_at] + dpm[tune_at:].replace("EscapeFlags != expectedFlags.Value) return;",
+                                                            "FALSE) return;", 1), cli),
+            # The administrator check dropped.
+            (display, re.sub(r"if \(write && !Admin\)", "if (FALSE)", dpm, count=1), cli),
+            # The dispatch moved behind the refusal: drop it, as a stand-in.
+            (display.replace("command == BC250_ESCAPE_RUN_DPM_TUNE", "command == 0xFFFFFFFFu", 1), dpm, cli),
+            # The CLI sends with HardwareAccess.
+            (display, dpm, cli.replace("SendEscapeFlags(BC250_DEFAULT_HWID, t, sizeof(*t), 1,",
+                                       "SendEscapeFlags(BC250_DEFAULT_HWID, t, sizeof(*t), 0,", 1)),
+        ]
+        for i, (d, k, c) in enumerate(mutations):
+            with self.subTest(mutation=i):
+                self.assertTrue((d, k, c) != (display, dpm, cli), "mutation did not apply")
+                self.assertTrue(dpm_tune_problems(d, k, c))
 
 
 class EscapeFlagsTest(unittest.TestCase):

@@ -24,6 +24,10 @@ bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore
                                                   one gated flip on HUBP0/OTG0 (ADR 0011 point 3 step 2)
 bc250kmd_cli sdmacopy [bytes]                     SDMA copy/fill positive control, read back and compared by the CPU (ADR 0013)
 bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0), assembled from several read-only bands into a BMP
+bc250kmd_cli dpm [count [interval ms]]            the KMD DPM governor's state, with the thresholds and floor in force (docs/design/dpm.md)
+bc250kmd_cli dpm tune <up> <target> <down> [hold_ms] | dpm tune reset
+                                                  governor thresholds (permille) at run time, elevated, not persisted (0.7.185)
+bc250kmd_cli dpm floor <MHz|off>                  a runtime clock floor; thermal, critical and max-setting limits still win
 ```
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage

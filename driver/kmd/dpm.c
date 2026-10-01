@@ -43,6 +43,10 @@
 
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 160);
 C_ASSERT(BC250_DPM_THROTTLE_COUNT == 8);
+C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 120);
+C_ASSERT(BC250_DPM_TUNE_COUNT == 7);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
+         FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 
 static const char* const g_Throttle[BC250_DPM_THROTTLE_COUNT] = {
     "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed"
@@ -66,6 +70,64 @@ void DpmInitialize(BC250_DEVICE* Device)
     KeInitializeEvent(&s->StopEvent, NotificationEvent, FALSE);
     s->Decision.reason = BC250_DPM_REASON_NOT_RUN;
     s->Snap.Reason = BC250_DPM_REASON_NOT_RUN;
+    bc250_dpm_tune_default(&s->Tune);
+}
+
+// ---- runtime tuning (0.7.185, BC250_ESCAPE_RUN_DPM_TUNE) ----------------------------------------------------------
+
+static BOOLEAN TuneEqual(const struct bc250_dpm_tune* A, const struct bc250_dpm_tune* B)
+{
+    return A->up_permille == B->up_permille && A->target_permille == B->target_permille &&
+           A->down_permille == B->down_permille && A->down_hold_ms == B->down_hold_ms && A->floor_level == B->floor_level;
+}
+
+// The floor as the escape and the log give it: the clock, 0 for none (level 0 is the table's own floor).
+static ULONG TuneFloorMHz(const struct bc250_dpm_tune* T)
+{
+    return T->floor_level != BC250_DPM_FLOOR_LEVEL ? bc250_dpm_level_mhz(T->floor_level) : 0;
+}
+
+// One line per change, old and new side by side, in the driver log (160 bytes a line: this one stays near 125).
+static void DpmLogTuneChange(const char* What, const struct bc250_dpm_tune* Old, const struct bc250_dpm_tune* New,
+                             ULONG Serial)
+{
+    GuardLog("dpm: tune (%s): up %lu->%lu target %lu->%lu down %lu->%lu permille, hold %lu->%lu ms, floor %lu->%lu MHz, "
+             "serial %lu", What, Old->up_permille, New->up_permille, Old->target_permille, New->target_permille,
+             Old->down_permille, New->down_permille, Old->down_hold_ms, New->down_hold_ms, TuneFloorMHz(Old),
+             TuneFloorMHz(New), Serial);
+}
+
+// The governor's own values (Gov.tune) next to the telemetry, while they are not the defaults, and in the summary.
+static void DpmLogTune(const char* What, const struct bc250_dpm_tune* T, ULONG Serial, ULONG Applied, ULONG FloorTicks)
+{
+    GuardLog("dpm: %s up %lu target %lu down %lu permille, hold %lu ms, floor %lu MHz, serial %lu applied %lu, "
+             "floor ticks %lu", What, T->up_permille, T->target_permille, T->down_permille, T->down_hold_ms,
+             TuneFloorMHz(T), Serial, Applied, FloorTicks);
+}
+
+// The thread, at the start of a governing tick: the escape's values, copied under SnapLock, at most once per change.
+// The escape checked them against the same ceiling (Decision.max_level is Gov.max_level), so the governor's own check
+// refuses nothing in practice; if it did, the governor keeps its values, Applied stays behind Serial and the log says
+// so once.
+static void DpmTakeTune(BC250_DPM_STATE* S)
+{
+    struct bc250_dpm_tune tune;
+    ULONG serial;
+    KIRQL irql;
+    enum bc250_dpm_tune_error error;
+
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    serial = S->TuneSerial;
+    tune = S->Tune;
+    KeReleaseSpinLock(&S->SnapLock, irql);
+    if (serial == S->TuneTaken || serial == S->TuneRefused) return;
+    error = bc250_dpm_set_tune(&S->Gov, &tune);
+    if (error == BC250_DPM_TUNE_OK) S->TuneTaken = serial;
+    else {
+        S->TuneRefused = serial;
+        GuardLog("dpm: tune serial %lu refused by the governor (error %d), running serial %lu", serial, (int)error,
+                 S->TuneTaken);
+    }
 }
 
 static BOOLEAN QueryPresent(PCWSTR Name, unsigned int* Value)
@@ -166,6 +228,8 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.ThermalEvents = g->thermal_events;
     snap.BusyAvgPermille = g->avg_permille;
     snap.Generation = S->Generation;
+    snap.TuneApplied = S->TuneTaken;
+    snap.FloorTicks = g->floor_ticks;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
@@ -362,6 +426,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         in.temperature_valid = T->TemperatureValid;
         in.dt_ms = dtMs;
         S->Gov.stable = InterlockedCompareExchange(&S->Stable, 0, 0) != 0;
+        DpmTakeTune(S);
         target = bc250_dpm_step(&S->Gov, &in);
         action = bc250_dpm_session_step(&S->Session, target, dtMs);
         if (action == BC250_DPM_SESSION_SET) {
@@ -410,11 +475,18 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
     if (now >= T->NextLog) {
         BC250_DPM_SNAP snap;
         KIRQL irql;
+        struct bc250_dpm_tune defaults;
+        ULONG serial;
         T->NextLog = now + 10000ull * BC250_DPM_LOG_MS;
         KeAcquireSpinLock(&S->SnapLock, &irql);
         snap = S->Snap;
+        serial = S->TuneSerial;
         KeReleaseSpinLock(&S->SnapLock, irql);
         DpmLogLine("telemetry", &snap);
+        // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
+        bc250_dpm_tune_default(&defaults);
+        if (!TuneEqual(&S->Gov.tune, &defaults) || serial != S->TuneTaken)
+            DpmLogTune("tune", &S->Gov.tune, serial, S->TuneTaken, S->Gov.floor_ticks);
     }
 }
 
@@ -454,6 +526,22 @@ void DpmStart(BC250_DEVICE* Device)
 
     DpmLock(s);
     if (s->Created) { DpmUnlock(s); return; }
+    {
+        // Runtime tuning is never carried into a new start: the defaults, and a log line when that drops something.
+        struct bc250_dpm_tune old, defaults;
+        ULONG serial;
+        KIRQL irql;
+        bc250_dpm_tune_default(&defaults);
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        old = s->Tune;
+        s->Tune = defaults;
+        if (!TuneEqual(&old, &defaults)) s->TuneSerial++;
+        serial = s->TuneSerial;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        // bc250_dpm_init below gives Gov the defaults too: the thread starts with this serial taken.
+        s->TuneTaken = s->TuneRefused = serial;
+        if (!TuneEqual(&old, &defaults)) DpmLogTuneChange("start", &old, &defaults, serial);
+    }
     RtlZeroMemory(&r, sizeof(r));
     RtlZeroMemory(d, sizeof(*d));
     RtlZeroMemory(&s->Session, sizeof(s->Session));
@@ -650,11 +738,17 @@ void DpmLogSummary(BC250_DEVICE* Device)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
     BC250_DPM_SNAP snap;
+    struct bc250_dpm_tune tune;
+    ULONG serial;
     KIRQL irql;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     snap = s->Snap;
+    tune = s->Tune;
+    serial = s->TuneSerial;
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
+    // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
+    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks);
 }
 
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.
@@ -734,6 +828,132 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULO
     Data->BusyTime100ns = snap.BusyTime100ns;
     Data->UptimeMs = snap.UptimeMs;
     Data->Generation = snap.Generation;
+    Data->NtStatus = (ULONG)status;
+    Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+// BC250_ESCAPE_RUN_DPM_TUNE (0.7.185). Software state only, so NoAdapterSynchronization=1 for every operation; what
+// makes that safe:
+// - Lifetime: the adapter context is valid while dxgkrnl calls DxgkDdiEscape, as for RUN_DPM; the StartHealth.Readers
+//   rundown taken below keeps it past a RemoveDevice (StartHealthRemove waits for it before the context is freed).
+//   Lock, SnapLock and Tune are set up in DpmInitialize (AddDevice) and live as long as the context.
+// - Writes take Lock, the KMUTEX DpmStart, DpmStop and DpmConfirm hold: Created, Decision, Generation and GaveUp's
+//   meaning cannot change under the check, and two writes cannot interleave their log lines. Inside it, SnapLock
+//   covers the store of Tune and TuneSerial; the governor thread copies both under SnapLock at the start of a
+//   governing tick (DpmTakeTune) and runs on its own copy (Gov.tune), so it never sees half a change. GaveUp is the
+//   thread's: a write that races the governor giving up is accepted and never taken (Applied stays behind Serial).
+// - Lock order: Readers (no wait) -> Lock -> SnapLock, and GuardLog after SnapLock is released. The thread takes
+//   TickLock -> SnapLock and never Lock; DpmStop holds Lock while it joins the thread, which needs neither Lock nor
+//   anything the escape holds; DpmPause takes TickLock only. No cycle.
+// - No hardware: no register, no SMU message, nothing a power transition turns off. A new floor reaches the SMU only
+//   through the thread's next tick and its checked transaction (SmuSetPoint); a paused governor (DpmPause, D3) takes
+//   nothing until DpmResume, and DpmStop joins the thread before the owner stops. PASSIVE_LEVEL (the KMUTEX wait).
+void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN Admin, ULONG EscapeFlags)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    D3DDDI_ESCAPEFLAGS expectedFlags = {0};
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+    // The inputs, read once; the same fields carry the outputs.
+    const ULONG op = Data->Op;
+    const BOOLEAN write = op != BC250_DPM_TUNE_OP_READ;
+    const ULONG floorMHz = Data->FloorMHz;
+    const ULONGLONG expected = Data->ExpectedGeneration;
+    struct bc250_dpm_tune request, old, defaults;
+    enum bc250_dpm_tune_error error = BC250_DPM_TUNE_OK;
+    ULONG serial = 0, applied, flags;
+    ULONGLONG floorTicks;
+    KIRQL irql;
+    int floorLevel = floorMHz == 0 ? (int)BC250_DPM_FLOOR_LEVEL : bc250_dpm_level_of(floorMHz);
+
+    request.up_permille = Data->UpPermille;
+    request.target_permille = Data->TargetPermille;
+    request.down_permille = Data->DownPermille;
+    request.down_hold_ms = Data->DownHoldMs;
+    request.floor_level = BC250_DPM_FLOOR_LEVEL;
+    expectedFlags.NoAdapterSynchronization = 1;
+    Data->Version = BC250_KMD_VERSION;
+    Data->Status = BC250_ESCAPE_STATUS_REFUSED;
+    Data->NtStatus = (ULONG)status;
+    Data->Flags = Data->Error = Data->MaxMHz = Data->Mode = 0;
+    Data->UpPermille = Data->TargetPermille = Data->DownPermille = Data->DownHoldMs = Data->FloorMHz = 0;
+    Data->DefaultUpPermille = Data->DefaultTargetPermille = Data->DefaultDownPermille = Data->DefaultDownHoldMs = 0;
+    Data->Serial = Data->Applied = 0;
+    Data->FloorTicks = Data->Generation = 0;
+    if (Data->AbiVersion != BC250_DPM_TUNE_ABI || Data->Reserved[0] || Data->Reserved[1] ||
+        op > BC250_DPM_TUNE_OP_RESET || EscapeFlags != expectedFlags.Value) return;
+    if (write && !Admin) {
+        Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+        Data->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
+        return;
+    }
+    if (!ExAcquireRundownProtection(&Device->StartHealth.Readers)) {
+        Data->NtStatus = (ULONG)STATUS_DELETE_PENDING;
+        return;
+    }
+    status = STATUS_SUCCESS;
+    bc250_dpm_tune_default(&defaults);
+    if (write) {
+        DpmLock(s);
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        old = s->Tune;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        if (expected != s->Generation) status = STATUS_RETRY;
+        else if (op != BC250_DPM_TUNE_OP_RESET &&
+                 (!s->Created || s->Decision.mode != BC250_DPM_MODE_DPM || s->GaveUp)) status = STATUS_INVALID_DEVICE_STATE;
+        else {
+            // Each operation changes its own part and keeps the rest as stored.
+            if (op == BC250_DPM_TUNE_OP_THRESHOLDS) request.floor_level = old.floor_level;
+            else if (op == BC250_DPM_TUNE_OP_FLOOR) {
+                request = old;
+                if (floorLevel < 0) error = BC250_DPM_TUNE_FLOOR;       // not a clock of the table
+                else request.floor_level = (unsigned int)floorLevel;
+            } else request = defaults;
+            if (error == BC250_DPM_TUNE_OK) error = bc250_dpm_tune_check(&request, s->Decision.max_level);
+            if (error != BC250_DPM_TUNE_OK) status = STATUS_INVALID_PARAMETER;
+            else if (!TuneEqual(&old, &request)) {
+                KeAcquireSpinLock(&s->SnapLock, &irql);
+                s->Tune = request;
+                serial = ++s->TuneSerial;
+                KeReleaseSpinLock(&s->SnapLock, irql);
+                DpmLogTuneChange(op == BC250_DPM_TUNE_OP_THRESHOLDS ? "thresholds" :
+                                 op == BC250_DPM_TUNE_OP_FLOOR ? "floor" : "reset", &old, &request, serial);
+            }
+        }
+        if (!NT_SUCCESS(status))
+            GuardLog("dpm: tune op %lu refused 0x%08X (error %d)", op, status, (int)error);
+        DpmUnlock(s);
+    }
+    // The reply: what is stored now, how far the thread got, and this start's frame.
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    request = s->Tune;
+    serial = s->TuneSerial;
+    applied = s->Snap.TuneApplied;
+    floorTicks = s->Snap.FloorTicks;
+    flags = s->Snap.Flags;
+    Data->Mode = s->Snap.Mode;
+    Data->MaxMHz = s->Snap.MaxMHz;
+    Data->Generation = s->Snap.Generation;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    ExReleaseRundownProtection(&Device->StartHealth.Readers);
+    Data->Flags = ((flags & BC250_DPM_FLAG_GOVERNING) ? BC250_DPM_TUNE_FLAG_GOVERNING : 0) |
+                  (request.up_permille != defaults.up_permille || request.target_permille != defaults.target_permille ||
+                   request.down_permille != defaults.down_permille || request.down_hold_ms != defaults.down_hold_ms
+                   ? BC250_DPM_TUNE_FLAG_THRESHOLDS : 0) |
+                  (request.floor_level != BC250_DPM_FLOOR_LEVEL ? BC250_DPM_TUNE_FLAG_FLOOR : 0) |
+                  (applied == serial ? BC250_DPM_TUNE_FLAG_APPLIED : 0);
+    Data->UpPermille = request.up_permille;
+    Data->TargetPermille = request.target_permille;
+    Data->DownPermille = request.down_permille;
+    Data->DownHoldMs = request.down_hold_ms;
+    Data->FloorMHz = TuneFloorMHz(&request);
+    Data->DefaultUpPermille = defaults.up_permille;
+    Data->DefaultTargetPermille = defaults.target_permille;
+    Data->DefaultDownPermille = defaults.down_permille;
+    Data->DefaultDownHoldMs = defaults.down_hold_ms;
+    Data->Serial = serial;
+    Data->Applied = applied;
+    Data->FloorTicks = floorTicks;
+    Data->Error = (ULONG)error;
     Data->NtStatus = (ULONG)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }

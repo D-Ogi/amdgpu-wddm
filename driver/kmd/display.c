@@ -343,6 +343,13 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         DpmRequest(device,(BC250_ESCAPE_DPM*)data,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
+    // DPM runtime tuning (0.7.185): thresholds and floor the governor thread takes at its next tick; software state,
+    // locking and lifetime argued at DpmTuneRequest (dpm.c).
+    if (command == BC250_ESCAPE_RUN_DPM_TUNE) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM_TUNE)) return STATUS_INVALID_PARAMETER;
+        DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
     // Interop switches: the start's decision and the session marker, software state as well (interop.c).
     if (data->Command == BC250_ESCAPE_RUN_INTEROP) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_INTEROP)) return STATUS_INVALID_PARAMETER;

@@ -46,9 +46,12 @@ power readout (it needs the metrics table and a DMA buffer); the plug telemetry 
 - Load: see "Busy" below. Busy per tick in permille, plus an average with 3/4 weight on the old.
 - Up: a tick at 900 permille or more raises at once to the lowest level at which the same work would fill 80 %
   (`clock * busy / 800`), at least one level.
-- Down: one level after the average stayed under 650 permille for 200 ms. A step down never lands above the up
-  threshold (650 x 1100/1000 < 900), so the two cannot chase each other; the host test sweeps every constant
-  demand from 100 to 2400 MHz and asserts no oscillation.
+- Down: one level after the average stayed under 650 permille for 200 ms. A step down never lands at or above the up
+  threshold ((650 + 1) x 1100/1000 = 716.1 <= 900, invariant 1 below), and a raise never lands below the down
+  threshold (the lowest landing is 739.2 permille, invariant 2), so the two cannot chase each other; the host test
+  sweeps every constant demand from 100 to 2400 MHz and asserts no oscillation.
+- These four numbers are the defaults of every start; "Runtime tuning" below changes them, and adds a floor, until the
+  next start.
 - Each transition is RequestGfxclk + ForceGfxVid in the safe order (voltage first when raising, clock first when
   lowering), with readbacks; every 1000 ms the SMU's clock and VID are read back and a mismatch resyncs.
 - A raise ramps. In trial 140 (0.7.176.1) the clock read back 1028-1029 MHz right after 1000 -> 1200 and 1200 at
@@ -123,9 +126,49 @@ healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
 
+## Runtime tuning (0.7.185)
+
+Session 225 (Witcher 3 LOW, native 1080p, 0.7.184.1) ran 45.4 fps with the GPU 76.7 % busy on average while the
+governor held 1000-1200 MHz: it raises only on a tick at 90 % or more. If CPU and GPU work of a frame partly
+serialize, the GPU's share of the frame is on the critical path at any utilisation, and a higher clock shortens the
+frame although the GPU is not saturated. To measure that, an administrator can change the governor on a running DPM
+start, without a restart and without the registry:
+
+| Command | Effect |
+|---|---|
+| `bc250kmd_cli dpm tune <up> <target> <down> [hold ms]` | the four thresholds (permille, ms; the hold stays when omitted) |
+| `bc250kmd_cli dpm floor <MHz\|off>` | a runtime floor: a clock of the table up to the start's ceiling (`DpmMaxMHz`) |
+| `bc250kmd_cli dpm tune reset` | thresholds and floor back to the defaults |
+| `bc250kmd_cli dpm tune` | what is in force, the defaults, how many ticks the floor lifted the clock |
+
+- Not persisted: every device start begins with the defaults (and logs what it dropped). Nothing in the registry.
+- Checked (`bc250_dpm_tune_check`, host-tested): each threshold 100-1000 permille, down < target < up, hold
+  100-5000 ms, the floor a table level at or below the start's ceiling, and two invariants over the whole table:
+  1. a one-step lowering never lands at or above up: `(down + 1) x mhz(L) <= up x mhz(L - 1)` for every level L >= 1,
+     which on this table reads `11 x (down + 1) <= 10 x up` (the +1: the average settles one permille under a
+     truncated busy share);
+  2. a raise never lands below down: `down x mhz(N) <= b x mhz(L)` for every level L below the top and every busy
+     share b from up to 1000, N being the level the governor raises to.
+  Invariant 1 alone is not enough: the average lags a step down by several ticks, so a short hold can take a second
+  step during the lag, and a raise that lands below down starts the cycle again. The host test simulates every
+  admitted tune of a grid under constant demand (no oscillation) and shows that tunes breaking only invariant 2 do
+  cycle. A refused tune names the reason and leaves the values as they were.
+- The floor lifts only what the load asks for. The thermal cap (87 C, released below 82 C), the critical rule (90 C),
+  a missing sensor and SetStablePowerState all still win: each brings the clock below the floor. `want` in the
+  telemetry stays the load's own answer, so a floored run still shows what the governor would have chosen.
+- Every change is a line in the driver log with old and new values, e.g. `dpm: tune (floor): up 900->900 target
+  800->800 down 650->650 permille, hold 200->200 ms, floor 0->2000 MHz, serial 3` (floor 0 = none). While the values
+  are not the defaults, a `dpm: tune ...` line follows every 5 s telemetry line, and `log summary` always prints one.
+- Escape `BC250_ESCAPE_RUN_DPM_TUNE` (26, `BC250_ESCAPE_DPM_TUNE`, ABI 1, 120 bytes), NoAdapterSynchronization only,
+  like `RUN_DPM`: the escape stores the values under the DPM lock and its snapshot spin lock, and the governor thread
+  takes them at its next 25 ms tick and applies a new level through its usual SMU transaction. Writes need an
+  administrator, the generation of the start the caller read and a governing DPM start. The 160-byte `RUN_DPM`
+  structure is unchanged, so older CLIs and the overlay keep working.
+
 ## Telemetry
 
-- `bc250kmd_cli dpm [count [interval ms]]`: mode, requested mode, reason, then per sample the committed clock and
+- `bc250kmd_cli dpm [count [interval ms]]`: mode, requested mode, reason, the thresholds and floor in force with their
+  source (default or runtime, 0.7.185), then per sample the committed clock and
   voltage, the SMU readback (MHz, VID), temperature, busy and average busy, demand, thermal cap, ceiling, throttle
   reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed) and counters, then the busy
   source (grbm or submit), the submit share and the SDMA0 share (0.7.177).

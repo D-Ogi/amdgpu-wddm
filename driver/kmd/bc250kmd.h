@@ -285,6 +285,7 @@ void CuModePatchCaps(BC250_DEVICE* Device, _Inout_updates_bytes_(Bytes) PVOID Ca
 
 // dpm.c
 struct _BC250_ESCAPE_DPM;
+struct _BC250_ESCAPE_DPM_TUNE;
 void DpmInitialize(BC250_DEVICE* Device);
 void DpmStart(BC250_DEVICE* Device);
 void DpmStop(BC250_DEVICE* Device);
@@ -294,6 +295,7 @@ void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULONG EscapeFlags);
+void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN Admin, ULONG EscapeFlags);
 
 // interop.c
 struct _BC250_ESCAPE_INTEROP;

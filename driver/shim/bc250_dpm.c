@@ -6,9 +6,11 @@
  * The governor is the classic utilisation governor, not an import: the demand of a tick is
  * busy x clock, and a raise picks the lowest level at which that demand would fill TARGET of the
  * time. Raises happen at once, lowerings one step at a time after DOWN_HOLD_MS below DOWN on the
- * average, so a step down never lands above UP (worst ratio 1100/1000: 650 x 1.1 = 715 < 900) and
- * the two cannot chase each other. The thermal cap sits on top and wins over everything but the
- * floor. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
+ * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
+ * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
+ * top and wins over everything but the floor. The thresholds and a runtime floor can change at run
+ * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
+ * every limit. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
  */
 #include <string.h>
 #include "bc250_dpm.h"
@@ -28,6 +30,15 @@ static unsigned int ceil_level(unsigned int mhz)
 	if (mhz <= BC250_CLOCK_FLOOR_MHZ) return BC250_DPM_FLOOR_LEVEL;
 	level = (mhz - BC250_CLOCK_FLOOR_MHZ + BC250_CLOCK_STEP_MHZ - 1u) / BC250_CLOCK_STEP_MHZ;
 	return level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : level;
+}
+
+/* Where a raise from cur goes: the lowest level at which the tick's work (busy x clock) would fill target
+ * permille, at least one level up. bc250_dpm_step and invariant 2 of bc250_dpm_tune_check share it. */
+static unsigned int raise_level(unsigned int cur, unsigned int busy, unsigned int target_permille)
+{
+	unsigned int want = ceil_level(bc250_dpm_level_mhz(cur) * busy / target_permille);
+	if (want <= cur && cur < BC250_DPM_TOP_LEVEL) want = cur + 1u;
+	return want;
 }
 
 unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
@@ -94,12 +105,59 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 	else d->mark_pending = 1;
 }
 
+void bc250_dpm_tune_default(struct bc250_dpm_tune *t)
+{
+	t->up_permille = BC250_DPM_UP_PERMILLE;
+	t->target_permille = BC250_DPM_TARGET_PERMILLE;
+	t->down_permille = BC250_DPM_DOWN_PERMILLE;
+	t->down_hold_ms = BC250_DPM_DOWN_HOLD_MS;
+	t->floor_level = BC250_DPM_FLOOR_LEVEL;
+}
+
+enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level)
+{
+	unsigned int level;
+
+	if (t->up_permille < BC250_DPM_TUNE_MIN_PERMILLE || t->up_permille > BC250_DPM_TUNE_MAX_PERMILLE ||
+	    t->target_permille < BC250_DPM_TUNE_MIN_PERMILLE || t->target_permille > BC250_DPM_TUNE_MAX_PERMILLE ||
+	    t->down_permille < BC250_DPM_TUNE_MIN_PERMILLE || t->down_permille > BC250_DPM_TUNE_MAX_PERMILLE)
+		return BC250_DPM_TUNE_RANGE;
+	if (!(t->down_permille < t->target_permille && t->target_permille < t->up_permille))
+		return BC250_DPM_TUNE_ORDER;
+	/* Invariant 1, every adjacent pair of the table, not only the bottom one: the inequality is the
+	 * contract, the table's shape (where the ratio peaks) is not. */
+	for (level = 1; level < BC250_CLOCK_LEVELS; level++)
+		if ((t->down_permille + 1u) * bc250_dpm_level_mhz(level) > t->up_permille * bc250_dpm_level_mhz(level - 1u))
+			return BC250_DPM_TUNE_LOWERING;
+	/* Invariant 2, with bc250_dpm_step's own arithmetic. At most 10 x 901 cases; run only when a tune changes. */
+	for (level = 0; level < BC250_DPM_TOP_LEVEL; level++) {
+		unsigned int busy, mhz = bc250_dpm_level_mhz(level);
+		for (busy = t->up_permille; busy <= 1000u; busy++) {
+			unsigned int next = raise_level(level, busy, t->target_permille);
+			if (t->down_permille * bc250_dpm_level_mhz(next) > busy * mhz) return BC250_DPM_TUNE_RAISE;
+		}
+	}
+	if (t->down_hold_ms < BC250_DPM_TUNE_MIN_HOLD_MS || t->down_hold_ms > BC250_DPM_TUNE_MAX_HOLD_MS)
+		return BC250_DPM_TUNE_HOLD;
+	if (t->floor_level > max_level || t->floor_level > BC250_DPM_TOP_LEVEL)
+		return BC250_DPM_TUNE_FLOOR;
+	return BC250_DPM_TUNE_OK;
+}
+
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 {
 	memset(g, 0, sizeof(*g));
 	g->max_level = max_level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : max_level;
 	g->thermal_cap = g->max_level;
 	g->level = BC250_DPM_FLOOR_LEVEL;
+	bc250_dpm_tune_default(&g->tune);
+}
+
+enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t)
+{
+	enum bc250_dpm_tune_error e = bc250_dpm_tune_check(t, g->max_level);
+	if (e == BC250_DPM_TUNE_OK) g->tune = *t;
+	return e;
 }
 
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
@@ -109,6 +167,9 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	unsigned int cur = g->level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : g->level;
 	unsigned int want = cur, limit, target;
 	unsigned int thermal = BC250_DPM_THROTTLE_NONE;
+	const struct bc250_dpm_tune *t = &g->tune;
+	/* bc250_dpm_set_tune admits no floor above the ceiling; a caller that wrote g->tune itself gets it clamped. */
+	unsigned int floor = t->floor_level < g->max_level ? t->floor_level : g->max_level;
 
 	g->avg_permille = (g->avg_permille * 3u + busy + 2u) / 4u;
 
@@ -151,22 +212,27 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	}
 
 	/* The load. */
-	if (busy >= BC250_DPM_UP_PERMILLE) {
-		unsigned int demand = bc250_dpm_level_mhz(cur) * busy / BC250_DPM_TARGET_PERMILLE;
-		want = ceil_level(demand);
-		if (want <= cur && cur < BC250_DPM_TOP_LEVEL) want = cur + 1u;
+	if (busy >= t->up_permille) {
+		want = raise_level(cur, busy, t->target_permille);
 		g->down_ms = 0;
-	} else if (g->avg_permille < BC250_DPM_DOWN_PERMILLE) {
+	} else if (g->avg_permille < t->down_permille) {
 		g->down_ms += dt;
-		if (g->down_ms >= BC250_DPM_DOWN_HOLD_MS) {
+		if (g->down_ms >= t->down_hold_ms) {
 			g->down_ms = 0;
 			if (cur > BC250_DPM_FLOOR_LEVEL) want = cur - 1u;
 		}
 	} else g->down_ms = 0;
 	g->want = want;
 
-	/* The limits, in the order that names the reason. */
+	/* The runtime floor lifts what the load asks for; the limits below still bound it. want stays the
+	 * load's own answer, so the telemetry shows what the governor would do without the floor. */
 	target = want;
+	if (target < floor) {
+		target = floor;
+		g->floor_ticks++;
+	}
+
+	/* The limits, in the order that names the reason. */
 	g->throttle = BC250_DPM_THROTTLE_NONE;
 	limit = g->thermal_cap < g->max_level ? g->thermal_cap : g->max_level;
 	if (g->stable) {

@@ -18,6 +18,7 @@ typedef struct _BC250_DPM_SNAP {
     ULONG SubmitBusyPermille, SdmaBusyPermille, BusySource, HwSamples;
     ULONG Raises, Lowers, ThermalEvents, Errors, Resyncs;
     ULONGLONG Ticks, BusyTime100ns, UptimeMs, Generation;
+    ULONG TuneApplied, FloorTicks;          // 0.7.185: the tune serial the governor runs with; Gov.floor_ticks
 } BC250_DPM_SNAP;
 
 typedef struct _BC250_DPM_STATE {
@@ -46,7 +47,12 @@ typedef struct _BC250_DPM_STATE {
     struct bc250_dpm_session Session;
     ULONG ErrorsInRow;
     BOOLEAN GaveUp;
+    ULONG TuneTaken, TuneRefused;           // the Tune serial last copied into Gov, or refused by it (the thread's, like Gov)
     BC250_DPM_SNAP Snap;                    // under SnapLock
+    // Runtime tuning (0.7.185, BC250_ESCAPE_RUN_DPM_TUNE). Written by the escape under Lock and SnapLock, read by the
+    // thread under SnapLock at the start of a governing tick, reset to the defaults by DpmStart. Never persisted.
+    struct bc250_dpm_tune Tune;             // under SnapLock
+    ULONG TuneSerial;                       // under SnapLock: one more for every change
 } BC250_DPM_STATE;
 
 // The submit path (gfx.c SubmitIbLocked, after the IB is committed): the ring went, or stays, busy.

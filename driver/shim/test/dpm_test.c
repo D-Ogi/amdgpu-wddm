@@ -412,6 +412,293 @@ static void test_session(void)
 	CHECK(bc250_dpm_session_step(&s, 0, 60000u) == BC250_DPM_SESSION_NONE);
 }
 
+/* ---- runtime tuning (0.7.185) ------------------------------------------------------------------- */
+
+/* The defaults keep invariant 1 at the table's widest step (1100/1000) and the order, at compile time. */
+typedef char dpm_default_lowering[(11u * (BC250_DPM_DOWN_PERMILLE + 1u) <= 10u * BC250_DPM_UP_PERMILLE) ? 1 : -1];
+typedef char dpm_default_order[(BC250_DPM_DOWN_PERMILLE < BC250_DPM_TARGET_PERMILLE &&
+				BC250_DPM_TARGET_PERMILLE < BC250_DPM_UP_PERMILLE) ? 1 : -1];
+typedef char dpm_strict_form_admits_818[(818u * 1100u < 900u * 1000u) ? 1 : -1];
+typedef char dpm_default_hold[(BC250_DPM_DOWN_HOLD_MS >= BC250_DPM_TUNE_MIN_HOLD_MS &&
+			       BC250_DPM_DOWN_HOLD_MS <= BC250_DPM_TUNE_MAX_HOLD_MS) ? 1 : -1];
+
+static struct bc250_dpm_tune tune(unsigned int up, unsigned int target, unsigned int down, unsigned int hold,
+				  unsigned int floor_level)
+{
+	struct bc250_dpm_tune t;
+	t.up_permille = up;
+	t.target_permille = target;
+	t.down_permille = down;
+	t.down_hold_ms = hold;
+	t.floor_level = floor_level;
+	return t;
+}
+
+/* Independent references for the two invariants. Invariant 1 straight from its inequality; invariant 2 by asking
+ * bc250_dpm_step itself where a raise from each level goes, so the check is held to what the governor does. */
+static int ref_lowering(const struct bc250_dpm_tune *t)
+{
+	unsigned int l;
+	for (l = 1; l < BC250_CLOCK_LEVELS; l++)
+		if ((t->down_permille + 1u) * bc250_clock_points[l].mhz > t->up_permille * bc250_clock_points[l - 1].mhz)
+			return 0;
+	return 1;
+}
+
+static int ref_raise(const struct bc250_dpm_tune *t)
+{
+	unsigned int l, busy;
+	for (l = 0; l < BC250_DPM_TOP_LEVEL; l++)
+		for (busy = t->up_permille; busy <= 1000u; busy++) {
+			struct bc250_dpm_governor g;
+			struct bc250_dpm_input in;
+			unsigned int next;
+			bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+			g.tune = *t;
+			g.tune.floor_level = 0;
+			g.level = l;
+			in.busy_permille = busy; in.temperature_mc = 60000; in.temperature_valid = 1; in.dt_ms = 25;
+			next = bc250_dpm_step(&g, &in);
+			if (next <= l) return -1;      /* not a raise: the reference itself is wrong */
+			if (t->down_permille * bc250_clock_points[next].mhz > busy * bc250_clock_points[l].mhz) return 0;
+		}
+	return 1;
+}
+
+static void test_tune_check(void)
+{
+	struct bc250_dpm_tune t, d;
+	struct bc250_dpm_governor g;
+	unsigned int up, target, down, compared = 0;
+
+	bc250_dpm_tune_default(&d);
+	CHECK(d.up_permille == 900u && d.target_permille == 800u && d.down_permille == 650u && d.down_hold_ms == 200u &&
+	      d.floor_level == 0u);
+	CHECK(bc250_dpm_tune_check(&d, BC250_DPM_TOP_LEVEL) == BC250_DPM_TUNE_OK);
+	CHECK(bc250_dpm_tune_check(&d, 0) == BC250_DPM_TUNE_OK);        /* a fixed-lab ceiling: no runtime floor is fine */
+	CHECK(ref_lowering(&d) == 1 && ref_raise(&d) == 1);
+	bc250_dpm_init(&g, 7);
+	CHECK(memcmp(&g.tune, &d, sizeof(d)) == 0 && g.floor_ticks == 0);
+
+	/* Ranges. */
+	t = tune(1001, 800, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RANGE);
+	t = tune(900, 800, 99, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RANGE);
+	t = tune(900, 0, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RANGE);
+	t = tune(1000, 999, 100, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	/* Order: down < target < up, strictly. */
+	t = tune(900, 650, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_ORDER);
+	t = tune(900, 900, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_ORDER);
+	t = tune(600, 800, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_ORDER);
+	/* Invariant 1 at its exact edge for up 900: 11 x 818 = 8998 <= 9000 admits down 817, 11 x 819 = 9009 does not
+	 * admit 818. (target 899 keeps invariant 2 out of the way.) */
+	t = tune(900, 899, 817, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = tune(900, 899, 818, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_LOWERING);
+	/* The strict form without the +1 would admit 818 (dpm_strict_form_admits_818): at 1100 MHz a load that reads
+	 * 818 permille (the work of 899.8 to 900.9 permille at 1000 MHz) can hold the average at 817, one under it, and
+	 * lower; at 1000 MHz the same work reads 899 or 900, and 900 is up. */
+	/* Invariant 2: a target just above down lets a raise land below down. */
+	t = tune(370, 336, 335, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RAISE);
+	CHECK(ref_lowering(&t) == 1 && ref_raise(&t) == 0);
+	/* The A/B tune of the 0.7.185 lab plan. */
+	t = tune(750, 650, 500, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	/* The hold. */
+	t = tune(900, 800, 650, 99, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_HOLD);
+	t = tune(900, 800, 650, 100, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = tune(900, 800, 650, 5000, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = tune(900, 800, 650, 5001, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_HOLD);
+	/* The floor: a level at or below the start's ceiling. */
+	t = tune(900, 800, 650, 200, 10); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	CHECK(bc250_dpm_tune_check(&t, 9) == BC250_DPM_TUNE_FLOOR);
+	CHECK(bc250_dpm_tune_check(&t, 0) == BC250_DPM_TUNE_FLOOR);
+	t = tune(900, 800, 650, 200, 11); CHECK(bc250_dpm_tune_check(&t, 99) == BC250_DPM_TUNE_FLOOR);
+	t = tune(900, 800, 650, 200, 6); CHECK(bc250_dpm_tune_check(&t, 6) == BC250_DPM_TUNE_OK);
+
+	/* set_tune: a refused tune leaves the governor's as it was, an admitted one replaces it. */
+	bc250_dpm_init(&g, 6);
+	t = tune(750, 650, 500, 300, 7);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && memcmp(&g.tune, &d, sizeof(d)) == 0);
+	t.floor_level = 6;
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK && memcmp(&g.tune, &t, sizeof(t)) == 0);
+
+	/* The check against the references: invariant 1 on a fine grid, invariant 2 (and 1) on a coarser one. */
+	for (up = 110; up <= 1000; up += 7)
+		for (down = 100; down < up; down++) {
+			t = tune(up, up - 1u, down, 200, 0);
+			if (down + 1u >= up) continue;
+			{
+				enum bc250_dpm_tune_error e = bc250_dpm_tune_check(&t, 10);
+				CHECK((e != BC250_DPM_TUNE_LOWERING) == ref_lowering(&t));
+				compared++;
+			}
+		}
+	for (up = 150; up <= 1000; up += 50)
+		for (down = 100; down < up; down += 45)
+			for (target = down + 1u; target < up; target += 40) {
+				enum bc250_dpm_tune_error e;
+				int r1, r2;
+				t = tune(up, target, down, 200, 0);
+				e = bc250_dpm_tune_check(&t, 10);
+				r1 = ref_lowering(&t);
+				r2 = r1 ? ref_raise(&t) : 1;
+				CHECK(r2 >= 0);
+				CHECK((e == BC250_DPM_TUNE_OK) == (r1 && r2 == 1));
+				if (!r1) CHECK(e == BC250_DPM_TUNE_LOWERING);
+				else if (r2 == 0) CHECK(e == BC250_DPM_TUNE_RAISE);
+				compared++;
+			}
+	CHECK(compared > 50000u);
+}
+
+/* The settle-and-hold sweep of test_no_oscillation, for any tune; returns the level changes after the settle. */
+static unsigned int sweep_changes(const struct bc250_dpm_tune *t, unsigned int max_level, unsigned int demand,
+				  unsigned int *settled)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, last = 0, changes = 0, level = 0;
+	bc250_dpm_init(&g, max_level);
+	g.tune = *t;
+	for (i = 0; i < 1000; i++) {
+		unsigned int mhz = bc250_dpm_level_mhz(g.level);
+		unsigned int busy = demand >= mhz ? 1000u : demand * 1000u / mhz;
+		level = run(&g, busy, 60, 25);
+		if (i >= 700 && level != last) changes++;
+		last = level;
+	}
+	*settled = level;
+	return changes;
+}
+
+static void test_tune_no_oscillation(void)
+{
+	static const unsigned int holds[] = { 100, 200, 5000 };
+	struct bc250_dpm_tune t;
+	unsigned int up, target, down, demand, h, settled, admitted = 0, seen_cycle = 0;
+
+	/* Every admitted tune on a grid, three holds, every constant demand: settles, no cycle, and where the load fits. */
+	for (up = 150; up <= 1000; up += 50)
+		for (down = 100; down < up; down += 50)
+			for (target = down + 10u; target < up; target += 50) {
+				t = tune(up, target, down, 200, 0);
+				if (bc250_dpm_tune_check(&t, 10) != BC250_DPM_TUNE_OK) continue;
+				admitted++;
+				for (h = 0; h < sizeof(holds) / sizeof(holds[0]); h++) {
+					t.down_hold_ms = holds[h];
+					for (demand = 100; demand <= 2400; demand += 50) {
+						unsigned int mhz, busy;
+						CHECK(sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled) == 0);
+						mhz = bc250_dpm_level_mhz(settled);
+						busy = demand >= mhz ? 1000u : demand * 1000u / mhz;
+						if (settled < BC250_DPM_TOP_LEVEL) CHECK(busy < t.up_permille);
+						if (settled > 0) CHECK(busy + 2u >= t.down_permille);
+					}
+				}
+			}
+	CHECK(admitted > 40u);
+
+	/* The lab plan's tune, densely. */
+	t = tune(750, 650, 500, 200, 0);
+	for (demand = 100; demand <= 2400; demand += 10) CHECK(sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled) == 0);
+
+	/* Negative control: tunes that keep invariant 1 but break invariant 2 do cycle. The check refuses them. */
+	t = tune(370, 336, 335, 200, 0);
+	CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RAISE);
+	for (demand = 300; demand <= 450; demand += 5) if (sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled)) seen_cycle++;
+	CHECK(seen_cycle > 0);
+	seen_cycle = 0;
+	t = tune(200, 181, 180, 100, 0);
+	CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RAISE);
+	for (demand = 180; demand <= 260; demand += 5) if (sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled)) seen_cycle++;
+	CHECK(seen_cycle > 0);
+}
+
+/* The runtime floor: lifts the load's want, never the limits. */
+static void test_floor(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_tune t;
+	struct bc250_dpm_input in;
+	unsigned int i, level;
+
+	/* Floor 2000 at idle: the first tick goes there, want stays the load's (the floor). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	t = tune(900, 800, 650, 200, 10);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	CHECK(run(&g, 0, 60, 25) == 10);
+	CHECK(g.want == 0 && g.throttle == BC250_DPM_THROTTLE_NONE && g.floor_ticks == 1 && g.raises == 1);
+	for (i = 0; i < 400; i++) CHECK(run(&g, 0, 60, 25) == 10);
+	CHECK(g.lowers == 0 && g.floor_ticks > 1);
+	/* Full load at the floor: nothing to raise, nothing lifted. */
+	i = g.floor_ticks;
+	CHECK(run(&g, 1000, 60, 25) == 10 && g.floor_ticks == i);
+
+	/* Thermal soft beats the floor: one step at 87 C, another every HOT_STEP_MS, back only below 82 C. */
+	CHECK(run_mc(&g, 0, 87000, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 0, 88, 25) == 9);
+	CHECK(run(&g, 0, 88, 25) == 8);
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 0, 82000, 25) == 8);
+	for (i = 0; i < 4 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
+	CHECK(level == 10 && g.throttle == BC250_DPM_THROTTLE_NONE);
+	/* Critical: the floor of the table at once, whatever the runtime floor. */
+	CHECK(run(&g, 0, 90, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD);
+	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
+	CHECK(level == 10);
+	/* No sensor: the table's floor. */
+	in = tick(0, 60, 25); in.temperature_valid = 0;
+	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+	CHECK(level == 0 && g.throttle == BC250_DPM_THROTTLE_SENSOR);
+	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
+	CHECK(level == 10);
+	/* SetStablePowerState pins the table's floor over the runtime floor. */
+	g.stable = 1;
+	CHECK(run(&g, 0, 60, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_STABLE);
+	g.stable = 0;
+	CHECK(run(&g, 0, 60, 25) == 10);
+
+	/* Floor off: from 2000 at idle one step per hold, as before 0.7.185 (the hold counted from here). */
+	t.floor_level = 0;
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	g.down_ms = 0;
+	for (i = 0; i < 7; i++) CHECK(run(&g, 0, 60, 25) == 10);
+	CHECK(run(&g, 0, 60, 25) == 9);
+	for (i = 0; i < 400 && level; i++) level = run(&g, 0, 60, 25);
+	CHECK(level == 0);
+
+	/* A floor in the middle: the load still raises above it, lowerings stop at it. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	t = tune(900, 800, 650, 200, 5);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	CHECK(run(&g, 0, 60, 25) == 5);
+	CHECK(run(&g, 1000, 60, 25) == 9);     /* 1500 x 1000 / 800 = 1875 -> 1900 */
+	for (i = 0; i < 400; i++) level = run(&g, 0, 60, 25);
+	CHECK(level == 5 && g.want <= 5);
+
+	/* The max setting: a floor above it is refused; one written past the check is clamped, never above the ceiling. */
+	bc250_dpm_init(&g, 6);
+	t = tune(900, 800, 650, 200, 10);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == 0);
+	t.floor_level = 6;
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	CHECK(run(&g, 0, 60, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_NONE);
+	CHECK(run(&g, 1000, 60, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
+	g.tune.floor_level = 10;
+	/* The limit alone would also hold it at 6, but name MAX_SETTING; the clamp keeps the floor a floor. */
+	for (i = 0; i < 50; i++) CHECK(run(&g, 0, 60, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_NONE);
+	/* Thermal soft with the floor at the ceiling: below both. */
+	CHECK(run(&g, 0, 87, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+
+	/* Tuned thresholds act: up 750 raises where 900 would not; down 500 holds where 650 would lower. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run(&g, 800, 60, 25) == 0);
+	t = tune(750, 650, 500, 200, 0);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	CHECK(run(&g, 800, 60, 25) == 3);      /* 1000 x 800 / 650 = 1230 -> 1300 */
+	for (i = 0; i < 100; i++) CHECK(run(&g, 600, 60, 25) == 3);
+	t = tune(900, 800, 650, 200, 0);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	for (i = 0; i < 100; i++) level = run(&g, 600, 60, 25);
+	CHECK(level < 3);
+}
+
 /* The busy source: GRBM samples when there are enough, the submit accounting otherwise. */
 static void test_busy_source(void)
 {
@@ -450,6 +737,9 @@ int main(void)
 	test_stable_and_failure();
 	test_session();
 	test_busy_source();
+	test_tune_check();
+	test_tune_no_oscillation();
+	test_floor();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }

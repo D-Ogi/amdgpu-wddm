@@ -6,10 +6,11 @@
  * bc250-win is the design; this header is the part without Windows in it, so the host test
  * (test/dpm_test.c) runs exactly what the miniport runs.
  *
- * Three pure pieces:
+ * Four pure pieces:
  *   bc250_dpm_decide()        the settings and the boot guard: fixed-lab or DPM for this start,
  *                             and what the caller must persist before and after
  *   bc250_dpm_step()          one governor tick: GPU busy share and temperature in, a level out
+ *   bc250_dpm_tune_check()    the thresholds and floor an administrator may set at run time (0.7.185)
  *   bc250_dpm_session_step()  the "running above the floor" marker that turns a crash at a high
  *                             clock into a fixed-lab next start
  * The operating points themselves are bc250_clock.h's table; a level is an index into it.
@@ -109,7 +110,8 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_COUNT
 };
 
-/* Thresholds. Busy is in permille of the tick's wall time. */
+/* Thresholds. Busy is in permille of the tick's wall time. These are the defaults every start begins
+ * with; an administrator may change them at run time (struct bc250_dpm_tune below). */
 #define BC250_DPM_UP_PERMILLE		900u	/* at or above: raise now */
 #define BC250_DPM_TARGET_PERMILLE	800u	/* a raise aims at this share at the new clock */
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
@@ -135,6 +137,61 @@ enum bc250_dpm_busy_source { BC250_DPM_BUSY_SUBMIT = 0, BC250_DPM_BUSY_GRBM = 1 
 unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
 				     enum bc250_dpm_busy_source *source);
 
+/* ---- runtime tuning (0.7.185) --------------------------------------------------------------- */
+
+/* The four thresholds above and a runtime floor, set by an administrator through the driver's escape
+ * (BC250_ESCAPE_RUN_DPM_TUNE) while a DPM start runs, for A/B experiments. Never persisted: every start
+ * begins with bc250_dpm_tune_default(). The floor is a level of the clock table the governor does not go
+ * below on its own; it never beats the thermal cap, the critical rule, a missing sensor or
+ * SetStablePowerState, and it never exceeds the start's ceiling (max_level, DpmMaxMHz). */
+struct bc250_dpm_tune {
+	unsigned int	up_permille;
+	unsigned int	target_permille;
+	unsigned int	down_permille;
+	unsigned int	down_hold_ms;
+	unsigned int	floor_level;		/* BC250_DPM_FLOOR_LEVEL: no runtime floor */
+};
+#define BC250_DPM_TUNE_MIN_PERMILLE	100u
+#define BC250_DPM_TUNE_MAX_PERMILLE	1000u
+#define BC250_DPM_TUNE_MIN_HOLD_MS	100u	/* at most one lowering per four ticks of the 25 ms governor */
+#define BC250_DPM_TUNE_MAX_HOLD_MS	5000u
+/* Why a tune was refused. Shared with the escape and the CLI. */
+enum bc250_dpm_tune_error {
+	BC250_DPM_TUNE_OK = 0,
+	BC250_DPM_TUNE_RANGE = 1,		/* a threshold outside MIN..MAX_PERMILLE */
+	BC250_DPM_TUNE_ORDER = 2,		/* not down < target < up */
+	BC250_DPM_TUNE_LOWERING = 3,		/* invariant 1: a one-step lowering could land at or above up */
+	BC250_DPM_TUNE_RAISE = 4,		/* invariant 2: a raise could land below down */
+	BC250_DPM_TUNE_HOLD = 5,		/* down_hold_ms outside MIN..MAX_HOLD_MS */
+	BC250_DPM_TUNE_FLOOR = 6,		/* the floor is not a table level at or below the start's ceiling */
+	BC250_DPM_TUNE_COUNT
+};
+void bc250_dpm_tune_default(struct bc250_dpm_tune *t);
+/* Ranges, order, then two invariants over the clock table, both checked exactly (every level, every busy
+ * share the governor can see), not by a rule of thumb about the table's shape:
+ *
+ * 1. A one-step lowering never lands at or above up. For every level L in 1..TOP:
+ *	(down + 1) x mhz(L) <= up x mhz(L - 1)
+ *    A lowering from L happens once the average stays below down. With the average settled on the load (it
+ *    settles at most one permille under the tick's busy share, and that share is truncated to a whole
+ *    permille) the load at L is below down + 1 permille, so at L - 1 the same work is below
+ *    (down + 1) x mhz(L) / mhz(L - 1) <= up permille: no raise answers the step down. mhz(L) / mhz(L - 1) is
+ *    largest at the bottom of this table (1100 / 1000), where the inequality reads 11 x (down + 1) <= 10 x up;
+ *    the defaults: 11 x 651 = 7161 <= 9000.
+ * 2. A raise never lands below down. For every level L in 0..TOP-1 and every busy share b in up..1000, with
+ *    N the level bc250_dpm_step raises to (the lowest whose clock covers mhz(L) x b / target, at least L + 1):
+ *	down x mhz(N) <= b x mhz(L)
+ *    The same work then fills at least down permille at N, the average comes down to it from above up and
+ *    never crosses down, so no lowering follows a raise. Together with the order (target < up) a constant
+ *    load settles after at most one raise. Invariant 1 alone does not give that: the average lags a step
+ *    down by several ticks, so a short hold can take a second step during that lag, and a raise landing
+ *    below down then starts the cycle again (the host test sweeps both). The defaults: the lowest landing
+ *    is 739.2 permille (961 at 1000 MHz raised to 1300 MHz), above 650.
+ *
+ * The hold's lower bound is about SMU traffic (each lowering is a transaction), not stability: with both
+ * invariants the host test finds no oscillation down to a one-tick hold. */
+enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level);
+
 struct bc250_dpm_input {
 	unsigned int	busy_permille;		/* 0..1000 over this tick */
 	int		temperature_mc;
@@ -153,9 +210,13 @@ struct bc250_dpm_governor {
 	unsigned int	throttle;		/* enum bc250_dpm_throttle of the last step */
 	unsigned int	want;			/* what the load asked for in the last step */
 	unsigned int	raises, lowers, thermal_events;
+	struct bc250_dpm_tune tune;		/* the thresholds and floor in force; bc250_dpm_set_tune changes them */
+	unsigned int	floor_ticks;		/* steps in which the runtime floor lifted the request above want */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
+/* A checked tune replaces g->tune (the next step uses it); a refused one leaves it as it was. */
+enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t);
 /* One tick. Returns the level to apply; the caller applies it and reports with bc250_dpm_commit()
  * (success) or leaves g->level as it was (failure). Never returns above min(max_level, thermal_cap). */
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in);
