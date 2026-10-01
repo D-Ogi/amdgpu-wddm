@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -22,6 +23,29 @@ template <class T, class... A> T* make_new(A&&... args) noexcept {
     void* p = ::operator new(sizeof(T), std::nothrow);
     return p ? new (p) T{std::forward<A>(args)...} : nullptr;
 }
+
+// Room for count trivial T: N inline (no allocation), more on the heap. For the arrays the hot slots translate on
+// every call (resource_barrier, execute_command_lists); a std::vector there cost an operator new and a delete per
+// call (session 246: ~0.26 ms per frame of ResourceBarrier at preset LOW). The elements start uninitialized.
+template <class T, size_t N> class InlineArray {
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
+    T inline_[N];
+    T* heap_ = nullptr;
+
+public:
+    InlineArray() noexcept {}
+    InlineArray(const InlineArray&) = delete;
+    InlineArray& operator=(const InlineArray&) = delete;
+    ~InlineArray() { ::operator delete(heap_); }
+    // Room for count elements, once, before data(): false when count needs the heap and the heap has none.
+    bool reserve(size_t count) noexcept {
+        if (count <= N) return true;
+        if (count > SIZE_MAX / sizeof(T)) return false;
+        heap_ = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
+        return heap_ != nullptr;
+    }
+    T* data() noexcept { return heap_ ? heap_ : inline_; }
+};
 
 // ---- Release sequence (engine-ddi.h, "Release sequence of heap memory") -----------------------------------------
 // Engine queues of one device, at most. create_engine_queue refuses more with E_OUTOFMEMORY, as the engine does

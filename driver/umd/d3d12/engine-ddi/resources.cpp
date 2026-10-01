@@ -1061,10 +1061,8 @@ void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    std::vector<D3D12_RESOURCE_BARRIER> out;
-    try {
-        out.reserve(count);
-    } catch (...) {
+    InlineArray<D3D12_RESOURCE_BARRIER, 64> out;
+    if (!out.reserve(count)) {
         l->h.device->report_list(l->rt, E_OUTOFMEMORY);
         return;
     }
@@ -1116,9 +1114,9 @@ void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3
             l->h.device->report_list(l->rt, E_INVALIDARG);
             return;
         }
-        out.push_back(a);
+        out.data()[i] = a;
     }
-    if (!out.empty()) l->list()->ResourceBarrier(static_cast<UINT>(out.size()), out.data());
+    if (count) l->list()->ResourceBarrier(count, out.data());
 }
 } // namespace
 
