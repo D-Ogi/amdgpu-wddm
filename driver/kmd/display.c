@@ -628,7 +628,13 @@ static NTSTATUS OfferTargetMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK
     if (NT_SUCCESS(status))
     {
         status=FillSignalInfo(Device, &mode->VideoSignalInfo);
-        mode->Preference = D3DKMDT_MP_PREFERRED;
+        // From interface 2.2 the preference shares one word with the wire formats the target accepts, and a
+        // target mode must name at least one (186 named none: seven commits on the lab, all blank, no mode set).
+        // The inherited GOP signal is 8-bit RGB. No VRR range, so the minimum refresh (2.9) is the refresh itself.
+        mode->WireFormatAndPreference.Value = 0;
+        mode->WireFormatAndPreference.Preference = D3DKMDT_MP_PREFERRED;
+        mode->WireFormatAndPreference.Rgb = D3DKMDT_BITS_PER_COMPONENT_08;
+        mode->MinimumVSyncFreq = mode->VideoSignalInfo.VSyncFreq;
         if (NT_SUCCESS(status)) status = set->pfnAddMode(hSet, mode);
         if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(hSet, mode);
     }
