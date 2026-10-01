@@ -141,15 +141,16 @@ constexpr UINT64 kBoxOffset = 4096;
 constexpr UINT32 texel(UINT x, UINT y, UINT z) { return 0xC0000000u | (z << 16) | (y << 8) | x; }
 constexpr UINT32 kPad = 0xDEADBEEFu;
 
-HRESULT create_volume(Env& env, Device& device, Buffer& out) {
+HRESULT create_volume(Env& env, Device& device, DXGI_FORMAT format, UINT width, UINT height, UINT16 depth,
+                      Buffer& out) {
     out = Buffer{};
     D3D12DDIARG_CREATERESOURCE_0088 res{};
     res.ResourceType = D3D12DDI_RT_TEXTURE3D;
-    res.Width = kSliceW;
-    res.Height = kSliceH;
-    res.DepthOrArraySize = kSliceD;
+    res.Width = width;
+    res.Height = height;
+    res.DepthOrArraySize = depth;
     res.MipLevels = 1;
-    res.Format = DXGI_FORMAT_R32_UINT;
+    res.Format = format;
     res.SampleDesc = {1, 0};
     res.Layout = D3D12DDI_TL_UNDEFINED;
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
@@ -196,7 +197,7 @@ void test_copy_slices(Env& env, Device& device) {
     Buffer upload, readback, volume;
     const HRESULT hr_u = create_buffer(env, device, HeapKind::Upload, kUpBytes, false, upload);
     const HRESULT hr_r = create_buffer(env, device, HeapKind::Readback, kDownBytes, false, readback);
-    const HRESULT hr_v = create_volume(env, device, volume);
+    const HRESULT hr_v = create_volume(env, device, DXGI_FORMAT_R32_UINT, kSliceW, kSliceH, kSliceD, volume);
     checkf(hr_u == S_OK && hr_r == S_OK && hr_v == S_OK,
            "copy slices: UPLOAD and READBACK buffers and an R32_UINT %ux%ux%u volume (hr %08lx %08lx %08lx)", kSliceW,
            kSliceH, kSliceD, static_cast<unsigned long>(hr_u), static_cast<unsigned long>(hr_r),
@@ -269,6 +270,121 @@ void test_copy_slices(Env& env, Device& device) {
                        "copy slices: up (pitch %u) and down (pitch %u) every texel in place, slices 1-2 by box too, "
                        "padding untouched (%u, %u and %u words differ)",
                        kUpPitch, kDownPitch, bad_whole, bad_box, pad_hit);
+                env.core.pfnUnmapHeap(device.h(), readback.hheap());
+            }
+        }
+    }
+    destroy_recording(env, device, rec);
+    if (queue) engine_ddi::destroy_engine_queue(queue);
+    destroy_buffer(env, device, volume);
+    destroy_buffer(env, device, readback);
+    destroy_buffer(env, device, upload);
+}
+
+// A block-compressed volume through physical placements (273: The Ascent's BC1 32 x 32 x 32, pitch 256, slice pitch
+// 2048). The physical size is in texels and the slice pitch counts rows of blocks: an 8 x 8 x 3 BC1 volume has 2 x 2
+// blocks of 8 bytes a slice, so pitch 256 and slice pitch 512 is the derived layout (one engine copy) and 768 a padded
+// one (one copy a slice). Read in blocks as the shell once did, the same placement asked for a footprint of 32 x 32
+// and 2048 bytes a slice. Up with 512, down whole with 768 and again with 512; every block back in place.
+namespace {
+constexpr UINT kBcW = 8, kBcH = 8, kBcRows = kBcH / 4, kBcBlocks = kBcW / 4;
+constexpr UINT16 kBcD = 3;
+constexpr UINT kBcDerived = kBcRows * kRowPitch, kBcPadded = (kBcRows + 1) * kRowPitch;
+constexpr UINT32 bc_word(UINT bx, UINT by, UINT z, UINT half) {
+    return half ? ~(0xB1000000u | (z << 16) | (by << 8) | bx) : 0xB1000000u | (z << 16) | (by << 8) | bx;
+}
+
+UINT bc_mismatches(const UINT32* words, UINT pitch) {
+    UINT bad = 0;
+    for (UINT z = 0; z < kBcD; ++z)
+        for (UINT by = 0; by < kBcRows; ++by)
+            for (UINT bx = 0; bx < kBcBlocks; ++bx)
+                for (UINT half = 0; half < 2; ++half)
+                    bad += words[(z * pitch + by * kRowPitch + bx * 8) / 4 + half] != bc_word(bx, by, z, half) ? 1u
+                                                                                                             : 0u;
+    return bad;
+}
+} // namespace
+
+void test_copy_bc_volume(Env& env, Device& device) {
+    constexpr UINT64 kUpBytes = UINT64{kBcDerived} * kBcD, kDownBytes = 8192;
+    Buffer upload, readback, volume;
+    const HRESULT hr_u = create_buffer(env, device, HeapKind::Upload, kUpBytes, false, upload);
+    const HRESULT hr_r = create_buffer(env, device, HeapKind::Readback, kDownBytes, false, readback);
+    const HRESULT hr_v = create_volume(env, device, DXGI_FORMAT_BC1_UNORM, kBcW, kBcH, kBcD, volume);
+    checkf(hr_u == S_OK && hr_r == S_OK && hr_v == S_OK,
+           "copy BC volume: UPLOAD and READBACK buffers and a BC1 %ux%ux%u volume (hr %08lx %08lx %08lx)", kBcW, kBcH,
+           static_cast<unsigned>(kBcD), static_cast<unsigned long>(hr_u), static_cast<unsigned long>(hr_r),
+           static_cast<unsigned long>(hr_v));
+    engine_ddi::EngineQueue* queue = nullptr;
+    Recording rec;
+    if (hr_u == S_OK && hr_r == S_OK && hr_v == S_OK) {
+        void* cpu = nullptr;
+        HRESULT hr = env.core.pfnMapHeap(device.h(), upload.hheap(), &cpu);
+        checkf(hr == S_OK && cpu, "copy BC volume: MapHeap of the UPLOAD heap (hr %08lx)",
+               static_cast<unsigned long>(hr));
+        if (hr == S_OK && cpu) {
+            auto* words = static_cast<UINT32*>(cpu);
+            for (UINT i = 0; i < kUpBytes / 4; ++i) words[i] = kPad;
+            for (UINT z = 0; z < kBcD; ++z)
+                for (UINT by = 0; by < kBcRows; ++by)
+                    for (UINT bx = 0; bx < kBcBlocks; ++bx)
+                        for (UINT half = 0; half < 2; ++half)
+                            words[(z * kBcDerived + by * kRowPitch + bx * 8) / 4 + half] = bc_word(bx, by, z, half);
+            env.core.pfnUnmapHeap(device.h(), upload.hheap());
+        }
+        hr = env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu);
+        if (hr == S_OK && cpu) {
+            auto* words = static_cast<UINT32*>(cpu);
+            for (UINT i = 0; i < kDownBytes / 4; ++i) words[i] = kPad;
+            env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        }
+        BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+        hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
+        checkf(hr == S_OK && queue, "copy BC volume: create_engine_queue DIRECT (hr %08lx)",
+               static_cast<unsigned long>(hr));
+        if (hr == S_OK) hr = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec);
+        if (hr == S_OK) {
+            const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[rec.table];
+            const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT derived{DXGI_FORMAT_BC1_UNORM, kBcW, kBcH, kBcD,
+                                                                          kRowPitch, kBcDerived};
+            const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT padded{DXGI_FORMAT_BC1_UNORM, kBcW, kBcH, kBcD,
+                                                                         kRowPitch, kBcPadded};
+            const D3D12DDIARG_PLACED_RESOURCE subresource{D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr};
+            const D3D12DDIARG_BUFFER_PLACEMENT tex = placement(volume, 0), from = placement(upload, 0),
+                                               out = placement(readback, 0), out2 = placement(readback, kBoxOffset);
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 to_dest =
+                transition(volume, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST);
+            t.pfnResourceBarrier(rec.hlist(), 1, &to_dest);
+            t.pfnCopyTextureRegion(rec.hlist(), &tex, subresource, 0, 0, 0, &from,
+                                   {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &derived}, nullptr);
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
+                transition(volume, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &to_source);
+            t.pfnCopyTextureRegion(rec.hlist(), &out, {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &padded}, 0, 0,
+                                   0, &tex, subresource, nullptr);
+            t.pfnCopyTextureRegion(rec.hlist(), &out2, {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &derived}, 0,
+                                   0, 0, &tex, subresource, nullptr);
+            t.pfnCloseCommandList(rec.hlist());
+            const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
+            hr = engine_ddi::execute_command_lists(queue, 1, lists);
+            checkf(hr == S_OK && !device.shell.list_errors && !device.shell.device_errors,
+                   "copy BC volume: three BC1 CopyTextureRegion calls recorded and executed (hr %08lx, %u list errors, "
+                   "%u device errors)",
+                   static_cast<unsigned long>(hr), device.shell.list_errors, device.shell.device_errors);
+            if (hr == S_OK && wait_queue_idle(env, queue, "copy BC volume") &&
+                env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu) == S_OK && cpu) {
+                const auto* words = static_cast<const UINT32*>(cpu);
+                const UINT bad_padded = bc_mismatches(words, kBcPadded);
+                const UINT bad_derived = bc_mismatches(words + kBoxOffset / 4, kBcDerived);
+                UINT pad_hit = 0;   // the third row of every padded slice stays as written
+                for (UINT z = 0; z < kBcD; ++z)
+                    for (UINT i = kBcDerived; i < kBcPadded; i += 4)
+                        pad_hit += words[(z * kBcPadded + i) / 4] != kPad ? 1u : 0u;
+                checkf(bad_padded == 0 && bad_derived == 0 && pad_hit == 0,
+                       "copy BC volume: up (slice pitch %u) and down (%u and %u) every block in place, padding "
+                       "untouched (%u, %u and %u words differ)",
+                       kBcDerived, kBcPadded, kBcDerived, bad_padded, bad_derived, pad_hit);
                 env.core.pfnUnmapHeap(device.h(), readback.hheap());
             }
         }

@@ -966,10 +966,11 @@ UINT block_size(DXGI_FORMAT f) noexcept {
 // D3D12's placed footprint has no slice pitch: the engine derives it as the row pitch times the footprint's rows of
 // blocks. The runtime's pitched layouts do carry one, and a placement of several slices whose slice pitch differs
 // from the derived one cannot be stated as a footprint. Such a placement is answered with split_pitch = its slice
-// pitch, and copy_texture_region copies it one slice at a time, slice n at Offset + n x SlicePitch (272: The Ascent
-// lost its device to the E_NOTIMPL this slot answered for one, before any frame). A slice pitch below the derived
-// one would overlap the slices and stays refused. The first of each kind is logged on the debugger's output too (a
-// game's stderr goes nowhere): two lines a process at most.
+// pitch, and copy_texture_region copies it one slice at a time, slice n at Offset + n x SlicePitch. A slice pitch
+// below the derived one would overlap the slices and stays refused (272 and 273: The Ascent lost its device to that
+// E_NOTIMPL for a BC1 volume, the derived pitch taken from its texel height as if it counted rows of blocks). The
+// first of each kind is logged on the debugger's output too (a game's stderr goes nowhere): two lines a process at
+// most.
 HRESULT pitched_slices(const char* kind, DXGI_FORMAT format, UINT width, UINT height, UINT depth, UINT pitch,
                        UINT slice_pitch, UINT rows, UINT64& split_pitch) noexcept {
     const uint64_t derived = static_cast<uint64_t>(pitch) * rows;
@@ -1001,16 +1002,19 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
         out.SubresourceIndex = static_cast<UINT>(p->BaseAddress.UMD.Offset);
         return S_OK;
     case D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED: {
+        // The physical size is in texels, rounded up to whole blocks (d3d12umddi.h's "Block dimensions"), not in
+        // blocks: 273's BC1 volume came as 32 x 32 x 32, pitch 256, slice pitch 2048 = 8 rows of blocks, which only
+        // texels explain (32 blocks a row would need 32 rows, 8192 bytes a slice). Multiplied by the block size it
+        // was a footprint four times too wide and too high: clamped to the image in 2D, a fourfold slice pitch in 3D.
         const auto* f = static_cast<const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
         const UINT bs = block_size(f->Format);
         HRESULT hr = pitched_slices("physical", f->Format, f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth,
-                                    f->Pitch, f->SlicePitch, f->PhysicalHeight, split_pitch);
+                                    f->Pitch, f->SlicePitch, (f->PhysicalHeight + bs - 1) / bs, split_pitch);
         if (FAILED(hr)) return hr;
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
-        out.PlacedFootprint.Footprint = {f->Format, f->PhysicalWidth * bs, f->PhysicalHeight * bs, f->PhysicalDepth,
-                                         f->Pitch};
+        out.PlacedFootprint.Footprint = {f->Format, f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth, f->Pitch};
         return S_OK;
     }
     case D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED: {
