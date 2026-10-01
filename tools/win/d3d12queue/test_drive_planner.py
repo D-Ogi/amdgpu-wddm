@@ -284,6 +284,15 @@ class PlannerTests(unittest.TestCase):
         for seconds in (True, 0, 66, float("nan"), float("inf"), "60"):
             with self.assertRaises(ValueError):
                 drive_loop(lambda t: self.fail("unexpected poll"), None, None, seconds, FakeClock(), None)
+        # The long limit is opt-in and bounded: 66..120 only with limit=120, never above it.
+        for seconds in (121, 0):
+            with self.assertRaises(ValueError):
+                drive_loop(lambda t: self.fail("unexpected poll"), None, None, seconds, FakeClock(), None,
+                           limit=120)
+        for limit in (64, 121, True, 90.0):
+            with self.assertRaises(ValueError):
+                drive_loop(lambda t: self.fail("unexpected poll"), None, None, 60, FakeClock(), None,
+                           limit=limit)
 
 
 class PollRetryTests(unittest.TestCase):

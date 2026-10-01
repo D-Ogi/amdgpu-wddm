@@ -9,6 +9,10 @@ import re
 import subprocess
 
 DRIVE_PLAN = ('create-device', 'create-queue', 'copy', 'status', 'exit')
+# Host budget of one Drive. The long limit is for clients whose copy verb runs past 60 s (UploadRace pressure v4,
+# about 93 s); the task's own 180 s bound and the supervisor still close every trial.
+DRIVE_LIMIT = 65
+DRIVE_LIMIT_LONG = 120
 
 class DriveRefusal(Exception):
     """A bounded safe reason, never remote exception text or payload."""
@@ -177,8 +181,10 @@ class DriveState:
 CALL_SECONDS = 20
 
 
-def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None, *, retry_poll_timeout=False):
-    """Run callbacks within a 1..65s host budget; command delivery is never retried.
+def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None, *, retry_poll_timeout=False,
+               limit=DRIVE_LIMIT):
+    """Run callbacks within a 1..limit s host budget (65 s unless a long client opts into up to
+    DRIVE_LIMIT_LONG); command delivery is never retried.
 
     poll(timeout) returns a complete snapshot; issue(seq, verb, timeout) must
     enforce its timeout, recheck STOP and validate controller acknowledgement.
@@ -187,8 +193,10 @@ def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None, *, ret
     subprocess.TimeoutExpired from poll may be retried under the same deadline.
     Other callback failures stop this loop and never establish closure.
     """
-    if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 1 <= seconds <= 65:
-        raise ValueError('Drive deadline must be 1..65 seconds')
+    if type(limit) is not int or not DRIVE_LIMIT <= limit <= DRIVE_LIMIT_LONG:
+        raise ValueError('Drive limit must be %d..%d seconds' % (DRIVE_LIMIT, DRIVE_LIMIT_LONG))
+    if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 1 <= seconds <= limit:
+        raise ValueError('Drive deadline must be 1..%d seconds' % limit)
     if type(retry_poll_timeout) is not bool:
         raise ValueError('retry_poll_timeout must be bool')
     state=DriveState();started=clock();end=started+seconds;last_progress=None
