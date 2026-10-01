@@ -1,0 +1,1924 @@
+mf-encoder-survey.ps1  UTC 2026-10-01T12:12:08Z
+host BC250-A  user bc250  PS 5.1.22621.6133
+os   Microsoft Windows 11 Pro build 22631
+MFStartup -> 0x00000000
+
+==============================================================================
+category MFT_CATEGORY_VIDEO_ENCODER  {f79eac7d-e545-4387-bdee-d647d7bde42a}
+==============================================================================
+
+-- flags 0x00000004  HARDWARE only (what a hardware-encoder client looks for)  -> hr 0x00000000  count 0
+
+-- flags 0x00000002  ASYNCMFT (software async, V2)  -> hr 0x00000000  count 1
+   [0] name="Microsoft MPEG-2 Video Encoder MFT" clsid={e6335f02-80b7-4dc4-adfa-dfe7210d20d5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=96B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG-2 Video Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 96 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {e6335f02-80b7-4dc4-adfa-dfe7210d20d5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 2
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+
+-- flags 0x00000001  SYNCMFT (software sync, V1)  -> hr 0x00000000  count 7
+   [0] name="H264 Encoder MFT" clsid={6ca50344-051a-4ded-9779-a43305165e35}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H264 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {6ca50344-051a-4ded-9779-a43305165e35}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [1] name="WMVideo8 Encoder MFT" clsid={7e320092-596a-41b2-bbeb-175d10504eb6}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=448B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo8 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 448 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7e320092-596a-41b2-bbeb-175d10504eb6}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [2] name="H263 Encoder MFT" clsid={bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H263 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [3] name="WMVideo9 Encoder MFT" clsid={d23b90d0-144f-46bd-841d-59e4eb19dc59}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=480B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={1d4a45f2-e5f6-4b44-8388-f0ae5c0e0c37}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo9 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 480 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {d23b90d0-144f-46bd-841d-59e4eb19dc59}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [4] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={0dbecec1-9eb3-4860-9c6f-ddbe86634575}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {9f7b3530-a5af-4b12-b255-60ff2fdbe0e3}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFEncoder.CHEIFWICEncoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [5] name="HEVCVideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\mfH265Enc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {248df6e4-1c48-4846-887b-a2fd8931978f}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Encoder.CH265EncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [6] name="VP9VideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvpxenc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {b8f9230e-d514-4af8-81a3-7c046acb3dcb}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "VP9Encoder.CVPXEncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+
+-- flags 0x00000010  LOCALMFT  -> hr 0x00000000  count 7
+   [0] name="H264 Encoder MFT" clsid={6ca50344-051a-4ded-9779-a43305165e35}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H264 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {6ca50344-051a-4ded-9779-a43305165e35}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [1] name="WMVideo8 Encoder MFT" clsid={7e320092-596a-41b2-bbeb-175d10504eb6}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=448B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo8 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 448 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7e320092-596a-41b2-bbeb-175d10504eb6}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [2] name="H263 Encoder MFT" clsid={bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H263 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [3] name="WMVideo9 Encoder MFT" clsid={d23b90d0-144f-46bd-841d-59e4eb19dc59}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=480B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={1d4a45f2-e5f6-4b44-8388-f0ae5c0e0c37}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo9 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 480 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {d23b90d0-144f-46bd-841d-59e4eb19dc59}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [4] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={0dbecec1-9eb3-4860-9c6f-ddbe86634575}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {fdedb70a-a219-405a-8df3-2047120e6f09}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFEncoder.CHEIFWICEncoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [5] name="HEVCVideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\mfH265Enc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {26744dbb-c810-425e-82c8-46a7df3f883c}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Encoder.CH265EncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [6] name="VP9VideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvpxenc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {cde3d09f-b36f-4d1c-a736-1fd0bd5f83cd}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "VP9Encoder.CVPXEncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+
+-- flags 0x0000003F  ALL (SYNC|ASYNC|HARDWARE|FIELDOFUSE|LOCAL|TRANSCODE)  -> hr 0x00000000  count 8
+   [0] name="H264 Encoder MFT" clsid={6ca50344-051a-4ded-9779-a43305165e35}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H264 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {6ca50344-051a-4ded-9779-a43305165e35}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [1] name="WMVideo8 Encoder MFT" clsid={7e320092-596a-41b2-bbeb-175d10504eb6}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=448B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo8 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 448 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7e320092-596a-41b2-bbeb-175d10504eb6}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [2] name="H263 Encoder MFT" clsid={bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H263 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [3] name="WMVideo9 Encoder MFT" clsid={d23b90d0-144f-46bd-841d-59e4eb19dc59}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=480B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={1d4a45f2-e5f6-4b44-8388-f0ae5c0e0c37}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo9 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 480 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {d23b90d0-144f-46bd-841d-59e4eb19dc59}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [4] name="Microsoft MPEG-2 Video Encoder MFT" clsid={e6335f02-80b7-4dc4-adfa-dfe7210d20d5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=96B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG-2 Video Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 96 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {e6335f02-80b7-4dc4-adfa-dfe7210d20d5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 2
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [5] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={0dbecec1-9eb3-4860-9c6f-ddbe86634575}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {1bb09a41-926b-4fda-ac14-9abd5fe86d36}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFEncoder.CHEIFWICEncoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [6] name="HEVCVideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\mfH265Enc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {d1945507-ec3b-44be-862e-ef78bd0ee4da}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Encoder.CH265EncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [7] name="VP9VideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvpxenc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {91f75c0c-9d2c-4ff0-bbbb-f39f614f2622}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "VP9Encoder.CVPXEncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+
+-- flags 0x0000007F  ALL | SORTANDFILTER  -> hr 0x00000000  count 8
+   [0] name="VP9VideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvpxenc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {a508a5e8-20c8-409a-aa3a-78a82b1daf94}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "VP9Encoder.CVPXEncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [1] name="HEVCVideoExtensionEncoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtensionEncoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\mfH265Enc.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {e19e1785-c4dc-4e36-93a0-8d4147eade0e}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Encoder.CH265EncoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [2] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={0dbecec1-9eb3-4860-9c6f-ddbe86634575}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {2c4967ff-641a-43c1-8987-20f073736b87}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFEncoder.CHEIFWICEncoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [3] name="H264 Encoder MFT" clsid={6ca50344-051a-4ded-9779-a43305165e35}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H264 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {6ca50344-051a-4ded-9779-a43305165e35}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [4] name="WMVideo8 Encoder MFT" clsid={7e320092-596a-41b2-bbeb-175d10504eb6}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=448B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo8 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 448 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7e320092-596a-41b2-bbeb-175d10504eb6}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [5] name="H263 Encoder MFT" clsid={bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "H263 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {bc47fcfe-98a0-4f27-bb07-698af24f2b38}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [6] name="WMVideo9 Encoder MFT" clsid={d23b90d0-144f-46bd-841d-59e4eb19dc59}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=480B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={39555659-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={1d4a45f2-e5f6-4b44-8388-f0ae5c0e0c37}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo9 Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 480 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {d23b90d0-144f-46bd-841d-59e4eb19dc59}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+   [7] name="Microsoft MPEG-2 Video Encoder MFT" clsid={e6335f02-80b7-4dc4-adfa-dfe7210d20d5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=96B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG-2 Video Encoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 96 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {e6335f02-80b7-4dc4-adfa-dfe7210d20d5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 2
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {f79eac7d-e545-4387-bdee-d647d7bde42a}
+
+==============================================================================
+category MFT_CATEGORY_VIDEO_DECODER  {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+==============================================================================
+
+-- flags 0x00000004  HARDWARE only (what a hardware-encoder client looks for)  -> hr 0x00000000  count 0
+
+-- flags 0x00000002  ASYNCMFT (software async, V2)  -> hr 0x00000000  count 0
+
+-- flags 0x00000001  SYNCMFT (software sync, V1)  -> hr 0x00000000  count 14
+   [0] name="Microsoft MPEG Video Decoder MFT" clsid={2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3147504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [1] name="DV Decoder MFT" clsid={404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={20637664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64687664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64737664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={6c737664-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "DV Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [2] name="Mpeg4s Decoder MFT" clsid={5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=224B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5334504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3273346d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253344d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5634504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7634706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4s Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 224 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [3] name="Microsoft H264 Video Decoder MFT" clsid={62ce7e72-4c71-4d20-b15d-452831a87d9d}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3f40f4f0-5622-4ff8-b6d8-a17a584bee5e}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft H264 Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {62ce7e72-4c71-4d20-b15d-452831a87d9d}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [4] name="WMV Screen decoder MFT" clsid={7bafb3b1-d8f4-4279-9253-27da423108de}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=192B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3153534d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253534d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000015-3274-11d0-b724-00aa006c1a01}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMV Screen decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7bafb3b1-d8f4-4279-9253-27da423108de}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 192 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [5] name="WMVideo Decoder MFT" clsid={82d353df-90bd-4382-8bc2-3f6192b76e34}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=288B outTypes=352B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={52564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53314356-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 288 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {82d353df-90bd-4382-8bc2-3f6192b76e34}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 352 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [6] name="MJPEG Decoder MFT" clsid={cb17e772-e1cc-4633-8450-5617af577905}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={47504a4d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "MJPEG Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cb17e772-e1cc-4633-8450-5617af577905}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [7] name="Mpeg43 Decoder MFT" clsid={cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg43 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [8] name="Mpeg4 Decoder MFT" clsid={f371728a-6052-4d47-827c-d039335dfe0a}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3447504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3467706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {f371728a-6052-4d47-827c-d039335dfe0a}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [9] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e9a4a80a-44fe-4de4-8971-7150b10a5199}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {2d39505e-9e26-4897-abae-b3e551aa1349}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFDecoder.CHEIFWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [10] name="RawImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41945702-8302-44a6-9445-ac98e8afa086}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000003-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "RawImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe\x64\msRAWImage_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.RawImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {ab32ec65-6b0e-4876-8581-3aa2f2873e2d}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "RAWDecoder.CRAWWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [11] name="HEVCVideoExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=224B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53564548-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555941-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313259-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\HEVCDECODER_STORE.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 224 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {dccb1bad-9b28-41a4-8145-e2bda4f1fcb5}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Decoder.CH265DecoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [12] name="WebpImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7693e886-51c9-4070-8419-9f70738ec8fa}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WebpImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe\x64\mswebp_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.WebpImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {a495fc01-4f1d-425b-a23c-3d82709692db}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebpDecoder.CWebpWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [13] name="VP9VideoExtensionDecoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=128B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionDecoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvp9dec_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 128 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {c093232d-4e0b-43ff-a6d7-d4ab511b8a1d}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebmMfVp8DecLib.MSMfVp9Dec"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+
+-- flags 0x00000010  LOCALMFT  -> hr 0x00000000  count 14
+   [0] name="Microsoft MPEG Video Decoder MFT" clsid={2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3147504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [1] name="DV Decoder MFT" clsid={404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={20637664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64687664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64737664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={6c737664-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "DV Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [2] name="Mpeg4s Decoder MFT" clsid={5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=224B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5334504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3273346d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253344d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5634504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7634706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4s Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 224 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [3] name="Microsoft H264 Video Decoder MFT" clsid={62ce7e72-4c71-4d20-b15d-452831a87d9d}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3f40f4f0-5622-4ff8-b6d8-a17a584bee5e}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft H264 Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {62ce7e72-4c71-4d20-b15d-452831a87d9d}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [4] name="WMV Screen decoder MFT" clsid={7bafb3b1-d8f4-4279-9253-27da423108de}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=192B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3153534d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253534d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000015-3274-11d0-b724-00aa006c1a01}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMV Screen decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7bafb3b1-d8f4-4279-9253-27da423108de}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 192 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [5] name="WMVideo Decoder MFT" clsid={82d353df-90bd-4382-8bc2-3f6192b76e34}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=288B outTypes=352B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={52564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53314356-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 288 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {82d353df-90bd-4382-8bc2-3f6192b76e34}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 352 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [6] name="MJPEG Decoder MFT" clsid={cb17e772-e1cc-4633-8450-5617af577905}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={47504a4d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "MJPEG Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cb17e772-e1cc-4633-8450-5617af577905}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [7] name="Mpeg43 Decoder MFT" clsid={cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg43 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [8] name="Mpeg4 Decoder MFT" clsid={f371728a-6052-4d47-827c-d039335dfe0a}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3447504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3467706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {f371728a-6052-4d47-827c-d039335dfe0a}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [9] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e9a4a80a-44fe-4de4-8971-7150b10a5199}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {a62b7976-bbe2-4ecd-aa22-de29d5367f76}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFDecoder.CHEIFWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [10] name="RawImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41945702-8302-44a6-9445-ac98e8afa086}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000003-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "RawImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe\x64\msRAWImage_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.RawImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {de5f3423-43e8-4075-933c-1cf365d6deba}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "RAWDecoder.CRAWWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [11] name="HEVCVideoExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=224B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53564548-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555941-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313259-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\HEVCDECODER_STORE.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 224 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {7726c029-e10d-4c17-89b2-e0ba934bf747}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Decoder.CH265DecoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [12] name="WebpImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7693e886-51c9-4070-8419-9f70738ec8fa}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WebpImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe\x64\mswebp_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.WebpImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {b33a070b-fb7a-4f1c-9351-0389f69d62b6}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebpDecoder.CWebpWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [13] name="VP9VideoExtensionDecoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=128B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionDecoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvp9dec_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 128 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {3da18016-0742-4896-8834-27b514a6003a}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebmMfVp8DecLib.MSMfVp9Dec"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+
+-- flags 0x0000003F  ALL (SYNC|ASYNC|HARDWARE|FIELDOFUSE|LOCAL|TRANSCODE)  -> hr 0x00000000  count 14
+   [0] name="Microsoft MPEG Video Decoder MFT" clsid={2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3147504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [1] name="DV Decoder MFT" clsid={404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={20637664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64687664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64737664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={6c737664-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "DV Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [2] name="Mpeg4s Decoder MFT" clsid={5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=224B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5334504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3273346d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253344d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5634504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7634706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4s Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 224 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [3] name="Microsoft H264 Video Decoder MFT" clsid={62ce7e72-4c71-4d20-b15d-452831a87d9d}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3f40f4f0-5622-4ff8-b6d8-a17a584bee5e}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft H264 Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {62ce7e72-4c71-4d20-b15d-452831a87d9d}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [4] name="WMV Screen decoder MFT" clsid={7bafb3b1-d8f4-4279-9253-27da423108de}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=192B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3153534d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253534d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000015-3274-11d0-b724-00aa006c1a01}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMV Screen decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7bafb3b1-d8f4-4279-9253-27da423108de}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 192 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [5] name="WMVideo Decoder MFT" clsid={82d353df-90bd-4382-8bc2-3f6192b76e34}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=288B outTypes=352B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={52564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53314356-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 288 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {82d353df-90bd-4382-8bc2-3f6192b76e34}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 352 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [6] name="MJPEG Decoder MFT" clsid={cb17e772-e1cc-4633-8450-5617af577905}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={47504a4d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "MJPEG Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cb17e772-e1cc-4633-8450-5617af577905}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [7] name="Mpeg43 Decoder MFT" clsid={cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg43 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [8] name="Mpeg4 Decoder MFT" clsid={f371728a-6052-4d47-827c-d039335dfe0a}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3447504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3467706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {f371728a-6052-4d47-827c-d039335dfe0a}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [9] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e9a4a80a-44fe-4de4-8971-7150b10a5199}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {8761b2cf-0f03-452c-9b7e-efac68492960}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFDecoder.CHEIFWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [10] name="RawImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41945702-8302-44a6-9445-ac98e8afa086}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000003-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "RawImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe\x64\msRAWImage_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.RawImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {6051a3cb-b16c-4d48-9341-597c3f2840cb}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "RAWDecoder.CRAWWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [11] name="HEVCVideoExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=224B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53564548-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555941-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313259-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\HEVCDECODER_STORE.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 224 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {818950ac-378d-4fd9-8141-75733ee9280d}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Decoder.CH265DecoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [12] name="WebpImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7693e886-51c9-4070-8419-9f70738ec8fa}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WebpImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe\x64\mswebp_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.WebpImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {5fe5f4f3-204a-46ea-8756-9a6a0cc83157}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebpDecoder.CWebpWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [13] name="VP9VideoExtensionDecoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=128B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionDecoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvp9dec_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 128 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {932b6a92-f47d-4466-881b-c546c13bc60f}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebmMfVp8DecLib.MSMfVp9Dec"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+
+-- flags 0x0000007F  ALL | SORTANDFILTER  -> hr 0x00000000  count 14
+   [0] name="VP9VideoExtensionDecoder" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=128B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30385056-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={30395056-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "VP9VideoExtensionDecoder"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe\x64\msvp9dec_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 128 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.VP9VideoExtensions_1.2.20.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {c0fedc49-8cb9-48a6-b7c9-24780e073ce5}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebmMfVp8DecLib.MSMfVp9Dec"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [1] name="WebpImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7693e886-51c9-4070-8419-9f70738ec8fa}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WebpImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe\x64\mswebp_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.WebpImageExtension_1.2.31.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.WebpImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {5b9b834b-51a7-46e9-bb32-b598363ac0d9}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "WebpDecoder.CWebpWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [2] name="HEVCVideoExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=224B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={43564548-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53564548-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={4f303234-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555941-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313259-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEVCVideoExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe\x64\HEVCDECODER_STORE.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 224 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEVCVideoExtension_2.4.109.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {ccf59a48-38a0-4535-9d84-da34a81d07ed}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "H265Decoder.CH265DecoderTransform"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 1
+   [3] name="RawImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41945702-8302-44a6-9445-ac98e8afa086}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000003-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "RawImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe\x64\msRAWImage_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.RawImageExtension_2.5.35.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.RawImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {3d8d984e-09c6-4da8-b618-d90ef8fa9bee}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "RAWDecoder.CRAWWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [4] name="HEIFImageExtension" clsid=
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e9a4a80a-44fe-4de4-8971-7150b10a5199}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30313050-0000-0010-8000-00aa00389b71}
+        attributes: 14
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "HEIFImageExtension"
+          {3c0fbe52-d034-4115-995d-95b356b9855c} UINT32   ? = 1
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {7347c815-79fc-4ad9-877d-acdf5f46685e} STRING   ? = "C:\Program Files\WindowsApps\Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe\x64\msheif_store.dll"
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {957193ad-9029-4835-a2f2-3ec9ae9bb6c8} STRING   ? = "Microsoft.HEIFImageExtension_1.2.48.0_x64__8wekyb3d8bbwe"
+          {9d8b61a8-6bc8-4bff-b31f-3a31060afa3d} STRING   ? = "Microsoft.HEIFImageExtension_8wekyb3d8bbwe"
+          {bb49bc51-1810-4c3a-a9cf-d59c4e5b9622} GUID     ? = {b1427fe4-761b-47c6-8e81-47a308d9d587}
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+          {de106d30-42fb-4767-808d-0fcc6811b0b9} STRING   ? = "HEIFDecoder.CHEIFWICDecoder"
+          {e626cad1-767f-4e4c-a24c-08bc51b77021} STRING   ? = "x64"
+          {f9542f80-d069-4efe-b30d-345536f76aaa} UINT32   ? = 0
+          {f9a1ef38-f61e-42e6-87b3-309438f9ac67} UINT32   ? = 0
+   [5] name="Microsoft MPEG Video Decoder MFT" clsid={2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={e06d8026-db46-11cf-b4d1-00805f6cbbea}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3147504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft MPEG Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {2d709e52-123f-49b5-9cbc-9af5cde28fb9}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [6] name="DV Decoder MFT" clsid={404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=32B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={20637664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64687664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={64737664-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={6c737664-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "DV Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {404a6de5-d4d6-4260-9bc7-5a6cbd882432}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 32 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [7] name="Mpeg4s Decoder MFT" clsid={5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=224B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5334504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3273346d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253344d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={5634504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={7634706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33363248-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4s Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 224 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {5686a0d9-fe39-409f-9dff-3fdbc849f9f5}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [8] name="Microsoft H264 Video Decoder MFT" clsid={62ce7e72-4c71-4d20-b15d-452831a87d9d}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=160B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={34363248-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3f40f4f0-5622-4ff8-b6d8-a17a584bee5e}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={56555949-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={30323449-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Microsoft H264 Video Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {62ce7e72-4c71-4d20-b15d-452831a87d9d}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 160 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [9] name="WMV Screen decoder MFT" clsid={7bafb3b1-d8f4-4279-9253-27da423108de}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=192B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3153534d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3253534d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000015-3274-11d0-b724-00aa006c1a01}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMV Screen decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {7bafb3b1-d8f4-4279-9253-27da423108de}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 192 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [10] name="WMVideo Decoder MFT" clsid={82d353df-90bd-4382-8bc2-3f6192b76e34}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=288B outTypes=352B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={33564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={50564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={32505657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={52564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={41564d57-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={31435657-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={53314356-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32315659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "WMVideo Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 288 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {82d353df-90bd-4382-8bc2-3f6192b76e34}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 352 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [11] name="MJPEG Decoder MFT" clsid={cb17e772-e1cc-4633-8450-5617af577905}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=32B outTypes=64B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={47504a4d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3231564e-0000-0010-8000-00aa00389b71}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "MJPEG Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 32 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cb17e772-e1cc-4633-8450-5617af577905}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 64 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [12] name="Mpeg43 Decoder MFT" clsid={cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=64B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3334504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg43 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 64 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {cba9e78b-49a3-49ea-93d4-6bcba8c4de07}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+   [13] name="Mpeg4 Decoder MFT" clsid={f371728a-6052-4d47-827c-d039335dfe0a}
+        hwUrl= hwVendor= async= d3d11= d3d12=
+        inTypes=128B outTypes=288B  (each MFT_REGISTER_TYPE_INFO is 2 GUIDs = 32 B)
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3447504d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3467706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234706d-0000-0010-8000-00aa00389b71}
+          in  major={73646976-0000-0010-8000-00aa00389b71} subtype={3234504d-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={32595559-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={59565955-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={55595659-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={3131564e-0000-0010-8000-00aa00389b71}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000016-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000014-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000017-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000018-524f-11ce-9f53-0020af0ba770}
+          out major={73646976-0000-0010-8000-00aa00389b71} subtype={00000029-524f-11ce-9f53-0020af0ba770}
+        attributes: 6
+          {314ffbae-5b41-4c95-9c19-4e7d586face3} STRING   MFT_FRIENDLY_NAME_Attribute = "Mpeg4 Decoder MFT"
+          {4276c9b1-759d-4bf3-9cd0-0d723d138f96} BLOB     MFT_INPUT_TYPES_Attributes = <blob 128 B>
+          {6821c42b-65a4-4e82-99bc-9a88205ecd0c} GUID     MFT_TRANSFORM_CLSID_Attribute = {f371728a-6052-4d47-827c-d039335dfe0a}
+          {8eae8cf3-a44f-4306-ba5c-bf5dda242818} BLOB     MFT_OUTPUT_TYPES_Attributes = <blob 288 B>
+          {9359bb7e-6275-46c4-a025-1c01e45f1a86} UINT32   ? = 1
+          {ceabba49-506d-4757-a6ff-66c184987e4e} GUID     ? = {d6c02d4b-6833-45b4-971a-05a4b04bab91}
+
+==============================================================================
+registry: Media Foundation hardware-MFT gates (read-only)
+==============================================================================
+-- HKLM:\SOFTWARE\Microsoft\Windows Media Foundation\HardwareMFT
+
+-- HKLM:\SOFTWARE\Microsoft\Windows Media Foundation\Platform
+
+-- HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows Media Foundation\HardwareMFT
+
+
+==============================================================================
+registry: Game DVR / Game Bar policy and settings (read-only)
+==============================================================================
+-- HKCU:\System\GameConfigStore
+
+
+GameDVR_Enabled                       : 1
+GameDVR_FSEBehaviorMode               : 0
+Win32_AutoGameModeDefaultProfile      : {1, 0, 1, 0...}
+Win32_GameModeRelatedProcesses        : {1, 0, 0, 0...}
+GameDVR_HonorUserFSEBehaviorMode      : 0
+GameDVR_DXGIHonorFSEWindowsCompatible : 0
+GameDVR_EFSEFeatureFlags              : 0
+PSPath                                : Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\Syst
+                                        em\GameConfigStore
+PSParentPath                          : Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\Syst
+                                        em
+PSChildName                           : GameConfigStore
+PSDrive                               : HKCU
+PSProvider                            : Microsoft.PowerShell.Core\Registry
+
+
+
+
+-- HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR
+
+
+KGLToGCSUpdatedRevision : 2691
+KGLRevision             : 2691
+LastGameActivity        : <redacted>
+PSPath                  : Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft
+                          \Windows\CurrentVersion\GameDVR
+PSParentPath            : Microsoft.PowerShell.Core\Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft
+                          \Windows\CurrentVersion
+PSChildName             : GameDVR
+PSDrive                 : HKCU
+PSProvider              : Microsoft.PowerShell.Core\Registry
+
+
+
+
+-- HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR
+   (absent)
+-- HKLM:\SOFTWARE\Microsoft\PolicyManager\default\ApplicationManagement\AllowGameDVR
+
+
+Behavior               : 73760
+GPBlockingRegKeyPath   : Software\Policies\Microsoft\Windows\GameDVR
+GPBlockingRegValueName : AllowGameDVR
+highrange              : 1
+lowrange               : 0
+mergealgorithm         : 1
+policytype             : 4
+value                  : 1
+PSPath                 : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft
+                         \PolicyManager\default\ApplicationManagement\AllowGameDVR
+PSParentPath           : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft
+                         \PolicyManager\default\ApplicationManagement
+PSChildName            : AllowGameDVR
+PSDrive                : HKLM
+PSProvider             : Microsoft.PowerShell.Core\Registry
+
+
+
+
+
+==============================================================================
+registry: video-encoder MFTs the system has registered (read-only)
+==============================================================================
+   (category key absent)
+
+==============================================================================
+adapters and our driver (read-only)
+==============================================================================
+
+
+Name           : BC-250 GPU (bc250kmd, display-only, lab build)
+PNPDeviceID    : PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\<instance redacted>
+DriverVersion  : 0.7.193.1
+DriverDate     : 10/1/2026 2:00:00 AM
+AdapterRAM     : 
+VideoProcessor : 
+
+
+
+
+
+==============================================================================
+mfplat / inbox encoder binaries present (read-only)
+==============================================================================
+   mfplat.dll               present  10.0.22621.1 (WinBuild.160101.0800)
+   mfh264enc.dll            present  10.0.22621.6133 (WinBuild.160101.0800)
+   mfh263enc.dll            present  10.0.22621.1 (WinBuild.160101.0800)
+   msmpeg2enc.dll           present  10.0.22621.1 (WinBuild.160101.0800)
+   mfx_mft_h264ve_64.dll    absent
+   amfrt64.dll              absent
+   nvEncodeAPI64.dll        absent
+
+done (no object activated, no value written)
