@@ -15,6 +15,7 @@
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 typedef int BOOLEAN, NTSTATUS, KIRQL, KDPC, FAST_MUTEX;
 typedef unsigned int UINT, ULONG;
+typedef unsigned long long ULONG_PTR;       /* x64; the submit path takes a context pointer as a value */
 typedef long LONG;
 typedef unsigned long long ULONGLONG;
 typedef long long LONGLONG;
@@ -30,9 +31,14 @@ typedef struct {
     ULONGLONG HwEpoch;
     struct { ULONGLONG Epoch; } FenceLedger[2];
     LONG HwCompleted,HwSubmitted,HwRefused,HwTimeouts;
+    LONG FaultSnapshots;                /* KMD193: register snapshots taken by the watchdog */
 } BC250_WDDM;
 typedef struct { void* Wddm; } BC250_DEVICE;
-typedef struct { ULONGLONG RootPhysical; } BC250_WDDM_OBJECT;
+/* KMD193: the identity WddmSubmitHardware copies into gfx.c's call and into the queue entry. */
+typedef struct { ULONGLONG RootPhysical; ULONG CreatorProcessId; BOOLEAN UmdContext, SystemContext; } BC250_WDDM_OBJECT;
+typedef struct { ULONGLONG Context; ULONG ProcessId, ContextFlags, Fence, Node; } BC250_GFX_SUBMIT_IDENTITY;
+#define BC250_PJ_CTX_UMD 1u
+#define BC250_PJ_CTX_SYSTEM 2u
 static ULONGLONG mock_now;
 #ifdef NO_RECOVERY_LEDGER
 #define EXPECT_LEDGER(v) 1
@@ -53,6 +59,12 @@ static void KeSetTimer(int* t,LARGE_INTEGER d,int* p) { (void)t; (void)p; timer=
 static void KeCancelTimer(int* t) { (void)t; timer=0; }
 static LONG InterlockedIncrement(LONG* n) { return ++*n; }
 static void GuardLog(const char* fmt,...) { (void)fmt; }
+/* hang.c's progress recorders: interlocked stores with no effect on the control flow under test. The watchdog
+ * DPC has been wrapped in them since KMD172; this harness never declared them, which the Mesa half of the
+ * generator hid by failing first. */
+#define ProgressSiteSubmitWatchdogDpc 0
+#define ProgressEnter(site) ((void)(site))
+#define ProgressExit(site,value) ((void)(site),(void)(value))
 static int GfxFenceArrived(BC250_DEVICE* d,ULONG v) { (void)d; return bc250_fence_reached(completed,v); }
 static void GfxSubmitFail(BC250_DEVICE* d) { (void)d; ++failures; }
 #ifndef NO_RECOVERY_LEDGER
@@ -61,8 +73,15 @@ static void WddmRecordFenceLedgerLocked(BC250_WDDM* w,UINT n,ULONGLONG e,UINT f,
 #endif
 static void WddmRecordCompletionLocked(BC250_WDDM* w,UINT f,UINT n) { (void)w; (void)n; reported=f; }
 static void WddmQueueReport(BC250_WDDM* w) { (void)w; ++reports; }
-static NTSTATUS GfxSubmitIb(BC250_DEVICE* d,ULONG v,ULONGLONG root,ULONGLONG va,ULONG bytes,ULONG* s)
-{ (void)d; (void)v; (void)root; (void)va; (void)bytes; if(refuse || (root_wait && completed != mock_seq))return STATUS_DEVICE_BUSY; *s=++mock_seq; ++dispatches; return 0; }
+static BC250_GFX_SUBMIT_IDENTITY last_identity;
+static NTSTATUS GfxSubmitIb(BC250_DEVICE* d,ULONG v,ULONGLONG root,ULONGLONG va,ULONG bytes,
+                            const BC250_GFX_SUBMIT_IDENTITY* id,ULONG* s)
+{ (void)d; (void)v; (void)root; (void)va; (void)bytes; CHECK(id!=0); if(id) last_identity=*id;
+  if(refuse || (root_wait && completed != mock_seq))return STATUS_DEVICE_BUSY; *s=++mock_seq; ++dispatches; return 0; }
+/* The timeout register snapshot is defined above the extracted region in wddm.c: modeled, and counted. */
+static unsigned int snapshots;
+static void WddmTimeoutSnapshot(const BC250_DEVICE* d,ULONG seq,UINT fence,UINT node)
+{ (void)d; (void)seq; (void)fence; (void)node; ++snapshots; }
 static int GfxSubmitReady(BC250_DEVICE* d) { (void)d; return armed && completed==mock_seq; }
 static int GfxSubmitBusy(BC250_DEVICE* d) { (void)d; return armed && completed!=mock_seq; }
 static void KeDelayExecutionThread(int mode,int alert,LARGE_INTEGER* tick)
@@ -74,11 +93,17 @@ static void KeDelayExecutionThread(int mode,int alert,LARGE_INTEGER* tick)
 #include "gfx_pipeline_actual.inc"
 int main(void)
 {
-    BC250_WDDM w={0}; BC250_DEVICE d={&w}; BC250_WDDM_OBJECT c={0x1000};
+    BC250_WDDM w={0}; BC250_DEVICE d={&w}; BC250_WDDM_OBJECT c={0x1000,4242,TRUE,FALSE};
     unsigned int i;
     w.FenceLedger[0].Epoch=1; mock_now=100;
     for(i=1;i<=7;i++) CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,i,0));
     CHECK(w.GfxPending.Count==7 && w.HwFence==1 && w.HwPending && dispatches==7);
+    /* KMD193: gfx.c is told who submitted, and the queue entry keeps it for the watchdog and for a dump. */
+    CHECK(last_identity.Context!=0 && last_identity.ProcessId==4242);
+    CHECK(last_identity.ContextFlags==BC250_PJ_CTX_UMD && last_identity.Fence==7 && last_identity.Node==0);
+    CHECK(w.GfxPending.Items[w.GfxPending.Head].ProcessId==4242);
+    CHECK(w.GfxPending.Items[w.GfxPending.Head].ContextFlags==BC250_PJ_CTX_UMD);
+    CHECK(w.GfxPending.Items[w.GfxPending.Head].Context==last_identity.Context);
     CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,8,0));
     CHECK(dispatches==7 && reported==0 && ledger==0);
     completed=2; WddmGpuFence(&d); // coalesced interrupt must retire both 1 and 2
@@ -100,6 +125,7 @@ int main(void)
     mock_now=6000000; CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,10,0));
     mock_now+=5000000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
     CHECK(failures==1 && reported==9 && w.HwPending && w.WatchdogFaulted[0]);
+    CHECK(snapshots==1);    /* KMD193: one register snapshot per timeout, no more */
     CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,11,0));
     CHECK(reported==9);
     // Recovery epoch mismatch may not retire stale hardware work.

@@ -54,6 +54,7 @@ static void ClearAlloc(struct umd_alloc_view* out)
     out->requested_va = 0;
     out->heap = 0;
     out->flags = 0;
+    out->version = 0;
     out->exact_va = 0;
     out->gem_flags = 0;
     out->cache_policy_valid = 0;
@@ -110,6 +111,7 @@ int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* ou
         out->requested_va = requested;
         out->heap = heap;
         out->flags = flags;
+        out->version = version;
         out->gem_flags = Rd64(p + 40);
         out->cache_policy_valid = version >= 2;
         out->exact_va = (flags & UMD_BLOB_A_EXACT_VA) != 0;

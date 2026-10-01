@@ -21,6 +21,8 @@
 #include "paging_drain.h"
 #include "object_index.h"
 #include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
+#include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
+#include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
 #include <ntstrsafe.h>
 
 #define BC250_WDDM_TAG 'wW2B'
@@ -191,6 +193,12 @@ typedef struct _BC250_WDDM_OBJECT {
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
     ULONGLONG UmdRequestedVa;
+    // KMD193 (bsod-245 items 3 and 4): identity the journal records of this object's destroy and of every job
+    // submitted on it would otherwise not have. Values only, taken at CreateAllocation/CreateContext; a dump
+    // reader reads them out of the journal, never out of the object, which may be freed by then.
+    unsigned long UmdBlobVersion;       // allocations: the BC2A version word (0 = not a UMD allocation)
+    ULONGLONG UmdGemFlags;              // allocations: the BC2A gem_flags
+    unsigned long CreatorProcessId;     // allocations and contexts: PsGetCurrentProcessId at creation
     volatile LONG InteropUser;          // devices: 1 once an interop Blt present of it was counted (interop.c)
 } BC250_WDDM_OBJECT;
 
@@ -362,6 +370,8 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
     volatile LONG UmdContexts;
+    volatile LONG ContextsLogged;       // KMD193: the capped "context %p pid ..." identity line, every kind
+    volatile LONG FaultSnapshots;       // KMD193: HARDWARE FENCE TIMEOUT register snapshots taken
     volatile LONG UmdSubmitHw;
     volatile LONG UmdSubmitSoft;
     BOOLEAN TraceUmdProbes;             // diagnostic reads only; no synchronization policy
@@ -834,6 +844,62 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
     if (first) GuardLog("wddm: fence %u node %u NOT dispatched; node closed, no completion, recovery required",FenceId,Node);
 }
 
+// KMD193 (bsod-245 item 2): what the CP and the GCVM fault latch held when the 500 ms watchdog gave up. In 245
+// the ring, the IB1 address and the fault page all came out of the dump afterwards; none of it was in the live
+// log, and there is no dump when the machine survives the TDR. Read-only, at DISPATCH_LEVEL in the watchdog
+// DPC, outside wddm->Lock, once per timeout.
+//
+// Two honest limits of these reads, stated here so that nobody reads the line as more than it is:
+//   - GRBM_STATUS_SE0 and the CP_IB*/CP_STAT family are banked by GRBM_GFX_INDEX, which this driver must not
+//     write (no new register writes): they are whatever bank was selected last, which on the submit path is
+//     the one the shim left behind.
+//   - CP_IB1/CP_IB2 are the command processor's live fetch registers, so they describe where the CP is now,
+//     not necessarily the timed-out job; the journal's BC250_PJ_GFX_SUBMIT record is what names the job.
+static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT Fence, UINT Node)
+{
+    static const struct { const char* Name; ULONG Offset; } registers[] = {
+        { "CP_RB0_RPTR", BC250_REG_GC_CP_RB0_RPTR }, { "CP_RB0_WPTR", BC250_REG_GC_CP_RB0_WPTR },
+        { "CP_IB1_BASE_LO", BC250_REG_GC_CP_IB1_BASE_LO }, { "CP_IB1_BASE_HI", BC250_REG_GC_CP_IB1_BASE_HI },
+        { "CP_IB1_BUFSZ", BC250_REG_GC_CP_IB1_BUFSZ },
+        { "CP_IB2_BASE_LO", BC250_REG_GC_CP_IB2_BASE_LO }, { "CP_IB2_BASE_HI", BC250_REG_GC_CP_IB2_BASE_HI },
+        { "CP_IB2_BUFSZ", BC250_REG_GC_CP_IB2_BUFSZ },
+        { "CP_STAT", BC250_REG_GC_CP_STAT }, { "CP_BUSY_STAT", BC250_REG_GC_CP_BUSY_STAT },
+        { "CP_STALLED_STAT1", BC250_REG_GC_CP_STALLED_STAT1 },
+        { "CP_STALLED_STAT2", BC250_REG_GC_CP_STALLED_STAT2 },
+        { "CP_STALLED_STAT3", BC250_REG_GC_CP_STALLED_STAT3 },
+        { "CP_CPF_STATUS", BC250_REG_GC_CP_CPF_STATUS }, { "CP_ME_CNTL", BC250_REG_GC_CP_ME_CNTL },
+        { "GRBM_STATUS", BC250_REG_GC_GRBM_STATUS }, { "GRBM_STATUS2", BC250_REG_GC_GRBM_STATUS2 },
+        { "GRBM_STATUS_SE0", BC250_REG_GC_GRBM_STATUS_SE0 },
+        { "GCVM_FAULT_STATUS", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_STATUS },
+        { "GCVM_FAULT_ADDR_LO32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_LO32 },
+        { "GCVM_FAULT_ADDR_HI32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_HI32 },
+    };
+    // 21 registers, three to a line: seven lines in the ring per timeout, and a timeout already means the
+    // device is finished for this start.
+    ULONG values[21];
+    ULONG i, refused = 0, status;
+    ULONGLONG page;
+
+    C_ASSERT(RTL_NUMBER_OF(registers) == RTL_NUMBER_OF(values));
+    C_ASSERT(RTL_NUMBER_OF(values) % 3 == 0);
+    for (i = 0; i < RTL_NUMBER_OF(values); i++)
+        if (!NT_SUCCESS(MmioRead(Device, registers[i].Offset, &values[i]))) { values[i] = 0; refused++; }
+    for (i = 0; i < RTL_NUMBER_OF(values); i += 3)
+        GuardLog("wddm: timeout seq %lu fence %u node %u %s 0x%08X %s 0x%08X %s 0x%08X", Seq, Fence, Node,
+                 registers[i].Name, values[i], registers[i + 1].Name, values[i + 1],
+                 registers[i + 2].Name, values[i + 2]);
+    // The latch of the first fault of a burst, decoded. ADDR_LO32/HI32 hold the page frame, not the byte
+    // address (amdgpu gmc_v10_0 prints "page starting at"), so the page is the pair shifted by 12.
+    status = values[18];
+    page = (((ULONGLONG)values[20] << 32) | values[19]) << 12;
+    GuardLog("wddm: timeout seq %lu fault cid %lu %s vmid %lu rw %lu perm 0x%lX walker 0x%lX more %lu "
+             "mapping %lu page 0x%llX, %lu register(s) refused", Seq, BC250_GCVM_FAULT_CID(status),
+             Bc250GfxhubClientName(BC250_GCVM_FAULT_CID(status)), BC250_GCVM_FAULT_VMID(status),
+             BC250_GCVM_FAULT_RW(status), BC250_GCVM_FAULT_PERMISSIONS(status),
+             BC250_GCVM_FAULT_WALKER_ERROR(status), BC250_GCVM_FAULT_MORE(status),
+             BC250_GCVM_FAULT_MAPPING(status), page, refused);
+}
+
 // Caller owns Lock. Keep the oldest deadline; appending work must not extend
 // a hung job's watchdog, and an already queued timer DPC must not fault a new head.
 static void WddmGfxHeadLocked(BC250_WDDM* Wddm)
@@ -889,7 +955,8 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     BC250_WDDM* wddm;
     BOOLEAN timedOut = FALSE;
     UINT fence = 0, node = 0;
-    ULONG seq = 0;
+    ULONG seq = 0, process = 0, contextFlags = 0;
+    ULONGLONG context = 0;
     KIRQL irql;
 
     UNREFERENCED_PARAMETER(Dpc);
@@ -901,10 +968,14 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     if (wddm->HwPending && !wddm->WatchdogFaulted[wddm->HwNode] &&
         KeQueryInterruptTime() >= Bc250GfxQueueHead(&wddm->GfxPending)->Deadline)
     {
+        const BC250_GFX_COMPLETION* head = Bc250GfxQueueHead(&wddm->GfxPending);
         timedOut = TRUE;
         fence = wddm->HwFence;
         node = wddm->HwNode;
         seq = wddm->HwSeq;
+        context = head->Context;            // KMD193: read under the lock, logged outside it
+        process = head->ProcessId;
+        contextFlags = head->ContextFlags;
         wddm->WatchdogFaulted[node] = TRUE;
         wddm->DeferredValid = FALSE;
         // Preserve HwPending: timeout is not a hardware completion.
@@ -917,6 +988,12 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     GfxSubmitFail(device);
     GuardLog("wddm: HARDWARE FENCE TIMEOUT after %u ms (sequence %u): fence %u remains pending for OS TDR, ring path closed",
              (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
+    // KMD193: who the job belonged to, then what the hardware held. Both once per timeout; the identity comes
+    // out of the queue entry, which keeps it from the submit (bsod-245 items 2 and 4).
+    GuardLog("wddm: timeout seq %lu fence %u node %u ctx 0x%llX pid %lu ctxflags 0x%lX", seq, fence, node,
+             context, process, contextFlags);
+    if (InterlockedIncrement(&wddm->FaultSnapshots) <= BC250_WDDM_LOG_CALLS)
+        WddmTimeoutSnapshot(device, seq, fence, node);
     // No DMA_COMPLETED or preemption notification is synthesized here.
 }
 
@@ -936,7 +1013,16 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     NTSTATUS status;
     KIRQL irql;
     BC250_GFX_COMPLETION job;
+    BC250_GFX_SUBMIT_IDENTITY identity;
     BOOLEAN allowed;
+    // KMD193: values only, copied once here, so that the ring, the journal and the pending queue all name the
+    // same context without gfx.c ever holding a pointer to a WDDM object.
+    identity.Context = (ULONGLONG)(ULONG_PTR)Context;
+    identity.ProcessId = Context->CreatorProcessId;
+    identity.ContextFlags = (Context->UmdContext ? BC250_PJ_CTX_UMD : 0u) |
+                            (Context->SystemContext ? BC250_PJ_CTX_SYSTEM : 0u);
+    identity.Fence = FenceId;
+    identity.Node = Node;
     ExAcquireFastMutex(&Wddm->GfxSubmitMutex);
     WddmGpuFence(Device);
     KeAcquireSpinLock(&Wddm->Lock, &irql);
@@ -945,7 +1031,7 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     job.Epoch = 0; //151 baseline has adapter-lifetime ownership, no recovery ledger
     KeReleaseSpinLock(&Wddm->Lock, irql);
     if (!allowed) { ExReleaseFastMutex(&Wddm->GfxSubmitMutex); return FALSE; }
-    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &seq);
+    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &identity, &seq);
     if (!NT_SUCCESS(status))
     {
         ExReleaseFastMutex(&Wddm->GfxSubmitMutex);
@@ -957,6 +1043,9 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     job.Seq = seq;
     job.Fence = job.ReportFence = FenceId;
     job.Node = Node;
+    job.Context = identity.Context;
+    job.ProcessId = identity.ProcessId;
+    job.ContextFlags = identity.ContextFlags;
     job.Deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     // A software-only fence between two HW jobs belongs to the older tail,
@@ -2741,6 +2830,9 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     object->OwnerDevice = hDevice;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
     object->SystemContext = (BOOLEAN)pCreateContext->Flags.SystemContext;
+    // KMD193: every BC250_PJ_GFX_SUBMIT record of a job on this context carries this process ID, so that a
+    // faulting job in a dump names the process that owns the context rather than only a pointer value.
+    object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
     if (umd)
     {
         object->UmdContext = TRUE;
@@ -2791,6 +2883,11 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     if (umd && parentWddm != NULL && InterlockedIncrement(&parentWddm->UmdContexts) <= BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: umd context node %u ip %u, private slot %u", pCreateContext->NodeOrdinal,
                  umdView.ip_type, (ULONG)UMD_BLOB_SUBMIT_BYTES);
+    // KMD193: one line per context, capped like every other first-calls log, so that the context value in a
+    // GFX_SUBMIT journal record or a Blt observation can be traced back to a process and a kind.
+    if (parentWddm != NULL && InterlockedIncrement(&parentWddm->ContextsLogged) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: context %p pid %lu node %u umd %u system %u ip %lu", object, object->CreatorProcessId,
+                 object->NodeOrdinal, (UINT)object->UmdContext, (UINT)object->SystemContext, object->UmdIpType);
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCreateContext))
     {
         GuardLog("wddm: CreateContext node %u engine 0x%X flags 0x%08X private %u", pCreateContext->NodeOrdinal,
@@ -3102,6 +3199,11 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
             object->UmdBytes = view.bytes;
             object->UmdHeap = view.heap;
             object->UmdRequestedVa = view.requested_va;
+            // KMD193: kept for the DESTROY journal record. 245's four freed objects carried UmdAlloc, UmdHeap
+            // and UmdBytes and still could not say which process had asked for them or with what intent.
+            object->UmdBlobVersion = view.version;
+            object->UmdGemFlags = view.gem_flags;
+            object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
             segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
             align = 4096;
             if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
@@ -3205,9 +3307,10 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
     for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
         BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
         if (object != NULL)
-            PagingJournalNote(BC250_PJ_DESTROY_ALLOCATION, object->UmdRequestedVa, pDestroyAllocation->pAllocationList[i],
-                              object->UmdAlloc ? object->UmdBytes : object->Allocation.Size, 0,
-                              object->UmdAlloc ? BC250_PJ_FLAG_UMD_ALLOCATION : 0u);
+            PagingJournalDestroy(object->UmdRequestedVa, pDestroyAllocation->pAllocationList[i],
+                                 object->UmdAlloc ? object->UmdBytes : object->Allocation.Size,
+                                 object->UmdAlloc ? BC250_PJ_FLAG_UMD_ALLOCATION : 0u,
+                                 object->CreatorProcessId, object->UmdBlobVersion, object->UmdGemFlags);
         WddmFreeObject(object);
     }
     if (pDestroyAllocation->Flags.DestroyResource && pDestroyAllocation->hResource != NULL)

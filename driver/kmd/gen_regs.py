@@ -127,6 +127,18 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
          ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD"),
+         # KMD193, ih.c: the UTCL2 fault latch the gfxhub keeps for the first fault of a burst, read once per
+         # burst in the IH DPC (read only; amdgpu reads the same three in gfxhub_v2_0_print_l2_protection_fault_status).
+         ("GC", "mmGCVM_L2_PROTECTION_FAULT_STATUS"), ("GC", "mmGCVM_L2_PROTECTION_FAULT_ADDR_LO32"),
+         ("GC", "mmGCVM_L2_PROTECTION_FAULT_ADDR_HI32"),
+         # KMD193, wddm.c: the CP/GRBM snapshot taken once per HARDWARE FENCE TIMEOUT (read only). GRBM_STATUS,
+         # GRBM_STATUS2 and CP_ME_CNTL are already named above for gfx.c.
+         ("GC", "mmCP_RB0_RPTR"), ("GC", "mmCP_RB0_WPTR"),
+         ("GC", "mmCP_IB1_BASE_LO"), ("GC", "mmCP_IB1_BASE_HI"), ("GC", "mmCP_IB1_BUFSZ"),
+         ("GC", "mmCP_IB2_BASE_LO"), ("GC", "mmCP_IB2_BASE_HI"), ("GC", "mmCP_IB2_BUFSZ"),
+         ("GC", "mmCP_STAT"), ("GC", "mmCP_BUSY_STAT"),
+         ("GC", "mmCP_STALLED_STAT1"), ("GC", "mmCP_STALLED_STAT2"), ("GC", "mmCP_STALLED_STAT3"),
+         ("GC", "mmCP_CPF_STATUS"), ("GC", "mmGRBM_STATUS_SE0"),
          # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
          ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"), ("OSSSYS", "mmIH_STATUS"),
          # dcn.c: the eight registers its decoded summary reads by name (ADR 0011 point 3), out of the 75 on

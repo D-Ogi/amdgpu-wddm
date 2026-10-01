@@ -1259,15 +1259,34 @@ static int Log(const WCHAR *fromText, int summary)
 // held), one line per record: index, driver time in seconds since boot (interrupt time), kind, page table
 // level/index/count/valid entries, the GPU VA, the allocation handle, the offset or byte count, the position in
 // the paging buffer, the OS fence and the SDMA sequence that carried it.
+//
+// From 0.7.193.1 two kinds reuse those four words for identity, and the tail of the line spells it out: a
+// `destroy` names the process and thread that called it and the process that created the allocation, and the
+// new `gfx-submit` kind names the context, its process and the IB1 and root of one GFX job (KMD193, written for
+// the 0x116 of trial 245, where nothing in the journal could say whose job had faulted).
 
 static const char *const g_JournalKind[] = { "?", "update-cpu", "update-gpu", "vfill", "vtransfer", "flush-tlb",
-                                             "destroy", "transfer", "fill" };
+                                             "destroy", "transfer", "fill", "gfx-submit" };
 
 static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long i)
 {
     const BC250_PAGING_JOURNAL_RECORD *r = &journal->Records[i];
     const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
     char segments[64] = "";
+    char identity[128] = "";
+
+    // KMD193 (0.7.193.1 and later) puts identity in the words each kind left unused, so the same L/i/n/v
+    // columns mean something else for these two kinds. Print what they mean rather than four bare numbers.
+    // An older driver leaves them zero, which prints as a destroy with no process and reads as "not recorded".
+    if (r->Kind == BC250_PJ_DESTROY_ALLOCATION && (r->Level | r->Index | r->Count | r->Valid) != 0)
+        snprintf(identity, sizeof(identity), " by pid %lu tid %lu, created by pid %lu, bc2a v%lu gem 0x%llX",
+                 r->Level, r->Index, r->Count, r->Valid, r->Dma);
+    else if (r->Kind == BC250_PJ_GFX_SUBMIT)
+        snprintf(identity, sizeof(identity), " node %lu ctx 0x%llX pid %lu%s%s ib 0x%llX root 0x%llX",
+                 r->Level, r->Allocation, r->Index, (r->Count & BC250_PJ_CTX_UMD) ? " umd" : "",
+                 (r->Count & BC250_PJ_CTX_SYSTEM) ? " system" : "", r->Va, r->Offset);
+    else if (r->Flags & BC250_PJ_FLAG_PROCESS)
+        snprintf(identity, sizeof(identity), " hprocess 0x%llX (no allocation)", r->Allocation);
 
     // UPDATE records of 0.7.183.1 and later carry the PTE segments of their valid entries in Flags bits 16-31
     // (BC250_PJ_FLAG_SEGMENT): " seg 0,1" = system memory and segment 1. Older drivers leave the bits zero.
@@ -1282,10 +1301,10 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
         }
     }
     printf("%8llu %14.6f %-10s L%lu i%-3lu n%-3lu v%-3lu va 0x%012llX alloc 0x%016llX off 0x%llX dma 0x%llX "
-           "fence %lu seq %lu flags 0x%lX%s%s\n",
+           "fence %lu seq %lu flags 0x%lX%s%s%s\n",
            journal->Next - journal->Returned + i, (double)r->Time / 1e7, kind, r->Level, r->Index, r->Count,
            r->Valid, r->Va, r->Allocation, r->Offset, r->Dma, r->Fence, r->Seq, r->Flags,
-           (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "", segments);
+           (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "", segments, identity);
 }
 
 // One escape of `journal follow`, on the held adapter: the records from `from` into *journal. 0 on success, 1 when

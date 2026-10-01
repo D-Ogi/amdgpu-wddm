@@ -9,7 +9,11 @@
 #include "bc250kmd_escape.h"
 
 #define BC250_PAGING_JOURNAL_MAGIC 0x4E524A50u      // "PJRN"
-#define BC250_PAGING_JOURNAL_VERSION 1u
+// Version 2 (KMD 0.7.193.1): the record layout and size are version 1's exactly; what changed is that the
+// fields DESTROY, UPDATE and the new GFX_SUBMIT kind used to leave zero now carry process, thread and context
+// identity (bc250kmd_escape.h, BC250_PJ_FLAG_PROCESS). A reader of version 1 decodes a version 2 ring correctly
+// and simply sees nothing in those words; a reader must not read identity out of a version 1 ring.
+#define BC250_PAGING_JOURNAL_VERSION 2u
 #define BC250_PAGING_JOURNAL_ENTRIES 1024u
 
 typedef struct _BC250_PAGING_JOURNAL {

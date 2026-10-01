@@ -69,6 +69,7 @@ struct umd_alloc_view {
     unsigned long long requested_va;  // recorded. This reader does not place it: VidMm does, later.
     unsigned long heap;               // UMD_BLOB_HEAP_GTT or UMD_BLOB_HEAP_VRAM
     unsigned long flags;
+    unsigned long version;            // the blob's own version word, recorded for the paging journal (KMD193)
     unsigned long long gem_flags;    // full BC2A cache/access intent, no truncation
     int cache_policy_valid;           // BC2A v2+, v1 retains legacy WC behavior
     int exact_va;

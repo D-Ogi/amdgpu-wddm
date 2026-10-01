@@ -1017,7 +1017,8 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 // With GartLock held, the gfx sequence installed as adev->backend and a GpuMem sequence open. GfxSubmitIb is this plus
 // all three; GfxFenceEscape's IB_AT mode calls it directly, because it already holds them.
 static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev,
-                               ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes, _Out_ ULONG* Seq)
+                               ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes,
+                               _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq)
 {
     struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
     ULONG seq, previousSeq;
@@ -1086,6 +1087,12 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     else
     {
         GuardLog("gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000");
+        // KMD193: the one line that names the submitter of the job frame above. 245 found the faulting job in
+        // the ring with nothing anywhere to say whose context it was on.
+        if (Identity != NULL)
+            GuardLog("gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX",
+                     seq, Identity->Fence, Identity->Node, GpuAddress, SizeBytes / 4, Identity->Context,
+                     Identity->ProcessId, Identity->ContextFlags);
         result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
@@ -1098,6 +1105,12 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     }
 
     Gfx->SubmitVmid = Vmid;
+    // KMD193: committed, so the journal gets its BC250_PJ_GFX_SUBMIT record here - before the DPM call and
+    // before this function can take any other exit. The record is what lets a dump put a faulting sequence
+    // next to the unmap that took its memory away (bsod-245 item 4).
+    if (Identity != NULL)
+        PagingJournalGfxSubmit(seq, Identity->Fence, GpuAddress, RootPhysical, Identity->Context, Identity->Node,
+                               Identity->ProcessId, Identity->ContextFlags);
     DpmBusyBegin(&Device->Dpm);     // committed: the ring is busy from here (dpm.h)
     if (InterlockedIncrement(&Gfx->PipelineSamples) <= 16) {
         ULONG observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
@@ -1110,7 +1123,7 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
 }
 
 NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
-                     ULONG SizeBytes, _Out_ ULONG* Seq)
+                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq)
 {
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
@@ -1134,7 +1147,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
         adev->backend = &gfx->Sequence;
         SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
         GpuMemBeginSequence(Device, NULL, 0);
-        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Seq);
+        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Identity, Seq);
         (void)GpuMemEndSequence(Device, &vram, &gtt);
         adev->backend = previousBackend;
     }
@@ -1336,8 +1349,10 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             // one that runs; GfxSubmitIb itself would deadlock on GartLock here.
             ULONG seq = 0;
 
+            // No identity: the IB_AT escape has no WDDM context and no OS fence, so it writes no
+            // BC250_PJ_GFX_SUBMIT record (KMD193).
             status = SubmitIbLocked(Device, gfx, adev, Data->Vmid, Data->RootPhysical, Data->IbAddress,
-                                    Data->Dwords * 4u, &seq);
+                                    Data->Dwords * 4u, NULL, &seq);
             if (NT_SUCCESS(status))
             {
                 Data->LastSeq = seq;

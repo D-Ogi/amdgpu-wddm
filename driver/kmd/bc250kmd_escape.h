@@ -35,7 +35,14 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C0u       // revision 192: O(1) object index and allocation serials instead of
+#define BC250_KMD_VERSION 0x000700C1u       // revision 193: hang instrumentation for the 147/208/209/245 VM-fault
+                                            // class - UTCL2 faults logged once a second with the latched GCVM
+                                            // status, a CP/GRBM/GCVM snapshot at each HARDWARE FENCE TIMEOUT,
+                                            // and process/thread/context identity in the paging journal
+                                            // (ih_fault.h, paging_identity.h, journal version 2). No escape
+                                            // struct and no journal record layout changed; the constant moves
+                                            // because packagecheck VRS010 matches it against the INF revision.
+                                            // 192: O(1) object index and allocation serials instead of
                                             // adapter-list scans on the close, bind and Present paths
                                             // (object_index.h, wddm.c); 191: FP16 (A16B16G16R16F) swap-chain
                                             // buffers admitted as composed LB7A surfaces at 8 bytes a pixel
@@ -816,12 +823,30 @@ typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 5244
 #define BC250_PJ_DESTROY_ALLOCATION 6u          // DestroyAllocation: Va the UMD's requested address, Offset the size
 #define BC250_PJ_TRANSFER 7u                    // TRANSFER (physical): Offset the bytes moved
 #define BC250_PJ_FILL 8u                        // FILL (physical): Offset the bytes moved
+#define BC250_PJ_GFX_SUBMIT 9u                  // KMD193: one GFX IB reached the ring (gfx.c SubmitIbLocked).
+                                                // Seq the GFX sequence, Fence the OS SubmissionFenceId, Va the
+                                                // IB1 GPU address, Offset the context's root page table,
+                                                // Allocation the KMD context object as a value, Level the
+                                                // scheduler node, Index the process that created the context,
+                                                // Count BC250_PJ_CTX_*. Valid and Dma unused.
 #define BC250_PJ_FLAG_REPEAT 1u                 // UPDATE: DXGK_UPDATEPAGETABLEFLAGS.Repeat (one entry for the whole range)
 #define BC250_PJ_FLAG_INITIAL 2u                // UPDATE: .InitialUpdate
 #define BC250_PJ_FLAG_EVICTION 4u               // UPDATE: .NotifyEviction, VidMm evicts the allocation
 #define BC250_PJ_FLAG_64KB 8u                   // UPDATE: .Use64KBPages (this driver refuses it)
 #define BC250_PJ_FLAG_TO_SYSTEM 16u             // VIRTUAL_TRANSFER: local to system (paging out); else system to local
 #define BC250_PJ_FLAG_UMD_ALLOCATION 32u        // DESTROY: a UMD allocation (Offset is its UmdBytes)
+// KMD193 (0.7.193.1 and later), no layout change: the fields a kind left unused now carry the identity the
+// 245 dump could not name (scratch game-recon bsod-245, REPORT-245.md item 3).
+//   DESTROY  Level  the process that called DxgkDdiDestroyAllocation (the System worker for a VidMm-deferred
+//                   destroy), Index its thread, Count the process that created the allocation, Valid the BC2A
+//                   blob version (0 when it is not a UMD allocation), Dma the BC2A gem_flags.
+//   UPDATE   with no hAllocation (every unmap), Allocation carries DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE
+//                   .hProcess instead, and BC250_PJ_FLAG_PROCESS says so.
+// Older drivers leave all of it zero, and g_PagingJournal.Version (BC250_PAGING_JOURNAL_VERSION) is 2 from
+// this revision on, so a dump reader need not guess.
+#define BC250_PJ_FLAG_PROCESS 64u               // UPDATE: Allocation holds hProcess, not an allocation handle
+#define BC250_PJ_CTX_UMD 1u                     // GFX_SUBMIT, Count: the context arrived as a BC2C blob
+#define BC250_PJ_CTX_SYSTEM 2u                  // GFX_SUBMIT, Count: DXGK_CREATECONTEXTFLAGS.SystemContext
 // UPDATE, KMD183 (0.7.183.1 and later): bits 16-31 are a mask of the DXGK_PTE.Segment values the slice's valid
 // entries carry: bit 16 + s for segment s < 15 (16 = system memory, 17 = segment 1, 18 = 2, 19 = 3), bit 31 for any
 // segment from 15 up. All zero on older drivers and for a slice with no valid entry. Record size and layout unchanged.

@@ -646,8 +646,18 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_S
 //   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
 //                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
 //                    only safe answer to a submission that never completed.
+// KMD193 (bsod-245 item 4): who the submission belongs to, as values. gfx.c does not know what a WDDM context
+// is and must not learn; it copies these three words into the journal's BC250_PJ_GFX_SUBMIT record and into its
+// own job-frame log line, and dereferences nothing. NULL from a caller with no context (the IB_AT escape).
+typedef struct _BC250_GFX_SUBMIT_IDENTITY {
+    ULONGLONG Context;          // the submitting KMD context object, as a value
+    ULONG ProcessId;            // the process that created that context
+    ULONG ContextFlags;         // BC250_PJ_CTX_* (bc250kmd_escape.h)
+    ULONG Fence;                // the OS SubmissionFenceId this IB carries
+    ULONG Node;                 // the scheduler node it was submitted on
+} BC250_GFX_SUBMIT_IDENTITY;
 NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
-                     ULONG SizeBytes, _Out_ ULONG* Seq);
+                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq);
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
@@ -818,6 +828,12 @@ void PagingJournalInit(void);
 void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG SliceStart, ULONG SliceCount,
                          ULONGLONG Dma, BOOLEAN Cpu);
 void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags);
+// KMD193 (bsod-245 items 3 and 4): the destroy's own caller and the allocation's creator, and one record per
+// GFX IB that reached the ring. Same record layout; paging_identity.h packs the fields each kind left unused.
+void PagingJournalDestroy(ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONG Flags, ULONG Creator,
+                          ULONG BlobVersion, ULONGLONG GemFlags);
+void PagingJournalGfxSubmit(ULONG Seq, ULONG Fence, ULONGLONG Ib1, ULONGLONG Root, ULONGLONG Context, ULONG Node,
+                            ULONG Process, ULONG ContextFlags);
 void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence);
 void PagingJournalStampSeq(ULONG Fence, ULONG Seq);
 ULONG PagingJournalRead(ULONGLONG From, _Out_writes_to_(Max, return) struct _BC250_PAGING_JOURNAL_RECORD* Page, ULONG Max,

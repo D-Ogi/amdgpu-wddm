@@ -6,6 +6,7 @@
 // ten ma w nogach (who has no memory walks twice): the journal is the memory, so that the next dump walks once.
 #include "bc250kmd.h"
 #include "paging_journal.h"
+#include "paging_identity.h"
 
 BC250_PAGING_JOURNAL g_PagingJournal;
 static KSPIN_LOCK g_PagingJournalLock;
@@ -36,6 +37,17 @@ static void PagingJournalCommit(_In_ const BC250_PAGING_JOURNAL_RECORD* Record)
     slot->Time = KeQueryInterruptTime();
     g_PagingJournal.Next++;
     KeReleaseSpinLock(&g_PagingJournalLock, irql);
+}
+
+// Only a record that a BuildPagingBuffer call wrote into a paging buffer takes a fence and an SDMA sequence
+// from a later submission of that buffer. KMD193 made this explicit instead of leaning on "Dma is zero":
+// DESTROY now carries the BC2A gem_flags in Dma and GFX_SUBMIT carries a GFX fence and sequence of its own, and
+// a stamp walk that mistook either for a paging slice would stop at it and leave the real slice unstamped.
+static BOOLEAN PagingJournalBuiltIntoBuffer(ULONG Kind)
+{
+    return Kind == BC250_PJ_UPDATE_CPU || Kind == BC250_PJ_UPDATE_GPU || Kind == BC250_PJ_VIRTUAL_FILL ||
+           Kind == BC250_PJ_VIRTUAL_TRANSFER || Kind == BC250_PJ_FLUSH_TLB || Kind == BC250_PJ_TRANSFER ||
+           Kind == BC250_PJ_FILL;
 }
 
 // One BuildPagingBuffer slice of an UPDATE_PAGE_TABLE request: its entries [SliceStart, SliceStart + SliceCount).
@@ -73,6 +85,10 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
     r.Allocation = (ULONGLONG)(ULONG_PTR)Update->hAllocation;
     r.Offset = Update->AllocationOffsetInBytes;
     r.Dma = Dma;
+    // KMD193: an unmap carries no hAllocation, so the record used to name nobody at all - which is exactly the
+    // record 245 needed (seq 604862 unmapped the faulting page). hProcess is VidMm's own handle for the
+    // process whose address space this slice belongs to; the flag says the word is not an allocation handle.
+    Bc250PjUpdateProcess(&r, (ULONGLONG)(ULONG_PTR)Update->hProcess);
     PagingJournalCommit(&r);
 }
 
@@ -93,6 +109,38 @@ void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULO
     PagingJournalCommit(&r);
 }
 
+// DestroyAllocation, with the identity 245 needed and did not have: who called the destroy (a System worker
+// means VidMm deferred it; the application's own submit thread means the UMD released the memory itself), and
+// what CreateAllocation had kept about the allocation. Flags, Va and Bytes are PagingJournalNote's.
+void PagingJournalDestroy(ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONG Flags, ULONG Creator,
+                          ULONG BlobVersion, ULONGLONG GemFlags)
+{
+    BC250_PAGING_JOURNAL_RECORD r;
+
+    RtlZeroMemory(&r, sizeof(r));
+    r.Kind = BC250_PJ_DESTROY_ALLOCATION;
+    r.Flags = Flags;
+    r.Va = Va;
+    r.Allocation = (ULONGLONG)(ULONG_PTR)Allocation;
+    r.Offset = Bytes;
+    Bc250PjDestroyIdentity(&r, HandleToULong(PsGetCurrentProcessId()), HandleToULong(PsGetCurrentThreadId()),
+                           Creator, BlobVersion, GemFlags);
+    PagingJournalCommit(&r);
+}
+
+// One record per GFX IB that reached the ring (gfx.c SubmitIbLocked, PASSIVE_LEVEL under GartLock). At a game's
+// submission rate this is the journal's busiest writer by far: docs/design/paging-journal.md, section "Write
+// rate and ring coverage", has the measured share and what it costs the ring's time window.
+void PagingJournalGfxSubmit(ULONG Seq, ULONG Fence, ULONGLONG Ib1, ULONGLONG Root, ULONGLONG Context, ULONG Node,
+                            ULONG Process, ULONG ContextFlags)
+{
+    BC250_PAGING_JOURNAL_RECORD r;
+
+    RtlZeroMemory(&r, sizeof(r));
+    Bc250PjGfxSubmit(&r, Seq, Fence, Ib1, Root, Context, Node, Process, ContextFlags);
+    PagingJournalCommit(&r);
+}
+
 // The OS submits the paging buffer the records were built into: DmaStart/DmaBytes is that submission's GPU
 // range (SubmitCommand's DmaBufferVirtualAddress and DmaBufferSize), Fence its SubmissionFenceId. Records built
 // into the range and not yet claimed take it. The walk runs backwards and stops at the first claimed record of
@@ -108,6 +156,7 @@ void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence)
     live = g_PagingJournal.Next < BC250_PAGING_JOURNAL_ENTRIES ? g_PagingJournal.Next : BC250_PAGING_JOURNAL_ENTRIES;
     for (n = 0; n < live; n++) {
         BC250_PAGING_JOURNAL_RECORD* r = &g_PagingJournal.Entry[(g_PagingJournal.Next - 1 - n) % BC250_PAGING_JOURNAL_ENTRIES];
+        if (!PagingJournalBuiltIntoBuffer(r->Kind)) continue;
         if (r->Dma == 0 || r->Dma < DmaStart || r->Dma - DmaStart >= DmaBytes) continue;
         if (r->Fence != 0) break;
         r->Fence = Fence;
@@ -127,6 +176,7 @@ void PagingJournalStampSeq(ULONG Fence, ULONG Seq)
     live = g_PagingJournal.Next < BC250_PAGING_JOURNAL_ENTRIES ? g_PagingJournal.Next : BC250_PAGING_JOURNAL_ENTRIES;
     for (n = 0; n < live; n++) {
         BC250_PAGING_JOURNAL_RECORD* r = &g_PagingJournal.Entry[(g_PagingJournal.Next - 1 - n) % BC250_PAGING_JOURNAL_ENTRIES];
+        if (!PagingJournalBuiltIntoBuffer(r->Kind)) continue;
         if (r->Fence != Fence) continue;
         if (r->Seq != 0) break;
         r->Seq = Seq;
