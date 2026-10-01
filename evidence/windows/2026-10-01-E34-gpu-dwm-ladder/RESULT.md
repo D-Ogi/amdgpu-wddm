@@ -21,7 +21,8 @@ CPU route: the same router with the CPU desktop UMD 4176D1DF. Each trial's resul
 ## Game sessions (214 against 217/218)
 
 Same engine (106D09E5), same game ICD (the use-after-free diagnostic build DC70A5E9), preset HIGH, 1920x1080
-fullscreen, DRS and upscalers off, RT off by the preset, the same scripted route; only the desktop route differs.
+fullscreen output, DRS off, RT off by the preset, the same scripted route; only the desktop route differs. The
+game's anti-aliasing setting was FSR 2 upscaling in Auto quality mode (see the correction below).
 
 | | 214 CPU route | 217 GPU route | 218 GPU route |
 |---|---|---|---|
@@ -46,3 +47,12 @@ at or below 1.5 %, attributed to the GPU DWM.
 
 `route.py 003 gpu` at 01:50:12Z (exit 0): DWM on the GPU route by default (DwmForceCpu 0), recorded as promotion,
 not as M13.4 (no 30-minute run, owner decision of 2026-09-30).
+
+## Correction (2026-10-01)
+
+This write-up first said "DRS and upscalers off". DRS was off, but `[PostProcess] AAMode=5` (graphics.xml: AMD FSR
+Upscaling) with `FSR2Quality=0` (Auto) was in force in 214, 217 and 218 and in every settings backup on the lab
+since 2026-09-29: it is the game's DX12 default and the session presets did not set it. The three sessions share
+the setting, so the GPU-against-CPU route comparison holds; the absolute rates are not native-resolution rates.
+The presets now set AAMode 1 (FXAA), frame generation off and DRS off, and the session script refuses to start
+otherwise.
