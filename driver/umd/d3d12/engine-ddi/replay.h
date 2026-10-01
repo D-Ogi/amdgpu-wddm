@@ -33,8 +33,8 @@
 //   ReplayRing producer fields (write, cached_done, snapshots, tag, owner): the owner thread; a ring passes to
 //     another thread only under Replay::lock, after its owner thread has exited.
 //   Ring bytes in [done, published): immutable, read by the worker. published: the producer (release). done: the
-//     worker (seq_cst, after the entry's engine call returned). sleeping, sleep_pos: the worker; wakers clear
-//     sleeping by exchange. next_wake: waiters under the ring's lock, the worker reads it lock-free.
+//     worker (seq_cst, after the entry's engine call returned). sleeping: the worker; wakers clear it by exchange.
+//     next_wake: waiters under the ring's lock, the worker reads it lock-free.
 //   CommandListRecord::replay_tail: the thread recording the list, or a drain of the list; other threads read it
 //     after the application's own ordering (a list is not free-threaded).
 #pragma once
@@ -49,8 +49,6 @@ namespace engine_ddi {
 // CommandListRecord::replay_tail: ((ring index + 1) << 56) | the ring position where the list's last entry ended.
 inline constexpr uint64_t kReplayPositionMask = (uint64_t{1} << 56) - 1;
 inline constexpr uint32_t kMaxReplayRings = 16;
-// The producer wakes a sleeping worker once this many bytes are pending, not on every entry.
-inline constexpr uint64_t kReplayWakeBytes = 1024;
 
 enum class Drain : uint32_t {
     Close, Reset, Bundle, Ecl, Switch, Direct, Destroy, Pool, Stack, Space, Slots, Teardown, Count
@@ -132,7 +130,6 @@ struct ReplayRing {
     std::atomic<bool> stop{false};
     // The worker's futex word: 1 while it sleeps or is about to; a waker exchanges it to 0 and wakes it.
     alignas(64) std::atomic<uint32_t> sleeping{0};
-    std::atomic<uint64_t> sleep_pos{0};
     std::atomic<uint64_t> wakes{0};
     // Waiters (drains): the smallest target among them, and where they sleep.
     alignas(64) std::atomic<uint64_t> next_wake{UINT64_MAX};
@@ -342,11 +339,10 @@ inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t si
     l->replay_tail.store(r->tag | end, std::memory_order_relaxed);
     r->entries.store(r->entries.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     r->entry_bytes.store(r->entry_bytes.load(std::memory_order_relaxed) + size, std::memory_order_relaxed);
-    // A missed wake (the worker is just going to sleep) costs latency, never an entry: the next publish, a drain
-    // or the worker's own timeout makes it up.
-    if (r->sleeping.load(std::memory_order_relaxed) &&
-        end - r->sleep_pos.load(std::memory_order_relaxed) >= kReplayWakeBytes)
-        replay_wake(r);
+    // The first publish after the worker slept wakes it; the publishes after that see sleeping clear and pay a load.
+    // A missed wake (the worker is just going to sleep) costs latency, never an entry: the next publish, a drain or
+    // the worker's own timeout makes it up.
+    if (r->sleeping.load(std::memory_order_relaxed)) replay_wake(r);
 }
 
 template <class F, class... A, size_t... I>

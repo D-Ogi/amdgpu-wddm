@@ -93,7 +93,6 @@ void APIENTRY worker_body(void* ring) {
         if (spin_for_work(r, pos, spin)) continue;
         // Sleep on the futex word. A waker exchanges it to 0 first, so a wake that comes before WaitOnAddress makes
         // it return at once; the read-modify-write of published orders this check after the store of sleeping.
-        r->sleep_pos.store(pos, std::memory_order_relaxed);
         r->sleeping.store(1, std::memory_order_seq_cst);
         if (r->published.fetch_add(0, std::memory_order_seq_cst) == pos && !r->stop.load(std::memory_order_seq_cst)) {
             uint32_t asleep = 1;
@@ -492,8 +491,8 @@ HRESULT set_replay_policy(DeviceContext* c, const ReplayPolicy* policy) noexcept
     rp->qpf = static_cast<uint64_t>(frequency.QuadPart);
     rp->spin_ticks = rp->qpf * kSpinMicroseconds / 1000000;
     c->replay = rp;
-    log_line("replay policy: on, up to %u rings of %u KiB, worker spin %u us, wake batch %llu bytes", policy->rings,
-             policy->ring_bytes >> 10, kSpinMicroseconds, static_cast<unsigned long long>(kReplayWakeBytes));
+    log_line("replay policy: on, up to %u rings of %u KiB, worker spin %u us, wake on the first publish", policy->rings,
+             policy->ring_bytes >> 10, kSpinMicroseconds);
     return S_OK;
 }
 
