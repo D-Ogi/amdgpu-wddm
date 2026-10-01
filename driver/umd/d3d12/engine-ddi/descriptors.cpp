@@ -6,6 +6,7 @@
 // GetCPU/GPUDescriptorHandleForHeapStart and GetDescriptorSizeInBytes return, and engine-ddi hands the result
 // back to the engine unchanged.
 #include "internal.h"
+#include "replay.h"
 
 namespace engine_ddi {
 
@@ -63,6 +64,7 @@ void APIENTRY destroy_heap(D3D12DDI_HDEVICE device, D3D12DDI_HDESCRIPTORHEAP h) 
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Destroy);
     release_engine(r->h);
     poison(r->h);
     c->live.fetch_sub(1);
@@ -450,9 +452,12 @@ void APIENTRY set_descriptor_heaps(D3D12DDI_HCOMMANDLIST hlist, UINT count, D3D1
         }
         engine[i] = static_cast<ID3D12DescriptorHeap*>(r->h.engine);
     }
-    l->list()->SetDescriptorHeaps(count, engine);
+    record(l, [=](ID3D12GraphicsCommandList* e, ID3D12DescriptorHeap* const* h) { e->SetDescriptorHeaps(count, h); },
+           in(engine, count));
 }
 
+// The clears read the view's CPU descriptor at the call: a deferred clear gets a copy of it (Snap). A UAV clear's
+// GPU handle names a shader-visible heap, which the application keeps until the list has run.
 void APIENTRY clear_rtv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HANDLE view, const FLOAT color[4],
                         UINT rect_count, const D3D12DDI_RECT* rects) {
     CommandListRecord* l = list_of(hlist, "ClearRenderTargetView");
@@ -461,7 +466,11 @@ void APIENTRY clear_rtv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HAN
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE{view.ptr}, color, rect_count, rects);
+    const D3D12_CPU_DESCRIPTOR_HANDLE handle{view.ptr};
+    record(l,
+           [=](ID3D12GraphicsCommandList* e, const D3D12_CPU_DESCRIPTOR_HANDLE* v, const FLOAT* rgba,
+               const D3D12DDI_RECT* r) { e->ClearRenderTargetView(*v, rgba, rect_count, r); },
+           Snap{&handle, 1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, FALSE}, in(color, 4), in(rects, rect_count));
 }
 
 // The view's GPU handle, its CPU handle and the resource pass through as the runtime gave them.
@@ -476,8 +485,13 @@ void clear_uav(D3D12DDI_HCOMMANDLIST hlist, const char* slot, D3D12DDI_GPU_DESCR
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    (l->list()->*clear)(D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr}, D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr},
-                        static_cast<ID3D12Resource*>(r->h.engine), values, rect_count, rects);
+    const D3D12_GPU_DESCRIPTOR_HANDLE visible{gpu.ptr};
+    const D3D12_CPU_DESCRIPTOR_HANDLE handle{cpu.ptr};
+    auto* target = static_cast<ID3D12Resource*>(r->h.engine);
+    record(l,
+           [=](ID3D12GraphicsCommandList* e, const D3D12_CPU_DESCRIPTOR_HANDLE* v, const Value* x,
+               const D3D12DDI_RECT* rr) { (e->*clear)(visible, *v, target, x, rect_count, rr); },
+           Snap{&handle, 1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, FALSE}, in(values, 4), in(rects, rect_count));
 }
 
 void APIENTRY clear_uav_uint(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
@@ -505,8 +519,12 @@ void APIENTRY clear_dsv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HAN
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE{view.ptr}, static_cast<D3D12_CLEAR_FLAGS>(flags), depth,
-                                     stencil, rect_count, rects);
+    const D3D12_CPU_DESCRIPTOR_HANDLE handle{view.ptr};
+    record(l,
+           [=](ID3D12GraphicsCommandList* e, const D3D12_CPU_DESCRIPTOR_HANDLE* v, const D3D12DDI_RECT* r) {
+               e->ClearDepthStencilView(*v, static_cast<D3D12_CLEAR_FLAGS>(flags), depth, stencil, rect_count, r);
+           },
+           Snap{&handle, 1, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, FALSE}, in(rects, rect_count));
 }
 } // namespace
 

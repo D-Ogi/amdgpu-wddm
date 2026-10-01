@@ -81,6 +81,16 @@ the same owner are allowed. A different device cannot inherit that authority,
 and engine workers do not acquire it merely by holding a pointer. Command-list
 entries resolve their owning shell through the engine context.
 
+The `deferred-replay` experiment (`AMDGPU_WDDM_D3D12_EXPERIMENT`, off by default,
+read once per device) turns on engine-ddi's deferred command-list replay
+([engine-ddi/README.md](engine-ddi/README.md)) with 8 rings of 4 MiB. Its worker
+threads are the one kind of engine-ddi thread that enters a device's runtime
+domain, together with `HostedDispatch::WorkerScope`: the engine's recording may
+allocate, map, lock and wait on the CPU there, while every context, submission,
+GPU-side sync and queue operation is refused with the failure note
+`replay-worker-op:<op>`. A removal a worker finds marks the device lost at once
+and is reported to the runtime from the next drain on a DDI thread.
+
 ## Queues and fences
 
 `queue-request.h` builds the BC2C v2 context request for the supported single-node

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: query heaps (D68-D70) and the query slots of a command list (L20-L22).
 #include "internal.h"
+#include "replay.h"
 
 namespace engine_ddi {
 
@@ -63,6 +64,7 @@ void APIENTRY destroy_query_heap(D3D12DDI_HDEVICE device, D3D12DDI_HQUERYHEAP h)
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Destroy);
     release_engine(r->h);
     poison(r->h);
     c->live.fetch_sub(1);
@@ -81,15 +83,19 @@ QueryHeapRecord* query_heap(CommandListRecord* l, D3D12DDI_HQUERYHEAP h, UINT fi
 void APIENTRY begin_query(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HQUERYHEAP h, D3D12DDI_QUERY_TYPE type, UINT index) {
     CommandListRecord* l = list_of(hlist, "BeginQuery");
     if (!l) return;
-    if (QueryHeapRecord* r = query_heap(l, h, index, 1))
-        l->list()->BeginQuery(static_cast<ID3D12QueryHeap*>(r->h.engine), static_cast<D3D12_QUERY_TYPE>(type), index);
+    if (QueryHeapRecord* r = query_heap(l, h, index, 1)) {
+        auto* heap = static_cast<ID3D12QueryHeap*>(r->h.engine);
+        record(l, [=](ID3D12GraphicsCommandList* e) { e->BeginQuery(heap, static_cast<D3D12_QUERY_TYPE>(type), index); });
+    }
 }
 
 void APIENTRY end_query(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HQUERYHEAP h, D3D12DDI_QUERY_TYPE type, UINT index) {
     CommandListRecord* l = list_of(hlist, "EndQuery");
     if (!l) return;
-    if (QueryHeapRecord* r = query_heap(l, h, index, 1))
-        l->list()->EndQuery(static_cast<ID3D12QueryHeap*>(r->h.engine), static_cast<D3D12_QUERY_TYPE>(type), index);
+    if (QueryHeapRecord* r = query_heap(l, h, index, 1)) {
+        auto* heap = static_cast<ID3D12QueryHeap*>(r->h.engine);
+        record(l, [=](ID3D12GraphicsCommandList* e) { e->EndQuery(heap, static_cast<D3D12_QUERY_TYPE>(type), index); });
+    }
 }
 
 void APIENTRY resolve_query_data(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HQUERYHEAP h, D3D12DDI_QUERY_TYPE type,
@@ -103,8 +109,11 @@ void APIENTRY resolve_query_data(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HQUERYHEA
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->ResolveQueryData(static_cast<ID3D12QueryHeap*>(r->h.engine), static_cast<D3D12_QUERY_TYPE>(type), first,
-                                count, static_cast<ID3D12Resource*>(d->h.engine), offset);
+    auto* heap = static_cast<ID3D12QueryHeap*>(r->h.engine);
+    auto* buffer = static_cast<ID3D12Resource*>(d->h.engine);
+    record(l, [=](ID3D12GraphicsCommandList* e) {
+        e->ResolveQueryData(heap, static_cast<D3D12_QUERY_TYPE>(type), first, count, buffer, offset);
+    });
 }
 } // namespace
 

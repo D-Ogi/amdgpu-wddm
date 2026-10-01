@@ -36,7 +36,8 @@ override of `pfnPresent`.
 - Command-list table binding: the shell keeps the `hRTTable` values and calls `pfnSetCommandListDDITableCb`.
 - Heap memory: `allocate_memory`, and `free_memory`, which returns an HRESULT.
 - Hooks run only on the thread of a DDI call into the device, during that call, and never re-enter engine-ddi.
-  Two DDI threads may call them at once; engine-ddi holds no lock of its own while it calls one.
+  Two DDI threads may call them at once; engine-ddi holds no lock of its own while it calls one. A replay worker
+  (below) calls none of them.
 
 **MemoryMode.**
 - `RuntimeBacked` is the only native mode. Every heap's memory is a runtime allocation that hosted RADV has
@@ -92,7 +93,8 @@ Steps 2 to 4 run only on the thread of a DDI call into the owning device while i
 - otherwise the first later call that observes retirement: `execute_command_lists`, `pfnCreateHeapAndResource`,
   `pfnDestroyHeapAndResource`, `destroy_engine_queue` or `destroy_device_context`.
 
-They never run from an engine thread or callback: INLINE mode has no engine threads, and engine-ddi starts none.
+They never run from an engine thread or callback: INLINE mode has no engine threads, and the only threads
+engine-ddi starts, the replay workers below, make engine command-list calls and nothing else.
 
 With `set_release_policy`'s `two_phase` (the shell's default since adapter107, M15.8) step 1 has two phases:
 when the destroy's own marks are reached, every engine queue's current mark is recorded once more and the
@@ -100,6 +102,28 @@ release waits for those as well, so a submission made between the destroy and th
 release with no mark at the destroy waits for one such second phase too. An idle queue's mark is already
 retired, so the hold ends at the next retirement point; a busy queue holds the memory about one more frame.
 Nothing waits on the CPU: both phases read the queues' state words and fences at the retirement points above.
+
+**Deferred command-list replay.** `set_replay_policy`, off by default; the shell turns it on with the
+`deferred-replay` experiment (adapter108). Topology, drains and the ownership rules R1 to R6 are in `replay.h`.
+- Off, every recording slot calls the engine list on the calling thread, as before: no ring, no thread.
+- On, a slot still validates, translates and reports on the calling thread, then writes the engine call into
+  that thread's ring: the engine list, a lambda that captures values only, and copies of every array the engine
+  reads through a pointer. CPU descriptors the engine reads at record time (render targets, clears) are copied
+  into the ring's own non-shader-visible heaps. Encoding allocates nothing; a full ring makes the producer wait,
+  counted.
+- One ring per (device, recording thread), each with one worker thread that makes the engine calls in order, up
+  to the policy's cap (the shell: 8 rings of 4 MiB). A new recording thread first takes over a ring whose
+  thread has exited; a thread beyond the cap records directly.
+- A list's pending calls replay before its Close (so the engine's Close result reaches the runtime from the Close
+  itself), Reset, ExecuteBundle, ExecuteCommandLists and destroy, and before it is recorded on another ring or
+  directly. Every ring's replay before the destroy of any object an entry can name, a command pool's reset or
+  destroy, and SetPipelineStackSize. Each drain kind is counted with its wait time in the `replay` summary lines.
+- The worker calls no hook and makes no context operation. The shell's `worker` hook runs it in a scope that
+  admits only the runtime callbacks recording needs; `drained`, on a DDI thread after a drain, reports a device
+  removal a worker saw.
+- `replay-test.exe` checks exactness against direct recording, order, every drain, backpressure, teardown and
+  multithreaded recording with destroys; the harness's `--deferred-replay` run repeats every harness check with
+  the policy on.
 
 **Shaders.**
 - The DDI payload is the bare program (DXBC tokens, or the DXIL part) with its length in DWORD 1, and

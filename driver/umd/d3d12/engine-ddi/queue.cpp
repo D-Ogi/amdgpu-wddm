@@ -3,6 +3,7 @@
 // execute_command_lists), the retirement fence of each engine queue, and the initialization of committed render
 // targets and depth-stencil resources.
 #include "internal.h"
+#include "replay.h"
 
 namespace engine_ddi {
 
@@ -306,6 +307,7 @@ HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMAN
             c->report(E_INVALIDARG);
             return E_INVALIDARG;
         }
+        drain_list(l, Drain::Ecl);              // a closed list has nothing pending: its Close drained it
         engine.data()[i] = l->list();
     }
     // Committed render targets created since the last call are initialized first; this queue then waits for them.

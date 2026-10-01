@@ -26,6 +26,10 @@ namespace {
 // that destroys and then creates at its budget gets the memory back first, as without the hand-off.
 constexpr uint32_t kRetireBacklogBound=256;
 constexpr uint32_t kRetireAgeBoundMs=250;
+// Deferred replay: recording threads with a ring of their own (a game records on a handful), and the bytes of each
+// ring. 4 MiB holds a frame of tens of thousands of small calls; a fuller ring makes its thread wait (counted).
+constexpr uint32_t kReplayRings=8;
+constexpr uint32_t kReplayRingBytes=4u<<20;
 void stage(const char* name,HRESULT result) noexcept {
     if(FAILED(result))ddi_failure_note(name,result);
     std::fprintf(stderr,"d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
@@ -57,6 +61,7 @@ class DeviceEngine final {
     // No entry lock: DDI entries of this device run at once on several threads (DeviceEngineScope).
     // active_ turns false once, at close or retain, after the runtime has ended every entry.
     std::atomic<bool> active_{true};
+    bool replay_{};                             // the deferred-replay policy is on (open, close)
     std::atomic<bool> binding_failed_{};
     std::atomic<UINT64> callback_sequence_{};
     // Lever L2 (experiment recording-bind): the binding Device::recording points to while it is published,
@@ -143,6 +148,15 @@ class DeviceEngine final {
             device.callbacks.pfnSetCommandListErrorCb(list,hr);
         else report_device_error(device,hr);
     }
+    // Deferred replay (engine-ddi set_replay_policy). A worker runs in this device's runtime domain and in the
+    // hosted dispatch's worker scope, which admits only the device-level operations a recording call can make.
+    static void APIENTRY replay_worker(void* shell,engine_ddi::ReplayBody body,void* ring) {
+        auto& self=*static_cast<DeviceEngine*>(shell);
+        bc250::umd::RuntimeDomain::Scope runtime(self.domain_);
+        HostedDispatch::WorkerScope worker(self.dispatch_);
+        body(ring);
+    }
+    static void APIENTRY replay_drained(void* shell) {static_cast<DeviceEngine*>(shell)->dispatch_.report_deferred_removal();}
     static BOOL APIENTRY is_lost(void* shell) {
         auto& device=*static_cast<Device*>(shell);
         return !device.engine || device.lost.load() || device.engine->dispatch_.lost();
@@ -309,6 +323,18 @@ public:
             result=engine_ddi::set_retire_policy(context_,&policy);stage("RetireHandoff",result);
             if(result!=S_OK)return result;
         }
+        // Deferred replay (experiment deferred-replay, off by default): recording calls go to a ring of the
+        // recording thread, and a worker thread per ring makes the engine calls (engine-ddi.h, set_replay_policy).
+        // Off, neither exists. Set before any queue or list exists.
+        if(ddi_experiment("deferred-replay")){
+            engine_ddi::ReplayPolicy policy{};
+            policy.size=sizeof(policy);policy.enabled=1;policy.rings=kReplayRings;policy.ring_bytes=kReplayRingBytes;
+            policy.shell=this;policy.worker=replay_worker;policy.drained=replay_drained;
+            result=engine_ddi::set_replay_policy(context_,&policy);stage("DeferredReplay",result);
+            if(result!=S_OK)return result;
+            replay_=true;
+            ddi_mode2_note("amdgpu_wddm_d3d12 experiment deferred-replay on\n");
+        }
         auto ops=QueueEngineOps::native();ops.close=checked_close;ops.check_health=health;ops.health_cookie=this;
         queues_.reset(new(std::nothrow) QueueEngineRegistry(device_,context_,ops));
         if(!queues_)return E_OUTOFMEMORY;
@@ -319,6 +345,13 @@ public:
         bc250::umd::RuntimeDomain::Scope runtime(domain_);
         HostedInstanceBootstrap::Scope hosted(bootstrap_);
         if(!hosted.entered())return false;
+        // The replay workers drain and stop first: their pending calls use the engine, the context and the dispatch.
+        if(replay_ && context_){
+            engine_ddi::ReplayPolicy off{};off.size=sizeof(off);
+            HRESULT hr=engine_ddi::set_replay_policy(context_,&off);stage("DeferredReplay-off",hr);
+            if(hr!=S_OK)return false;
+            replay_=false;
+        }
         if(queues_){unsigned unresolved=0;
             HRESULT hr=queues_->discard_retired_metadata(unresolved);stage("QueueMetadata",hr);
             if(hr!=S_OK || unresolved)return false;

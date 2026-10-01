@@ -171,6 +171,7 @@ uint64_t observed_value(EngineQueue* queue) noexcept;
 HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* lists) noexcept;
 
 struct ResourceRecord;
+struct Replay;                                  // replay.h: deferred command-list replay
 
 // The retire policy's decision at a submission's retirement point (set_retire_policy): true leaves the pending
 // releases to the resource DDIs. Never with the hand-off off, nothing pending, the backlog bound reached, or the
@@ -246,6 +247,9 @@ public:
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     std::atomic<uint64_t> retire_deferred{0};   // submission passes left to the resource DDIs
 #endif
+    // Deferred command-list replay (set_replay_policy, replay.h), null when off: written before the context is used
+    // on another thread, and at teardown; read by every recording slot.
+    Replay* replay = nullptr;
 
     // Every report is logged with thread and time, so it can be placed between the begin and end records
     // of the entry that made it. A reported error can surface to the application at a later call.
@@ -440,6 +444,8 @@ struct CommandListRecord {
     D3D12_COMMAND_LIST_TYPE type;
     uint32_t table;                             // 0 compute table, 1 graphics table
     bool recording;                             // between a Reset and a Close that both succeeded
+    // Deferred replay (replay.h): the ring and the position where the list's last pending entry ends, 0 if none.
+    std::atomic<uint64_t> replay_tail{0};
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 

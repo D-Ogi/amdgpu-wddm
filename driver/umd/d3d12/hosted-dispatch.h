@@ -73,6 +73,9 @@ class HostedDispatch final {
     HRESULT internal_queue(uint32_t op,void* argument) noexcept;
     std::atomic<bool> lost_{false};
     std::atomic<bool> active_{true};
+    // The replay worker of this thread (WorkerScope), and a removal it found, which a DDI thread reports.
+    inline static thread_local const HostedDispatch* worker_{};
+    std::atomic<bool> removal_deferred_{false};
     Allocation* find(D3DKMT_HANDLE handle) noexcept;
     Reservation* containing(UINT64 base,UINT64 bytes) noexcept;
     bool owned(UINT64 base,UINT64 bytes,const void* except) const noexcept;
@@ -105,5 +108,21 @@ public:
     // unresolved allocation/reservation/context/paging/sync count; does not claim OS allocation reclamation.
     unsigned discard_metadata() noexcept;
     bool lost() const noexcept {return lost_.load();}
+    // A deferred-replay worker of engine-ddi (set_replay_policy) on this thread, inside its device's runtime domain:
+    // the engine's recording may allocate, map, lock and wait on the CPU through this dispatch, as a DDI thread's
+    // does, while every context, submission, GPU-side sync and queue operation refuses with a failure note
+    // (replay-worker-op:<op>). A removal the worker finds marks the device lost at once and is reported to the
+    // runtime by report_deferred_removal on a DDI thread: the worker makes no runtime error callback.
+    class WorkerScope final {
+        const HostedDispatch* previous_;
+    public:
+        explicit WorkerScope(const HostedDispatch& dispatch) noexcept:previous_(worker_) {worker_=&dispatch;}
+        ~WorkerScope() {worker_=previous_;}
+        WorkerScope(const WorkerScope&)=delete;
+        WorkerScope& operator=(const WorkerScope&)=delete;
+    };
+    static bool worker_admits(uint32_t op) noexcept;
+    // On a DDI thread of the device: the runtime's error callback for a removal a worker found, once.
+    void report_deferred_removal() noexcept;
 };
 }

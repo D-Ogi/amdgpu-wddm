@@ -6,8 +6,11 @@
 namespace bc250::umd {
 
 // A runtime entry grants authority only to this device on the entering thread.
-// This is not a lock and does not grant engine workers permission to call DDI
-// callbacks. The runtime owns serialization and device lifetime. Keep this
+// This is not a lock and does not by itself grant engine workers permission to
+// call DDI callbacks. The one worker that enters a domain is the D3D12 shell's
+// deferred-replay worker, which enters it together with
+// HostedDispatch::WorkerScope; that scope narrows what the worker may call.
+// The runtime owns serialization and device lifetime. Keep this
 // object alive until engine workers have stopped and all scopes have returned.
 // Instantiate and use the guard in the UMD module, not independently in two DLLs.
 class RuntimeDomain final {

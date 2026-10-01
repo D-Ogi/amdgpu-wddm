@@ -36,9 +36,10 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 }
 // Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a
 // measurement that needs them: one name or several separated by commas. Empty, "none" or unknown names mean
-// none; unset means the application profile below, if any. Read once per process. Names: raytracing-tier (adapter-caps.cpp), present-cached and present-noprimary
-// (heap-import.cpp), recording-bind and retire-handoff (device-engine.cpp: the recording entry binding and the
-// retire hand-off, both read once per device).
+// none; unset means the application profile below, if any. Read once per process. Names: raytracing-tier
+// (adapter-caps.cpp), present-cached and present-noprimary (heap-import.cpp), recording-bind, retire-handoff and
+// deferred-replay (device-engine.cpp: the recording entry binding, the retire hand-off and the deferred
+// command-list replay, all read once per device).
 // The three switches of the release gate (M15.8, the fixes of the trial 245 report) are the other way round:
 // each names the fix to turn OFF, because all three are the driver's behaviour.
 //   release-two-phase-off: engine-ddi waits for one snapshot per release, not two (device-engine.cpp, F1).

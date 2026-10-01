@@ -53,6 +53,7 @@
 // destroy, and its own copy of the names each exposed (StateObjectTranslation::held and exposed).
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
+#include "replay.h"
 #include <climits>
 #include <cstdarg>
 #include <cstdio>
@@ -753,6 +754,7 @@ void APIENTRY destroy_state_object(D3D12DDI_HDEVICE device, D3D12DDI_HSTATEOBJEC
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Destroy);
     const bool held = r->h.engine != nullptr;
     if (r->properties) r->properties->Release();
     r->properties = nullptr;
@@ -797,8 +799,13 @@ UINT APIENTRY get_pipeline_stack_size(D3D12DDI_HSTATEOBJECT_0054 h) {
     return r ? narrow_stack_size(r->properties->GetPipelineStackSize(), "GetPipelineStackSize") : 0;
 }
 
+// The engine reads the size when a list records with the state object: with replay on, the calls recorded before
+// this one run first.
 void APIENTRY set_pipeline_stack_size(D3D12DDI_HSTATEOBJECT_0054 h, UINT size) {
-    if (StateObjectRecord* r = live_state_object(h, "SetPipelineStackSize")) r->properties->SetPipelineStackSize(size);
+    StateObjectRecord* r = live_state_object(h, "SetPipelineStackSize");
+    if (!r) return;
+    drain_all(r->h.device, Drain::Stack);
+    r->properties->SetPipelineStackSize(size);
 }
 } // namespace
 

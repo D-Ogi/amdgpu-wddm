@@ -254,12 +254,37 @@ ProgressSource HostedDispatch::progress_source() noexcept {
         [](void* owner,const ProgressSnapshot* snapshot) noexcept {
             return static_cast<HostedDispatch*>(owner)->progress_retired(snapshot);}};
 }
-// Never under lock_: the runtime's error callback is a callback like any other.
+// Never under lock_: the runtime's error callback is a callback like any other. A replay worker leaves the callback
+// to report_deferred_removal.
 HRESULT HostedDispatch::remove_device(int site) noexcept {
     char name[48];std::snprintf(name,sizeof(name),"hosted-remove-device:%d",site);
     ddi_failure_note(name,D3DDDIERR_DEVICEREMOVED);
+    if(worker_==this){
+        if(!lost_.exchange(true))removal_deferred_.store(true,std::memory_order_release);
+        return D3DDDIERR_DEVICEREMOVED;
+    }
     if(!lost_.exchange(true) && user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
     return D3DDDIERR_DEVICEREMOVED;
+}
+void HostedDispatch::report_deferred_removal() noexcept {
+    if(!removal_deferred_.load(std::memory_order_acquire) || worker_==this || !removal_deferred_.exchange(false))return;
+    ddi_failure_note("hosted-remove-device:deferred",D3DDDIERR_DEVICEREMOVED);
+    if(user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
+}
+// What a recording call of the engine may need on a replay worker: device-level memory and CPU-side sync work. No
+// context, submission, GPU wait or signal, progress publication or queue operation (engine-ddi replay.h, R4).
+bool HostedDispatch::worker_admits(uint32_t op) noexcept {
+    switch(op){
+    case BC250_HOST_CREATE_PAGING:case BC250_HOST_DESTROY_PAGING:case BC250_HOST_CHECK_STATUS:
+    case BC250_HOST_REPORT_LOST:
+    case BC250_HOST_CreateAllocation2:case BC250_HOST_DestroyAllocation2:case BC250_HOST_ReserveGpuVirtualAddress:
+    case BC250_HOST_MapGpuVirtualAddress:case BC250_HOST_FreeGpuVirtualAddress:case BC250_HOST_MakeResident:
+    case BC250_HOST_Evict:case BC250_HOST_Lock2:case BC250_HOST_Unlock2:
+    case BC250_HOST_CreateSynchronizationObject2:case BC250_HOST_DestroySynchronizationObject:
+    case BC250_HOST_WaitForSynchronizationObjectFromCpu:case BC250_HOST_SignalSynchronizationObjectFromCpu:
+    case BC250_HOST_GetDeviceState:return true;
+    default:return false;
+    }
 }
 bc250_host HostedDispatch::descriptor(uint64_t luid,void* identity) noexcept {
     bc250_host host{};host.sType=BC250_HOST_STYPE;host.version=BC250_HOST_VERSION;
@@ -685,6 +710,10 @@ int32_t HostedDispatch::dispatch(void* userdata,uint32_t op,void* argument) noex
     auto self=static_cast<HostedDispatch*>(userdata);
     if(!self || !self->active_.load(std::memory_order_acquire) || !self->runtime_.handle || !self->domain_.entered())
         return static_cast<int32_t>(0xc000000du);
+    if(worker_==self && !worker_admits(op)){
+        char name[40];std::snprintf(name,sizeof(name),"replay-worker-op:%u",op);
+        ddi_failure_note(name,E_INVALIDARG);return static_cast<int32_t>(0xc000000du);
+    }
     HRESULT hr=self->operation(op,argument);
     if(hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG){
         self->remove_device();return static_cast<int32_t>(0xc00002b6u);}

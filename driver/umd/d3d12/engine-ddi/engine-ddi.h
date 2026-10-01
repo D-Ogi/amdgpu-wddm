@@ -7,8 +7,9 @@
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
 // Boundary r4 (2026-09-29): the linear primary. MemoryRequest grows by the surface fields and
 // kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3. Added within r4,
-// additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set), and
-// set_release_policy, the two-phase retirement of heap memory (also off unless set).
+// additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set),
+// set_release_policy, the two-phase retirement of heap memory, and set_replay_policy, deferred command-list replay
+// on worker threads (both also off unless set).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -109,7 +110,8 @@ inline constexpr uint32_t kBoundaryRevision = 4;
 //   device exists: the DDI call that makes the last destroy if the work has already retired, otherwise the first
 //   later DDI call that observes retirement (execute_command_lists, update_tile_mappings, copy_tile_mappings,
 //   pfnCreateHeapAndResource, pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from
-//   an engine thread or an engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   an engine thread or an engine callback: the engine has no threads in INLINE mode, and the only threads
+//   engine-ddi creates, the workers of set_replay_policy, make engine command-list calls and nothing else.
 //   With a retire policy (set_retire_policy) the three submission calls observe retirement only past its bounds,
 //   and the resource DDIs and the queue and device calls take the rest; which thread runs steps 2 and 3 changes,
 //   not what proves retirement, and not the order of the steps.
@@ -183,7 +185,8 @@ struct ImportedMemory {
 // ---- Hooks the shell provides --------------------------------------------------------------------------------
 // Hooks are called only on the thread of a DDI call into the device, during that call, and never re-enter
 // engine-ddi. Two DDI threads of one device may call hooks at the same time (the runtime calls heap and resource
-// creation and destruction concurrently). engine-ddi never holds a lock of its own while it calls a hook.
+// creation and destruction concurrently). engine-ddi never holds a lock of its own while it calls a hook. A replay
+// worker (set_replay_policy) calls none of them.
 struct ShellHooks {
     uint32_t size;                              // sizeof(ShellHooks)
     void* shell;                                // passed back unchanged
@@ -272,6 +275,38 @@ struct ReleasePolicy {
     uint32_t two_phase;                         // 0: one snapshot per release; 1: the second phase above
 };
 HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) noexcept;
+
+// Deferred command-list replay. Off (enabled 0, the default) every recording slot calls the engine list on the
+// calling thread, as before this policy existed: no ring, no thread. On, a recording slot still validates,
+// translates and reports on the calling thread, then writes the engine call, with a copy of every array and
+// descriptor the engine reads through a pointer, into the calling thread's ring; each ring's worker thread makes
+// the engine calls in order (replay.h: topology, drains, ownership rules). Close, Reset, ExecuteBundle,
+// ExecuteCommandLists and the destroy of a list wait for that list's pending calls, so the engine's Close result
+// still reaches the runtime from the Close itself; the destroy of any object a pending call can name, a command
+// pool's reset and destroy, and SetPipelineStackSize wait for every ring. Up to rings recording threads (1 to 16)
+// get a ring of ring_bytes each (a power of two, 64 KiB to 64 MiB); a thread beyond them records directly.
+//   worker(shell, body, ring): the start of each worker thread, called once on it; it must call body(ring), which
+//     returns at teardown. The worker makes engine command-list calls only, and the engine's recording may call
+//     runtime callbacks through the hosted Vulkan driver (descriptor and memory work), so the shell sets up what
+//     those need on the thread and keeps out what a recording call must not do there.
+//   drained(shell): on a DDI thread, after each drain that a DDI call makes, with no engine-ddi lock held; the shell
+//     reports there what a worker could not (a device removal it saw).
+// enabled 0 on a context with the policy on drains every ring, stops and joins the workers and frees the rings;
+// destroy_device_context does the same before it frees the context. Call it with enabled 1 like set_retire_policy:
+// after create_device_context, before the context is used on another thread. E_INVALIDARG, with the policy held
+// before kept, for a null argument, a size other than sizeof(ReplayPolicy), enabled other than 0 or 1, enabled 1
+// while on, rings or ring_bytes out of range, or a null hook.
+using ReplayBody = void (APIENTRY*)(void* ring);
+struct ReplayPolicy {
+    uint32_t size;                              // sizeof(ReplayPolicy)
+    uint32_t enabled;                           // 0: direct recording (turns it off if on); 1: deferred replay
+    uint32_t rings;                             // enabled 1: recording threads with a ring, 1 to 16
+    uint32_t ring_bytes;                        // enabled 1: bytes per ring
+    void* shell;                                // passed back unchanged
+    void (APIENTRY* worker)(void* shell, ReplayBody body, void* ring);
+    void (APIENTRY* drained)(void* shell);
+};
+HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
 
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);

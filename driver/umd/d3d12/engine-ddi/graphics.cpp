@@ -8,6 +8,7 @@
 // enums they pass are equal (static_asserts below). They are installed in the graphics table only; the compute
 // table keeps the fail-safe that rejects them.
 #include "internal.h"
+#include "replay.h"
 #include <cstring>
 
 namespace engine_ddi {
@@ -250,43 +251,48 @@ void APIENTRY destroy_rasterizer(D3D12DDI_HDEVICE device, D3D12DDI_HRASTERIZERST
 // ---- Command-list slots (graphics table) --------------------------------------------------------------------------
 void invalid(CommandListRecord* l) noexcept { l->h.device->report_list(l->rt, E_INVALIDARG); }
 
+using List = ID3D12GraphicsCommandList;
+
 void APIENTRY draw_instanced(D3D12DDI_HCOMMANDLIST hlist, UINT vertices, UINT instances, UINT first_vertex,
                              UINT first_instance) {
     if (CommandListRecord* l = list_of(hlist, "DrawInstanced"))
-        l->list()->DrawInstanced(vertices, instances, first_vertex, first_instance);
+        record(l, [=](List* e) { e->DrawInstanced(vertices, instances, first_vertex, first_instance); });
 }
 
 void APIENTRY draw_indexed_instanced(D3D12DDI_HCOMMANDLIST hlist, UINT indices, UINT instances, UINT first_index,
                                      INT base_vertex, UINT first_instance) {
     if (CommandListRecord* l = list_of(hlist, "DrawIndexedInstanced"))
-        l->list()->DrawIndexedInstanced(indices, instances, first_index, base_vertex, first_instance);
+        record(l, [=](List* e) { e->DrawIndexedInstanced(indices, instances, first_index, base_vertex, first_instance); });
 }
 
 void APIENTRY ia_set_topology(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_PRIMITIVE_TOPOLOGY topology) {
     if (CommandListRecord* l = list_of(hlist, "IaSetTopology"))
-        l->list()->IASetPrimitiveTopology(static_cast<D3D12_PRIMITIVE_TOPOLOGY>(topology));
+        record(l, [=](List* e) { e->IASetPrimitiveTopology(static_cast<D3D12_PRIMITIVE_TOPOLOGY>(topology)); });
 }
 
 void APIENTRY rs_set_viewports(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_VIEWPORT* viewports) {
     CommandListRecord* l = list_of(hlist, "RsSetViewports");
     if (!l) return;
     if (count > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE || (count && !viewports)) return invalid(l);
-    l->list()->RSSetViewports(count, reinterpret_cast<const D3D12_VIEWPORT*>(viewports));
+    record(l, [=](List* e, const D3D12_VIEWPORT* v) { e->RSSetViewports(count, v); },
+           in(reinterpret_cast<const D3D12_VIEWPORT*>(viewports), count));
 }
 
 void APIENTRY rs_set_scissor_rects(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_RECT* rects) {
     CommandListRecord* l = list_of(hlist, "RsSetScissorRects");
     if (!l) return;
     if (count > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE || (count && !rects)) return invalid(l);
-    l->list()->RSSetScissorRects(count, rects);
+    record(l, [=](List* e, const D3D12DDI_RECT* r) { e->RSSetScissorRects(count, r); }, in(rects, count));
 }
 
+// A null factor sets the default (1, 1, 1, 1); otherwise the engine reads four floats.
 void APIENTRY om_set_blend_factor(D3D12DDI_HCOMMANDLIST hlist, const FLOAT factor[4]) {
-    if (CommandListRecord* l = list_of(hlist, "OmSetBlendFactor")) l->list()->OMSetBlendFactor(factor);
+    if (CommandListRecord* l = list_of(hlist, "OmSetBlendFactor"))
+        record(l, [](List* e, const FLOAT* f) { e->OMSetBlendFactor(f); }, in(factor, factor ? 4 : 0));
 }
 
 void APIENTRY om_set_stencil_ref(D3D12DDI_HCOMMANDLIST hlist, UINT ref) {
-    if (CommandListRecord* l = list_of(hlist, "OmSetStencilRef")) l->list()->OMSetStencilRef(ref);
+    if (CommandListRecord* l = list_of(hlist, "OmSetStencilRef")) record(l, [=](List* e) { e->OMSetStencilRef(ref); });
 }
 
 void APIENTRY set_graphics_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HROOTSIGNATURE h) {
@@ -294,17 +300,20 @@ void APIENTRY set_graphics_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_
     if (!l) return;
     auto* r = record_of<RootSignatureRecord>(h.pDrvPrivate, Tag::RootSignature, l->h.device);
     if (h.pDrvPrivate && !r) return invalid(l);
-    l->list()->SetGraphicsRootSignature(r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr);
+    ID3D12RootSignature* signature = r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr;
+    record(l, [=](List* e) { e->SetGraphicsRootSignature(signature); });
 }
 
 void APIENTRY set_graphics_root_table(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_DESCRIPTOR_HANDLE base) {
-    if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootDescriptorTable"))
-        l->list()->SetGraphicsRootDescriptorTable(index, D3D12_GPU_DESCRIPTOR_HANDLE{base.ptr});
+    if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootDescriptorTable")) {
+        const D3D12_GPU_DESCRIPTOR_HANDLE handle{base.ptr};
+        record(l, [=](List* e) { e->SetGraphicsRootDescriptorTable(index, handle); });
+    }
 }
 
 void APIENTRY set_graphics_root_constant(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT data, UINT offset) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRoot32BitConstant"))
-        l->list()->SetGraphicsRoot32BitConstant(index, data, offset);
+        record(l, [=](List* e) { e->SetGraphicsRoot32BitConstant(index, data, offset); });
 }
 
 void APIENTRY set_graphics_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT count, const void* data,
@@ -312,27 +321,29 @@ void APIENTRY set_graphics_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT inde
     CommandListRecord* l = list_of(hlist, "SetGraphicsRoot32BitConstants");
     if (!l) return;
     if (count && !data) return invalid(l);
-    l->list()->SetGraphicsRoot32BitConstants(index, count, data, offset);
+    record(l, [=](List* e, const UINT* d) { e->SetGraphicsRoot32BitConstants(index, count, d, offset); },
+           in(static_cast<const UINT*>(data), count));
 }
 
 void APIENTRY set_graphics_root_cbv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootConstantBufferView"))
-        l->list()->SetGraphicsRootConstantBufferView(index, va);
+        record(l, [=](List* e) { e->SetGraphicsRootConstantBufferView(index, va); });
 }
 
 void APIENTRY set_graphics_root_srv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootShaderResourceView"))
-        l->list()->SetGraphicsRootShaderResourceView(index, va);
+        record(l, [=](List* e) { e->SetGraphicsRootShaderResourceView(index, va); });
 }
 
 void APIENTRY set_graphics_root_uav(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootUnorderedAccessView"))
-        l->list()->SetGraphicsRootUnorderedAccessView(index, va);
+        record(l, [=](List* e) { e->SetGraphicsRootUnorderedAccessView(index, va); });
 }
 
 void APIENTRY ia_set_index_buffer(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDI_INDEX_BUFFER_VIEW* view) {
     if (CommandListRecord* l = list_of(hlist, "IASetIndexBuffer"))
-        l->list()->IASetIndexBuffer(reinterpret_cast<const D3D12_INDEX_BUFFER_VIEW*>(view));
+        record(l, [](List* e, const D3D12_INDEX_BUFFER_VIEW* v) { e->IASetIndexBuffer(v); },
+               in(reinterpret_cast<const D3D12_INDEX_BUFFER_VIEW*>(view), view ? 1 : 0));
 }
 
 void APIENTRY ia_set_vertex_buffers(D3D12DDI_HCOMMANDLIST hlist, UINT start, UINT count,
@@ -341,7 +352,8 @@ void APIENTRY ia_set_vertex_buffers(D3D12DDI_HCOMMANDLIST hlist, UINT start, UIN
     if (!l) return;
     if (start >= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT || count > D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT - start)
         return invalid(l);
-    l->list()->IASetVertexBuffers(start, count, reinterpret_cast<const D3D12_VERTEX_BUFFER_VIEW*>(views));
+    record(l, [=](List* e, const D3D12_VERTEX_BUFFER_VIEW* v) { e->IASetVertexBuffers(start, count, v); },
+           in(reinterpret_cast<const D3D12_VERTEX_BUFFER_VIEW*>(views), views ? count : 0));
 }
 
 void APIENTRY so_set_targets(D3D12DDI_HCOMMANDLIST hlist, UINT start, UINT count,
@@ -351,17 +363,24 @@ void APIENTRY so_set_targets(D3D12DDI_HCOMMANDLIST hlist, UINT start, UINT count
     if (start >= D3D12_SO_BUFFER_SLOT_COUNT || count > D3D12_SO_BUFFER_SLOT_COUNT - start) return invalid(l);
     // No views unbinds the slots. The engine reads the array without checking it, so it gets empty views.
     const D3D12_STREAM_OUTPUT_BUFFER_VIEW none[D3D12_SO_BUFFER_SLOT_COUNT]{};
-    l->list()->SOSetTargets(start, count,
-                            views ? reinterpret_cast<const D3D12_STREAM_OUTPUT_BUFFER_VIEW*>(views) : none);
+    record(l, [=](List* e, const D3D12_STREAM_OUTPUT_BUFFER_VIEW* v) { e->SOSetTargets(start, count, v); },
+           in(views ? reinterpret_cast<const D3D12_STREAM_OUTPUT_BUFFER_VIEW*>(views) : none, count));
 }
 
+// The engine reads the descriptors behind the handles at this call: a deferred call gets copies of them (Snap).
 void APIENTRY om_set_render_targets(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_CPU_DESCRIPTOR_HANDLE* rtvs,
                                     BOOL single_range, const D3D12DDI_CPU_DESCRIPTOR_HANDLE* dsv) {
     CommandListRecord* l = list_of(hlist, "OMSetRenderTargets");
     if (!l) return;
     if (count > D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT || (count && !rtvs)) return invalid(l);
-    l->list()->OMSetRenderTargets(count, reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(rtvs), single_range,
-                                  reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(dsv));
+    record(l,
+           [=](List* e, const D3D12_CPU_DESCRIPTOR_HANDLE* r, const D3D12_CPU_DESCRIPTOR_HANDLE* d) {
+               e->OMSetRenderTargets(count, r, single_range, d);
+           },
+           Snap{reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(rtvs), count, D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                single_range},
+           Snap{reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(dsv), dsv ? 1u : 0u, D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                FALSE});
 }
 } // namespace
 

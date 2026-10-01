@@ -3,6 +3,7 @@
 // their tile slots are in tiles.cpp), resource_allocation, object_allocation, and the list slots that move data
 // between resources (L10, L13, L17).
 #include "internal.h"
+#include "replay.h"
 #include "format-list.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include <algorithm>
@@ -627,6 +628,7 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, D3D12DDI_HRESOURCE hres) {
     DeviceContext* c = resolve(device);
     if (!c) return;
+    drain_all(c, Drain::Destroy);
     if (hres.pDrvPrivate) {
         if (auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c)) {
             Backing* b = r->backing;
@@ -950,7 +952,8 @@ void APIENTRY copy_buffer_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDIARG_BUFFER
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->CopyBufferRegion(d, dst.BaseAddress.UMD.Offset, s, src.BaseAddress.UMD.Offset, bytes);
+    const UINT64 dst_offset = dst.BaseAddress.UMD.Offset, src_offset = src.BaseAddress.UMD.Offset;
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyBufferRegion(d, dst_offset, s, src_offset, bytes); });
 }
 
 UINT block_size(DXGI_FORMAT f) noexcept {
@@ -1021,7 +1024,8 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
     if (box)
         b = {static_cast<UINT>(box->Left), static_cast<UINT>(box->Top), static_cast<UINT>(box->Front),
              static_cast<UINT>(box->Right), static_cast<UINT>(box->Bottom), static_cast<UINT>(box->Back)};
-    l->list()->CopyTextureRegion(&d, x, y, z, &s, box ? &b : nullptr);
+    const bool has_box = box != nullptr;
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyTextureRegion(&d, x, y, z, &s, has_box ? &b : nullptr); });
 }
 
 void APIENTRY resource_copy(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst, D3D12DDI_HRESOURCE src) {
@@ -1033,7 +1037,7 @@ void APIENTRY resource_copy(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst,
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->CopyResource(d, s);
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyResource(d, s); });
 }
 
 // No argument structure means the whole resource.
@@ -1047,17 +1051,22 @@ void APIENTRY discard_resource(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE r
         return;
     }
     if (!args) {
-        l->list()->DiscardResource(r, nullptr);
+        record(l, [=](ID3D12GraphicsCommandList* e) { e->DiscardResource(r, nullptr); });
         return;
     }
-    const D3D12_DISCARD_REGION region{args->NumRects, args->pRects, args->FirstSubresource, args->NumSubresources};
-    l->list()->DiscardResource(r, &region);
+    const UINT rects = args->NumRects, first = args->FirstSubresource, subresources = args->NumSubresources;
+    record(l,
+           [=](ID3D12GraphicsCommandList* e, const D3D12_RECT* p) {
+               const D3D12_DISCARD_REGION region{rects, p, first, subresources};
+               e->DiscardResource(r, &region);
+           },
+           in(args->pRects, rects));
 }
 
-void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDIARG_RESOURCE_BARRIER_0022* in) {
+void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDIARG_RESOURCE_BARRIER_0022* ddi) {
     CommandListRecord* l = list_of(hlist, "ResourceBarrier");
     if (!l) return;
-    if (count && !in) {
+    if (count && !ddi) {
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
@@ -1067,7 +1076,7 @@ void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3
         return;
     }
     for (UINT i = 0; i < count; ++i) {
-        const D3D12DDIARG_RESOURCE_BARRIER_0022& b = in[i];
+        const D3D12DDIARG_RESOURCE_BARRIER_0022& b = ddi[i];
         D3D12_RESOURCE_BARRIER a{};
         a.Flags = static_cast<D3D12_RESOURCE_BARRIER_FLAGS>(
             b.Flags & (D3D12DDI_RESOURCE_BARRIER_FLAG_BEGIN_ONLY | D3D12DDI_RESOURCE_BARRIER_FLAG_END_ONLY));
@@ -1116,7 +1125,9 @@ void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3
         }
         out.data()[i] = a;
     }
-    if (count) l->list()->ResourceBarrier(count, out.data());
+    if (count)
+        record(l, [=](ID3D12GraphicsCommandList* e, const D3D12_RESOURCE_BARRIER* b) { e->ResourceBarrier(count, b); },
+               in(out.data(), count));
 }
 } // namespace
 

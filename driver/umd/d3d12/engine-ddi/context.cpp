@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: device context, resolver, table filling with fail-safes and the release sequence.
 #include "internal.h"
+#include "replay.h"
 #include <cstdarg>
 #include <cstdio>
 #include <tuple>
@@ -347,6 +348,7 @@ template <class T> void release_ref(T*& p) noexcept {
 }
 
 void destroy(DeviceContext* c) noexcept {
+    replay_off(c);                              // the workers first: their pending calls name the engine device
     release_initialization(c);
     release_ref(c->empty_local);
     release_ref(c->device10);

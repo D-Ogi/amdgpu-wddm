@@ -60,7 +60,7 @@ Write-Host "engine ABI $($pin.abi_version) $($pin.header_revision): $engineHeade
 # Object files are named after the source's leaf, so no two sources here may share one.
 $libSources = @('context.cpp', 'caps.cpp', 'queue.cpp', 'commands.cpp', 'resources.cpp', 'descriptors.cpp',
                 'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp', 'tiles.cpp', 'state-objects.cpp', 'state-object-shell.cpp',
-                'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
+                'replay.cpp', 'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
 $harnessSources = @(Get-ChildItem -LiteralPath (Join-Path $src 'tests') -Filter '*.cpp' |
     Where-Object { $_.Name -like 'harness*.cpp' -or $_.Name -like 'test-*.cpp' } | ForEach-Object FullName)
 
