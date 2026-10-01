@@ -161,9 +161,14 @@ returns is not validated.
 A presentable surface (a linear primary) is allocated with the LB7A v1
 description under the E26R v1 resource record. Its storage format is one
 that `driver/contract/amdgpu_wddm_surface_format.h` enables for composition
-(B8G8R8A8, R8G8B8A8, R10G10B10A2 today); the compositor converts it to the
-desktop's format, so the monitor's depth does not decide it. The same table
-gives the kernel driver and the compositor's UMD the format's size a pixel.
+(B8G8R8A8, R8G8B8A8, R10G10B10A2 and R16G16B16A16_FLOAT today); the
+compositor converts it to the desktop's format, so the monitor's depth does
+not decide it. The same table gives the kernel driver and the compositor's UMD
+the format's size a pixel (8 for FP16). The swap chain's colour space and HDR
+metadata never reach this DDI: DXGI hands them to the compositor. An FP16
+primary is presentable on a machine only when the kernel driver and the
+desktop UMD carry the table's FP16 row as well (0.7.184.1, 4176D1DF and
+E6B944CF do not); until then the kernel refuses its allocation.
 It is released by its runtime
 resource, with ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY, and only inside the
 `pfnCreateHeapAndResource` or `pfnDestroyHeapAndResource` call of that

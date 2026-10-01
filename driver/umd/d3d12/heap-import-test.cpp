@@ -19,6 +19,7 @@ static bool resident_pending=false,fail_wait=false,fail_evict=false;
 static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
 static unsigned long surface_format=0;
+static uint32_t surface_width=256;            // LB7A.Width the next primary must carry
 static unsigned creates=0,makes_resident=0,evictions=0,waits=0,probes=0;
 static uint32_t expected_type=0;
 static void* identity=handle<void*>(0x5432);
@@ -35,7 +36,7 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
   uint32_t e[3];std::memcpy(e,a->pPrivateDriverData,sizeof(e));
   assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
   uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
-  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==256 && w[3]==64 && w[4]==1024);
+  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==surface_width && w[3]==64 && w[4]==1024);
   assert(w[5]==surface_format && w[6]==65536 && w[7]==0);
   assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
   assert(a->pAllocationInfo->VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
@@ -274,8 +275,16 @@ int main(){
    assert(owner.allocate(&s,&memory)==expected && !memory.memory && events.empty() && next_allocation==before);
   };
   // Refused before any callback: a description the surface does not exist for, and one that the
-  // reader's rules do not admit. FP16 is a row the format table knows and does not enable yet.
-  target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;refused(E_NOTIMPL);
+  // reader's rules do not admit.
+  // An FP16 swap chain is eight bytes a pixel: 128 pixels fill the 1024-byte pitch that held 256
+  // four-byte ones, so the kernel gets A16B16G16R16F with the same pitch and size. At 256 pixels the
+  // pitch is short by half: refused before any callback, by the table's bytes, not by a width * 4.
+  target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;refused(E_INVALIDARG);
+  target.Width=128;surface_width=128;surface_format=D3DDDIFMT_A16B16G16R16F;events.clear();
+  {OwnerScope create(&owner,0);
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.byte_size==65536);
+   assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+  target.Width=256;surface_width=256;surface_format=D3DDDIFMT_A8B8G8R8;
   target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
   target.MipLevels=2;refused(E_NOTIMPL);target.MipLevels=1;
   target.SampleDesc.Count=4;refused(E_NOTIMPL);target.SampleDesc.Count=1;
@@ -323,7 +332,7 @@ int main(){
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
  // Every reference taken was released: all calls but the refused one and the failed eviction.
- assert(makes_resident==evictions+2);assert(surfaces==4);
+ assert(makes_resident==evictions+2);assert(surfaces==5);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.
@@ -389,7 +398,7 @@ int main(){
   assert(late.discard_metadata()==5 && events.empty());
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  }
- assert(surfaces==11);
+ assert(surfaces==12);
  {
   // present-cached: the 16-byte E26R v2 record, shared 1, CPU_READ without the PRIMARY intent bit; the
   // allocation itself is unchanged (LB7A v1, PRIMARY, no video present source). Default stays v1.
@@ -419,7 +428,19 @@ int main(){
   assert(both.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && both.args.PrivateDriverDataSize==16);
   std::memcpy(e,both.args.pPrivateDriverData,sizeof(e));
   assert(e[0]==0x52363245u && e[1]==2 && e[2]==1 && e[3]==2);
+  // The pitch rule takes the bytes a pixel from the format's row: 4 for the 8- and 10-bit rows, 8 for FP16.
+  // The LB7A words carry the format as given; the reader opens it by the same table.
+  AllocationRequest fp16;
+  assert(fp16.prepare_surface(256,64,2048,D3DDDIFMT_A16B16G16R16F,131072,handle<void*>(2))==S_OK);
+  uint32_t w[8];std::memcpy(w,fp16.info.pPrivateDriverData,sizeof(w));
+  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==256 && w[3]==64 && w[4]==2048 && w[5]==113 && w[6]==131072 && !w[7]);
+  assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_A16B16G16R16F,131072,handle<void*>(2))==E_INVALIDARG);
+  assert(fp16.prepare_surface(256,64,2048,D3DDDIFMT_A16B16G16R16F,65536,handle<void*>(2))==E_INVALIDARG);
+  assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_A2B10G10R10,65536,handle<void*>(2))==S_OK);
+  // Rows the table does not have, or has without COMPOSED: A2R10G10B10 (35), X8R8G8B8 (scan-out only).
+  assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_A2R10G10B10,65536,handle<void*>(2))==E_NOTIMPL);
+  assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_X8R8G8B8,65536,handle<void*>(2))==E_NOTIMPL);
  }
- std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R, "
+ std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation");
 }
