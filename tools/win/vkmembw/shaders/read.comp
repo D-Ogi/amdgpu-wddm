@@ -1,0 +1,18 @@
+#version 450
+// Read bandwidth: each invocation adds up (mod 2^32 per lane) the elements of binding 0 it visits and stores one
+// 16-byte result in binding 1, so the stores are 16 bytes per invocation against the whole buffer read. The sum
+// of all results equals the sum of the whole source, which the host checks. (Not XOR: over a power-of-two range
+// the pattern's XOR is 0, the same value an idle kernel leaves in a zeroed buffer.)
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer Src { uvec4 src[]; };
+layout(std430, binding = 1) writeonly buffer Acc { uvec4 acc[]; };
+layout(push_constant) uniform Pc { uint n; uint seed; } pc;
+
+void main()
+{
+    uint stride = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+    uvec4 x = uvec4(0u);
+    for (uint i = gl_GlobalInvocationID.x; i < pc.n; i += stride)
+        x += src[i];
+    acc[gl_GlobalInvocationID.x] = x;
+}

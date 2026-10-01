@@ -1,0 +1,13 @@
+#version 450
+// Write bandwidth: element i of binding 1 becomes (4i, 4i+1, 4i+2, 4i+3) ^ seed. Grid-stride loop, so any
+// dispatch size covers the whole buffer and consecutive invocations store consecutive 16-byte elements.
+layout(local_size_x = 256) in;
+layout(std430, binding = 1) writeonly buffer Dst { uvec4 dst[]; };
+layout(push_constant) uniform Pc { uint n; uint seed; } pc;
+
+void main()
+{
+    uint stride = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+    for (uint i = gl_GlobalInvocationID.x; i < pc.n; i += stride)
+        dst[i] = (uvec4(4u * i) + uvec4(0u, 1u, 2u, 3u)) ^ uvec4(pc.seed);
+}

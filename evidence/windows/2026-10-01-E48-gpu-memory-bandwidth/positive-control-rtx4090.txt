@@ -1,0 +1,27 @@
+device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+queue family  0 flags 0xF, timestamps 64 valid bits, period 1.000 ns
+memory        5 types, 3 heaps
+  type  0 heap 1 flags 0x000
+  type  1 heap 0 flags 0x001
+  type  2 heap 1 flags 0x006
+  type  3 heap 1 flags 0x00E
+  type  4 heap 2 flags 0x007
+  heap 0 size 24142 MiB flags 0x1
+  heap 1 size 65447 MiB flags 0x0
+  heap 2 size 214 MiB flags 0x1
+placement local: src/dst type 1 (heap 0, flags 0x001), readback type 3 (flags 0x00E)
+  buffers 256 MiB x2, 16777216 elements of 16 bytes, 4096 groups x 256 = 1048576 invocations, 20 iterations
+  warmup 63 batches of 8 copies, 498 ms
+  write  n=20 gpu_ms min 0.284 median 0.294 max 0.365 sum 6.0 | GB/s median 914.4 best 945.8 | cpu_ms 7.6 (0.381 per dispatch)
+  copy   n=20 gpu_ms min 0.586 median 0.599 max 0.609 sum 12.0 | GB/s median 896.3 best 915.5 | cpu_ms 19.2 (0.961 per dispatch)
+  read   n=20 gpu_ms min 0.308 median 0.309 max 0.340 sum 6.2 | GB/s median 921.7 best 925.2 | cpu_ms 6.4 (0.319 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+placement host: src/dst type 2 (heap 1, flags 0x006), readback type 3 (flags 0x00E)
+  buffers 256 MiB x2, 16777216 elements of 16 bytes, 4096 groups x 256 = 1048576 invocations, 20 iterations
+  warmup 2 batches of 8 copies, 819 ms
+  write  n=20 gpu_ms min 24.937 median 26.480 max 29.607 sum 533.6 | GB/s median 10.1 best 10.8 | cpu_ms 545.1 (27.253 per dispatch)
+  copy   n=20 gpu_ms min 47.771 median 49.302 max 54.123 sum 993.5 | GB/s median 10.9 best 11.2 | cpu_ms 993.7 (49.687 per dispatch)
+  read   n=20 gpu_ms min 25.548 median 27.427 max 28.805 sum 545.7 | GB/s median 10.4 best 11.2 | cpu_ms 545.8 (27.292 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+result ok
+exit=0
