@@ -35,7 +35,8 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700BDu       // revision 189: target modes name their wire format (8-bit RGB), which
+#define BC250_KMD_VERSION 0x000700BEu       // revision 190: DDI interface version 0xE003 (WDDM 2.9; 3.x
+                                            // makes VidMm refuse the VRAM-only CpuVisible CDD shadow); 189: target modes name their wire format (8-bit RGB), which
                                             // interface 2.2+ needs (display.c OfferTargetMode; 188 also wrote the 2.9
                                             // MinimumVSyncFreq past the V1 mode info and bugchecked); 186:
                                             // DDI interface version 0x10004 (WDDM 3.1 table, WDDMVersion
