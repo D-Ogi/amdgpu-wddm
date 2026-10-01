@@ -9,7 +9,9 @@
 namespace {
 struct Owner {
     bool allowed{true};
+    bool fast{};                        // FastPolicy admits this owner's recording slots to the fast path
     std::atomic<unsigned> entered{},left{},calls{},failures{};
+    std::atomic<unsigned> fast_entered{},fast_left{};
     std::atomic<HRESULT> last_error{};
     std::atomic<bool> failure_in_scope{};
 };
@@ -32,6 +34,21 @@ struct Policy {
     }
 };
 struct SecondPolicy:Policy {};
+// The recording fast path (EntryThunk, ListBinding::fast): an owner with `fast` set admits a thread that is in no
+// scope; FastScope binds `current` as Scope does, and counts apart, so a test sees which path a call took.
+struct FastPolicy:Policy {
+    static const Owner* fast_binding(Owner& owner) noexcept {return owner.fast && !current?&owner:nullptr;}
+    class FastScope {
+        Owner* owner_;Owner* previous_;bool active_;
+    public:
+        explicit FastScope(const Owner& owner) noexcept
+          :owner_(const_cast<Owner*>(&owner)),previous_(current),active_(owner.allowed) {
+            if(active_){current=owner_;++owner_->fast_entered;}
+        }
+        ~FastScope(){if(active_){++owner_->fast_left;current=previous_;}}
+        bool entered() const noexcept{return active_;}
+    };
+};
 struct TracePolicy:Policy {
     struct Event {Owner* owner;const char* name;std::uint64_t id;HRESULT outcome;bool begin;};
     inline static Event events[32]{};
@@ -144,6 +161,23 @@ SIZE_T APIENTRY fence_size(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATE_FENCE*) {
 void APIENTRY dispatch(D3D12DDI_HCOMMANDLIST h,UINT x,UINT y,UINT z) {
     assert(current==static_cast<Owner*>(h.pDrvPrivate) && x==2 && y==3 && z==4);++current->calls;
 }
+// Fast-path fixtures: a recording slot that enters another recording slot of the same list (the inner call must
+// take the full path, being nested), and one that throws.
+D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 fast_list{};
+unsigned topology_throwing{};
+void APIENTRY nested_draw(D3D12DDI_HCOMMANDLIST h,UINT,UINT,UINT,UINT) {
+    assert(current==static_cast<Owner*>(h.pDrvPrivate));++current->calls;
+    fast_list.pfnDispatch(h,2,3,4);
+    assert(current==static_cast<Owner*>(h.pDrvPrivate));
+}
+static_assert(std::is_same_v<decltype(&nested_draw),PFND3D12DDI_DRAWINSTANCED>);
+void APIENTRY throwing_topology(D3D12DDI_HCOMMANDLIST h,D3D12DDI_PRIMITIVE_TOPOLOGY) {
+    assert(current==static_cast<Owner*>(h.pDrvPrivate));++current->calls;
+    if(topology_throwing==1)throw std::bad_alloc{};
+    if(topology_throwing==2)throw std::runtime_error("recording refused by exception");
+}
+static_assert(std::is_same_v<decltype(&throwing_topology),PFND3D12DDI_IA_SETTOPOLOGY_0003>);
+struct NullFastBinding {static constexpr bool fast=true;static decltype(&dispatch) original() noexcept{return nullptr;}};
 template<class Fn>struct Dummy;
 template<class R,class... A>struct Dummy<R(APIENTRY*)(A...)> {
     static R APIENTRY call(A...) {
@@ -506,10 +540,62 @@ int main() {
     assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_FAIL);heap_throwing=0;
     assert(ObservedPolicy::heap_observations==3 && !current && a.entered==a.left && b.entered==b.left);
 
+    // Recording fast path: under a policy with FastScope, the recording slots of an admitted owner run in
+    // FastScope (no Scope, no trace hooks); Close, Reset and Present, an owner the policy does not admit, a
+    // nested entry, and a policy without FastScope take the full path. Failures are reported inside FastScope.
+    using FastTables=native12::DdiEntryTables<FastPolicy>;
+    List fast_source=source_list();
+    fast_source.pfnDrawInstanced=nested_draw;fast_source.pfnIaSetTopology=throwing_topology;
+    assert(FastTables::wrap_list(1,fast_source,&fast_list)==S_OK);
+    Owner f;f.fast=true;D3D12DDI_HCOMMANDLIST hf{&f};
+    fast_list.pfnDispatch(hf,2,3,4);
+    assert(f.calls==1 && f.fast_entered==1 && f.fast_left==1 && f.entered==0 && !current);
+    fast_list.pfnCloseCommandList(hf);
+    fast_list.pfnResetCommandList(hf,nullptr);
+    fast_list.pfnPresent(hf,{},nullptr,nullptr,nullptr,nullptr);
+    assert(f.calls==4 && f.fast_entered==1 && f.entered==3 && f.entered==f.left && !current);
+    // Nested: the outer draw is fast, the dispatch it makes sees a bound thread and takes the full path.
+    fast_list.pfnDrawInstanced(hf,3,1,0,0);
+    assert(f.calls==6 && f.fast_entered==2 && f.fast_left==2 && f.entered==4 && f.entered==f.left && !current);
+    // An owner the policy does not admit: full path, and the full path still refuses a denied owner.
+    Owner g;D3D12DDI_HCOMMANDLIST hg{&g};
+    fast_list.pfnDispatch(hg,2,3,4);
+    assert(g.calls==1 && g.fast_entered==0 && g.entered==1 && !current);
+    g.allowed=false;
+    fast_list.pfnDispatch(hg,2,3,4);
+    assert(g.calls==1 && g.failures==1 && g.last_error==E_UNEXPECTED && !g.failure_in_scope && !current);
+    // Admitted but the fast scope does not enter: the full path decides, and refuses here.
+    g.fast=true;
+    fast_list.pfnDispatch(hg,2,3,4);
+    assert(g.calls==1 && g.fast_entered==0 && g.failures==2 && !g.failure_in_scope && !current);
+    g.allowed=true;g.fast=false;
+    // Exceptions and a missing original are failures reported inside FastScope.
+    topology_throwing=1;fast_list.pfnIaSetTopology(hf,D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    assert(f.failures==1 && f.last_error==E_OUTOFMEMORY && f.failure_in_scope && !current);
+    topology_throwing=2;fast_list.pfnIaSetTopology(hf,D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    assert(f.failures==2 && f.last_error==E_FAIL && f.failure_in_scope && !current);
+    topology_throwing=0;fast_list.pfnIaSetTopology(hf,D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    assert(f.failures==2 && f.fast_entered==5 && f.fast_entered==f.fast_left && f.entered==f.left);
+    native12::EntryThunk<decltype(&dispatch),NullFastBinding,FastPolicy>::call(hf,2,3,4);
+    assert(f.failures==3 && f.last_error==E_UNEXPECTED && f.failure_in_scope && f.fast_entered==6 && !current);
+    assert((!native12::EntryThunk<decltype(&dispatch),NullFastBinding,Policy>::fast_path()));
+    // A null handle resolves to no owner: refused on the full path, as before.
+    fast_list.pfnDispatch({},2,3,4);
+    assert(!current);
+    // The same slots under a policy without FastScope never take it (wrapped_compute is Policy's).
+    const unsigned fast_before=f.fast_entered.load(),entered_before_full=f.entered.load();
+    wrapped_compute.pfnDispatch(hf,2,3,4);
+    assert(f.fast_entered==fast_before && f.entered==entered_before_full+1 && !current);
+    // Several threads at once, fast on f and full on g.
+    std::thread fast_a([&]{for(unsigned i=0;i<1000;++i){fast_list.pfnDispatch(hf,2,3,4);assert(!current);}});
+    std::thread fast_b([&]{for(unsigned i=0;i<1000;++i){fast_list.pfnDispatch(hg,2,3,4);assert(!current);}});
+    fast_a.join();fast_b.join();
+    assert(f.fast_entered==fast_before+1000 && f.fast_entered==f.fast_left && g.entered==g.left && g.fast_entered==0);
+
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});
     call_a.join();call_b.join();refill.join();
     assert(!current && a.entered==a.left && b.entered==b.left);
-    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation and concurrency pass");
+    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording fast path (admission, Close/Reset/Present and nested fallback, failures inside the fast scope) and concurrency pass");
 }

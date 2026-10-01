@@ -51,6 +51,10 @@ class DeviceEngine final {
     std::atomic<bool> active_{true};
     std::atomic<bool> binding_failed_{};
     std::atomic<UINT64> callback_sequence_{};
+    // Lever L2 (experiment recording-bind): the binding Device::recording points to while it is published,
+    // and whether the experiment is on for this device, read once at open.
+    RecordingBinding recording_{};
+    std::atomic<bool> recording_bind_{};
     static int32_t dispatch(void* owner,uint32_t operation,void* argument) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
         if(!self.active_.load(std::memory_order_acquire))return static_cast<int32_t>(0xc000000du);
@@ -60,7 +64,9 @@ class DeviceEngine final {
         // unconditional formatting cost 15 % of this module's main-thread samples (native 164).
         // The sequence is counted in that mode only, so that callbacks on several threads do not
         // share a cache line for a number nobody reads.
-        const bool traced=ddi_trace_enabled();
+        // With recording-bind the device's trace mode, read once, replaces the per-call read (L2).
+        const bool traced=self.recording_bind_.load(std::memory_order_relaxed)?self.device_.trace_mode==1:
+            ddi_trace_enabled();
         const UINT64 sequence=traced?self.callback_sequence_.fetch_add(1,std::memory_order_relaxed)+1:0;
         LARGE_INTEGER start{},end{};
         if(traced){
@@ -184,6 +190,14 @@ public:
                   device.adapter->instance_policy) {
         services_={sizeof(services_),this,bind,unbind};
     }
+    // L2: publishes this owner's recording binding in Device::recording when `on` and the device is not
+    // traced, clears it otherwise. Called once the engine is open, and with false before it closes.
+    bool bind_recording(bool on) noexcept {
+        recording_={this,&domain_,&bootstrap_,&active_};
+        recording_bind_.store(on,std::memory_order_relaxed);
+        device_.recording=on && device_.trace_mode==0?&recording_:nullptr;
+        return device_.recording!=nullptr;
+    }
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
     QueueEngineRegistry* queues() const noexcept {return queues_.get();}
     RuntimeHeapImports* imports() const noexcept {return imports_.get();}
@@ -301,15 +315,22 @@ HRESULT create_device_engine(Device& device) noexcept {
     AdapterEngineAccess access{};
     HRESULT result=get_adapter_engine(*device.adapter,&access);
     stage("AdapterEngine",result);if(FAILED(result))return result;
+    device.trace_mode=ddi_trace_mode();device.recording=nullptr;
     auto owner=new(std::nothrow) DeviceEngine(device,access);if(!owner)return E_OUTOFMEMORY;
     device.engine=owner;
     result=owner->open();
-    if(result==S_OK)return S_OK;
+    if(result==S_OK){
+        // The device handle reaches the runtime only after this DDI returns, so no entry sees it change.
+        if(ddi_experiment("recording-bind"))stage("RecordingBind",owner->bind_recording(true)?S_OK:S_FALSE);
+        return S_OK;
+    }
     if(owner->close())delete owner;else owner->retain();
     device.engine=nullptr;return result;
 }
 void destroy_device_engine(Device& device) noexcept {
     auto owner=device.engine;if(!owner)return;
+    // DestroyDevice runs after every other entry of the device has returned: no recording entry holds it.
+    owner->bind_recording(false);
     if(owner->close())delete owner;else owner->retain();
     device.engine=nullptr;
 }
@@ -343,14 +364,19 @@ HRESULT host_test_open_device_engine(Device& device,PFN_vkGetInstanceProcAddr ic
                                      VkDevice vk_device) noexcept {
     if(device.engine || !device.adapter || !icd)return E_UNEXPECTED;
     AdapterEngineAccess access{};access.driver_entry=icd;
+    device.trace_mode=ddi_trace_mode();device.recording=nullptr;
     auto owner=new(std::nothrow) DeviceEngine(device,access);if(!owner)return E_OUTOFMEMORY;
     device.engine=owner;
     const HRESULT result=owner->host_test_open(physical,vk_device);
     if(result!=S_OK)(void)host_test_close_device_engine(device);
     return result;
 }
+bool host_test_bind_recording(Device& device,bool on) noexcept {
+    return device.engine && device.engine->bind_recording(on);
+}
 bool host_test_close_device_engine(Device& device) noexcept {
     auto owner=device.engine;if(!owner)return false;
+    owner->bind_recording(false);
     owner->host_test_destroy_instance();
     const bool closed=owner->close();
     if(closed)delete owner;else owner->retain();

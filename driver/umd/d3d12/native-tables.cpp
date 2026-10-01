@@ -27,6 +27,11 @@ template<class T> bool trace_input(const T* source,T& destination) noexcept {
 }
 struct EntryPolicy:EntryOwner<Device> {
     using Scope=DeviceEngineScope;
+    // The recording slots of the list tables (ddi-entry.h, ListBinding::fast) enter through the device's
+    // recording binding when it is published (lever L2, device-engine.h); otherwise, and for every other
+    // table, through Scope with the trace hooks below.
+    using FastScope=RecordingScope;
+    static const RecordingBinding* fast_binding(Device& device) noexcept {return RecordingScope::admit(device.recording);}
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
     // Sizes only: other scalar returns can be addresses, which a trace must not carry.

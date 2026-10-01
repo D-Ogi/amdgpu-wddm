@@ -280,6 +280,50 @@ void shared_context(Device& device){
     D3DKMT_DESTROYCONTEXT release{};release.hContext=context.hContext;wrapper.arguments=&release;
     {DeviceEngineScope scope(device);assert(scope.entered() && call(0,BC250_HOST_DESTROY_QUEUE_CONTEXT,&wrapper)==0);}
 }
+// 6. The recording binding (lever L2): published only when asked and only for an untraced device. A RecordingScope
+// grants what DeviceEngineScope grants (callbacks accepted, device_engine_entered) on every thread at once, and
+// takes it back; inside it, admit() refuses (a nested entry goes the full way), the full scope admits the same
+// device and refuses another; inside another device's scope admit() refuses; cleared, the device has no binding.
+constexpr unsigned kRecordingRounds=50;
+void recording(Device& device,Device& other){
+    assert(!device.recording && !other.recording);
+    device.trace_mode=2;
+    assert(!host_test_bind_recording(device,true) && !device.recording);
+    device.trace_mode=0;
+    assert(host_test_bind_recording(device,true) && device.recording && RecordingScope::admit(device.recording));
+    bc250_host_paging paging{};
+    {RecordingScope scope(*RecordingScope::admit(device.recording));
+     assert(scope.entered() && call(0,BC250_HOST_CREATE_PAGING,&paging)==0 && paging.queue==9);}
+    assert(!device_engine_entered(device));
+    scope_meeting.arm(kThreads);
+    std::vector<std::thread> threads;
+    for(unsigned t=0;t<kThreads;++t)threads.emplace_back([&]{
+        if(device_engine_entered(device)){++failures;return;}
+        const RecordingBinding* binding=RecordingScope::admit(device.recording);
+        if(!binding){++failures;return;}
+        RecordingScope scope(*binding);
+        if(!scope.entered() || !device_engine_entered(device) || device_engine_entered(other)){++failures;return;}
+        if(RecordingScope::admit(device.recording))++failures;
+        {DeviceEngineScope nested(device);if(!nested.entered())++failures;}
+        {DeviceEngineScope foreign(other);if(foreign.entered())++failures;}
+        if(!device_engine_entered(device))++failures;
+        for(unsigned round=0;round<kRecordingRounds;++round)if(!round_trip(paging)){++failures;return;}
+        scope_meeting.pass();
+    });
+    for(auto& thread:threads)thread.join();
+    scope_meeting.disarm();
+    assert(!failures.load() && scope_meeting.met.load() && !device_engine_entered(device));
+    std::thread foreign([&]{
+        DeviceEngineScope scope(other);
+        if(!scope.entered() || RecordingScope::admit(device.recording))++failures;
+    });
+    foreign.join();
+    std::thread after([]{if(call(0,BC250_HOST_CHECK_STATUS,nullptr)>=0)++failures;});
+    after.join();
+    {RecordingScope scope(*RecordingScope::admit(device.recording));
+     assert(scope.entered() && call(0,BC250_HOST_DESTROY_PAGING,&paging)==0);}
+    assert(!failures.load() && !host_test_bind_recording(device,false) && !device.recording);
+}
 }
 int main(){
     Adapter adapter{};adapter.contract.luid=UINT64_C(0x0000000100000042);
@@ -303,14 +347,18 @@ int main(){
     refusals(other);
     imports(device);
     shared_context(device);
+    recording(device,other);
     assert(!errors.load() && !device.lost.load() && !other.lost.load());
     // Everything created was released: the owners close without an unresolved object.
     assert(host_test_close_device_engine(other) && host_test_close_device_engine(device));
-    assert(!live_instances.load() && !device.engine && !other.engine);
-    assert(allocations.load()==kThreads*kRounds+kImportThreads*kImportRounds && deallocations.load()==allocations.load());
-    assert(paging_creates.load()==2 && paging_destroys.load()==2);
+    assert(!live_instances.load() && !device.engine && !other.engine && !device.recording);
+    assert(allocations.load()==kThreads*kRounds+kImportThreads*kImportRounds+kThreads*kRecordingRounds &&
+           deallocations.load()==allocations.load());
+    assert(paging_creates.load()==3 && paging_destroys.load()==3);
     std::printf("PASS entry concurrency: %u threads in scopes of one device at once, %u hosted callback rounds "
         "with all threads inside one runtime callback together, outside and foreign scopes refused, %u heap "
         "imports under owner scopes on %u threads at once, one internal context submitted on by two threads at "
-        "once and closed\n",kThreads,kThreads*kRounds,kImportThreads*kImportRounds,kImportThreads);
+        "once and closed, %u callback rounds under recording scopes on %u threads at once (L2 binding: "
+        "untraced only, nested and foreign refused, cleared at close)\n",kThreads,kThreads*kRounds,
+        kImportThreads*kImportRounds,kImportThreads,kThreads*kRecordingRounds,kThreads);
 }
