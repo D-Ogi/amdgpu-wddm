@@ -423,6 +423,13 @@
       "source": "LEARN enumerating-gpu-nodes: DxgkDdiGetNodeMetadata 'must return STATUS_INVALID_PARAMETER for NodeOrdinal >= GetNumNodes()', and the same ordinal space indexes DXGKARG_CREATECONTEXT.NodeOrdinal (LEARN ns-d3dkmddi-_dxgkarg_createcontext, 'Node targetted for this context'); SAMPLE RosKmdAdapter.cpp rejects an out-of-range node in CreateContext before allocating anything",
       "when": [{"cap_nonzero": "GpuEngineTopology.NbAsymetricProcessingNodes"}],
       "require": [{"ctx_node_checked": true}]
+    },
+    {
+      "id": "R39-SEGMENT-BUDGET-GROUPS",
+      "declaration": "DXGK_QUERYSEGMENTOUT4 declares the adapter's segments",
+      "requires_text": "every memory segment carries Flags.LocalBudgetGroup alone and every aperture segment carries Flags.NonLocalBudgetGroup alone, so that system memory reached through the aperture is not counted into the local budget",
+      "source": "WDK d3dkmddi.h DXGK_SEGMENTFLAGS LocalBudgetGroup (bit 19) / NonLocalBudgetGroup (bit 20); LEARN memory-management-strategies (local and non-local budgets of DXGI QueryVideoMemoryInfo). Measured: 0.7.182.1 declared the aperture in no group and the lab reported local 11339 MiB = segments 1 + 3 + SharedSystemMemory - 768 MiB, non-local 0; a budget-sized client then overflowed segment 1 (trial 211)",
+      "require": [{"segment_budget_groups": true}]
     }
   ]
 }

@@ -272,14 +272,13 @@ static int Info(const WCHAR *wantedId)
 
 // With softwareOnly the escape carries NoAdapterSynchronization and nothing else: the typed snapshots (DPM) that
 // the driver answers without idling the adapter refuse any other flag combination.
-static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int softwareOnly, NTSTATUS *result)
+// Finds the adapter whose hardware id matches and opens it: 0 with *handle set, or 1 after reporting why not.
+static int OpenAdapterById(const WCHAR *wantedId, D3DKMT_HANDLE *handle, NTSTATUS *result)
 {
     BC250_ADAPTER adapters[16];
     int count = FindAdapters(adapters, 16);
     int chosen = -1;
     D3DKMT_OPENADAPTERFROMDEVICENAME open = { 0 };
-    D3DKMT_CLOSEADAPTER close = { 0 };
-    D3DKMT_ESCAPE escape = { 0 };
 
     for (int i = 0; i < count && chosen < 0; i++)
         if (MatchesHardwareId(adapters[i].HardwareId, wantedId)) chosen = i;
@@ -288,18 +287,62 @@ static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int
     open.pDeviceName = adapters[chosen].InterfacePath;
     *result = D3DKMTOpenAdapterFromDeviceName(&open);
     if (!NT_SUCCESS(*result)) { PrintStatus("D3DKMTOpenAdapterFromDeviceName", *result); return 1; }
+    *handle = open.hAdapter;
+    return 0;
+}
 
-    escape.hAdapter = open.hAdapter;
+static NTSTATUS EscapeOn(D3DKMT_HANDLE adapter, void *data, unsigned size, int softwareOnly)
+{
+    D3DKMT_ESCAPE escape = { 0 };
+
+    escape.hAdapter = adapter;
     escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
     if (softwareOnly) escape.Flags.NoAdapterSynchronization = 1;
     else escape.Flags.HardwareAccess = 1;   // dxgkrnl then serializes the call with the rest of the adapter's work
     escape.pPrivateDriverData = data;
     escape.PrivateDriverDataSize = size;
-    *result = D3DKMTEscape(&escape);
+    return D3DKMTEscape(&escape);
+}
 
-    close.hAdapter = open.hAdapter;
+static void CloseAdapterHandle(D3DKMT_HANDLE adapter)
+{
+    D3DKMT_CLOSEADAPTER close = { 0 };
+
+    close.hAdapter = adapter;
     D3DKMTCloseAdapter(&close);
+}
+
+static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int softwareOnly, NTSTATUS *result)
+{
+    D3DKMT_HANDLE adapter = 0;
+
+    if (OpenAdapterById(wantedId, &adapter, result)) return 1;
+    *result = EscapeOn(adapter, data, size, softwareOnly);
+    CloseAdapterHandle(adapter);
     return 0;
+}
+
+// The held adapter of `journal follow` (0.7.183.1): opened at the first read and kept for the whole run, so a
+// sampler no longer walks the display device interfaces and opens the adapter once per interval. A failed escape
+// closes it (a PnP disable/enable of the adapter, as the GPU DWM ladder does, leaves the handle stale), and the
+// next read opens it again. Nothing else in this tool holds an adapter.
+static D3DKMT_HANDLE g_HeldAdapter;
+static unsigned long g_HeldOpens;
+
+static int SendEscapeHeld(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
+{
+    if (g_HeldAdapter == 0) {
+        if (OpenAdapterById(wantedId, &g_HeldAdapter, result)) { g_HeldAdapter = 0; return 1; }
+        g_HeldOpens++;
+    }
+    *result = EscapeOn(g_HeldAdapter, data, size, 0);
+    if (!NT_SUCCESS(*result)) { CloseAdapterHandle(g_HeldAdapter); g_HeldAdapter = 0; }
+    return 0;
+}
+
+static void ReleaseHeldAdapter(void)
+{
+    if (g_HeldAdapter != 0) { CloseAdapterHandle(g_HeldAdapter); g_HeldAdapter = 0; }
 }
 
 static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
@@ -1156,15 +1199,30 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
 {
     const BC250_PAGING_JOURNAL_RECORD *r = &journal->Records[i];
     const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
+    char segments[64] = "";
+
+    // UPDATE records of 0.7.183.1 and later carry the PTE segments of their valid entries in Flags bits 16-31
+    // (BC250_PJ_FLAG_SEGMENT): " seg 0,1" = system memory and segment 1. Older drivers leave the bits zero.
+    if ((r->Kind == BC250_PJ_UPDATE_CPU || r->Kind == BC250_PJ_UPDATE_GPU) && (r->Flags & BC250_PJ_FLAG_SEGMENT_MASK)) {
+        const char *separator = " seg ";
+        size_t used = 0;
+        for (unsigned s = 0; s < 16 && used < sizeof(segments); s++) {
+            if (!(r->Flags & (1u << (BC250_PJ_FLAG_SEGMENT_SHIFT + s)))) continue;
+            if (s == 15) used += (size_t)snprintf(segments + used, sizeof(segments) - used, "%s15+", separator);
+            else used += (size_t)snprintf(segments + used, sizeof(segments) - used, "%s%u", separator, s);
+            separator = ",";
+        }
+    }
     printf("%8llu %14.6f %-10s L%lu i%-3lu n%-3lu v%-3lu va 0x%012llX alloc 0x%016llX off 0x%llX dma 0x%llX "
-           "fence %lu seq %lu flags 0x%lX%s\n",
+           "fence %lu seq %lu flags 0x%lX%s%s\n",
            journal->Next - journal->Returned + i, (double)r->Time / 1e7, kind, r->Level, r->Index, r->Count,
            r->Valid, r->Va, r->Allocation, r->Offset, r->Dma, r->Fence, r->Seq, r->Flags,
-           (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "");
+           (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "", segments);
 }
 
-// One escape: the records from `from`, printed; returns the driver's Next (the index to ask for next), or 0 on a
-// refusal, which the caller has already reported when `report` is set.
+// One escape of `journal follow`, on the held adapter: the records from `from` into *journal. 0 on success, 1 when
+// the adapter could not be opened or the escape failed (the held handle is closed then and the next call reopens
+// it), 3 on a driver refusal; `report` prints the reason.
 static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long from, int report)
 {
     NTSTATUS status;
@@ -1173,7 +1231,7 @@ static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long 
     journal->Magic = BC250_ESCAPE_MAGIC;
     journal->Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
     journal->From = from;
-    if (SendEscape(BC250_DEFAULT_HWID, journal, sizeof(*journal), &status)) return 1;
+    if (SendEscapeHeld(BC250_DEFAULT_HWID, journal, sizeof(*journal), &status)) return 1;
     if (!NT_SUCCESS(status)) { if (report) PrintStatus("D3DKMTEscape", status); return 1; }
     if (journal->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { if (report) printf("refused: caller is not an administrator\n"); return 3; }
     if (journal->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
@@ -1193,11 +1251,16 @@ static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long 
 // spawned a fresh bc250kmd_cli every second alongside the present heartbeat left the lab's sshd accepting
 // nothing for as long as it ran (2026-09-30, trial 152 and scratch\dpm\test-shape.sh); a single long process
 // like `dpm N MS` never did. A liveness line every 30 s, a summary at the end.
+//
+// 0.7.183.1: the adapter is opened once and held (SendEscapeHeld); up to 182 every read found and opened it
+// again. A failed read no longer ends the run: the handle is dropped, the failure is printed once, and the next
+// interval reopens. A journal whose total fell below the cursor belongs to a reloaded driver (the PnP restart
+// of the GPU DWM ladder), and the cursor goes back to its oldest record.
 static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
 {
     static BC250_ESCAPE_PAGING_JOURNAL journal;
     unsigned long long from, printed = 0, lost = 0;
-    unsigned long seconds, ms = 1000, reads = 0;
+    unsigned long seconds, ms = 1000, reads = 0, failures = 0, failing = 0, restarts = 0;
     ULONGLONG start, lastLive;
     WCHAR *end;
     int rc;
@@ -1209,7 +1272,7 @@ static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
         if (*end || ms < 50 || ms > 60000) { fprintf(stderr, "journal follow SECONDS [MS]: MS 50..60000\n"); return 2; }
     }
     rc = JournalPage(&journal, ~0ull, 1);
-    if (rc) return rc;
+    if (rc) { ReleaseHeldAdapter(); return rc; }
     from = journal.Next;
     printf("journal follow: %lu s every %lu ms from record %llu (%llu written so far, ring of %lu, table %s)\n",
            seconds, ms, from, journal.Total, journal.Capacity,
@@ -1220,7 +1283,32 @@ static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
         ULONGLONG now = GetTickCount64();
         if (now - start >= (ULONGLONG)seconds * 1000ull) break;
         rc = JournalPage(&journal, from, 0);
-        if (rc) { printf("journal follow: escape failed (%d) at read %lu\n", rc, reads + 1); fflush(stdout); return rc; }
+        if (rc == 3) {
+            printf("journal follow: the driver refused read %lu (status %lu)\n", reads + 1, journal.Status);
+            fflush(stdout);
+            ReleaseHeldAdapter();
+            return rc;
+        }
+        if (rc) {
+            failures++;
+            if (!failing++) printf("journal follow: t=%llu s read %lu failed, reopening the adapter at the next interval\n",
+                                   (now - start) / 1000ull, reads + 1);
+            fflush(stdout);
+            Sleep(ms);
+            continue;
+        }
+        if (failing) {
+            printf("journal follow: t=%llu s reads resumed after %lu failed (adapter opens %lu)\n",
+                   (now - start) / 1000ull, failing, g_HeldOpens);
+            failing = 0;
+        }
+        if (journal.Total < from) {
+            printf("journal follow: the journal holds %llu records, fewer than the cursor %llu: a reloaded driver; "
+                   "following from its oldest record\n", journal.Total, from);
+            restarts++;
+            from = 0;
+            continue;
+        }
         reads++;
         lost += journal.Lost;
         for (unsigned long i = 0; i < journal.Returned && i < BC250_PAGING_JOURNAL_MAX; i++) PrintJournalRecord(&journal, i);
@@ -1235,7 +1323,10 @@ static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
         fflush(stdout);
         Sleep(ms);
     }
-    printf("journal follow: done, %lu reads, %llu records printed, %llu lost to the ring, next %llu\n", reads, printed, lost, from);
+    printf("journal follow: done, %lu reads, %llu records printed, %llu lost to the ring, next %llu; "
+           "%lu failed reads, %lu adapter opens, %lu driver reloads\n",
+           reads, printed, lost, from, failures, g_HeldOpens, restarts);
+    ReleaseHeldAdapter();
     return 0;
 }
 

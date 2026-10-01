@@ -70,6 +70,19 @@
 #define BC250_WDDM_MAGIC_ALLOCATION 'lA7M'
 #define BC250_WDDM_MAGIC_OPENED     'pO7M'  // an allocation opened on a device: what a DXGK_ALLOCATIONLIST entry names
 
+// KMD183: the index of BC250_WDDM.PagingXferCount/PagingXferBytes. Virtual transfers are sorted by
+// TransferVirtual.TransferDirection (d3dkmddi.h DXGK_MEMORY_TRANSFER_DIRECTION), physical ones by which end is
+// segment 0 (system memory). WddmCountTransfer is the only writer.
+typedef enum _BC250_WDDM_XFER {
+    BC250WddmXferVirtualToSystem = 0,   // DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM
+    BC250WddmXferVirtualFromSystem,     // DXGK_MEMORY_TRANSFER_SYSTEM_TO_LOCAL
+    BC250WddmXferVirtualOther,          // DXGK_MEMORY_TRANSFER_LOCAL_TO_LOCAL and anything newer
+    BC250WddmXferPhysicalToSystem,      // Transfer.Destination.SegmentId == 0
+    BC250WddmXferPhysicalFromSystem,    // Transfer.Source.SegmentId == 0
+    BC250WddmXferPhysicalOther,         // segment to segment
+    BC250WddmXferKinds
+} BC250_WDDM_XFER;
+
 // The DDIs this file adds, in the order the table declares them. Only used to count calls for the log.
 typedef enum _BC250_WDDM_DDI {
     WddmDdiQueryAdapterInfo = 0,
@@ -300,6 +313,10 @@ typedef struct _BC250_WDDM {
     volatile LONG PagingMapsBuilt;
     volatile LONG PagingUnmapsBuilt;
     volatile LONG64 PagingBytesMoved;
+    // KMD183: built transfers by kind and direction, count and bytes, indexed by BC250_WDDM_XFER (trial 211 could
+    // not tell evictions to system memory from restores without the journal, which wrapped).
+    volatile LONG PagingXferCount[BC250WddmXferKinds];
+    volatile LONG64 PagingXferBytes[BC250WddmXferKinds];
     volatile LONG PagingInsufficientBuffer;
     volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
     // Per-buffer private data owns commands; these counters track node routing only.
@@ -1612,6 +1629,15 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingDmaLastRoot,Wddm->PagingDmaLastPa,Wddm->PagingDmaLastCpu);
     GuardLog("wddm summary: BuildPagingBuffer: %ld transfers, %ld fills, %lld bytes, %ld insufficient-buffer",
              Wddm->PagingTransfersBuilt, Wddm->PagingFillsBuilt, Wddm->PagingBytesMoved, Wddm->PagingInsufficientBuffer);
+    // BC250_LOG_TEXT is 160 bytes: count/bytes pairs keep realistic values (6-digit counts, 11-digit bytes) in one line.
+    GuardLog("wddm summary: virtual transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld",
+             Wddm->PagingXferCount[BC250WddmXferVirtualToSystem], Wddm->PagingXferBytes[BC250WddmXferVirtualToSystem],
+             Wddm->PagingXferCount[BC250WddmXferVirtualFromSystem], Wddm->PagingXferBytes[BC250WddmXferVirtualFromSystem],
+             Wddm->PagingXferCount[BC250WddmXferVirtualOther], Wddm->PagingXferBytes[BC250WddmXferVirtualOther]);
+    GuardLog("wddm summary: physical transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld",
+             Wddm->PagingXferCount[BC250WddmXferPhysicalToSystem], Wddm->PagingXferBytes[BC250WddmXferPhysicalToSystem],
+             Wddm->PagingXferCount[BC250WddmXferPhysicalFromSystem], Wddm->PagingXferBytes[BC250WddmXferPhysicalFromSystem],
+             Wddm->PagingXferCount[BC250WddmXferPhysicalOther], Wddm->PagingXferBytes[BC250WddmXferPhysicalOther]);
     GuardLog("wddm summary: aperture map batches %ld, unmap batches %ld",Wddm->PagingMapsBuilt,Wddm->PagingUnmapsBuilt);
     GuardLog("wddm summary: paging TLB invalidations %ld, PTE update batches %ld",
              Wddm->PagingFlushesBuilt,Wddm->PagingUpdatesBuilt);
@@ -2263,6 +2289,12 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
         descriptor->Flags.Aperture = 1;
         descriptor->Flags.CacheCoherent = 1;
         descriptor->Flags.CpuVisible = 1;
+        // Revision 183: system memory reached through the aperture counts against the NON-local budget group
+        // (d3dkmddi.h DXGK_SEGMENTFLAGS). With no segment in that group dxgkrnl reported a UMA-style budget:
+        // local 11339 MiB = segments 1 + 3 + SharedSystemMemory - 768 MiB, non-local 0. A budget-sized client
+        // then overflowed segment 1 by up to 3.4 GiB, and VidMm evicted into the RAM the OS runs on (trial 211,
+        // K48). Placement is unchanged: segment ids, segment sets and the paging buffer segment stay as they were.
+        descriptor->Flags.NonLocalBudgetGroup = 1;
         descriptor->BaseAddress.QuadPart = (LONGLONG)Device->WddmAperture.mc;
         descriptor->CpuTranslatedAddress.QuadPart = (LONGLONG)0xFFFFFFFE00000000ull;
         descriptor->Size = (SIZE_T)Device->WddmAperture.bytes;
@@ -4018,6 +4050,17 @@ static ULONGLONG WddmPagingBuildPosition(_In_ const DXGKARG_BUILDPAGINGBUFFER* B
     return Build->DmaBufferGpuVirtualAddress + Build->DmaBufferWriteOffset;
 }
 
+// A built transfer: the old totals plus the KMD183 split by kind and direction (BC250_WDDM_XFER).
+static void WddmCountTransfer(_Inout_ BC250_WDDM* Wddm, _In_ BC250_WDDM_XFER Kind, _In_ ULONGLONG Moved)
+{
+    InterlockedIncrement(&Wddm->PagingTransfersBuilt);
+    InterlockedAdd64(&Wddm->PagingBytesMoved,(LONG64)Moved);
+    if ((ULONG)Kind < BC250WddmXferKinds) {
+        InterlockedIncrement(&Wddm->PagingXferCount[Kind]);
+        InterlockedAdd64(&Wddm->PagingXferBytes[Kind],(LONG64)Moved);
+    }
+}
+
 static DXGKDDI_BUILDPAGINGBUFFER Bc250WddmBuildPagingBuffer;
 static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKARG_BUILDPAGINGBUFFER* pBuildPagingBuffer)
 {
@@ -4099,8 +4142,10 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             status=WddmBuildCapturedVirtualTransfer((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,
                 context?&context->Captures:NULL,pBuildPagingBuffer,&moved);
         if (moved) {
-            InterlockedIncrement(&wddm->PagingTransfersBuilt);
-            InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            DXGK_MEMORY_TRANSFER_DIRECTION direction=pBuildPagingBuffer->TransferVirtual.TransferDirection;
+            WddmCountTransfer(wddm,direction==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ? BC250WddmXferVirtualToSystem :
+                direction==DXGK_MEMORY_TRANSFER_SYSTEM_TO_LOCAL ? BC250WddmXferVirtualFromSystem :
+                BC250WddmXferVirtualOther,moved);
             PagingJournalNote(BC250_PJ_VIRTUAL_TRANSFER,pBuildPagingBuffer->TransferVirtual.SourceVirtualAddress,
                 pBuildPagingBuffer->TransferVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),
                 pBuildPagingBuffer->TransferVirtual.TransferDirection==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ?
@@ -4114,8 +4159,9 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         ULONGLONG moved=0;
         NTSTATUS status=WddmBuildPhysicalTransfer((BC250_DEVICE*)hAdapter,pBuildPagingBuffer,&moved);
         if (moved) {
-            InterlockedIncrement(&wddm->PagingTransfersBuilt);
-            InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            WddmCountTransfer(wddm,pBuildPagingBuffer->Transfer.Destination.SegmentId==0 ? BC250WddmXferPhysicalToSystem :
+                pBuildPagingBuffer->Transfer.Source.SegmentId==0 ? BC250WddmXferPhysicalFromSystem :
+                BC250WddmXferPhysicalOther,moved);
             PagingJournalNote(BC250_PJ_TRANSFER,0,pBuildPagingBuffer->Transfer.hAllocation,moved,
                 WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }

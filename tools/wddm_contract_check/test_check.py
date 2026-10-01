@@ -367,6 +367,28 @@ class NegativeFixtures(unittest.TestCase):
         result, _ = statuses(wddm=wddm)
         self.assertEqual(check.OK, result["R34-PAGINGBUFFER-SEGMENT"])
 
+    def test_aperture_segment_outside_the_non_local_group(self):
+        """0.7.182.1's shape: an aperture segment in no non-local group. dxgkrnl then folded the shared
+        system memory into the local budget (local 11339 MiB, non-local 0, trial 211)."""
+        wddm = GOOD_WDDM.replace("descriptor->Flags.CpuVisible = 1;",
+                                 "descriptor->Flags.CpuVisible = 1;\n    descriptor->Flags.Aperture = 1;")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R39-SEGMENT-BUDGET-GROUPS")
+
+    def test_aperture_segment_in_the_non_local_group(self):
+        """The same aperture segment, moved from the local group to the non-local one: the rule passes."""
+        wddm = GOOD_WDDM.replace("descriptor->Flags.CpuVisible = 1;",
+                                 "descriptor->Flags.CpuVisible = 1;\n    descriptor->Flags.Aperture = 1;")
+        wddm = wddm.replace("descriptor->Flags.LocalBudgetGroup = 1;",
+                            "descriptor->Flags.NonLocalBudgetGroup = 1;")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.OK, result["R39-SEGMENT-BUDGET-GROUPS"])
+
+    def test_memory_segment_in_no_budget_group(self):
+        wddm = drop(GOOD_WDDM, "descriptor->Flags.LocalBudgetGroup")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual(check.VIOLATION, result["R39-SEGMENT-BUDGET-GROUPS"])
+
     def test_context_dma_buffer_in_a_segment(self):
         """The same VerifySegmentSet rule, applied to the context's own DMA buffer."""
         wddm = GOOD_WDDM.replace("pCreateContext->ContextInfo.DmaBufferSegmentSet = 0;",

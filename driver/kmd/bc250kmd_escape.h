@@ -34,7 +34,7 @@
 #define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
-#define BC250_KMD_VERSION 0x000700B6u       // revision 182: a full paging DMA buffer is refused quietly (bc250_sdma_paging.c)
+#define BC250_KMD_VERSION 0x000700B7u       // revision 183: the aperture segment counts against the non-local budget (wddm.c)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -768,6 +768,12 @@ typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 5244
 #define BC250_PJ_FLAG_64KB 8u                   // UPDATE: .Use64KBPages (this driver refuses it)
 #define BC250_PJ_FLAG_TO_SYSTEM 16u             // VIRTUAL_TRANSFER: local to system (paging out); else system to local
 #define BC250_PJ_FLAG_UMD_ALLOCATION 32u        // DESTROY: a UMD allocation (Offset is its UmdBytes)
+// UPDATE, KMD183 (0.7.183.1 and later): bits 16-31 are a mask of the DXGK_PTE.Segment values the slice's valid
+// entries carry: bit 16 + s for segment s < 15 (16 = system memory, 17 = segment 1, 18 = 2, 19 = 3), bit 31 for any
+// segment from 15 up. All zero on older drivers and for a slice with no valid entry. Record size and layout unchanged.
+#define BC250_PJ_FLAG_SEGMENT_SHIFT 16u
+#define BC250_PJ_FLAG_SEGMENT_MASK 0xFFFF0000u
+#define BC250_PJ_FLAG_SEGMENT(s) (((s) < 15u) ? (1u << (BC250_PJ_FLAG_SEGMENT_SHIFT + (s))) : 0x80000000u)
 
 typedef struct _BC250_PAGING_JOURNAL_RECORD {
     unsigned long long Time;                // KeQueryInterruptTime() when recorded (100 ns since boot; the log's

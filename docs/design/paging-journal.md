@@ -28,6 +28,11 @@ count and how many of those entries have the Windows Valid bit: a slice with `Va
 unmaps. The VA comes from `FirstPteVirtualAddress` (WDDM 2.0's field of the request) plus the slice's offset at that
 level's span (4 KiB << 9L for this driver's 512-entry tables).
 
+From 0.7.183.1 an update record's `Flags` bits 16-31 also name the segments its valid entries point into
+(`DXGK_PTE.Segment`, `BC250_PJ_FLAG_SEGMENT`): bit 16 + s for segment s below 15, so bit 16 is system memory and
+bit 17 segment 1, and bit 31 for any segment from 15 up. The CLI prints them as `seg 0,1`. A record of an older
+driver, or one whose slice has no valid entry, has the bits clear. Record size and layout are unchanged.
+
 Each GPU-path record stores its position in the paging buffer (`DmaBufferGpuVirtualAddress + DmaBufferWriteOffset`
 at the build). SubmitCommand on the paging node stamps the OS `SubmissionFenceId` into the records of the submitted
 range (`PagingJournalStampFence`, walking back and stopping at the previous submission of a reused buffer), and the
@@ -46,7 +51,11 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
   `bc250kmd_cli journal follow SECONDS [MS]` is the sampler for a trial: one process, one adapter handle, one
   escape per interval, printing the records added since the previous read. It replaced a loop that spawned the
   CLI once a second: next to the desktop's present heartbeat that loop left the lab's sshd accepting no new
-  connection for as long as it ran (2026-09-30), while a single long process never did.
+  connection for as long as it ran (2026-09-30), while a single long process never did. Up to 0.7.182.1 the
+  follow mode still found and opened the adapter for every read; from 0.7.183.1 it opens it once and holds it.
+  A failed read drops the handle and the next interval reopens it, so a PnP disable/enable of the adapter no
+  longer ends the sampler, and a journal whose total fell below the cursor (a reloaded driver) is read again
+  from its oldest record.
 - From a dump: `scratch\m15\game-recon\bsod-analysis\pagingjournal.py` (local) reads `g_PagingJournal` through the
   build's map, checks `Magic`/`Version`/`EntryBytes`, and lists the records around a fault VA.
 

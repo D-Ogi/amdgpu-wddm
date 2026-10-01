@@ -523,6 +523,29 @@ def predicate(facts: Facts, pred: dict):
         found = [s["id"] for s in facts.segments if truthy(s["flags"].get("Aperture"))]
         return bool(found), ("aperture segment(s): %s" % found) if found else "no aperture segment declared"
 
+    # Every declared segment sits in exactly one budget group: memory segments in the local group, aperture
+    # segments in the non-local group (d3dkmddi.h DXGK_SEGMENTFLAGS LocalBudgetGroup/NonLocalBudgetGroup).
+    # With no segment in the non-local group dxgkrnl folded the shared system memory into the local budget
+    # (trial 211, K48). The rule reads every segment, not only segment 1.
+    if "segment_budget_groups" in pred:
+        if not facts.segments:
+            return False, "no segment descriptor found"
+        bad, good = [], []
+        for segment in facts.segments:
+            flags = segment["flags"]
+            aperture = truthy(flags.get("Aperture"))
+            local, nonlocal_ = truthy(flags.get("LocalBudgetGroup")), truthy(flags.get("NonLocalBudgetGroup"))
+            want = "non-local" if aperture else "local"
+            line = "segment %d (%s): LocalBudgetGroup %d, NonLocalBudgetGroup %d" % (
+                segment["id"], "aperture" if aperture else "memory", local, nonlocal_)
+            if (nonlocal_ and not local) if aperture else (local and not nonlocal_):
+                good.append(line)
+            else:
+                bad.append(line + ", wanted the %s group only" % want)
+        if bad:
+            return False, "; ".join(bad)
+        return True, "; ".join(good)
+
     # DXGK_CONTEXTINFO, the CreateContext answer.
     if "ctx_equals" in pred:
         name, want = pred["ctx_equals"]["name"], pred["ctx_equals"]["value"]

@@ -46,14 +46,20 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
                          ULONGLONG Dma, BOOLEAN Cpu)
 {
     BC250_PAGING_JOURNAL_RECORD r;
-    ULONG i, valid = 0, span;
+    ULONG i, valid = 0, span, segments = 0;
 
     if (Update == NULL) return;
     RtlZeroMemory(&r, sizeof(r));
     if (Update->pPageTableEntries != NULL && SliceStart <= Update->NumPageTableEntries &&
         SliceCount <= Update->NumPageTableEntries - SliceStart)
-        for (i = 0; i < SliceCount; i++)
-            if (Update->pPageTableEntries[Update->Flags.Repeat ? 0 : SliceStart + i].Valid) valid++;
+        for (i = 0; i < SliceCount; i++) {
+            const DXGK_PTE* pte = &Update->pPageTableEntries[Update->Flags.Repeat ? 0 : SliceStart + i];
+            if (!pte->Valid) continue;
+            valid++;
+            // KMD183: which segments the slice's valid entries point into (DXGK_PTE.Segment, d3dukmdt.h; 0 is
+            // system memory). Read from the same entries Valid counts, so it costs no extra pass.
+            segments |= BC250_PJ_FLAG_SEGMENT((ULONG)pte->Segment);
+        }
     span = Update->PageTableLevel < 5 ? 12 + 9 * Update->PageTableLevel : 63;
     r.Kind = Cpu ? BC250_PJ_UPDATE_CPU : BC250_PJ_UPDATE_GPU;
     r.Level = Update->PageTableLevel;
@@ -61,7 +67,8 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
     r.Count = SliceCount;
     r.Valid = valid;
     r.Flags = (Update->Flags.Repeat ? BC250_PJ_FLAG_REPEAT : 0u) | (Update->Flags.InitialUpdate ? BC250_PJ_FLAG_INITIAL : 0u) |
-              (Update->Flags.NotifyEviction ? BC250_PJ_FLAG_EVICTION : 0u) | (Update->Flags.Use64KBPages ? BC250_PJ_FLAG_64KB : 0u);
+              (Update->Flags.NotifyEviction ? BC250_PJ_FLAG_EVICTION : 0u) | (Update->Flags.Use64KBPages ? BC250_PJ_FLAG_64KB : 0u) |
+              segments;
     r.Va = Update->FirstPteVirtualAddress + ((ULONGLONG)SliceStart << span);
     r.Allocation = (ULONGLONG)(ULONG_PTR)Update->hAllocation;
     r.Offset = Update->AllocationOffsetInBytes;
