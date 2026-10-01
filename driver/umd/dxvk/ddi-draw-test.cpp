@@ -1050,6 +1050,27 @@ int main() {
     if(resourceTable.pfnOfferResources(&offerArgs)!=E_FAIL || offerCalls!=2) std::abort(); // no engine/context
     reclaimArgs.Resources=0; reclaimArgs.pResources=nullptr;
     if(resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaimCalls!=3 || owner.runtime().domain.entered()) std::abort();
+    // Engine-private resources (no runtime surface): Offer, Reclaim and residency are hints and never fail a batch;
+    // DXGI removes the device on a failed Offer (Task Manager's XAML looped on that, M14.1, 2026-10-01). Runtime
+    // surfaces in the same batch still reach the kernel by allocation handle.
+    {
+        DdiResource privateResource{}; privateResource.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[0]);
+        DXGI_DDI_HRESOURCE mixed[4]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&privateResource),
+                                     sharedHandles[0],sharedHandles[1],sharedHandles[2]};
+        BOOL kept[4]={9,9,9,9};
+        DXGI_DDI_ARG_OFFERRESOURCES privateOffer{reclaimArgs.hDevice,mixed,1,D3DDDI_OFFER_PRIORITY_LOW};
+        DXGI_DDI_ARG_RECLAIMRESOURCES mixedReclaim{reclaimArgs.hDevice,mixed,kept,4};
+        DXGI_DDI_RESIDENCY privateStatus=static_cast<DXGI_DDI_RESIDENCY>(99);
+        DXGI_DDI_ARG_QUERYRESOURCERESIDENCY privateResidency{reclaimArgs.hDevice,mixed,&privateStatus,1};
+        const unsigned offers=offerCalls,reclaims=reclaimCalls,residencies=residencyCalls;
+        if (resourceTable.pfnOfferResources(&privateOffer)!=S_OK || offerCalls!=offers ||
+            resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 ||
+            kept[0] || kept[1] || !kept[2] || kept[3] ||
+            resourceTable.pfnQueryResourceResidency(&privateResidency)!=S_OK || residencyCalls!=residencies ||
+            privateStatus!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || owner.runtime().domain.entered()) std::abort();
+        mixedReclaim.Resources=1; kept[0]=9;
+        if (resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 || kept[0]) std::abort();
+    }
     DXGI_DDI_ARG_SETDISPLAYMODE modeArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],0};
     if (!resourceTable.pfnSetDisplayMode || resourceTable.pfnSetDisplayMode(nullptr)!=E_INVALIDARG ||
         resourceTable.pfnSetDisplayMode(&modeArgs)!=E_NOTIMPL || displayModeCalls) std::abort();
@@ -1087,8 +1108,8 @@ int main() {
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_RESIDENT_IN_SHARED_MEMORY) std::abort();
     tracked[1].owner=&foreignRuntime;
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_INVALIDARG || residencyCalls!=5) std::abort();
-    sharedResources[0].runtime_surface=nullptr;
-    if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=E_NOTIMPL || priorityCalls!=1 ||
+    sharedResources[0].runtime_surface=nullptr; // Engine-private: SetResourcePriority is a hint, no callback.
+    if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 ||
         resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) std::abort();
     UINT64 adapterLuid=77;
     if(query_adapter_identity(nullptr,adapter_query,adapterLuid)!=E_INVALIDARG ||
