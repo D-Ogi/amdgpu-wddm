@@ -67,13 +67,16 @@ gate in this driver:
 The gate is read once, in `DriverEntry`, before the driver object is touched, so at 0 not a line of `wddm.c` runs.
 Both paths are counted by the same start budget, because both can cost a boot.
 
-**One binary, one interface version.** The whole driver is compiled at `DXGKDDI_INTERFACE_VERSION_WDDM2_0`
+**One binary, one interface version.** The whole driver is compiled at `DXGKDDI_INTERFACE_VERSION_WDDM3_1`
 (`bc250kmd.h` says why, with the measurement behind it): the WDK headers change the *shape* of `DXGKRNL_INTERFACE`
 and of most `DXGKARG_*` structures with that macro, and `BC250_DEVICE` embeds a `DXGKRNL_INTERFACE`, so two
 translation units at two versions would disagree about the layout of this driver's own device structure. The
 display-only table is unaffected: `KMDDOD_INITIALIZATION_DATA` and all 30 of its members are identical at both
 versions, and so are every member of `DXGK_DRIVERCAPS`, `DXGKARG_QUERYADAPTERINFO` and `DXGKARG_ESCAPE` that
 `display.c` reads or writes. `Version` inside each table is a run-time value and is unchanged in either path.
+ADR 0019 stage B1 moved the interface version from 0x5023 to 0x10004, the newest whose whole table, caps buffer
+and callback interface the lab's dxgkrnl (22621) reads; `DXGK_DRIVERCAPS.WDDMVersion` stays 2.0 and every DDI the
+2.1-3.1 headers add stays NULL until the WDDMVersion steps of stage B4 (`bc250kmd.h`, `wddm.c` `WddmCheckReserved`).
 
 ### What stage A is, and is not
 

@@ -66,9 +66,21 @@ QAI_TYPES = {
 
 # DXGKDDI_INTERFACE_VERSION_* values that matter to the rules (d3dukmdt.h).
 INTERFACE_VERSIONS = {
-    "DXGKDDI_INTERFACE_VERSION_WIN8": 0x4002,
+    "DXGKDDI_INTERFACE_VERSION_WIN8": 0x300E,
     "DXGKDDI_INTERFACE_VERSION_WDDM1_3": 0x4002,
     "DXGKDDI_INTERFACE_VERSION_WDDM2_0": 0x5023,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_1": 0x6003,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_2": 0x700A,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_3": 0x8001,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_4": 0x9006,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_5": 0xA00B,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_6": 0xB004,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_7": 0xC004,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_8": 0xD001,
+    "DXGKDDI_INTERFACE_VERSION_WDDM2_9": 0xE003,
+    "DXGKDDI_INTERFACE_VERSION_WDDM3_0": 0xF003,
+    "DXGKDDI_INTERFACE_VERSION_WDDM3_1": 0x10004,
+    "DXGKDDI_INTERFACE_VERSION_WDDM3_2": 0x11007,
 }
 
 WDDM_VERSIONS = {
@@ -632,6 +644,18 @@ def predicate(facts: Facts, pred: dict):
     if "table_version_is" in pred:
         want = pred["table_version_is"]
         return facts.table_version == want, "DRIVER_INITIALIZATION_DATA.Version = %s" % facts.table_version
+    if "table_version_matches_interface" in pred:
+        # The table must declare the version the binary is compiled at: dxgkrnl sizes its copies of the table,
+        # DRIVERCAPS and DXGKRNL_INTERFACE by the declared version, our sizeof() follows the compiled one.
+        raw = (facts.table_version or "").strip()
+        declared = INTERFACE_VERSIONS.get(raw)
+        if declared is None and re.fullmatch(r"0[xX][0-9a-fA-F]+", raw):
+            declared = int(raw, 16)
+        if declared is None or facts.interface_version is None:
+            return None, "DRIVER_INITIALIZATION_DATA.Version = %s, DXGKDDI_INTERFACE_VERSION = %s" % (
+                facts.table_version, "0x%04X" % facts.interface_version if facts.interface_version else "not found")
+        return declared == facts.interface_version, "DRIVER_INITIALIZATION_DATA.Version = %s (0x%04X), compiled 0x%04X" % (
+            raw, declared, facts.interface_version)
     if "interface_at_least" in pred:
         want = int(pred["interface_at_least"], 16)
         if facts.interface_version is None:

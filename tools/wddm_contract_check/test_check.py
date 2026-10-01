@@ -439,6 +439,24 @@ class NegativeFixtures(unittest.TestCase):
         result, _ = statuses(wddm=wddm)
         self.assertOnlyViolation(result, "R04-FLIPONVSYNCMMIO")
 
+    def test_table_version_not_the_compiled_one(self):
+        """ADR 0019 B1: a table that declares 3.1 in a binary compiled at 2.0 would hand dxgkrnl a 0x340-byte
+        table it copies as 0x560 bytes, and a 0x240-byte DRIVERCAPS it sized at 0x250."""
+        wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
+                                 "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1;")
+        self.assertNotEqual(GOOD_WDDM, wddm)
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R20-WDDMVERSION-VS-INTERFACE")
+
+    def test_interface_moved_together_with_the_table(self):
+        """The B1 shape itself: compiled at 0x10004 and declaring WDDM3_1 is not a violation of any rule."""
+        wddm = GOOD_WDDM.replace("Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;",
+                                 "Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1;")
+        wddm = wddm.replace("#define DXGKDDI_INTERFACE_VERSION 0x5023", "#define DXGKDDI_INTERFACE_VERSION 0x10004")
+        result, _ = statuses(wddm=wddm)
+        self.assertEqual({}, {k: v for k, v in result.items() if v == check.VIOLATION})
+        self.assertEqual(check.OK, result["R20-WDDMVERSION-VS-INTERFACE"])
+
     def test_empty_source_is_not_a_pass(self):
         """The failure mode of a regex checker: a file it cannot parse must not read as compliant."""
         result, _ = statuses(wddm="/* nothing */\n")

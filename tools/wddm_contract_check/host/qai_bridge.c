@@ -1,7 +1,7 @@
 /* The kernel-header half of the QueryAdapterInfo host harness.
  *
  * This file is compiled against the WDK's km headers, at the same DXGKDDI_INTERFACE_VERSION as the
- * driver (bc250kmd.h pins 0x5023), and is linked together with the REAL driver\kmd\wddm.c. Not a copy
+ * driver (bc250kmd.h pins 0x10004), and is linked together with the REAL driver\kmd\wddm.c. Not a copy
  * of it, not a transcription: the same file the miniport is built from, compiled a second time without
  * /kernel and with the kernel services replaced by host_stubs.c. wddm.c is not modified in any way and
  * knows nothing about this harness.

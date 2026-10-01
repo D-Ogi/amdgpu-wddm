@@ -2459,7 +2459,8 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // What was promised, and into how large a structure: the size says which DXGK_DRIVERCAPS this dxgkrnl thinks
     // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
     // the 160 bytes of a log line: count before adding a field. Our own sizeof and the paging node are not in
-    // it: both are constants of the build (576 at interface 0x5023, which is what dxgkrnl offers; node 0).
+    // it: both are constants of the build (592 = 0x250 at interface 0x10004, which is what the lab's dxgkrnl offers
+    // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0).
     if (WddmAnswersLogged(Device))
         GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u "
                  "tdr %u dflip %u rot %u",
@@ -2616,8 +2617,11 @@ static NTSTATUS Bc250WddmGetNodeMetadata(_In_ const HANDLE hAdapter, UINT NodeOr
     // stage D: wddm->NodeCount, not the compile-time constant, docs/design/paging-node.md section 6).
     if (node >= nodeCount || adapter != 0) return STATUS_INVALID_PARAMETER;
 
-    // At WDDM 2.0 the member after FriendlyName is a reserved UINT32, not DXGK_NODEMETADATA_FLAGS (that arrives at
-    // WDDM 2.2); zeroing covers it either way.
+    // At interface 0x10004 the member after FriendlyName is DXGK_NODEMETADATA_FLAGS (a reserved UINT32 at 2.0).
+    // Zeroing it is the honest answer: no ContextSchedulingSupported (no hardware scheduling), no
+    // RingBufferFenceRelease, no SupportTrackedWorkload, no UserModeSubmission. The lab's dxgkrnl reads these flags
+    // for a table that declares interface 0x9000 or later (static reading, ADR 0019 B1), so this zero is now a
+    // statement and not padding.
     RtlZeroMemory(pGetNodeMetadata, sizeof(*pGetNodeMetadata));
     if (node == BC250_WDDM_NODE_COPY)
     {
@@ -5662,10 +5666,15 @@ C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, Version) == 0);
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPresent) > FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiDestroyDevice));
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSubmitCommandVirtual) > FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSubmitCommand));
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetNodeMetadata) > FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCreateContext));
-// Nothing after the WDDM 2.0 block exists: SetVideoProtectedRegion is that block's last member, so if the
-// structure ends right after it, every WDDM 2.1 and later member is structurally absent, not a NULL we defend.
-C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) ==
-         FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID));
+// At interface 0x5023 this said that nothing after the WDDM 2.0 block exists. ADR 0019 B1 compiles the 3.1 table,
+// so the WDDM 2.1-3.1 members do exist now and are NULLs we defend instead: the 2.0 block still ends where it did
+// (SetVideoProtectedRegion is its last member), the structure ends at the 3.1 block's last member (Reserved4, so
+// nothing of 3.2 is compiled in), and WddmCheckReserved checks at run time that the whole tail between the two
+// is NULL. A stage that fills a member of that tail moves BC250_WDDM_TABLE_TAIL_START or adds an exception there.
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID) == 832);
+C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) == FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, Reserved4) + sizeof(PVOID));
+#define BC250_WDDM_TABLE_TAIL_START \
+    (FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID))
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -5699,9 +5708,15 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
     };
     ULONG i;
 
+    SIZE_T offset;
+
     for (i = 0; i < RTL_NUMBER_OF(reserved); i++)
         if (*(PVOID* const*)((const UCHAR*)Data + reserved[i].Offset) != NULL)
             GuardLog("wddm: table member %s must be zero and is not", reserved[i].Name);
+    // ADR 0019 B1: every WDDM 2.1-3.1 member stays NULL while WDDMVersion is 2.0 (see the asserts above).
+    for (offset = BC250_WDDM_TABLE_TAIL_START; offset < sizeof(*Data); offset += sizeof(PVOID))
+        if (*(PVOID const*)((const UCHAR*)Data + offset) != NULL)
+            GuardLog("wddm: table member at offset %u (after the WDDM 2.0 block) must be NULL and is not", (ULONG)offset);
 }
 
 // ---- the display side, traced -----------------------------------------------------------------------------------
@@ -5768,7 +5783,9 @@ BC250_WDDM_TRACED_DDI(DXGKDDI_QUERYVIDPNHWCAPABILITY, QueryVidPnHWCapability, DX
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 {
     RtlZeroMemory(Data, sizeof(*Data));
-    Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;
+    // ADR 0019 B1: the table version is the compiled interface version (bc250kmd.h says why 3.1); the WDDM
+    // feature level is DXGK_DRIVERCAPS.WDDMVersion, which stays 2.0 until stage B4.
+    Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1;
 
     // The 28 pointers the display-only table already has; since 0.7.6 the child and VidPN ones go through the
     // tracing wrappers above, which change no answer. PresentDisplayOnly is the one member with no
@@ -5846,9 +5863,13 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
     // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat, RenderKm,
-    // RenderGdi, ControlInterrupt2 (WDDM 2.1+, and it does not exist at 2.0), CancelCommand (CancelCommandAware
-    // = 0), MapCpuHostAperture and UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and the
-    // hardware-scheduling DDIs, which do not exist at all at WDDM 2.0. QueryInterface, ControlEtwLogging,
+    // RenderGdi, ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
+    // UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and everything the 2.1-3.1 headers append
+    // after SetStablePowerState: the hardware-queue and hardware-scheduling DDIs (no HWS), the native-fence and
+    // doorbell DDIs (no native fence, no user-mode submission), the flip-queue DDIs, SetTargetGamma and
+    // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
+    // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
+    // version alone obliges none of them; WDDMVersion stays 2.0 (ADR 0019 B1). QueryInterface, ControlEtwLogging,
     // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, GetChildContainerId, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
     // display-only table today. ControlInterrupt and GetScanLine are **not** in this list any more: the flip

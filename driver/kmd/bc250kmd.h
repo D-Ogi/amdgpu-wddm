@@ -9,9 +9,23 @@
 // wddm.c (M7 stage A: the full WDDM table behind the EnableFullWddm gate, ADR 0008).
 #pragma once
 
-// M7, ADR 0008 point 2: the whole binary is compiled at the WDDM 2.0 DDI interface version, which is the version
-// the full table is declared with. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8,
-// exactly as it does today; that value is a run-time field, not this macro.
+// ADR 0019 stage B1 (was M7, ADR 0008 point 2 at WDDM 2.0): the whole binary is compiled at the WDDM 3.1 DDI
+// interface version, which is the version the full table is declared with. Only the interface version moves in
+// B1: DXGK_DRIVERCAPS.WDDMVersion stays DXGKDDI_WDDMv2 (wddm.c), and every DDI and cap the 3.1 headers add stays
+// NULL or zero. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8, exactly as it does
+// today; that value is a run-time field, not this macro.
+//
+// Why 0x10004 and not 3.2 (0x11007): the lab's dxgkrnl (10.0.22621.6199, static reading in
+// <BC250_ROOT>\scratch\m15\offgpu\wddm-uplift\b1\dxgk) accepts any table version from 0x104E up except
+// 0x5000-0x5005 (DXGADAPTER::Initialize, RVA 0x1fd20d), and sizes its copies by the declared version with no
+// upper bound: DRIVER_INITIALIZATION_DATA 0x560 bytes at >= 0x10004 (DpiGetDriverDataSizeFromVersion),
+// DXGK_DRIVERCAPS 0x250 at >= 0xE003 (GetDriverCapsSizeFromDdiVersion), DXGKRNL_INTERFACE.Size 0x240 at >= 0xD001
+// (DpiFdoStartAdapter, RVA 0x2009ee). 0x10004 is therefore the newest version whose whole table, caps buffer and
+// callback interface that dxgkrnl actually reads, and every one of the three equals our sizeof below. 3.2 would
+// load identically there (the tail past 0x560 is ignored) but cannot be validated on the lab, and on a 24H2+
+// dxgkrnl it engages the 3.2 feature negotiation; it waits for ADR 0019 stage B5.
+//
+// History, kept because the arguments still hold:
 //
 // One version for one binary, not one per translation unit: this macro changes the shape of DXGKRNL_INTERFACE and
 // of most DXGKARG_* structures, and BC250_DEVICE carries a DXGKRNL_INTERFACE, so two translation units compiled at
@@ -38,8 +52,10 @@
 // only inside the WIN8 prefix and never assign the whole structure: DXGK_CHILD_STATUS (0x0C at WIN8, 0x10 from
 // WDDM 1.3 on; see pnp.c's Bc250QueryChildStatus) and DXGKRNL_INTERFACE (0x100 at WIN8, 0x138 at 2.0), which
 // pnp.c already copies with min(DxgkInterface->Size, sizeof(device->Dxgk)) for exactly this reason.
+// At 3.1 the same argument holds with new numbers: DXGK_CHILD_STATUS stays 0x10, DXGKRNL_INTERFACE is 0x240 and
+// dxgkrnl hands exactly that at this version; the asserts after the includes pin both.
 // The literal is what the preprocessor needs here; the assert below binds it to the header's own constant.
-#define DXGKDDI_INTERFACE_VERSION 0x5023
+#define DXGKDDI_INTERFACE_VERSION 0x10004
 
 #include <ntifs.h>        // superset of ntddk.h; the token checks of the escape need it
 #include <windef.h>
@@ -54,7 +70,32 @@
 #include "dpm.h"
 #include "interop.h"
 
-C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
+C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM3_1);
+
+// ADR 0019 B1 ABI gate. Sizes are the ones the lab's dxgkrnl (22621.6199) copies or allocates for a 0x10004
+// table, read statically (see above); offsets are the members this driver fills or reads, and each equals its
+// value at 0x5023 (WDK 10.0.26100 record layouts, <BC250_ROOT>\scratch\m15\offgpu\wddm-uplift\b1\abi). A WDK
+// update or a version change that moves any of them stops the build here instead of at the lab.
+C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) == 0x560);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, Version) == 0);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiQueryAdapterInfo) == 136);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVidPnSourceAddress) == 320);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetScanLine) == 368);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiControlInterrupt) == 384);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPresent) == 432);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetNodeMetadata) == 664);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCalibrateGpuClock) == 696);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSubmitCommandVirtual) == 720);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetStablePowerState) == 816);
+C_ASSERT(sizeof(DXGK_DRIVERCAPS) == 0x250);
+C_ASSERT(FIELD_OFFSET(DXGK_DRIVERCAPS, SchedulingCaps) == 64);
+C_ASSERT(FIELD_OFFSET(DXGK_DRIVERCAPS, WDDMVersion) == 0x150);
+C_ASSERT(sizeof(DXGKRNL_INTERFACE) == 0x240);
+C_ASSERT(sizeof(DXGK_CHILD_STATUS) == 0x10);
+C_ASSERT(sizeof(KMDDOD_INITIALIZATION_DATA) == 0x150);
+C_ASSERT(sizeof(D3DKMDT_VIDPN_TARGET_MODE) == 80);
+C_ASSERT(FIELD_OFFSET(D3DKMDT_VIDPN_TARGET_MODE, WireFormatAndPreference) == 64);   // was Preference at 2.0
+C_ASSERT(FIELD_OFFSET(DXGK_NODEMETADATA, GpuMmuSupported) == 72);
 
 #define BC250_TAG 'dK52'
 #define BC250_CHILD_UID 0x250001        // the one DisplayPort output, as far as this driver is concerned
