@@ -1,0 +1,32 @@
+kmd 261822   2378.393 wddm summary: paging operation   2    2988  first at 1048
+kmd 261823   2378.393 wddm summary: paging operation   8     265  first at 1069
+kmd 261824   2378.393 wddm summary: objects created/destroyed: dev 45/39 ctx 54/49 proc 27/23 alloc 5314/7501, 224 alive
+kmd 261825   2378.393 wddm summary: allocations opened/closed: 5345/5242 calls
+kmd 261826   2378.393 wddm summary: submissions 0 physical + 84395 virtual, 2321 preemptions, last completed fence 34118
+kmd 261827   2378.393 wddm summary: node 0 hardware: 34118 submitted, 33479 completed, 0 timeouts, 0 refused
+kmd 261828   2378.393 wddm summary: umd: 5272 allocs (0 refused), 31 contexts, 34105 submits on the ring, 0 not run
+kmd 261831   2378.393 wddm summary: node 1 (paging, open): 50277 hardware submitted, 50277 completed, 0 timeouts, 0 refused
+kmd 261833   2378.393 wddm summary: SubmitCommandVirtual by node: 0: 34118, 1: 50277, 0 private-buffer refusals
+kmd 261834   2378.393 wddm summary: paging DMA VA nonzero 99814 zero 1029, mapping observations 8
+kmd 261835   2378.393 wddm summary: native DMA transfers 253 fills 3303 bytes 10104193024
+kmd 261837   2378.393 wddm summary: native DMA exact disjoint checks 147
+kmd 261838   2378.393 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x256A41000 CPU_PA0x256A41000
+kmd 261839   2378.393 wddm summary: BuildPagingBuffer: 253 transfers, 3303 fills, 10104193024 bytes, 23174 insufficient-buffer
+kmd 261840   2378.393 wddm summary: virtual transfers (count/bytes) to system 251/806010880, from system 2/18432000, other 0/0
+kmd 261841   2378.393 wddm summary: physical transfers (count/bytes) to system 0/0, from system 0/0, other 0/0
+kmd 261842   2378.393 wddm summary: aperture map batches 0, unmap batches 0
+kmd 261843   2378.393 wddm summary: paging TLB invalidations 25273, PTE update batches 65949
+kmd 261844   2378.393 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+kmd 261845   2378.393 wddm summary: presents 9950, flips 9940 of 9943 address calls (9937 arrived above DISPATCH_LEVEL)
+kmd 261958   2378.394 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+kmd 261959   2378.394 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+kmd 261960   2378.394 wddm summary: widest blit 0 rows
+kmd 261961   2378.394 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+kmd 261962   2378.394 wddm summary: vsync enabled, 0 ticks, 142545 reported to dxgkrnl
+kmd 261963   2378.394 wddm summary: visibility calls 11 source 0x00000000 requested 1 status 0x00000000 current 1
+kmd 261964   2378.394 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+kmd 261977   2378.394 wddm summary: dcn lock acknowledgement timeouts 0
+kmd 261978   2378.394 wddm summary: vidpn flip open: 9940 hardware flips, 0 refused, 1 hardware vsyncs armed 142551 acked 0 refused 8 completion-deferred 7 old-buffer-reports
+kmd 261985   2378.394 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+kmd 261986   2378.394 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+kmd 262023   2379.801 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 85.6 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 14 thermal 0 err

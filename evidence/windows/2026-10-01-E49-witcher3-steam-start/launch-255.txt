@@ -1,0 +1,54 @@
+2026-10-01T14:32:58.8425291Z experiment none
+2026-10-01T14:32:58.9148146Z app_profile present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff
+2026-10-01T14:32:58.9544738Z steam state flags 4 build 25646871
+2026-10-01T14:32:59.0613232Z steam -applaunch 292030 --launcher-skip pid 3164
+2026-10-01T14:33:01.1932401Z launch 2s: REDprelauncher 9304
+2026-10-01T14:33:03.2532992Z launch 4s: witcher3 3456
+2026-10-01T14:33:03.2882097Z launch through steam 4 s, bound now 356 s
+2026-10-01T14:33:03.2974041Z pid 3456 session 1
+2026-10-01T14:33:03.4127378Z module 0s sl.interposer.dll 8C87C9499461DA561EDD529AA9BF7831D67D7B94EBB1C1A5ED54EF4934E1EA4C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\sl.interposer.dll
+2026-10-01T14:33:05.9216603Z module 0s libxess.dll 251659DD84A3E84DE67C886A4186E01F3ECA49B00641906FE38BB6B807E5D5B7 C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\libxess.dll
+2026-10-01T14:33:06.0126794Z module 0s dxgi.dll DDC578A287120BAC2BFCCBAECBDE5EB41E397B023853340204A3B4FAD98BDA3B C:\Windows\SYSTEM32\dxgi.dll
+2026-10-01T14:33:06.0202432Z module 0s d3d12.dll 9992F5B26F9DDE36F3EC911EF6C404CF7C89C94FD56C152815252800CF5140CC C:\Windows\SYSTEM32\d3d12.dll
+2026-10-01T14:33:09.4442808Z module 6s d3d12core.dll 681C72042ED1691A326C2AADFF47A1957ED998F649158312C155C1B2AB71F44C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\D3D12_0\D3D12Core.dll
+2026-10-01T14:33:45.0720087Z module 41s amdgpu_wddm_d3d12.dll 0CE9D4F804B689DD31CF5E01C3258B2608252BB19F6A22EF5E670235C8D15F5F C:\BC250\m15\registration002\amdgpu_wddm_d3d12.dll
+2026-10-01T14:33:45.2337083Z module 41s amdgpu_wddm_vkd3d.dll 15E3E24EBCA029C3B2EE1B82222E2A5E6754215D535E9B082347292EBE0BF902 C:\BC250\m15\registration002\amdgpu_wddm_vkd3d.dll
+2026-10-01T14:33:46.1408985Z module 41s amdgpu_wddm_radv.dll 2A13235DB7B66B9C8DDE550CECBAFCD930AA0748F8C23252020A4EA0C4DA1729 C:\BC250\m15\registration002\amdgpu_wddm_radv.dll
+2026-10-01T14:33:46.1968413Z window 41s The Witcher 3
+2026-10-01T14:33:49.6181575Z menu 41s: dx12user.settings written 2026-10-01T14:33:42.8397230Z
+2026-10-01T14:33:49.6212592Z menu 41s: profile.settings written 2026-10-01T14:33:42.8438087Z
+2026-10-01T14:33:50.3067690Z menu 41s: mean 16 cue none tied run 0
+2026-10-01T14:33:59.9932240Z menu 57s: dx12user.settings written 2026-10-01T14:33:49.7140975Z
+2026-10-01T14:33:59.9942453Z menu 57s: input.settings written 2026-10-01T14:33:49.7975254Z
+2026-10-01T14:33:59.9952763Z menu 57s: profile.settings written 2026-10-01T14:33:49.7213421Z
+2026-10-01T14:34:00.5779979Z menu 57s: mean 2.7 cue none tied run 0
+2026-10-01T14:34:10.5138611Z menu 67s: mean 6 cue none tied run 0
+2026-10-01T14:34:20.3901035Z menu 77s: dx12user.settings written 2026-10-01T14:34:11.9152741Z
+2026-10-01T14:34:20.3911282Z menu 77s: input.settings written 2026-10-01T14:34:11.9751726Z
+2026-10-01T14:34:20.3921466Z menu 77s: profile.settings written 2026-10-01T14:34:11.9214380Z
+2026-10-01T14:34:20.3993323Z menu 77s: settings_write_seen dx12user.settings 2026-10-01T14:34:11.9152741Z
+2026-10-01T14:34:20.8293223Z menu 77s: mean 1.7 cue 77 tied run 1
+-10-01T14:32:59.0613232Z steam -applaunch 292030 --launcher-skip pid 3164
+2026-10-01T14:34:30.5823148Z menu 87s: mean 1.8 cue 77 tied run 2
+2026-10-01T14:34:30.7309070Z menu 87s: E attempt 1, down 1 up 1 release retries 0
+2026-10-01T14:34:40.6226131Z menu 97s: mean 18.8 grid diff 17.81
+2026-10-01T14:34:40.6277617Z menu 97s: grid changed, transition candidate
+2026-10-01T14:34:51.8406359Z menu 104s: mean 19.5 tied True
+2026-10-01T14:35:00.8217276Z menu 117s: mean 19.8 tied True
+2026-10-01T14:35:09.2345558Z menu 125s: mean 5.1 tied True
+2026-10-01T14:35:18.3354277Z menu 134s: mean 42.4 tied True
+2026-10-01T14:35:27.3495071Z menu 143s: mean 42.1 tied True
+2026-10-01T14:35:36.5022986Z menu 152s: mean 42.8 tied True
+2026-10-01T14:35:45.9814014Z menu 160s: mean 41.7 tied True
+2026-10-01T14:35:54.6851912Z menu 170s: mean 41.8 tied True
+2026-10-01T14:36:04.5727929Z menu 179s: mean 38.3 tied True
+2026-10-01T14:36:21.3564225Z menu 190s: mean 59.1 tied True
+2026-10-01T14:36:35.5827390Z menu 205s: mean 72 tied True
+2026-10-01T14:36:46.7372166Z menu 221s: mean 49.7 tied True
+2026-10-01T14:36:59.9626603Z menu 236s: mean 70.6 tied True
+2026-10-01T14:37:10.7233711Z menu 246s: mean 31.4 tied True
+2026-10-01T14:37:21.5500209Z menu 257s: mean 27.8 tied True
+2026-10-01T14:37:32.3583551Z control 262s: cmd-009.txt note extra walk for the K24 window | look -40,0 x40 -> 40 | hold 11 5000 ms -> 1/1/0 | shot shot-009.jpg 21963
+2026-10-01T14:37:34.2251956Z menu 270s: mean 29.3 tied True
+2026-10-01T14:37:49.7607974Z menu 286s: mean 44.6 tied True
+2026-10-01T14:38:03.0934291Z menu 299s: mean 46.2 tied True

@@ -1,0 +1,7 @@
+{"status": "functional-restored", "tree_closed": true, "baseline_restored": true, "candidate_retained": false, "elapsed": 337.9092796, "errors": []}
+window A no gpu etl
+== window B
+  "Unknown" (3456)                 n=   464 rate=   9.1/s interval median= 109.24 ms p95= 142.62 ms p99= 197.55 ms max=  231.62 ms >50ms=463 >100ms=351 >250ms=0
+  "Unknown" (8172)                 n=   464 rate=   9.1/s interval median= 109.40 ms p95= 125.10 ms p99= 143.09 ms max=  219.59 ms >50ms=462 >100ms=388 >250ms=0
+2026-10-01T14:33:02.7379851Z t=0.1 left=352.3 window A skipped (-SkipA)
+2026-10-01T14:35:58.5754518Z t=175.9 left=176.4 window B trigger world: walk 174s: start, 40 s
