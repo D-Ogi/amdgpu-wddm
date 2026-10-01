@@ -83,8 +83,10 @@ until T7 passes):
 | T6 | The Witcher 3 preset high, GPU DWM, CPU capture | route shots correct; fps, main-thread Ready time, DWM CPUs and DWM GPU packets against the CPU-DWM baseline of the same build |
 | T7 | T6 again | a second clean session |
 
-State on 2026-09-30: T0 host work and the kernel driver change for the switches are in progress (PLANNED); no
-ladder step has run.
+State on 2026-10-01: MEASURED, T1-T7 passed on KMD 0.7.182.1 (M771, M772). T4 and T5 were repeated with clients
+rebuilt from main; T6 and T7 ran The Witcher 3 at 35.5 and 35.4 frames/s on the GPU-composed desktop against 21.1
+on the CPU-composed one. GPU DWM is the lab default since 2026-10-01T01:50Z, recorded as promotion. Open: DWM050's
+pixel oracles have not been re-run on the router artifacts, and the reboot behaviour of the GPU route is untested.
 
 ### M14: system Direct3D 11 through a DDI user-mode driver with DXVK as the engine
 
@@ -138,8 +140,9 @@ proposed here as M15's exit criteria.
 - **GPU DWM (M13, and the largest off-GPU lever for M15).** MEASURED: on the CPU desktop UMD, DWM used 4.2 of
   12 CPUs in the game at 20.3 fps, in twelve llvmpipe threads, and took 3.4 ms per frame from the game's main
   thread, which waited 7.7 ms per frame for a core (trial 178); raising the game's priority returned 2 ms and
-  slowed its code about 10 % (trial 179). DWM on the GPU used 0.19 CPUs in the DWM050 trial of M723 (its process samples, 86.6 s). The
-  expected gain for the game is not claimed until ladder step T6 measures it.
+  slowed its code about 10 % (trial 179). DWM on the GPU used 0.19 CPUs in the DWM050 trial of M723 (its process samples, 86.6 s). MEASURED
+  by ladder steps T6 and T7 (M772): 35.5 and 35.4 frames/s against 21.1 at the same build and route, DPM reaching
+  2000 MHz only on the GPU route, DWM at 8.6 % of one CPU in the game.
 - **DPM and CU count.** DECIDED (owner, 2026-09-30): automatic DPM, ceiling 1500 MHz, hard ceiling 2000 MHz,
   2000 MHz approved for RT tests, thermal limits unchanged (stop and cool down above 85 C). MEASURED: the
   governor raises to 1500 MHz under the game (trials 145, 146) and stepped down on thermal soft at 85.2 C

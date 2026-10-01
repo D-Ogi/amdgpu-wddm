@@ -1,0 +1,5 @@
+kmd 455409   3712.415 dpm: summary dpm 1900 MHz/984 mV (SMU 1900 MHz VID 90) 77.6 C busy 50.0% avg 58.2% want 1900 cap 2000 max 2000 throttle none, raises 78 lowers 176 thermal 0 er
+kmd 466815   3728.225 dpm: summary dpm 1600 MHz/935 mV (SMU 1600 MHz VID 98) 77.8 C busy 48.3% avg 51.2% want 1600 cap 2000 max 2000 throttle none, raises 90 lowers 207 thermal 0 er
+kmd 477929   3744.111 dpm: summary dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 78.1 C busy 48.3% avg 55.7% want 1000 cap 2000 max 2000 throttle none, raises 103 lowers 243 thermal 0
+kmd 481336   3749.448 dpm: summary dpm 1500 MHz/919 mV (SMU 1500 MHz VID 100) 78.0 C busy 50.0% avg 49.7% want 1500 cap 2000 max 2000 throttle none, raises 108 lowers 248 thermal 0
+kmd 485387   3754.780 dpm: summary dpm 2000 MHz/1000 mV (SMU 2000 MHz VID 88) 79.0 C busy 76.7% avg 68.9% want 2000 cap 2000 max 2000 throttle none, raises 115 lowers 258 thermal 0
