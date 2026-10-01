@@ -365,8 +365,8 @@ offset 0, a placed buffer at that address plus its offset.
 The linear primary (boundary r4, engine ABI 1.3 V13). A committed texture on a heap with
 `D3D12DDI_HEAP_FLAG_PRIMARY` is what a reader outside the engine opens and reads by row pitch. When its
 description is one the surface exists for (2D, one mip, one layer, one sample, a format the surface format table
-`driver/contract/amdgpu_wddm_surface_format.h` enables for composition - today B8G8R8A8_UNORM, R8G8B8A8_UNORM and
-R10G10B10A2_UNORM - at most 8192 on an edge, heap without CPU access, castable formats none beyond the format and
+`driver/contract/amdgpu_wddm_surface_format.h` enables for composition - today B8G8R8A8_UNORM, R8G8B8A8_UNORM,
+R10G10B10A2_UNORM and R16G16B16A16_FLOAT - at most 8192 on an edge, heap without CPU access, castable formats none beyond the format and
 its sRGB sibling where the table names one), engine-ddi:
 
 1. asks the engine what the linear image needs (`QueryLinearImage`), before any memory exists;
@@ -388,7 +388,8 @@ passes `D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY` with such a description, an
 select the surface; no description becomes linear by its shape.
 
 Development PC witness (harness round trip 7, `tests/test-linear-primary.cpp`, RuntimeBacked on the stub shell):
-256x256 B8G8R8A8_UNORM, 127x79 R8G8B8A8_UNORM and 200x120 R10G10B10A2_UNORM primaries are created, cleared
+256x256 B8G8R8A8_UNORM, 127x79 R8G8B8A8_UNORM, 200x120 R10G10B10A2_UNORM and 136x72 R16G16B16A16_FLOAT (scRGB
+values 2.0, -0.25, 0.5, 1.0, which a clamping or 4-byte surface would not keep) primaries are created, cleared
 through a render target view,
 copied to a READBACK buffer and compared texel by texel. What a reader of the memory itself sees is not
 established by that: the copy goes through the image.

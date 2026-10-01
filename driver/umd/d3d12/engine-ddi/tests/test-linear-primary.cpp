@@ -5,6 +5,8 @@
 // READBACK buffer and compared texel by texel.
 #include "harness.h"
 
+#include "../../../../contract/amdgpu_wddm_surface_format.h"
+
 #include <algorithm>
 #include <cstring>
 #include <thread>
@@ -100,9 +102,21 @@ UINT64 engine_alignment(Device& device, const Shape& s) {
     return info.MemoryAlignment;
 }
 
-// Creates the primary, clears it, reads it back. Returns false when a later case cannot run.
+// The bytes of one texel of a composed format, from the surface format table; 0 for a format it does not compose.
+UINT texel_bytes(DXGI_FORMAT format) {
+    const AMDGPU_WDDM_SURFACE_FORMAT* row = amdgpu_wddm_surface_admit(
+        amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(format)), AMDGPU_WDDM_SURFACE_COMPOSED);
+    return row ? row->bytes_per_pixel : 0;
+}
+
+// Creates the primary, clears it, reads it back. Returns false when a later case cannot run. expected is the texel
+// as it lies in memory, read little endian: its low texel_bytes(format) bytes are compared.
 bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue* queue, const Shape& s,
-                const FLOAT colour[4], UINT32 expected) {
+                const FLOAT colour[4], UINT64 expected) {
+    const UINT bpp = texel_bytes(s.format);
+    checkf(bpp == 4 || bpp == 8, "linear primary %ux%u: format %d is a composed row of the surface format table (%u bytes)",
+           s.width, s.height, static_cast<int>(s.format), bpp);
+    if (bpp != 4 && bpp != 8) return false;
     const D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info = allocation_info(env, device, s);
     Shape plain = s;
     plain.primary = false;
@@ -124,7 +138,7 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
     const UINT64 queried = engine_alignment(device, s);
     checkf(hr == S_OK && asked && m.last_flags == want && m.last_type_bits && m.last_alignment &&
                m.last_byte_size == info.ResourceDataSize && queried && m.last_alignment == queried &&
-               m.last_row_pitch >= align_up(s.width, 4) * 4 &&
+               m.last_row_pitch >= align_up(s.width, 4) * bpp &&
                !(m.last_row_pitch % 16) && m.last_layout_size && rows <= m.last_byte_size &&
                m.last_layout_size <= m.last_byte_size,
            "linear primary %ux%u: one memory request with the linear surface (hr %08lx, flags %x, types %08x, "
@@ -151,7 +165,7 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
            "linear primary %ux%u: CheckExistingResourceAllocationInfo answers the same (%llu bytes)", s.width, s.height,
            static_cast<unsigned long long>(existing.ResourceDataSize));
 
-    const UINT pitch = align_up(s.width * 4, 256);
+    const UINT pitch = align_up(s.width * bpp, 256);
     hr = create_buffer(env, device, HeapKind::Readback, UINT64{pitch} * s.height, false, readback);
     D3D12DDIARG_CREATE_DESCRIPTOR_HEAP_0001 heap_args{D3D12DDI_DESCRIPTOR_HEAP_TYPE_RTV, 1,
                                                       D3D12DDI_DESCRIPTOR_HEAP_FLAG_NONE, 0};
@@ -204,13 +218,13 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
             for (UINT y = 0; y < s.height; ++y) {
                 const BYTE* row = static_cast<const BYTE*>(cpu) + UINT64{pitch} * y;
                 for (UINT x = 0; x < s.width; ++x) {
-                    UINT32 texel = 0;
-                    std::memcpy(&texel, row + 4 * x, sizeof(texel));
+                    UINT64 texel = 0;
+                    std::memcpy(&texel, row + UINT64{bpp} * x, bpp);
                     bad += texel != expected ? 1u : 0u;
                 }
             }
-            checkf(bad == 0, "linear primary %ux%u: every texel reads %08x (%u of %u differ)", s.width, s.height,
-                   expected, bad, s.width * s.height);
+            checkf(bad == 0, "linear primary %ux%u: every texel reads %0*llx (%u of %u differ)", s.width, s.height,
+                   static_cast<int>(bpp * 2), static_cast<unsigned long long>(expected), bad, s.width * s.height);
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
         } else {
             checkf(false, "linear primary %ux%u: MapHeap of the READBACK heap (hr %08lx)", s.width, s.height,
@@ -253,6 +267,11 @@ void test_linear_primary(Env& env) {
     // A 10-bit swap chain's storage, four bytes as well: red in the low ten bits, alpha in the top two. 0.2, 0.4
     // and 0.6 of 1023 are 204.6, 409.2 and 613.8, so no rounding tie decides the word.
     round_trip(env, device, m, queue, Shape{200, 120, DXGI_FORMAT_R10G10B10A2_UNORM}, first, 0xe66664cdu);
+    // An FP16 swap chain's storage, eight bytes a texel: red in the low half. Values outside [0, 1] (scRGB) must
+    // survive, so the surface is a float one and nothing clamps; each is exact in FP16 (2.0 0x4000, -0.25 0xb400,
+    // 0.5 0x3800, 1.0 0x3c00), so no rounding rule decides the word.
+    const FLOAT scrgb[4] = {2.0f, -0.25f, 0.5f, 1.0f};
+    round_trip(env, device, m, queue, Shape{136, 72, DXGI_FORMAT_R16G16B16A16_FLOAT}, scrgb, 0x3c003800b4004000ull);
     // The runtime's heap may be larger than the surface, carry the answer's alignment and allow every
     // category: the memory request and the engine's heap are the surface's all the same.
     {
