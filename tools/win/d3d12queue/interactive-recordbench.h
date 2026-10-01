@@ -512,14 +512,15 @@ inline HRESULT recordbench_run(Session& s){
     if(BCryptGenRandom(nullptr,reinterpret_cast<PUCHAR>(&sh.seed),sizeof(sh.seed),BCRYPT_USE_SYSTEM_PREFERRED_RNG)<0){delete shared;return E_FAIL;}
     LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);sh.qpf=static_cast<double>(frequency.QuadPart);
     sh.cycles_per_us=calibrate(sh.qpf);
-    // What the UMD reads once per process: absent, or the bounded text.
-    char experiment[64]{};
-    {   char text[96]{};SetLastError(ERROR_SUCCESS);
+    // What the UMD reads once per process (ddi_experiment_name, ddi-trace.h): absent, or the text when it is at most
+    // 95 lower-case letters, digits, hyphens and commas; anything else it reads as none.
+    char experiment[96]{};
+    {   char text[128]{};SetLastError(ERROR_SUCCESS);
         const DWORD length=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",text,sizeof(text));
+        bool valid=length<sizeof(experiment);
+        for(const char c:text)if(c && !((c>='a' && c<='z') || (c>='0' && c<='9') || c==',' || c=='-'))valid=false;
         if(!length)strcpy_s(experiment,GetLastError()==ERROR_ENVVAR_NOT_FOUND?"absent":"empty");
-        else if(length>=sizeof(experiment))strcpy_s(experiment,"longer than 63");
-        else{for(char& c:text)if(c && !((c>='a' && c<='z') || (c>='0' && c<='9') || c==',' || c=='-'))c='?';
-            strcpy_s(experiment,text);}
+        else strcpy_s(experiment,valid?text:"invalid, read as none");
     }
     char label[400]{};
     sprintf_s(label,"Record bench seed %016llx, lists %u, draws per list %u, executes %u, work us per group %u, phases until %llu ms, "
