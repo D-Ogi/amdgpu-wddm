@@ -926,6 +926,11 @@ D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device,
     return (r->backing && r->backing->imported) ? r->backing->memory.allocation : 0;
 }
 
+// The engine's answer (engine_format_support), with one exception. The runtime does not take 0 as "no such format"
+// for R10G10B10_XR_BIAS_A2_UNORM: answered 0 while the engine had no such format, it offered the application a
+// displayable 2D texture format with TEXTURE2D, DISPLAY, BACK_BUFFER_CAST and TILED (266), and a texture of it would
+// then be refused by the engine. NOT_SUPPORTED says "not supported at all"; d3d12umddi.h defines it for this format
+// only and as its only bit, so it is the answer while the engine makes no 2D texture of the format.
 void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT* out) {
     DeviceContext* c = resolve(device);
     if (!c) return;
@@ -934,6 +939,12 @@ void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, 
         return;
     }
     *out = engine_format_support(c, format);
+    if (format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM) {
+        D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
+        if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s))) ||
+            !(s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D))
+            *out = D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
+    }
 }
 
 // ---- Command-list slots -------------------------------------------------------------------------------------------

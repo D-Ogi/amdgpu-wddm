@@ -346,7 +346,7 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 
 | Slot | Answer | Status |
 |---|---|---|
-| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format | engine answer |
+| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format, except NOT_SUPPORTED for R10G10B10_XR_BIAS_A2_UNORM without an engine 2D texture (the runtime offers that format as a display format over a 0, 266) | engine answer |
 | CheckMultisampleQualityLevels, Flags NONE | the engine's MULTISAMPLE_QUALITY_LEVELS; 0 when the engine refuses | engine answer |
 | CheckMultisampleQualityLevels, Flags TILED_RESOURCE | the engine's MULTISAMPLE_QUALITY_LEVELS with the TILED_RESOURCE flag; 0 when the engine refuses | engine answer |
 | GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
