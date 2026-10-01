@@ -34,7 +34,8 @@
 #define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
-#define BC250_KMD_VERSION 0x000700B7u       // revision 183: the aperture segment counts against the non-local budget (wddm.c)
+#define BC250_KMD_VERSION 0x000700B8u       // revision 184: thermal limit 87 C (bc250_clock.h); log and journal reads
+                                            // without adapter synchronization (display.c)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -703,6 +704,12 @@ typedef struct _BC250_ESCAPE_FENCE {
 // BC250_ESCAPE_LOG_SUMMARY is refused (REFUSED, STATUS_INVALID_DEVICE_REQUEST) unless D3DKMT_ESCAPE.Flags has
 // HardwareAccess set and NoAdapterSynchronization clear: the summary reads state that a device stop frees, and
 // that flag is what makes dxgkrnl serialize the two.
+//
+// BC250_ESCAPE_GET_LOG and BC250_ESCAPE_GET_PAGING_JOURNAL, from 0.7.184.1 on, are also answered with
+// NoAdapterSynchronization alone (every other flag 0), in any power phase: they copy driver-image rings and touch
+// no hardware, so dxgkrnl need not take the adapter lock for them (display.c, SoftwareReadEscape). Up to 0.7.183.1
+// that combination is refused (REFUSED, STATUS_DEVICE_NOT_READY from the escape) and a reader must use
+// HardwareAccess, which bc250kmd_cli falls back to by itself.
 #define BC250_LOG_FROM_SUMMARY 0xFFFFFFFFu
 
 typedef struct _BC250_LOG_LINE {

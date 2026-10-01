@@ -208,11 +208,11 @@ default.
 | Step | Action | Pass |
 |---|---|---|
 | 1 | Deploy KMD 0.7.174 by the usual live disable/enable; start-health CONFIRM | `cumode status`: applied 24, reason none, `valid`, no `wrote`; stock CC `0xFFF80000` and SPI `0x7` on all four SAs; no power-gating enable in `RLC_PG_CNTL` (0.7.176 and later: `0x00800000` passes). If stock SPI reads `0xFFFF` at stage 4, stop: 40 would be refused (`STOCK_UNEXPECTED`), and the write point needs rethinking |
-| 2 | `bc250kmd_cli read 0x0935C` and `0x089BC` (SE0/SA0 after init); `cumode status` temperature | `0x7`, `0xFFF80000`; temperature below 85 C |
+| 2 | `bc250kmd_cli read 0x0935C` and `0x089BC` (SE0/SA0 after init); `cumode status` temperature | `0x7`, `0xFFF80000`; temperature below 87 C (85 C before 2026-10-01) |
 | 3 | `cumode set 40`, then reboot (or `cumode restart-device` for the warm-path trial) | the command returns 0; `CuMode` 40 |
 | 4 | `cumode status` after the start | applied 40, counted 40, `PENDING`, `consistent`, `wrote`; CC `0xFFE00000`, SPI `0x1F` on all SAs; `bc250kmd_cli read 0x0935C` still `0x1F` after the full init |
 | 5 | `RADV_DEBUG=info` run of the E14 compute client (`vkcompute`) | `num_cu = 40`; GPU hash equals CPU hash; no VM fault, no TDR |
-| 6 | Temperature and plug power during a 60 s compute load | under 85 C; power rise recorded next to the 24 CU number |
+| 6 | Temperature and plug power during a 60 s compute load | under 87 C (85 C before 2026-10-01); power rise recorded next to the 24 CU number |
 | 7 | `cumode confirm --wait 120` | `CONFIRMED`; `CuModeConfirmed = 40`; `CuModePending` gone |
 | 8 | `cumode set 24`, reboot, `cumode status` | applied 24, CC/SPI stock, counted 24, RADV `num_cu = 24`, compute hash exact |
 | 9 | Guard check: `cumode set 40`, reboot, then reboot again without confirming | the second start applies 24, `CuMode` 24, last reason `PENDING_UNCONFIRMED` |

@@ -95,10 +95,16 @@ so the next game trial compares them in the world. If both read well under 90 % 
 and the governor rightly stays low. SMU metrics are not an alternative: amdgpu reads only the metrics table on this
 part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
 
-Same sensor as temp.py (M23). At 85 C or more the cap drops at once to one level under the current clock, then one
+Same sensor as temp.py (M23). At 87 C or more the cap drops at once to one level under the current clock, then one
 more level every 500 ms while it stays hot. At 90 C, or with an invalid sensor read, the cap is the floor. Below
-80 C the cap rises one level per second. The clock gate also refuses any raise at 85 C after its readbacks, so a
+82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its readbacks, so a
 stale decision cannot raise either; lowering is always allowed.
+
+The hot threshold was 85 C, with release below 80 C, up to KMD 0.7.183.1. The owner moved it to 87 C on 2026-10-01
+("Ustaw bezp. temp na 87 C, bo to w końcu AMD": set the safe temperature to 87 C, it is an AMD part after all),
+from 0.7.184.1 on. Release moved with it to keep the 5 C hysteresis; the 90 C floor is unchanged. The trigger was
+Witcher 3 session 219 at native 1080p: the telemetry lines peaked at 84.8 C Tctl, and the governor, which samples
+every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 
 ## Settings and boot guard (`HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`)
 

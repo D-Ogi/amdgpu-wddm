@@ -99,7 +99,7 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 /* What holds the level below what the load asks for. Shared with the escape and the CLI. */
 enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_NONE = 0,
-	BC250_DPM_THROTTLE_THERMAL_SOFT = 1,	/* 85 C: stepped down, no raise */
+	BC250_DPM_THROTTLE_THERMAL_SOFT = 1,	/* 87 C: stepped down, no raise */
 	BC250_DPM_THROTTLE_THERMAL_HARD = 2,	/* 90 C: at the floor */
 	BC250_DPM_THROTTLE_SENSOR = 3,		/* no temperature reading: at the floor */
 	BC250_DPM_THROTTLE_MAX_SETTING = 4,	/* DpmMaxMHz */
@@ -114,10 +114,10 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_TARGET_PERMILLE	800u	/* a raise aims at this share at the new clock */
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
 #define BC250_DPM_DOWN_HOLD_MS		200u
-#define BC250_DPM_HOT_MC		BC250_CLOCK_HOT_MC	/* 85 C: one step down at once, no raise */
+#define BC250_DPM_HOT_MC		BC250_CLOCK_HOT_MC	/* 87 C: one step down at once, no raise */
 #define BC250_DPM_HOT_STEP_MS		500u	/* still hot after this: another step down */
 #define BC250_DPM_CRITICAL_MC		90000	/* the floor at once */
-#define BC250_DPM_RELEASE_MC		80000	/* below: the thermal cap rises again */
+#define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
 
@@ -148,7 +148,7 @@ struct bc250_dpm_governor {
 	unsigned int	thermal_cap;		/* the thermal clamp, max_level when released */
 	unsigned int	avg_permille;		/* busy, exponential average, 1/4 per tick */
 	unsigned int	down_ms, hot_ms, release_ms;
-	int		hot;			/* inside a >= 85 C episode */
+	int		hot;			/* inside a >= 87 C episode */
 	int		stable;			/* SetStablePowerState(TRUE) */
 	unsigned int	throttle;		/* enum bc250_dpm_throttle of the last step */
 	unsigned int	want;			/* what the load asked for in the last step */

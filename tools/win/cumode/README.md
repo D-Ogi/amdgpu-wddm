@@ -20,7 +20,7 @@ a minute, and a KMD deploy's start-health confirmation confirms it too. If the m
 the next start falls back to 24 and writes `CuMode = 24`; `cumode set 40` tries again.
 
 40 CUs draw more power and heat: the reference measured about +30 W at 1500 MHz. The tool changes no clock and
-no voltage; the lab runs at 1000 MHz / 820 mV. The temperature line needs an administrator; stop above 85 C.
+no voltage; the lab runs at 1000 MHz / 820 mV. The temperature line needs an administrator; stop above 87 C (85 C before 2026-10-01).
 
 Exit codes: 0 done, 1 failed, 2 bad usage or no BC-250 with this driver, 3 refused by the driver.
 

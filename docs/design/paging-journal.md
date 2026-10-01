@@ -56,6 +56,15 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
   A failed read drops the handle and the next interval reopens it, so a PnP disable/enable of the adapter no
   longer ends the sampler, and a journal whose total fell below the cursor (a reloaded driver) is read again
   from its oldest record.
+- Flags: up to 0.7.183.1 every read was a `HardwareAccess` escape, for which dxgkrnl takes the adapter lock; a
+  game's threads then waited behind each sampler read (WrResource waits readied by bc250kmd_cli on Witcher 3's main
+  thread, 1.2-1.3 ms per frame, lab profile of 2026-10-01). From 0.7.184.1 the driver also answers
+  `GET_PAGING_JOURNAL` and `GET_LOG` with `NoAdapterSynchronization` alone, in any power phase: both copy
+  driver-image rings under their own spin locks and touch no hardware (`display.c`, `SoftwareReadEscape`). The CLI
+  sends them that way and falls back to `HardwareAccess` against an older driver; `journal follow` counts the
+  escapes of each kind in its final line. `log summary` keeps `HardwareAccess` for its first page, because the
+  summary walks state a stop frees and reads display registers. `tools/win/bc250kmd_cli/test_escape_flags.py`
+  keeps the driver's and the CLI's lists equal.
 - From a dump: `scratch\m15\game-recon\bsod-analysis\pagingjournal.py` (local) reads `g_PagingJournal` through the
   build's map, checks `Magic`/`Version`/`EntryBytes`, and lists the records around a fault VA.
 

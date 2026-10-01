@@ -322,20 +322,86 @@ static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int
     return 0;
 }
 
+// ---- reads of the log ring and the paging journal without adapter synchronization (0.7.184.1) --------------------
+//
+// The commands the driver answers with NoAdapterSynchronization alone from 0.7.184.1 on (display.c
+// SoftwareReadEscape; test_escape_flags.py keeps the two lists equal). With HardwareAccess dxgkrnl takes the adapter
+// lock for the escape, and a lab profile of a Witcher 3 session (2026-10-01) put the game's main thread in WrResource
+// waits readied by this tool, 1.2-1.3 ms per frame, from the samplers' `log N`, `log summary` and `journal` reads.
+// LOG_SUMMARY is not on the list: the driver walks state a stop frees and reads display registers for it, and
+// refuses it without HardwareAccess (display.c LogEscape), so its first page keeps the old flags.
+static int SoftwareRead(unsigned long command)
+{
+    switch (command) {
+    case BC250_ESCAPE_GET_LOG:
+    case BC250_ESCAPE_GET_PAGING_JOURNAL:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+// A driver up to 0.7.183.1 refuses NoAdapterSynchronization for these commands: STATUS_DEVICE_NOT_READY, with
+// Status REFUSED and nothing else written, Version included. (0.7.184.1 writes Version before any refusal of its
+// own.) The first refused software read therefore sends the same request again with HardwareAccess on the same
+// handle, and every later read of this process does so at once; the held adapter of `journal follow` forgets it
+// when it reopens (a reloaded driver may be a newer one).
+static int g_ReadsHard;                     // a software read was refused: this driver wants HardwareAccess
+static unsigned long g_SoftReads, g_HardReads;
+
+typedef char BC250_CLI_READ_FITS[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) <= sizeof(BC250_ESCAPE_LOG)) ? 1 : -1];
+// Status and Version sit at the same offsets in both replies (the common head of the escape structures).
+typedef char BC250_CLI_READ_HEAD[(FIELD_OFFSET(BC250_ESCAPE_LOG, Status) == FIELD_OFFSET(BC250_ESCAPE_PAGING_JOURNAL, Status) &&
+                                  FIELD_OFFSET(BC250_ESCAPE_LOG, Version) == FIELD_OFFSET(BC250_ESCAPE_PAGING_JOURNAL, Version))
+                                 ? 1 : -1];
+
+static NTSTATUS ReadEscapeOn(D3DKMT_HANDLE adapter, unsigned long command, void *data, unsigned size)
+{
+    static unsigned char request[sizeof(BC250_ESCAPE_LOG)];     // the request as sent, for the fallback
+    const BC250_ESCAPE_LOG *reply = (const BC250_ESCAPE_LOG *)data;     // Status and Version only (see above)
+    NTSTATUS status;
+
+    if (SoftwareRead(command) && !g_ReadsHard && size <= sizeof(request)) {
+        memcpy(request, data, size);
+        status = EscapeOn(adapter, data, size, 1);
+        if (NT_SUCCESS(status) && !(reply->Status == BC250_ESCAPE_STATUS_REFUSED && reply->Version == 0)) {
+            g_SoftReads++;
+            return status;
+        }
+        memcpy(data, request, size);        // whatever the refusal wrote: the same request again
+        g_ReadsHard = 1;
+    }
+    g_HardReads++;
+    return EscapeOn(adapter, data, size, 0);
+}
+
+// One read with its own adapter open and close, as SendEscape.
+static int SendReadEscape(const WCHAR *wantedId, unsigned long command, void *data, unsigned size, NTSTATUS *result)
+{
+    D3DKMT_HANDLE adapter = 0;
+
+    if (OpenAdapterById(wantedId, &adapter, result)) return 1;
+    *result = ReadEscapeOn(adapter, command, data, size);
+    CloseAdapterHandle(adapter);
+    return 0;
+}
+
 // The held adapter of `journal follow` (0.7.183.1): opened at the first read and kept for the whole run, so a
 // sampler no longer walks the display device interfaces and opens the adapter once per interval. A failed escape
 // closes it (a PnP disable/enable of the adapter, as the GPU DWM ladder does, leaves the handle stale), and the
-// next read opens it again. Nothing else in this tool holds an adapter.
+// next read opens it again. Nothing else in this tool holds an adapter. From 0.7.184.1 its reads go through
+// ReadEscapeOn.
 static D3DKMT_HANDLE g_HeldAdapter;
 static unsigned long g_HeldOpens;
 
-static int SendEscapeHeld(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
+static int SendEscapeHeld(const WCHAR *wantedId, unsigned long command, void *data, unsigned size, NTSTATUS *result)
 {
     if (g_HeldAdapter == 0) {
         if (OpenAdapterById(wantedId, &g_HeldAdapter, result)) { g_HeldAdapter = 0; return 1; }
         g_HeldOpens++;
+        g_ReadsHard = 0;
     }
-    *result = EscapeOn(g_HeldAdapter, data, size, 0);
+    *result = ReadEscapeOn(g_HeldAdapter, command, data, size);
     if (!NT_SUCCESS(*result)) { CloseAdapterHandle(g_HeldAdapter); g_HeldAdapter = 0; }
     return 0;
 }
@@ -1150,7 +1216,8 @@ static int Log(const WCHAR *fromText, int summary)
         log.Magic = BC250_ESCAPE_MAGIC;
         log.Command = (summary && first) ? BC250_ESCAPE_LOG_SUMMARY : BC250_ESCAPE_GET_LOG;
         log.From = from;
-        if (SendEscape(BC250_DEFAULT_HWID, &log, sizeof(log), &status)) return 1;
+        // LOG_SUMMARY keeps HardwareAccess; GET_LOG pages go without adapter synchronization (ReadEscapeOn).
+        if (SendReadEscape(BC250_DEFAULT_HWID, log.Command, &log, sizeof(log), &status)) return 1;
         if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
         if (log.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
         if (log.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
@@ -1231,7 +1298,7 @@ static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long 
     journal->Magic = BC250_ESCAPE_MAGIC;
     journal->Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
     journal->From = from;
-    if (SendEscapeHeld(BC250_DEFAULT_HWID, journal, sizeof(*journal), &status)) return 1;
+    if (SendEscapeHeld(BC250_DEFAULT_HWID, journal->Command, journal, sizeof(*journal), &status)) return 1;
     if (!NT_SUCCESS(status)) { if (report) PrintStatus("D3DKMTEscape", status); return 1; }
     if (journal->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { if (report) printf("refused: caller is not an administrator\n"); return 3; }
     if (journal->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
@@ -1256,6 +1323,9 @@ static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long 
 // again. A failed read no longer ends the run: the handle is dropped, the failure is printed once, and the next
 // interval reopens. A journal whose total fell below the cursor belongs to a reloaded driver (the PnP restart
 // of the GPU DWM ladder), and the cursor goes back to its oldest record.
+//
+// 0.7.184.1: the reads carry NoAdapterSynchronization alone (ReadEscapeOn), falling back to HardwareAccess against an
+// older driver; the final line counts the escapes of each kind.
 static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
 {
     static BC250_ESCAPE_PAGING_JOURNAL journal;
@@ -1324,8 +1394,9 @@ static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
         Sleep(ms);
     }
     printf("journal follow: done, %lu reads, %llu records printed, %llu lost to the ring, next %llu; "
-           "%lu failed reads, %lu adapter opens, %lu driver reloads\n",
-           reads, printed, lost, from, failures, g_HeldOpens, restarts);
+           "%lu failed reads, %lu adapter opens, %lu driver reloads; escapes: %lu without adapter synchronization, "
+           "%lu with HardwareAccess\n",
+           reads, printed, lost, from, failures, g_HeldOpens, restarts, g_SoftReads, g_HardReads);
     ReleaseHeldAdapter();
     return 0;
 }
@@ -1350,7 +1421,7 @@ static int Journal(const WCHAR *fromText)
         journal.Magic = BC250_ESCAPE_MAGIC;
         journal.Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
         journal.From = from;
-        if (SendEscape(BC250_DEFAULT_HWID, &journal, sizeof(journal), &status)) return 1;
+        if (SendReadEscape(BC250_DEFAULT_HWID, journal.Command, &journal, sizeof(journal), &status)) return 1;
         if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
         if (journal.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
         if (journal.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {

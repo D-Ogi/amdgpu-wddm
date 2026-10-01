@@ -246,7 +246,7 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
         return TRUE;
     }
     if (report.status == BC250_CLOCK_TOO_HOT) {
-        // The transaction's own gate saw 85 C before the governor's sample did: nothing was requested.
+        // The transaction's own gate saw 87 C (BC250_CLOCK_HOT_MC) before the governor's sample did: nothing was requested.
         GuardLog("dpm: %lu -> %lu MHz refused by the clock gate at %d mC (%s)", from,
                  bc250_dpm_level_mhz(Level), report.temperature_mc, Why);
         return FALSE;

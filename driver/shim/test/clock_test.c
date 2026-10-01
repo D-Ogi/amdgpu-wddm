@@ -3,6 +3,7 @@
 #include "bc250_clock.h"
 #include "smu_v11_8_ppsmc.h"
 static int checks,failures;
+typedef char clock_hot_is_87c[(BC250_CLOCK_HOT_MC==87000)?1:-1]; // owner decision 2026-10-01 (85000 before)
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL line%d: %s\n",__LINE__,#x);}}while(0)
 #define MAXMSG 128u
 struct backend {int held,begin_count,end_count,temp_count,fail_begin,fail_temp,fail_message,temp,read_delta;
@@ -144,14 +145,24 @@ int main(void){
   struct backend b=setup(step?1000:0,step?256:116,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_STATE_INVALID);CHECK(b.count==2 && !r.ready && b.end_count==1);
  }
- {struct backend b=setup(1000,116,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=85000;
+ // The limit is 87 C (owner decision 2026-10-01; 85 C before; clock_hot_is_87c): refused from 87000 mC on,
+ // carried out at 86999.
+ {struct backend b=setup(1000,116,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=87000;
   // Hot: a raise is refused after the two readbacks and before any request.
   CHECK(bc250_clock_prepare(&c,1500,919,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.count==2 && b.end_count==1);
-  CHECK(b.mhz==1000 && b.vid==116 && r.initial_mhz==1000 && r.initial_vid==116);
+  CHECK(b.mhz==1000 && b.vid==116 && r.initial_mhz==1000 && r.initial_vid==116 && r.temperature_mc==87000);
   b.temp=67000;b.fail_temp=1;CHECK(bc250_clock_prepare(&c,1000,820,&r)==-72);CHECK(!r.ready && b.count==2 && b.end_count==2);
  }
- {struct backend b=setup(1000,136,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=90000;
-  // A voltage-only raise is a raise as well.
+ for(step=0;step<2;step++){
+  // One millidegree under the limit, and the old 85 C limit: the same raise goes through, voltage first.
+  struct backend b=setup(1000,116,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=step?85000:86999;
+  CHECK(bc250_clock_prepare(&c,1500,919,&r)==0);CHECK(r.ready && b.mhz==1500 && b.vid==b.target_vid && r.voltage_staged);
+  CHECK(r.temperature_mc==(step?85000:86999) && b.end_count==1 && !b.held);
+ }
+ {struct backend b=setup(1000,136,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=87000;
+  // A voltage-only raise is a raise as well, at the limit itself and above it.
+  CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.count==2 && b.vid==136);
+  b.temp=90000;b.count=0;b.temp_count=0;
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.count==2 && b.vid==136);
  }
  {struct backend b=setup(2000,88,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=95000;

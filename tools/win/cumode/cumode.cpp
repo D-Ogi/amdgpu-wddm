@@ -37,7 +37,7 @@ static const wchar_t kHardwareId[] = L"PCI\\VEN_1002&DEV_13FE";
 static const wchar_t kWarning[] =
     L"40 CUs draw more power and heat than 24: the unlock's reference measured about +30 W at 1500 MHz. "
     L"This tool changes no clock and no voltage (the lab runs 1000 MHz / 820 mV). Watch the temperature "
-    L"and stop above 85 C. An unconfirmed 40 CU start falls back to 24 at the next start.";
+    L"and stop above 87 C. An unconfirmed 40 CU start falls back to 24 at the next start.";
 
 static const wchar_t* const kReason[BC250_CU_REASON_COUNT] = {
     L"none",
@@ -240,7 +240,7 @@ static int Status()
         Say(L"SE%u SA%u      CC 0x%08lX USER 0x%08lX SPI 0x%02lX  active WGPs 0x%02lX   stock CC 0x%08lX SPI 0x%02lX",
             i / 2, i % 2, data.Cc[i], data.User[i], data.Spi[i], data.ActiveWgps[i], data.StockCc[i], data.StockSpi[i]);
     Say(L"RLC          PG_CNTL 0x%08lX, PG_ALWAYS_ON_WGP_MASK 0x%08lX", data.RlcPgCntl, data.RlcAonWgpMask);
-    if (ReadTemperature(path, &milliC)) Say(L"temperature  %.1f C%s", milliC / 1000.0, milliC >= 85000 ? L"  STOP AND COOL DOWN" : L"");
+    if (ReadTemperature(path, &milliC)) Say(L"temperature  %.1f C%s", milliC / 1000.0, milliC >= 87000 ? L"  STOP AND COOL DOWN" : L"");
     else Say(L"temperature  unavailable%s", IsAdmin() ? L"" : L" (needs an administrator)");
     if (data.Flags & BC250_CU_MODE_FLAG_PENDING)
         Say(L"note         40 CUs are pending: run `cumode confirm` once the desktop has run healthy for a minute.");

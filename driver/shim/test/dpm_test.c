@@ -193,14 +193,22 @@ static struct bc250_dpm_input tick(unsigned int busy, int temp_c, unsigned int d
 	return in;
 }
 
-/* One tick applied without failure; returns the level. */
-static unsigned int run(struct bc250_dpm_governor *g, unsigned int busy, int temp_c, unsigned int dt)
+/* One tick applied without failure, the temperature in millidegrees (the thresholds' edges); returns the level. */
+static unsigned int run_mc(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt)
 {
-	struct bc250_dpm_input in = tick(busy, temp_c, dt);
-	unsigned int level = bc250_dpm_step(g, &in);
+	struct bc250_dpm_input in = tick(busy, 0, dt);
+	unsigned int level;
+	in.temperature_mc = temp_mc;
+	level = bc250_dpm_step(g, &in);
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
 	bc250_dpm_commit(g, level);
 	return level;
+}
+
+/* The same in whole degrees. */
+static unsigned int run(struct bc250_dpm_governor *g, unsigned int busy, int temp_c, unsigned int dt)
+{
+	return run_mc(g, busy, temp_c * 1000, dt);
 }
 
 static void test_load_steps(void)
@@ -286,45 +294,61 @@ static void test_no_oscillation(void)
 	}
 }
 
+/* The limits: hot at 87 C (owner decision 2026-10-01; 85 C before), the cap released 5 C lower, the floor at
+ * 90 C. A constant CHECK would trip C4127 under /WX, so these fail the build instead. */
+typedef char dpm_hot_is_87c[(BC250_DPM_HOT_MC == 87000 && BC250_CLOCK_HOT_MC == 87000) ? 1 : -1];
+typedef char dpm_release_is_82c[(BC250_DPM_RELEASE_MC == 82000 && BC250_DPM_HOT_MC - BC250_DPM_RELEASE_MC == 5000) ? 1 : -1];
+typedef char dpm_critical_is_90c[(BC250_DPM_CRITICAL_MC == 90000) ? 1 : -1];
+
 static void test_thermal(void)
 {
 	struct bc250_dpm_governor g;
 	struct bc250_dpm_input in;
 	unsigned int i, level;
 
-	/* 85 C at the top: one step down at once, under full load. */
+	/* The limits themselves are checked at compile time (dpm_hot_is_87c and the two after it). */
+
+	/* Under full load at the top, 85 C (the old limit) and 86.999 C do nothing thermal. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
-	CHECK(run(&g, 1000, 85, 25) == 9);
+	CHECK(run(&g, 1000, 85, 25) == 10);
+	CHECK(run_mc(&g, 1000, 86999, 25) == 10);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.thermal_events == 0 && g.thermal_cap == 10);
+	/* 87 C at the top: one step down at once, under full load. */
+	CHECK(run_mc(&g, 1000, 87000, 25) == 9);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1 && g.thermal_cap == 9);
 	/* Still hot: another step every HOT_STEP_MS, none in between. */
-	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 86, 25) == 9);
-	CHECK(run(&g, 1000, 86, 25) == 8);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 88, 25) == 9);
+	CHECK(run(&g, 1000, 88, 25) == 8);
 	CHECK(g.thermal_events == 1);
-	/* 80..85: the cap holds, no raise, the reason stays thermal. */
-	for (i = 0; i < 200; i++) CHECK(run(&g, 1000, 82, 25) == 8);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
-	/* Below 80: one level per RELEASE_STEP_MS, back to the top. */
-	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 75, 25) == 8);
-	CHECK(run(&g, 1000, 75, 25) == 9);
+	/* 82..86.999: the cap holds, no raise, the reason stays thermal. Both edges, then the middle. */
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 86999, 25) == 8);
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == 8);
+	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 84, 25) == 8);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1);
+	/* Below 82 (81.999 is enough): one level per RELEASE_STEP_MS, back to the top. */
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == 8);
+	CHECK(run_mc(&g, 1000, 81999, 25) == 9);
 	for (i = 0; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 75, 25);
 	CHECK(level == 10 && g.thermal_cap == 10);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
 
-	/* A new episode after a cool spell clamps at once again. */
-	CHECK(run(&g, 1000, 87, 25) == 9 && g.thermal_events == 2);
+	/* A new episode after a cool spell clamps at once again, at exactly the limit. */
+	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.thermal_events == 2);
 
-	/* 90 C: the floor at once, whatever the load; recovery goes through release, step by step. */
+	/* 90 C: the floor at once, whatever the load; recovery goes through release, step by step. 89.999 C is
+	 * hot, not critical. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
+	CHECK(run_mc(&g, 1000, 89999, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	CHECK(run(&g, 1000, 90, 25) == 0);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD && g.thermal_cap == 0);
 	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 88, 25) == 0);    /* hot, not critical: cap stays 0 */
-	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 81, 25) == 0);    /* not yet below release */
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == 0);    /* not yet below release */
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 70, 25);
 	CHECK(level == 10);
 
-	/* 85 C at the floor: nothing to lower, no underflow, no raise. */
+	/* 87 C at the floor: nothing to lower, no underflow, no raise. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run(&g, 1000, 85, 25) == 0 && g.thermal_cap == 0);
+	CHECK(run_mc(&g, 1000, 87000, 25) == 0 && g.thermal_cap == 0);
 	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 89, 25) == 0);
 
 	/* No reading is treated as critical. */
@@ -337,7 +361,7 @@ static void test_thermal(void)
 	bc250_dpm_init(&g, 6);
 	for (i = 0; i < 10; i++) level = run(&g, 1000, 60, 25);
 	CHECK(level == 6 && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
-	CHECK(run(&g, 1000, 85, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(run(&g, 1000, 87, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 70, 25);
 	CHECK(level == 6 && g.thermal_cap == 6);   /* the cap is released only up to the setting */
 }

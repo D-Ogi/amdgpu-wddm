@@ -42,7 +42,7 @@ struct bc250_clock_report {
 #define BC250_CLOCK_LEVELS 11u
 #define BC250_CLOCK_FLOOR_MV 820u
 #define BC250_CLOCK_CEILING_MV 1000u
-#define BC250_CLOCK_HOT_MC 85000     /* no raise of clock or voltage at or above this */
+#define BC250_CLOCK_HOT_MC 87000     /* no raise of clock or voltage at or above this (owner, 2026-10-01; was 85000) */
 /* After the commit the SMU reports the clock on its way to a raised request (unit A, KMD 0.7.176.1: 1028-1029 MHz
  * right after 1000 -> 1200, 1200 one 25 ms governor tick later; lowerings read back exact). While the readback lies
  * between the initial clock and the request, it is read again, at most this often, with this pause before each. */
