@@ -1,0 +1,11 @@
+prestep: steam 1 (session 1) webhelpers 6 ws_mb 270 private_mb 768 available_mb 5228
+no stop request
+== trial 250
+{"status": "functional-restored", "tree_closed": true, "baseline_restored": true, "candidate_retained": false, "elapsed": 396.9244973, "errors": []}
+window A no gpu etl
+== window B
+  "Unknown" (11604)                n=   431 rate=   9.3/s interval median= 107.02 ms p95= 146.84 ms p99= 195.34 ms max=  220.16 ms >50ms=423 >100ms=306 >250ms=0
+  "Unknown" (1200)                 n=   430 rate=   9.3/s interval median= 108.57 ms p95= 122.24 ms p99= 134.68 ms max=  152.40 ms >50ms=429 >100ms=327 >250ms=0
+2026-10-01T12:31:03.7623473Z t=0.0 left=354.4 window A skipped (-SkipA)
+2026-10-01T12:34:27.1461452Z t=203.4 left=151.1 window B trigger world: walk 203s: start, 40 s
+no samples

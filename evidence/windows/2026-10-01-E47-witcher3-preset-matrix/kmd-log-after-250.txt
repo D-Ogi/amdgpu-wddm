@@ -1,0 +1,61 @@
+log lines 1074
+matches 28
+   246      0.839 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+762859   2797.191 wddm summary: node 0 hardware: 158625 submitted, 157871 completed, 0 timeouts, 0 refused
+762860   2797.191 wddm summary: umd: 12869 allocs (0 refused), 43 contexts, 158611 submits on the ring, 0 not run
+762863   2797.191 wddm summary: node 1 (paging, open): 114550 hardware submitted, 114550 completed, 0 timeouts, 0 refused
+762865   2797.191 wddm summary: SubmitCommandVirtual by node: 0: 158625, 1: 114550, 0 private-buffer refusals
+762995   2797.191 wddm: GPU Present calls14 records14 rotate8 refused0
+763017   2797.192 wddm summary: dcn lock acknowledgement timeouts 0
+763018   2797.192 wddm summary: vidpn flip open: 37453 hardware flips, 0 refused, 1 hardware vsyncs armed 167637 acked 0 refused 28 completion-deferred 26 old-buffer-reports
+763025   2797.192 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+763038   2797.192 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 13 roots
+763120   2802.313 wddm summary: node 0 hardware: 158633 submitted, 157879 completed, 0 timeouts, 0 refused
+763121   2802.313 wddm summary: umd: 12870 allocs (0 refused), 43 contexts, 158619 submits on the ring, 0 not run
+763124   2802.313 wddm summary: node 1 (paging, open): 114556 hardware submitted, 114556 completed, 0 timeouts, 0 refused
+763126   2802.313 wddm summary: SubmitCommandVirtual by node: 0: 158633, 1: 114556, 0 private-buffer refusals
+763256   2802.314 wddm: GPU Present calls14 records14 rotate8 refused0
+763278   2802.314 wddm summary: dcn lock acknowledgement timeouts 0
+763279   2802.314 wddm summary: vidpn flip open: 37461 hardware flips, 0 refused, 1 hardware vsyncs armed 167944 acked 0 refused 28 completion-deferred 26 old-buffer-reports
+763286   2802.314 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+763299   2802.314 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 13 roots
+763406   2807.441 wddm summary: node 0 hardware: 158644 submitted, 157890 completed, 0 timeouts, 0 refused
+763407   2807.441 wddm summary: umd: 12873 allocs (0 refused), 43 contexts, 158630 submits on the ring, 0 not run
+763410   2807.441 wddm summary: node 1 (paging, open): 114578 hardware submitted, 114578 completed, 0 timeouts, 0 refused
+763412   2807.441 wddm summary: SubmitCommandVirtual by node: 0: 158644, 1: 114578, 0 private-buffer refusals
+763542   2807.441 wddm: GPU Present calls14 records14 rotate8 refused0
+763564   2807.441 wddm summary: dcn lock acknowledgement timeouts 0
+763565   2807.441 wddm summary: vidpn flip open: 37472 hardware flips, 0 refused, 1 hardware vsyncs armed 168251 acked 0 refused 28 completion-deferred 26 old-buffer-reports
+763572   2807.441 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+763585   2807.442 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 13 roots
+--- summary
+log          763823 lines since this driver load, 762799 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+     2      0.000 stage 20
+     3      0.500 stage 30
+     4      0.500 guard: count 0 -> 1 flushed, durable required 1
+     5      0.500 stage 31
+     6      0.500 stage 32
+     7      0.500 post display 1920x1200 pitch 7680 format 22 target 2424833
+     8      0.500 stage 33
+     9      0.500 stage 34
+    10      0.500 interrupt resource 1: message, vector 0x70, flags 0x3
+    11      0.500 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    12      0.500 smu: native owner start status 0x00000000
+    13      0.500 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    14      0.500 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    15      0.500 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    16      0.500 gart: ready, dummy page at 0x26FF3A000
+    17      0.500 psp: ready
+    18      0.500 gpumem: ready, doorbells at 0xD0000000
+    19      0.500 gfx: ready, GPU submission allowed, paging node allowed
+    20      0.500 ih: ready
+    21      0.500 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x1 blit 1 cdd 1 previous-end 2
+    22      0.500 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    23      0.515 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    24      0.515 startup: entering interrupt connection
+    25      0.515 startup: entering firmware preparation
+    26      0.515 startup: entering native clock preparation
+    27      0.531 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 67000mc staged 0
+    28      0.531 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
