@@ -337,8 +337,15 @@ static_assert(D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW == static_cast<int>(D3D12_IND
               D3D12DDI_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW ==
                   static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW) &&
               D3D12DDI_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW ==
-                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW),
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT),
               "indirect argument types");
+// The argument buffer of a DISPATCH_RAYS signature holds the application's D3D12_DISPATCH_RAYS_DESC records (the
+// API layout, which D3D12DDIARG_DISPATCH_RAYS_0054 matches, asserted at DispatchRays below); the engine reads them
+// as they are.
 
 SIZE_T APIENTRY calc_command_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001*) {
     return sizeof(CommandSignatureRecord);
@@ -347,6 +354,14 @@ SIZE_T APIENTRY calc_command_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREAT
 // The engine refuses a root signature that no argument needs as well as a missing one, and the DDI does not say
 // whether the runtime sends the handle for a signature of draws alone: it is passed on only when an argument
 // changes root arguments.
+// The runtime removes the device when this DDI fails with E_NOTIMPL (measured on the lab: a DISPATCH_RAYS argument
+// answered E_NOTIMPL, CreateCommandSignature returned DXGI_ERROR_DEVICE_REMOVED and the removed reason was
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR). Every argument type of the DDI is therefore translated, mesh dispatch and the
+// incrementing constant (ExecuteIndirectTier 1_1, which caps.cpp does not answer) included, and the engine decides.
+// A type this shell does not know and a signature the engine refuses are answered with E_OUTOFMEMORY, the one
+// failure a D3D10/11 create function may report without it being critical (windows-driver-docs display
+// handling-errors.md); that the D3D12 runtime passes it on without removing the device is an INFERENCE, not
+// measured. Both cases leave a log line.
 HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001* args,
                                           D3D12DDI_HCOMMANDSIGNATURE h) {
     DeviceContext* c = resolve(device);
@@ -364,6 +379,8 @@ HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DD
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW:
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH:
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW:
             break;
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW:
@@ -386,8 +403,15 @@ HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DD
             out[i].UnorderedAccessView.RootParameterIndex = in.UnorderedAccessView.RootParameterIndex;
             rooted = true;
             break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT:
+            out[i].IncrementingConstant = {in.IncrementingConstant.RootParameterIndex,
+                                           in.IncrementingConstant.DestOffsetIn32BitValues};
+            rooted = true;
+            break;
         default:
-            return E_NOTIMPL;                           // ray and mesh dispatch, incrementing constant
+            log_line("command signature: argument %u has the unknown type %d: E_OUTOFMEMORY", i,
+                     static_cast<int>(in.Type));
+            return E_OUTOFMEMORY;
         }
     }
     ID3D12RootSignature* root = nullptr;
@@ -400,8 +424,12 @@ HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DD
     ID3D12CommandSignature* signature = nullptr;
     const HRESULT hr = c->device->CreateCommandSignature(&desc, root, __uuidof(ID3D12CommandSignature),
                                                          reinterpret_cast<void**>(&signature));
-    if (FAILED(hr)) return hr;
-    if (!signature) return E_UNEXPECTED;
+    if (FAILED(hr) || !signature) {
+        if (hr != E_OUTOFMEMORY)
+            log_line("command signature: the engine refused %u arguments, stride %u (hr %08lx): E_OUTOFMEMORY",
+                     args->NumArgumentDescs, args->ByteStride, static_cast<unsigned long>(hr));
+        return E_OUTOFMEMORY;
+    }
     new (h.pDrvPrivate) CommandSignatureRecord{{Tag::CommandSignature, 0, signature, c}, args->ByteStride};
     c->live.fetch_add(1);
     return S_OK;
@@ -792,8 +820,8 @@ void APIENTRY set_pipeline_state1(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HSTATEOBJECT
     }
 }
 
-// L64. The DDI argument is the API description (asserted above). Indirect dispatch goes through ExecuteIndirect,
-// whose command signatures refuse the ray dispatch argument.
+// L64. The DDI argument is the API description (asserted above). Indirect dispatch goes through ExecuteIndirect
+// with a DISPATCH_RAYS command signature, passed to the engine like the draw and dispatch signatures.
 void APIENTRY dispatch_rays(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_DISPATCH_RAYS_0054* args) {
     constexpr const char* kSlot = "DispatchRays";
     CommandListRecord* l = list_of(h, kSlot);
