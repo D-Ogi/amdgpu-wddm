@@ -141,6 +141,26 @@ and [native Evict](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3d1
 The engine-side ownership contract is in
 [engine-ddi/INTEGRATION.md](engine-ddi/INTEGRATION.md).
 
+## Registration between sessions
+
+The UMD is the fourth `UserModeDriverName` entry, and it loads the engine and
+the ICD from its own directory: the three files are one unit, the triplet.
+dxgkrnl reads the names at adapter start, while each process loads the files
+when it opens the adapter, so new contents at the same path reach processes
+started afterwards without an adapter restart (M765-M768). Between sessions the
+directory holds either the diagnostic shell alone, which has no sibling loader
+and answers device creation with `DXGI_ERROR_UNSUPPORTED` (M768), or an accepted
+triplet. With an accepted triplet every process that creates a D3D12 device on
+the adapter, for example Task Manager's DirectX version probe, loads all three
+DLLs and a hosted Vulkan instance. Experiments (`AMDGPU_WDDM_D3D12_EXPERIMENT`)
+come from the process environment only, so such processes run the defaults.
+The sparse policy stays at its default (value absent, on); the DWORD set to 0
+removes FL 12_x from processes started afterwards without removing D3D12.
+A file that a running process maps cannot be deleted or overwritten in place,
+only renamed: replacements use `ReplaceFile` with a named backup, and the kill
+switch is the diagnostic shell put back at the registered path that way.
+Running processes keep what they loaded.
+
 ## Diagnostics and remaining boundaries
 
 Set `AMDGPU_WDDM_DDI_TRACE=1` before process startup to enable paired DDI entry and
