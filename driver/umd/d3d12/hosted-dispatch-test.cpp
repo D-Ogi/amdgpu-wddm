@@ -194,5 +194,46 @@ int main(){
   assert(map_one(y.hAllocation,y_map)<0 && reuse.lost() && reuse_errors==1);
   assert(reuse.discard_metadata()==4);
  }
- std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss, address reuse inside a free");
+ // 4. A deferred-replay worker of engine-ddi (WorkerScope inside the device's domain) reaches the memory and CPU-side
+ //    sync operations only; a removal it finds marks the device lost at once and reaches the runtime's error callback
+ //    from report_deferred_removal on a DDI thread, once. The scope names one device and ends with its thread's scope.
+ {
+  constexpr int32_t refused=static_cast<int32_t>(0xc000000du);
+  HostedDispatch work(domain,{device_handle},um,kt),other(domain,{device_handle},um,kt);
+  auto on=[](HostedDispatch& d,uint32_t op,void* a){return HostedDispatch::dispatch(&d,op,a);};
+  assert(HostedDispatch::worker_admits(BC250_HOST_Lock2) && HostedDispatch::worker_admits(BC250_HOST_REPORT_LOST));
+  assert(!HostedDispatch::worker_admits(BC250_HOST_SubmitCommand) && !HostedDispatch::worker_admits(BC250_HOST_CREATE_QUEUE_CONTEXT));
+  const unsigned creates=context_creates,submits=submitted,reported=errors;
+  std::thread([&]{
+   bc250::umd::RuntimeDomain::Scope entered(domain);
+   D3DKMT_CREATECONTEXTVIRTUAL created{};bc250_host_queue_context queue{nullptr,&created};
+   bc250_host_paging pages{};
+   {
+    HostedDispatch::WorkerScope scope(work);
+    assert(on(work,BC250_HOST_CHECK_STATUS,nullptr)==0);
+    assert(on(work,BC250_HOST_CREATE_PAGING,&pages)==0 && pages.queue==9 && on(work,BC250_HOST_DESTROY_PAGING,&pages)==0);
+    assert(on(work,BC250_HOST_CREATE_QUEUE_CONTEXT,&queue)==refused && !created.hContext && context_creates==creates);
+    D3DKMT_SUBMITCOMMAND command{};assert(on(work,BC250_HOST_SubmitCommand,&command)==refused && submitted==submits);
+    D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU gpu_wait{};
+    assert(on(work,BC250_HOST_WaitForSynchronizationObjectFromGpu,&gpu_wait)==refused);
+    bc250_host_progress published{};assert(on(work,BC250_HOST_PUBLISH_PROGRESS,&published)==refused);
+    // Another device on the same thread is not restricted.
+    assert(on(other,BC250_HOST_CREATE_QUEUE_CONTEXT,&queue)==0 && created.hContext && context_creates==creates+1);
+    D3DKMT_DESTROYCONTEXT gone{};gone.hContext=created.hContext;bc250_host_queue_context end{nullptr,&gone};
+    assert(on(other,BC250_HOST_DESTROY_QUEUE_CONTEXT,&end)==0);
+    // A removal on the worker: lost at once, no callback from this thread, also not from a report made here.
+    assert(on(work,BC250_HOST_REPORT_LOST,nullptr)<0 && work.lost() && errors==reported);
+    work.report_deferred_removal();assert(errors==reported && on(work,BC250_HOST_CHECK_STATUS,nullptr)<0);
+   }
+   // The scope has ended: this thread is a DDI thread of the device again.
+   created={};assert(on(other,BC250_HOST_CREATE_QUEUE_CONTEXT,&queue)==0 && context_creates==creates+2);
+   D3DKMT_DESTROYCONTEXT gone{};gone.hContext=created.hContext;bc250_host_queue_context end{nullptr,&gone};
+   assert(on(other,BC250_HOST_DESTROY_QUEUE_CONTEXT,&end)==0);
+  }).join();
+  assert(errors==reported);
+  work.report_deferred_removal();assert(errors==reported+1);
+  work.report_deferred_removal();assert(errors==reported+1);
+  assert(work.discard_metadata()==0 && other.discard_metadata()==0);
+ }
+ std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss, address reuse inside a free, replay worker scope");
 }

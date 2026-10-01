@@ -3,6 +3,10 @@
 // GPU, composes the DDI tables, runs the round trips and tears everything down. Development PC only.
 //
 //   engine-ddi-harness.exe --engine <amdgpu_wddm_vkd3d.dll> [--adapter <substring of the DXGI description>]
+//                          [--deferred-replay]
+//
+// --deferred-replay turns the replay policy on for every device context the run opens (open_device), as the
+// shell's deferred-replay experiment does: the recording slots' engine calls run on replay workers.
 #include "harness.h"
 #include <dxgi1_4.h>
 #include <cstdarg>
@@ -14,6 +18,7 @@ namespace harness {
 
 namespace {
 int g_failures = 0;
+bool g_replay = false;                  // --deferred-replay
 constexpr SIZE_T kCanaryBytes = 32;
 constexpr uint8_t kFill = 0xCD;
 constexpr uint8_t kCanary = 0xA5;
@@ -82,6 +87,10 @@ void APIENTRY report_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST list, HRESU
 
 BOOL APIENTRY is_device_lost(void*) { return FALSE; }
 
+// The shell's replay hooks without its scopes: the harness has no runtime domain or hosted dispatch to enter.
+void APIENTRY replay_worker(void*, engine_ddi::ReplayBody body, void* ring) { body(ring); }
+void APIENTRY replay_drained(void*) {}
+
 HRESULT APIENTRY bind_list_table(void* shell, D3D12DDI_HRTCOMMANDLIST list, uint32_t table) {
     static_cast<Shell*>(shell)->binds.push_back({list.handle, table});
     return S_OK;
@@ -144,6 +153,13 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
     info.hooks.bind_list_table = bind_list_table;
     HRESULT hr = engine_ddi::create_device_context(&info, &device.context);
     device.sd.context = device.context;
+    if (hr == S_OK && g_replay) {
+        const engine_ddi::ReplayPolicy policy{sizeof(policy), 1, 8, 4u << 20, &device.shell, replay_worker,
+                                              replay_drained};
+        hr = engine_ddi::set_replay_policy(device.context, &policy);
+        if (hr != S_OK)
+            checkf(false, "deferred replay: policy on for a device context (hr %08lx)", static_cast<unsigned long>(hr));
+    }
     return hr;
 }
 
@@ -424,15 +440,19 @@ int wmain(int argc, wchar_t** argv) {
             engine_path = argv[++i];
         } else if (!std::wcscmp(argv[i], L"--adapter") && i + 1 < argc) {
             adapter = argv[++i];
+        } else if (!std::wcscmp(argv[i], L"--deferred-replay")) {
+            g_replay = true;
         } else {
             std::printf("FAIL  unknown or incomplete option %ls\n", argv[i]);
             return 2;
         }
     }
     if (!engine_path) {
-        std::printf("usage: engine-ddi-harness --engine <amdgpu_wddm_vkd3d.dll> [--adapter <substring>]\n");
+        std::printf("usage: engine-ddi-harness --engine <amdgpu_wddm_vkd3d.dll> [--adapter <substring>] "
+                    "[--deferred-replay]\n");
         return 2;
     }
+    std::printf("deferred replay: %s\n", g_replay ? "on for every device context" : "off");
 
     // The engine keeps its disk shader cache in %LOCALAPPDATA%\amdgpu-wddm\vkd3d. The harness points LOCALAPPDATA
     // at localappdata beside itself, before the engine's first device reads it, so no run writes to the profile;
