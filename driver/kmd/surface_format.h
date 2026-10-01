@@ -5,7 +5,8 @@
 // The KMD's admission of a surface format, over the shared table in driver/contract, which alone says what a
 // format is enabled for. Plain integers, so the host tests compile it without a WDK header; wddm.c checks the
 // values against D3DDDIFORMAT with C_ASSERT. The stages are the KMD's:
-//   Composed  a received LB7A blob of GDI type 0: the table's COMPOSED rows (A8R8G8B8, A8B8G8R8, A2B10G10R10).
+//   Composed  a received LB7A blob of GDI type 0: the table's COMPOSED rows (A8R8G8B8, A8B8G8R8, A2B10G10R10 at
+//             4 bytes, A16B16G16R16F at 8; gdi_private.h sizes the row by the returned bytes, never by 4).
 //             dxgkrnl's own standard allocations (shared primary, shadow, staging) arrive as type 0 as well, so
 //             the SCANOUT_PRIMARY rows (X8R8G8B8) and X8B8G8R8, which the table does not describe, stay
 //             admitted here exactly as before the table.

@@ -126,7 +126,8 @@ static void GdiAllocationPolicies(void)
 }
 
 /* wddm.c's WddmSurfacePixelBytes before the format table, transcribed: every
- * admission the table answers must equal the geometry at these bytes. */
+ * admission the table answers must equal the geometry at these bytes. The
+ * table's two additions to type 0 are mapped in SurfaceFormats. */
 static unsigned long PixelBytesBeforeTable(unsigned long Format)
 {
     if (Format==28) return 1;
@@ -137,7 +138,8 @@ static void SurfaceFormats(void)
 {
     static const unsigned long widths[]={1,3,64,127,1366,1920}, heights[]={1,3,79,1080};
     BC250_WDDM_ALLOCATION_PRIVATE s={0};
-    unsigned long f,t,rule,bpp,accepted=0,refused=0,accepted31=0,refused31=0;
+    unsigned long f,t,rule,bpp,accepted=0,refused=0,accepted31=0,refused31=0,accepted113=0,refused113=0;
+    unsigned long long bytes;
     unsigned int i,j;
     int rgb10,rgba8;
     s.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;s.Version=1;
@@ -146,13 +148,14 @@ static void SurfaceFormats(void)
         CHECK(WddmSurfaceFormatBpp(f,BC250_SURFACE_SCANOUT)==(f==21 || f==22 ? 4ul : 0ul));
         CHECK(!WddmSurfaceFormatBpp(f,0));
     }
-    /* Shapes: the DXGI shared-surface layout, GDI's 1- and 4-byte layouts, and
-     * a pitch one pixel short. Each type and format against the old answer. */
+    /* Shapes: the DXGI shared-surface layout at 4 and 8 bytes a pixel, GDI's
+     * 1- and 4-byte layouts, and a pitch one pixel short. Each type and format
+     * against the old answer. */
     for(i=0;i<sizeof(widths)/sizeof(widths[0]);i++)for(j=0;j<sizeof(heights)/sizeof(heights[0]);j++)
-    for(t=0;t<=8;t++)for(rule=0;rule<4;rule++) {
+    for(t=0;t<=8;t++)for(rule=0;rule<5;rule++) {
         s.Width=widths[i];s.Height=heights[j];
-        if (!rule) {
-            s.Pitch=(s.Width*4u+255u)&~255ul;
+        if (!rule || rule==4) {
+            s.Pitch=(s.Width*(rule ? 8u : 4u)+255u)&~255ul;
             s.Size=(unsigned long long)s.Pitch*((s.Height+3u)&~3ul);
         } else if (rule<3) {
             if (!WddmGdiLayout(s.Width,s.Height,t ? t : 2,rule==1 ? 1 : 4,&s.Pitch,&s.Size)) continue;
@@ -161,9 +164,10 @@ static void SurfaceFormats(void)
         }
         for(f=0;f<256;f++) {
             s.Format=f;
-            /* A2B10G10R10 (DXGI R10G10B10A2) is the one change: a type 0
-             * surface of 4-byte pixels, admitted wherever A8B8G8R8 is. */
-            bpp=PixelBytesBeforeTable(f==31 && !t ? 32 : f);
+            /* The table's changes are type 0 only: A2B10G10R10 (DXGI
+             * R10G10B10A2) at 4 bytes a pixel, admitted wherever A8B8G8R8 is,
+             * and A16B16G16R16F (DXGI R16G16B16A16_FLOAT) at 8. */
+            bpp=f==113 && !t ? 8 : PixelBytesBeforeTable(f==31 && !t ? 32 : f);
             CHECK(WddmSurfaceAdmitted(&s,t)==WddmSurfaceGeometry(&s,t,bpp));
             if (WddmSurfaceAdmitted(&s,t)) accepted++; else refused++;
         }
@@ -171,18 +175,41 @@ static void SurfaceFormats(void)
         s.Format=32;rgba8=WddmSurfaceAdmitted(&s,t);
         CHECK(t ? !rgb10 : rgb10==rgba8);
         if (!t) { if (rgb10) accepted31++; else refused31++; }
+        /* FP16 only where the pitch holds 8 bytes a pixel, and never at a GDI type. */
+        s.Format=113;
+        CHECK(WddmSurfaceAdmitted(&s,t)==(!t && DcnLinearSurfaceBytes(s.Width,s.Height,s.Pitch,8,&bytes) && s.Size>=bytes));
+        if (!t) { if (WddmSurfaceAdmitted(&s,t)) accepted113++; else refused113++; }
     }
-    CHECK(accepted && refused && accepted31 && refused31);
+    CHECK(accepted && refused && accepted31 && refused31 && accepted113 && refused113);
     CHECK(WddmSurfaceFormatBpp(31,BC250_SURFACE_COMPOSED)==4);
     CHECK(!WddmSurfaceFormatBpp(31,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(31,BC250_SURFACE_SCANOUT));
+    CHECK(WddmSurfaceFormatBpp(113,BC250_SURFACE_COMPOSED)==8);
+    CHECK(!WddmSurfaceFormatBpp(113,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(113,BC250_SURFACE_SCANOUT));
+    /* The 8-byte geometry itself: a whole number of pixels per row, the row inside the pitch. */
+    CHECK(DcnLinearSurfaceBytes(256,64,2048,8,&bytes) && bytes==131072ull);
+    CHECK(!DcnLinearSurfaceBytes(256,64,2044,8,&bytes) && !bytes);
+    CHECK(!DcnLinearSurfaceBytes(256,64,2052,8,&bytes) && !bytes);
+    CHECK(DcnLinearSurfaceBytes(256,64,2056,8,&bytes) && bytes==2056ull*64u);
+    CHECK(DcnLinearSurfaceBytes(256,64,1024,4,&bytes) && bytes==65536ull);
+    CHECK(!DcnLinearSurfaceBytes(256,64,2048,2,&bytes) && !DcnLinearSurfaceBytes(256,64,2048,16,&bytes));
+    CHECK(DcnSurfaceBytes(256,64,1024,&bytes) && bytes==65536ull && !DcnSurfaceBytes(256,64,1020,&bytes));
     /* One 1080p DXGI shared surface: the 4-byte formats in, the unknown ones
-     * (A2R10G10B10, A16B16G16R16F, A2B10G10R10_XR_BIAS, UNKNOWN) out. */
+     * (A2R10G10B10, A2B10G10R10_XR_BIAS, UNKNOWN) out, and A16B16G16R16F out
+     * at a 4-byte pitch. At an 8-byte pitch only A16B16G16R16F is new. */
     s.Width=1920;s.Height=1080;s.Pitch=7680;s.Size=7680ull*1080u;
     for(f=0;f<256;f++) {
         s.Format=f;
         if (f==21 || f==22 || f==31 || f==32 || f==33) CHECK(WddmSurfaceAdmitted(&s,0));
         if (f==0 || f==35 || f==113 || f==119) CHECK(!WddmSurfaceAdmitted(&s,0));
     }
+    s.Pitch=15360;s.Size=15360ull*1080u;
+    for(f=0;f<256;f++) {
+        s.Format=f;
+        if (f==21 || f==22 || f==31 || f==32 || f==33 || f==113) CHECK(WddmSurfaceAdmitted(&s,0));
+        if (f==0 || f==35 || f==119) CHECK(!WddmSurfaceAdmitted(&s,0));
+    }
+    s.Format=113;s.Size=15360ull*1080u-1u;CHECK(!WddmSurfaceAdmitted(&s,0));
+    s.Size=15360ull*1080u;CHECK(!WddmSurfaceAdmitted(&s,1) && !WddmSurfaceAdmitted(&s,2));
     CHECK(!WddmSurfaceAdmitted(0,0));
 }
 

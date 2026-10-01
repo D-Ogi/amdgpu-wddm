@@ -78,8 +78,9 @@ static __inline int WddmSurfaceGeometry(const BC250_WDDM_ALLOCATION_PRIVATE* Sur
         Surface->Version!=1 || Type>8 || Surface->Size>~0ull-4095ull) return 0;
     if (!Type) {
         /* Legacy UMD producers may add pitch/row padding. Bound the footprint,
-         * but do not require the standard-GDI producer's exact layout. */
-        return Bpp==4 && DcnSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,&size) &&
+         * but do not require the standard-GDI producer's exact layout. The
+         * bytes of a pixel are the format row's: 4, or 8 for an FP16 buffer. */
+        return DcnLinearSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,Bpp,&size) &&
             Surface->Size>=size;
     }
     return WddmGdiLayout(Surface->Width,Surface->Height,Type,Bpp,&pitch,&size) &&

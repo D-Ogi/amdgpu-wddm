@@ -31,13 +31,20 @@ unsigned long DcnPrimaryPitch(unsigned long Width)
     if (!Width || pixels>0xffffffffull/4ull) return 0;
     return (unsigned long)(pixels*4ull);
 }
+int DcnLinearSurfaceBytes(unsigned long Width,unsigned long Height,unsigned long Pitch,
+                          unsigned long BytesPerPixel,unsigned long long* Bytes)
+{
+    *Bytes=0;
+    if (BytesPerPixel!=4 && BytesPerPixel!=8) return 0;
+    if (!Width || !Height || !Pitch || (Pitch%BytesPerPixel) ||
+        (unsigned long long)Width*BytesPerPixel>Pitch) return 0;
+    *Bytes=(unsigned long long)Pitch*Height;
+    return 1;
+}
 int DcnSurfaceBytes(unsigned long Width,unsigned long Height,unsigned long Pitch,
                     unsigned long long* Bytes)
 {
-    *Bytes=0;
-    if (!Width || !Height || !Pitch || (Pitch&3ul) || (unsigned long long)Width*4ull>Pitch) return 0;
-    *Bytes=(unsigned long long)Pitch*Height;
-    return 1;
+    return DcnLinearSurfaceBytes(Width,Height,Pitch,4,Bytes);
 }
 
 int DcnSharedTextureLayout(unsigned long Width,unsigned long Height,

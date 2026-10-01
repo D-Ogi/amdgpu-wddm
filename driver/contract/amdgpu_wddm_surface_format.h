@@ -24,7 +24,14 @@
  *   SCANOUT_PRIMARY  may be the argument of SetVidPnSourceAddress, i.e. read by the display
  *                    pipeline. Today only the formats of the plane the firmware left.
  * A row without a bit is known and refused with a reason, never mistaken for an unknown format.
- * RGBA16F is present with no bits: enabling it is a policy change here plus its measurement.
+ *
+ * RGBA16F (an FP16 swap chain, scRGB when the application says so) is COMPOSED at 8 bytes a
+ * pixel. Every reader takes bytes_per_pixel from the row, never 4: the pitch is at least
+ * width * 8. The colour space and HDR metadata are not part of LB7A: DXGI hands them to the
+ * compositor, which converts to the desktop's format; no reader here interprets the values.
+ * A component built against a copy of this table without the bit still refuses the row (the
+ * kernel driver up to 0.7.184.1 and the desktop UMDs 4176D1DF and E6B944CF do), so the bit takes
+ * effect on a machine only when every component along the path carries it.
  */
 #ifndef AMDGPU_WDDM_SURFACE_FORMAT_H
 #define AMDGPU_WDDM_SURFACE_FORMAT_H
@@ -69,7 +76,8 @@ static inline const AMDGPU_WDDM_SURFACE_FORMAT *amdgpu_wddm_surface_formats(unsi
          AMDGPU_WDDM_SURFACE_COMPOSED, "RGBA8"},
         {AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM, 0, AMDGPU_WDDM_D3DDDI_A2B10G10R10, 4,
          AMDGPU_WDDM_SURFACE_COMPOSED, "RGB10A2"},
-        {AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT, 0, AMDGPU_WDDM_D3DDDI_A16B16G16R16F, 8, 0, "RGBA16F"},
+        {AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT, 0, AMDGPU_WDDM_D3DDDI_A16B16G16R16F, 8,
+         AMDGPU_WDDM_SURFACE_COMPOSED, "RGBA16F"},
         {0, 0, AMDGPU_WDDM_D3DDDI_X8R8G8B8, 4, AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY, "X8"},
     };
     *count = (unsigned int)(sizeof(rows) / sizeof(rows[0]));

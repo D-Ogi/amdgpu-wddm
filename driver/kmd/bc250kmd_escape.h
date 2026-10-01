@@ -35,13 +35,13 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700BEu       // revision 190: DDI interface version 0xE003 (WDDM 2.9; 3.x
-                                            // makes VidMm refuse the VRAM-only CpuVisible CDD shadow); 189: target modes name their wire format (8-bit RGB), which
-                                            // interface 2.2+ needs (display.c OfferTargetMode; 188 also wrote the 2.9
-                                            // MinimumVSyncFreq past the V1 mode info and bugchecked); 186:
-                                            // DDI interface version 0x10004 (WDDM 3.1 table, WDDMVersion
-                                            // still 2.0; ADR 0019 B1, bc250kmd.h); 185: DPM governor thresholds and a
-                                            // runtime clock floor at run time (dpm.c, BC250_ESCAPE_RUN_DPM_TUNE)
+#define BC250_KMD_VERSION 0x000700BFu       // revision 191: FP16 (A16B16G16R16F) swap-chain buffers admitted as
+                                            // composed LB7A surfaces at 8 bytes a pixel (surface_format.h,
+                                            // gdi_private.h; was 187 on 186); 190: DDI interface version 0xE003
+                                            // (WDDM 2.9; 3.x makes VidMm refuse the VRAM-only CpuVisible CDD
+                                            // shadow); 189: target modes name their wire format (8-bit RGB),
+                                            // which interface 2.2+ needs (display.c OfferTargetMode); 185: DPM
+                                            // governor thresholds and a runtime clock floor (dpm.c)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
