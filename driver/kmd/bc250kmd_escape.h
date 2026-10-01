@@ -35,13 +35,19 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C1u       // revision 193: hang instrumentation for the 147/208/209/245 VM-fault
+#define BC250_KMD_VERSION 0x000700C2u       // revision 194: M15.12 hang recovery stage 1 behind HangRecoveryMode
+                                            // (absent/0 = 193's behaviour exactly). DxgkDdiResetEngine for node 0
+                                            // kills the hung VMID's waves (amdgpu gfx_v10_0_ring_soft_recovery via
+                                            // bc250_gfx_soft_recover_vmid) and, only if the job's fence then
+                                            // retires, reopens the ring and reports the fence aborted so the guilty
+                                            // device is removed and the desktop survives; otherwise today's 0x116.
+                                            // No escape struct or journal layout changed; the constant moves
+                                            // because packagecheck VRS010 matches it against the INF revision.
+                                            // 193: hang instrumentation for the 147/208/209/245 VM-fault
                                             // class - UTCL2 faults logged once a second with the latched GCVM
                                             // status, a CP/GRBM/GCVM snapshot at each HARDWARE FENCE TIMEOUT,
                                             // and process/thread/context identity in the paging journal
-                                            // (ih_fault.h, paging_identity.h, journal version 2). No escape
-                                            // struct and no journal record layout changed; the constant moves
-                                            // because packagecheck VRS010 matches it against the INF revision.
+                                            // (ih_fault.h, paging_identity.h, journal version 2).
                                             // 192: O(1) object index and allocation serials instead of
                                             // adapter-list scans on the close, bind and Present paths
                                             // (object_index.h, wddm.c); 191: FP16 (A16B16G16R16F) swap-chain

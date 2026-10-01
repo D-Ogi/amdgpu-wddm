@@ -931,7 +931,7 @@ static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
 
 // E11: what amdgpu wrote on unit A in this step (E03 trace, 0.0375 to 0.0385 s, 0.2495 to 0.2528 s, 0.5496 to 0.551 s, 1.56 to 1.562 s, names matching
 // ^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_GFX_ALLOW_COUNT 290
+#define BC250_MMIO_GFX_ALLOW_COUNT 291
 static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x03780ul,   // NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
     0x0384Cul,   // NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH
@@ -1031,6 +1031,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x08C28ul,   // GC.SH_MEM_BASES
     0x08C30ul,   // GC.SQ_ARB_CONFIG
     0x08C34ul,   // GC.SH_MEM_CONFIG
+    0x08DECul,   // GC.SQ_CMD (not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery)
     0x0935Cul,   // GC.SPI_PG_ENABLE_STATIC_WGP_MASK (not traced: CU mode dispatch gate, docs/design/cu-mode.md)
     0x09508ul,   // GC.TA_CNTL_AUX
     0x09830ul,   // GC.DB_DEBUG

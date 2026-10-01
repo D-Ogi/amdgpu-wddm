@@ -663,6 +663,18 @@ BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 
+// The one hardware VMID the WDDM path uses for node 0, re-pointed at each submitter's page-directory root per
+// job (wddm.c re-pointed it, gfx.c's SubmitIbLocked flushes it). Shared here so the M15.12 soft recovery in
+// gfx.c and the submit path in wddm.c name the same VMID. VMID 2 is SDMA paging's (bc250_sdma.h).
+#define BC250_WDDM_VMID 1u
+
+//   GfxSoftRecover   M15.12 stage 1 (DESIGN.md). PASSIVE_LEVEL, from DxgkDdiResetEngine only, under the
+//                    HangRecoveryMode switch: kill the in-flight job's waves on BC250_WDDM_VMID (amdgpu's
+//                    gfx_v10_0_ring_soft_recovery) and wait up to 10 ms for its fence to retire. TRUE = the ring
+//                    drained and reopened (SubmitInFlight and the sticky SubmitFailed cleared); FALSE = nothing
+//                    changed, the caller keeps today's refusal. On TRUE, *DrainedSeq is the sequence that retired.
+BOOLEAN GfxSoftRecover(_Inout_ BC250_DEVICE* Device, _Out_opt_ ULONG* DrainedSeq);
+
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. A
 // second, parallel channel to the four above, not a generalization of them: SubmitCommand (the paging buffer's
 // DDI) is _IRQL_requires_(DISPATCH_LEVEL), exactly, so this path may never take Device->GartLock and never
