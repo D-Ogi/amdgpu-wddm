@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
+#pragma comment(lib,"advapi32.lib") // RegGetValueW: the application profile below
 
 namespace native12 {
 // Opt-in for one diagnostic process, sampled once. Names and scalar outcomes
@@ -33,8 +35,8 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
     OutputDebugStringA(line);
 }
 // Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a
-// measurement that needs them: one name or several separated by commas. Unset, empty or unknown means none.
-// Read once per process. Names: raytracing-tier (adapter-caps.cpp), present-cached and present-noprimary
+// measurement that needs them: one name or several separated by commas. Empty, "none" or unknown names mean
+// none; unset means the application profile below, if any. Read once per process. Names: raytracing-tier (adapter-caps.cpp), present-cached and present-noprimary
 // (heap-import.cpp), recording-bind and retire-handoff (device-engine.cpp: the recording entry binding and the
 // retire hand-off, both read once per device).
 // The three switches of the release gate (M15.8, the fixes of the trial 245 report) are the other way round:
@@ -44,23 +46,86 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
 // All three off is adapter106's release behaviour.
-// The value as given, for traces: lower-case letters, digits, hyphens and commas only, else empty.
-inline const char* ddi_experiment_name() noexcept {
-    static const struct Value {
-        char text[96]{};
-        Value() noexcept {
-            const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",text,sizeof(text));
-            if(!n || n>=sizeof(text))text[0]=0;
-            for(const char* p=text;*p;++p)
-                if(!((*p>='a' && *p<='z') || (*p>='0' && *p<='9') || *p=='-' || *p==',')){text[0]=0;break;}
-        }
-    } value;
-    return value.text;
+// Application profile (M15.7): a game started by its own launcher (Steam) inherits nothing from a trial, so it
+// would run without the switches its trials measured. When the process has no AMDGPU_WDDM_D3D12_EXPERIMENT,
+// the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image file name> gives the
+// list in the same syntax (registry key names compare without case). The variable wins whenever it is present;
+// its value "none" names no switch and keeps a trial independent of any profile.
+enum class DdiExperimentSource : unsigned {
+    None,         // neither the variable nor a profile for this image
+    Environment,  // AMDGPU_WDDM_D3D12_EXPERIMENT, "none" and empty included
+    Profile,      // the image's application profile
+    Invalid,      // a value outside the syntax or too long: no switch
+};
+struct DdiExperimentValue {
+    char text[256]{};
+    DdiExperimentSource source{DdiExperimentSource::None};
+};
+namespace ddi_detail {
+inline bool experiment_syntax(const char* text) noexcept {
+    for(const char* p=text;*p;++p)
+        if(!((*p>='a' && *p<='z') || (*p>='0' && *p<='9') || *p=='-' || *p==','))return false;
+    return true;
 }
-inline bool ddi_experiment(const char* name) noexcept {
-    if(!name || !name[0])return false;
+// The profile key of an image path: the file name after the last separator, under the Applications key.
+inline bool application_profile_key(const wchar_t* image,wchar_t* key,size_t capacity) noexcept {
+    static constexpr wchar_t prefix[]=L"SOFTWARE\\amdgpu-wddm\\D3D12\\Applications\\";
+    const wchar_t* name=image;
+    for(const wchar_t* p=image;*p;++p)if(*p==L'\\' || *p==L'/')name=p+1;
+    const size_t prefix_length=sizeof(prefix)/sizeof(wchar_t)-1,name_length=std::wcslen(name);
+    if(!name_length || prefix_length+name_length+1>capacity)return false;
+    std::wmemcpy(key,prefix,prefix_length);
+    std::wmemcpy(key+prefix_length,name,name_length+1);
+    return true;
+}
+// The profile's list for this process into text, 1 when found, 0 when there is none, -1 when the value is not a
+// string of the syntax that fits.
+inline int application_profile(char* text,size_t capacity) noexcept {
+    wchar_t image[MAX_PATH]{};
+    const DWORD n=GetModuleFileNameW(nullptr,image,MAX_PATH);
+    wchar_t key[96+MAX_PATH]{};
+    if(!n || n>=MAX_PATH || !application_profile_key(image,key,sizeof(key)/sizeof(wchar_t)))return 0;
+    wchar_t value[256]{};DWORD bytes=sizeof(value);
+    const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,key,L"Experiment",RRF_RT_REG_SZ,nullptr,value,&bytes);
+    if(status==ERROR_FILE_NOT_FOUND)return 0;
+    if(status!=ERROR_SUCCESS)return -1;
+    size_t i=0;
+    for(;value[i];++i){
+        if(i+1>=capacity || value[i]>0x7F)return -1;
+        text[i]=static_cast<char>(value[i]);
+    }
+    text[i]=0;
+    return 1;
+}
+inline DdiExperimentValue resolve_experiment() noexcept {
+    DdiExperimentValue v{};
+    SetLastError(ERROR_SUCCESS);
+    const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",v.text,sizeof(v.text));
+    if(n || GetLastError()!=ERROR_ENVVAR_NOT_FOUND){
+        v.source=n<sizeof(v.text)?DdiExperimentSource::Environment:DdiExperimentSource::Invalid;
+    } else {
+        const int found=application_profile(v.text,sizeof(v.text));
+        v.source=found>0?DdiExperimentSource::Profile:found<0?DdiExperimentSource::Invalid:DdiExperimentSource::None;
+    }
+    if(v.source==DdiExperimentSource::Invalid || !experiment_syntax(v.text)){
+        v.text[0]=0;v.source=DdiExperimentSource::Invalid;
+    }
+    if(!std::strcmp(v.text,"none"))v.text[0]=0;
+    return v;
+}
+}
+// Read once per process.
+inline const DdiExperimentValue& ddi_experiment_value() noexcept {
+    static const DdiExperimentValue value=ddi_detail::resolve_experiment();
+    return value;
+}
+// The list as given, for traces: lower-case letters, digits, hyphens and commas only, else empty.
+inline const char* ddi_experiment_name() noexcept {return ddi_experiment_value().text;}
+// Whether the comma-separated list names the switch exactly.
+inline bool ddi_experiment_listed(const char* list,const char* name) noexcept {
+    if(!list || !name || !name[0])return false;
     const size_t length=std::strlen(name);
-    for(const char* given=ddi_experiment_name();*given;){
+    for(const char* given=list;*given;){
         const char* end=std::strchr(given,',');
         const size_t size=end?static_cast<size_t>(end-given):std::strlen(given);
         if(size==length && !std::memcmp(given,name,length))return true;
@@ -68,6 +133,7 @@ inline bool ddi_experiment(const char* name) noexcept {
     }
     return false;
 }
+inline bool ddi_experiment(const char* name) noexcept {return ddi_experiment_listed(ddi_experiment_name(),name);}
 // A formatted line of the failures-only mode, under the same budget.
 inline void ddi_mode2_note(const char* text) noexcept {
     if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;

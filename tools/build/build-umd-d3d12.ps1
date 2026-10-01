@@ -90,6 +90,10 @@ try {
   if($LASTEXITCODE){throw 'Paging test build failed'}
   & .\paging-test.exe
   if($LASTEXITCODE){throw 'Paging tests failed'}
+  & cl.exe @flags /Fe:ddi-experiment-test.exe "$repo\driver\umd\d3d12\ddi-experiment-test.cpp"
+  if($LASTEXITCODE){throw 'Experiment source test build failed'}
+  & .\ddi-experiment-test.exe
+  if($LASTEXITCODE){throw 'Experiment source tests failed'}
   & cl.exe @flags /Fe:residency-test.exe "$repo\driver\umd\d3d12\residency-test.cpp"
   if($LASTEXITCODE){throw 'Residency test build failed'}
   & .\residency-test.exe
