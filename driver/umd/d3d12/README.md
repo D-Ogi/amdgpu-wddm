@@ -82,8 +82,10 @@ the same owner are allowed. A different device cannot inherit that authority,
 and engine workers do not acquire it merely by holding a pointer. Command-list
 entries resolve their owning shell through the engine context.
 
-The `deferred-replay` experiment (`AMDGPU_WDDM_D3D12_EXPERIMENT`, off by default,
-read once per device) turns on engine-ddi's deferred command-list replay
+Deferred command-list replay is on by default and read once per device; the
+experiment `deferred-replay-off` (`AMDGPU_WDDM_D3D12_EXPERIMENT`, see
+[ddi-trace.h](ddi-trace.h) for every default and its off switch) takes it back.
+On, it uses engine-ddi's deferred command-list replay
 ([engine-ddi/README.md](engine-ddi/README.md)) with 8 rings of 4 MiB. Its worker
 threads are the one kind of engine-ddi thread that enters a device's runtime
 domain, together with `HostedDispatch::WorkerScope`: the engine's recording may

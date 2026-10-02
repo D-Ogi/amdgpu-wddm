@@ -485,17 +485,16 @@ struct MemoryArchitecturePolicy {
 // tier 1 without resource serialization tier 2. Logged like build_caps's refusals.
 HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept;
 
-// A diagnostic deviation, off by default: with `report` set, type 1006 answers RaytracingTier 1_1 when the
-// engine's own answer is 1_1 or higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. The
-// tier promises more than engine-ddi does: an existing collection imported with an export list is still refused
-// (E_NOTIMPL, temporarily, until an engine with the fix of its deferred import loop is pinned; importing a whole
-// collection works), and indirect ray dispatch reaches the engine but traces every record up to the count only on an
-// engine with the fork's fix (vkd3d-proton upstream traces the first record alone and nothing with a count buffer).
-// It is for a measurement of the slots that exist (acceleration structures, inline ray queries, state objects with
-// collections and AddToStateObject, DispatchRays, indirect DispatchRays) with a client that uses nothing else, never a
-// driver default. Same calling rule as set_memory_architecture_policy.
-// E_INVALIDARG for a null caps.
-HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept;
+// Reporting is ON by default: type 1006 answers RaytracingTier 1_1 when the engine's own answer is 1_1 or
+// higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. Call this with `report` false to
+// take the whole answer back to NOT_SUPPORTED, which the shell does for the experiment raytracing-tier-off.
+// Two known gaps the tier promises and engine-ddi does not yet keep: an existing collection imported with an
+// export list is refused (E_NOTIMPL, until an engine with the fix of its deferred import loop is pinned;
+// importing a whole collection works), and the runtime's own state object description is unmeasured. Indirect
+// ray dispatch traces every record up to the count only on an engine with the fork's fix, which is the pinned
+// one (vkd3d-proton upstream traces the first record alone and nothing with a count buffer).
+// Same calling rule as set_memory_architecture_policy. E_INVALIDARG for a null caps.
+HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases

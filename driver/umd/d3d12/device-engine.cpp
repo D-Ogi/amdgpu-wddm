@@ -314,27 +314,28 @@ public:
             result=engine_ddi::set_release_policy(context_,&policy);stage("ReleasePolicy",result);
             if(result!=S_OK)return result;
         }
-        // Lever L3 (experiment retire-handoff, off by default): submissions leave the release sequence to the
-        // resource DDIs, within kRetireBacklogBound and kRetireAgeBoundMs (engine-ddi.h, set_retire_policy).
+        // Lever L3, on unless the experiment retire-handoff-off says otherwise: submissions leave the release
+        // sequence to the resource DDIs, within kRetireBacklogBound and kRetireAgeBoundMs (engine-ddi.h,
+        // set_retire_policy). engine-ddi's own default keeps the sequence, so this call alone decides.
         // Set before any queue exists.
-        if(ddi_experiment("retire-handoff")){
+        if(!ddi_experiment_off("retire-handoff")){
             engine_ddi::RetirePolicy policy{};
             policy.size=sizeof(policy);policy.handoff=1;
             policy.backlog_bound=kRetireBacklogBound;policy.age_bound_ms=kRetireAgeBoundMs;
             result=engine_ddi::set_retire_policy(context_,&policy);stage("RetireHandoff",result);
             if(result!=S_OK)return result;
         }
-        // Deferred replay (experiment deferred-replay, off by default): recording calls go to a ring of the
-        // recording thread, and a worker thread per ring makes the engine calls (engine-ddi.h, set_replay_policy).
-        // Off, neither exists. Set before any queue or list exists.
-        if(ddi_experiment("deferred-replay")){
+        // Deferred replay, on unless the experiment deferred-replay-off says otherwise: recording calls go to
+        // a ring of the recording thread, and a worker thread per ring makes the engine calls (engine-ddi.h,
+        // set_replay_policy). Off, neither exists. Set before any queue or list exists.
+        if(!ddi_experiment_off("deferred-replay")){
             engine_ddi::ReplayPolicy policy{};
             policy.size=sizeof(policy);policy.enabled=1;policy.rings=kReplayRings;policy.ring_bytes=kReplayRingBytes;
             policy.shell=this;policy.worker=replay_worker;policy.drained=replay_drained;
             result=engine_ddi::set_replay_policy(context_,&policy);stage("DeferredReplay",result);
             if(result!=S_OK)return result;
             replay_=true;
-            ddi_mode2_note("amdgpu_wddm_d3d12 experiment deferred-replay on\n");
+            ddi_mode2_note("amdgpu_wddm_d3d12 deferred-replay on\n");
         }
         auto ops=QueueEngineOps::native();ops.close=checked_close;ops.check_health=health;ops.health_cookie=this;
         queues_.reset(new(std::nothrow) QueueEngineRegistry(device_,context_,ops));
@@ -426,12 +427,14 @@ HRESULT create_device_engine(Device& device) noexcept {
     result=owner->open();
     if(result==S_OK){
         // The device handle reaches the runtime only after this DDI returns, so no entry sees it change.
-        if(ddi_experiment("recording-bind")){
+        // Lever L2 is on unless the experiment recording-bind-off says otherwise. S_FALSE here is the full
+        // trace (mode 1) refusing the binding, not a failure: bind_recording explains why.
+        if(!ddi_experiment_off("recording-bind")){
             const bool bound=owner->bind_recording(true);
             stage("RecordingBind",bound?S_OK:S_FALSE);
             // The lab's game runs capture the debugger log of trace mode 2, not stderr (the retire hand-off's
             // policy line reaches it through engine-ddi's log_line).
-            if(bound)ddi_mode2_note("amdgpu_wddm_d3d12 experiment recording-bind bound\n");
+            if(bound)ddi_mode2_note("amdgpu_wddm_d3d12 recording-bind bound\n");
         }
         return S_OK;
     }
