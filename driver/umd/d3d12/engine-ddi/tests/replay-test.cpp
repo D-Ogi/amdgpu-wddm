@@ -2202,7 +2202,7 @@ int main() {
               "priority: the worker starts at its owner's level (%d), runs one above it while the drain waits (%d) "
               "and returns after (%d); %llu lifts", created, lifted, after, ull(rp->boosts));
         check(held_wait.over_1ms >= 1 && held_wait.over_10ms >= 1 && held_wait.longest >= 25 * ms &&
-                  rp->long_waits >= 1 && rp->rings[0]->stuck_longest >= 25 * ms && rp->rings[0]->stuck_run,
+                  rp->long_waits >= 1 && rp->rings[0]->stuck_longest >= 10 * ms && rp->rings[0]->stuck_run,
               "diagnostics: the drain's wait counted as 1 and 10 ms or more (%llu, %llu), longest %llu us, %llu long "
               "waits; the held entry seen as the worker's stuck stretch (%llu us)",
               ull(held_wait.over_1ms), ull(held_wait.over_10ms), ull(held_wait.longest * 1000000 / rp->qpf),
@@ -2211,7 +2211,9 @@ int main() {
         double entry_ms = 0;
         const size_t at = wait.find(" stuck_ms=");
         if (at != std::string::npos) entry_ms = std::atof(wait.c_str() + at + 10);
-        check(!wait.empty() && wait.find(" stuck_rva=0x0") == std::string::npos && entry_ms >= 25.0,
+        // The stretch is sampled between the waiter's slices (a timer tick each here): at least one tick of the
+        // 30 ms hold.
+        check(!wait.empty() && wait.find(" stuck_rva=0x0") == std::string::npos && entry_ms >= 10.0,
               "diagnostics: a long-wait line for the drain names the levels and the held entry (%.1f ms): %s", entry_ms,
               wait.substr(0, 200).c_str());
         check(!f.line("replay at ecl drain 64: ").empty() &&

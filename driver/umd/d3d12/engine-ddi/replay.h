@@ -128,7 +128,9 @@ struct ReplayRing {
     int applied_priority;
     uint32_t boosters;
     // The longest stretch a slow wait saw without the worker finishing an entry (QPC ticks), and the entry it was
-    // running then (ring lock). The waiters measure it in their 2 ms slices: the worker pays nothing for it.
+    // running then (ring lock). The waiters measure it between their 2 ms slices, so it is a lower bound, short by up
+    // to one slice as the timer rounds it (a 15.6 ms tick unless the process raised the timer resolution); the
+    // worker pays nothing for it.
     uint64_t stuck_longest;
     void (*stuck_run)(const EntryHeader*) noexcept;
     // The producer: the owner thread, or under Replay::lock the thread that takes the ring over.

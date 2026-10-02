@@ -249,7 +249,8 @@ struct WaitStart {
     bool asleep;                                // the worker slept with this work behind it
 };
 
-// What a wait saw while it slept: the longest stretch without a finished entry, and the entry running then.
+// What a wait saw while it slept: the longest stretch without a finished entry (a lower bound: see
+// ReplayRing::stuck_longest), and the entry running then.
 struct WaitStuck {
     uint64_t ticks;
     void (*run)(const EntryHeader*) noexcept;
