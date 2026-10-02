@@ -65,6 +65,9 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //     refuses Cached on a PRIMARY allocation (trial 105), so it needs present-noprimary with it.
 //   present-noprimary: the swap-chain buffers are not PRIMARY (heap-import.cpp), which also forfeits the
 //     scanout route. Measured gain of the pair under the CPU compositor, none under the GPU one (K115).
+// One more name asks for a diagnostic rather than a deviation:
+//   replay-log: with deferred replay on, the replay lines also go to a file of their own (replay-log.h), for a
+//     game whose stderr nobody reads. It changes no behaviour; it costs the writes.
 // The positive names of the defaults (raytracing-tier, recording-bind, retire-handoff, deferred-replay) are
 // still accepted and do nothing, so that an older trial string or profile naming them still resolves.
 //

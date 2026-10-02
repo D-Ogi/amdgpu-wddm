@@ -96,6 +96,10 @@ try {
   if($LASTEXITCODE){throw 'Experiment source test build failed'}
   & .\ddi-experiment-test.exe
   if($LASTEXITCODE){throw 'Experiment source tests failed'}
+  & cl.exe @flags /Fe:replay-log-test.exe "$repo\driver\umd\d3d12\replay-log-test.cpp"
+  if($LASTEXITCODE){throw 'Replay log test build failed'}
+  & .\replay-log-test.exe
+  if($LASTEXITCODE){throw 'Replay log tests failed'}
   & cl.exe @flags /Fe:residency-test.exe "$repo\driver\umd\d3d12\residency-test.cpp"
   if($LASTEXITCODE){throw 'Residency test build failed'}
   & .\residency-test.exe

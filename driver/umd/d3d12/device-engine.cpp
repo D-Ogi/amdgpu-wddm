@@ -7,6 +7,7 @@
 #include "hosted-instance.h"
 #include "hosted-queue.h"
 #include "heap-import.h"
+#include "replay-log.h"
 #include "engine-ddi/engine-ddi.h"
 #include <d3dkmthk.h>
 #include <atomic>
@@ -63,6 +64,7 @@ class DeviceEngine final {
     // active_ turns false once, at close or retain, after the runtime has ended every entry.
     std::atomic<bool> active_{true};
     bool replay_{};                             // the deferred-replay policy is on (open, close)
+    ReplayLog replay_log_;                      // experiment replay-log: the replay lines' own file (replay-log.h)
     std::atomic<bool> binding_failed_{};
     std::atomic<UINT64> callback_sequence_{};
     // Lever L2 (experiment recording-bind): the binding Device::recording points to while it is published,
@@ -158,6 +160,7 @@ class DeviceEngine final {
         body(ring);
     }
     static void APIENTRY replay_drained(void* shell) {static_cast<DeviceEngine*>(shell)->dispatch_.report_deferred_removal();}
+    static void APIENTRY replay_log(void* shell,const char* line) {static_cast<DeviceEngine*>(shell)->replay_log_.write(line);}
     static BOOL APIENTRY is_lost(void* shell) {
         auto& device=*static_cast<Device*>(shell);
         return !device.engine || device.lost.load() || device.engine->dispatch_.lost();
@@ -329,11 +332,14 @@ public:
         }
         // Deferred replay, on unless the experiment deferred-replay-off says otherwise: recording calls go to
         // a ring of the recording thread, and a worker thread per ring makes the engine calls (engine-ddi.h,
-        // set_replay_policy). Off, neither exists. Set before any queue or list exists.
+        // set_replay_policy). Off, neither exists. Set before any queue or list exists. With the experiment
+        // replay-log, the replay lines also go to a file of their own (replay-log.h), for a game whose stderr
+        // nobody reads.
         if(!ddi_experiment_off("deferred-replay")){
             engine_ddi::ReplayPolicy policy{};
             policy.size=sizeof(policy);policy.enabled=1;policy.rings=kReplayRings;policy.ring_bytes=kReplayRingBytes;
             policy.shell=this;policy.worker=replay_worker;policy.drained=replay_drained;
+            if(ddi_experiment("replay-log") && replay_log_.open_for_process())policy.log=replay_log;
             result=engine_ddi::set_replay_policy(context_,&policy);stage("DeferredReplay",result);
             if(result!=S_OK)return result;
             replay_=true;

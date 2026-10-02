@@ -92,7 +92,12 @@ domain, together with `HostedDispatch::WorkerScope`: the engine's recording may
 allocate, map, lock and wait on the CPU there, while every context, submission,
 GPU-side sync and queue operation is refused with the failure note
 `replay-worker-op:<op>`. A removal a worker finds marks the device lost at once
-and is reported to the runtime from the next drain on a DDI thread.
+and is reported to the runtime from the next drain on a DDI thread. With the
+`replay-log` experiment as well, engine-ddi's replay lines (summaries every 10 s,
+long waits) also go to `amdgpu_wddm-replay-<image>-<pid>-<device>.log` in the
+application profile's `LogDirectory` (REG_SZ next to `Experiment`) or the
+temporary directory ([replay-log.h](replay-log.h)): a game started by Steam has no
+stderr anyone reads.
 
 ## Queues and fences
 
