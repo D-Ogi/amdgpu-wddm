@@ -256,6 +256,89 @@ uint32_t depth_copies(Env& env, Device& device) {
     destroy_buffer(env, device, upload);
     return reported;
 }
+
+// A reserved 64 x 64 texture of one mip: neither a heap nor a base resource (engine-ddi.h, "Reserved"), in the API's
+// layout for reserved textures, starting in the legacy COPY_DEST state.
+HRESULT create_reserved_texture(Env& env, Device& device, DXGI_FORMAT format, Buffer& out) {
+    out = Buffer{};
+    D3D12DDIARG_CREATERESOURCE_0088 res{};
+    res.ResourceType = D3D12DDI_RT_TEXTURE2D;
+    res.Width = 64;
+    res.Height = 64;
+    res.DepthOrArraySize = 1;
+    res.MipLevels = 1;
+    res.Format = format;
+    res.SampleDesc = {1, 0};
+    res.Layout = D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE;
+    res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST;
+    const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes = env.core.pfnCalcPrivateHeapAndResourceSizes(
+        device.h(), nullptr, &res, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+    out.resource = env.storage.alloc(sizes.Resource);
+    if (!out.resource) return E_OUTOFMEMORY;
+    const HRESULT hr = env.core.pfnCreateHeapAndResource(device.h(), nullptr, D3D12DDI_HHEAP{},
+                                                         D3D12DDI_HRTRESOURCE{&out.rt}, &res, nullptr,
+                                                         D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
+    if (FAILED(hr)) out.resource = nullptr;             // nothing to destroy
+    return hr;
+}
+
+// The first reserved texture the engine reports no tiled support for: a reserved R32_UINT texture, TILED in the
+// engine, gives no line; one of the first format the engine makes 2D textures of but reports no TILED support for
+// (one plane, not depth-stencil) gives one with what the slot returned, a second one nothing. The runtime would
+// refuse such a texture after CheckFormatSupport; the harness asks the slot directly, and the engine makes its
+// committed fallback or refuses it.
+void untiled_reserved(Env& env, Device& device) {
+    const auto support = [&](DXGI_FORMAT f) {
+        D3D12_FEATURE_DATA_FORMAT_SUPPORT s{f};
+        if (FAILED(env.engine->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s))))
+            s = D3D12_FEATURE_DATA_FORMAT_SUPPORT{f};
+        return s;
+    };
+    const auto planes = [&](DXGI_FORMAT f) {
+        D3D12_FEATURE_DATA_FORMAT_INFO info{f, 0};
+        return SUCCEEDED(env.engine->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO, &info, sizeof(info)))
+                   ? info.PlaneCount
+                   : 0;
+    };
+    const char* prefix = "CreateHeapAndResource: first reserved texture";
+    Buffer tiled;
+    const bool r32_tiled = (support(DXGI_FORMAT_R32_UINT).Support2 & D3D12_FORMAT_SUPPORT2_TILED) != 0;
+    const HRESULT hr_t = create_reserved_texture(env, device, DXGI_FORMAT_R32_UINT, tiled);
+    const size_t after_tiled = refusal_lines(prefix).size();
+    checkf(hr_t == S_OK && r32_tiled && after_tiled == 0,
+           "log lines: a reserved R32_UINT texture, TILED in the engine, gives no line (hr %08lx, TILED %d, %zu lines)",
+           static_cast<unsigned long>(hr_t), r32_tiled ? 1 : 0, after_tiled);
+    destroy_buffer(env, device, tiled);
+
+    DXGI_FORMAT untiled = DXGI_FORMAT_UNKNOWN;
+    for (UINT v = 1; v <= DXGI_FORMAT_A4B4G4R4_UNORM && untiled == DXGI_FORMAT_UNKNOWN; ++v) {
+        const auto f = static_cast<DXGI_FORMAT>(v);
+        const D3D12_FEATURE_DATA_FORMAT_SUPPORT s = support(f);
+        if ((s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D) && !(s.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL) &&
+            !(s.Support2 & D3D12_FORMAT_SUPPORT2_TILED) && planes(f) == 1)
+            untiled = f;
+    }
+    if (untiled == DXGI_FORMAT_UNKNOWN) {
+        std::printf("SKIP  log lines: the engine reports TILED for every one-plane 2D texture format it makes\n");
+        return;
+    }
+    Buffer first, second;
+    const HRESULT hr_first = create_reserved_texture(env, device, untiled, first);
+    const HRESULT hr_second = create_reserved_texture(env, device, untiled, second);
+    const std::vector<std::string> lines = refusal_lines(prefix);
+    char want[256];
+    std::snprintf(want, sizeof(want),
+                  "CreateHeapAndResource: first reserved texture the engine reports no tiled support for: format %u "
+                  "(asked as %u), 64 x 64, array 1, mips 1, samples 1, flags 0x0, result %08lx",
+                  static_cast<unsigned>(untiled), static_cast<unsigned>(untiled), static_cast<unsigned long>(hr_first));
+    checkf(lines.size() == 1 && lines[0] == want,
+           "log lines: one line for the first reserved texture of format %u, which the engine reports no TILED "
+           "support for (hr %08lx, then %08lx; %zu lines): \"%s\"",
+           static_cast<unsigned>(untiled), static_cast<unsigned long>(hr_first), static_cast<unsigned long>(hr_second),
+           lines.size(), lines.empty() ? "" : lines[0].c_str());
+    destroy_buffer(env, device, second);
+    destroy_buffer(env, device, first);
+}
 } // namespace
 
 void test_log_lines(Env& env) {
@@ -266,6 +349,7 @@ void test_log_lines(Env& env) {
     virtual_placement(env, device);
     const uint32_t device_errors = allocation_refusals(env, device);
     const uint32_t list_errors = depth_copies(env, device);
+    untiled_reserved(env, device);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
     checkf(hr == S_OK && live == 0 && device.shell.device_errors == device_errors &&

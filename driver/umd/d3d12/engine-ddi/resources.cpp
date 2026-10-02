@@ -390,6 +390,8 @@ D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_heap_and_resource(D3D12DDI_HDEVIC
     return {sizeof(HeapRecord), sizeof(ResourceRecord)};
 }
 
+void log_untiled_reserved(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, HRESULT result) noexcept;
+
 HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_0001* heap_desc, D3D12DDI_HHEAP hheap,
                                  D3D12DDI_HRTRESOURCE rt, const D3D12DDIARG_CREATERESOURCE_0088* res_desc,
                                  const D3D12DDI_CLEAR_VALUES* clear, D3D12DDI_HRESOURCE hres) noexcept {
@@ -412,6 +414,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             ID3D12Resource* engine = nullptr;
             HRESULT hr = reserve(c, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
                                  res_desc->pCastableFormats, &engine);
+            log_untiled_reserved(c, desc, hr);
             if (FAILED(hr)) return hr;
             construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, nullptr, 0, desc, rt,
                                ResourceKind::Reserved);
@@ -912,6 +915,50 @@ UINT ddi_format_support(DeviceContext* c, const D3D12_FEATURE_DATA_FORMAT_SUPPOR
 UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
     HRESULT hr = S_OK;
     return ddi_format_support(c, engine_format(c, format, &hr));
+}
+
+// The first reserved 2D texture the engine reports no tiled support for, logged once a process with what the slot
+// returned for it. The engine makes a reserved texture of a single-aspect format it cannot make sparse its committed
+// fallback, on which tile mappings are ignored, and refuses one of two aspects (vkd3d-proton
+// d3d12_resource_create_reserved). The runtime asks CheckFormatSupport (CheckMultisampleQualityLevels with
+// TILED_RESOURCE above 1 sample) about the resource's format, while the engine makes a texture with
+// ALLOW_DEPTH_STENCIL of the depth format its table pairs with that format (vkd3d_depth_stencil_formats); the
+// question here is about the format the engine makes. Until the line is written, a single-sample reserved texture
+// asks the engine once per format and a multisample one each time; after it, nothing is asked.
+LogOnce g_untiled_reserved;
+FormatSet g_tiled_formats;
+
+DXGI_FORMAT engine_depth_format(DXGI_FORMAT format) noexcept {
+    switch (format) {
+    case DXGI_FORMAT_R16_TYPELESS: case DXGI_FORMAT_R16_UNORM: return DXGI_FORMAT_D16_UNORM;
+    case DXGI_FORMAT_R24G8_TYPELESS: return DXGI_FORMAT_D24_UNORM_S8_UINT;
+    case DXGI_FORMAT_R32_TYPELESS: case DXGI_FORMAT_R32_FLOAT: return DXGI_FORMAT_D32_FLOAT;
+    case DXGI_FORMAT_R32G8X24_TYPELESS: return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    default: return format;
+    }
+}
+
+void log_untiled_reserved(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, HRESULT result) noexcept {
+    if (g_untiled_reserved.done() || desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) return;
+    const DXGI_FORMAT f =
+        (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) ? engine_depth_format(desc.Format) : desc.Format;
+    const UINT samples = desc.SampleDesc.Count;
+    bool tiled = false;
+    if (samples <= 1) {
+        if (g_tiled_formats.contains(static_cast<uint32_t>(f))) return;
+        HRESULT hr = S_OK;
+        tiled = (engine_format(c, f, &hr).Support2 & D3D12_FORMAT_SUPPORT2_TILED) != 0;
+        if (tiled) g_tiled_formats.insert(static_cast<uint32_t>(f));
+    } else {
+        tiled = engine_quality_levels(c, f, samples, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_TILED_RESOURCE) != 0;
+    }
+    if (tiled || !g_untiled_reserved.first()) return;
+    log_refusal("CreateHeapAndResource: first reserved texture the engine reports no tiled support for: format %u "
+                "(asked as %u), %llu x %u, array %u, mips %u, samples %u, flags 0x%x, result %08lx",
+                static_cast<unsigned>(desc.Format), static_cast<unsigned>(f),
+                static_cast<unsigned long long>(desc.Width), desc.Height, static_cast<unsigned>(desc.DepthOrArraySize),
+                static_cast<unsigned>(desc.MipLevels), samples, static_cast<unsigned>(desc.Flags),
+                static_cast<unsigned long>(result));
 }
 
 // The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer for Flags NONE and TILED_RESOURCE (the values are
