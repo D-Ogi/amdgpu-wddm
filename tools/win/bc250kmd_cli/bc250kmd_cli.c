@@ -1681,6 +1681,12 @@ static int Confirm(void)
 //
 // "log summary" asks the WDDM table to write its call counters into the ring first, which is what stage A is run
 // for; with the gate closed that is one line saying the table is not running.
+//
+// "log summary only" starts at the first line the summary itself wrote (BC250_LOG_FROM_SUMMARY): the summary and
+// whatever the driver logged after it, two or three pages instead of the whole ring. It is the form for a caller
+// that polls, such as the overlay. The last line counts the escapes of each kind, so that a poller can see that
+// only the summary took the adapter lock (BD-054: a CLI from before 0.7.184.1 sent every page with HardwareAccess,
+// and the overlay's poll of it stalled a running game for 280-420 ms every 5 s).
 
 static int Log(const WCHAR *fromText, int summary)
 {
@@ -1690,11 +1696,14 @@ static int Log(const WCHAR *fromText, int summary)
     NTSTATUS status;
     WCHAR *end;
 
-    if (fromText != NULL) {
+    if (fromText != NULL && summary && !_wcsicmp(fromText, L"only")) {
+        from = BC250_LOG_FROM_SUMMARY;
+    } else if (fromText != NULL) {
         from = wcstoul(fromText, &end, 10);
         // wcstoul takes "-1" and returns 0xFFFFFFFF, which is BC250_LOG_FROM_SUMMARY: a sentinel is not a number to type.
         if (*end || fromText[0] == L'-' || from == BC250_LOG_FROM_SUMMARY) {
-            fprintf(stderr, "log [from], where from is a decimal sequence number, not %ls\n", fromText);
+            fprintf(stderr, "log [from] | log summary [from | only], where from is a decimal sequence number, not %ls\n",
+                    fromText);
             return 2;
         }
     }
@@ -1729,6 +1738,8 @@ static int Log(const WCHAR *fromText, int summary)
                    log.Lines[i].Milliseconds % 1000, log.Lines[i].Text);
             printed++;
         }
+        // The sentinel is no position to compare with: the driver answers the sequence it actually read from.
+        if (from == BC250_LOG_FROM_SUMMARY) from = log.From;
         if (log.Returned == 0 || log.Next <= from) break;   // the end, or a driver that is not moving on
         from = log.Next;
         // A driver that keeps logging while we read would keep us here: the ring is 1024 lines, so anything past
@@ -1736,6 +1747,8 @@ static int Log(const WCHAR *fromText, int summary)
         if (printed > 4 * log.RingLines) { printf("             stopped at %lu lines; ask again from %lu\n", printed, from); break; }
     }
     printf("             %lu lines printed\n", printed);
+    printf("             escapes: %lu without adapter synchronization, %lu with HardwareAccess\n",
+           g_SoftReads, g_HardReads);
     return 0;
 }
 
@@ -2399,7 +2412,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli sdmaib [bytes]               (VMID0 indirect SDMA copy/fill control)\n"
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
-                        "       bc250kmd_cli log [from] | log summary [from]\n"
+                        "       bc250kmd_cli log [from] | log summary [from | only]   (only: the summary's own lines, for a poller)\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
                         "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
