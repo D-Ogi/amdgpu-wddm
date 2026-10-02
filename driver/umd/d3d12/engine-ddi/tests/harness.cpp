@@ -565,6 +565,7 @@ int wmain(int argc, wchar_t** argv) {
                "positive paths: no device or command-list error reported (%u device, %u list)",
                device.shell.device_errors, device.shell.list_errors);
     }
+    test_log_lines(env);
     test_retirement(env);
     test_retire_handoff(env);
     test_runtime_backed(env);

@@ -190,6 +190,8 @@ void test_graphics(Env& env, Device& device);
 void test_retirement(Env& env);
 void test_retire_handoff(Env& env);
 void test_device_queries(Env& env, Device& device);
+// The once-only diagnostic lines, on a device of its own; it runs before any other test makes their cases.
+void test_log_lines(Env& env);
 void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
 void test_small_placement(Env& env);

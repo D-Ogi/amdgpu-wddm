@@ -7,6 +7,7 @@
 #include "format-list.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include <algorithm>
+#include <cstdio>
 
 namespace engine_ddi {
 
@@ -1064,6 +1065,26 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     }
 }
 
+// The first virtual placement of a process, as the slot received it. The engine's footprint takes the virtual size;
+// the line shows the physical size, both pitches, the offset and the box that came with it.
+LogOnce g_virtual_placement;
+
+void log_virtual_placement(const char* side, const D3D12DDIARG_BUFFER_PLACEMENT* p,
+                           const D3D12DDIARG_PLACED_RESOURCE& r, const D3D12DDI_BOX* box) noexcept {
+    if (r.Layout != D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED || g_virtual_placement.done()) return;
+    const auto* f = static_cast<const D3D12DDIARG_VIRTUAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
+    if (!p || !f || !g_virtual_placement.first()) return;
+    char b[96] = "none";
+    if (box)
+        std::snprintf(b, sizeof(b), "(%ld, %ld, %ld) to (%ld, %ld, %ld)", box->Left, box->Top, box->Front, box->Right,
+                      box->Bottom, box->Back);
+    log_refusal("CopyTextureRegion: first virtual placement, %s: format %u, virtual %u x %u x %u, physical %u x %u x "
+                "%u, pitch %u, slice pitch %u, offset %llu, box %s",
+                side, static_cast<unsigned>(f->Format), f->VirtualWidth, f->VirtualHeight, f->VirtualDepth,
+                f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth, f->Pitch, f->SlicePitch,
+                static_cast<unsigned long long>(p->BaseAddress.UMD.Offset), b);
+}
+
 // One CopyTextureRegion of a split placement as one engine copy per slice. The other side is a subresource: a
 // buffer-to-buffer copy is not a texture copy. Source slices come from the box (or the whole footprint); destination
 // slices from the box (or the whole source subresource, sized from the shell's record of the source resource).
@@ -1124,6 +1145,11 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
     UINT64 dpitch = 0, spitch = 0;
     HRESULT hr = copy_location(l, pdst, dst, d, dpitch);
     if (SUCCEEDED(hr)) hr = copy_location(l, psrc, src, s, spitch);
+    if (SUCCEEDED(hr)) {
+        // Diagnostic lines, before the box is checked: they describe the call as the slot received it.
+        log_virtual_placement("destination", pdst, dst, box);
+        log_virtual_placement("source", psrc, src, box);
+    }
     if (SUCCEEDED(hr) && box && (box->Left < 0 || box->Top < 0 || box->Front < 0 || box->Right < box->Left ||
                                  box->Bottom < box->Top || box->Back < box->Front))
         hr = E_INVALIDARG;
