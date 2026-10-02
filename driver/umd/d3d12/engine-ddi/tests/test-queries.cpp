@@ -163,6 +163,55 @@ void test_format_walk(Env& env, Device& device) {
     }
     std::printf("note  format walk: %u listed formats lack a non-video bit the FL11_1 format list requires\n",
                 short_formats);
+    // Support and size agree: every format whose answer carries a bit only a texture can have gets a size for a
+    // 64 x 64 2D texture from CheckResourceAllocationInfo, not UINT64_MAX. The runtime adds the FL11_1 required
+    // support of a format to whatever the driver answers (YUY2 answered 0 came back with TEXTURE2D and SHADER_SAMPLE,
+    // R8G8_B8G8_UNORM was not asked at all, 284), so the listed formats with required texture bits that get no size
+    // are printed: the runtime offers them and creation refuses them.
+    {
+        constexpr UINT kTextureBits =
+            D3D12DDI_FORMAT_SUPPORT_SHADER_SAMPLE | D3D12DDI_FORMAT_SUPPORT_SHADER_GATHER |
+            D3D12DDI_FORMAT_SUPPORT_RENDERTARGET | D3D12DDI_FORMAT_SUPPORT_BLENDABLE |
+            D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET | D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_LOAD |
+            D3D12DDI_FORMAT_SUPPORT_DISPLAY;
+        auto sized = [&](DXGI_FORMAT f) {
+            D3D12DDIARG_CREATERESOURCE_0088 res{};
+            res.ResourceType = D3D12DDI_RT_TEXTURE2D;
+            res.Width = 64;
+            res.Height = 64;
+            res.DepthOrArraySize = 1;
+            res.MipLevels = 1;
+            res.Format = f;
+            res.SampleDesc = {1, 0};
+            res.Layout = D3D12DDI_TL_UNDEFINED;
+            res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
+            D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
+            env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1,
+                                                    &info);
+            return info.ResourceDataSize && info.ResourceDataSize != UINT64_MAX;
+        };
+        unsigned claimed = 0;
+        std::string unsized, gap;
+        for (UINT f = 0; f <= 300; ++f) {
+            const DXGI_FORMAT format = static_cast<DXGI_FORMAT>(f);
+            UINT support = 0;
+            env.core.pfnCheckFormatSupport(device.h(), format, &support);
+            if ((support & ~static_cast<UINT>(D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED)) & kTextureBits) {
+                ++claimed;
+                if (!sized(format)) unsized += " " + std::to_string(f);
+            }
+        }
+        for (const engine_ddi::FormatListEntry& e : engine_ddi::kFormatList) {
+            if ((e.required & kTextureBits) && !sized(e.format))
+                gap += " " + std::to_string(static_cast<unsigned>(e.format));
+        }
+        checkf(claimed && unsized.empty(),
+               "format walk: each of the %u formats answered with a texture-only bit gets a size for a 64 x 64 2D "
+               "texture (no size:%s)",
+               claimed, unsized.empty() ? " none" : unsized.c_str());
+        std::printf("note  format walk: FL11_1 requires texture support the engine cannot size for formats:%s\n",
+                    gap.empty() ? " none" : gap.c_str());
+    }
     // The diagnostic line of CheckFormatSupport: one for each value below 256 and one for every larger value together,
     // however often the walk asked; R8G8B8A8_UNORM's carries the engine's raw answer next to the DDI answer.
     {
