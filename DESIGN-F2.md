@@ -21,11 +21,17 @@ The whole WDDM path submits at one VMID (`wddm.c` `BC250_WDDM_VMID 1`), and the 
 registers and then invalidates that VMID. A root change must not redirect a job that is still using VMID 1, so
 the driver waits for idle instead.
 
-Consequence measured in session 313 (Witcher 3 D3D12, register timeline aligned to dxgkrnl ETW): the game and
-DWM are different processes with different roots, so every frame alternates two roots on one VMID, and the GFX
-pipe is idle 3.1 ms per frame with the game's packet accepted by dxgkrnl but not yet on the ring. F1 removes the
-*wake* latency of that wait (sleep on a clock tick -> wake on the fence). It does not remove the wait itself:
-the game job still cannot start until the DWM job retires.
+Consequence measured in sessions 313 and 314 (Witcher 3 D3D12, register timeline aligned to dxgkrnl ETW to the
+microsecond): the game and DWM are different processes with different roots, so every frame alternates two roots
+on one VMID. DWM's composition job runs 0.29 ms (p10-p90 0.26-0.31); dxgkrnl's node-0 worker offers the game's
+next packet 0.14 ms into it, about 0.13 ms before DWM's completion interrupt, and the refusal above costs
+4.7 ms per handover at 0.6-1.0 holds a frame, i.e. 2.9-4.0 ms of GFX idle a frame.
+
+F1 removes the *wake* latency of that wait: a bounded spin catches the 0.13 ms remainder with no context
+switch, and an event wait covers the rest, instead of a relative sleep that expired on a clock tick (p50 4.2 ms
+/ p90 5.6 ms measured in the HIGH session, p50 2.3 / p90 14.2 in the LOW one). It does not remove the wait
+itself: the game job still cannot start until the DWM job retires. Removing that is what this document is for.
+The floor F1 leaves is therefore about 0.13 ms of blocking job plus the ~0.55 ms a plain submit costs.
 
 Two facts that matter to everything below, both already true in the deployed driver:
 
@@ -113,8 +119,10 @@ emits (`shim/bc250_gfx.c:1813`, the PFP half of `gfx_v10_0_ring_emit_vm_flush`) 
 
 ### Expected effect
 
-The game and DWM jobs land on the ring back to back; the 3.1 ms class of session 313 goes to the ring's own
-0.63 ms Start-to-ring, and the remaining idle is the 0.94 ms completion-report class plus whatever the CP needs
+The game and DWM jobs land on the ring back to back. Where F1 leaves a floor of about 0.13 ms (the blocking
+job's remainder) plus the ~0.55 ms of a plain submit, (a) removes the first term entirely: the game job no
+longer waits for DWM's fence at all, only for the ring. The remaining per-frame idle is then the 0.94 ms
+completion-report class (GFX idle to dxgkrnl's DmaPacket Info, p50 0.47, p90 2.03) plus whatever the CP needs
 between frames. This is a prediction, not a measurement.
 
 ## 3. Option (b): the flush on the ring

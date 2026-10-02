@@ -28,6 +28,12 @@
 #define BC250_WDDM_TAG 'wW2B'
 #define BC250_WDDM_LOG_CALLS 8              // how many first calls of each DDI reach the guard log
 #define BC250_WDDM_PRESENT_LIST_QWORDS 12u  // how much of a present's allocation list is read: 3 entries of either arm
+// KMD196: buckets of the held-submission histogram, microseconds. The edges are chosen so that the regimes this
+// change is about fall in different buckets and cannot be confused in a summary: the spin catch (<100, 100-199),
+// the plain submit cost of about 550 us plus the ~130 us the blocking job still had to run (500-999), the 4.7 ms
+// hold being removed (2000-4999), and the 14-16 ms clock-tick mode of the LOW session (10000-19999). The edges
+// themselves are in WddmHoldBucket, next to the names.
+#define BC250_WDDM_HOLD_BUCKETS 9
 
 // Segment ids are one-based: DXGK_QUERYSEGMENTOUT4.PagingBufferSegmentId is "the index (starting from 1)".
 #define BC250_WDDM_SEGMENT_VRAM 1u
@@ -381,16 +387,20 @@ typedef struct _BC250_WDDM {
     volatile LONG64 UmdProbeTicks;      // subset spent reading/logging IB and shader contents
     LARGE_INTEGER UmdProfileFrequency;
     // KMD196: the cost of a submission the gfx ring would not take at once, so that one lab session can price
-    // the event wake against the 1 ms sleep it replaced. Held time is wall clock from the first refusal to the
-    // submit that succeeded or to the refusal that gave up - the GFX pipe is idle for part of it, which is what
-    // session 313 measured as 3.1 ms a frame. Wakes are counted by their source: Event is a retirement that
-    // reached the waiter, Timeout is the lost-interrupt fallback expiring, and a run whose Timeout share is not
-    // small means end-of-pipe interrupts are being missed, not that the wake is slow.
+    // the spin-then-event wait against the 1 ms sleep it replaced. Held time is wall clock from the first
+    // refusal to the submit that succeeded or to the refusal that gave up - the GFX pipe is idle for part of
+    // it, which is what sessions 313/314 measured as 2.9-4.0 ms a frame. The three wake sources are counted
+    // apart on purpose: Spins says the bounded spin was enough, Event says a retirement reached a real wait,
+    // and a Timeout share that is not small means end-of-pipe interrupts are being missed - a correctness
+    // signal, not a slow wake.
     volatile LONG SubmitHolds;          // submissions held at least once (node 0, UMD and GPU Present together)
     volatile LONG64 SubmitHeldUs;       // sum of their held times, microseconds from QPC
     volatile LONG64 SubmitHeldMaxUs;    // the longest single hold
+    volatile LONG64 SubmitHoldSpins;    // phase 1 stalls over all holds
+    volatile LONG SubmitHoldSpinOnly;   // of SubmitHolds, those the spin resolved without any wait
     volatile LONG64 SubmitHoldEventWakes;
     volatile LONG64 SubmitHoldTimeoutWakes;
+    volatile LONG SubmitHeldHistogram[BC250_WDDM_HOLD_BUCKETS];  // held time by bucket, g_WddmHoldBucketNames
 
     KTIMER VSyncTimer;
     KDPC VSyncDpc;
@@ -1089,27 +1099,80 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
 // waiters below - the UMD one and the GPU Present one - use this state and these two calls, so there is one
 // definition of what "held" means, one deadline and one set of counters.
 //
-// The wait is event-driven. The 1 ms KeDelayExecutionThread it replaced was not slow because 1 ms is long but
-// because a relative sleep expires on a clock tick: session 313 saw the two modes the 15.6 ms default tick
-// makes, 1-2 ms and 14-16 ms, where the ring itself needs 0.63 ms from Start to on-ring when nothing is
-// running. The timed wait that remains is the fallback for a lost end-of-pipe interrupt, and it is the same
-// 1 ms, so a start with no interrupts at all behaves exactly as before this change.
-#define BC250_WDDM_HOLD_WAIT_MS 1       // the lost-interrupt fallback only; the event normally wakes first
+// The wait has two phases, and the order is what the measurement of sessions 313/314 dictates (both aligned to
+// the microsecond against dxgkrnl ETW):
+//
+//   - DWM's composition job is 0.29 ms long (p10-p90 0.26-0.31).
+//   - dxgkrnl's node-0 worker calls SubmitCommand for the game's next packet 0.14 ms after that job started,
+//     which is about 0.13 ms BEFORE DWM's completion interrupt. So at the moment of the refusal the blocking
+//     job has roughly 0.13 ms left to run.
+//   - The KeDelayExecutionThread(1 ms) this replaces actually lasted p50 4.2 ms / p90 5.6 ms in the HIGH
+//     session and p50 2.3 / p90 14.2 ms in the LOW one: a relative sleep expires on a clock tick, so the
+//     "1 ms" was a tick, not a millisecond. Readied-to-running was only 0.04-0.06 ms, so nothing was starved
+//     of CPU - the timer simply fired late.
+//   - Cost: 4.7 ms per DWM-to-game handover, 0.6-1.0 holds a frame, 2.9-4.0 ms of GFX idle a frame.
+//
+// Phase 1 is therefore a bounded spin of BC250_WDDM_HOLD_SPIN_US, which is long enough to cover that 0.13 ms
+// several times over and short enough to be cheap: a submission caught here costs no context switch at all and
+// no timer at all. Phase 2 is the event wait, for the cases the spin does not catch - a longer blocking job, a
+// queue slot, several waiters - with a BC250_WDDM_HOLD_WAIT_MS fallback timeout so that a lost end-of-pipe
+// interrupt still ends the wait. A bare KeDelayExecutionThread appears nowhere in either phase.
+//
+// The spin runs at APC_LEVEL or below, never at DISPATCH_LEVEL, so the fence DPC that ends it can preempt this
+// thread on the same core; and every spin step calls WddmGpuFence through the caller's loop, which reads the
+// fence page directly, so the spin does not actually depend on that DPC being scheduled at all.
+#define BC250_WDDM_HOLD_SPIN_US 500     // phase 1 budget: the blocking job has ~130 us left at the refusal
+#define BC250_WDDM_HOLD_SPIN_STEP_US 20 // one stall between retries; 25 retries fill the budget
+#define BC250_WDDM_HOLD_WAIT_MS 1       // phase 2 fallback only; the event normally wakes it first
+
+static const char* const g_WddmHoldBucketNames[BC250_WDDM_HOLD_BUCKETS] = {
+    "<100", "100", "200", "500", "1k", "2k", "5k", "10k", "20k+"
+};
+
+// WddmSummaryOf prints the nine buckets by name in one line, one argument pair each: adding a bucket means
+// growing that line, so it is pinned here rather than left to be noticed in a log that silently lost a column.
+C_ASSERT(BC250_WDDM_HOLD_BUCKETS == 9);
+
+static ULONG WddmHoldBucket(ULONG HeldUs)
+{
+    if (HeldUs < 100) return 0;
+    if (HeldUs < 200) return 1;
+    if (HeldUs < 500) return 2;
+    if (HeldUs < 1000) return 3;
+    if (HeldUs < 2000) return 4;
+    if (HeldUs < 5000) return 5;
+    if (HeldUs < 10000) return 6;
+    if (HeldUs < 20000) return 7;
+    return 8;
+}
 
 typedef struct _BC250_WDDM_HOLD {
     ULONGLONG Deadline;                 // interrupt time; the BC250_WDDM_SUBMIT_TIMEOUT_MS bound, unchanged
     LARGE_INTEGER Start;                // QPC at the first refusal, for the held time in microseconds
+    LARGE_INTEGER Frequency;            // QPC frequency, read once with Start
     LONG Generation;                    // Device->GfxRetireGeneration as of the last condition test
+    ULONG Spins;                        // phase 1 stalls
     ULONG EventWakes;
     ULONG TimeoutWakes;
 } BC250_WDDM_HOLD;
+
+// Microseconds since the first refusal. The frequency comes out of the same KeQueryPerformanceCounter call as
+// Start, so this needs nothing from the adapter block and works before WddmStart has recorded a frequency.
+static ULONG WddmHoldElapsedUs(_In_ const BC250_WDDM_HOLD* Hold)
+{
+    LONGLONG ticks = KeQueryPerformanceCounter(NULL).QuadPart - Hold->Start.QuadPart;
+
+    if (ticks < 0 || Hold->Frequency.QuadPart <= 0) return 0;
+    return (ULONG)((ULONGLONG)ticks * 1000000ull / (ULONGLONG)Hold->Frequency.QuadPart);
+}
 
 // Before the first condition test, so that a retirement between that test and the first wait is not lost.
 static void WddmHoldBegin(_Inout_ BC250_DEVICE* Device, _Out_ BC250_WDDM_HOLD* Hold)
 {
     Hold->Deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
-    Hold->Start = KeQueryPerformanceCounter(NULL);
+    Hold->Start = KeQueryPerformanceCounter(&Hold->Frequency);
     Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    Hold->Spins = 0;
     Hold->EventWakes = 0;
     Hold->TimeoutWakes = 0;
 }
@@ -1117,11 +1180,11 @@ static void WddmHoldBegin(_Inout_ BC250_DEVICE* Device, _Out_ BC250_WDDM_HOLD* H
 // TRUE: something may have changed, test the submit condition again. FALSE: the deadline passed, the adapter is
 // stopping, or this thread may not wait - the caller makes its terminal attempt and gives up.
 //
-// Clear, then re-read the generation, then wait. A retirement after the caller's test has already bumped the
-// generation, so this returns at once rather than waiting for a fence that has arrived; and a concurrent
-// waiter's clear cannot swallow this one's wake, because it too bumps nothing and the generation it reads has
-// moved. The event is a NotificationEvent on purpose: one retirement releases every held submission, and they
-// then compete for GfxSubmitMutex exactly as they competed for the ring before.
+// Phase 2's shape: clear, then re-read the generation, then wait. A retirement after the caller's test has
+// already bumped the generation, so this returns at once rather than waiting for a fence that has arrived; and
+// a concurrent waiter's clear cannot swallow this one's wake, because the generation it reads has moved too.
+// The event is a NotificationEvent on purpose: one retirement releases every held submission, and they then
+// compete for GfxSubmitMutex exactly as they competed for the ring before.
 static BOOLEAN WddmHoldWait(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm, _Inout_ BC250_WDDM_HOLD* Hold)
 {
     LARGE_INTEGER timeout;
@@ -1129,7 +1192,8 @@ static BOOLEAN WddmHoldWait(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* W
     NTSTATUS status;
 
     // A wait with a timeout needs APC_LEVEL or below, which both call sites already check before they get here;
-    // this is the bound restated where the wait actually happens, not a new policy.
+    // this is the bound restated where the waiting happens, not a new policy. It governs the spin as well: a
+    // spin at DISPATCH_LEVEL could outlast the DPC that would end it.
     if (KeGetCurrentIrql() > APC_LEVEL) return FALSE;
     // Teardown: once Stopping is set WddmSubmitHardware refuses every submission anyway, so waiting out the
     // remaining deadline would only delay the stop. WddmStop signals the event after setting it, so this is
@@ -1137,6 +1201,19 @@ static BOOLEAN WddmHoldWait(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* W
     if (Wddm != NULL && WddmStopping(Wddm)) return FALSE;
     if (KeQueryInterruptTime() >= Hold->Deadline) return FALSE;
 
+    // Phase 1. Measured by QPC, not by counting stalls: KeStallExecutionProcessor is a lower bound on the
+    // delay, so a counted budget would be a budget only on paper.
+    if (WddmHoldElapsedUs(Hold) < BC250_WDDM_HOLD_SPIN_US)
+    {
+        KeStallExecutionProcessor(BC250_WDDM_HOLD_SPIN_STEP_US);
+        Hold->Spins++;
+        // The generation is refreshed so that phase 2, if it is reached, does not treat a retirement the spin
+        // already saw as a reason to skip its wait.
+        Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+        return TRUE;
+    }
+
+    // Phase 2.
     KeClearEvent(&Device->GfxRetireEvent);
     generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
     if (generation != Hold->Generation)
@@ -1159,19 +1236,20 @@ static BOOLEAN WddmHoldWait(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* W
 static void WddmHoldReport(_In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_HOLD* Hold, UINT FenceId,
                            _In_z_ const char* What)
 {
-    LONGLONG ticks, frequency;
     ULONG held;
     LONG64 seen;
 
-    if (Wddm == NULL || (Hold->EventWakes == 0 && Hold->TimeoutWakes == 0)) return;
-    ticks = KeQueryPerformanceCounter(NULL).QuadPart - Hold->Start.QuadPart;
-    frequency = Wddm->UmdProfileFrequency.QuadPart;
-    if (ticks < 0) ticks = 0;
-    held = frequency > 0 ? (ULONG)((ULONGLONG)ticks * 1000000ull / (ULONGLONG)frequency) : 0;
+    if (Wddm == NULL || (Hold->Spins == 0 && Hold->EventWakes == 0 && Hold->TimeoutWakes == 0)) return;
+    held = WddmHoldElapsedUs(Hold);
     InterlockedIncrement(&Wddm->SubmitHolds);
     InterlockedAdd64(&Wddm->SubmitHeldUs, (LONG64)held);
+    InterlockedAdd64(&Wddm->SubmitHoldSpins, (LONG64)Hold->Spins);
     InterlockedAdd64(&Wddm->SubmitHoldEventWakes, (LONG64)Hold->EventWakes);
     InterlockedAdd64(&Wddm->SubmitHoldTimeoutWakes, (LONG64)Hold->TimeoutWakes);
+    InterlockedIncrement(&Wddm->SubmitHeldHistogram[WddmHoldBucket(held)]);
+    // A submission the spin caught never reached the event wait: counting those separately is how the lab run
+    // tells "the spin was the right call" from "the spin only burned CPU".
+    if (Hold->EventWakes == 0 && Hold->TimeoutWakes == 0) InterlockedIncrement(&Wddm->SubmitHoldSpinOnly);
     for (;;)
     {
         seen = InterlockedCompareExchange64(&Wddm->SubmitHeldMaxUs, 0, 0);
@@ -1180,8 +1258,8 @@ static void WddmHoldReport(_In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_HOLD
     }
     // Uncapped, like the line it replaces: 4081 lines in 220 s is 18 a second, and the per-submission
     // distribution is the whole point of the comparison the summary counters only total up.
-    GuardLog("wddm: %s submit fence %u held %lu us for the gfx ring (%lu event, %lu timeout wakes)",
-             What, FenceId, held, Hold->EventWakes, Hold->TimeoutWakes);
+    GuardLog("wddm: %s submit fence %u held %lu us (%lu spins, %lu event, %lu timeout)",
+             What, FenceId, held, Hold->Spins, Hold->EventWakes, Hold->TimeoutWakes);
 }
 
 // BGP1 may arrive in a burst when CDD stops pacing to vblank (M659).
@@ -1838,13 +1916,27 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->UmdProfileCalls, Wddm->UmdSubmitTicks, Wddm->UmdProfileFrequency.QuadPart);
     GuardLog("wddm profile: probe enabled %u, calls %ld, elapsed ticks %lld (included in umd)",
              Wddm->TraceUmdProbes, Wddm->UmdProbeCalls, Wddm->UmdProbeTicks);
-    // KMD196. Mean held time is Us/holds; a tick-bound run (the 1 ms sleep this replaced) sits near 4800 us by
-    // session 313's measurement, an event-woken one near the ring's own 630 us. Timeout wakes near zero means
-    // the end-of-pipe interrupt is doing the waking; a large share means it is being missed and the fallback is
-    // carrying the path, which is a correctness question and not a performance one.
-    GuardLog("wddm profile: holds %ld, held %lld us (worst %lld), wakes %lld event %lld timeout",
-             Wddm->SubmitHolds, Wddm->SubmitHeldUs, Wddm->SubmitHeldMaxUs,
+    // KMD196. Mean held time is Us/holds. The sleep this replaced measured 4700 us a hold over sessions 313/314;
+    // the spin-then-event wait should land near 130 us (what the blocking job still had to run) plus the ~550 us
+    // a plain submit costs. SpinOnly/holds is the share the bounded spin resolved with no wait at all. Timeout
+    // wakes near zero means the end-of-pipe interrupt is doing the waking; a large share means it is being
+    // missed and the fallback is carrying the path, which is a correctness question, not a performance one.
+    GuardLog("wddm profile: holds %ld (spin-only %ld), held %lld us worst %lld, %lld spins",
+             Wddm->SubmitHolds, Wddm->SubmitHoldSpinOnly, Wddm->SubmitHeldUs, Wddm->SubmitHeldMaxUs,
+             Wddm->SubmitHoldSpins);
+    GuardLog("wddm profile: hold wakes %lld event, %lld timeout",
              Wddm->SubmitHoldEventWakes, Wddm->SubmitHoldTimeoutWakes);
+    // The histogram, one line. Nine counts and nine names, so a reader needs neither this file nor the edges.
+    GuardLog("wddm profile: held us %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld",
+             g_WddmHoldBucketNames[0], Wddm->SubmitHeldHistogram[0],
+             g_WddmHoldBucketNames[1], Wddm->SubmitHeldHistogram[1],
+             g_WddmHoldBucketNames[2], Wddm->SubmitHeldHistogram[2],
+             g_WddmHoldBucketNames[3], Wddm->SubmitHeldHistogram[3],
+             g_WddmHoldBucketNames[4], Wddm->SubmitHeldHistogram[4],
+             g_WddmHoldBucketNames[5], Wddm->SubmitHeldHistogram[5],
+             g_WddmHoldBucketNames[6], Wddm->SubmitHeldHistogram[6],
+             g_WddmHoldBucketNames[7], Wddm->SubmitHeldHistogram[7],
+             g_WddmHoldBucketNames[8], Wddm->SubmitHeldHistogram[8]);
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
              Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
