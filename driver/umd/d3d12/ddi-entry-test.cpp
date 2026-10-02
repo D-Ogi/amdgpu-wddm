@@ -619,11 +619,33 @@ int main() {
     std::thread fast_b([&]{for(unsigned i=0;i<1000;++i){fast_list.pfnDispatch(hg,2,3,4);assert(!current);}});
     fast_a.join();fast_b.join();
     assert(f.fast_entered==fast_before+1000 && f.fast_entered==f.fast_left && g.entered==g.left && g.fast_entered==0);
+    // The descriptor slots of the core table take the fast path too; every other core slot, observed or not, the
+    // full one.
+    Core fast_core{};
+    assert(native12::DdiEntryTables<FastPolicy>::wrap_core(source,&fast_core)==S_OK);
+    const D3D12DDI_HDEVICE hfd{&f};
+    const D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu{0x1000};
+    const unsigned core_fast=f.fast_entered.load(),core_full=f.entered.load(),core_calls=f.calls.load();
+    fast_core.pfnCopyDescriptors(hfd,1,&cpu,nullptr,1,&cpu,nullptr,D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    fast_core.pfnCopyDescriptorsSimple(hfd,1,cpu,cpu,D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    fast_core.pfnCreateShaderResourceView(hfd,nullptr,cpu);
+    fast_core.pfnCreateConstantBufferView(hfd,nullptr,cpu);
+    fast_core.pfnCreateSampler(hfd,nullptr,cpu);
+    fast_core.pfnCreateUnorderedAccessView(hfd,nullptr,cpu);
+    fast_core.pfnCreateRenderTargetView(hfd,nullptr,cpu);
+    fast_core.pfnCreateDepthStencilView(hfd,nullptr,cpu);
+    assert(f.fast_entered==core_fast+8 && f.fast_left==f.fast_entered && f.entered==core_full && !current);
+    UINT support{};
+    fast_core.pfnCheckFormatSupport(hfd,DXGI_FORMAT_UNKNOWN,&support);
+    assert(fast_core.pfnCreateHeapAndResource(hfd,nullptr,{},{},nullptr,nullptr,{},{})==E_NOTIMPL);
+    (void)fast_core.pfnGetDescriptorSizeInBytes(hfd,D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    assert(f.fast_entered==core_fast+8 && f.entered==core_full+3 && f.entered==f.left && f.calls==core_calls+11);
+    assert(!current);
 
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});
     call_a.join();call_b.join();refill.join();
     assert(!current && a.entered==a.left && b.entered==b.left);
-    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording fast path (admission, Close/Reset/Present and nested fallback, failures inside the fast scope with the fast_denied note) and concurrency pass");
+    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording and descriptor fast path (admission, Close/Reset/Present, other core slots and nested fallback, failures inside the fast scope with the fast_denied note) and concurrency pass");
 }
