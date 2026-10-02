@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <tuple>
 #include <type_traits>
+#include "../stdio-log.h"
 
 namespace engine_ddi {
 
@@ -13,7 +14,7 @@ namespace {
 // AMDGPU_WDDM_DDI_TRACE=2 is the shell's failures-only debugger mode (ddi-trace.h, same parse). The lab's game runs
 // capture the debugger's log and not stderr (game-runtime.ps1), so without this copy the lines below (a release
 // that cannot prove retirement, a release past its bound, a queue destroyed unretired, a fence anomaly) never reach
-// any record of a game run. Bounded like the shell's failure notes; the stderr line is unchanged.
+// any record of a game run. Bounded like the shell's failure notes; the sink line (stdio-log.h) is unchanged.
 bool debugger_lines() noexcept {
     static const bool on = []() noexcept {
         char value[2]{};
@@ -30,7 +31,7 @@ void log_line(const char* format, ...) noexcept {
     va_start(args, format);
     vsnprintf(text, sizeof(text), format, args);
     va_end(args);
-    std::fprintf(stderr, "engine-ddi: %s\n", text);
+    amdgpu_wddm_log::print("engine-ddi: %s\n", text);
     if (!debugger_lines() || debugger_budget.fetch_sub(1, std::memory_order_relaxed) <= 0) return;
     LARGE_INTEGER now{};
     QueryPerformanceCounter(&now);
@@ -46,7 +47,7 @@ void log_refusal(const char* format, ...) noexcept {
     va_start(args, format);
     vsnprintf(text, sizeof(text), format, args);
     va_end(args);
-    std::fprintf(stderr, "engine-ddi: %s\n", text);
+    amdgpu_wddm_log::print("engine-ddi: %s\n", text);
     char line[540];
     std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s\n", text);
     OutputDebugStringA(line);

@@ -112,6 +112,7 @@ struct Fixture {
 int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     _dup2(_fileno(stdout), _fileno(stderr));        // engine-ddi's log lines, in order with the results
+    SetEnvironmentVariableA("AMDGPU_WDDM_LOG", "stderr"); // the sink is off by default (stdio-log.h)
 
     // 1. The policy's refusals.
     {

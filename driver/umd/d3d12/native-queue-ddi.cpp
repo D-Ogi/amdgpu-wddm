@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <new>
+#include "stdio-log.h"
 
 namespace native12 {
 namespace {
@@ -76,7 +77,7 @@ void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATIO
     // No separate engine fence, CPU fence write or extra GPU submission occurs.
     args->PhysicalAdapterMask = 1;
     if (ddi_trace_enabled())
-        std::fprintf(stderr, "d3d12-ddi SignalFence runtime-context mask=1 value=%llu\n",
+        amdgpu_wddm_log::print("d3d12-ddi SignalFence runtime-context mask=1 value=%llu\n",
             static_cast<unsigned long long>(args->Value));
 }
 void APIENTRY native_wait(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATION* args) {

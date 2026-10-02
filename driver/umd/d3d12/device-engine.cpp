@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <new>
+#include "stdio-log.h"
 
 namespace native12 {
 namespace {
@@ -32,8 +33,8 @@ constexpr uint32_t kReplayRings=8;
 constexpr uint32_t kReplayRingBytes=4u<<20;
 void stage(const char* name,HRESULT result) noexcept {
     if(FAILED(result))ddi_failure_note(name,result);
-    std::fprintf(stderr,"d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
-    std::fflush(stderr);
+    amdgpu_wddm_log::print("d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
+    amdgpu_wddm_log::flush();
 }
 HRESULT vk_result(VkResult result) noexcept {
     switch(result){
@@ -84,8 +85,8 @@ class DeviceEngine final {
         LARGE_INTEGER start{},end{};
         if(traced){
             QueryPerformanceCounter(&start);
-            std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"begin\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
-                sequence,operation,start.QuadPart,GetCurrentThreadId());std::fflush(stderr);
+            amdgpu_wddm_log::print("{\"event\":\"hosted-callback\",\"edge\":\"begin\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+                sequence,operation,start.QuadPart,GetCurrentThreadId());amdgpu_wddm_log::flush();
         }
         int32_t result;
         bool heap=false;
@@ -100,9 +101,9 @@ class DeviceEngine final {
         } else result=HostedDispatch::dispatch(&self.dispatch_,operation,argument);
         if(!traced)return result;
         QueryPerformanceCounter(&end);
-        std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"end\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"status\":\"%08x\"}\n",
+        amdgpu_wddm_log::print("{\"event\":\"hosted-callback\",\"edge\":\"end\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"status\":\"%08x\"}\n",
             sequence,operation,end.QuadPart,static_cast<unsigned>(result));
-        std::fflush(stderr);return result;
+        amdgpu_wddm_log::flush();return result;
     }
     static HRESULT APIENTRY bind(void* owner,void* cookie,VkQueue queue) {
         auto& self=*static_cast<DeviceEngine*>(owner);
@@ -178,7 +179,7 @@ class DeviceEngine final {
         if(trace && ddi_trace_enabled() && request && device.engine && device.engine->imports_){
             // What was asked and where the import ended; the stage is where it returned, not a cause.
             const auto& r=device.engine->imports_->last_report();
-            std::fprintf(stderr,"{\"event\":\"shell-memory-request\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
+            amdgpu_wddm_log::print("{\"event\":\"shell-memory-request\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
                 "\"memory_type_bits\":%u,\"row_pitch\":%u,\"layout_size\":%llu,\"stage\":%u,\"memory_type\":%u,"
                 "\"held\":%llu,\"address_alignment\":%llu,\"address\":%llu,\"status\":\"%08lx\"}\n",
                 request->flags,static_cast<unsigned long long>(request->byte_size),
@@ -206,7 +207,7 @@ class DeviceEngine final {
             const uint64_t count=frees.fetch_add(1,std::memory_order_relaxed)+1;
             LARGE_INTEGER now{};QueryPerformanceCounter(&now);
             if(ddi_trace_enabled())
-                std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
+                amdgpu_wddm_log::print("{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
                     "\"gpu_va\":%llu,\"byte_size\":%llu,\"released\":%u,\"held_count\":%u,\"held_bytes\":%llu,"
                     "\"qpc\":%lld,\"thread\":%lu,\"status\":\"%08lx\"}\n",
                     unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
@@ -264,7 +265,7 @@ public:
         info.QueueMode=BC250_VKD3D_QUEUE_MODE_INLINE;info.Services=&services_;
         info.InstanceMode=BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
-        std::fprintf(stderr,"{\"event\":\"clock\",\"frequency\":%lld}\n",frequency.QuadPart);
+        amdgpu_wddm_log::print("{\"event\":\"clock\",\"frequency\":%lld}\n",frequency.QuadPart);
         stage("CreateDevice-begin",S_OK);
         HRESULT result=access_.functions.CreateDevice(&info,__uuidof(ID3D12Device),reinterpret_cast<void**>(&engine_));
         stage("CreateDevice-end",result);
@@ -284,10 +285,10 @@ public:
         imports_->bind_progress(dispatch_.progress_source());
         {
             const auto& policy=imports_->policy();
-            std::fprintf(stderr,"d3d12-engine import release policy progress_gate=%u depth=%u count_cap=%u "
+            amdgpu_wddm_log::print("d3d12-engine import release policy progress_gate=%u depth=%u count_cap=%u "
                 "age_ms=%u byte_cap=%llu\n",unsigned(policy.progress_gate),policy.quarantine_depth,
                 policy.quarantine_count_cap,policy.quarantine_age_ms,
-                static_cast<unsigned long long>(policy.quarantine_byte_cap));std::fflush(stderr);
+                static_cast<unsigned long long>(policy.quarantine_byte_cap));amdgpu_wddm_log::flush();
             char line[192];
             std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 import release policy progress_gate=%u depth=%u "
                 "count_cap=%u age_ms=%u byte_cap=%llu\n",unsigned(policy.progress_gate),policy.quarantine_depth,
@@ -358,8 +359,8 @@ public:
         }
         if(context_){
             uint32_t live=0;HRESULT hr=engine_ddi::destroy_device_context(context_,&live);
-            std::fprintf(stderr,"d3d12-engine DeviceContext-close result=%08lx live=%u\n",static_cast<unsigned long>(hr),live);
-            std::fflush(stderr);if(hr!=S_OK)return false;context_=nullptr;
+            amdgpu_wddm_log::print("d3d12-engine DeviceContext-close result=%08lx live=%u\n",static_cast<unsigned long>(hr),live);
+            amdgpu_wddm_log::flush();if(hr!=S_OK)return false;context_=nullptr;
         }
         if(imports_){HRESULT hr=imports_->close_after_engine_retirement();stage("HeapImports-close",hr);if(hr!=S_OK)return false;}
         if(engine_){
@@ -373,8 +374,8 @@ public:
         if(queue_bridge_)unresolved+=queue_bridge_->discard_metadata();
         active_.store(false,std::memory_order_release);
         const bool binding_failed=binding_failed_.load();
-        std::fprintf(stderr,"d3d12-engine teardown instance_closed=%u binding_failed=%u unresolved=%u\n",
-            unsigned(closed),unsigned(binding_failed),unresolved);std::fflush(stderr);
+        amdgpu_wddm_log::print("d3d12-engine teardown instance_closed=%u binding_failed=%u unresolved=%u\n",
+            unsigned(closed),unsigned(binding_failed),unresolved);amdgpu_wddm_log::flush();
         // Retain owner/code on uncertain unbind even if the engine discarded its instance.
         return closed && !binding_failed && unresolved==0;
     }

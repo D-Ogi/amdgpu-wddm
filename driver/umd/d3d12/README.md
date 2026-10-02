@@ -38,7 +38,8 @@ level 12_0 and above depend on; the process environment is not asked. Sparse
 binding is on when the DWORD `AmdgpuWddmSparseBinding` in the adapter's
 software key is 1 or the system names that value as not found, and off when it
 is 0. Any other value, an unspecified failure of the query or a key that cannot
-be asked resolves to off and is reported on stderr. The key is read through
+be asked resolves to off and is reported on the log sink (`AMDGPU_WDDM_LOG`,
+below). The key is read through
 `QueryAdapterInfo`, so a later edit reaches neither a cached adapter nor its
 devices. The guarantee holds for an ICD that recognizes the structure: an older
 one ignores it and keeps its environment behaviour, so reported features alone
@@ -180,6 +181,12 @@ still be identified. A normal return from a void DDI is not proof that its work
 succeeded; error callbacks and GPU completion must be examined separately.
 Adapter negotiation, engine startup, hosted callbacks and teardown have their
 own diagnostics.
+
+None of these lines reach the application's stdio unless `AMDGPU_WDDM_LOG` asks
+(`stdio-log.h`): unset, empty or `0` prints nothing, `stderr` prints to stderr,
+`file:<path>` appends to a shared file. The vkd3d-proton engine and the RADV ICD
+read the same switch. An application that pipes stderr and never reads it
+(3DMark's helpers, session 283) blocked once the pipe was full.
 
 DXGI table publication is not implemented. Present private data size is zero.
 The Present handler returns the allocation of one presented surface and the

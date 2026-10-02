@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <cstdio>
+#include "stdio-log.h"
 namespace native12 {
 struct AdapterCapsOwner {
     HMODULE engine{},icd{};
@@ -56,9 +57,9 @@ HRESULT resolve_instance_policy(Adapter& adapter,AdapterCapsOwner& owner) noexce
     const bool unexpected=hr!=S_OK || policy.source==SparsePolicySource::Invalid ||
                           policy.source==SparsePolicySource::Unreadable;
     if(unexpected || ddi_trace_enabled()){
-        std::fprintf(stderr,"d3d12-caps instance-policy sparse=%u source=%s status=%08lx unresolved=%u result=%08lx\n",
+        amdgpu_wddm_log::print("d3d12-caps instance-policy sparse=%u source=%s status=%08lx unresolved=%u result=%08lx\n",
             unsigned(policy.sparse),source_name(policy.source),static_cast<unsigned long>(policy.status),
-            unsigned(owner.unresolved_adapter!=0),static_cast<unsigned long>(hr));std::fflush(stderr);
+            unsigned(owner.unresolved_adapter!=0),static_cast<unsigned long>(hr));amdgpu_wddm_log::flush();
     }
     return hr;
 }
@@ -84,8 +85,8 @@ HRESULT apply_memory_policy(Adapter& adapter,AdapterCapsOwner& owner) noexcept {
         hr=engine_ddi::set_memory_architecture_policy(owner.caps,&policy);
     }
     if(ddi_trace_enabled()){
-        std::fprintf(stderr,"d3d12-caps host-memory-policy io_coherent=%u unresolved=%u result=%08lx\n",
-            unsigned(coherent),unsigned(owner.unresolved_adapter!=0),static_cast<unsigned long>(hr));std::fflush(stderr);
+        amdgpu_wddm_log::print("d3d12-caps host-memory-policy io_coherent=%u unresolved=%u result=%08lx\n",
+            unsigned(coherent),unsigned(owner.unresolved_adapter!=0),static_cast<unsigned long>(hr));amdgpu_wddm_log::flush();
     }
     return hr;
 }
@@ -129,8 +130,8 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     // object and DispatchRays slots, while AddToStateObject, existing collections and indirect dispatch refuse.
     if(SUCCEEDED(hr) && ddi_experiment("raytracing-tier")){
         hr=engine_ddi::set_diagnostic_raytracing_tier(owner.caps,true);
-        std::fprintf(stderr,"d3d12-caps experiment raytracing-tier result=%08lx\n",static_cast<unsigned long>(hr));
-        std::fflush(stderr);
+        amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier result=%08lx\n",static_cast<unsigned long>(hr));
+        amdgpu_wddm_log::flush();
     }
     if(SUCCEEDED(hr))owner.access={funcs,get};
     return hr;
@@ -149,7 +150,7 @@ HRESULT ensure_caps(Adapter& adapter, AdapterCapsOwner** out) noexcept {
                 // and owners for process teardown; CloseAdapter must not claim
                 // successful cleanup or retry a potentially consumed handle.
                 ++adapter.retained_engines;adapter.engine_caps=owner.release();
-                std::fprintf(stderr,"d3d12-caps unresolved query adapter retained\n");std::fflush(stderr);
+                amdgpu_wddm_log::print("d3d12-caps unresolved query adapter retained\n");amdgpu_wddm_log::flush();
             }
         } catch(const std::bad_alloc&) {adapter.caps_status=E_OUTOFMEMORY;}
     }

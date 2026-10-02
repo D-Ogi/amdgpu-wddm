@@ -148,6 +148,7 @@ try {
         $envSaved = Save-ProcessEnvironment
         try {
             $env:VKD3D_DEBUG = 'warn'
+            $env:AMDGPU_WDDM_LOG = 'stderr' # the UMD stack prints nothing on stdio without it (stdio-log.h)
             if ($WithVvl) {
                 $env:VK_LAYER_PATH = Join-Path $root 'toolchain\vvl\bin'
                 $env:VK_INSTANCE_LAYERS = 'VK_LAYER_KHRONOS_validation'

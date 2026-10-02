@@ -12,7 +12,7 @@
 
 namespace engine_ddi {
 
-// One line on stderr, prefixed "engine-ddi: ". The native build has no other log sink yet.
+// One line on the AMDGPU_WDDM_LOG sink (stdio-log.h: nothing, stderr or a file), prefixed "engine-ddi: ".
 void log_line(const char* format, ...) noexcept;
 // A refusal: the same line, also on the debugger's output. A game's stderr goes nowhere, and refusals are rare.
 void log_refusal(const char* format, ...) noexcept;

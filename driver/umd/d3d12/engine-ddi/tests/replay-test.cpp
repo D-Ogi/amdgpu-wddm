@@ -1308,6 +1308,7 @@ unsigned long long ull(uint64_t v) { return static_cast<unsigned long long>(v); 
 int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     _dup2(_fileno(stdout), _fileno(stderr));        // engine-ddi's log lines, in order with the results
+    SetEnvironmentVariableA("AMDGPU_WDDM_LOG", "stderr"); // the sink is off by default (stdio-log.h)
     // A drain that never ends would hang the build: give up after two minutes.
     std::thread([] {
         Sleep(120000);

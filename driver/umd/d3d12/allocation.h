@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <d3d12umddi.h>
 #include "ddi-trace.h"
+#include "stdio-log.h"
 namespace native12 {
 // One allocation, invoked synchronously from its owning device's DDI thread.
 // The owner must retain this record after failed release and invalidate callbacks
@@ -42,20 +43,20 @@ public:
         // The callback's own edges, after the local checks: what it was given and what it returned.
         const bool traced=ddi_trace_enabled();
         if(traced){
-            std::fprintf(stderr,"{\"event\":\"allocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
+            amdgpu_wddm_log::print("{\"event\":\"allocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
                 "\"allocations\":%u,\"runtime_resource\":%u,\"kernel_resource\":%u,\"private_size\":%u,"
                 "\"info_flags\":%u,\"source\":%u,"
                 "\"info_private_size\":%u,\"thread\":%lu}\n",ddi_experiment_name(),args.NumAllocations,
                 args.hResource?1u:0u,args.hKMResource?1u:0u,args.PrivateDriverDataSize,static_cast<unsigned>(info.Flags),
                 static_cast<unsigned>(info.VidPnSourceId),info.PrivateDriverDataSize,GetCurrentThreadId());
-            std::fflush(stderr);
+            amdgpu_wddm_log::flush();
         }
         HRESULT hr=allocate_(runtime_,&args);
         if(traced){
-            std::fprintf(stderr,"{\"event\":\"allocate-callback\",\"edge\":\"end\",\"status\":\"%08lx\","
+            amdgpu_wddm_log::print("{\"event\":\"allocate-callback\",\"edge\":\"end\",\"status\":\"%08lx\","
                 "\"allocation\":%u,\"thread\":%lu}\n",static_cast<unsigned long>(hr),info.hAllocation?1u:0u,
                 GetCurrentThreadId());
-            std::fflush(stderr);
+            amdgpu_wddm_log::flush();
         }
         if(FAILED(hr)) return hr;
         if(!info.hAllocation) return E_UNEXPECTED;
@@ -78,17 +79,17 @@ public:
             D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
         const bool traced=ddi_trace_enabled();
         if(traced){
-            std::fprintf(stderr,"{\"event\":\"deallocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
+            amdgpu_wddm_log::print("{\"event\":\"deallocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
                 "\"resource\":%u,\"owner_known\":%u,\"allocations\":%u,\"flags\":%u,\"thread\":%lu}\n",
                 ddi_experiment_name(),args.hResource?1u:0u,resource_?1u:0u,args.NumAllocations,
                 static_cast<unsigned>(args.Flags),GetCurrentThreadId());
-            std::fflush(stderr);
+            amdgpu_wddm_log::flush();
         }
         HRESULT hr=deallocate_(runtime_,&args);
         if(traced){
-            std::fprintf(stderr,"{\"event\":\"deallocate-callback\",\"edge\":\"end\",\"status\":\"%08lx\","
+            amdgpu_wddm_log::print("{\"event\":\"deallocate-callback\",\"edge\":\"end\",\"status\":\"%08lx\","
                 "\"thread\":%lu}\n",static_cast<unsigned long>(hr),GetCurrentThreadId());
-            std::fflush(stderr);
+            amdgpu_wddm_log::flush();
         }
         if(SUCCEEDED(hr)){allocation_=0;address_=0;resource_=nullptr;}
         return hr;
