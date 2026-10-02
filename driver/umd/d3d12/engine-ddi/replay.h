@@ -150,6 +150,7 @@ struct Replay {
     uint64_t serial = 0;                        // identity for the thread caches, never reused
     uint64_t qpf = 1;                           // QueryPerformanceFrequency
     uint64_t spin_ticks = 0;                    // the worker's spin before it sleeps
+    uint64_t wake_bytes = 0;                    // a publish wakes a sleeping worker once this much is pending
     SRWLOCK lock = SRWLOCK_INIT;                // the thread lookup: rings, count, ring owners
     ReplayRing* rings[kMaxReplayRings]{};
     std::atomic<uint32_t> count{0};
@@ -339,10 +340,15 @@ inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t si
     l->replay_tail.store(r->tag | end, std::memory_order_relaxed);
     r->entries.store(r->entries.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     r->entry_bytes.store(r->entry_bytes.load(std::memory_order_relaxed) + size, std::memory_order_relaxed);
-    // The first publish after the worker slept wakes it; the publishes after that see sleeping clear and pay a load.
-    // A missed wake (the worker is just going to sleep) costs latency, never an entry: the next publish, a drain or
-    // the worker's own timeout makes it up.
-    if (r->sleeping.load(std::memory_order_relaxed)) replay_wake(r);
+    // A sleeping worker is woken once wake_bytes are pending, not by the first publish: a game records a few calls,
+    // runs its own code longer than the worker's spin, records a few more, and a wake per such burst cost the
+    // recording thread a system call each (304: 1.2 ms per frame of the main thread in WakeByAddressSingle).
+    // While it sleeps the worker writes nothing, so done is the position it caught up to. Entries below the bound
+    // wait at most until the next drain (every Close drains its list and wakes the worker), the next publish past the
+    // bound or the worker's own timeout: latency, never an entry.
+    if (r->sleeping.load(std::memory_order_relaxed) &&
+        end - r->done.load(std::memory_order_relaxed) >= r->replay->wake_bytes)
+        replay_wake(r);
 }
 
 template <class F, class... A, size_t... I>

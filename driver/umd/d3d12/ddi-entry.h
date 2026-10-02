@@ -113,6 +113,11 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
         if constexpr(requires {Binding::name();}) return Binding::name();
         else return "unnamed";
     }
+    // Whether the policy observes this slot's arguments (EntryTrace::observed); a template, so that a policy
+    // without a matching hook answers false instead of failing to compile.
+    template<class Owner> static constexpr bool observed_slot() noexcept {
+        return requires(Owner* owner,A... args) {Policy::observed(owner,binding_name(),args...);};
+    }
     template<class Owner> static R fast_denied(Owner* owner,HRESULT hr) noexcept {
         static_assert(noexcept(Policy::failure(owner,hr)),"failure must not throw");
         Policy::failure(owner,hr);
@@ -127,6 +132,8 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
             auto first=std::get<0>(std::tuple<A...>(args...));
             static_assert(noexcept(Policy::resolve(first)),"resolve must not throw");
             if(auto* owner=Policy::resolve(first)) {
+                static_assert(!observed_slot<std::remove_pointer_t<decltype(owner)>>(),
+                    "a slot with an observation hook must take the full path");
                 static_assert(noexcept(Policy::fast_binding(*owner)),"fast binding must not throw");
                 if(const auto* binding=Policy::fast_binding(*owner)) {
                     using FastScope=typename Policy::FastScope;
@@ -414,6 +421,18 @@ template<class Policy> class DdiEntryTables final {
     NATIVE12_LIST_0092_MEMBERS(N12_LIST_NAME)
 #undef N12_LIST_NAME
     template<auto Member,class Name> struct CoreBinding:Name {
+        // The descriptor slots may take the policy's fast path (EntryThunk) as the recording slots do: a game fills
+        // its tables between draws, thousands of calls a frame (Witcher 3, lab session 291: CopyDescriptors alone
+        // 0.16 ms of the main thread's frame in the full entry). They write descriptor memory, report failures
+        // through the device's error callback, which the fast scope binds as Scope does, and no hook observes them.
+        static constexpr bool fast=ddi_same_name(Name::name(),"pfnCopyDescriptors") ||
+            ddi_same_name(Name::name(),"pfnCopyDescriptorsSimple") ||
+            ddi_same_name(Name::name(),"pfnCreateShaderResourceView") ||
+            ddi_same_name(Name::name(),"pfnCreateConstantBufferView") ||
+            ddi_same_name(Name::name(),"pfnCreateSampler") ||
+            ddi_same_name(Name::name(),"pfnCreateUnorderedAccessView") ||
+            ddi_same_name(Name::name(),"pfnCreateRenderTargetView") ||
+            ddi_same_name(Name::name(),"pfnCreateDepthStencilView");
         static auto original() noexcept {
             using Fn=std::remove_reference_t<decltype(core_.*Member)>;
             return core_ready_.load(std::memory_order_acquire)?core_.*Member:Fn{};

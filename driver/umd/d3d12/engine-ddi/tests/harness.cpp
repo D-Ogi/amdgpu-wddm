@@ -557,6 +557,7 @@ int wmain(int argc, wchar_t** argv) {
         test_stored_formats(env, device);
         test_compute(env, device);
         test_graphics(env, device);
+        test_draw_path(env, device);
         test_device_queries(env, device);
         uint32_t live = UINT32_MAX;
         hr = engine_ddi::destroy_device_context(device.context, &live);

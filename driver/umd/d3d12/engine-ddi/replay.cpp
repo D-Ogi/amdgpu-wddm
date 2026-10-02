@@ -23,6 +23,7 @@ static_assert(replay_detail::align_up(sizeof(ReplayRing), 64) + sizeof(uint64_t)
               "ring header");
 constexpr uint32_t kSpinMicroseconds = 20;      // the worker spins this long for more work before it sleeps
 constexpr DWORD kSleepMilliseconds = 100;       // a sleeping worker looks again at least this often
+constexpr uint32_t kWakeKilobytes = 8;          // pending entries that wake a sleeping worker (about 80 calls)
 
 std::atomic<uint64_t> g_serial{0};
 
@@ -490,9 +491,10 @@ HRESULT set_replay_policy(DeviceContext* c, const ReplayPolicy* policy) noexcept
     rp->serial = g_serial.fetch_add(1) + 1;
     rp->qpf = static_cast<uint64_t>(frequency.QuadPart);
     rp->spin_ticks = rp->qpf * kSpinMicroseconds / 1000000;
+    rp->wake_bytes = uint64_t{kWakeKilobytes} << 10;
     c->replay = rp;
-    log_line("replay policy: on, up to %u rings of %u KiB, worker spin %u us, wake on the first publish", policy->rings,
-             policy->ring_bytes >> 10, kSpinMicroseconds);
+    log_line("replay policy: on, up to %u rings of %u KiB, worker spin %u us, wake at %u KiB pending", policy->rings,
+             policy->ring_bytes >> 10, kSpinMicroseconds, kWakeKilobytes);
     return S_OK;
 }
 

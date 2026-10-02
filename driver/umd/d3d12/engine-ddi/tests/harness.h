@@ -189,6 +189,8 @@ void test_copy_bc_volume(Env& env, Device& device);
 void test_stored_formats(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_graphics(Env& env, Device& device);
+// Ranged descriptor copies, vertex and index buffer rebinds between draws, and the per-draw cost (test-draw-path.cpp).
+void test_draw_path(Env& env, Device& device);
 void test_retirement(Env& env);
 void test_retire_handoff(Env& env);
 void test_device_queries(Env& env, Device& device);
