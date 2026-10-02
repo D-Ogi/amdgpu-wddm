@@ -40,6 +40,27 @@ void checkf(bool ok, const char* format, ...) {
 
 int failure_count() { return g_failures; }
 
+namespace {
+SRWLOCK g_lines_lock = SRWLOCK_INIT;
+std::vector<std::string> g_lines;       // every log_refusal line, from any thread
+
+void record_line(const char* text, void*) {
+    AcquireSRWLockExclusive(&g_lines_lock);
+    g_lines.emplace_back(text);
+    ReleaseSRWLockExclusive(&g_lines_lock);
+}
+} // namespace
+
+std::vector<std::string> refusal_lines(const char* prefix) {
+    std::vector<std::string> out;
+    const size_t n = std::strlen(prefix);
+    AcquireSRWLockShared(&g_lines_lock);
+    for (const std::string& line : g_lines)
+        if (!line.compare(0, n, prefix)) out.push_back(line);
+    ReleaseSRWLockShared(&g_lines_lock);
+    return out;
+}
+
 // ---- Storage ---------------------------------------------------------------------------------------------------------
 Storage::~Storage() {
     for (const Block& b : blocks_) delete[] b.p;
@@ -218,7 +239,7 @@ HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size
 
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
 
     // The runtime turns the API heap type into CPU page property and memory pool for this adapter; the engine's
     // GetCustomHeapProperties gives the same answer (API values are the DDI values plus one).
@@ -453,6 +474,7 @@ int wmain(int argc, wchar_t** argv) {
         return 2;
     }
     std::printf("deferred replay: %s\n", g_replay ? "on for every device context" : "off");
+    engine_ddi::harness_set_log_observer(record_line, nullptr);
 
     // The engine keeps its disk shader cache in %LOCALAPPDATA%\amdgpu-wddm\vkd3d. The harness points LOCALAPPDATA
     // at localappdata beside itself, before the engine's first device reads it, so no run writes to the profile;
@@ -532,6 +554,7 @@ int wmain(int argc, wchar_t** argv) {
         test_copy(env, device);
         test_copy_slices(env, device);
         test_copy_bc_volume(env, device);
+        test_stored_formats(env, device);
         test_compute(env, device);
         test_graphics(env, device);
         test_device_queries(env, device);
@@ -543,6 +566,7 @@ int wmain(int argc, wchar_t** argv) {
                "positive paths: no device or command-list error reported (%u device, %u list)",
                device.shell.device_errors, device.shell.list_errors);
     }
+    test_log_lines(env);
     test_retirement(env);
     test_retire_handoff(env);
     test_runtime_backed(env);

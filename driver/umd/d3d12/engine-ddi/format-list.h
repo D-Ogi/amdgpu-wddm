@@ -7,7 +7,8 @@ namespace engine_ddi {
 
 struct FormatListEntry { DXGI_FORMAT format; UINT allowed; UINT required; };
 
-// The D3D12DDI_FORMAT_SUPPORT bits a format may and must carry at feature level 11_1.
+// The D3D12DDI_FORMAT_SUPPORT bits a format may and must carry at feature level 11_1, UAV_READS
+// only on the formats d3d/UAVTypedLoad.md of the same repository names.
 inline constexpr FormatListEntry kFormatList[] = {
     // UNKNOWN may: buffer tiled
     //        must: buffer
@@ -306,39 +307,39 @@ inline constexpr FormatListEntry kFormatList[] = {
     // BC7_UNORM_SRGB may: sample gather tiled
     //               must: sample gather
     {DXGI_FORMAT_BC7_UNORM_SRGB, 0x00014001u, 0x00004001u},
-    // AYUV may: sample rt blend dec_out vp_out vp_in uav_w gather uav_r
+    // AYUV may: sample rt blend dec_out vp_out vp_in uav_w gather
     //     must: sample rt blend vp_in uav_w gather
-    {DXGI_FORMAT_AYUV, 0x000242E7u, 0x00004287u},
-    // Y410 may: sample dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_AYUV, 0x000042E7u, 0x00004287u},
+    // Y410 may: sample dec_out vp_out vp_in uav_w gather
     //     must: sample uav_w gather
-    {DXGI_FORMAT_Y410, 0x000242E1u, 0x00004201u},
-    // Y416 may: sample dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_Y410, 0x000042E1u, 0x00004201u},
+    // Y416 may: sample dec_out vp_out vp_in uav_w gather
     //     must: sample uav_w gather
-    {DXGI_FORMAT_Y416, 0x000242E1u, 0x00004201u},
-    // NV12 may: sample rt blend dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_Y416, 0x000042E1u, 0x00004201u},
+    // NV12 may: sample rt blend dec_out vp_out vp_in uav_w gather
     //     must: sample rt blend dec_out vp_out vp_in uav_w gather
-    {DXGI_FORMAT_NV12, 0x000242E7u, 0x000042E7u},
-    // P010 may: sample rt blend dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_NV12, 0x000042E7u, 0x000042E7u},
+    // P010 may: sample rt blend dec_out vp_out vp_in uav_w gather
     //     must: sample rt blend uav_w gather
-    {DXGI_FORMAT_P010, 0x000242E7u, 0x00004207u},
-    // P016 may: sample rt blend dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_P010, 0x000042E7u, 0x00004207u},
+    // P016 may: sample rt blend dec_out vp_out vp_in uav_w gather
     //     must: sample rt blend uav_w gather
-    {DXGI_FORMAT_P016, 0x000242E7u, 0x00004207u},
+    {DXGI_FORMAT_P016, 0x000042E7u, 0x00004207u},
     // 420_OPAQUE may: dec_out vp_out vp_in
     //           must: dec_out vp_out vp_in
     {DXGI_FORMAT_420_OPAQUE, 0x000000E0u, 0x000000E0u},
-    // YUY2 may: sample dec_out vp_out vp_in uav_w gather uav_r
+    // YUY2 may: sample dec_out vp_out vp_in uav_w gather
     //     must: sample vp_in uav_w gather
-    {DXGI_FORMAT_YUY2, 0x000242E1u, 0x00004281u},
-    // Y210 may: sample dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_YUY2, 0x000042E1u, 0x00004281u},
+    // Y210 may: sample dec_out vp_out vp_in uav_w gather
     //     must: sample uav_w gather
-    {DXGI_FORMAT_Y210, 0x000242E1u, 0x00004201u},
-    // Y216 may: sample dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_Y210, 0x000042E1u, 0x00004201u},
+    // Y216 may: sample dec_out vp_out vp_in uav_w gather
     //     must: sample uav_w gather
-    {DXGI_FORMAT_Y216, 0x000242E1u, 0x00004201u},
-    // NV11 may: sample rt blend dec_out vp_out vp_in uav_w gather uav_r
+    {DXGI_FORMAT_Y216, 0x000042E1u, 0x00004201u},
+    // NV11 may: sample rt blend dec_out vp_out vp_in uav_w gather
     //     must: sample rt blend uav_w gather
-    {DXGI_FORMAT_NV11, 0x000242E7u, 0x00004207u},
+    {DXGI_FORMAT_NV11, 0x000042E7u, 0x00004207u},
     // AI44 may: vp_in
     //     must: vp_in
     {DXGI_FORMAT_AI44, 0x00000080u, 0x00000080u},

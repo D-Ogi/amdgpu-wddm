@@ -17,6 +17,38 @@ void log_line(const char* format, ...) noexcept;
 // A refusal: the same line, also on the debugger's output. A game's stderr goes nowhere, and refusals are rare.
 void log_refusal(const char* format, ...) noexcept;
 
+// Diagnostic lines written once a process, through log_refusal. first() is true for its first caller only; once
+// it was, done() and first() cost one relaxed load. Constant-initialized: a namespace-scope instance needs no guard.
+class LogOnce {
+public:
+    constexpr LogOnce() noexcept = default;
+    bool done() const noexcept { return done_.load(std::memory_order_relaxed); }
+    bool first() noexcept { return !done() && !done_.exchange(true, std::memory_order_relaxed); }
+
+private:
+    std::atomic<bool> done_{false};
+};
+
+// A set of DXGI_FORMAT values, lock-free: each value below 256 on its own, every larger one as a single member.
+// For lines written once per format and for engine answers kept per format. Constant-initialized, as LogOnce.
+class FormatSet {
+public:
+    constexpr FormatSet() noexcept = default;
+    bool contains(uint32_t value) const noexcept {
+        return (words_[word(value)].load(std::memory_order_relaxed) & bit(value)) != 0;
+    }
+    // True when value was not a member yet: for each value, its first caller.
+    bool insert(uint32_t value) noexcept {
+        return !contains(value) &&
+               !(words_[word(value)].fetch_or(bit(value), std::memory_order_relaxed) & bit(value));
+    }
+
+private:
+    static constexpr uint32_t word(uint32_t value) noexcept { return value < 256 ? value / 64 : 4; }
+    static constexpr uint64_t bit(uint32_t value) noexcept { return uint64_t{1} << (value < 256 ? value % 64 : 0); }
+    std::atomic<uint64_t> words_[5]{};
+};
+
 // A value-initialized T on the heap, or null. Written out rather than new (std::nothrow) T{}, whose value
 // initialization /analyze models before the null check (C28182).
 template <class T, class... A> T* make_new(A&&... args) noexcept {
@@ -358,7 +390,40 @@ struct ResourceRecord {
     ResourceRecord* init_next;
     uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
     uint64_t linear_size;                       // the size of its backing as asked of the shell
+    DXGI_FORMAT stored_from;                    // the video format desc stores (stored_format), else UNKNOWN
 };
+
+// A packed video format the engine has no image of, stored as the typeless format of its element (INTEGRATION.md,
+// "Packed video formats"). The DXGI_FORMAT reference names the view formats of each: the storage's family, which a
+// typeless image allows, and R32_UINT for a UAV of a 4-byte element, which the engine adds to a typeless image with
+// ALLOW_UNORDERED_ACCESS. A 4:2:2 element holds two pixels: the resource's width and every x the application gives
+// are in pixels, the engine's in elements, and "one view provides a straightforward mapping of the entire surface".
+struct StoredFormat {
+    DXGI_FORMAT format;                         // as the application names it
+    DXGI_FORMAT storage;                        // the engine's resource format
+    DXGI_FORMAT view;                           // what a view naming the video format (or no format) gets
+    UINT pixels;                                // pixels per element
+};
+inline const StoredFormat* stored_format(DXGI_FORMAT f) noexcept {
+    static constexpr StoredFormat kStored[] = {
+        {DXGI_FORMAT_AYUV, DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM, 1},
+        {DXGI_FORMAT_Y410, DXGI_FORMAT_R10G10B10A2_TYPELESS, DXGI_FORMAT_R10G10B10A2_UNORM, 1},
+        {DXGI_FORMAT_Y416, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 1},
+        {DXGI_FORMAT_YUY2, DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM, 2},
+        {DXGI_FORMAT_Y210, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 2},
+        {DXGI_FORMAT_Y216, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 2},
+    };
+    for (const StoredFormat& s : kStored)
+        if (s.format == f) return &s;
+    return nullptr;
+}
+
+// The format a view of r is created with: the view format of a stored video format named by the view, or by the
+// resource when the view names none; any other format as given.
+inline DXGI_FORMAT view_format(const ResourceRecord* r, DXGI_FORMAT format) noexcept {
+    const StoredFormat* s = stored_format(format == DXGI_FORMAT_UNKNOWN && r ? r->stored_from : format);
+    return s ? s->view : format;
+}
 inline constexpr uint32_t kInitNone = 0;
 inline constexpr uint32_t kInitQueued = 1;
 inline constexpr uint32_t kInitRecorded = 2;    // named by a batch that may still run
@@ -522,6 +587,10 @@ void harness_set_in_ddi_bound(DeviceContext* context, uint32_t milliseconds) noe
 // watches, from the thread that makes them.
 using StateObjectObserver = void (*)(const D3D12_STATE_OBJECT_DESC& desc, ID3D12StateObject* parent, void* user);
 void harness_set_state_object_observer(StateObjectObserver observer, void* user) noexcept;
+// Called by log_refusal with each line's text (without the "engine-ddi: " prefix) after the line was written, on the
+// calling thread; null (the default) calls nothing. Process-wide, like the once-only lines it lets a test count.
+using LogObserver = void (*)(const char* text, void* user);
+void harness_set_log_observer(LogObserver observer, void* user) noexcept;
 #endif
 
 } // namespace engine_ddi

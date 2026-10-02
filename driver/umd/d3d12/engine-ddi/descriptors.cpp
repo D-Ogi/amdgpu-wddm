@@ -128,7 +128,7 @@ void APIENTRY create_uav(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_UNORD
         return;
     }
     D3D12_UNORDERED_ACCESS_VIEW_DESC d{};
-    d.Format = args->Format;
+    d.Format = view_format(r, args->Format);
     ID3D12Resource* counter = nullptr;
     switch (args->ResourceDimension) {
     case D3D12DDI_RD_BUFFER:
@@ -192,7 +192,7 @@ void APIENTRY create_rtv(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_RENDE
         return;
     }
     D3D12_RENDER_TARGET_VIEW_DESC d{};
-    d.Format = args->Format;
+    d.Format = view_format(r, args->Format);
     const bool ms = r && r->desc.SampleDesc.Count > 1;
     switch (args->ResourceDimension) {
     case D3D12DDI_RD_BUFFER:
@@ -253,7 +253,7 @@ void APIENTRY create_srv(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_SHADE
         return;
     }
     D3D12_SHADER_RESOURCE_VIEW_DESC d{};
-    d.Format = args->Format;
+    d.Format = view_format(r, args->Format);
     d.Shader4ComponentMapping = args->Shader4ComponentMapping;
     const bool ms = r && r->desc.SampleDesc.Count > 1;
     switch (args->ResourceDimension) {
