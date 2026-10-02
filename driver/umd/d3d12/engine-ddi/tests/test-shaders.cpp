@@ -176,7 +176,7 @@ HRESULT create_render_target(Env& env, Device& device, DXGI_FORMAT format, Buffe
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
     const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, D3D12_HEAP_TYPE_DEFAULT);
     D3D12DDIARG_CREATEHEAP_0001 heap{};
     heap.ByteSize = info.ResourceDataSize;

@@ -743,8 +743,23 @@ HRESULT linear_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& des
     return S_OK;
 }
 
-// The first refusal of each format, with its description and the code reported: what the runtime does with that
-// report (the device error callback) is not documented for this slot. Once per format, at most 257 lines a process.
+// The answer for a description that cannot be sized: ResourceDataSize UINT64_MAX, the API's own error answer
+// (GetResourceAllocationInfo: "If an error occurs, then SizeInBytes equals UINT64_MAX"), with the default placement
+// alignment for its sample count, as the engine answers such a description itself. No code goes to the device error
+// callback: the DDI reference allows this slot none, and the runtime takes an error a function does not allow as
+// critical and removes the device ("Handling Errors"). An application may ask about any description; creating the
+// resource is refused by CreateHeapAndResource, which returns its HRESULT.
+void unsized(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
+    *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+    out->ResourceDataSize = UINT64_MAX;
+    out->ResourceDataAlignment = in.SampleDesc.Count > 1 ? D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT
+                                                         : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    out->Layout = in.ResourceType == D3D12DDI_RT_BUFFER ? D3D12DDI_TL_ROW_MAJOR : in.Layout;
+    no_additional_data(out);
+}
+
+// The first refusal of each format, with its description and why it was refused. Once per format, at most 257 lines
+// a process.
 FormatSet g_allocation_refusals;
 
 void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
@@ -754,13 +769,12 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
     DeviceContext* c = resolve(device);
     if (!c) return;
-    if (!in || !out) {
-        c->report(E_INVALIDARG);
+    if (!in || !out || (in->NumCastableFormats && !in->pCastableFormats)) {
+        c->report(E_INVALIDARG);                        // a malformed call, not a question about a description
         return;
     }
     D3D12_RESOURCE_DESC1 desc{};
     HRESULT hr = to_api_desc(*in, desc);
-    if (SUCCEEDED(hr) && in->NumCastableFormats && !in->pCastableFormats) hr = E_INVALIDARG;
     if (SUCCEEDED(hr)) {
         if (c->mode == MemoryMode::RuntimeBacked && (optimization & D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY) &&
             linear_primary_shape(desc, *in)) {
@@ -771,17 +785,16 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
         }
     }
     if (FAILED(hr)) {
-        *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+        unsized(*in, out);
         if (g_allocation_refusals.insert(static_cast<uint32_t>(in->Format)))
-            log_refusal("CheckResourceAllocationInfo: %08lx reported for the first refusal of format %u: type %u, "
-                        "%llu x %u, depth or array %u, mips %u, samples %u, flags 0x%x, layout %u, castable %u, "
-                        "alignment %u, optimization 0x%x",
-                        static_cast<unsigned long>(hr), static_cast<unsigned>(in->Format),
+            log_refusal("CheckResourceAllocationInfo: UINT64_MAX answered for the first refusal of format %u (%08lx): "
+                        "type %u, %llu x %u, depth or array %u, mips %u, samples %u, flags 0x%x, layout %u, "
+                        "castable %u, alignment %u, optimization 0x%x",
+                        static_cast<unsigned>(in->Format), static_cast<unsigned long>(hr),
                         static_cast<unsigned>(in->ResourceType), static_cast<unsigned long long>(in->Width), in->Height,
                         static_cast<unsigned>(in->DepthOrArraySize), static_cast<unsigned>(in->MipLevels),
                         in->SampleDesc.Count, static_cast<unsigned>(in->Flags), static_cast<unsigned>(in->Layout),
                         in->NumCastableFormats, alignment_restriction, static_cast<unsigned>(optimization));
-        c->report(hr);
     }
 }
 

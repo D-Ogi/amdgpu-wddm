@@ -35,7 +35,7 @@ HRESULT create_texture(Env& env, Device& device, DXGI_FORMAT format, UINT width,
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
     const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, D3D12_HEAP_TYPE_DEFAULT);
     D3D12DDIARG_CREATEHEAP_0001 heap{};
     heap.ByteSize = info.ResourceDataSize;
@@ -106,12 +106,30 @@ void virtual_placement(Env& env, Device& device) {
     destroy_buffer(env, device, upload);
 }
 
+// A 64 x 64 texture of one mip in the given format, as CheckResourceAllocationInfo is asked about it.
+D3D12DDIARG_CREATERESOURCE_0088 texture_description(DXGI_FORMAT format) {
+    D3D12DDIARG_CREATERESOURCE_0088 res{};
+    res.ResourceType = D3D12DDI_RT_TEXTURE2D;
+    res.Width = 64;
+    res.Height = 64;
+    res.DepthOrArraySize = 1;
+    res.MipLevels = 1;
+    res.Format = format;
+    res.SampleDesc = {1, 0};
+    res.Layout = D3D12DDI_TL_UNDEFINED;
+    res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
+    return res;
+}
+
 // The first refusal of each format by CheckResourceAllocationInfo: a 64 x 64 texture of each candidate the engine has
-// no size for, asked twice, reports E_INVALIDARG twice and gives one line with its description; a candidate the
-// engine sizes gives none. Returns the device errors reported.
+// no size for, asked twice, gets ResourceDataSize UINT64_MAX with the default 64 KiB alignment (no additional data,
+// layout as asked) both times, reports no error and gives one line with its description; a candidate the engine
+// sizes gets its size and gives none. A malformed call, without a description or with a castable count and no list,
+// still reports E_INVALIDARG and leaves the answer zeroed. Returns the device errors reported.
 uint32_t allocation_refusals(Env& env, Device& device) {
     const DXGI_FORMAT candidates[] = {DXGI_FORMAT_YUY2, DXGI_FORMAT_R8G8_B8G8_UNORM, DXGI_FORMAT_G8R8_G8B8_UNORM,
                                       DXGI_FORMAT_R1_UNORM, DXGI_FORMAT_AI44, DXGI_FORMAT_R8G8B8A8_UNORM};
+    constexpr UINT32 k64K = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
     const uint32_t errors_before = device.shell.device_errors;
     unsigned refused = 0, wrong = 0;
     std::string first_line, first_want;
@@ -119,29 +137,26 @@ uint32_t allocation_refusals(Env& env, Device& device) {
         D3D12_RESOURCE_DESC api{D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, 64, 64, 1, 1, format, {1, 0},
                                 D3D12_TEXTURE_LAYOUT_UNKNOWN, D3D12_RESOURCE_FLAG_NONE};
         const bool engine_refuses = env.engine->GetResourceAllocationInfo(0, 1, &api).SizeInBytes == UINT64_MAX;
-        D3D12DDIARG_CREATERESOURCE_0088 res{};
-        res.ResourceType = D3D12DDI_RT_TEXTURE2D;
-        res.Width = 64;
-        res.Height = 64;
-        res.DepthOrArraySize = 1;
-        res.MipLevels = 1;
-        res.Format = format;
-        res.SampleDesc = {1, 0};
-        res.Layout = D3D12DDI_TL_UNDEFINED;
-        res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
+        const D3D12DDIARG_CREATERESOURCE_0088 res = texture_description(format);
         const uint32_t errors = device.shell.device_errors;
+        unsigned answers_wrong = 0;
         for (int i = 0; i < 2; ++i) {
             D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
             env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1,
                                                     &info);
+            const bool unsized = info.ResourceDataSize == UINT64_MAX && info.ResourceDataAlignment == k64K &&
+                                 !info.AdditionalDataHeaderSize && !info.AdditionalDataSize &&
+                                 info.AdditionalDataHeaderAlignment == k64K && info.AdditionalDataAlignment == k64K &&
+                                 info.Layout == D3D12DDI_TL_UNDEFINED;
+            const bool sized = info.ResourceDataSize && info.ResourceDataSize != UINT64_MAX;
+            answers_wrong += engine_refuses ? !unsized : !sized;
         }
-        char prefix[96];
-        std::snprintf(prefix, sizeof(prefix), "CheckResourceAllocationInfo: %08lx reported for the first refusal of "
-                      "format %u:", static_cast<unsigned long>(E_INVALIDARG), static_cast<unsigned>(format));
+        char prefix[112];
+        std::snprintf(prefix, sizeof(prefix), "CheckResourceAllocationInfo: UINT64_MAX answered for the first refusal "
+                      "of format %u (%08lx):", static_cast<unsigned>(format), static_cast<unsigned long>(E_INVALIDARG));
         const std::vector<std::string> lines = refusal_lines(prefix);
         const uint32_t reported = device.shell.device_errors - errors;
-        const bool last_invalid = device.shell.last_device_error == E_INVALIDARG;
-        wrong += engine_refuses ? (lines.size() != 1 || reported != 2 || !last_invalid) : (!lines.empty() || reported);
+        wrong += answers_wrong || reported || lines.size() != (engine_refuses ? 1u : 0u);
         if (engine_refuses && !refused++ && !lines.empty()) {
             first_line = lines[0];
             first_want = std::string(prefix) + " type 3, 64 x 64, depth or array 1, mips 1, samples 1, flags 0x0, "
@@ -149,9 +164,26 @@ uint32_t allocation_refusals(Env& env, Device& device) {
         }
     }
     checkf(refused && !wrong && first_line == first_want,
-           "log lines: one CheckResourceAllocationInfo line per refused format, two E_INVALIDARG reports each (%u of "
-           "%zu candidates refused, %u differ); the first is \"%s\"",
+           "log lines: CheckResourceAllocationInfo answers UINT64_MAX aligned to 64 KiB for each format the engine "
+           "cannot size, with no error reported, and gives one line per format (%u of %zu candidates refused, %u "
+           "differ); the first is \"%s\"",
            refused, sizeof(candidates) / sizeof(candidates[0]), wrong, first_line.c_str());
+
+    const uint32_t errors_malformed = device.shell.device_errors;
+    D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 none{}, uncast{};
+    none.ResourceDataSize = uncast.ResourceDataSize = 1;
+    env.core.pfnCheckResourceAllocationInfo(device.h(), nullptr, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &none);
+    D3D12DDIARG_CREATERESOURCE_0088 castable = texture_description(DXGI_FORMAT_R8G8B8A8_UNORM);
+    castable.NumCastableFormats = 1;
+    env.core.pfnCheckResourceAllocationInfo(device.h(), &castable, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1,
+                                            &uncast);
+    const uint32_t malformed = device.shell.device_errors - errors_malformed;
+    checkf(malformed == 2 && device.shell.last_device_error == E_INVALIDARG && !none.ResourceDataSize &&
+               !uncast.ResourceDataSize,
+           "log lines: CheckResourceAllocationInfo without a description and with a castable count but no list reports "
+           "E_INVALIDARG and answers zero (%u reported, sizes %llu, %llu)",
+           malformed, static_cast<unsigned long long>(none.ResourceDataSize),
+           static_cast<unsigned long long>(uncast.ResourceDataSize));
     return device.shell.device_errors - errors_before;
 }
 

@@ -239,7 +239,7 @@ HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size
 
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
 
     // The runtime turns the API heap type into CPU page property and memory pool for this adapter; the engine's
     // GetCustomHeapProperties gives the same answer (API values are the DDI values plus one).

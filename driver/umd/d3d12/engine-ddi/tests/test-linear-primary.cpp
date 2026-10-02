@@ -55,7 +55,7 @@ HRESULT create_target(Env& env, Device& device, const Shape& s, Buffer& out) {
     out = Buffer{};
     const D3D12DDIARG_CREATERESOURCE_0088 res = description(s);
     const D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info = allocation_info(env, device, s);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
     D3D12DDIARG_CREATEHEAP_0001 heap{};
     heap.ByteSize = s.heap_bytes ? s.heap_bytes : info.ResourceDataSize;
     heap.Alignment = s.heap_alignment ? info.ResourceDataAlignment : 0;

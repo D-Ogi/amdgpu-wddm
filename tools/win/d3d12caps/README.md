@@ -107,12 +107,13 @@ without the game's core) has no allocations and fails here by design, so record 
 ## Allocation refusal probe
 
 `amdgpu_wddm_d3d12allocprobe.exe` asks whether a texture the driver cannot size costs the application its device.
-Our engine has no layout for YUY2 and R8G8_B8G8_UNORM, and the shell reports `E_INVALIDARG` through the device
-error callback (`pfnSetErrorCb`) when `CheckResourceAllocationInfo` is asked about one. The D3D12 DDI reference
-names no error for that function. The rules for that callback ("Handling Errors",
+Our engine has no layout for YUY2 and R8G8_B8G8_UNORM. The shell used to report `E_INVALIDARG` through the device
+error callback (`pfnSetErrorCb`) when `CheckResourceAllocationInfo` was asked about one; it now answers
+`ResourceDataSize` `UINT64_MAX`, the API's error answer, and reports nothing. The D3D12 DDI reference names no error
+for that function. The rules for that callback ("Handling Errors",
 learn.microsoft.com/windows-hardware/drivers/display/handling-errors, written for the D3D10 DDI) make an error a
 function does not allow critical: the runtime removes the device. Whether the D3D12 runtime asks the driver about
-these formats at all, and what it does with the error, is what the probe measures.
+these formats at all, and what it makes of either answer, is what the probe measures.
 
 For R8G8B8A8_UNORM (the control), YUY2, R8G8_B8G8_UNORM and R8G8B8A8_UNORM again, it runs four steps on a 64 x 64
 2D texture (one mip, one sample, layout UNKNOWN, no flags, state COMMON): `GetResourceAllocationInfo`,

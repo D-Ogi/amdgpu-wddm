@@ -350,7 +350,7 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 | CheckMultisampleQualityLevels, Flags NONE | the engine's MULTISAMPLE_QUALITY_LEVELS; 0 when the engine refuses | engine answer |
 | CheckMultisampleQualityLevels, Flags TILED_RESOURCE | the engine's MULTISAMPLE_QUALITY_LEVELS with the TILED_RESOURCE flag; 0 when the engine refuses | engine answer |
 | GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
-| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data | engine answer |
+| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data. A description CheckResourceAllocationInfo cannot size gets ResourceDataSize UINT64_MAX, the API's error answer, with the default alignment for its sample count | engine answer |
 | EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
 | CheckDriverMatchingIdentifier | UNRECOGNIZED | exact: engine-ddi serializes nothing |
 | ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE |
