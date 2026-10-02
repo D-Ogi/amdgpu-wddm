@@ -1,6 +1,6 @@
 param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145',[switch]$IgnoreFlush)
 $ErrorActionPreference='Stop'
-$repo=Join-Path $Root 'bc250-win'
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 $source=Get-Content (Join-Path $repo 'driver\kmd\start_health.c') -Raw

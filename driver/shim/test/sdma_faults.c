@@ -345,6 +345,27 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 	g_last_doorbell = value;
 }
 
+/* bc250_gfx.c's RLC safe-mode scope, which bc250_sdma_quiesce_for_reload (M370) and the reset paths
+ * that call it take. No case here reaches them; every call is counted and the verdict fails on one,
+ * so a case that does reach them has to model the scope here rather than pass a silent stub. */
+static unsigned int g_rlc_safe_calls;
+
+int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested)
+{
+	(void)adev;
+	g_rlc_safe_calls++;
+	if (requested)
+		*requested = false;
+	return BC250_EINVAL;
+}
+
+void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested)
+{
+	(void)adev;
+	(void)requested;
+	g_rlc_safe_calls++;
+}
+
 void bc250_shim_log(int level, void *dev, const char *fmt, ...)
 {
 	static const char *const tag[] = { "info", "warn", "err " };
@@ -978,6 +999,7 @@ int main(int argc, char **argv)
 	case_teardown_leaves_ring_usable(&adev);
 
 	fault_alloc_reset();
+	check(g_rlc_safe_calls == 0, "no case entered the RLC safe-mode scope this suite does not model");
 
 	printf("\n== verdict ==\n");
 	printf("  %u checks, %u failures, %u expected failures (confirmed defects), %u XPASS\n",
