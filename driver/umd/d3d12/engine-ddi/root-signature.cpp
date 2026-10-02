@@ -13,6 +13,7 @@
 // The part is wrapped in a DXBC container with a zero checksum. The engine does not check it (vkd3d-proton,
 // libs/vkd3d-shader/dxbc.c, parse_dxbc: "Ignoring DXBC checksum"); a checksum is needed before any other reader.
 #include "internal.h"
+#include "replay.h"
 #include <cstring>
 
 namespace engine_ddi {
@@ -141,6 +142,7 @@ void APIENTRY destroy_root_signature(D3D12DDI_HDEVICE device, D3D12DDI_HROOTSIGN
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Destroy);
     release_engine(r->h);
     poison(r->h);
     c->live.fetch_sub(1);

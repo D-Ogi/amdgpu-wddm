@@ -3,6 +3,10 @@
 // GPU, composes the DDI tables, runs the round trips and tears everything down. Development PC only.
 //
 //   engine-ddi-harness.exe --engine <amdgpu_wddm_vkd3d.dll> [--adapter <substring of the DXGI description>]
+//                          [--deferred-replay]
+//
+// --deferred-replay turns the replay policy on for every device context the run opens (open_device), as the
+// shell's deferred-replay experiment does: the recording slots' engine calls run on replay workers.
 #include "harness.h"
 #include <dxgi1_4.h>
 #include <cstdarg>
@@ -14,6 +18,7 @@ namespace harness {
 
 namespace {
 int g_failures = 0;
+bool g_replay = false;                  // --deferred-replay
 constexpr SIZE_T kCanaryBytes = 32;
 constexpr uint8_t kFill = 0xCD;
 constexpr uint8_t kCanary = 0xA5;
@@ -34,6 +39,27 @@ void checkf(bool ok, const char* format, ...) {
 }
 
 int failure_count() { return g_failures; }
+
+namespace {
+SRWLOCK g_lines_lock = SRWLOCK_INIT;
+std::vector<std::string> g_lines;       // every log_refusal line, from any thread
+
+void record_line(const char* text, void*) {
+    AcquireSRWLockExclusive(&g_lines_lock);
+    g_lines.emplace_back(text);
+    ReleaseSRWLockExclusive(&g_lines_lock);
+}
+} // namespace
+
+std::vector<std::string> refusal_lines(const char* prefix) {
+    std::vector<std::string> out;
+    const size_t n = std::strlen(prefix);
+    AcquireSRWLockShared(&g_lines_lock);
+    for (const std::string& line : g_lines)
+        if (!line.compare(0, n, prefix)) out.push_back(line);
+    ReleaseSRWLockShared(&g_lines_lock);
+    return out;
+}
 
 // ---- Storage ---------------------------------------------------------------------------------------------------------
 Storage::~Storage() {
@@ -81,6 +107,10 @@ void APIENTRY report_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST list, HRESU
 }
 
 BOOL APIENTRY is_device_lost(void*) { return FALSE; }
+
+// The shell's replay hooks without its scopes: the harness has no runtime domain or hosted dispatch to enter.
+void APIENTRY replay_worker(void*, engine_ddi::ReplayBody body, void* ring) { body(ring); }
+void APIENTRY replay_drained(void*) {}
 
 HRESULT APIENTRY bind_list_table(void* shell, D3D12DDI_HRTCOMMANDLIST list, uint32_t table) {
     static_cast<Shell*>(shell)->binds.push_back({list.handle, table});
@@ -144,6 +174,13 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
     info.hooks.bind_list_table = bind_list_table;
     HRESULT hr = engine_ddi::create_device_context(&info, &device.context);
     device.sd.context = device.context;
+    if (hr == S_OK && g_replay) {
+        const engine_ddi::ReplayPolicy policy{sizeof(policy), 1, 8, 4u << 20, &device.shell, replay_worker,
+                                              replay_drained};
+        hr = engine_ddi::set_replay_policy(device.context, &policy);
+        if (hr != S_OK)
+            checkf(false, "deferred replay: policy on for a device context (hr %08lx)", static_cast<unsigned long>(hr));
+    }
     return hr;
 }
 
@@ -202,7 +239,7 @@ HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size
 
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
 
     // The runtime turns the API heap type into CPU page property and memory pool for this adapter; the engine's
     // GetCustomHeapProperties gives the same answer (API values are the DDI values plus one).
@@ -424,15 +461,20 @@ int wmain(int argc, wchar_t** argv) {
             engine_path = argv[++i];
         } else if (!std::wcscmp(argv[i], L"--adapter") && i + 1 < argc) {
             adapter = argv[++i];
+        } else if (!std::wcscmp(argv[i], L"--deferred-replay")) {
+            g_replay = true;
         } else {
             std::printf("FAIL  unknown or incomplete option %ls\n", argv[i]);
             return 2;
         }
     }
     if (!engine_path) {
-        std::printf("usage: engine-ddi-harness --engine <amdgpu_wddm_vkd3d.dll> [--adapter <substring>]\n");
+        std::printf("usage: engine-ddi-harness --engine <amdgpu_wddm_vkd3d.dll> [--adapter <substring>] "
+                    "[--deferred-replay]\n");
         return 2;
     }
+    std::printf("deferred replay: %s\n", g_replay ? "on for every device context" : "off");
+    engine_ddi::harness_set_log_observer(record_line, nullptr);
 
     // The engine keeps its disk shader cache in %LOCALAPPDATA%\amdgpu-wddm\vkd3d. The harness points LOCALAPPDATA
     // at localappdata beside itself, before the engine's first device reads it, so no run writes to the profile;
@@ -510,6 +552,9 @@ int wmain(int argc, wchar_t** argv) {
     if (hr == S_OK) {
         test_private_instances(env, create, device);
         test_copy(env, device);
+        test_copy_slices(env, device);
+        test_copy_bc_volume(env, device);
+        test_stored_formats(env, device);
         test_compute(env, device);
         test_graphics(env, device);
         test_device_queries(env, device);
@@ -521,7 +566,9 @@ int wmain(int argc, wchar_t** argv) {
                "positive paths: no device or command-list error reported (%u device, %u list)",
                device.shell.device_errors, device.shell.list_errors);
     }
+    test_log_lines(env);
     test_retirement(env);
+    test_retire_handoff(env);
     test_runtime_backed(env);
     test_tiled(env);
     test_small_placement(env);

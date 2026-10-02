@@ -6,6 +6,7 @@
 # capability's column) and requires ('R'). DISPLAY is never allowed: the DDI defines it from version 107 on
 # (DirectX-Specs d3d/D3D12R9G9B9E5Format.md), and engine-ddi speaks 0092. Nor are CAPTURE and VIDEO_ENCODER, which
 # the list has no column for, or MULTIPLANE_OVERLAY, which that document groups with DISPLAY (all or nothing).
+# UAV_READS is allowed only on the formats DirectX-Specs d3d/UAVTypedLoad.md names (UAV_READS_FORMATS).
 import sys
 import xml.etree.ElementTree as ET
 
@@ -31,11 +32,24 @@ DDI = {
     'MULTISAMPLE_LOAD': [37], 'DECODER_OUTPUT': [40], 'VIDEO_PROCESSOR_OUTPUT': [42],
     'VIDEO_PROCESSOR_INPUT': [41], 'VERTEX_BUFFER': [2], 'UAV_WRITES': [23], 'BUFFER': [1],
     'OUTPUT_MERGER_LOGIC_OP': [19], 'SHADER_GATHER': [13], 'TILED': [44],
-    # Typed UAV loads: allowed wherever typed UAVs are (the D3D12 additional-formats set), required where the list
-    # requires them (R32_FLOAT, R32_UINT, R32_SINT).
+    # Typed UAV loads: allowed where typed UAVs are and the format is one of UAV_READS_FORMATS, required where the
+    # list requires them (R32_FLOAT, R32_UINT, R32_SINT).
     'UAV_READS': [23],
 }
 REQUIRED = {'MULTISAMPLE_RENDERTARGET': [33], 'UAV_READS': [25]}
+
+# The formats that may report UAV_READS, "all others should never set the _UAV_READS bit" (d3d/UAVTypedLoad.md,
+# CheckFormatSupport). The video formats the list allows typed UAVs on (AYUV, Y410, Y416, NV12, P010, P016, YUY2,
+# Y210, Y216, NV11) are not among them.
+UAV_READS_FORMATS = {
+    'R32G32B32A32_FLOAT', 'R32G32B32A32_UINT', 'R32G32B32A32_SINT', 'R16G16B16A16_FLOAT', 'R16G16B16A16_UNORM',
+    'R16G16B16A16_UINT', 'R16G16B16A16_SNORM', 'R16G16B16A16_SINT', 'R32G32_FLOAT', 'R32G32_UINT', 'R32G32_SINT',
+    'R10G10B10A2_UNORM', 'R10G10B10A2_UINT', 'R11G11B10_FLOAT', 'R8G8B8A8_UNORM', 'R8G8B8A8_UINT', 'R8G8B8A8_SNORM',
+    'R8G8B8A8_SINT', 'R16G16_FLOAT', 'R16G16_UNORM', 'R16G16_UINT', 'R16G16_SNORM', 'R16G16_SINT', 'R32_FLOAT',
+    'R32_UINT', 'R32_SINT', 'R8G8_UNORM', 'R8G8_UINT', 'R8G8_SNORM', 'R8G8_SINT', 'R16_FLOAT', 'R16_UNORM', 'R16_UINT',
+    'R16_SNORM', 'R16_SINT', 'R8_UNORM', 'R8_UINT', 'R8_SNORM', 'R8_SINT', 'A8_UNORM', 'B5G6R5_UNORM',
+    'B5G5R5A1_UNORM', 'B4G4R4A4_UNORM',
+}
 
 
 def main(path):
@@ -57,11 +71,14 @@ def main(path):
               '(CC-BY-4.0).\n')
     out.write('#pragma once\n\nnamespace engine_ddi {\n\n')
     out.write('struct FormatListEntry { DXGI_FORMAT format; UINT allowed; UINT required; };\n\n')
-    out.write('// The D3D12DDI_FORMAT_SUPPORT bits a format may and must carry at feature level 11_1.\n')
+    out.write('// The D3D12DDI_FORMAT_SUPPORT bits a format may and must carry at feature level 11_1, UAV_READS\n'
+              '// only on the formats d3d/UAVTypedLoad.md of the same repository names.\n')
     out.write('inline constexpr FormatListEntry kFormatList[] = {\n')
     for n, name, caps in table:
         allowed, required = [], []
         for bit, cols in DDI.items():
+            if bit == 'UAV_READS' and name not in UAV_READS_FORMATS:
+                continue
             if any(caps[c] in ('R', 'o', 'd') for c in cols):
                 allowed.append(bit)
             if any(caps[c] == 'R' for c in REQUIRED.get(bit, cols)):

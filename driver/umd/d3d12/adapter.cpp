@@ -12,6 +12,7 @@
 #include "ddi-0092-layout.h"
 #include "ddi-trace.h"
 #include <cstring>
+#include "stdio-log.h"
 namespace {
 using native12::Adapter;
 using native12::Device;
@@ -20,7 +21,7 @@ bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
         (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0092;
 }
 void trace(const char* operation,unsigned long long value=0) noexcept {
-    fprintf(stderr,"d3d12-ddi %s %llu\n",operation,value);fflush(stderr);
+    amdgpu_wddm_log::print("d3d12-ddi %s %llu\n",operation,value);amdgpu_wddm_log::flush();
 }
 SIZE_T APIENTRY device_size(D3D12DDI_HADAPTER h,const D3D12DDIARG_CALCPRIVATEDEVICESIZE* a) {
     if(!h.pDrvPrivate || !a) return 0;
@@ -68,44 +69,44 @@ HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
         if(a->Type==D3D12DDICAPS_TYPE_MEMORY_ARCHITECTURE && a->DataSize==sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041)){
             const auto& value=*static_cast<const D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041*>(a->pData);
             UINT node=0;if(a->pInfo)std::memcpy(&node,a->pInfo,sizeof(node));
-            std::fprintf(stderr,"{\"event\":\"ddi-caps-memory\",\"type\":1002,\"node\":%u,\"uma\":%u,\"io_coherent\":%u,\"cache_coherent\":%u,\"heap_serialization\":%u,\"resource_serialization\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            amdgpu_wddm_log::print("{\"event\":\"ddi-caps-memory\",\"type\":1002,\"node\":%u,\"uma\":%u,\"io_coherent\":%u,\"cache_coherent\":%u,\"heap_serialization\":%u,\"resource_serialization\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
                 node,unsigned(value.UMA),unsigned(value.IOCoherent),unsigned(value.CacheCoherent),
                 unsigned(value.HeapSerializationTier),unsigned(value.ResourceSerializationTier),now.QuadPart,GetCurrentThreadId());
         }
         if(a->Type==D3D12DDICAPS_TYPE_0022_TEXTURE_LAYOUT && !a->pInfo && a->DataSize==sizeof(D3D12DDI_TEXTURE_LAYOUT_CAPS_0026)){
             const auto& value=*static_cast<const D3D12DDI_TEXTURE_LAYOUT_CAPS_0026*>(a->pData);
-            std::fprintf(stderr,"{\"event\":\"ddi-caps-layout\",\"type\":1060,\"layouts\":%u,\"swizzles\":%u,\"standard64k\":%u,\"row_major\":%u,\"indexable\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            amdgpu_wddm_log::print("{\"event\":\"ddi-caps-layout\",\"type\":1060,\"layouts\":%u,\"swizzles\":%u,\"standard64k\":%u,\"row_major\":%u,\"indexable\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
                 value.DeviceDependentLayoutCount,value.DeviceDependentSwizzleCount,unsigned(value.Supports64KStandardSwizzle),
                 unsigned(value.SupportsRowMajorTexture),unsigned(value.IndexableSwizzlePatterns),now.QuadPart,GetCurrentThreadId());
         }
         if(a->Type==D3D12DDICAPS_TYPE_SHADER && a->DataSize==sizeof(D3D12DDI_SHADER_CAPS_0084)){
             UINT words[16]{};std::memcpy(words,a->pData,sizeof(words));
-            std::fprintf(stderr,"d3d12-caps shader0084 words=");
-            for(auto word:words)std::fprintf(stderr," %08x",word);
-            std::fprintf(stderr,"\n");
+            amdgpu_wddm_log::print("d3d12-caps shader0084 words=");
+            for(auto word:words)amdgpu_wddm_log::print(" %08x",word);
+            amdgpu_wddm_log::print("\n");
         }
         if(a->Type==D3D12DDICAPS_TYPE_0011_SHADER_MODELS && a->DataSize==sizeof(D3D12DDI_D3D12_SHADER_MODELS_DATA_0011)){
             const auto* models=static_cast<const D3D12DDI_D3D12_SHADER_MODELS_DATA_0011*>(a->pData);
             if(models->pNumShaderModelsSupported){
                 const UINT count=*models->pNumShaderModelsSupported;
-                std::fprintf(stderr,"d3d12-caps shader-models count=%u array=%u values=",count,unsigned(models->pShaderModelsSupported!=nullptr));
+                amdgpu_wddm_log::print("d3d12-caps shader-models count=%u array=%u values=",count,unsigned(models->pShaderModelsSupported!=nullptr));
                 if(models->pShaderModelsSupported && count<=64)
-                    for(UINT i=0;i<count;++i)std::fprintf(stderr," %08x",unsigned(models->pShaderModelsSupported[i]));
-                std::fprintf(stderr,"\n");
+                    for(UINT i=0;i<count;++i)amdgpu_wddm_log::print(" %08x",unsigned(models->pShaderModelsSupported[i]));
+                amdgpu_wddm_log::print("\n");
             }
         }
     }
-    fprintf(stderr,"d3d12-ddi GetCaps type=%u size=%u info_present=%u result=%08lx\n",
-        unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));fflush(stderr);
+    amdgpu_wddm_log::print("d3d12-ddi GetCaps type=%u size=%u info_present=%u result=%08lx\n",
+        unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));amdgpu_wddm_log::flush();
     if(native12::ddi_trace_enabled()){
-        std::fprintf(stderr,"{\"event\":\"ddi-caps\",\"type\":%u,\"data_size\":%u,\"info_present\":%u,\"status\":\"%08lx\"}\n",
+        amdgpu_wddm_log::print("{\"event\":\"ddi-caps\",\"type\":%u,\"data_size\":%u,\"info_present\":%u,\"status\":\"%08lx\"}\n",
             unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));
         if(a->Type==D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS && a->pInfo && a->DataSize==sizeof(D3D12DDI_ROW_MAJOR_LAYOUT_CAPS)){
             UINT info[2]{};std::memcpy(info,a->pInfo,sizeof(info));
-            std::fprintf(stderr,"{\"event\":\"ddi-layout-set\",\"layout\":%u,\"unit\":%u,\"status\":\"%08lx\"}\n",
+            amdgpu_wddm_log::print("{\"event\":\"ddi-layout-set\",\"layout\":%u,\"unit\":%u,\"status\":\"%08lx\"}\n",
                 info[0],info[1],static_cast<unsigned long>(hr));
         }
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     native12::ddi_trace_end("pfnGetCaps",trace_id,hr);return hr;
 }
@@ -115,8 +116,8 @@ HRESULT APIENTRY optional_tables(D3D12DDI_HADAPTER h,UINT32* count,D3D12DDI_TABL
 }
 HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER h,D3D12DDI_TABLE_TYPE type,void* output,SIZE_T size,UINT number,D3D12DDI_HRTTABLE table) {
     HRESULT hr=h.pDrvPrivate?native12::fill_native_tables(*static_cast<Adapter*>(h.pDrvPrivate),type,output,size,number,table):E_INVALIDARG;
-    fprintf(stderr,"d3d12-ddi FillDDITable type=%u size=%llu number=%u runtime_table_present=%u result=%08lx\n",
-        unsigned(type),static_cast<unsigned long long>(size),number,unsigned(table.handle!=nullptr),static_cast<unsigned long>(hr));fflush(stderr);
+    amdgpu_wddm_log::print("d3d12-ddi FillDDITable type=%u size=%llu number=%u runtime_table_present=%u result=%08lx\n",
+        unsigned(type),static_cast<unsigned long long>(size),number,unsigned(table.handle!=nullptr),static_cast<unsigned long>(hr));amdgpu_wddm_log::flush();
     return hr;
 }
 void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {

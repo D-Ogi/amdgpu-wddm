@@ -11,7 +11,7 @@
 #include <cstring>
 #include <cstdint>
 #include <algorithm>
-#if defined(INTERACTIVE_GAMELOAD) || defined(INTERACTIVE_RESETCHURN)
+#if defined(INTERACTIVE_GAMELOAD) || defined(INTERACTIVE_RESETCHURN) || defined(INTERACTIVE_RECORDBENCH)
 #include <atomic>
 #include <thread>
 #include <utility>
@@ -78,7 +78,7 @@ struct Session {
     ComPtr<IUnknown> extra[12];  // objects of a build variant, released with the rest
     // detached: a thread that may still call event() outlived its command; no further command runs after it.
     unsigned sequence{};bool copy_success{},pending{},io_failed{},detached{};
-    SRWLOCK trace_lock=SRWLOCK_INIT;  // event() is also called from the worker threads of -GameLoad and -ResetChurn
+    SRWLOCK trace_lock=SRWLOCK_INIT;  // event() is also called from the worker threads of -GameLoad, -ResetChurn and -RecordBench
     // sequence and io_failed are shared with those threads: the command loop writes and reads them under the lock.
     void set_sequence(unsigned value){AcquireSRWLockExclusive(&trace_lock);sequence=value;ReleaseSRWLockExclusive(&trace_lock);}
     bool trace_failed(){AcquireSRWLockShared(&trace_lock);const bool failed=io_failed;ReleaseSRWLockShared(&trace_lock);return failed;}
@@ -225,7 +225,7 @@ struct Session {
 #if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) + \
     defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) + defined(INTERACTIVE_RAYSTATE) + \
     defined(INTERACTIVE_RAYGROW) + defined(INTERACTIVE_RAYCOLLECTION) + defined(INTERACTIVE_GAMELOAD) + \
-    defined(INTERACTIVE_RESETCHURN) > 1
+    defined(INTERACTIVE_RESETCHURN) + defined(INTERACTIVE_RECORDBENCH) > 1
 #error one variant of the copy verb per build
 #endif
 #ifdef INTERACTIVE_DRAW
@@ -252,6 +252,9 @@ struct Session {
 #endif
 #ifdef INTERACTIVE_RESETCHURN
 #include "interactive-resetchurn.h"
+#endif
+#ifdef INTERACTIVE_RECORDBENCH
+#include "interactive-recordbench.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
@@ -313,6 +316,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=gameload_run(session);break;
 #elif defined(INTERACTIVE_RESETCHURN)
         case Verb::Copy:hr=resetchurn_run(session);break;
+#elif defined(INTERACTIVE_RECORDBENCH)
+        case Verb::Copy:hr=recordbench_run(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif

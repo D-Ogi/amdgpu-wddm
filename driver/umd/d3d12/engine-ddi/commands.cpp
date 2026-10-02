@@ -10,6 +10,7 @@
 #include <memory>
 #include <type_traits>
 #include "internal.h"
+#include "replay.h"
 
 namespace engine_ddi {
 
@@ -53,6 +54,7 @@ void APIENTRY destroy_pool(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDPOOL_0040 h
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Pool);                  // pending calls of lists recording into these allocators
     for (ID3D12CommandAllocator*& a : p->allocators) {
         if (a) a->Release();
         a = nullptr;
@@ -69,6 +71,7 @@ void APIENTRY reset_pool(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDPOOL_0040 h) 
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Pool);
     for (ID3D12CommandAllocator* a : p->allocators) {
         if (!a) continue;
         HRESULT hr = a->Reset();
@@ -164,14 +167,17 @@ void APIENTRY destroy_list(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDLIST h) {
         c->report(E_INVALIDARG);
         return;
     }
+    drain_list(l, Drain::Destroy);
     release_engine(l->h);
     poison(l->h);
     c->live.fetch_sub(1);
 }
 
+// With replay on, the list's pending calls run first, so the engine's Close result is the list's.
 void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     CommandListRecord* l = list_of(h, "CloseCommandList");
     if (!l) return;
+    drain_list(l, Drain::Close);
     HRESULT hr = l->list()->Close();
     // A list whose Close failed is not a closed list: it stays what it was.
     if (FAILED(hr)) l->h.device->report_list(l->rt, hr);
@@ -181,6 +187,7 @@ void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
 void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMANDLIST_0040* args) {
     CommandListRecord* l = list_of(h, "ResetCommandList");
     if (!l) return;
+    drain_list(l, Drain::Reset);
     DeviceContext* c = l->h.device;
     auto* r = args ? record_of<CommandRecorderRecord>(args->hDrvCommandRecorder.pDrvPrivate, Tag::CommandRecorder, c)
                    : nullptr;
@@ -224,37 +231,48 @@ void APIENTRY set_predication(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOURCE hres, 
     if (!l) return;
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, l->h.device);
     if (hres.pDrvPrivate && !r) return l->h.device->report_list(l->rt, E_INVALIDARG);
-    l->list()->SetPredication(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr, r ? offset : 0,
-                              static_cast<D3D12_PREDICATION_OP>(op));
+    ID3D12Resource* resource = r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr;
+    const UINT64 at = r ? offset : 0;
+    record(l, [=](ID3D12GraphicsCommandList* e) {
+        e->SetPredication(resource, at, static_cast<D3D12_PREDICATION_OP>(op));
+    });
 }
 
+// The interface is queried on the calling thread; a deferred call releases it on the worker (replay.h, R2).
 void APIENTRY om_set_depth_bounds(D3D12DDI_HCOMMANDLIST h, FLOAT low, FLOAT high) {
     CommandListRecord* l = list_of(h, "OMSetDepthBounds");
     if (!l) return;
-    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
-        l1->OMSetDepthBounds(low, high);
-        l1->Release();
-    }
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l1->OMSetDepthBounds(low, high);
+            l1->Release();
+        });
 }
 
+// NumSamplesPerPixel x NumPixels positions (the API's array size).
 void APIENTRY set_sample_positions(D3D12DDI_HCOMMANDLIST h, UINT per_pixel, UINT pixels,
                                    D3D12DDI_SAMPLE_POSITION* positions) {
     static_assert(sizeof(D3D12DDI_SAMPLE_POSITION) == sizeof(D3D12_SAMPLE_POSITION), "sample position");
     CommandListRecord* l = list_of(h, "SetSamplePositions");
     if (!l) return;
-    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
-        l1->SetSamplePositions(per_pixel, pixels, reinterpret_cast<D3D12_SAMPLE_POSITION*>(positions));
-        l1->Release();
-    }
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const D3D12_SAMPLE_POSITION* p) {
+                   l1->SetSamplePositions(per_pixel, pixels, const_cast<D3D12_SAMPLE_POSITION*>(p));
+                   l1->Release();
+               },
+               in(reinterpret_cast<const D3D12_SAMPLE_POSITION*>(positions),
+                  positions ? size_t{per_pixel} * pixels : 0));
 }
 
 void APIENTRY set_view_instance_mask(D3D12DDI_HCOMMANDLIST h, UINT mask) {
     CommandListRecord* l = list_of(h, "SetViewInstanceMask");
     if (!l) return;
-    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
-        l1->SetViewInstanceMask(mask);
-        l1->Release();
-    }
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l1->SetViewInstanceMask(mask);
+            l1->Release();
+        });
 }
 
 // ---- L15 pfnExecuteBundle ---------------------------------------------------------------------------------------
@@ -271,6 +289,9 @@ void APIENTRY execute_bundle(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HCOMMANDLIST hbun
                  l->recording ? 1 : 0, !b ? "unknown" : b->recording ? "recording" : "not a bundle");
         return l->h.device->report_list(l->rt, E_INVALIDARG);
     }
+    // With replay on, both lists' pending calls run first, and the engine call is made here.
+    drain_list(b, Drain::Bundle);
+    drain_list(l, Drain::Bundle);
     l->list()->ExecuteBundle(b->list());
 }
 
@@ -304,11 +325,14 @@ void APIENTRY rs_set_shading_rate(D3D12DDI_HCOMMANDLIST h, D3D12DDI_SHADING_RATE
     static_assert(sizeof(D3D12DDI_SHADING_RATE_COMBINER_0062) == sizeof(D3D12_SHADING_RATE_COMBINER), "combiner");
     CommandListRecord* l = list_of(h, "RSSetShadingRate");
     if (!l) return;
-    if (auto* l5 = list_as<ID3D12GraphicsCommandList5>(l)) {
-        l5->RSSetShadingRate(static_cast<D3D12_SHADING_RATE>(rate),
-                             reinterpret_cast<const D3D12_SHADING_RATE_COMBINER*>(combiners));
-        l5->Release();
-    }
+    if (auto* l5 = list_as<ID3D12GraphicsCommandList5>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const D3D12_SHADING_RATE_COMBINER* k) {
+                   l5->RSSetShadingRate(static_cast<D3D12_SHADING_RATE>(rate), k);
+                   l5->Release();
+               },
+               in(reinterpret_cast<const D3D12_SHADING_RATE_COMBINER*>(combiners),
+                  combiners ? D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT : 0));
 }
 
 void APIENTRY rs_set_shading_rate_image(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOURCE hres) {
@@ -316,10 +340,12 @@ void APIENTRY rs_set_shading_rate_image(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOU
     if (!l) return;
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, l->h.device);
     if (hres.pDrvPrivate && !r) return l->h.device->report_list(l->rt, E_INVALIDARG);
-    if (auto* l5 = list_as<ID3D12GraphicsCommandList5>(l)) {
-        l5->RSSetShadingRateImage(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr);
-        l5->Release();
-    }
+    ID3D12Resource* image = r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr;
+    if (auto* l5 = list_as<ID3D12GraphicsCommandList5>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l5->RSSetShadingRateImage(image);
+            l5->Release();
+        });
 }
 } // namespace
 
@@ -337,8 +363,15 @@ static_assert(D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW == static_cast<int>(D3D12_IND
               D3D12DDI_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW ==
                   static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW) &&
               D3D12DDI_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW ==
-                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW),
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT),
               "indirect argument types");
+// The argument buffer of a DISPATCH_RAYS signature holds the application's D3D12_DISPATCH_RAYS_DESC records (the
+// API layout, which D3D12DDIARG_DISPATCH_RAYS_0054 matches, asserted at DispatchRays below); the engine reads them
+// as they are.
 
 SIZE_T APIENTRY calc_command_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001*) {
     return sizeof(CommandSignatureRecord);
@@ -347,6 +380,14 @@ SIZE_T APIENTRY calc_command_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREAT
 // The engine refuses a root signature that no argument needs as well as a missing one, and the DDI does not say
 // whether the runtime sends the handle for a signature of draws alone: it is passed on only when an argument
 // changes root arguments.
+// The runtime removes the device when this DDI fails with E_NOTIMPL (measured on the lab: a DISPATCH_RAYS argument
+// answered E_NOTIMPL, CreateCommandSignature returned DXGI_ERROR_DEVICE_REMOVED and the removed reason was
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR). Every argument type of the DDI is therefore translated, mesh dispatch and the
+// incrementing constant (ExecuteIndirectTier 1_1, which caps.cpp does not answer) included, and the engine decides.
+// A type this shell does not know and a signature the engine refuses are answered with E_OUTOFMEMORY, the one
+// failure a D3D10/11 create function may report without it being critical (windows-driver-docs display
+// handling-errors.md); that the D3D12 runtime passes it on without removing the device is an INFERENCE, not
+// measured. Both cases leave a log line.
 HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001* args,
                                           D3D12DDI_HCOMMANDSIGNATURE h) {
     DeviceContext* c = resolve(device);
@@ -364,6 +405,8 @@ HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DD
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW:
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH:
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW:
             break;
         case D3D12DDI_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW:
@@ -386,8 +429,15 @@ HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DD
             out[i].UnorderedAccessView.RootParameterIndex = in.UnorderedAccessView.RootParameterIndex;
             rooted = true;
             break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT:
+            out[i].IncrementingConstant = {in.IncrementingConstant.RootParameterIndex,
+                                           in.IncrementingConstant.DestOffsetIn32BitValues};
+            rooted = true;
+            break;
         default:
-            return E_NOTIMPL;                           // ray and mesh dispatch, incrementing constant
+            log_line("command signature: argument %u has the unknown type %d: E_OUTOFMEMORY", i,
+                     static_cast<int>(in.Type));
+            return E_OUTOFMEMORY;
         }
     }
     ID3D12RootSignature* root = nullptr;
@@ -400,8 +450,12 @@ HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DD
     ID3D12CommandSignature* signature = nullptr;
     const HRESULT hr = c->device->CreateCommandSignature(&desc, root, __uuidof(ID3D12CommandSignature),
                                                          reinterpret_cast<void**>(&signature));
-    if (FAILED(hr)) return hr;
-    if (!signature) return E_UNEXPECTED;
+    if (FAILED(hr) || !signature) {
+        if (hr != E_OUTOFMEMORY)
+            log_line("command signature: the engine refused %u arguments, stride %u (hr %08lx): E_OUTOFMEMORY",
+                     args->NumArgumentDescs, args->ByteStride, static_cast<unsigned long>(hr));
+        return E_OUTOFMEMORY;
+    }
     new (h.pDrvPrivate) CommandSignatureRecord{{Tag::CommandSignature, 0, signature, c}, args->ByteStride};
     c->live.fetch_add(1);
     return S_OK;
@@ -415,6 +469,7 @@ void APIENTRY destroy_command_signature(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMA
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Destroy);
     release_engine(r->h);
     poison(r->h);
     c->live.fetch_sub(1);
@@ -431,10 +486,14 @@ void APIENTRY execute_indirect(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HCOMMANDSIG
     void* count_handle =count.BaseAddress.UMD.hResource.pDrvPrivate;
     auto* n = count_handle ? record_of<ResourceRecord>(count_handle, Tag::Resource, c) : nullptr;
     if (!s || !a || (count_handle && !n)) return c->report_list(l->rt, E_INVALIDARG);
-    l->list()->ExecuteIndirect(static_cast<ID3D12CommandSignature*>(s->h.engine), max_count,
-                               static_cast<ID3D12Resource*>(a->h.engine), arguments.BaseAddress.UMD.Offset,
-                               n ? static_cast<ID3D12Resource*>(n->h.engine) : nullptr,
-                               n ? count.BaseAddress.UMD.Offset : 0);
+    auto* signature = static_cast<ID3D12CommandSignature*>(s->h.engine);
+    auto* argument_buffer = static_cast<ID3D12Resource*>(a->h.engine);
+    const UINT64 argument_offset = arguments.BaseAddress.UMD.Offset;
+    ID3D12Resource* count_buffer = n ? static_cast<ID3D12Resource*>(n->h.engine) : nullptr;
+    const UINT64 count_offset = n ? count.BaseAddress.UMD.Offset : 0;
+    record(l, [=](ID3D12GraphicsCommandList* e) {
+        e->ExecuteIndirect(signature, max_count, argument_buffer, argument_offset, count_buffer, count_offset);
+    });
 }
 
 // ---- Resolves (graphics table) -------------------------------------------------------------------------------------
@@ -446,8 +505,11 @@ void APIENTRY resolve_subresource(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURC
     auto* d = record_of<ResourceRecord>(dst.pDrvPrivate, Tag::Resource, c);
     auto* s = record_of<ResourceRecord>(src.pDrvPrivate, Tag::Resource, c);
     if (!d || !s) return c->report_list(l->rt, E_INVALIDARG);
-    l->list()->ResolveSubresource(static_cast<ID3D12Resource*>(d->h.engine), dst_subresource,
-                                  static_cast<ID3D12Resource*>(s->h.engine), src_subresource, format);
+    auto* dst_resource = static_cast<ID3D12Resource*>(d->h.engine);
+    auto* src_resource = static_cast<ID3D12Resource*>(s->h.engine);
+    record(l, [=](ID3D12GraphicsCommandList* e) {
+        e->ResolveSubresource(dst_resource, dst_subresource, src_resource, src_subresource, format);
+    });
 }
 
 void APIENTRY resolve_subresource_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst, UINT dst_subresource,
@@ -466,12 +528,16 @@ void APIENTRY resolve_subresource_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_H
     auto* d = record_of<ResourceRecord>(dst.pDrvPrivate, Tag::Resource, c);
     auto* s = record_of<ResourceRecord>(src.pDrvPrivate, Tag::Resource, c);
     if (!d || !s) return c->report_list(l->rt, E_INVALIDARG);
-    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
-        l1->ResolveSubresourceRegion(static_cast<ID3D12Resource*>(d->h.engine), dst_subresource, x, y,
-                                     static_cast<ID3D12Resource*>(s->h.engine), src_subresource, rect, format,
-                                     static_cast<D3D12_RESOLVE_MODE>(mode));
-        l1->Release();
-    }
+    auto* dst_resource = static_cast<ID3D12Resource*>(d->h.engine);
+    auto* src_resource = static_cast<ID3D12Resource*>(s->h.engine);
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const D3D12DDI_RECT* r) {
+                   l1->ResolveSubresourceRegion(dst_resource, dst_subresource, x, y, src_resource, src_subresource,
+                                                const_cast<D3D12_RECT*>(r), format, static_cast<D3D12_RESOLVE_MODE>(mode));
+                   l1->Release();
+               },
+               in(rect, rect ? 1 : 0));
 }
 
 // ---- Acceleration structures (D108, L60-L62) and ray dispatch (L63, L64) ------------------------------------------
@@ -720,13 +786,27 @@ void APIENTRY build_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
     desc.Inputs = *api(&args->Inputs);
     desc.SourceAccelerationStructureData = args->SourceAccelerationStructureData;
     desc.ScratchAccelerationStructureData = args->ScratchAccelerationStructureData;
-    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
-        l4->BuildRaytracingAccelerationStructure(&desc, args->NumPostbuildInfoDescs,
-                                                 args->NumPostbuildInfoDescs
-                                                     ? reinterpret_cast<const ApiPostbuild*>(args->pPostbuildInfoDescs)
-                                                     : nullptr);
-        l4->Release();
-    }
+    // A bottom level's geometry descriptions are CPU memory the engine reads at this call (an array, or an array of
+    // pointers); the call gets them through the arguments below, a top level's instances stay a GPU address.
+    const bool bottom = desc.Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    const bool pointers = desc.Inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS;
+    const UINT geometries = bottom ? desc.Inputs.NumDescs : 0;
+    const UINT postbuild = args->NumPostbuildInfoDescs;
+    using Geometry = D3D12_RAYTRACING_GEOMETRY_DESC;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const Geometry* array, const Geometry* const* gathered,
+                   const ApiPostbuild* info) {
+                   D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d = desc;
+                   if (bottom && pointers) d.Inputs.ppGeometryDescs = gathered;
+                   else if (bottom) d.Inputs.pGeometryDescs = array;
+                   l4->BuildRaytracingAccelerationStructure(&d, postbuild, info);
+                   l4->Release();
+               },
+               in(bottom && !pointers ? desc.Inputs.pGeometryDescs : nullptr, bottom && !pointers ? geometries : 0),
+               Gather<Geometry>{bottom && pointers ? desc.Inputs.ppGeometryDescs : nullptr,
+                                bottom && pointers ? geometries : 0},
+               in(postbuild ? reinterpret_cast<const ApiPostbuild*>(args->pPostbuildInfoDescs) : nullptr, postbuild));
 }
 
 // L61. With no source structure there is nothing to write, and the engine is not called.
@@ -743,11 +823,14 @@ void APIENTRY emit_postbuild_info(D3D12DDI_HCOMMANDLIST h,
         return;
     const ApiPostbuild desc{args->Desc.DestBuffer,
                             static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_TYPE>(args->Desc.InfoType)};
-    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
-        l4->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, args->NumSourceAccelerationStructures,
-                                                             args->pSourceAccelerationStructureData);
-        l4->Release();
-    }
+    const UINT sources = args->NumSourceAccelerationStructures;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const D3D12_GPU_VIRTUAL_ADDRESS* source) {
+                   l4->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, sources, source);
+                   l4->Release();
+               },
+               in(args->pSourceAccelerationStructureData, sources));
 }
 
 // L62. The engine copies by clone and compaction only (acceleration_structure.c, convert_copy_mode) and drops the
@@ -770,11 +853,14 @@ void APIENTRY copy_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
         }
     }
     if (refused(l, kSlot, hr) || !args) return;
-    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
-        l4->CopyRaytracingAccelerationStructure(args->DestAccelerationStructureData, args->SourceAccelerationStructureData,
-                                                static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE>(args->Mode));
-        l4->Release();
-    }
+    const D3D12_GPU_VIRTUAL_ADDRESS dst = args->DestAccelerationStructureData;
+    const D3D12_GPU_VIRTUAL_ADDRESS src = args->SourceAccelerationStructureData;
+    const auto mode = static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE>(args->Mode);
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l4->CopyRaytracingAccelerationStructure(dst, src, mode);
+            l4->Release();
+        });
 }
 
 // L63. A live ray tracing pipeline of the list's device (state-objects.cpp); a collection, an inert record or another
@@ -786,23 +872,28 @@ void APIENTRY set_pipeline_state1(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HSTATEOBJECT
     const auto* r = record_of<StateObjectRecord>(so.pDrvPrivate, Tag::StateObject, l->h.device);
     const bool usable = r && r->properties && r->executable;
     if (refused(l, kSlot, usable ? S_OK : E_INVALIDARG) || !usable) return;
-    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
-        l4->SetPipelineState1(static_cast<ID3D12StateObject*>(r->h.engine));
-        l4->Release();
-    }
+    auto* state_object = static_cast<ID3D12StateObject*>(r->h.engine);
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l, [=](ID3D12GraphicsCommandList*) {
+            l4->SetPipelineState1(state_object);
+            l4->Release();
+        });
 }
 
-// L64. The DDI argument is the API description (asserted above). Indirect dispatch goes through ExecuteIndirect,
-// whose command signatures refuse the ray dispatch argument.
+// L64. The DDI argument is the API description (asserted above). Indirect dispatch goes through ExecuteIndirect
+// with a DISPATCH_RAYS command signature, passed to the engine like the draw and dispatch signatures.
 void APIENTRY dispatch_rays(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_DISPATCH_RAYS_0054* args) {
     constexpr const char* kSlot = "DispatchRays";
     CommandListRecord* l = list_of(h, kSlot);
     if (!l) return;
     if (refused(l, kSlot, args ? S_OK : E_INVALIDARG) || !args) return;
-    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
-        l4->DispatchRays(reinterpret_cast<const ApiDispatchRays*>(args));
-        l4->Release();
-    }
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+        record(l,
+               [=](ID3D12GraphicsCommandList*, const ApiDispatchRays* d) {
+                   l4->DispatchRays(d);
+                   l4->Release();
+               },
+               in(reinterpret_cast<const ApiDispatchRays*>(args), 1));
 }
 } // namespace
 

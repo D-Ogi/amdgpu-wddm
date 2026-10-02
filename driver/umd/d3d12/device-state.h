@@ -8,6 +8,7 @@
 namespace native12 {
 struct AdapterCapsOwner;
 class DeviceEngine;
+struct RecordingBinding;
 struct Adapter {
     D3D12DDI_HRTADAPTER runtime;
     D3DDDI_ADAPTERCALLBACKS callbacks;
@@ -32,6 +33,11 @@ struct Device {
     QueueRegistry queues;
     MemoryRegistry memory;
     DeviceEngine* engine{};
+    // ddi_trace_mode() of this device, read once when its engine is created (device-engine.cpp).
+    int trace_mode{};
+    // The recording binding of this device's command lists (RecordingScope, device-engine.h), or null for the
+    // full entry. Fixed while the engine is open: set after it opened, cleared before it closes.
+    const RecordingBinding* recording{};
     std::atomic<bool> lost{false};
     // The queue domain: one queue operation of this device at a time (QueueDomainScope).
     SRWLOCK queue_domain=SRWLOCK_INIT;

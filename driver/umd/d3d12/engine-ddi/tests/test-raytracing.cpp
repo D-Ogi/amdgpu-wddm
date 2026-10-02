@@ -80,7 +80,7 @@ HRESULT create_structure_buffer(Env& env, Device& device, UINT64 size, Buffer& o
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
-    if (!info.ResourceDataSize) return E_FAIL;
+    if (!info.ResourceDataSize || info.ResourceDataSize == UINT64_MAX) return E_FAIL;
     const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, D3D12_HEAP_TYPE_DEFAULT);
     D3D12DDIARG_CREATEHEAP_0001 heap{};
     heap.ByteSize = info.ResourceDataSize;
@@ -539,6 +539,14 @@ void test_raytracing(Env& env) {
 //      and the parent's DDI object is destroyed before the child is used: a dispatch through a table of the parent's
 //      raygen and hit group identifiers and miss_far's writes its own constant on every hit and miss_far's 3 on every
 //      miss, the 64 words exact.
+//   9. Indirect DispatchRays (L64 through ExecuteIndirect): a command signature of one DISPATCH_RAYS argument, stride
+//      128, no root signature, created S_OK. Two records over the first pipeline's table, 8x4 then 8x8, and the count
+//      words 1, 2, 0 and 3; six variants (max 1; max 2 with count 1, 2, 0 or 3; max 2 without a count buffer), each
+//      into its own prefilled result, first from the UPLOAD buffer with no INDIRECT_ARGUMENT transition before them,
+//      then from a DEFAULT copy behind one. Every record up to the smaller of count and maximum is traced: rows 0 to 3
+//      for max 1 and for count 1, none for count 0, all for the rest, the other rows at the prefill. One record without
+//      a count buffer must be exact on any engine; an engine that traces the first record alone and nothing with a
+//      count buffer (vkd3d-proton upstream) gives one SKIP line instead.
 // The descriptions are copied by the harness's state object observer immediately before the engine's
 // CreateStateObject or AddToStateObject (internal.h, harness_set_state_object_observer; the shell's DLL has no
 // observer).
@@ -577,6 +585,46 @@ static_assert(kRaygenOffset % kTableAlignment == 0 && kMissOffset % kTableAlignm
                   kTable7 + kHitOffset + kHitStride <= kUploadBytes,
               "shader table layout");
 constexpr UINT64 kPipelineOutBytes = 7 * 256;      // one 64-word result per pipeline, 256 bytes apart
+// The indirect dispatches (9): a command signature of one DISPATCH_RAYS argument, its stride above the record's 104
+// bytes. Their UPLOAD buffer: the two records kRaysStride apart, the count words at kCountsOffset (the first
+// kIndirectArgsBytes bytes, which the list also copies into a DEFAULT buffer), and the output's prefill at
+// kPrefillOffset. In the output, one 64-word result per variant and argument buffer, 256 bytes apart, the UPLOAD
+// buffer's first.
+constexpr UINT kRaysStride = 128;
+constexpr UINT32 kCounts[] = {1, 2, 0, 3};          // the count words; 3 is above every maximum count here
+constexpr UINT64 kCountsOffset = 2 * UINT64{kRaysStride}, kIndirectArgsBytes = kCountsOffset + sizeof(kCounts);
+constexpr UINT kIndirectVariants = 6, kIndirectSections = 2 * kIndirectVariants;
+constexpr UINT64 kIndirectOutBytes = kIndirectSections * 256, kPrefillOffset = 512,
+                 kIndirectUploadBytes = kPrefillOffset + kIndirectOutBytes;
+constexpr UINT32 kPrefill = 0xB0253CEEu;            // what a word no ray wrote holds
+constexpr UINT kNoCount = UINT_MAX;
+// A variant: the maximum count, the index of the count word it names in kCounts (kNoCount: no count buffer), the
+// rows its result holds when every record up to the smaller of the count and the maximum is traced (the first record
+// is 8x4, the second 8x8), and the rows an engine that traces the first record alone and nothing with a count buffer
+// writes (vkd3d-proton upstream).
+struct IndirectVariant {
+    UINT max_count;
+    UINT count;
+    UINT rows;
+    UINT rows_first_only;
+};
+constexpr IndirectVariant kIndirect[kIndirectVariants] = {
+    {1, kNoCount, kGrid / 2, kGrid / 2},    // max 1, no count buffer
+    {2, 0, kGrid / 2, 0},                   // max 2, count 1
+    {2, 1, kGrid, 0},                       // max 2, count 2
+    {2, kNoCount, kGrid, kGrid / 2},        // max 2, no count buffer
+    {2, 2, 0, 0},                           // max 2, count 0: nothing
+    {2, 3, kGrid, 0},                       // max 2, count 3: both records
+};
+static_assert(sizeof(D3D12_DISPATCH_RAYS_DESC) == 104 && kRaysStride > sizeof(D3D12_DISPATCH_RAYS_DESC) &&
+                  kRaysStride % sizeof(UINT32) == 0 && kIndirectArgsBytes <= kPrefillOffset && kPrefill != kMiss &&
+                  kPrefill != kRecordValue,
+              "indirect dispatch layout");
+
+// The 64 words of an indirect result whose first rows rows the first pipeline wrote, the rest at the prefill.
+void rows_written(const UINT32* expected, UINT rows, UINT32* out) {
+    for (UINT i = 0; i < kWords; ++i) out[i] = i < rows * kGrid ? expected[i] : kPrefill;
+}
 constexpr LPCWSTR kRaygenMangled = L"\x01?raygen@@YAXXZ";
 constexpr LPCWSTR kMissMangled = L"\x01?miss@@YAXUPayload@@@Z";
 constexpr LPCWSTR kMissFarMangled = L"\x01?miss_far@@YAXUPayload@@@Z";
@@ -1419,6 +1467,57 @@ void test_raytracing_pipeline(Env& env) {
     }
     env.core.pfnUnmapHeap(device.h(), upload.hheap());
 
+    // 9, the command signature of one DISPATCH_RAYS argument (no root signature: it changes no root argument) and the
+    // indirect dispatches' buffers. Two records over the first pipeline's table, the first 8x4 (rows 0 to 3), the
+    // second 8x8; where both write, they write the same word. The stride's padding is zero: an engine stepping 104
+    // bytes would read the second record's dimensions from zero words and launch nothing.
+    const D3D12DDI_INDIRECT_ARGUMENT_DESC rays_argument{D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS, {}};
+    const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 rays_signature_args{kRaysStride, 1, &rays_argument,
+                                                                       D3D12DDI_HROOTSIGNATURE{}, 1};
+    void* rays_signature_storage =
+        env.storage.alloc(env.core.pfnCalcPrivateCommandSignatureSize(device.h(), &rays_signature_args));
+    const D3D12DDI_HCOMMANDSIGNATURE hrays_signature{rays_signature_storage};
+    const HRESULT hr_rays_signature =
+        rays_signature_storage ? env.core.pfnCreateCommandSignature(device.h(), &rays_signature_args, hrays_signature)
+                               : E_OUTOFMEMORY;
+    Buffer indirect_upload, indirect_args, indirect_out, indirect_back;
+    const HRESULT hr_indirect[] = {
+        create_buffer(env, device, HeapKind::Upload, kIndirectUploadBytes, false, indirect_upload),
+        create_buffer(env, device, HeapKind::Default, kIndirectArgsBytes, false, indirect_args),
+        create_buffer(env, device, HeapKind::Default, kIndirectOutBytes, true, indirect_out),
+        create_buffer(env, device, HeapKind::Readback, kIndirectOutBytes, false, indirect_back),
+    };
+    bool indirect_ready = hr_rays_signature == S_OK && !device.shell.device_errors;
+    for (HRESULT h : hr_indirect) indirect_ready = indirect_ready && h == S_OK;
+    const D3D12DDI_GPU_VIRTUAL_ADDRESS indirect_out_va =
+        indirect_ready ? env.core.pfnCheckResourceVirtualAddress(device.h(), indirect_out.hres()) : 0;
+    void* indirect_cpu = nullptr;
+    indirect_ready = indirect_ready && indirect_out_va &&
+                     env.core.pfnMapHeap(device.h(), indirect_upload.hheap(), &indirect_cpu) == S_OK && indirect_cpu;
+    if (indirect_ready) {
+        auto* p = static_cast<BYTE*>(indirect_cpu);
+        std::memset(p, 0, static_cast<size_t>(kIndirectUploadBytes));
+        for (UINT r = 0; r < 2; ++r) {
+            D3D12_DISPATCH_RAYS_DESC record{};
+            record.RayGenerationShaderRecord = {upload_va + kRaygenOffset, kRecordBytes};
+            record.MissShaderTable = {upload_va + kMissOffset, kRecordBytes, kRecordBytes};
+            record.HitGroupTable = {upload_va + kHitOffset, kHitStride, kHitStride};
+            record.Width = kGrid;
+            record.Height = r ? kGrid : kGrid / 2;
+            record.Depth = 1;
+            std::memcpy(p + r * kRaysStride, &record, sizeof(record));
+        }
+        std::memcpy(p + kCountsOffset, kCounts, sizeof(kCounts));
+        for (UINT64 at = kPrefillOffset; at < kIndirectUploadBytes; at += sizeof(UINT32))
+            std::memcpy(p + at, &kPrefill, sizeof(UINT32));
+        env.core.pfnUnmapHeap(device.h(), indirect_upload.hheap());
+    }
+    checkf(indirect_ready,
+           "raytracing pipeline: CreateCommandSignature of one DISPATCH_RAYS argument, stride %u, no root signature: "
+           "S_OK; two records, the counts and the prefill in an UPLOAD buffer, a DEFAULT buffer for their copy, an "
+           "output and a READBACK buffer (hr %08lx)",
+           kRaysStride, static_cast<unsigned long>(hr_rays_signature));
+
     BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};
     engine_ddi::EngineQueue* queue = nullptr;
     hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
@@ -1496,6 +1595,50 @@ void test_raytracing_pipeline(Env& env) {
         later_rays.HitGroupTable.StartAddress += later_tables[k].table;
         t.pfnDispatchRays(rec.hlist(), &later_rays);
     }
+    // 9, the indirect dispatches: the first pipeline again, each variant into its own result of the prefilled output,
+    // first over the UPLOAD records with no INDIRECT_ARGUMENT transition before them in the list (an engine may patch
+    // them ahead of the list), then over their DEFAULT copy behind one (patched in the list, between its commands).
+    if (indirect_ready) {
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_copy[] = {
+            transition(indirect_out, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST),
+            transition(indirect_args, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST),
+        };
+        t.pfnResourceBarrier(rec.hlist(), 2, to_copy);
+        D3D12DDIARG_BUFFER_PLACEMENT to{}, from{};
+        to.BaseAddress.UMD = {indirect_out.hres(), 0};
+        from.BaseAddress.UMD = {indirect_upload.hres(), kPrefillOffset};
+        t.pfnCopyBufferRegion(rec.hlist(), to, from, kIndirectOutBytes);
+        to.BaseAddress.UMD = {indirect_args.hres(), 0};
+        from.BaseAddress.UMD = {indirect_upload.hres(), 0};
+        t.pfnCopyBufferRegion(rec.hlist(), to, from, kIndirectArgsBytes);
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_uav =
+            transition(indirect_out, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS);
+        t.pfnResourceBarrier(rec.hlist(), 1, &to_uav);
+        t.pfnSetPipelineState1(rec.hlist(), hso);
+        for (UINT source = 0; source < 2; ++source) {
+            if (source) {
+                const D3D12DDIARG_RESOURCE_BARRIER_0022 to_indirect = transition(
+                    indirect_args, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_INDIRECT_ARGUMENT);
+                t.pfnResourceBarrier(rec.hlist(), 1, &to_indirect);
+            }
+            const Buffer& records = source ? indirect_args : indirect_upload;
+            for (UINT v = 0; v < kIndirectVariants; ++v) {
+                t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1,
+                                                       indirect_out_va + 256 * (source * kIndirectVariants + v));
+                D3D12DDIARG_BUFFER_PLACEMENT arguments{}, count{};
+                arguments.BaseAddress.UMD = {records.hres(), 0};
+                if (kIndirect[v].count != kNoCount)
+                    count.BaseAddress.UMD = {records.hres(), kCountsOffset + kIndirect[v].count * sizeof(UINT32)};
+                t.pfnExecuteIndirect(rec.hlist(), hrays_signature, kIndirect[v].max_count, arguments, count);
+            }
+        }
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 done =
+            transition(indirect_out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+        t.pfnResourceBarrier(rec.hlist(), 1, &done);
+        to.BaseAddress.UMD = {indirect_back.hres(), 0};
+        from.BaseAddress.UMD = {indirect_out.hres(), 0};
+        t.pfnCopyBufferRegion(rec.hlist(), to, from, kIndirectOutBytes);
+    }
     const D3D12DDIARG_RESOURCE_BARRIER_0022 end =
         transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
     t.pfnResourceBarrier(rec.hlist(), 1, &end);
@@ -1508,7 +1651,8 @@ void test_raytracing_pipeline(Env& env) {
     hr = engine_ddi::execute_command_lists(queue, 1, lists);
     checkf(hr == S_OK && !device.shell.list_errors && !device.shell.device_errors,
            "raytracing pipeline: bottom and top level, SetPipelineState1 and DispatchRays 8x8 over a shader table in "
-           "the UPLOAD buffer, once for each pipeline, executed (hr %08lx, %u list errors, %u device errors)",
+           "the UPLOAD buffer, once for each pipeline, and the indirect dispatches, executed (hr %08lx, %u list errors, "
+           "%u device errors)",
            static_cast<unsigned long>(hr), device.shell.list_errors, device.shell.device_errors);
     if (hr == S_OK && wait_queue_idle(env, queue, "raytracing pipeline")) {
         void* mapped = nullptr;
@@ -1573,6 +1717,60 @@ void test_raytracing_pipeline(Env& env) {
                    "words, %u hits with %08x and %u misses with miss_far's %u (%u differ, first at %u)",
                    hits, kGrowValue, kWords - hits, kMissFar, bad_grown, first_grown);
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        }
+        void* indirect_mapped = nullptr;
+        const HRESULT hr_indirect_map =
+            indirect_ready ? env.core.pfnMapHeap(device.h(), indirect_back.hheap(), &indirect_mapped) : E_ABORT;
+        checkf(!indirect_ready || (hr_indirect_map == S_OK && indirect_mapped),
+               "raytracing pipeline: MapHeap of the indirect dispatches' READBACK heap (hr %08lx)",
+               static_cast<unsigned long>(hr_indirect_map));
+        if (indirect_ready && hr_indirect_map == S_OK && indirect_mapped) {
+            const auto* words = static_cast<const UINT32*>(indirect_mapped);
+            UINT bad[kIndirectSections], bad_first_only[kIndirectSections], first[kIndirectSections];
+            bool every_record = true, first_only = true;
+            for (UINT s = 0; s < kIndirectSections; ++s) {
+                const IndirectVariant& v = kIndirect[s % kIndirectVariants];
+                UINT32 want[kWords], want_first_only[kWords];
+                rows_written(expected, v.rows, want);
+                rows_written(expected, v.rows_first_only, want_first_only);
+                UINT unused = 0;
+                bad[s] = mismatches(words + s * kWords, want, &first[s]);
+                bad_first_only[s] = mismatches(words + s * kWords, want_first_only, &unused);
+                every_record = every_record && !bad[s];
+                first_only = first_only && !bad_first_only[s];
+            }
+            // One record without a count buffer: what any engine with indirect ray dispatch does.
+            checkf(!bad[0] && !bad[kIndirectVariants],
+                   "raytracing pipeline: indirect DispatchRays, one 8x4 record, no count buffer: rows 0 to 3 as "
+                   "DispatchRays writes them, rows 4 to 7 at the prefill, from the UPLOAD records and from their DEFAULT "
+                   "copy (%u and %u words differ)",
+                   bad[0], bad[kIndirectVariants]);
+            if (every_record) {
+                checkf(true,
+                       "raytracing pipeline: indirect DispatchRays, stride %u, every record up to the smaller of count "
+                       "and maximum: max 2 with count 1 rows 0 to 3, with count 2, count 3 and no count buffer all 64 "
+                       "words, with count 0 none, from the UPLOAD records (patched ahead of the list) and from their "
+                       "DEFAULT copy after an INDIRECT_ARGUMENT transition",
+                       kRaysStride);
+            } else if (first_only) {
+                std::printf("SKIP  raytracing pipeline: indirect DispatchRays: the engine traces the first record alone "
+                            "and nothing with a count buffer (vkd3d-proton upstream; the amdgpu-wddm engine fork "
+                            "traces every record up to the count)\n");
+            } else {
+                // Per section, UPLOAD variants then DEFAULT ones in kIndirect's order: words differing from the oracle
+                // of every record up to the count, and the first of them (64: none).
+                char detail[192]{};
+                int at = 0;
+                for (UINT s = 0; s < kIndirectSections && at >= 0 && at < static_cast<int>(sizeof(detail)); ++s)
+                    at += std::snprintf(detail + at, sizeof(detail) - static_cast<size_t>(at), "%s%u@%u", s ? " " : "",
+                                        bad[s], first[s]);
+                checkf(false,
+                       "raytracing pipeline: indirect DispatchRays, stride %u: the results match neither every record "
+                       "up to the count nor the first record alone; differing words@first per section (max 1, count "
+                       "1, count 2, no count, count 0, count 3; UPLOAD then DEFAULT): %s",
+                       kRaysStride, detail);
+            }
+            env.core.pfnUnmapHeap(device.h(), indirect_back.hheap());
         }
     }
 
@@ -1688,6 +1886,8 @@ void test_raytracing_pipeline(Env& env) {
     for (void* storage : mixed_storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
     env.core.pfnDestroyStateObject(device.h(), himporter);
     env.core.pfnDestroyStateObject(device.h(), hchild);
+    if (hr_rays_signature == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hrays_signature);
+    for (Buffer* b : {&indirect_upload, &indirect_args, &indirect_out, &indirect_back}) destroy_buffer(env, device, *b);
     for (Buffer* b : {&blas, &tlas, &scratch, &out, &readback, &upload}) destroy_buffer(env, device, *b);
     destroy_root_signatures(env, device, rs);
     uint32_t live = UINT32_MAX;

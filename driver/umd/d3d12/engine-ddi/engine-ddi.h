@@ -6,7 +6,10 @@
 // r3, additively: set_memory_architecture_policy, the shell's policy for GetCaps 1002. The engine
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
 // Boundary r4 (2026-09-29): the linear primary. MemoryRequest grows by the surface fields and
-// kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3.
+// kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3. Added within r4,
+// additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set),
+// set_release_policy, the two-phase retirement of heap memory, and set_replay_policy, deferred command-list replay
+// on worker threads (both also off unless set).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -107,7 +110,11 @@ inline constexpr uint32_t kBoundaryRevision = 4;
 //   device exists: the DDI call that makes the last destroy if the work has already retired, otherwise the first
 //   later DDI call that observes retirement (execute_command_lists, update_tile_mappings, copy_tile_mappings,
 //   pfnCreateHeapAndResource, pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from
-//   an engine thread or an engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   an engine thread or an engine callback: the engine has no threads in INLINE mode, and the only threads
+//   engine-ddi creates, the workers of set_replay_policy, make engine command-list calls and nothing else.
+//   With a retire policy (set_retire_policy) the three submission calls observe retirement only past its bounds,
+//   and the resource DDIs and the queue and device calls take the rest; which thread runs steps 2 and 3 changes,
+//   not what proves retirement, and not the order of the steps.
 //   A tile mapping is queue work like a submission: its call signals the queue's retirement fence after the bind, so
 //   heap memory destroyed after the mapping waits for it.
 //   The memory of a linear primary (kMemoryLinearSurface) is the exception to "the first later DDI call": the
@@ -178,7 +185,8 @@ struct ImportedMemory {
 // ---- Hooks the shell provides --------------------------------------------------------------------------------
 // Hooks are called only on the thread of a DDI call into the device, during that call, and never re-enter
 // engine-ddi. Two DDI threads of one device may call hooks at the same time (the runtime calls heap and resource
-// creation and destruction concurrently). engine-ddi never holds a lock of its own while it calls a hook.
+// creation and destruction concurrently). engine-ddi never holds a lock of its own while it calls a hook. A replay
+// worker (set_replay_policy) calls none of them.
 struct ShellHooks {
     uint32_t size;                              // sizeof(ShellHooks)
     void* shell;                                // passed back unchanged
@@ -223,6 +231,82 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
 // device loss needs one, it will be a separate reviewed addition that states how every record stops using the
 // context.
 HRESULT destroy_device_context(DeviceContext* context, uint32_t* live_objects) noexcept;
+
+// Retire hand-off. Without a policy (and with handoff 0) every retirement point runs the release sequence for what
+// has retired, the submission calls included: execute_command_lists, update_tile_mappings and copy_tile_mappings
+// then pay steps 2 to 4 (the runtime's DestroyAllocation2 and FreeGpuVirtualAddress among them) on the submitting
+// thread, which a game keeps on its critical path (trial 217: 0.40 ms/frame on-CPU and 0.31 ms/frame waiting in
+// the kernel on the main thread, the only submitter). With handoff 1 a submission call runs the sequence only when
+// at least backlog_bound releases are pending, or when no pfnCreateHeapAndResource or pfnDestroyHeapAndResource
+// of the device has run it for age_bound_ms (by GetTickCount64, whose step is about 16 ms); otherwise it leaves
+// the releases to the next resource DDI, on whichever thread the application makes it. Retirement is proven as
+// before (the fences, the marks, stuck releases), each release still runs once and on a DDI thread of its device,
+// and destroy_engine_queue and destroy_device_context still run the sequence unconditionally. A
+// pfnCreateHeapAndResource still runs it before it allocates. Bounds: backlog_bound 1 or more; age_bound_ms 1 to
+// 10000. Call it after create_device_context and before the context is used on another thread or by any DDI; it
+// writes the context. E_INVALIDARG, with the policy held before kept, for a null argument, a size other than
+// sizeof(RetirePolicy), handoff other than 0 or 1, or handoff 1 with a bound out of range.
+struct RetirePolicy {
+    uint32_t size;                              // sizeof(RetirePolicy)
+    uint32_t handoff;                           // 0: every retirement point runs the sequence; 1: hand-off
+    uint32_t backlog_bound;                     // handoff 1: a submission runs it at this many pending releases
+    uint32_t age_bound_ms;                      // handoff 1: ... or after this long without a resource DDI's pass
+};
+HRESULT set_retire_policy(DeviceContext* context, const RetirePolicy* policy) noexcept;
+
+// Two-phase retirement of heap memory (M15.8, fix F1 of the trial 245 report). Without a policy (and with
+// two_phase 0) a release waits for the marks of one snapshot: the work every engine queue had submitted when
+// the destroy reached engine-ddi. That is what the application's own ordering promises, and nothing more: a
+// submission the engine makes after the destroy, on any queue, still naming the memory (a batch recorded
+// before it, or an engine-internal path ordered on a queue's timeline) is outside those marks. Trial 245
+// faulted on exactly that window: the GFX job was in the ring 2.1 ms before the unmap of the memory it read.
+// With two_phase 1, when a release's first-phase marks are reached, every engine queue's current mark is
+// recorded once more and the release waits for those too; a release that had no mark at all waits for one
+// such second phase as well, so a destroy that races a submission on another thread is covered by it. An
+// idle queue's mark is already retired, so the second phase adds nothing to wait for and the hold ends at
+// the next retirement point; a busy queue holds the memory about one more frame. Nothing waits on the CPU:
+// both phases are reads of the queues' state words and retirement fences, taken at the retirement points
+// engine-ddi already has. The memory of a linear primary (in_ddi) keeps its single bounded phase inside the
+// destroy that ends it. Call it like set_retire_policy: after create_device_context, before the context is
+// used on another thread. E_INVALIDARG, with the policy held before kept, for a null argument, a size other
+// than sizeof(ReleasePolicy), or two_phase other than 0 or 1.
+struct ReleasePolicy {
+    uint32_t size;                              // sizeof(ReleasePolicy)
+    uint32_t two_phase;                         // 0: one snapshot per release; 1: the second phase above
+};
+HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) noexcept;
+
+// Deferred command-list replay. Off (enabled 0, the default) every recording slot calls the engine list on the
+// calling thread, as before this policy existed: no ring, no thread. On, a recording slot still validates,
+// translates and reports on the calling thread, then writes the engine call, with a copy of every array and
+// descriptor the engine reads through a pointer, into the calling thread's ring; each ring's worker thread makes
+// the engine calls in order (replay.h: topology, drains, ownership rules). Close, Reset, ExecuteBundle,
+// ExecuteCommandLists and the destroy of a list wait for that list's pending calls, so the engine's Close result
+// still reaches the runtime from the Close itself; the destroy of any object a pending call can name, a command
+// pool's reset and destroy, and SetPipelineStackSize wait for every ring. Up to rings recording threads (1 to 16)
+// get a ring of ring_bytes each (a power of two, 64 KiB to 64 MiB); a thread beyond them records directly.
+//   worker(shell, body, ring): the start of each worker thread, called once on it; it must call body(ring), which
+//     returns at teardown. The worker makes engine command-list calls only, and the engine's recording may call
+//     runtime callbacks through the hosted Vulkan driver (descriptor and memory work), so the shell sets up what
+//     those need on the thread and keeps out what a recording call must not do there.
+//   drained(shell): on a DDI thread, after each drain that a DDI call makes, with no engine-ddi lock held; the shell
+//     reports there what a worker could not (a device removal it saw).
+// enabled 0 on a context with the policy on drains every ring, stops and joins the workers and frees the rings;
+// destroy_device_context does the same before it frees the context. Call it with enabled 1 like set_retire_policy:
+// after create_device_context, before the context is used on another thread. E_INVALIDARG, with the policy held
+// before kept, for a null argument, a size other than sizeof(ReplayPolicy), enabled other than 0 or 1, enabled 1
+// while on, rings or ring_bytes out of range, or a null hook.
+using ReplayBody = void (APIENTRY*)(void* ring);
+struct ReplayPolicy {
+    uint32_t size;                              // sizeof(ReplayPolicy)
+    uint32_t enabled;                           // 0: direct recording (turns it off if on); 1: deferred replay
+    uint32_t rings;                             // enabled 1: recording threads with a ring, 1 to 16
+    uint32_t ring_bytes;                        // enabled 1: bytes per ring
+    void* shell;                                // passed back unchanged
+    void (APIENTRY* worker)(void* shell, ReplayBody body, void* ring);
+    void (APIENTRY* drained)(void* shell);
+};
+HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
 
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);
@@ -403,11 +487,13 @@ HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitectu
 
 // A diagnostic deviation, off by default: with `report` set, type 1006 answers RaytracingTier 1_1 when the
 // engine's own answer is 1_1 or higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. The
-// tier promises more than engine-ddi does: indirect ray dispatch is still refused, and so is an existing collection
-// imported with an export list (E_NOTIMPL, temporarily, until an engine with the fix of its deferred import loop is
-// pinned; importing a whole collection works). It is for a measurement of the slots that exist (acceleration
-// structures, inline ray queries, state objects with collections and AddToStateObject, DispatchRays) with a client
-// that uses nothing else, never a driver default. Same calling rule as set_memory_architecture_policy.
+// tier promises more than engine-ddi does: an existing collection imported with an export list is still refused
+// (E_NOTIMPL, temporarily, until an engine with the fix of its deferred import loop is pinned; importing a whole
+// collection works), and indirect ray dispatch reaches the engine but traces every record up to the count only on an
+// engine with the fork's fix (vkd3d-proton upstream traces the first record alone and nothing with a count buffer).
+// It is for a measurement of the slots that exist (acceleration structures, inline ray queries, state objects with
+// collections and AddToStateObject, DispatchRays, indirect DispatchRays) with a client that uses nothing else, never a
+// driver default. Same calling rule as set_memory_architecture_policy.
 // E_INVALIDARG for a null caps.
 HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept;
 

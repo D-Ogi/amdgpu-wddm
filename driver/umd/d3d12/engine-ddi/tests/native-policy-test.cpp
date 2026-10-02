@@ -3,6 +3,7 @@
 // native build must refuse, and that both tables come out with every slot filled. No engine is loaded: the refusals
 // happen before engine-ddi touches the engine device, which is a dummy pointer here.
 #include "engine-ddi.h"
+#include "internal.h"
 #include <cstdio>
 #include <cstring>
 #include <io.h>
@@ -34,6 +35,7 @@ int main() {
     // The refusals below log through engine-ddi's stderr sink by design: expected output, sent to stdout in order.
     setvbuf(stdout, nullptr, _IONBF, 0);
     _dup2(_fileno(stdout), _fileno(stderr));
+    SetEnvironmentVariableA("AMDGPU_WDDM_LOG", "stderr"); // the sink is off by default (stdio-log.h)
     BC250_VKD3D_ENGINE_FUNCS funcs{};
     funcs.Size = sizeof(funcs);
     funcs.AbiVersion = BC250_VKD3D_ENGINE_ABI_VERSION;
@@ -87,6 +89,21 @@ int main() {
     check(!core.pfnCreateCommandQueue && !core.pfnCreateFence && !core.pfnMakeResident,
           "core table: shell slots left untouched");
     check(all_filled(lists[0]) && all_filled(lists[1]), "list tables: all 70 slots non-null");
+
+    // Retire hand-off (set_retire_policy): the refusals that need no context, and the decision itself.
+    engine_ddi::RetirePolicy policy{sizeof(policy), 1, 256, 250};
+    check(engine_ddi::set_retire_policy(nullptr, &policy) == E_INVALIDARG, "retire policy: null context refused");
+    using engine_ddi::retire_defers;
+    check(!retire_defers(false, 5, 256, 1000, 990, 250), "retire policy: off never defers");
+    check(!retire_defers(true, 0, 256, 1000, 990, 250), "retire policy: nothing pending, nothing to defer");
+    check(retire_defers(true, 5, 256, 1000, 990, 250) && retire_defers(true, 255, 256, 1000, 751, 250),
+          "retire policy: under both bounds a submission defers");
+    check(!retire_defers(true, 256, 256, 1000, 990, 250) && !retire_defers(true, 4000, 256, 1000, 990, 250),
+          "retire policy: the backlog bound makes a submission run the sequence");
+    check(!retire_defers(true, 5, 256, 1000, 750, 250) && !retire_defers(true, 5, 256, 100000, 990, 250),
+          "retire policy: the age bound makes a submission run the sequence");
+    check(!retire_defers(true, 5, 256, 1000, 0, 250), "retire policy: before any resource DDI's pass it never defers");
+    check(!retire_defers(true, 5, 256, 990, 1000, 250), "retire policy: a tick ahead of now does not defer");
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }

@@ -38,7 +38,8 @@ level 12_0 and above depend on; the process environment is not asked. Sparse
 binding is on when the DWORD `AmdgpuWddmSparseBinding` in the adapter's
 software key is 1 or the system names that value as not found, and off when it
 is 0. Any other value, an unspecified failure of the query or a key that cannot
-be asked resolves to off and is reported on stderr. The key is read through
+be asked resolves to off and is reported on the log sink (`AMDGPU_WDDM_LOG`,
+below). The key is read through
 `QueryAdapterInfo`, so a later edit reaches neither a cached adapter nor its
 devices. The guarantee holds for an ICD that recognizes the structure: an older
 one ignores it and keeps its environment behaviour, so reported features alone
@@ -80,6 +81,16 @@ authority and hosted instance dispatch on the calling thread. Nested calls for
 the same owner are allowed. A different device cannot inherit that authority,
 and engine workers do not acquire it merely by holding a pointer. Command-list
 entries resolve their owning shell through the engine context.
+
+The `deferred-replay` experiment (`AMDGPU_WDDM_D3D12_EXPERIMENT`, off by default,
+read once per device) turns on engine-ddi's deferred command-list replay
+([engine-ddi/README.md](engine-ddi/README.md)) with 8 rings of 4 MiB. Its worker
+threads are the one kind of engine-ddi thread that enters a device's runtime
+domain, together with `HostedDispatch::WorkerScope`: the engine's recording may
+allocate, map, lock and wait on the CPU there, while every context, submission,
+GPU-side sync and queue operation is refused with the failure note
+`replay-worker-op:<op>`. A removal a worker finds marks the device lost at once
+and is reported to the runtime from the next drain on a DDI thread.
 
 ## Queues and fences
 
@@ -133,6 +144,24 @@ records. Mapping completion alone is not GPU-use retirement. `PagingDomain` also
 provides a context-specific GPU wait helper, but imports still require a completed
 mapping before publication.
 
+The proof of retirement that reaches the shell is engine-ddi's: the retirement
+fences of its engine queues. It cannot cover a submission on a context outside
+that set, and trial 245 faulted on a GFX job that was in the ring 2.1 ms before
+the unmap of the memory it read (`scratch/m15/game-recon/bsod-245`, local). The
+release therefore passes a gate of its own (`ImportReleasePolicy`, M15.8): the
+import stays mapped and allocated until the device-wide progress taken when the
+release arrived has retired, and until the policy's delay has passed. That
+progress is per monitored fence (`device-progress.h`): the ICD signals the
+submitting context's fence after every native submit and publishes the value, on
+application and internal contexts alike, and `HostedDispatch` sees every such
+publication. The delay is a bounded FIFO, oldest first, with a count, a byte and
+an age bound; the bounds only shorten the delay and never the progress condition.
+A linear primary is never held, because only its own runtime resource may release
+it. The device's teardown drains the FIFO in full and counts what was still
+unretired there. Both halves of the gate are switchable
+(`import-progress-gate-off`, `import-quarantine-off`, and
+`release-two-phase-off` for engine-ddi's half; `ddi-trace.h`), all on by default.
+
 Contract sources are the WDK/SDK 10.0.26100 `d3d12umddi.h` callbacks and
 `d3dukmdt.h` structures, plus the local Microsoft documentation checkout:
 [MakeResidentCb](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dumddi/nc-d3dumddi-pfnd3dddi_makeresidentcb),
@@ -173,6 +202,12 @@ succeeded; error callbacks and GPU completion must be examined separately.
 Adapter negotiation, engine startup, hosted callbacks and teardown have their
 own diagnostics.
 
+None of these lines reach the application's stdio unless `AMDGPU_WDDM_LOG` asks
+(`stdio-log.h`): unset, empty or `0` prints nothing, `stderr` prints to stderr,
+`file:<path>` appends to a shared file. The vkd3d-proton engine and the RADV ICD
+read the same switch. An application that pipes stderr and never reads it
+(3DMark's helpers, session 283) blocked once the pipe was full.
+
 DXGI table publication is not implemented. Present private data size is zero.
 The Present handler returns the allocation of one presented surface and the
 context of its queue, and refuses every other shape; composition of what it
@@ -181,9 +216,14 @@ returns is not validated.
 A presentable surface (a linear primary) is allocated with the LB7A v1
 description under the E26R v1 resource record. Its storage format is one
 that `driver/contract/amdgpu_wddm_surface_format.h` enables for composition
-(B8G8R8A8, R8G8B8A8, R10G10B10A2 today); the compositor converts it to the
-desktop's format, so the monitor's depth does not decide it. The same table
-gives the kernel driver and the compositor's UMD the format's size a pixel.
+(B8G8R8A8, R8G8B8A8, R10G10B10A2 and R16G16B16A16_FLOAT today); the
+compositor converts it to the desktop's format, so the monitor's depth does
+not decide it. The same table gives the kernel driver and the compositor's UMD
+the format's size a pixel (8 for FP16). The swap chain's colour space and HDR
+metadata never reach this DDI: DXGI hands them to the compositor. An FP16
+primary is presentable on a machine only when the kernel driver and the
+desktop UMD carry the table's FP16 row as well (0.7.184.1, 4176D1DF and
+E6B944CF do not); until then the kernel refuses its allocation.
 It is released by its runtime
 resource, with ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY, and only inside the
 `pfnCreateHeapAndResource` or `pfnDestroyHeapAndResource` call of that

@@ -8,6 +8,7 @@
 // engine heap of a heap record: in RuntimeBacked mode that is the heap CreateHeapFromMemory made over the shell's
 // import of a runtime allocation (resources.cpp), so the tiles are bound to that memory.
 #include "internal.h"
+#include "replay.h"
 
 namespace engine_ddi {
 
@@ -103,7 +104,7 @@ template <class Call> HRESULT map_on_queue(EngineQueue* q, Call call) noexcept {
         c->report(hr);
         return hr;
     }
-    c->process_retired();
+    c->retire_after_submit();
     return S_OK;
 }
 
@@ -150,11 +151,14 @@ void APIENTRY copy_tiles(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE htiled,
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->CopyTiles(static_cast<ID3D12Resource*>(tiled->h.engine),
-                         reinterpret_cast<const D3D12_TILED_RESOURCE_COORDINATE*>(start),
-                         reinterpret_cast<const D3D12_TILE_REGION_SIZE*>(size),
-                         static_cast<ID3D12Resource*>(buffer->h.engine), buffer_offset,
-                         static_cast<D3D12_TILE_COPY_FLAGS>(f));
+    auto* tiled_resource = static_cast<ID3D12Resource*>(tiled->h.engine);
+    auto* buffer_resource = static_cast<ID3D12Resource*>(buffer->h.engine);
+    record(l,
+           [=](ID3D12GraphicsCommandList* e, const D3D12_TILED_RESOURCE_COORDINATE* at, const D3D12_TILE_REGION_SIZE* n) {
+               e->CopyTiles(tiled_resource, at, n, buffer_resource, buffer_offset, static_cast<D3D12_TILE_COPY_FLAGS>(f));
+           },
+           in(reinterpret_cast<const D3D12_TILED_RESOURCE_COORDINATE*>(start), 1),
+           in(reinterpret_cast<const D3D12_TILE_REGION_SIZE*>(size), 1));
 }
 } // namespace
 

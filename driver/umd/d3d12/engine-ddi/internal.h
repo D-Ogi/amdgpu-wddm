@@ -6,15 +6,48 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace engine_ddi {
 
-// One line on stderr, prefixed "engine-ddi: ". The native build has no other log sink yet.
+// One line on the AMDGPU_WDDM_LOG sink (stdio-log.h: nothing, stderr or a file), prefixed "engine-ddi: ".
 void log_line(const char* format, ...) noexcept;
 // A refusal: the same line, also on the debugger's output. A game's stderr goes nowhere, and refusals are rare.
 void log_refusal(const char* format, ...) noexcept;
+
+// Diagnostic lines written once a process, through log_refusal. first() is true for its first caller only; once
+// it was, done() and first() cost one relaxed load. Constant-initialized: a namespace-scope instance needs no guard.
+class LogOnce {
+public:
+    constexpr LogOnce() noexcept = default;
+    bool done() const noexcept { return done_.load(std::memory_order_relaxed); }
+    bool first() noexcept { return !done() && !done_.exchange(true, std::memory_order_relaxed); }
+
+private:
+    std::atomic<bool> done_{false};
+};
+
+// A set of DXGI_FORMAT values, lock-free: each value below 256 on its own, every larger one as a single member.
+// For lines written once per format and for engine answers kept per format. Constant-initialized, as LogOnce.
+class FormatSet {
+public:
+    constexpr FormatSet() noexcept = default;
+    bool contains(uint32_t value) const noexcept {
+        return (words_[word(value)].load(std::memory_order_relaxed) & bit(value)) != 0;
+    }
+    // True when value was not a member yet: for each value, its first caller.
+    bool insert(uint32_t value) noexcept {
+        return !contains(value) &&
+               !(words_[word(value)].fetch_or(bit(value), std::memory_order_relaxed) & bit(value));
+    }
+
+private:
+    static constexpr uint32_t word(uint32_t value) noexcept { return value < 256 ? value / 64 : 4; }
+    static constexpr uint64_t bit(uint32_t value) noexcept { return uint64_t{1} << (value < 256 ? value % 64 : 0); }
+    std::atomic<uint64_t> words_[5]{};
+};
 
 // A value-initialized T on the heap, or null. Written out rather than new (std::nothrow) T{}, whose value
 // initialization /analyze models before the null check (C28182).
@@ -22,6 +55,29 @@ template <class T, class... A> T* make_new(A&&... args) noexcept {
     void* p = ::operator new(sizeof(T), std::nothrow);
     return p ? new (p) T{std::forward<A>(args)...} : nullptr;
 }
+
+// Room for count trivial T: N inline (no allocation), more on the heap. For the arrays the hot slots translate on
+// every call (resource_barrier, execute_command_lists); a std::vector there cost an operator new and a delete per
+// call (session 246: ~0.26 ms per frame of ResourceBarrier at preset LOW). The elements start uninitialized.
+template <class T, size_t N> class InlineArray {
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
+    T inline_[N];
+    T* heap_ = nullptr;
+
+public:
+    InlineArray() noexcept {}
+    InlineArray(const InlineArray&) = delete;
+    InlineArray& operator=(const InlineArray&) = delete;
+    ~InlineArray() { ::operator delete(heap_); }
+    // Room for count elements, once, before data(): false when count needs the heap and the heap has none.
+    bool reserve(size_t count) noexcept {
+        if (count <= N) return true;
+        if (count > SIZE_MAX / sizeof(T)) return false;
+        heap_ = static_cast<T*>(::operator new(count * sizeof(T), std::nothrow));
+        return heap_ != nullptr;
+    }
+    T* data() noexcept { return heap_ ? heap_ : inline_; }
+};
 
 // ---- Release sequence (engine-ddi.h, "Release sequence of heap memory") -----------------------------------------
 // Engine queues of one device, at most. create_engine_queue refuses more with E_OUTOFMEMORY, as the engine does
@@ -50,6 +106,12 @@ struct PendingRelease {
     uint64_t marks[kMaxEngineQueues];           // the value each slot's retirement fence must reach
     bool stuck;                                 // retirement can never be proven: pending for the device's life
     PendingRelease* next;
+    // Two-phase retirement (set_release_policy). phase 1: the marks of the destroy's own snapshot; phase 2:
+    // the marks re-recorded once those were reached. Without the policy a release stays at phase 0 and its
+    // one snapshot decides, as before. The two counts and the times are for the log line only.
+    uint32_t phase;
+    uint32_t queues[2];                         // slots that held a mark in each phase
+    uint64_t snapshot_qpc[2];
 };
 
 // Pending releases of one device, an intrusive list: no call allocates. Not thread-safe: the owner holds its lock
@@ -141,6 +203,16 @@ uint64_t observed_value(EngineQueue* queue) noexcept;
 HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* lists) noexcept;
 
 struct ResourceRecord;
+struct Replay;                                  // replay.h: deferred command-list replay
+
+// The retire policy's decision at a submission's retirement point (set_retire_policy): true leaves the pending
+// releases to the resource DDIs. Never with the hand-off off, nothing pending, the backlog bound reached, or the
+// age bound passed since the last resource DDI's pass (resource_tick 0: none yet). Ticks are GetTickCount64.
+inline bool retire_defers(bool handoff, uint32_t pending, uint32_t backlog_bound, uint64_t now, uint64_t resource_tick,
+                          uint32_t age_bound_ms) noexcept {
+    if (!handoff || !pending || pending >= backlog_bound || !resource_tick) return false;
+    return now >= resource_tick && now - resource_tick < age_bound_ms;
+}
 
 class DeviceContext {
 public:
@@ -191,6 +263,26 @@ public:
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
+    // The release policy (set_release_policy): written before the context is used on another thread, read
+    // only after. The counters are diagnostic (the log line at powers of two).
+    bool release_two_phase = false;
+    std::atomic<uint64_t> releases_recorded{0};  // releases that took a first-phase snapshot
+    std::atomic<uint64_t> releases_second{0};    // releases that reached a second phase
+    std::atomic<uint64_t> releases_run{0};       // releases whose memory went back to the shell
+    // The retire policy (set_retire_policy): written before the context is used on another thread, read only after.
+    bool retire_handoff = false;
+    uint32_t retire_backlog_bound = 0;
+    uint32_t retire_age_bound_ms = 0;
+    // GetTickCount64 at the last resource DDI's pass; stored only when it changes, so that resource DDIs on many
+    // threads do not write one cache line on every call.
+    std::atomic<uint64_t> retire_resource_tick{0};
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    std::atomic<uint64_t> retire_deferred{0};   // submission passes left to the resource DDIs
+#endif
+    // Deferred command-list replay (set_replay_policy, replay.h), null when off: written before the context is used
+    // on another thread, and at teardown; read by every recording slot.
+    Replay* replay = nullptr;
+
     // Every report is logged with thread and time, so it can be placed between the begin and end records
     // of the entry that made it. A reported error can surface to the application at a later call.
     static long long report_time() noexcept {
@@ -216,8 +308,19 @@ public:
     // takes the snapshot again, with the lock released in between, until no mark is left or in_ddi_bound_ms
     // have passed; after the bound the device error is reported and the node is recorded like any other.
     void release(PendingRelease* node) noexcept;
-    // Runs the release sequence for everything that has retired (a retirement point).
+    // Runs the release sequence for everything that has retired (a retirement point). With the release
+    // policy's two_phase, a node whose first-phase marks are reached has its second phase recorded here
+    // instead and stays pending until those marks are reached too (set_release_policy).
     void process_retired() noexcept;
+    // Records the marks of every engine queue in the node, under lock. Returns the number of slots that
+    // hold one; node->stuck is set when a queue proves nothing (removed device, lost retirement).
+    uint32_t snapshot_marks(PendingRelease* node) noexcept;
+    // The retirement point of a submission call (execute_command_lists, update_tile_mappings, copy_tile_mappings):
+    // process_retired, unless the retire policy hands it to the resource DDIs (retire_defers).
+    void retire_after_submit() noexcept;
+    // The retirement point of pfnCreateHeapAndResource and pfnDestroyHeapAndResource: notes the time for the
+    // policy's age bound, then process_retired.
+    void retire_at_resource() noexcept;
     void notify(const ReleasePayload& payload, bool deferred, HRESULT free_result) const noexcept;
 };
 
@@ -287,7 +390,40 @@ struct ResourceRecord {
     ResourceRecord* init_next;
     uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
     uint64_t linear_size;                       // the size of its backing as asked of the shell
+    DXGI_FORMAT stored_from;                    // the video format desc stores (stored_format), else UNKNOWN
 };
+
+// A packed video format the engine has no image of, stored as the typeless format of its element (INTEGRATION.md,
+// "Packed video formats"). The DXGI_FORMAT reference names the view formats of each: the storage's family, which a
+// typeless image allows, and R32_UINT for a UAV of a 4-byte element, which the engine adds to a typeless image with
+// ALLOW_UNORDERED_ACCESS. A 4:2:2 element holds two pixels: the resource's width and every x the application gives
+// are in pixels, the engine's in elements, and "one view provides a straightforward mapping of the entire surface".
+struct StoredFormat {
+    DXGI_FORMAT format;                         // as the application names it
+    DXGI_FORMAT storage;                        // the engine's resource format
+    DXGI_FORMAT view;                           // what a view naming the video format (or no format) gets
+    UINT pixels;                                // pixels per element
+};
+inline const StoredFormat* stored_format(DXGI_FORMAT f) noexcept {
+    static constexpr StoredFormat kStored[] = {
+        {DXGI_FORMAT_AYUV, DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM, 1},
+        {DXGI_FORMAT_Y410, DXGI_FORMAT_R10G10B10A2_TYPELESS, DXGI_FORMAT_R10G10B10A2_UNORM, 1},
+        {DXGI_FORMAT_Y416, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 1},
+        {DXGI_FORMAT_YUY2, DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM, 2},
+        {DXGI_FORMAT_Y210, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 2},
+        {DXGI_FORMAT_Y216, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 2},
+    };
+    for (const StoredFormat& s : kStored)
+        if (s.format == f) return &s;
+    return nullptr;
+}
+
+// The format a view of r is created with: the view format of a stored video format named by the view, or by the
+// resource when the view names none; any other format as given.
+inline DXGI_FORMAT view_format(const ResourceRecord* r, DXGI_FORMAT format) noexcept {
+    const StoredFormat* s = stored_format(format == DXGI_FORMAT_UNKNOWN && r ? r->stored_from : format);
+    return s ? s->view : format;
+}
 inline constexpr uint32_t kInitNone = 0;
 inline constexpr uint32_t kInitQueued = 1;
 inline constexpr uint32_t kInitRecorded = 2;    // named by a batch that may still run
@@ -373,6 +509,8 @@ struct CommandListRecord {
     D3D12_COMMAND_LIST_TYPE type;
     uint32_t table;                             // 0 compute table, 1 graphics table
     bool recording;                             // between a Reset and a Close that both succeeded
+    // Deferred replay (replay.h): the ring and the position where the list's last pending entry ends, 0 if none.
+    std::atomic<uint64_t> replay_tail{0};
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 
@@ -436,6 +574,8 @@ uint32_t harness_stuck_releases(DeviceContext* context) noexcept;
 uint32_t harness_live_objects(DeviceContext* context) noexcept;
 uint32_t harness_pending_initializations(DeviceContext* context) noexcept;
 bool harness_retirement_lost(DeviceContext* context) noexcept;
+// Submission retirement points that the retire policy left to the resource DDIs (set_retire_policy).
+uint64_t harness_deferred_retire_points(DeviceContext* context) noexcept;
 // Fault injection: completed_value returns value instead of the fence's (0 turns it off); the next retirement
 // Signal of execute_command_lists is skipped and fails with E_FAIL after the engine's ExecuteCommandLists ran.
 void harness_force_completed(EngineQueue* queue, uint64_t value) noexcept;
@@ -447,6 +587,10 @@ void harness_set_in_ddi_bound(DeviceContext* context, uint32_t milliseconds) noe
 // watches, from the thread that makes them.
 using StateObjectObserver = void (*)(const D3D12_STATE_OBJECT_DESC& desc, ID3D12StateObject* parent, void* user);
 void harness_set_state_object_observer(StateObjectObserver observer, void* user) noexcept;
+// Called by log_refusal with each line's text (without the "engine-ddi: " prefix) after the line was written, on the
+// calling thread; null (the default) calls nothing. Process-wide, like the once-only lines it lets a test count.
+using LogObserver = void (*)(const char* text, void* user);
+void harness_set_log_observer(LogObserver observer, void* user) noexcept;
 #endif
 
 } // namespace engine_ddi

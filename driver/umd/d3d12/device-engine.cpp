@@ -15,13 +15,26 @@
 #include <cstdio>
 #include <cstring>
 #include <new>
+#include "stdio-log.h"
 
 namespace native12 {
 namespace {
+// Bounds of the retire hand-off (L3). A submission still runs the release sequence once this many releases
+// are pending, or once no resource DDI has run it for this long, so memory a game destroys and never follows
+// with another resource call is still returned. Trial 217 terminated about 0.6 allocations per frame, and its
+// resource destroys ran on worker threads that also create; at that rate neither bound should be reached in
+// steady state (expected, not measured). A create runs the sequence before it allocates, so an application
+// that destroys and then creates at its budget gets the memory back first, as without the hand-off.
+constexpr uint32_t kRetireBacklogBound=256;
+constexpr uint32_t kRetireAgeBoundMs=250;
+// Deferred replay: recording threads with a ring of their own (a game records on a handful), and the bytes of each
+// ring. 4 MiB holds a frame of tens of thousands of small calls; a fuller ring makes its thread wait (counted).
+constexpr uint32_t kReplayRings=8;
+constexpr uint32_t kReplayRingBytes=4u<<20;
 void stage(const char* name,HRESULT result) noexcept {
     if(FAILED(result))ddi_failure_note(name,result);
-    std::fprintf(stderr,"d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
-    std::fflush(stderr);
+    amdgpu_wddm_log::print("d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
+    amdgpu_wddm_log::flush();
 }
 HRESULT vk_result(VkResult result) noexcept {
     switch(result){
@@ -49,8 +62,13 @@ class DeviceEngine final {
     // No entry lock: DDI entries of this device run at once on several threads (DeviceEngineScope).
     // active_ turns false once, at close or retain, after the runtime has ended every entry.
     std::atomic<bool> active_{true};
+    bool replay_{};                             // the deferred-replay policy is on (open, close)
     std::atomic<bool> binding_failed_{};
     std::atomic<UINT64> callback_sequence_{};
+    // Lever L2 (experiment recording-bind): the binding Device::recording points to while it is published,
+    // and whether the experiment is on for this device, read once at open.
+    RecordingBinding recording_{};
+    std::atomic<bool> recording_bind_{};
     static int32_t dispatch(void* owner,uint32_t operation,void* argument) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
         if(!self.active_.load(std::memory_order_acquire))return static_cast<int32_t>(0xc000000du);
@@ -60,13 +78,15 @@ class DeviceEngine final {
         // unconditional formatting cost 15 % of this module's main-thread samples (native 164).
         // The sequence is counted in that mode only, so that callbacks on several threads do not
         // share a cache line for a number nobody reads.
-        const bool traced=ddi_trace_enabled();
+        // With recording-bind the device's trace mode, read once, replaces the per-call read (L2).
+        const bool traced=self.recording_bind_.load(std::memory_order_relaxed)?self.device_.trace_mode==1:
+            ddi_trace_enabled();
         const UINT64 sequence=traced?self.callback_sequence_.fetch_add(1,std::memory_order_relaxed)+1:0;
         LARGE_INTEGER start{},end{};
         if(traced){
             QueryPerformanceCounter(&start);
-            std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"begin\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
-                sequence,operation,start.QuadPart,GetCurrentThreadId());std::fflush(stderr);
+            amdgpu_wddm_log::print("{\"event\":\"hosted-callback\",\"edge\":\"begin\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+                sequence,operation,start.QuadPart,GetCurrentThreadId());amdgpu_wddm_log::flush();
         }
         int32_t result;
         bool heap=false;
@@ -81,9 +101,9 @@ class DeviceEngine final {
         } else result=HostedDispatch::dispatch(&self.dispatch_,operation,argument);
         if(!traced)return result;
         QueryPerformanceCounter(&end);
-        std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"end\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"status\":\"%08x\"}\n",
+        amdgpu_wddm_log::print("{\"event\":\"hosted-callback\",\"edge\":\"end\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"status\":\"%08x\"}\n",
             sequence,operation,end.QuadPart,static_cast<unsigned>(result));
-        std::fflush(stderr);return result;
+        amdgpu_wddm_log::flush();return result;
     }
     static HRESULT APIENTRY bind(void* owner,void* cookie,VkQueue queue) {
         auto& self=*static_cast<DeviceEngine*>(owner);
@@ -129,6 +149,15 @@ class DeviceEngine final {
             device.callbacks.pfnSetCommandListErrorCb(list,hr);
         else report_device_error(device,hr);
     }
+    // Deferred replay (engine-ddi set_replay_policy). A worker runs in this device's runtime domain and in the
+    // hosted dispatch's worker scope, which admits only the device-level operations a recording call can make.
+    static void APIENTRY replay_worker(void* shell,engine_ddi::ReplayBody body,void* ring) {
+        auto& self=*static_cast<DeviceEngine*>(shell);
+        bc250::umd::RuntimeDomain::Scope runtime(self.domain_);
+        HostedDispatch::WorkerScope worker(self.dispatch_);
+        body(ring);
+    }
+    static void APIENTRY replay_drained(void* shell) {static_cast<DeviceEngine*>(shell)->dispatch_.report_deferred_removal();}
     static BOOL APIENTRY is_lost(void* shell) {
         auto& device=*static_cast<Device*>(shell);
         return !device.engine || device.lost.load() || device.engine->dispatch_.lost();
@@ -150,7 +179,7 @@ class DeviceEngine final {
         if(trace && ddi_trace_enabled() && request && device.engine && device.engine->imports_){
             // What was asked and where the import ended; the stage is where it returned, not a cause.
             const auto& r=device.engine->imports_->last_report();
-            std::fprintf(stderr,"{\"event\":\"shell-memory-request\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
+            amdgpu_wddm_log::print("{\"event\":\"shell-memory-request\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
                 "\"memory_type_bits\":%u,\"row_pitch\":%u,\"layout_size\":%llu,\"stage\":%u,\"memory_type\":%u,"
                 "\"held\":%llu,\"address_alignment\":%llu,\"address\":%llu,\"status\":\"%08lx\"}\n",
                 request->flags,static_cast<unsigned long long>(request->byte_size),
@@ -166,11 +195,35 @@ class DeviceEngine final {
         const auto trace=ddi_trace_begin("shellFreeMemory");
         auto& device=*static_cast<Device*>(shell);
         const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->free(memory):E_UNEXPECTED;
-        if(trace && ddi_trace_enabled() && device.engine && device.engine->imports_){
+        if(trace && device.engine && device.engine->imports_){
+            // Instrumentation item 5 of the trial 245 report: the address and size the release named, with
+            // the time and thread, so that the line meets the kernel's paging journal (which records the
+            // unmap and the destroy of the same VA) and the engine's release lines. In the full trace every
+            // call prints; in the failures-only mode of the lab's game runs the line goes to the debugger
+            // at powers of two of the free count, and whenever the quarantine let something go, so a game
+            // adds a line per doubling and one per actual release, not one per frame.
             const auto& r=device.engine->imports_->last_free_report();
-            std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
-                "\"status\":\"%08lx\"}\n",unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
-                static_cast<unsigned long>(hr));
+            static std::atomic<uint64_t> frees{};
+            const uint64_t count=frees.fetch_add(1,std::memory_order_relaxed)+1;
+            LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+            if(ddi_trace_enabled())
+                amdgpu_wddm_log::print("{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
+                    "\"gpu_va\":%llu,\"byte_size\":%llu,\"released\":%u,\"held_count\":%u,\"held_bytes\":%llu,"
+                    "\"qpc\":%lld,\"thread\":%lu,\"status\":\"%08lx\"}\n",
+                    unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
+                    static_cast<unsigned long long>(r.gpu_va),static_cast<unsigned long long>(r.byte_size),
+                    r.released,r.held_count,static_cast<unsigned long long>(r.held_bytes),
+                    now.QuadPart,GetCurrentThreadId(),static_cast<unsigned long>(hr));
+            else if(ddi_trace_mode()==2 && (r.released || !(count&(count-1)))){
+                char line[256];
+                std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 shell-memory-free n=%llu va=%llu bytes=%llu "
+                    "stage=%u released=%u held=%u/%llu qpc=%lld thread=%lu status=%08lx\n",
+                    static_cast<unsigned long long>(count),static_cast<unsigned long long>(r.gpu_va),
+                    static_cast<unsigned long long>(r.byte_size),static_cast<unsigned>(r.stage),r.released,
+                    r.held_count,static_cast<unsigned long long>(r.held_bytes),now.QuadPart,GetCurrentThreadId(),
+                    static_cast<unsigned long>(hr));
+                ddi_mode2_note(line);
+            }
         }
         ddi_trace_end("shellFreeMemory",trace,hr);
         return hr;
@@ -183,6 +236,16 @@ public:
        bootstrap_(access.driver_entry,device.adapter->contract.luid,this,this,dispatch,
                   device.adapter->instance_policy) {
         services_={sizeof(services_),this,bind,unbind};
+    }
+    // L2: publishes this owner's recording binding in Device::recording when `on` and the device is not in
+    // the full trace (mode 1, two lines per call), clears it otherwise. The failures-only mode 2 of the lab's
+    // debugger runs keeps the binding: it writes nothing on success, and the fast path notes its own refusals
+    // (EntryPolicy::fast_denied). Called once the engine is open, and with false before it closes.
+    bool bind_recording(bool on) noexcept {
+        recording_={this,&domain_,&bootstrap_,&active_};
+        recording_bind_.store(on,std::memory_order_relaxed);
+        device_.recording=on && device_.trace_mode!=1?&recording_:nullptr;
+        return device_.recording!=nullptr;
     }
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
     QueueEngineRegistry* queues() const noexcept {return queues_.get();}
@@ -202,7 +265,7 @@ public:
         info.QueueMode=BC250_VKD3D_QUEUE_MODE_INLINE;info.Services=&services_;
         info.InstanceMode=BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
-        std::fprintf(stderr,"{\"event\":\"clock\",\"frequency\":%lld}\n",frequency.QuadPart);
+        amdgpu_wddm_log::print("{\"event\":\"clock\",\"frequency\":%lld}\n",frequency.QuadPart);
         stage("CreateDevice-begin",S_OK);
         HRESULT result=access_.functions.CreateDevice(&info,__uuidof(ID3D12Device),reinterpret_cast<void**>(&engine_));
         stage("CreateDevice-end",result);
@@ -216,6 +279,23 @@ public:
         imports_.reset(new(std::nothrow) RuntimeHeapImports(device_,domain_,physical,device,instance,hosted.entry(),this));
         if(!imports_)return E_OUTOFMEMORY;
         result=imports_->initialize();stage("HeapImports",result);if(result!=S_OK)return result;
+        // The release gate's shell half (M15.8, F2 and F3): the device-wide progress of every context comes
+        // from the hosted dispatch, which sees every progress publication the ICD makes. Bound before any
+        // import exists, so no release can miss it.
+        imports_->bind_progress(dispatch_.progress_source());
+        {
+            const auto& policy=imports_->policy();
+            amdgpu_wddm_log::print("d3d12-engine import release policy progress_gate=%u depth=%u count_cap=%u "
+                "age_ms=%u byte_cap=%llu\n",unsigned(policy.progress_gate),policy.quarantine_depth,
+                policy.quarantine_count_cap,policy.quarantine_age_ms,
+                static_cast<unsigned long long>(policy.quarantine_byte_cap));amdgpu_wddm_log::flush();
+            char line[192];
+            std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 import release policy progress_gate=%u depth=%u "
+                "count_cap=%u age_ms=%u byte_cap=%llu\n",unsigned(policy.progress_gate),policy.quarantine_depth,
+                policy.quarantine_count_cap,policy.quarantine_age_ms,
+                static_cast<unsigned long long>(policy.quarantine_byte_cap));
+            ddi_mode2_note(line);
+        }
         engine_ddi::ContextCreateInfo context{};
         context.size=sizeof(context);context.boundary_revision=engine_ddi::kBoundaryRevision;
         context.memory_mode=engine_ddi::MemoryMode::RuntimeBacked;
@@ -224,6 +304,38 @@ public:
         context.hooks={sizeof(context.hooks),&device_,report_error,report_list_error,is_lost,bind_list,allocate,free};
         result=engine_ddi::create_device_context(&context,&context_);stage("DeviceContext",result);
         if(result!=S_OK)return result;
+        // The engine-ddi half of the release gate (M15.8, F1): two-phase retirement, on unless the
+        // experiment release-two-phase-off says otherwise. Set before any queue exists, like the policy
+        // below; engine-ddi's own default is one phase, so the switch alone decides.
+        {
+            engine_ddi::ReleasePolicy policy{};
+            policy.size=sizeof(policy);
+            policy.two_phase=ddi_experiment("release-two-phase-off")?0u:1u;
+            result=engine_ddi::set_release_policy(context_,&policy);stage("ReleasePolicy",result);
+            if(result!=S_OK)return result;
+        }
+        // Lever L3 (experiment retire-handoff, off by default): submissions leave the release sequence to the
+        // resource DDIs, within kRetireBacklogBound and kRetireAgeBoundMs (engine-ddi.h, set_retire_policy).
+        // Set before any queue exists.
+        if(ddi_experiment("retire-handoff")){
+            engine_ddi::RetirePolicy policy{};
+            policy.size=sizeof(policy);policy.handoff=1;
+            policy.backlog_bound=kRetireBacklogBound;policy.age_bound_ms=kRetireAgeBoundMs;
+            result=engine_ddi::set_retire_policy(context_,&policy);stage("RetireHandoff",result);
+            if(result!=S_OK)return result;
+        }
+        // Deferred replay (experiment deferred-replay, off by default): recording calls go to a ring of the
+        // recording thread, and a worker thread per ring makes the engine calls (engine-ddi.h, set_replay_policy).
+        // Off, neither exists. Set before any queue or list exists.
+        if(ddi_experiment("deferred-replay")){
+            engine_ddi::ReplayPolicy policy{};
+            policy.size=sizeof(policy);policy.enabled=1;policy.rings=kReplayRings;policy.ring_bytes=kReplayRingBytes;
+            policy.shell=this;policy.worker=replay_worker;policy.drained=replay_drained;
+            result=engine_ddi::set_replay_policy(context_,&policy);stage("DeferredReplay",result);
+            if(result!=S_OK)return result;
+            replay_=true;
+            ddi_mode2_note("amdgpu_wddm_d3d12 experiment deferred-replay on\n");
+        }
         auto ops=QueueEngineOps::native();ops.close=checked_close;ops.check_health=health;ops.health_cookie=this;
         queues_.reset(new(std::nothrow) QueueEngineRegistry(device_,context_,ops));
         if(!queues_)return E_OUTOFMEMORY;
@@ -234,14 +346,21 @@ public:
         bc250::umd::RuntimeDomain::Scope runtime(domain_);
         HostedInstanceBootstrap::Scope hosted(bootstrap_);
         if(!hosted.entered())return false;
+        // The replay workers drain and stop first: their pending calls use the engine, the context and the dispatch.
+        if(replay_ && context_){
+            engine_ddi::ReplayPolicy off{};off.size=sizeof(off);
+            HRESULT hr=engine_ddi::set_replay_policy(context_,&off);stage("DeferredReplay-off",hr);
+            if(hr!=S_OK)return false;
+            replay_=false;
+        }
         if(queues_){unsigned unresolved=0;
             HRESULT hr=queues_->discard_retired_metadata(unresolved);stage("QueueMetadata",hr);
             if(hr!=S_OK || unresolved)return false;
         }
         if(context_){
             uint32_t live=0;HRESULT hr=engine_ddi::destroy_device_context(context_,&live);
-            std::fprintf(stderr,"d3d12-engine DeviceContext-close result=%08lx live=%u\n",static_cast<unsigned long>(hr),live);
-            std::fflush(stderr);if(hr!=S_OK)return false;context_=nullptr;
+            amdgpu_wddm_log::print("d3d12-engine DeviceContext-close result=%08lx live=%u\n",static_cast<unsigned long>(hr),live);
+            amdgpu_wddm_log::flush();if(hr!=S_OK)return false;context_=nullptr;
         }
         if(imports_){HRESULT hr=imports_->close_after_engine_retirement();stage("HeapImports-close",hr);if(hr!=S_OK)return false;}
         if(engine_){
@@ -255,8 +374,8 @@ public:
         if(queue_bridge_)unresolved+=queue_bridge_->discard_metadata();
         active_.store(false,std::memory_order_release);
         const bool binding_failed=binding_failed_.load();
-        std::fprintf(stderr,"d3d12-engine teardown instance_closed=%u binding_failed=%u unresolved=%u\n",
-            unsigned(closed),unsigned(binding_failed),unresolved);std::fflush(stderr);
+        amdgpu_wddm_log::print("d3d12-engine teardown instance_closed=%u binding_failed=%u unresolved=%u\n",
+            unsigned(closed),unsigned(binding_failed),unresolved);amdgpu_wddm_log::flush();
         // Retain owner/code on uncertain unbind even if the engine discarded its instance.
         return closed && !binding_failed && unresolved==0;
     }
@@ -301,15 +420,28 @@ HRESULT create_device_engine(Device& device) noexcept {
     AdapterEngineAccess access{};
     HRESULT result=get_adapter_engine(*device.adapter,&access);
     stage("AdapterEngine",result);if(FAILED(result))return result;
+    device.trace_mode=ddi_trace_mode();device.recording=nullptr;
     auto owner=new(std::nothrow) DeviceEngine(device,access);if(!owner)return E_OUTOFMEMORY;
     device.engine=owner;
     result=owner->open();
-    if(result==S_OK)return S_OK;
+    if(result==S_OK){
+        // The device handle reaches the runtime only after this DDI returns, so no entry sees it change.
+        if(ddi_experiment("recording-bind")){
+            const bool bound=owner->bind_recording(true);
+            stage("RecordingBind",bound?S_OK:S_FALSE);
+            // The lab's game runs capture the debugger log of trace mode 2, not stderr (the retire hand-off's
+            // policy line reaches it through engine-ddi's log_line).
+            if(bound)ddi_mode2_note("amdgpu_wddm_d3d12 experiment recording-bind bound\n");
+        }
+        return S_OK;
+    }
     if(owner->close())delete owner;else owner->retain();
     device.engine=nullptr;return result;
 }
 void destroy_device_engine(Device& device) noexcept {
     auto owner=device.engine;if(!owner)return;
+    // DestroyDevice runs after every other entry of the device has returned: no recording entry holds it.
+    owner->bind_recording(false);
     if(owner->close())delete owner;else owner->retain();
     device.engine=nullptr;
 }
@@ -343,14 +475,19 @@ HRESULT host_test_open_device_engine(Device& device,PFN_vkGetInstanceProcAddr ic
                                      VkDevice vk_device) noexcept {
     if(device.engine || !device.adapter || !icd)return E_UNEXPECTED;
     AdapterEngineAccess access{};access.driver_entry=icd;
+    device.trace_mode=ddi_trace_mode();device.recording=nullptr;
     auto owner=new(std::nothrow) DeviceEngine(device,access);if(!owner)return E_OUTOFMEMORY;
     device.engine=owner;
     const HRESULT result=owner->host_test_open(physical,vk_device);
     if(result!=S_OK)(void)host_test_close_device_engine(device);
     return result;
 }
+bool host_test_bind_recording(Device& device,bool on) noexcept {
+    return device.engine && device.engine->bind_recording(on);
+}
 bool host_test_close_device_engine(Device& device) noexcept {
     auto owner=device.engine;if(!owner)return false;
+    owner->bind_recording(false);
     owner->host_test_destroy_instance();
     const bool closed=owner->close();
     if(closed)delete owner;else owner->retain();

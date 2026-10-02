@@ -77,8 +77,10 @@ struct HostedDispatch::Allocation {
 struct HostedDispatch::Sync {
     Sync* next{};
     D3DKMT_HANDLE handle{};
+    uint64_t id{};                              // identity inside the device: a KMT handle may be reissued
     D3DDDI_SYNCHRONIZATIONOBJECT_TYPE type{};
     const volatile UINT64* cpu{};
+    UINT64 published{};                         // the largest progress value published on it (any context)
     unsigned borrowed{};                        // progress publications in flight that name it
     bool busy{};
 };
@@ -208,12 +210,81 @@ HostedDispatch::Sync* HostedDispatch::find_sync(D3DKMT_HANDLE handle) noexcept {
     for(auto sync=syncs_;sync;sync=sync->next)if(sync->handle==handle)return sync;
     return nullptr;
 }
-// Never under lock_: the runtime's error callback is a callback like any other.
+HostedDispatch::Sync* HostedDispatch::find_sync_id(uint64_t id) noexcept {
+    if(!id)return nullptr;
+    for(auto sync=syncs_;sync;sync=sync->next)if(sync->id==id)return sync;
+    return nullptr;
+}
+// The marks of device-progress.h: one per monitored fence whose published value it has not reached. A fence
+// whose destroy is in flight gets a mark with no value read (its CPU page may already be unmapped); the mark
+// is satisfied when the fence is gone, which the ICD does only after waiting for it (radv_wddm2_cs.c:198).
+void HostedDispatch::progress_snapshot(ProgressSnapshot* out) noexcept {
+    if(!out)return;
+    *out={};
+    AcquireSRWLockShared(&lock_);
+    for(auto sync=syncs_;sync;sync=sync->next){
+        if(sync->type!=D3DDDI_MONITORED_FENCE || !sync->published || !sync->id)continue;
+        if(!sync->busy && sync->cpu){
+            const UINT64 value=*sync->cpu;MemoryBarrier();
+            // A removed device never runs anything again; a fence that caught up needs no mark.
+            if(value==UINT64_MAX || value>=sync->published)continue;
+        }
+        if(out->count==kMaxProgressMarks){out->complete=false;break;}
+        out->marks[out->count++]={sync->id,sync->published};
+    }
+    ReleaseSRWLockShared(&lock_);
+}
+bool HostedDispatch::progress_retired(const ProgressSnapshot* snapshot) noexcept {
+    if(!snapshot || !snapshot->complete)return false;
+    bool retired=true;
+    AcquireSRWLockShared(&lock_);
+    for(unsigned i=0;i<snapshot->count && retired;++i){
+        auto sync=find_sync_id(snapshot->marks[i].sync);
+        if(!sync)continue;                       // destroyed after the snapshot: its work retired with it
+        if(sync->busy || !sync->cpu){retired=false;continue;}
+        const UINT64 value=*sync->cpu;MemoryBarrier();
+        if(value!=UINT64_MAX && value<snapshot->marks[i].value)retired=false;
+    }
+    ReleaseSRWLockShared(&lock_);
+    return retired;
+}
+ProgressSource HostedDispatch::progress_source() noexcept {
+    return {this,
+        [](void* owner,ProgressSnapshot* out) noexcept {static_cast<HostedDispatch*>(owner)->progress_snapshot(out);},
+        [](void* owner,const ProgressSnapshot* snapshot) noexcept {
+            return static_cast<HostedDispatch*>(owner)->progress_retired(snapshot);}};
+}
+// Never under lock_: the runtime's error callback is a callback like any other. A replay worker leaves the callback
+// to report_deferred_removal.
 HRESULT HostedDispatch::remove_device(int site) noexcept {
     char name[48];std::snprintf(name,sizeof(name),"hosted-remove-device:%d",site);
     ddi_failure_note(name,D3DDDIERR_DEVICEREMOVED);
+    if(worker_==this){
+        if(!lost_.exchange(true))removal_deferred_.store(true,std::memory_order_release);
+        return D3DDDIERR_DEVICEREMOVED;
+    }
     if(!lost_.exchange(true) && user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
     return D3DDDIERR_DEVICEREMOVED;
+}
+void HostedDispatch::report_deferred_removal() noexcept {
+    if(!removal_deferred_.load(std::memory_order_acquire) || worker_==this || !removal_deferred_.exchange(false))return;
+    ddi_failure_note("hosted-remove-device:deferred",D3DDDIERR_DEVICEREMOVED);
+    if(user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
+}
+// What a recording call of the engine may need on a replay worker: device-level memory and CPU-side sync work. No
+// context, submission, GPU wait or signal, progress publication or queue operation (engine-ddi replay.h, R4).
+bool HostedDispatch::worker_admits(uint32_t op) noexcept {
+    switch(op){
+    case BC250_HOST_CREATE_PAGING:case BC250_HOST_DESTROY_PAGING:case BC250_HOST_CHECK_STATUS:
+    case BC250_HOST_REPORT_LOST:
+    case BC250_HOST_CreateAllocation2:case BC250_HOST_DestroyAllocation2:case BC250_HOST_ReserveGpuVirtualAddress:
+    case BC250_HOST_MapGpuVirtualAddress:case BC250_HOST_FreeGpuVirtualAddress:case BC250_HOST_MakeResident:
+    case BC250_HOST_Evict:case BC250_HOST_Lock2:case BC250_HOST_Unlock2:
+    case BC250_HOST_CreateSynchronizationObject2:case BC250_HOST_DestroySynchronizationObject:
+    case BC250_HOST_WaitForSynchronizationObjectFromCpu:case BC250_HOST_SignalSynchronizationObjectFromCpu:
+    case BC250_HOST_GetDeviceState:return true;
+    default:return false;
+    }
 }
 bc250_host HostedDispatch::descriptor(uint64_t luid,void* identity) noexcept {
     bc250_host host{};host.sType=BC250_HOST_STYPE;host.version=BC250_HOST_VERSION;
@@ -352,7 +423,12 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
             ++sync->borrowed;
         }
         const HRESULT hr=internal_queue(op,argument);
-        Held held(lock_);--sync->borrowed;return hr;
+        Held held(lock_);--sync->borrowed;
+        // Device-wide progress (device-progress.h): the publication was accepted, so everything this
+        // context submitted up to this value is on the GPU. Values of one fence only grow (the publication
+        // is refused otherwise), and the maximum is taken in case several contexts ever share a fence.
+        if(hr==S_OK && a.value>sync->published)sync->published=a.value;
+        return hr;
     }
 #define KT_CALL(name,args) (kernel_.pfn##name##Cb?kernel_.pfn##name##Cb(runtime_.handle,args):E_NOTIMPL)
     switch(op){
@@ -593,7 +669,7 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         Held held(lock_);sync->busy=false;
         if(hr!=S_OK){unlink(sync);held.release();delete sync;return hr;}
         const bool duplicate=find_sync(b.hSyncObject)!=nullptr;
-        sync->handle=b.hSyncObject;sync->type=b.Info.Type;
+        sync->handle=b.hSyncObject;sync->type=b.Info.Type;sync->id=++next_sync_;
         if(sync->type==D3DDDI_MONITORED_FENCE)sync->cpu=static_cast<const volatile UINT64*>(b.Info.MonitoredFence.FenceValueCPUVirtualAddress);
         const bool malformed=!sync->handle || duplicate || (sync->type==D3DDDI_MONITORED_FENCE && !sync->cpu);
         held.release();
@@ -634,6 +710,10 @@ int32_t HostedDispatch::dispatch(void* userdata,uint32_t op,void* argument) noex
     auto self=static_cast<HostedDispatch*>(userdata);
     if(!self || !self->active_.load(std::memory_order_acquire) || !self->runtime_.handle || !self->domain_.entered())
         return static_cast<int32_t>(0xc000000du);
+    if(worker_==self && !worker_admits(op)){
+        char name[40];std::snprintf(name,sizeof(name),"replay-worker-op:%u",op);
+        ddi_failure_note(name,E_INVALIDARG);return static_cast<int32_t>(0xc000000du);
+    }
     HRESULT hr=self->operation(op,argument);
     if(hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG){
         self->remove_device();return static_cast<int32_t>(0xc00002b6u);}

@@ -12,6 +12,7 @@
 // StreamOutputSemantic.
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
+#include "replay.h"
 #include <new>
 #include <string>
 #include <vector>
@@ -389,12 +390,15 @@ void APIENTRY destroy_pipeline(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINESTATE 
         c->report(E_INVALIDARG);
         return;
     }
+    drain_all(c, Drain::Destroy);
     release_engine(r->h);
     poison(r->h);
     c->live.fetch_sub(1);
 }
 
 // ---- Command-list slots -----------------------------------------------------------------------------------------
+using List = ID3D12GraphicsCommandList;
+
 void APIENTRY set_pipeline_state(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HPIPELINESTATE h) {
     CommandListRecord* l = list_of(hlist, "SetPipelineState");
     if (!l) return;
@@ -404,7 +408,8 @@ void APIENTRY set_pipeline_state(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HPIPELINE
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->SetPipelineState(p ? static_cast<ID3D12PipelineState*>(p->h.engine) : nullptr);
+    ID3D12PipelineState* pso = p ? static_cast<ID3D12PipelineState*>(p->h.engine) : nullptr;
+    record(l, [=](List* e) { e->SetPipelineState(pso); });
 }
 
 void APIENTRY set_compute_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HROOTSIGNATURE h) {
@@ -415,17 +420,20 @@ void APIENTRY set_compute_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_H
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->SetComputeRootSignature(r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr);
+    ID3D12RootSignature* signature = r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr;
+    record(l, [=](List* e) { e->SetComputeRootSignature(signature); });
 }
 
 void APIENTRY set_compute_root_table(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_DESCRIPTOR_HANDLE base) {
-    if (CommandListRecord* l = list_of(hlist, "SetComputeRootDescriptorTable"))
-        l->list()->SetComputeRootDescriptorTable(index, D3D12_GPU_DESCRIPTOR_HANDLE{base.ptr});
+    if (CommandListRecord* l = list_of(hlist, "SetComputeRootDescriptorTable")) {
+        const D3D12_GPU_DESCRIPTOR_HANDLE handle{base.ptr};
+        record(l, [=](List* e) { e->SetComputeRootDescriptorTable(index, handle); });
+    }
 }
 
 void APIENTRY set_compute_root_constant(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT data, UINT offset) {
     if (CommandListRecord* l = list_of(hlist, "SetComputeRoot32BitConstant"))
-        l->list()->SetComputeRoot32BitConstant(index, data, offset);
+        record(l, [=](List* e) { e->SetComputeRoot32BitConstant(index, data, offset); });
 }
 
 void APIENTRY set_compute_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT count, const void* data,
@@ -436,26 +444,27 @@ void APIENTRY set_compute_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT index
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->SetComputeRoot32BitConstants(index, count, data, offset);
+    record(l, [=](List* e, const UINT* d) { e->SetComputeRoot32BitConstants(index, count, d, offset); },
+           in(static_cast<const UINT*>(data), count));
 }
 
 void APIENTRY set_compute_root_cbv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetComputeRootConstantBufferView"))
-        l->list()->SetComputeRootConstantBufferView(index, va);
+        record(l, [=](List* e) { e->SetComputeRootConstantBufferView(index, va); });
 }
 
 void APIENTRY set_compute_root_srv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetComputeRootShaderResourceView"))
-        l->list()->SetComputeRootShaderResourceView(index, va);
+        record(l, [=](List* e) { e->SetComputeRootShaderResourceView(index, va); });
 }
 
 void APIENTRY set_compute_root_uav(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetComputeRootUnorderedAccessView"))
-        l->list()->SetComputeRootUnorderedAccessView(index, va);
+        record(l, [=](List* e) { e->SetComputeRootUnorderedAccessView(index, va); });
 }
 
 void APIENTRY dispatch(D3D12DDI_HCOMMANDLIST hlist, UINT x, UINT y, UINT z) {
-    if (CommandListRecord* l = list_of(hlist, "Dispatch")) l->list()->Dispatch(x, y, z);
+    if (CommandListRecord* l = list_of(hlist, "Dispatch")) record(l, [=](List* e) { e->Dispatch(x, y, z); });
 }
 } // namespace
 

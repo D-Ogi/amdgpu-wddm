@@ -88,13 +88,68 @@ template<class Function,class Binding,class Policy> struct EntryThunk;
 template<class R,class... A,class Binding,class Policy>
 struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
     static_assert(sizeof...(A)>0,"A DDI entry must carry an owner handle");
-    template<class Owner> static R denied(Owner* owner,HRESULT hr) noexcept {
-        static_assert(noexcept(Policy::failure(owner,hr)),"failure must not throw");
-        Policy::failure(owner,hr);
+    static R failure_value(HRESULT hr) noexcept {
         if constexpr(std::is_same_v<R,HRESULT>) return hr;
         else if constexpr(!std::is_void_v<R>) return EntryFailureValue<R>::value();
     }
+    template<class Owner> static R denied(Owner* owner,HRESULT hr) noexcept {
+        static_assert(noexcept(Policy::failure(owner,hr)),"failure must not throw");
+        Policy::failure(owner,hr);
+        return failure_value(hr);
+    }
+    // Optional fast path, for a binding that opts in (static constexpr bool fast) under a policy that offers
+    // one: Policy::fast_binding(Owner&) noexcept returns the owner's precomputed binding, or null for the full
+    // path, and Policy::FastScope(*binding) noexcept binds this thread, with entered(). Admitted, the call runs
+    // without EntryTrace and without Scope, so the policy admits only where the fast scope grants the same
+    // authority as Scope and where the trace hooks would write nothing on success; a refusal, a missing original
+    // and an exception are handled as on the full path (denied), inside the fast scope, and then given to the
+    // optional Policy::fast_denied(owner,name,hr) noexcept, which stands in for the leave hook's failure record.
+    // Everything else takes the full path.
+    static constexpr bool fast_path() noexcept {
+        if constexpr(requires {Binding::fast;} && requires {typename Policy::FastScope;}) return Binding::fast;
+        else return false;
+    }
+    static constexpr const char* binding_name() noexcept {
+        if constexpr(requires {Binding::name();}) return Binding::name();
+        else return "unnamed";
+    }
+    template<class Owner> static R fast_denied(Owner* owner,HRESULT hr) noexcept {
+        static_assert(noexcept(Policy::failure(owner,hr)),"failure must not throw");
+        Policy::failure(owner,hr);
+        if constexpr(requires {Policy::fast_denied(owner,binding_name(),hr);}) {
+            static_assert(noexcept(Policy::fast_denied(owner,binding_name(),hr)),"fast_denied must not throw");
+            Policy::fast_denied(owner,binding_name(),hr);
+        }
+        return failure_value(hr);
+    }
     static R APIENTRY call(A... args) noexcept {
+        if constexpr(fast_path()) {
+            auto first=std::get<0>(std::tuple<A...>(args...));
+            static_assert(noexcept(Policy::resolve(first)),"resolve must not throw");
+            if(auto* owner=Policy::resolve(first)) {
+                static_assert(noexcept(Policy::fast_binding(*owner)),"fast binding must not throw");
+                if(const auto* binding=Policy::fast_binding(*owner)) {
+                    using FastScope=typename Policy::FastScope;
+                    static_assert(std::is_nothrow_constructible_v<FastScope,decltype(*binding)>);
+                    static_assert(std::is_nothrow_destructible_v<FastScope>);
+                    FastScope scope(*binding);
+                    if(scope.entered()) {
+                        auto fn=Binding::original();
+                        if(!fn) return fast_denied(owner,E_UNEXPECTED);
+                        try {
+                            return fn(args...);
+                        } catch(const std::bad_alloc&) {
+                            return fast_denied(owner,E_OUTOFMEMORY);
+                        } catch(...) {
+                            return fast_denied(owner,E_FAIL);
+                        }
+                    }
+                }
+            }
+        }
+        return full(args...);
+    }
+    static R full(A... args) noexcept {
         auto first=std::get<0>(std::tuple<A...>(args...));
         static_assert(noexcept(Policy::resolve(first)),"resolve must not throw");
         using Owner=std::remove_pointer_t<decltype(Policy::resolve(first))>;
@@ -328,6 +383,10 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
     X(pfnBarrier) \
     X(pfnOmSetAlphaBlendFactor)
 
+constexpr bool ddi_same_name(const char* a,const char* b) noexcept {
+    while(*a && *a==*b){++a;++b;}
+    return *a==*b;
+}
 // One immutable original table per Policy and table number in this UMD module.
 // Refill with identical entries is permitted. A changed entry refuses the whole
 // refill without publishing any output. No mutable current adapter/device global.
@@ -361,6 +420,10 @@ template<class Policy> class DdiEntryTables final {
         }
     };
     template<unsigned Index,auto Member,class Name> struct ListBinding:Name {
+        // The recording slots may take the policy's fast path (EntryThunk). Close and Reset bound a recording,
+        // and Present is a queue operation (QueueDomainScope); those three always take the full entry.
+        static constexpr bool fast=!ddi_same_name(Name::name(),"pfnCloseCommandList") &&
+            !ddi_same_name(Name::name(),"pfnResetCommandList") && !ddi_same_name(Name::name(),"pfnPresent");
         static auto original() noexcept {
             using Fn=std::remove_reference_t<decltype(lists_[Index].*Member)>;
             return list_ready_[Index].load(std::memory_order_acquire)?lists_[Index].*Member:Fn{};

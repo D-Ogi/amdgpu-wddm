@@ -3,6 +3,7 @@
 // execute_command_lists), the retirement fence of each engine queue, and the initialization of committed render
 // targets and depth-stencil resources.
 #include "internal.h"
+#include "replay.h"
 
 namespace engine_ddi {
 
@@ -294,10 +295,8 @@ QueueClose destroy_engine_queue(EngineQueue* q) noexcept {
 HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept {
     if (!q || (count && !lists)) return E_INVALIDARG;
     DeviceContext* c = q->context;
-    std::vector<ID3D12CommandList*> engine;
-    try {
-        engine.reserve(count);
-    } catch (...) {
+    InlineArray<ID3D12CommandList*, 64> engine;
+    if (!engine.reserve(count)) {
         c->report(E_OUTOFMEMORY);
         return E_OUTOFMEMORY;
     }
@@ -308,7 +307,8 @@ HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMAN
             c->report(E_INVALIDARG);
             return E_INVALIDARG;
         }
-        engine.push_back(l->list());
+        drain_list(l, Drain::Ecl);              // a closed list has nothing pending: its Close drained it
+        engine.data()[i] = l->list();
     }
     // Committed render targets created since the last call are initialized first; this queue then waits for them.
     const uint64_t init = flush_initializations(c, q);
@@ -324,7 +324,7 @@ HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMAN
         c->report(hr);
         return hr;
     }
-    c->process_retired();
+    c->retire_after_submit();
     return S_OK;
 }
 

@@ -231,6 +231,56 @@ checks the value oracle with the same parameters. The software control passes th
 `-FeatureLevel12_1` (2026-09-30, exit 0, 333 batches in 20 s, 1332 lists, 1363968 draws, 65470464 words
 compared, no mismatch, 664 allocator renewals, batch mean 59 ms).
 
+`build.ps1 -RecordBench` replaces the `copy` operation with a CPU-bound recording benchmark
+(`interactive-recordbench.h`), the measurement client of the UMD's `deferred-replay` experiment (adapter108). A
+frame is `-RecordBenchLists` (default 4, 1 to 8) lists of `-RecordBenchDraws` (default 512, a multiple of 16) draws
+of one pixel each, executed in `-RecordBenchExecutes` (default 2) `ExecuteCommandLists` calls, then a fence round
+trip. Every draw changes state as a game does: 8 root constants and a root CBV into the list's UPLOAD ring each
+draw, the pipeline every 4 draws (two pipelines that differ in their pixel program), the descriptor table every 8
+(4 CBVs in a shader-visible heap), and per group of 16 draws the render target (two 1x1 targets in turn),
+viewport, scissor and vertex buffer; even draws are indexed. Each list also has its barriers, a buffer copy and
+two texture copies. The pixel program of `recordbench.hlsl` (`recordbench-programs.h`, fxc) writes everything it
+read into the draw's own 128-byte slot: the root constants, the CBV words, the table words, the pipeline's mark
+with the slot index, the vertex buffer's tag, a cross word of those four sources and a seal; the target keeps the
+last draw's root word 1. After the fence every word of every slot and both targets of every list is compared with
+`recordbench-oracle.h`. The root and CBV words, the cross word and the targets depend on the run's seed, the
+phase, the frame, the list and the draw, and the mark, tag and table words on the pipeline, vertex buffer and table
+the draw had bound, so a call replayed late, out of order or not at all leaves a wrong word. The
+first 16 mismatches are traced as `Record bench mismatch PHASE frame F list L draw D slot|target word W, readback
+offset O, expected E, actual A, actual is ...`, naming the list, frame, draw and word the actual value came from
+when this phase wrote it in that frame or the one before.
+
+Three phases share `-RecordBenchSeconds` (default 20, 3 to 140, never the last 10 s before the client's deadline),
+each counting its frames after 16 warm-up frames: `burst`, the main thread records the lists back to back;
+`interleaved`, the main thread also spins `-RecordBenchWorkUs` (default 64) microseconds of stand-in application
+work after each group of 16 draws, as a game's main thread interleaves its own work with recording (about 8 ms a
+frame with the defaults); `threaded`, one thread per list records with the same work while the main thread waits,
+then submits. Per frame the client takes the recording thread's `QueryThreadCycleTime` cycles over its recording
+less those of its stand-in work (the `api` figure: what the runtime and the driver cost that thread; in the threaded
+phase the largest of the threads, with their sum beside it), the submission's cycles, and the QPC wall time of
+recording, submission, GPU wait and verification. Cycles become microseconds at a rate calibrated by five 20 ms
+spins at the start; the final line gives the rate again at the end, because Windows does not promise a constant
+cycle rate. Per phase it also takes the main thread's and the process's CPU time (`GetThreadTimes`,
+`GetProcessTimes`) over the counted frames, so CPU time that moved to other threads, such as the replay workers,
+stays visible. Each phase writes two trace lines (`Record bench PHASE: frames N after 16 warm-up, api cpu us mean
+... p50 ... p95 ... max ..., all threads mean ..., work cpu us mean ..., submit cpu us mean ...` and `Record bench
+PHASE wall us: record ..., submit ..., gpu wait ..., verify ..., frame ...; cpu ms per frame: main thread ...,
+process ..., over ... ms`) and appends one row per counted frame to `recordbench-frames.csv` in the session
+directory, after the phase and never inside a measured span. The run starts with `Record bench seed ...` and ends
+with `Record bench: phases measured M of 3, frames N, words W, mismatches X, ...`; both name the
+`AMDGPU_WDDM_D3D12_EXPERIMENT` value the process saw. It succeeds only when all three phases counted a frame, every
+word compared equal, no list failed to record and the device was not removed. No window is made.
+
+The A/B is one binary run twice: the trial runner sets `AMDGPU_WDDM_D3D12_EXPERIMENT` from
+`BC250_TRIAL_EXPERIMENT` at Stage, `deferred-replay` for the on arm and nothing for the off arm, both with
+`BC250_TRIAL_TRACE=2` or `0` (the full DDI trace writes a record per call and would dominate the figures). Then
+`python -B recordbench_compare.py <off session> <on session>` prints the table per phase with the change, from
+each session's `trace.jsonl` and `recordbench-frames.csv`, and exits 1 when either session did not pass.
+`recordbench-test` checks the oracle with the build's parameters and `test_recordbench_compare.py` the table. The
+software control passes this variant (2026-10-01, exit 0, 323 counted frames in 20 s over the three phases,
+24316824 words compared, no mismatch); WARP does its work at `ExecuteCommandLists`, so its recording figures say
+nothing about our driver's.
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained

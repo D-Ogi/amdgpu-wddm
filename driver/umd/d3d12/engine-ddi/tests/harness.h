@@ -16,6 +16,10 @@ void check(bool ok, const char* what);
 void checkf(bool ok, const char* format, ...);
 int failure_count();
 
+// The log_refusal lines of the whole run so far that start with prefix, in order (engine_ddi::harness_set_log_observer,
+// installed before the first device). The once-only diagnostic lines are counted per process, as they are written.
+std::vector<std::string> refusal_lines(const char* prefix);
+
 // Runtime-owned private storage: filled with 0xCD like fresh runtime memory, with a canary behind the size the
 // driver asked for. Blocks live until the harness ends.
 class Storage {
@@ -179,10 +183,17 @@ HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory
 
 // ---- Round trips ---------------------------------------------------------------------------------------------------
 void test_copy(Env& env, Device& device);
+void test_copy_slices(Env& env, Device& device);
+void test_copy_bc_volume(Env& env, Device& device);
+// The packed video formats engine-ddi stores as typeless formats: sized, created, viewed, copied and read back.
+void test_stored_formats(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_graphics(Env& env, Device& device);
 void test_retirement(Env& env);
+void test_retire_handoff(Env& env);
 void test_device_queries(Env& env, Device& device);
+// The once-only diagnostic lines, on a device of its own; it runs before any other test makes their cases.
+void test_log_lines(Env& env);
 void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
 void test_small_placement(Env& env);

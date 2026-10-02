@@ -14,6 +14,7 @@
 #include "heap-import.h"
 #include <atomic>
 #include <cstring>
+#include "stdio-log.h"
 
 namespace native12 {
 namespace {
@@ -27,14 +28,25 @@ template<class T> bool trace_input(const T* source,T& destination) noexcept {
 }
 struct EntryPolicy:EntryOwner<Device> {
     using Scope=DeviceEngineScope;
+    // The recording slots of the list tables (ddi-entry.h, ListBinding::fast) enter through the device's
+    // recording binding when it is published (lever L2, device-engine.h); otherwise, and for every other
+    // table, through Scope with the trace hooks below.
+    using FastScope=RecordingScope;
+    static const RecordingBinding* fast_binding(Device& device) noexcept {return RecordingScope::admit(device.recording);}
+    // The leave hook's failure record for a call refused on the fast path (failures-only trace mode 2; the
+    // binding is never published in mode 1).
+    // Out of line: 134 recording thunks would otherwise each carry the note's formatting on their cold path.
+    __declspec(noinline) static void fast_denied(Device*,const char* name,HRESULT outcome) noexcept {
+        if(FAILED(outcome) && outcome!=E_PENDING)ddi_failure_note(name,outcome);
+    }
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
     // Sizes only: other scalar returns can be addresses, which a trace must not carry.
     static void returned(Device*,const char* name,uint64_t id,uint64_t value) noexcept {
         if(!id || !ddi_trace_enabled() || (std::strncmp(name,"pfnCalcPrivate",14) && std::strcmp(name,"pfnGetDescriptorSizeInBytes")))return;
-        std::fprintf(stderr,"{\"event\":\"ddi-return\",\"sequence\":%llu,\"name\":\"%s\",\"value\":%llu}\n",
+        amdgpu_wddm_log::print("{\"event\":\"ddi-return\",\"sequence\":%llu,\"name\":\"%s\",\"value\":%llu}\n",
             static_cast<unsigned long long>(id),name,static_cast<unsigned long long>(value));
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT* output) noexcept {
         if(ddi_trace_mode()==2){
@@ -43,9 +55,9 @@ struct EntryPolicy:EntryOwner<Device> {
         }
         if(!ddi_trace_enabled())return;
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        std::fprintf(stderr,"{\"event\":\"ddi-format\",\"name\":\"%s\",\"format\":%u,\"output_present\":%u,\"support\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+        amdgpu_wddm_log::print("{\"event\":\"ddi-format\",\"name\":\"%s\",\"format\":%u,\"output_present\":%u,\"support\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
             name,unsigned(format),unsigned(output!=nullptr),output?*output:0,now.QuadPart,GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT samples,
         D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags,UINT* output) noexcept {
@@ -55,16 +67,16 @@ struct EntryPolicy:EntryOwner<Device> {
         }
         if(!ddi_trace_enabled())return;
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        std::fprintf(stderr,"{\"event\":\"ddi-msaa\",\"name\":\"%s\",\"format\":%u,\"samples\":%u,\"flags\":%u,\"output_present\":%u,\"levels\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+        amdgpu_wddm_log::print("{\"event\":\"ddi-msaa\",\"name\":\"%s\",\"format\":%u,\"samples\":%u,\"flags\":%u,\"output_present\":%u,\"levels\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
             name,unsigned(format),samples,unsigned(flags),unsigned(output!=nullptr),output?*output:0,now.QuadPart,GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     static void observed(Device* device,const char* name,D3D12DDI_HDEVICE,UINT count,UINT* map) noexcept {
         if(!ddi_trace_enabled() || !map || !count)return;
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        std::fprintf(stderr,"{\"event\":\"ddi-node-map\",\"name\":\"%s\",\"count\":%u,\"first\":%u,\"lost\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+        amdgpu_wddm_log::print("{\"event\":\"ddi-node-map\",\"name\":\"%s\",\"count\":%u,\"first\":%u,\"lost\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
             name,count,map[0],unsigned(device && device->lost.load()),now.QuadPart,GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,
         const D3D12DDIARG_CREATEHEAP_0001* heap,D3D12DDI_HHEAP,D3D12DDI_HRTRESOURCE,
@@ -78,7 +90,7 @@ struct EntryPolicy:EntryOwner<Device> {
         // WDK26100 d3d12umddi.h:10884: pitches are meaningful only for ROW_MAJOR.
         const bool row_readable=row_present && r.Layout==D3D12DDI_TL_ROW_MAJOR && trace_input(r.pRowMajorLayout,row);
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        std::fprintf(stderr,"{\"event\":\"ddi-create-heap-resource\",\"name\":\"%s\","
+        amdgpu_wddm_log::print("{\"event\":\"ddi-create-heap-resource\",\"name\":\"%s\","
             "\"heap_present\":%u,\"heap_readable\":%u,\"heap_flags\":%u,\"cpu_page\":%u,\"memory_pool\":%u,"
             "\"bytes\":%llu,\"alignment\":%llu,\"creation_node_mask\":%u,\"visible_node_mask\":%u,"
             "\"resource_present\":%u,\"resource_readable\":%u,\"resource_type\":%u,\"layout\":%u,"
@@ -91,7 +103,7 @@ struct EntryPolicy:EntryOwner<Device> {
             static_cast<unsigned long long>(r.Width),r.Height,unsigned(r.DepthOrArraySize),unsigned(r.MipLevels),unsigned(r.Flags),r.NumCastableFormats,
             unsigned(row_present),unsigned(row_readable),row.RowPitch,row.SlicePitch,unsigned(session.pDrvPrivate!=nullptr),
             now.QuadPart,GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,const D3D12DDIARG_CREATERESOURCE_0088* resource,
         D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS optimization,UINT32 alignment_restriction,UINT visible_nodes,
@@ -100,7 +112,7 @@ struct EntryPolicy:EntryOwner<Device> {
         D3D12DDIARG_CREATERESOURCE_0088 r{};D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
         const bool resource_readable=trace_input(resource,r),output_readable=trace_input(output,info);
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        std::fprintf(stderr,"{\"event\":\"ddi-allocation-info\",\"name\":\"%s\",\"optimization\":%u,\"alignment_restriction\":%u,"
+        amdgpu_wddm_log::print("{\"event\":\"ddi-allocation-info\",\"name\":\"%s\",\"optimization\":%u,\"alignment_restriction\":%u,"
             "\"visible_node_mask\":%u,\"resource_readable\":%u,\"resource_type\":%u,\"layout\":%u,\"format\":%u,"
             "\"width\":%llu,\"height\":%u,\"depth\":%u,\"mips\":%u,\"samples\":%u,\"resource_flags\":%u,"
             "\"output_readable\":%u,\"data_size\":%llu,\"data_alignment\":%llu,\"qpc\":%lld,\"thread\":%lu}\n",
@@ -109,7 +121,7 @@ struct EntryPolicy:EntryOwner<Device> {
             unsigned(r.DepthOrArraySize),unsigned(r.MipLevels),r.SampleDesc.Count,unsigned(r.Flags),
             unsigned(output_readable),static_cast<unsigned long long>(info.ResourceDataSize),
             static_cast<unsigned long long>(info.ResourceDataAlignment),now.QuadPart,GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     // Fixed-size fields only: no surface array, rectangle, private data or handle is followed or printed.
     static void observed(Device*,const char* name,D3D12DDI_HCOMMANDLIST,D3D12DDI_HCOMMANDQUEUE queue,
@@ -119,7 +131,7 @@ struct EntryPolicy:EntryOwner<Device> {
         D3D12DDIARG_PRESENT_0001 a{};
         const bool readable=trace_input(args,a);
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
-        std::fprintf(stderr,"{\"event\":\"ddi-present\",\"name\":\"%s\",\"args_readable\":%u,\"queue_present\":%u,"
+        amdgpu_wddm_log::print("{\"event\":\"ddi-present\",\"name\":\"%s\",\"args_readable\":%u,\"queue_present\":%u,"
             "\"surfaces\":%u,\"surfaces_present\":%u,\"destination_present\":%u,\"destination_subresource\":%u,"
             "\"flags\":%u,\"flip_interval\":%u,\"vidpn_source\":%u,\"dirty_rects\":%u,\"private_size\":%u,"
             "\"private_present\":%u,\"optimize_for_composition\":%u,\"result_present\":%u,\"contexts_present\":%u,"
@@ -129,7 +141,7 @@ struct EntryPolicy:EntryOwner<Device> {
             unsigned(a.Flags.Value),unsigned(a.FlipInterval),unsigned(a.VidPnSourceID),a.DirtyRects,a.PrivateDriverDataSize,
             unsigned(a.pPrivateDriverData!=nullptr),unsigned(a.OptimizeForComposition),unsigned(result!=nullptr),
             unsigned(contexts!=nullptr),unsigned(queues!=nullptr),now.QuadPart,GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     // Device, command list, state object and the null resolver: entry-owner.h, shared with device-table-test.cpp.
     using EntryOwner<Device>::resolve;
@@ -210,12 +222,12 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     const HRESULT hr=device?present_outputs(*device,queue,args,result,contexts,queues,stage):E_INVALIDARG;
     if(hr!=S_OK){if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};}
     if(ddi_trace_enabled()){
-        std::fprintf(stderr,"{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
+        amdgpu_wddm_log::print("{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
             "\"source\":%u,\"destination\":%u,\"context\":%u,\"thread\":%lu}\n",stage,
             static_cast<unsigned long>(hr),unsigned(hr==S_OK && result->BroadcastSrcAllocation[0]!=0),
             unsigned(hr==S_OK && result->BroadcastDstAllocation[0]!=0),
             unsigned(hr==S_OK && contexts->hContext!=nullptr),GetCurrentThreadId());
-        std::fflush(stderr);
+        amdgpu_wddm_log::flush();
     }
     if(hr!=S_OK && device)report_device_error(*device,hr);
 }

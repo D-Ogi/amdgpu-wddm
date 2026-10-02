@@ -3,9 +3,11 @@
 // their tile slots are in tiles.cpp), resource_allocation, object_allocation, and the list slots that move data
 // between resources (L10, L13, L17).
 #include "internal.h"
+#include "replay.h"
 #include "format-list.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include <algorithm>
+#include <cstdio>
 
 namespace engine_ddi {
 
@@ -69,6 +71,16 @@ HRESULT to_api_desc(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DE
     out.Format = in.Format;
     out.SampleDesc = in.SampleDesc;
     out.Layout = static_cast<D3D12_TEXTURE_LAYOUT>(in.Layout);
+    // A packed video format is its storage (internal.h, StoredFormat): a 2D texture of one sample, and of one mip level
+    // for a 4:2:2 format, whose mip widths in pixels and in elements part ways (6 pixels are 3 elements, the next
+    // level 3 pixels, 2 elements, while the image's next level is 1 element). Sizing and creation both come here.
+    if (const StoredFormat* s = stored_format(in.Format)) {
+        if (in.ResourceType != D3D12DDI_RT_TEXTURE2D || in.SampleDesc.Count > 1 ||
+            (s->pixels > 1 && (in.MipLevels != 1 || in.Width % s->pixels)))
+            return E_INVALIDARG;
+        out.Format = s->storage;
+        out.Width = in.Width / s->pixels;
+    }
     const UINT f = in.Flags;
     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
     if (f & D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET) flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
@@ -374,11 +386,14 @@ HRESULT engine_heap_from_memory(DeviceContext* c, const D3D12_HEAP_DESC& desc, c
                                          reinterpret_cast<void**>(heap));
 }
 
+// stored_from is the format the application named, kept when desc stores it (internal.h, StoredFormat).
 void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
-                        const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind) noexcept {
+                        const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind,
+                        DXGI_FORMAT stored_from) noexcept {
     if (b) backing_acquire(b);                          // a reserved resource has none
+    if (!stored_format(stored_from)) stored_from = DXGI_FORMAT_UNKNOWN;
     new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, kInitNone, nullptr, nullptr,
-                           0, 0};
+                           0, 0, stored_from};
     c->live.fetch_add(1);
 }
 
@@ -387,6 +402,8 @@ D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_heap_and_resource(D3D12DDI_HDEVIC
                                                                  D3D12DDI_HPROTECTEDRESOURCESESSION_0030) {
     return {sizeof(HeapRecord), sizeof(ResourceRecord)};
 }
+
+void log_untiled_reserved(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, HRESULT result) noexcept;
 
 HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_0001* heap_desc, D3D12DDI_HHEAP hheap,
                                  D3D12DDI_HRTRESOURCE rt, const D3D12DDIARG_CREATERESOURCE_0088* res_desc,
@@ -410,9 +427,10 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             ID3D12Resource* engine = nullptr;
             HRESULT hr = reserve(c, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
                                  res_desc->pCastableFormats, &engine);
+            log_untiled_reserved(c, desc, hr);
             if (FAILED(hr)) return hr;
             construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, nullptr, 0, desc, rt,
-                               ResourceKind::Reserved);
+                               ResourceKind::Reserved, res_desc->Format);
             return S_OK;
         }
         if (!base->backing) return E_INVALIDARG;        // a reserved resource names no heap memory
@@ -427,7 +445,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
                            res_desc->NumCastableFormats, res_desc->pCastableFormats, &engine);
         if (FAILED(hr)) return hr;
         construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, base->backing, offset, desc, rt,
-                           ResourceKind::Placed);
+                           ResourceKind::Placed, res_desc->Format);
         return S_OK;
     }
     if (!hheap.pDrvPrivate) return E_INVALIDARG;
@@ -572,7 +590,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     c->live.fetch_add(1);
     if (res_desc) {
         auto* record = static_cast<ResourceRecord*>(hres.pDrvPrivate);
-        construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Committed);
+        construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Committed, res_desc->Format);
         if (linear) {
             record->linear_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
             record->linear_size = surface.backing_size;
@@ -593,7 +611,7 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
                                                D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
     DeviceContext* c = resolve(device);
     if (!c) return E_INVALIDARG;
-    c->process_retired();
+    c->retire_at_resource();
     if (session.pDrvPrivate) {                          // protected resource sessions
         log_line("CreateHeapAndResource: protected resource session given: E_NOTIMPL");
         return E_NOTIMPL;
@@ -627,6 +645,7 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, D3D12DDI_HRESOURCE hres) {
     DeviceContext* c = resolve(device);
     if (!c) return;
+    drain_all(c, Drain::Destroy);
     if (hres.pDrvPrivate) {
         if (auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c)) {
             Backing* b = r->backing;
@@ -653,7 +672,7 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP 
             c->report(E_INVALIDARG);
         }
     }
-    c->process_retired();
+    c->retire_at_resource();
 }
 
 HRESULT APIENTRY map_heap(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, void** data) {
@@ -737,6 +756,25 @@ HRESULT linear_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& des
     return S_OK;
 }
 
+// The answer for a description that cannot be sized: ResourceDataSize UINT64_MAX, the API's own error answer
+// (GetResourceAllocationInfo: "If an error occurs, then SizeInBytes equals UINT64_MAX"), with the default placement
+// alignment for its sample count, as the engine answers such a description itself. No code goes to the device error
+// callback: the DDI reference allows this slot none, and the runtime takes an error a function does not allow as
+// critical and removes the device ("Handling Errors"). An application may ask about any description; creating the
+// resource is refused by CreateHeapAndResource, which returns its HRESULT.
+void unsized(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
+    *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+    out->ResourceDataSize = UINT64_MAX;
+    out->ResourceDataAlignment = in.SampleDesc.Count > 1 ? D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT
+                                                         : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    out->Layout = in.ResourceType == D3D12DDI_RT_BUFFER ? D3D12DDI_TL_ROW_MAJOR : in.Layout;
+    no_additional_data(out);
+}
+
+// The first refusal of each format, with its description and why it was refused. Once per format, at most 257 lines
+// a process.
+FormatSet g_allocation_refusals;
+
 void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
                                              D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS optimization,
                                              UINT32 alignment_restriction, UINT,
@@ -744,13 +782,12 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
     DeviceContext* c = resolve(device);
     if (!c) return;
-    if (!in || !out) {
-        c->report(E_INVALIDARG);
+    if (!in || !out || (in->NumCastableFormats && !in->pCastableFormats)) {
+        c->report(E_INVALIDARG);                        // a malformed call, not a question about a description
         return;
     }
     D3D12_RESOURCE_DESC1 desc{};
     HRESULT hr = to_api_desc(*in, desc);
-    if (SUCCEEDED(hr) && in->NumCastableFormats && !in->pCastableFormats) hr = E_INVALIDARG;
     if (SUCCEEDED(hr)) {
         if (c->mode == MemoryMode::RuntimeBacked && (optimization & D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY) &&
             linear_primary_shape(desc, *in)) {
@@ -761,8 +798,16 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
         }
     }
     if (FAILED(hr)) {
-        *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
-        c->report(hr);
+        unsized(*in, out);
+        if (g_allocation_refusals.insert(static_cast<uint32_t>(in->Format)))
+            log_refusal("CheckResourceAllocationInfo: UINT64_MAX answered for the first refusal of format %u (%08lx): "
+                        "type %u, %llu x %u, depth or array %u, mips %u, samples %u, flags 0x%x, layout %u, "
+                        "castable %u, alignment %u, optimization 0x%x",
+                        static_cast<unsigned>(in->Format), static_cast<unsigned long>(hr),
+                        static_cast<unsigned>(in->ResourceType), static_cast<unsigned long long>(in->Width), in->Height,
+                        static_cast<unsigned>(in->DepthOrArraySize), static_cast<unsigned>(in->MipLevels),
+                        in->SampleDesc.Count, static_cast<unsigned>(in->Flags), static_cast<unsigned>(in->Layout),
+                        in->NumCastableFormats, alignment_restriction, static_cast<unsigned>(optimization));
     }
 }
 
@@ -838,6 +883,14 @@ UINT format_list_allowed(DXGI_FORMAT format) noexcept {
     return 0;
 }
 
+// The engine's D3D12_FEATURE_FORMAT_SUPPORT answer for format, *hr its result; no support bits when it refuses.
+D3D12_FEATURE_DATA_FORMAT_SUPPORT engine_format(DeviceContext* c, DXGI_FORMAT format, HRESULT* hr) noexcept {
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
+    *hr = c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s));
+    if (FAILED(*hr)) s = D3D12_FEATURE_DATA_FORMAT_SUPPORT{format};
+    return s;
+}
+
 // The engine's D3D12_FEATURE_FORMAT_SUPPORT answer as D3D12DDI_FORMAT_SUPPORT bits, limited to the bits the D3D11.3
 // format list allows for the format (an engine answer beyond it, such as SHADER_GATHER on a stencil view, or DISPLAY,
 // which the DDI defines only from version 107 on, is dropped); 0 (no optional capability) when the engine refuses
@@ -845,9 +898,8 @@ UINT format_list_allowed(DXGI_FORMAT format) noexcept {
 // merger's logic op. MULTISAMPLE_RENDERTARGET means a render target or depth-stencil target with some sample count
 // above 1 (d3d12umddi.h), so it stays only while the engine reports quality levels for such a count: then this
 // answer and CheckMultisampleQualityLevels agree.
-UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
-    if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s)))) return 0;
+UINT ddi_format_support(DeviceContext* c, const D3D12_FEATURE_DATA_FORMAT_SUPPORT& s) noexcept {
+    const DXGI_FORMAT format = s.Format;
     struct Bit { UINT api; UINT ddi; };
     static const Bit one[] = {
         {D3D12_FORMAT_SUPPORT1_BUFFER, D3D12DDI_FORMAT_SUPPORT_BUFFER},
@@ -886,6 +938,55 @@ UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
     return bits;
 }
 
+UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
+    HRESULT hr = S_OK;
+    return ddi_format_support(c, engine_format(c, format, &hr));
+}
+
+// The first reserved 2D texture the engine reports no tiled support for, logged once a process with what the slot
+// returned for it. The engine makes a reserved texture of a single-aspect format it cannot make sparse its committed
+// fallback, on which tile mappings are ignored, and refuses one of two aspects (vkd3d-proton
+// d3d12_resource_create_reserved). The runtime asks CheckFormatSupport (CheckMultisampleQualityLevels with
+// TILED_RESOURCE above 1 sample) about the resource's format, while the engine makes a texture with
+// ALLOW_DEPTH_STENCIL of the depth format its table pairs with that format (vkd3d_depth_stencil_formats); the
+// question here is about the format the engine makes. Until the line is written, a single-sample reserved texture
+// asks the engine once per format and a multisample one each time; after it, nothing is asked.
+LogOnce g_untiled_reserved;
+FormatSet g_tiled_formats;
+
+DXGI_FORMAT engine_depth_format(DXGI_FORMAT format) noexcept {
+    switch (format) {
+    case DXGI_FORMAT_R16_TYPELESS: case DXGI_FORMAT_R16_UNORM: return DXGI_FORMAT_D16_UNORM;
+    case DXGI_FORMAT_R24G8_TYPELESS: return DXGI_FORMAT_D24_UNORM_S8_UINT;
+    case DXGI_FORMAT_R32_TYPELESS: case DXGI_FORMAT_R32_FLOAT: return DXGI_FORMAT_D32_FLOAT;
+    case DXGI_FORMAT_R32G8X24_TYPELESS: return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    default: return format;
+    }
+}
+
+void log_untiled_reserved(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, HRESULT result) noexcept {
+    if (g_untiled_reserved.done() || desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) return;
+    const DXGI_FORMAT f =
+        (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) ? engine_depth_format(desc.Format) : desc.Format;
+    const UINT samples = desc.SampleDesc.Count;
+    bool tiled = false;
+    if (samples <= 1) {
+        if (g_tiled_formats.contains(static_cast<uint32_t>(f))) return;
+        HRESULT hr = S_OK;
+        tiled = (engine_format(c, f, &hr).Support2 & D3D12_FORMAT_SUPPORT2_TILED) != 0;
+        if (tiled) g_tiled_formats.insert(static_cast<uint32_t>(f));
+    } else {
+        tiled = engine_quality_levels(c, f, samples, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_TILED_RESOURCE) != 0;
+    }
+    if (tiled || !g_untiled_reserved.first()) return;
+    log_refusal("CreateHeapAndResource: first reserved texture the engine reports no tiled support for: format %u "
+                "(asked as %u), %llu x %u, array %u, mips %u, samples %u, flags 0x%x, result %08lx",
+                static_cast<unsigned>(desc.Format), static_cast<unsigned>(f),
+                static_cast<unsigned long long>(desc.Width), desc.Height, static_cast<unsigned>(desc.DepthOrArraySize),
+                static_cast<unsigned>(desc.MipLevels), samples, static_cast<unsigned>(desc.Flags),
+                static_cast<unsigned long>(result));
+}
+
 // The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer for Flags NONE and TILED_RESOURCE (the values are
 // equal) for a format that can itself be multisampled: one whose CheckFormatSupport answer carries
 // MULTISAMPLE_RENDERTARGET, or a typeless parent, which shares its family's quality levels (D3D11.3 functional spec
@@ -910,6 +1011,9 @@ void APIENTRY check_multisample_quality_levels(D3D12DDI_HDEVICE device, DXGI_FOR
     if (sample_count > 1 && !is_typeless_parent(format) &&
         !(engine_format_support(c, format) & D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET))
         return;
+    // A stored video format, one sample here (the engine knows no such format, so no multisample target above), has
+    // its view format's levels.
+    if (const StoredFormat* stored = stored_format(format)) format = stored->view;
     *out = engine_quality_levels(c, format, sample_count, static_cast<D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS>(flags));
 }
 
@@ -924,6 +1028,15 @@ D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device,
     return (r->backing && r->backing->imported) ? r->backing->memory.allocation : 0;
 }
 
+// The first answer for each format value, logged with the engine's own: what the runtime was told and from which
+// engine answer. Once per format, so at most 257 lines a process.
+FormatSet g_format_answers;
+
+// The engine's answer (engine_format_support), with one exception. The runtime does not take 0 as "no such format"
+// for R10G10B10_XR_BIAS_A2_UNORM: answered 0 while the engine had no such format, it offered the application a
+// displayable 2D texture format with TEXTURE2D, DISPLAY, BACK_BUFFER_CAST and TILED (266), and a texture of it would
+// then be refused by the engine. NOT_SUPPORTED says "not supported at all"; d3d12umddi.h defines it for this format
+// only and as its only bit, so it is the answer while the engine makes no 2D texture of the format.
 void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT* out) {
     DeviceContext* c = resolve(device);
     if (!c) return;
@@ -931,7 +1044,23 @@ void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, 
         c->report(E_INVALIDARG);
         return;
     }
-    *out = engine_format_support(c, format);
+    HRESULT hr = S_OK;
+    // A stored video format is answered from its view format (internal.h, StoredFormat), limited to the bits the list
+    // allows the video format; neither allows a multisample target.
+    const StoredFormat* stored = stored_format(format);
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT s = engine_format(c, stored ? stored->view : format, &hr);
+    s.Format = format;
+    *out = ddi_format_support(c, s);
+    if (format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM && !(s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D))
+        *out = D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
+    if (g_format_answers.insert(static_cast<uint32_t>(format))) {
+        // A stored format's line names the view format the engine was asked about.
+        char view[32] = "";
+        if (stored) std::snprintf(view, sizeof(view), " view format %u,", static_cast<unsigned>(stored->view));
+        log_refusal("CheckFormatSupport: format %u:%s engine %08lx, Support1 %#x, Support2 %#x; answer %#x",
+                    static_cast<unsigned>(format), view, static_cast<unsigned long>(hr),
+                    static_cast<unsigned>(s.Support1), static_cast<unsigned>(s.Support2), *out);
+    }
 }
 
 // ---- Command-list slots -------------------------------------------------------------------------------------------
@@ -950,7 +1079,8 @@ void APIENTRY copy_buffer_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDIARG_BUFFER
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->CopyBufferRegion(d, dst.BaseAddress.UMD.Offset, s, src.BaseAddress.UMD.Offset, bytes);
+    const UINT64 dst_offset = dst.BaseAddress.UMD.Offset, src_offset = src.BaseAddress.UMD.Offset;
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyBufferRegion(d, dst_offset, s, src_offset, bytes); });
 }
 
 UINT block_size(DXGI_FORMAT f) noexcept {
@@ -960,8 +1090,34 @@ UINT block_size(DXGI_FORMAT f) noexcept {
                : 1u;
 }
 
+// D3D12's placed footprint has no slice pitch: the engine derives it as the row pitch times the footprint's rows of
+// blocks. The runtime's pitched layouts do carry one, and a placement of several slices whose slice pitch differs
+// from the derived one cannot be stated as a footprint. Such a placement is answered with split_pitch = its slice
+// pitch, and copy_texture_region copies it one slice at a time, slice n at Offset + n x SlicePitch. A slice pitch
+// below the derived one would overlap the slices and stays refused (272 and 273: The Ascent lost its device to that
+// E_NOTIMPL for a BC1 volume, the derived pitch taken from its texel height as if it counted rows of blocks). The
+// first of each kind is logged on the debugger's output too (a game's stderr goes nowhere): two lines a process at
+// most.
+HRESULT pitched_slices(const char* kind, DXGI_FORMAT format, UINT width, UINT height, UINT depth, UINT pitch,
+                       UINT slice_pitch, UINT rows, UINT64& split_pitch) noexcept {
+    const uint64_t derived = static_cast<uint64_t>(pitch) * rows;
+    if (depth <= 1 || slice_pitch == derived) return S_OK;
+    const bool split = slice_pitch > derived;
+    static std::atomic<bool> once_split{false}, once_refused{false};
+    if (!(split ? once_split : once_refused).exchange(true))
+        log_refusal("CopyTextureRegion: %s placement format %u, %u x %u x %u, pitch %u, slice pitch %u, "
+                    "derived %llu: %s",
+                    kind, static_cast<unsigned>(format), width, height, depth, pitch, slice_pitch,
+                    static_cast<unsigned long long>(derived),
+                    split ? "copied one slice at a time" : "refused (E_NOTIMPL)");
+    if (!split) return E_NOTIMPL;
+    split_pitch = slice_pitch;
+    return S_OK;
+}
+
 HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* p, const D3D12DDIARG_PLACED_RESOURCE& r,
-                      D3D12_TEXTURE_COPY_LOCATION& out) noexcept {
+                      D3D12_TEXTURE_COPY_LOCATION& out, UINT64& split_pitch) noexcept {
+    split_pitch = 0;
     if (!p) return E_INVALIDARG;
     out = D3D12_TEXTURE_COPY_LOCATION{};
     out.pResource = engine_resource(l, p->BaseAddress.UMD.hResource);
@@ -973,24 +1129,29 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
         out.SubresourceIndex = static_cast<UINT>(p->BaseAddress.UMD.Offset);
         return S_OK;
     case D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED: {
+        // The physical size is in texels, rounded up to whole blocks (d3d12umddi.h's "Block dimensions"), not in
+        // blocks: 273's BC1 volume came as 32 x 32 x 32, pitch 256, slice pitch 2048 = 8 rows of blocks, which only
+        // texels explain (32 blocks a row would need 32 rows, 8192 bytes a slice). Multiplied by the block size it
+        // was a footprint four times too wide and too high: clamped to the image in 2D, a fourfold slice pitch in 3D.
         const auto* f = static_cast<const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
-        if (f->PhysicalDepth > 1 &&
-            static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
-            return E_NOTIMPL;                           // the API derives the slice pitch; one slice has none
         const UINT bs = block_size(f->Format);
+        HRESULT hr = pitched_slices("physical", f->Format, f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth,
+                                    f->Pitch, f->SlicePitch, (f->PhysicalHeight + bs - 1) / bs, split_pitch);
+        if (FAILED(hr)) return hr;
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
-        out.PlacedFootprint.Footprint = {f->Format, f->PhysicalWidth * bs, f->PhysicalHeight * bs, f->PhysicalDepth,
-                                         f->Pitch};
+        out.PlacedFootprint.Footprint = {f->Format, f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth, f->Pitch};
         return S_OK;
     }
     case D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED: {
         const auto* f = static_cast<const D3D12DDIARG_VIRTUAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
-        if (f->PhysicalDepth > 1 &&
-            static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
-            return E_NOTIMPL;
+        // The footprint is the virtual size; the engine's rows of blocks follow from its height.
+        const UINT bs = block_size(f->Format);
+        HRESULT hr = pitched_slices("virtual", f->Format, f->VirtualWidth, f->VirtualHeight, f->VirtualDepth,
+                                    f->Pitch, f->SlicePitch, (f->VirtualHeight + bs - 1) / bs, split_pitch);
+        if (FAILED(hr)) return hr;
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
         out.PlacedFootprint.Footprint = {f->Format, f->VirtualWidth, f->VirtualHeight, f->VirtualDepth, f->Pitch};
@@ -1001,6 +1162,139 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     }
 }
 
+// The first virtual placement of a process, as the slot received it. The engine's footprint takes the virtual size;
+// the line shows the physical size, both pitches, the offset and the box that came with it.
+LogOnce g_virtual_placement;
+
+void log_virtual_placement(const char* side, const D3D12DDIARG_BUFFER_PLACEMENT* p,
+                           const D3D12DDIARG_PLACED_RESOURCE& r, const D3D12DDI_BOX* box) noexcept {
+    if (r.Layout != D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED || g_virtual_placement.done()) return;
+    const auto* f = static_cast<const D3D12DDIARG_VIRTUAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
+    if (!p || !f || !g_virtual_placement.first()) return;
+    char b[96] = "none";
+    if (box)
+        std::snprintf(b, sizeof(b), "(%ld, %ld, %ld) to (%ld, %ld, %ld)", box->Left, box->Top, box->Front, box->Right,
+                      box->Bottom, box->Back);
+    log_refusal("CopyTextureRegion: first virtual placement, %s: format %u, virtual %u x %u x %u, physical %u x %u x "
+                "%u, pitch %u, slice pitch %u, offset %llu, box %s",
+                side, static_cast<unsigned>(f->Format), f->VirtualWidth, f->VirtualHeight, f->VirtualDepth,
+                f->PhysicalWidth, f->PhysicalHeight, f->PhysicalDepth, f->Pitch, f->SlicePitch,
+                static_cast<unsigned long long>(p->BaseAddress.UMD.Offset), b);
+}
+
+// Copies between a footprint and a depth-stencil texture: Vulkan wants a multiple of 4 as the buffer offset of a
+// depth or stencil aspect, and the engine states no restriction (UnrestrictedBufferTextureCopyPitchSupported). The
+// first such copy of a process is logged, and the first whose footprint offset is not a multiple of 4: two lines at
+// most, the same one when the first copy is that. Once the first is written, only a footprint at an offset not a
+// multiple of 4 makes a copy read the texture's record; once both are, a copy costs two relaxed loads.
+LogOnce g_depth_copy, g_depth_copy_unaligned;
+
+bool depth_stencil_texture(const D3D12_RESOURCE_DESC1& desc) noexcept {
+    switch (desc.Format) {
+    case DXGI_FORMAT_D16_UNORM: case DXGI_FORMAT_D24_UNORM_S8_UINT: case DXGI_FORMAT_D32_FLOAT:
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+        return true;
+    default:
+        return (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
+    }
+}
+
+void log_depth_copy(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* pdst,
+                    const D3D12_TEXTURE_COPY_LOCATION& d, const D3D12DDIARG_BUFFER_PLACEMENT* psrc,
+                    const D3D12_TEXTURE_COPY_LOCATION& s) noexcept {
+    if (g_depth_copy.done() && g_depth_copy_unaligned.done()) return;
+    constexpr auto kIndex = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    constexpr auto kFootprint = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    const bool up = d.Type == kIndex && s.Type == kFootprint;
+    if (!up && !(d.Type == kFootprint && s.Type == kIndex)) return;
+    const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& f = (up ? s : d).PlacedFootprint;
+    if (g_depth_copy.done() && f.Offset % 4 == 0) return;
+    const auto* r = record_of<ResourceRecord>((up ? pdst : psrc)->BaseAddress.UMD.hResource.pDrvPrivate, Tag::Resource,
+                                              l->h.device);
+    if (!r || !depth_stencil_texture(r->desc)) return;
+    const UINT subresource = (up ? d : s).SubresourceIndex;
+    const bool first = g_depth_copy.first();
+    const bool first_unaligned = f.Offset % 4 != 0 && g_depth_copy_unaligned.first();
+    if (!first && !first_unaligned) return;
+    const UINT mips = r->desc.MipLevels ? r->desc.MipLevels : 1;
+    const UINT layers =
+        r->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : std::max<UINT>(1, r->desc.DepthOrArraySize);
+    log_refusal("CopyTextureRegion: first depth-stencil copy%s, %s a footprint: resource format %u, subresource %u, "
+                "plane %u, footprint format %u, offset %llu (%% 4 = %u, %% 512 = %u), pitch %u",
+                first_unaligned ? " with an offset not a multiple of 4" : "", up ? "from" : "to",
+                static_cast<unsigned>(r->desc.Format), subresource, subresource / (mips * layers),
+                static_cast<unsigned>(f.Footprint.Format), static_cast<unsigned long long>(f.Offset),
+                static_cast<unsigned>(f.Offset % 4), static_cast<unsigned>(f.Offset % 512), f.Footprint.RowPitch);
+}
+
+// One CopyTextureRegion of a split placement as one engine copy per slice. The other side is a subresource: a
+// buffer-to-buffer copy is not a texture copy. Source slices come from the box (or the whole footprint); destination
+// slices from the box (or the whole source subresource, sized from the shell's record of the source resource).
+HRESULT copy_slices(CommandListRecord* l, const D3D12_TEXTURE_COPY_LOCATION& d, UINT64 dpitch, UINT x, UINT y, UINT z,
+                    const D3D12_TEXTURE_COPY_LOCATION& s, UINT64 spitch, const ResourceRecord* src, bool has_box,
+                    const D3D12_BOX& b) noexcept {
+    const bool src_split = spitch != 0;
+    const D3D12_TEXTURE_COPY_LOCATION& other = src_split ? d : s;
+    if ((dpitch && spitch) || other.Type != D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX) return E_INVALIDARG;
+    D3D12_BOX area = b;
+    if (!has_box) {
+        if (src_split) {
+            const D3D12_SUBRESOURCE_FOOTPRINT& f = s.PlacedFootprint.Footprint;
+            area = {0, 0, 0, f.Width, f.Height, f.Depth};
+        } else {
+            if (!src) return E_INVALIDARG;
+            const D3D12_RESOURCE_DESC1& desc = src->desc;
+            const UINT mips = desc.MipLevels ? desc.MipLevels : 1;
+            const UINT mip = s.SubresourceIndex % mips;
+            const UINT depth = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? desc.DepthOrArraySize : 1;
+            area = {0, 0, 0, static_cast<UINT>(std::max<UINT64>(1, desc.Width >> mip)),
+                    std::max(1u, desc.Height >> mip), std::max(1u, depth >> mip)};
+        }
+    }
+    if (area.back <= area.front) return S_OK;
+    record(l, [=](ID3D12GraphicsCommandList* e) {
+        for (UINT n = area.front; n < area.back; ++n) {
+            D3D12_TEXTURE_COPY_LOCATION dn = d, sn = s;
+            D3D12_BOX bn = area;
+            UINT zn = z + (n - area.front);
+            if (src_split) {
+                // Slice n of the source footprint, one slice deep, to destination slice z + (n - front).
+                sn.PlacedFootprint.Offset += n * spitch;
+                sn.PlacedFootprint.Footprint.Depth = 1;
+                bn.front = 0;
+                bn.back = 1;
+            } else {
+                // Source slice n to footprint slice zn, each slice its own one-slice-deep footprint.
+                dn.PlacedFootprint.Offset += static_cast<UINT64>(zn) * dpitch;
+                dn.PlacedFootprint.Footprint.Depth = 1;
+                bn.front = n;
+                bn.back = n + 1;
+                zn = 0;
+            }
+            e->CopyTextureRegion(&dn, x, y, zn, &sn, &bn);
+        }
+    });
+    return S_OK;
+}
+
+// One side of a copy in the engine's elements (internal.h, StoredFormat): a footprint of a stored video format becomes
+// one of its storage, as many elements wide as its pixels fill. The answer is the side's pixels per element, from the
+// footprint's format or from the record of the subresource's resource; x and the box are the caller's to divide.
+UINT stored_side(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* p,
+                 D3D12_TEXTURE_COPY_LOCATION& loc) noexcept {
+    if (loc.Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT) {
+        D3D12_SUBRESOURCE_FOOTPRINT& f = loc.PlacedFootprint.Footprint;
+        const StoredFormat* s = stored_format(f.Format);
+        if (!s) return 1;
+        f.Format = s->storage;
+        f.Width = (f.Width + s->pixels - 1) / s->pixels;
+        return s->pixels;
+    }
+    const auto* r = record_of<ResourceRecord>(p->BaseAddress.UMD.hResource.pDrvPrivate, Tag::Resource, l->h.device);
+    const StoredFormat* s = r ? stored_format(r->stored_from) : nullptr;
+    return s ? s->pixels : 1;
+}
+
 void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG_BUFFER_PLACEMENT* pdst,
                                   D3D12DDIARG_PLACED_RESOURCE dst, UINT x, UINT y, UINT z,
                                   const D3D12DDIARG_BUFFER_PLACEMENT* psrc, D3D12DDIARG_PLACED_RESOURCE src,
@@ -1008,8 +1302,15 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
     CommandListRecord* l = list_of(hlist, "CopyTextureRegion");
     if (!l) return;
     D3D12_TEXTURE_COPY_LOCATION d, s;
-    HRESULT hr = copy_location(l, pdst, dst, d);
-    if (SUCCEEDED(hr)) hr = copy_location(l, psrc, src, s);
+    UINT64 dpitch = 0, spitch = 0;
+    HRESULT hr = copy_location(l, pdst, dst, d, dpitch);
+    if (SUCCEEDED(hr)) hr = copy_location(l, psrc, src, s, spitch);
+    if (SUCCEEDED(hr)) {
+        // Diagnostic lines, before the box is checked: they describe the call as the slot received it.
+        log_virtual_placement("destination", pdst, dst, box);
+        log_virtual_placement("source", psrc, src, box);
+        log_depth_copy(l, pdst, d, psrc, s);
+    }
     if (SUCCEEDED(hr) && box && (box->Left < 0 || box->Top < 0 || box->Front < 0 || box->Right < box->Left ||
                                  box->Bottom < box->Top || box->Back < box->Front))
         hr = E_INVALIDARG;
@@ -1021,7 +1322,20 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
     if (box)
         b = {static_cast<UINT>(box->Left), static_cast<UINT>(box->Top), static_cast<UINT>(box->Front),
              static_cast<UINT>(box->Right), static_cast<UINT>(box->Bottom), static_cast<UINT>(box->Back)};
-    l->list()->CopyTextureRegion(&d, x, y, z, &s, box ? &b : nullptr);
+    const bool has_box = box != nullptr;
+    // A 4:2:2 copy starts on an even pixel (the format's 2 x 1 block); a source box ending on an odd one, at the
+    // edge of an odd-width footprint, takes its last element whole.
+    const UINT dst_pixels = stored_side(l, pdst, d), src_pixels = stored_side(l, psrc, s);
+    x /= dst_pixels;
+    b.left /= src_pixels;
+    b.right = (b.right + src_pixels - 1) / src_pixels;
+    if (dpitch || spitch) {
+        const auto* sr = record_of<ResourceRecord>(psrc->BaseAddress.UMD.hResource.pDrvPrivate, Tag::Resource, l->h.device);
+        hr = copy_slices(l, d, dpitch, x, y, z, s, spitch, sr, has_box, b);
+        if (FAILED(hr)) l->h.device->report_list(l->rt, hr);
+        return;
+    }
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyTextureRegion(&d, x, y, z, &s, has_box ? &b : nullptr); });
 }
 
 void APIENTRY resource_copy(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst, D3D12DDI_HRESOURCE src) {
@@ -1033,7 +1347,7 @@ void APIENTRY resource_copy(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst,
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->CopyResource(d, s);
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyResource(d, s); });
 }
 
 // No argument structure means the whole resource.
@@ -1047,29 +1361,32 @@ void APIENTRY discard_resource(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE r
         return;
     }
     if (!args) {
-        l->list()->DiscardResource(r, nullptr);
+        record(l, [=](ID3D12GraphicsCommandList* e) { e->DiscardResource(r, nullptr); });
         return;
     }
-    const D3D12_DISCARD_REGION region{args->NumRects, args->pRects, args->FirstSubresource, args->NumSubresources};
-    l->list()->DiscardResource(r, &region);
+    const UINT rects = args->NumRects, first = args->FirstSubresource, subresources = args->NumSubresources;
+    record(l,
+           [=](ID3D12GraphicsCommandList* e, const D3D12_RECT* p) {
+               const D3D12_DISCARD_REGION region{rects, p, first, subresources};
+               e->DiscardResource(r, &region);
+           },
+           in(args->pRects, rects));
 }
 
-void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDIARG_RESOURCE_BARRIER_0022* in) {
+void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDIARG_RESOURCE_BARRIER_0022* ddi) {
     CommandListRecord* l = list_of(hlist, "ResourceBarrier");
     if (!l) return;
-    if (count && !in) {
+    if (count && !ddi) {
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    std::vector<D3D12_RESOURCE_BARRIER> out;
-    try {
-        out.reserve(count);
-    } catch (...) {
+    InlineArray<D3D12_RESOURCE_BARRIER, 64> out;
+    if (!out.reserve(count)) {
         l->h.device->report_list(l->rt, E_OUTOFMEMORY);
         return;
     }
     for (UINT i = 0; i < count; ++i) {
-        const D3D12DDIARG_RESOURCE_BARRIER_0022& b = in[i];
+        const D3D12DDIARG_RESOURCE_BARRIER_0022& b = ddi[i];
         D3D12_RESOURCE_BARRIER a{};
         a.Flags = static_cast<D3D12_RESOURCE_BARRIER_FLAGS>(
             b.Flags & (D3D12DDI_RESOURCE_BARRIER_FLAG_BEGIN_ONLY | D3D12DDI_RESOURCE_BARRIER_FLAG_END_ONLY));
@@ -1116,9 +1433,11 @@ void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3
             l->h.device->report_list(l->rt, E_INVALIDARG);
             return;
         }
-        out.push_back(a);
+        out.data()[i] = a;
     }
-    if (!out.empty()) l->list()->ResourceBarrier(static_cast<UINT>(out.size()), out.data());
+    if (count)
+        record(l, [=](ID3D12GraphicsCommandList* e, const D3D12_RESOURCE_BARRIER* b) { e->ResourceBarrier(count, b); },
+               in(out.data(), count));
 }
 } // namespace
 

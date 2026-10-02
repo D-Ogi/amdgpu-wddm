@@ -26,7 +26,12 @@ is `engine-ddi.h`, revision 3.
   commit with no local changes, SHA-256 `D8BB19C34D33C1F4D25E96C56CFD924B533A010A7AD6596B692F08ED8DCA0317`, in
   `<workspace>\scratch\m15\engine-1.3-r5-66c98e72` (`engine_dll_dir` in the pin). This engine refuses a command
   signature that changes state on a device without device generated commands (E_NOTIMPL at the create)
-  instead of creating one that executes nothing.
+  instead of creating one that executes nothing. The runtime removes the device when pfnCreateCommandSignature
+  fails with E_NOTIMPL (measured on the lab with a DISPATCH_RAYS argument: DXGI_ERROR_DEVICE_REMOVED, removed
+  reason DXGI_ERROR_DRIVER_INTERNAL_ERROR), so engine-ddi translates every argument type of the DDI, mesh
+  dispatch and the incrementing constant included, and answers an engine refusal or an unknown type with
+  E_OUTOFMEMORY and a log line (commands.cpp); that the D3D12 runtime passes E_OUTOFMEMORY on without removing
+  the device is an INFERENCE from the D3D10/11 rule (windows-driver-docs display `handling-errors.md`).
 - [engine-abi.json](engine-abi.json) holds these pins. The build script refuses a header, and before a run an
   engine DLL, whose SHA-256 differs. A new header revision means a new pin, a rebuild of both sides, and a new
   engine DLL.
@@ -152,7 +157,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | WriteBufferImmediateQueueFlags | NONE | pfnWriteBufferImmediate is a fail-safe |
 | 1006 | | ViewInstancingTier | NOT_SUPPORTED | pfnSetViewInstanceMask is a fail-safe |
 | 1006 | | RenderPassTier | NOT_SUPPORTED | engine-ddi fills no render pass table; the runtime emulates render passes |
-| 1006 | | RaytracingTier | NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), but indirect ray dispatch is refused, a collection imported with an export list answers E_NOTIMPL for now, and the runtime's state object description is not yet measured. `set_diagnostic_raytracing_tier` reports the engine's 1_1 or higher as 1_1 for a measurement, never as a default |
+| 1006 | | RaytracingTier | NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), but only an engine with the fork's fix traces every record up to the count, a collection imported with an export list answers E_NOTIMPL for now, and the runtime's state object description is not yet measured. `set_diagnostic_raytracing_tier` reports the engine's 1_1 or higher as 1_1 for a measurement, never as a default |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
 | 1006 | | MeshShaderTier, MeshShaderSupportsFullRangeRenderTargetArrayIndex, MSPrimitivesPipelineStatisticIncludesCulledPrimitives | NOT_SUPPORTED, FALSE, FALSE | pfnDispatchMesh and the mesh shader slots are fail-safes |
 | 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe |
@@ -310,7 +315,9 @@ without an ABI change would be to pass NOT_AVAILABLE L1 heaps to the engine as L
   slot finds its device only through `ResolveDevice`; a slot called while it returns null answers nothing (a query
   leaves its output zeroed or untouched) and reports no error, because there is no device to report to.
   DestroyDevice: `destroy_device_context`; S_FALSE with live objects keeps the context, and then it stays
-  registered too.
+  registered too. Optionally, right after `create_device_context` and before any queue, `set_retire_policy`: the
+  retire hand-off, which leaves the release sequence of submission calls to the resource DDIs within a backlog and
+  an age bound (engine-ddi.h). The shell sets it only under the diagnostic experiment `retire-handoff`.
 - Queues (the queue table is the shell's): after creating the WDDM context, `create_engine_queue`;
   ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`, which returns
   `QueueClose::Retired` when every engine use of the queue is proven retired and `QueueClose::NotRetired`
@@ -339,11 +346,11 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 
 | Slot | Answer | Status |
 |---|---|---|
-| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format | engine answer |
+| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format, except NOT_SUPPORTED for R10G10B10_XR_BIAS_A2_UNORM without an engine 2D texture (the runtime offers that format as a display format over a 0, 266); a packed video format engine-ddi stores gets its view format's answer within the bits the format list allows it ("Packed video formats" below) | engine answer |
 | CheckMultisampleQualityLevels, Flags NONE | the engine's MULTISAMPLE_QUALITY_LEVELS; 0 when the engine refuses | engine answer |
 | CheckMultisampleQualityLevels, Flags TILED_RESOURCE | the engine's MULTISAMPLE_QUALITY_LEVELS with the TILED_RESOURCE flag; 0 when the engine refuses | engine answer |
 | GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
-| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data | engine answer |
+| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description (for a stored packed video format, the description of its storage); no additional data. A description CheckResourceAllocationInfo cannot size gets ResourceDataSize UINT64_MAX, the API's error answer, with the default alignment for its sample count. Measured on unit A (native-caps284, 285, 64 x 64 YUY2 and R8G8_B8G8_UNORM textures): with E_INVALIDARG reported instead, the runtime removed the device at GetResourceAllocationInfo (DXGI_ERROR_DRIVER_INTERNAL_ERROR, SizeInBytes 0); with UINT64_MAX it answered SizeInBytes 0xFFFFFFFFFFFF0000 (UINT64_MAX aligned down to 64 KiB, no wrap), CreateCommittedResource E_OUTOFMEMORY, CreatePlacedResource E_INVALIDARG, and the device stayed | engine answer |
 | EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
 | CheckDriverMatchingIdentifier | UNRECOGNIZED | exact: engine-ddi serializes nothing |
 | ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE |
@@ -353,6 +360,43 @@ are all `_Out_` zeroes them before it reports E_NOTIMPL, and each of these is a 
 E_NOTIMPL report is the difference from the table above): CheckSubresourceInfo,
 GetMetaCommandRequiredParameterInfo. The first lab log of
 D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
+
+### Packed video formats
+
+FL11_1 requires 2D textures of AYUV, Y410, Y416, YUY2, Y210 and Y216, and the runtime adds that support whatever
+CheckFormatSupport answers (284: YUY2 answered 0 came back with TEXTURE2D and SHADER_SAMPLE). The engine has no image
+of any of them. engine-ddi stores each as the typeless format of its element (internal.h, `StoredFormat`): AYUV and
+YUY2 as R8G8B8A8_TYPELESS, Y410 as R10G10B10A2_TYPELESS, Y416, Y210 and Y216 as R16G16B16A16_TYPELESS. A 4:2:2 element
+(YUY2, Y210, Y216) holds two pixels: the engine's width is half the resource's. The DXGI_FORMAT reference names the
+view formats of each; they are the storage's family, plus R32_UINT for a UAV of a 4-byte element, which the engine
+adds to a 4-byte typeless image with ALLOW_UNORDERED_ACCESS.
+
+- Sizing and creation: one translation of the description serves CheckResourceAllocationInfo and
+  CreateHeapAndResource, so the size answered is the size created. Only a single-sample 2D texture is stored; a
+  4:2:2 texture also needs an even width and exactly one mip level (its mip widths in pixels and in elements part
+  ways). Any other description of these formats gets UINT64_MAX and E_INVALIDARG.
+- Views: an SRV, UAV or RTV format passes as given, except that a view naming the video format, or no format, of a
+  stored resource gets the format's default view: R8G8B8A8_UNORM, R10G10B10A2_UNORM or R16G16B16A16_UNORM.
+- Copies: CopyTextureRegion makes a footprint of a video format one of its storage, as many elements wide as its
+  pixels fill, and divides a 4:2:2 copy's destination x and source box by two, the box's right edge rounded up.
+  CopyResource copies storage to storage.
+- Support: CheckFormatSupport answers the default view format's engine answer within the bits the format list allows
+  the video format (sample, gather and typed UAV writes; AYUV also render target and blend).
+  CheckMultisampleQualityLevels answers the view format's levels at one sample, none above.
+- Harness (`tests/test-stored-formats.cpp`): each format sized as its storage; three 8 x 4 textures of each, one
+  filled from a footprint, one cleared through a UAV naming the video format, one through the UINT view (R32_UINT for
+  a 4-byte element); copies with a box and an offset in pixels, from a footprint and between textures; all read back
+  byte for byte. Without the copy translation the 4:2:2 rows differ; without the view translation the engine finds no
+  view format ("Failed to find format") and the harness dies. Not yet run on unit A.
+
+Known gaps, refused (UINT64_MAX, E_INVALIDARG) while the runtime still offers their FL11_1 support:
+
+- R8G8_B8G8_UNORM and G8R8_G8B8_UNORM: a sampled view reconstructs the shared channel per pixel, which no store as a
+  typeless element gives.
+- NV11: planar, two planes.
+- A mip chain of a 4:2:2 format. YUY2's legacy R8G8_B8G8_UNORM view at twice the width reaches the engine as given and
+  is refused there.
+- A reserved (tiled) texture of a stored format is created, with the storage's tile shape and coordinates; untested.
 
 ### Heap memory: allocate_memory and free_memory
 
@@ -365,8 +409,8 @@ offset 0, a placed buffer at that address plus its offset.
 The linear primary (boundary r4, engine ABI 1.3 V13). A committed texture on a heap with
 `D3D12DDI_HEAP_FLAG_PRIMARY` is what a reader outside the engine opens and reads by row pitch. When its
 description is one the surface exists for (2D, one mip, one layer, one sample, a format the surface format table
-`driver/contract/amdgpu_wddm_surface_format.h` enables for composition - today B8G8R8A8_UNORM, R8G8B8A8_UNORM and
-R10G10B10A2_UNORM - at most 8192 on an edge, heap without CPU access, castable formats none beyond the format and
+`driver/contract/amdgpu_wddm_surface_format.h` enables for composition - today B8G8R8A8_UNORM, R8G8B8A8_UNORM,
+R10G10B10A2_UNORM and R16G16B16A16_FLOAT - at most 8192 on an edge, heap without CPU access, castable formats none beyond the format and
 its sRGB sibling where the table names one), engine-ddi:
 
 1. asks the engine what the linear image needs (`QueryLinearImage`), before any memory exists;
@@ -388,7 +432,8 @@ passes `D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY` with such a description, an
 select the surface; no description becomes linear by its shape.
 
 Development PC witness (harness round trip 7, `tests/test-linear-primary.cpp`, RuntimeBacked on the stub shell):
-256x256 B8G8R8A8_UNORM, 127x79 R8G8B8A8_UNORM and 200x120 R10G10B10A2_UNORM primaries are created, cleared
+256x256 B8G8R8A8_UNORM, 127x79 R8G8B8A8_UNORM, 200x120 R10G10B10A2_UNORM and 136x72 R16G16B16A16_FLOAT (scRGB
+values 2.0, -0.25, 0.5, 1.0, which a clamping or 4-byte surface would not keep) primaries are created, cleared
 through a render target view,
 copied to a READBACK buffer and compared texel by texel. What a reader of the memory itself sees is not
 established by that: the copy goes through the image.
@@ -618,9 +663,15 @@ GetShaderStackSize, D112 GetPipelineStackSize and D113 SetPipelineStackSize are 
 CalcPrivateAddToStateObjectSize and D116 AddToStateObject are engine-ddi slots on the engine's
 `ID3D12Device7::AddToStateObject`, queried at context creation (absent: E_NOTIMPL for growth only). L63
 SetPipelineState1 and L64 DispatchRays go to the engine's `ID3D12GraphicsCommandList4` (commands.cpp, both tables;
-the dispatch argument is the API's `D3D12_DISPATCH_RAYS_DESC`, size, offsets and alignment asserted). Refused: an
-existing collection imported with an export list (E_NOTIMPL, temporarily, below), work graphs (state object type
-EXECUTABLE), and indirect ray dispatch (the command signature's DISPATCH_RAYS argument). The shell needs no new
+the dispatch argument is the API's `D3D12_DISPATCH_RAYS_DESC`, size, offsets and alignment asserted). Indirect ray
+dispatch is pfnExecuteIndirect with a command signature of a DISPATCH_RAYS argument (commands.cpp), created and
+executed like the draw and dispatch signatures; its argument buffer holds the application's `D3D12_DISPATCH_RAYS_DESC`
+records, which the engine reads as they are. vkd3d-proton upstream traces the first record alone and nothing with a
+count buffer; the fork's fix (vkd3d-proton fork 4e572c10 and e1ce3e7e, on d0c089a1) unrolls one
+`vkCmdTraceRaysIndirect2KHR` per record and, with a count buffer, first copies the records into scratch, those at or
+past the count with zero dimensions over a zeroed, aligned table region. Refused:
+an existing collection imported with an export list (E_NOTIMPL, temporarily, below) and work graphs (state object type
+EXECUTABLE). The shell needs no new
 resolver for D115 and D116: both carry the device handle first (d3d12umddi.h:9190-9191), which `entry-owner.h`
 already resolves.
 
@@ -791,6 +842,19 @@ without the held reference to the collection, or to the parent, the public count
 the last two controls: the engine's own internal references keep an imported collection and a parent alive
 (`raytracing_pipeline.c:2762-2769`), so engine-ddi's held references are for the lifetime contract, not the witness's
 pixels.
+
+Indirect ray dispatch: a command signature of one DISPATCH_RAYS argument, stride 128 (above the record's 104 bytes),
+no root signature, S_OK. Two records over the first pipeline's table, 8x4 then 8x8, and the count words 1, 2, 0 and
+3; six ExecuteIndirect variants (max 1; max 2 with count 1, 2, 0 or 3; max 2 without a count buffer), each into its
+own prefilled result, first from an UPLOAD buffer with no INDIRECT_ARGUMENT transition before them in the list (the
+engine may patch ahead of the list), then from a DEFAULT copy behind one (patched in the list). With the fork's fix
+every record up to the smaller of count and maximum is traced: rows 0 to 3 for max 1 and count 1, none for count 0,
+all 64 words for the rest, the other rows at the prefill, from both buffers. One record without a count buffer is
+exact on every engine; the pinned engine and the registered 106D09E5 trace the first record alone and nothing with a
+count buffer, exactly the pattern the round trip reports as one SKIP line. A first version of the fix wrote the
+records past the count as all zeros: zero shader table addresses lost the device on the development PC's NVIDIA GPU
+although nothing was to be launched (VK_ERROR_DEVICE_LOST in this round trip); the fix names a zeroed, aligned
+scratch region for their tables instead.
 
 Refusals: an unknown subobject type
 (E_INVALIDARG), a ray tracing pipeline named as an existing collection (E_INVALIDARG), DispatchRays on a closed list and SetPipelineState1 with another

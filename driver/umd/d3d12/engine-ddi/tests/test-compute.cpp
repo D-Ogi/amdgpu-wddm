@@ -214,8 +214,9 @@ void test_compute(Env& env, Device& device) {
                      "(hr %08lx %08lx %08lx)",
            static_cast<unsigned long>(hr_s), static_cast<unsigned long>(hr_a), static_cast<unsigned long>(hr_2));
     // A signature that changes state: a root constant, then the dispatch. The engine needs device generated
-    // commands for it and refuses the signature without them (E_NOTIMPL); created, it has to execute: the
-    // first quarter of the buffer with the seed from the argument buffer.
+    // commands for it and refuses the signature without them (E_NOTIMPL), which engine-ddi answers with
+    // E_OUTOFMEMORY; created, it has to execute: the first quarter of the buffer with the seed from the argument
+    // buffer.
     constexpr UINT kSeedRooted = 0x0c0ffeeu;
     constexpr UINT kRootedOffset = 64;
     D3D12DDI_INDIRECT_ARGUMENT_DESC rooted_arguments[2]{};
@@ -239,26 +240,56 @@ void test_compute(Env& env, Device& device) {
             env.core.pfnUnmapHeap(device.h(), arguments.hheap());
         }
     }
-    checkf(hr_rooted == E_NOTIMPL || (hr_rooted == S_OK && (rooted || !indirect)),
+    checkf(hr_rooted == E_OUTOFMEMORY || (hr_rooted == S_OK && (rooted || !indirect)),
            "compute: command signature of a root constant and a dispatch: %s (hr %08lx %08lx)",
-           hr_rooted == E_NOTIMPL ? "refused, the device has no device generated commands" : "created",
+           hr_rooted == E_OUTOFMEMORY ? "refused, the device has no device generated commands" : "created",
            static_cast<unsigned long>(hr_rooted), static_cast<unsigned long>(hr_3));
     {
-        // Refusals: a type of a later slice, and a root argument without a root signature.
-        D3D12DDI_INDIRECT_ARGUMENT_DESC refused{D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS, {}};
-        D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 refused_args{64, 1, &refused, hrs, 1};
-        void* refused_storage = env.storage.alloc(sizeof(void*) * 8);
-        const HRESULT hr_rays =
-            env.core.pfnCreateCommandSignature(device.h(), &refused_args, D3D12DDI_HCOMMANDSIGNATURE{refused_storage});
-        refused.Type = D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+        // The runtime removes the device when the create fails with anything but E_OUTOFMEMORY (E_NOTIMPL measured
+        // on the lab), so every argument type reaches the engine: a mesh dispatch (created; the engine executes it
+        // only with a mesh pipeline) and an incrementing constant before a dispatch (rooted, no argument buffer
+        // space; created, or refused by the engine and then E_OUTOFMEMORY). A signature the engine refuses (a root
+        // constant and no action, E_INVALIDARG in the engine) is E_OUTOFMEMORY; a root argument without a root
+        // signature, which the runtime never lets through, stays engine-ddi's own E_INVALIDARG.
+        D3D12DDI_INDIRECT_ARGUMENT_DESC mesh{D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH, {}};
+        const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 mesh_args{3 * sizeof(UINT), 1, &mesh, hrs, 1};
+        void* mesh_storage = env.storage.alloc(env.core.pfnCalcPrivateCommandSignatureSize(device.h(), &mesh_args));
+        const D3D12DDI_HCOMMANDSIGNATURE hmesh{mesh_storage};
+        const HRESULT hr_mesh =
+            mesh_storage ? env.core.pfnCreateCommandSignature(device.h(), &mesh_args, hmesh) : E_ABORT;
+        if (hr_mesh == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hmesh);
+        D3D12DDI_INDIRECT_ARGUMENT_DESC incrementing[2]{};
+        incrementing[0].Type = D3D12DDI_INDIRECT_ARGUMENT_TYPE_INCREMENTING_CONSTANT;
+        incrementing[0].IncrementingConstant = {1, 0};
+        incrementing[1].Type = D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+        const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 incrementing_args{3 * sizeof(UINT), 2, incrementing, hrs, 1};
+        void* incrementing_storage =
+            env.storage.alloc(env.core.pfnCalcPrivateCommandSignatureSize(device.h(), &incrementing_args));
+        const D3D12DDI_HCOMMANDSIGNATURE hincrementing{incrementing_storage};
+        const HRESULT hr_incrementing =
+            incrementing_storage ? env.core.pfnCreateCommandSignature(device.h(), &incrementing_args, hincrementing)
+                                 : E_ABORT;
+        if (hr_incrementing == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hincrementing);
+        D3D12DDI_INDIRECT_ARGUMENT_DESC refused{D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT, {}};
         refused.Constant = {1, 0, 1};
+        D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 refused_args{64, 1, &refused, hrs, 1};
+        void* refused_storage = env.storage.alloc(env.core.pfnCalcPrivateCommandSignatureSize(device.h(), &refused_args));
+        const HRESULT hr_engine =
+            refused_storage ? env.core.pfnCreateCommandSignature(device.h(), &refused_args,
+                                                                 D3D12DDI_HCOMMANDSIGNATURE{refused_storage})
+                            : E_ABORT;
         refused_args.hRootSignature = D3D12DDI_HROOTSIGNATURE{};
         const HRESULT hr_rootless =
-            env.core.pfnCreateCommandSignature(device.h(), &refused_args, D3D12DDI_HCOMMANDSIGNATURE{refused_storage});
-        checkf(hr_rays == E_NOTIMPL && hr_rootless == E_INVALIDARG,
-               "compute: a ray dispatch argument is E_NOTIMPL, a constant without a root signature E_INVALIDARG "
-               "(hr %08lx %08lx)",
-               static_cast<unsigned long>(hr_rays), static_cast<unsigned long>(hr_rootless));
+            refused_storage ? env.core.pfnCreateCommandSignature(device.h(), &refused_args,
+                                                                 D3D12DDI_HCOMMANDSIGNATURE{refused_storage})
+                            : E_ABORT;
+        checkf(hr_mesh == S_OK && (hr_incrementing == S_OK || hr_incrementing == E_OUTOFMEMORY) &&
+                   hr_engine == E_OUTOFMEMORY && hr_rootless == E_INVALIDARG,
+               "compute: a mesh dispatch signature is S_OK, an incrementing constant S_OK or E_OUTOFMEMORY, a "
+               "signature the engine refuses E_OUTOFMEMORY, a constant without a root signature E_INVALIDARG "
+               "(hr %08lx %08lx %08lx %08lx)",
+               static_cast<unsigned long>(hr_mesh), static_cast<unsigned long>(hr_incrementing),
+               static_cast<unsigned long>(hr_engine), static_cast<unsigned long>(hr_rootless));
     }
 
     BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};

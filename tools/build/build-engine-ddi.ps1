@@ -5,15 +5,18 @@
 #      the same checkout (khronos/Vulkan-Headers/include) unless -VulkanInclude says otherwise.
 #   1. Header gate: engine-ddi-header-test.cpp (static layout checks of the boundary), built and run.
 #   2. Native library engine-ddi.lib, as the shell's DLL links it: no harness macro, /analyze. Its symbols must contain
-#      no harness_ entry point; native-policy-test.exe must see EnginePrivateTest refused and both tables filled, and
-#      caps-test.exe must pass the GetCaps checks against its stub engine.
+#      no harness_ entry point; native-policy-test.exe must see EnginePrivateTest refused and both tables filled,
+#      caps-test.exe must pass the GetCaps checks against its stub engine, and release-gate-test.exe and
+#      replay-test.exe the release gate and the deferred command-list replay against fake engine objects.
 #   With -NativeOnly the script stops here, and it needs no engine DLL and no GPU.
 #   3. Harness library (AMDGPU_WDDM_ENGINE_DDI_HARNESS) and engine-ddi-harness.exe, which plays the runtime and the
 #      shell against the real engine DLL on this PC's GPU (Vulkan loader, first hardware adapter unless -Adapter).
 #   4. Runs, unless -NoRun: the engine DLL's SHA-256 must equal engine_dll_sha256 in engine-abi.json; caps-test.exe
-#      --engine (query_adapter_caps on the real engine), then the harness; with -Vvl a second harness run under the
-#      Khronos validation layer (toolchain\vvl) with synchronization validation, which must report no message and
-#      must show the loader line that inserts the layer (the witness that "no message" is not "no layer").
+#      --engine (query_adapter_caps on the real engine), then the harness, and the harness again with
+#      --deferred-replay (every device context replays its lists' engine calls on workers); with -Vvl a further
+#      harness run under the Khronos validation layer (toolchain\vvl) with synchronization validation, which must
+#      report no message and must show the loader line that inserts the layer (the witness that "no message" is not
+#      "no layer").
 # Any failed step fails the script. Output goes to <workspace>\scratch\build\d3d12-engine-ddi unless -OutputDir.
 param(
     [string]$OutputDir,
@@ -60,7 +63,7 @@ Write-Host "engine ABI $($pin.abi_version) $($pin.header_revision): $engineHeade
 # Object files are named after the source's leaf, so no two sources here may share one.
 $libSources = @('context.cpp', 'caps.cpp', 'queue.cpp', 'commands.cpp', 'resources.cpp', 'descriptors.cpp',
                 'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp', 'tiles.cpp', 'state-objects.cpp', 'state-object-shell.cpp',
-                'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
+                'replay.cpp', 'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
 $harnessSources = @(Get-ChildItem -LiteralPath (Join-Path $src 'tests') -Filter '*.cpp' |
     Where-Object { $_.Name -like 'harness*.cpp' -or $_.Name -like 'test-*.cpp' } | ForEach-Object FullName)
 
@@ -116,6 +119,10 @@ try {
         Invoke-Step 'native policy test' { & .\native-policy-test.exe }
         Invoke-Step 'caps test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:caps-test.exe (Join-Path $src 'tests\caps-test.cpp') engine-ddi.lib dxgi.lib }
         Invoke-Step 'caps test (stub engine)' { & .\caps-test.exe }
+        Invoke-Step 'release gate test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:release-gate-test.exe (Join-Path $src 'tests\release-gate-test.cpp') engine-ddi.lib }
+        Invoke-Step 'release gate test' { & .\release-gate-test.exe }
+        Invoke-Step 'replay test build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:replay-test.exe (Join-Path $src 'tests\replay-test.cpp') engine-ddi.lib }
+        Invoke-Step 'replay test' { & .\replay-test.exe }
 
         if (-not $NativeOnly) {
             Invoke-Step 'harness library' { & cl.exe @flags $harnessFlag /c /Fo:harness\ /Fd:harness\engine-ddi.pdb @libSources }
@@ -134,13 +141,14 @@ try {
         throw "engine DLL $EngineDll has SHA-256 $engineSha; engine-abi.json pins $($pin.engine_dll_sha256)"
     }
 
-    function Invoke-Run([string]$Tag, [string]$Exe, [bool]$WithVvl) {
+    function Invoke-Run([string]$Tag, [string]$Exe, [bool]$WithVvl, [string[]]$Extra = @()) {
         $runDir = Join-Path $OutputDir "run-$Tag"
         if (Test-Path -LiteralPath $runDir) { Remove-Item -LiteralPath $runDir -Recurse -Force }
         New-Item -ItemType Directory -Force $runDir | Out-Null
         $envSaved = Save-ProcessEnvironment
         try {
             $env:VKD3D_DEBUG = 'warn'
+            $env:AMDGPU_WDDM_LOG = 'stderr' # the UMD stack prints nothing on stdio without it (stdio-log.h)
             if ($WithVvl) {
                 $env:VK_LAYER_PATH = Join-Path $root 'toolchain\vvl\bin'
                 $env:VK_INSTANCE_LAYERS = 'VK_LAYER_KHRONOS_validation'
@@ -151,6 +159,7 @@ try {
             }
             $argList = @('--engine', "`"$EngineDll`"")
             if ($Adapter) { $argList += '--adapter', "`"$Adapter`"" }
+            $argList += $Extra
             $p = Start-Process -FilePath (Join-Path $OutputDir $Exe) -ArgumentList $argList `
                 -WorkingDirectory $runDir -NoNewWindow -PassThru `
                 -RedirectStandardOutput "$runDir\stdout.txt" -RedirectStandardError "$runDir\stderr.txt"
@@ -200,6 +209,7 @@ try {
 
     Invoke-Run 'caps' 'caps-test.exe' $false
     Invoke-Run 'plain' 'engine-ddi-harness.exe' $false
+    Invoke-Run 'replay' 'engine-ddi-harness.exe' $false @('--deferred-replay')
     if ($Vvl) { Invoke-Run 'vvl' 'engine-ddi-harness.exe' $true }
 } finally { Restore-ProcessEnvironment $saved }
 Write-Host 'engine-ddi: build and checks passed (development PC only)'

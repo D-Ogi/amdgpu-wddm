@@ -2,6 +2,7 @@
 #pragma once
 #include "engine-ddi/engine-ddi.h"
 #include "../dxvk/runtime-domain.h"
+#include "device-progress.h"
 #include "paging.h"
 #include <atomic>
 namespace native12 {
@@ -20,11 +21,41 @@ enum class ImportStage : uint32_t {
     Resident                                    // appended: trace values of the others stay as they were
 };
 // Where the latest free() ended, by the same rule.
-enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocate };
+enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocate,
+    Quarantined                                 // appended: the import is held mapped (ImportReleasePolicy)
+};
 struct FreeReport {
     FreeStage stage{};
     bool surface{};
     bool owner_expired{};                       // a linear primary outside its resource's own DDI
+    // The import this free() named, for the trace that has to meet the kernel's paging journal by address
+    // (instrumentation item 5 of the trial 245 report), and what the quarantine held when it returned.
+    uint64_t gpu_va{},byte_size{};
+    uint32_t held_count{};
+    uint64_t held_bytes{};
+    uint32_t released{};                        // quarantined imports this call drained (0 or more)
+};
+// The shell's half of the release gate (M15.8, fixes F2 and F3 of the trial 245 report). A released import
+// stays mapped and allocated until both hold:
+//   - progress_gate: the device-wide progress taken when the release reached the shell has retired, which
+//     covers every context of the device, the engine's and the ICD's internal ones included
+//     (device-progress.h). Without a progress source the gate proves nothing and is not applied.
+//   - quarantine_depth: this many further releases have reached the shell, or the entry is older than
+//     quarantine_age_ms, or a cap is over. The depth is a delay against a race the first condition cannot
+//     see (a submission that names the memory and reaches the kernel after the snapshot); the caps bound
+//     how much memory the delay holds and never shorten the progress condition.
+// All zero (off()) is adapter106's behaviour: the unmap and the deallocation run inside free().
+struct ImportReleasePolicy {
+    uint32_t quarantine_depth{};
+    uint32_t quarantine_count_cap{};
+    uint32_t quarantine_age_ms{};
+    uint64_t quarantine_byte_cap{};
+    bool progress_gate{};
+    bool holds() const noexcept {return progress_gate || quarantine_depth;}
+    static ImportReleasePolicy off() noexcept {return {};}
+    // The driver's defaults, with the two experiment switches of ddi-trace.h applied (both default on):
+    // import-progress-gate-off and import-quarantine-off.
+    static ImportReleasePolicy from_switches() noexcept;
 };
 // A linear primary's release reached the shell outside the DDI of its runtime resource. No runtime
 // callback was made; the allocation stays owned by its record until the device's metadata goes.
@@ -57,22 +88,47 @@ class RuntimeHeapImports final {
     PFN_vkCreateBuffer create_buffer_{};
     PFN_vkDestroyBuffer destroy_buffer_{};
     PFN_vkGetBufferMemoryRequirements requirements_{};
-    mutable SRWLOCK lock_=SRWLOCK_INIT;         // records_ and the records' flags
+    mutable SRWLOCK lock_=SRWLOCK_INIT;         // records_ and the records' flags, and the quarantine
     SRWLOCK paging_open_lock_=SRWLOCK_INIT;     // the first allocate() opens the paging queue
     Record* records_{};
+    // The quarantine (ImportReleasePolicy): records whose Vulkan import is gone and whose mapping and
+    // runtime allocation are still held, oldest first. A quarantined record is out of records_, so no
+    // other call can find it; only drain() touches it, one thread at a time (draining_).
+    Record* held_{},*held_tail_{};
+    uint32_t held_count_{};
+    uint64_t held_bytes_{},deposits_{};
+    bool draining_{};
+    ImportReleasePolicy policy_{};
+    ProgressSource progress_{};
+    std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
     HRESULT release(Record&) noexcept;
-    HRESULT release_owned(Record&,VkDeviceMemory) noexcept;
+    HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
+    HRESULT release_owned(Record&) noexcept;                    // the mapping and the runtime allocation
+    void detach(Record*) noexcept;                // out of records_, under lock_
+    void deposit(Record*) noexcept;               // into the quarantine, under lock_
+    void drain(bool all) noexcept;                // never under lock_
     void erase(Record*) noexcept;
 public:
     RuntimeHeapImports(Device&,bc250::umd::RuntimeDomain&,VkPhysicalDevice,VkDevice,
-                       VkInstance,PFN_vkGetInstanceProcAddr,void* host_identity) noexcept;
+                       VkInstance,PFN_vkGetInstanceProcAddr,void* host_identity,
+                       const ImportReleasePolicy& policy=ImportReleasePolicy::from_switches()) noexcept;
     ~RuntimeHeapImports();
     RuntimeHeapImports(const RuntimeHeapImports&)=delete;
     RuntimeHeapImports& operator=(const RuntimeHeapImports&)=delete;
     HRESULT initialize() noexcept;
+    // The source of the device-wide progress the gate reads. Set once, before the first free(), by the
+    // owner that has it (device-engine.cpp); without it progress_gate holds nothing.
+    void bind_progress(const ProgressSource& source) noexcept {progress_=source;}
+    const ImportReleasePolicy& policy() const noexcept {return policy_;}
+    // What the quarantine holds now, for tests and the trace.
+    uint32_t held_count() const noexcept;
+    uint64_t held_bytes() const noexcept;
+    uint64_t forced_releases() const noexcept {return forced_.load();}
+    // A retirement point of the quarantine outside allocate() and free(): releases what the policy admits.
+    void retire_held() noexcept {drain(false);}
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;
     const ImportReport& last_report() const noexcept {return report_;}
     const FreeReport& last_free_report() const noexcept {return free_report_;}
