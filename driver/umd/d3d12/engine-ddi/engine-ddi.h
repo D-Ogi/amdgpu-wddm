@@ -309,6 +309,35 @@ struct ReplayPolicy {
 };
 HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
 
+// ---- Entry path (experiment) -------------------------------------------------------------------------------------
+// The direct recording entry and the entry statistics (entry.h), both off unless a knob sets them. The knobs are read
+// once per process from the environment, else from C:\BC250\tmp\amdgpu_wddm_radv.cfg (KEY=VALUE lines, the ICD's
+// knob file, which also reaches a game that Steam starts):
+//   BC250_ENTRY_PATH   one letter per arm, rotated every BC250_ENTRY_PHASE_MS (default 2000) at the shell's Present;
+//                      a single letter fixes the arm. a: the shell's entry (as without the knob); b: the direct entry;
+//                      c: the direct entry, with spinning replay workers looking for work every BC250_ENTRY_POLL_US
+//                      (default 1) instead of after every pause; d: the shell's entry and a busy wait of
+//                      BC250_ENTRY_PAD_US (default 300) in each Present.
+//   BC250_ENTRY_STATS  1: a row per phase in C:\BC250\tmp\amdgpu_wddm_radv-deferred-<pid>-shell.log (else the same
+//                      name in %TEMP%): frame times, calls and sampled times per timed entry and thread, the direct
+//                      entry's misses, the replay workers' busy, spin, yield and sleep times.
+// The direct entry is the graphics table's slot for the value-only recording calls (draws, input assembler,
+// viewports and scissors, blend factor and stencil reference, graphics root arguments): with deferred replay on, it
+// writes the slot's own ring entry from the table entry itself, without the shell's entry thunk; anything else, and
+// every call of an arm without it, goes to the slot as filled before.
+// install_direct_list: writes the direct entries over the graphics table's (table_index 1) slots, keeping those as
+// the fallback, when a knob asks for the path or the statistics; false, with the table untouched, otherwise. A later
+// call for another device must find the same slots (else false: that table keeps them).
+bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+// The direct entry records only for a context the shell admits as it admits its own fast entry (the recording
+// binding published): on after that is published, off before it is cleared.
+void set_direct_entry(DeviceContext* context, bool on) noexcept;
+// The shell's Present, first thing: the frame clock, the arm rotation, the rows and arm d's wait. Only the first
+// thread that calls it counts frames; for the others it returns at once.
+void entry_frame() noexcept;
+// Whether the statistics are on (the shell then times its own entries).
+bool entry_stats_on() noexcept;
+
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);
 

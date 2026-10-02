@@ -8,6 +8,7 @@
 // enums they pass are equal (static_asserts below). They are installed in the graphics table only; the compute
 // table keeps the fail-safe that rejects them.
 #include "internal.h"
+#include "entry.h"
 #include "replay.h"
 #include <cstring>
 
@@ -253,46 +254,101 @@ void invalid(CommandListRecord* l) noexcept { l->h.device->report_list(l->rt, E_
 
 using List = ID3D12GraphicsCommandList;
 
+// The engine call of each value-only slot, made by one function per slot: the slot below and its direct entry (further
+// down) record the same lambda type, so an entry replays alike whichever of the two wrote it.
+auto draw_instanced_op(UINT vertices, UINT instances, UINT first_vertex, UINT first_instance) noexcept {
+    return [=](List* e) { e->DrawInstanced(vertices, instances, first_vertex, first_instance); };
+}
+auto draw_indexed_instanced_op(UINT indices, UINT instances, UINT first_index, INT base_vertex,
+                               UINT first_instance) noexcept {
+    return [=](List* e) { e->DrawIndexedInstanced(indices, instances, first_index, base_vertex, first_instance); };
+}
+auto ia_set_topology_op(D3D12DDI_PRIMITIVE_TOPOLOGY topology) noexcept {
+    return [=](List* e) { e->IASetPrimitiveTopology(static_cast<D3D12_PRIMITIVE_TOPOLOGY>(topology)); };
+}
+auto rs_set_viewports_op(UINT count) noexcept {
+    return [=](List* e, const D3D12_VIEWPORT* v) { e->RSSetViewports(count, v); };
+}
+auto rs_set_scissor_rects_op(UINT count) noexcept {
+    return [=](List* e, const D3D12DDI_RECT* r) { e->RSSetScissorRects(count, r); };
+}
+auto om_set_blend_factor_op() noexcept {
+    return [](List* e, const FLOAT* f) { e->OMSetBlendFactor(f); };
+}
+auto om_set_stencil_ref_op(UINT ref) noexcept {
+    return [=](List* e) { e->OMSetStencilRef(ref); };
+}
+auto set_graphics_root_table_op(UINT index, D3D12DDI_GPU_DESCRIPTOR_HANDLE base) noexcept {
+    const D3D12_GPU_DESCRIPTOR_HANDLE handle{base.ptr};
+    return [=](List* e) { e->SetGraphicsRootDescriptorTable(index, handle); };
+}
+auto set_graphics_root_constant_op(UINT index, UINT data, UINT offset) noexcept {
+    return [=](List* e) { e->SetGraphicsRoot32BitConstant(index, data, offset); };
+}
+auto set_graphics_root_constants_op(UINT index, UINT count, UINT offset) noexcept {
+    return [=](List* e, const UINT* d) { e->SetGraphicsRoot32BitConstants(index, count, d, offset); };
+}
+auto set_graphics_root_cbv_op(UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) noexcept {
+    return [=](List* e) { e->SetGraphicsRootConstantBufferView(index, va); };
+}
+auto set_graphics_root_srv_op(UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) noexcept {
+    return [=](List* e) { e->SetGraphicsRootShaderResourceView(index, va); };
+}
+auto set_graphics_root_uav_op(UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) noexcept {
+    return [=](List* e) { e->SetGraphicsRootUnorderedAccessView(index, va); };
+}
+auto ia_set_index_buffer_op() noexcept {
+    return [](List* e, const D3D12_INDEX_BUFFER_VIEW* v) { e->IASetIndexBuffer(v); };
+}
+auto ia_set_vertex_buffers_op(UINT start, UINT count) noexcept {
+    return [=](List* e, const D3D12_VERTEX_BUFFER_VIEW* v) { e->IASetVertexBuffers(start, count, v); };
+}
+// The arguments the slots refuse (reported as E_INVALIDARG); the direct entry leaves them to the slot.
+bool viewport_count_ok(UINT count, const void* data) noexcept {
+    return count <= D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE && (!count || data);
+}
+bool vertex_slots_ok(UINT start, UINT count) noexcept {
+    return start < D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT && count <= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT - start;
+}
+
 void APIENTRY draw_instanced(D3D12DDI_HCOMMANDLIST hlist, UINT vertices, UINT instances, UINT first_vertex,
                              UINT first_instance) {
     if (CommandListRecord* l = list_of(hlist, "DrawInstanced"))
-        record(l, [=](List* e) { e->DrawInstanced(vertices, instances, first_vertex, first_instance); });
+        record(l, draw_instanced_op(vertices, instances, first_vertex, first_instance));
 }
 
 void APIENTRY draw_indexed_instanced(D3D12DDI_HCOMMANDLIST hlist, UINT indices, UINT instances, UINT first_index,
                                      INT base_vertex, UINT first_instance) {
     if (CommandListRecord* l = list_of(hlist, "DrawIndexedInstanced"))
-        record(l, [=](List* e) { e->DrawIndexedInstanced(indices, instances, first_index, base_vertex, first_instance); });
+        record(l, draw_indexed_instanced_op(indices, instances, first_index, base_vertex, first_instance));
 }
 
 void APIENTRY ia_set_topology(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_PRIMITIVE_TOPOLOGY topology) {
-    if (CommandListRecord* l = list_of(hlist, "IaSetTopology"))
-        record(l, [=](List* e) { e->IASetPrimitiveTopology(static_cast<D3D12_PRIMITIVE_TOPOLOGY>(topology)); });
+    if (CommandListRecord* l = list_of(hlist, "IaSetTopology")) record(l, ia_set_topology_op(topology));
 }
 
 void APIENTRY rs_set_viewports(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_VIEWPORT* viewports) {
     CommandListRecord* l = list_of(hlist, "RsSetViewports");
     if (!l) return;
-    if (count > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE || (count && !viewports)) return invalid(l);
-    record(l, [=](List* e, const D3D12_VIEWPORT* v) { e->RSSetViewports(count, v); },
-           in(reinterpret_cast<const D3D12_VIEWPORT*>(viewports), count));
+    if (!viewport_count_ok(count, viewports)) return invalid(l);
+    record(l, rs_set_viewports_op(count), in(reinterpret_cast<const D3D12_VIEWPORT*>(viewports), count));
 }
 
 void APIENTRY rs_set_scissor_rects(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_RECT* rects) {
     CommandListRecord* l = list_of(hlist, "RsSetScissorRects");
     if (!l) return;
-    if (count > D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE || (count && !rects)) return invalid(l);
-    record(l, [=](List* e, const D3D12DDI_RECT* r) { e->RSSetScissorRects(count, r); }, in(rects, count));
+    if (!viewport_count_ok(count, rects)) return invalid(l);
+    record(l, rs_set_scissor_rects_op(count), in(rects, count));
 }
 
 // A null factor sets the default (1, 1, 1, 1); otherwise the engine reads four floats.
 void APIENTRY om_set_blend_factor(D3D12DDI_HCOMMANDLIST hlist, const FLOAT factor[4]) {
     if (CommandListRecord* l = list_of(hlist, "OmSetBlendFactor"))
-        record(l, [](List* e, const FLOAT* f) { e->OMSetBlendFactor(f); }, in(factor, factor ? 4 : 0));
+        record(l, om_set_blend_factor_op(), in(factor, factor ? 4 : 0));
 }
 
 void APIENTRY om_set_stencil_ref(D3D12DDI_HCOMMANDLIST hlist, UINT ref) {
-    if (CommandListRecord* l = list_of(hlist, "OmSetStencilRef")) record(l, [=](List* e) { e->OMSetStencilRef(ref); });
+    if (CommandListRecord* l = list_of(hlist, "OmSetStencilRef")) record(l, om_set_stencil_ref_op(ref));
 }
 
 void APIENTRY set_graphics_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HROOTSIGNATURE h) {
@@ -306,15 +362,13 @@ void APIENTRY set_graphics_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_
 }
 
 void APIENTRY set_graphics_root_table(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_DESCRIPTOR_HANDLE base) {
-    if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootDescriptorTable")) {
-        const D3D12_GPU_DESCRIPTOR_HANDLE handle{base.ptr};
-        record(l, [=](List* e) { e->SetGraphicsRootDescriptorTable(index, handle); });
-    }
+    if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootDescriptorTable"))
+        record(l, set_graphics_root_table_op(index, base));
 }
 
 void APIENTRY set_graphics_root_constant(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT data, UINT offset) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRoot32BitConstant"))
-        record(l, [=](List* e) { e->SetGraphicsRoot32BitConstant(index, data, offset); });
+        record(l, set_graphics_root_constant_op(index, data, offset));
 }
 
 void APIENTRY set_graphics_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT count, const void* data,
@@ -322,38 +376,35 @@ void APIENTRY set_graphics_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT inde
     CommandListRecord* l = list_of(hlist, "SetGraphicsRoot32BitConstants");
     if (!l) return;
     if (count && !data) return invalid(l);
-    record(l, [=](List* e, const UINT* d) { e->SetGraphicsRoot32BitConstants(index, count, d, offset); },
-           in(static_cast<const UINT*>(data), count));
+    record(l, set_graphics_root_constants_op(index, count, offset), in(static_cast<const UINT*>(data), count));
 }
 
 void APIENTRY set_graphics_root_cbv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootConstantBufferView"))
-        record(l, [=](List* e) { e->SetGraphicsRootConstantBufferView(index, va); });
+        record(l, set_graphics_root_cbv_op(index, va));
 }
 
 void APIENTRY set_graphics_root_srv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootShaderResourceView"))
-        record(l, [=](List* e) { e->SetGraphicsRootShaderResourceView(index, va); });
+        record(l, set_graphics_root_srv_op(index, va));
 }
 
 void APIENTRY set_graphics_root_uav(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
     if (CommandListRecord* l = list_of(hlist, "SetGraphicsRootUnorderedAccessView"))
-        record(l, [=](List* e) { e->SetGraphicsRootUnorderedAccessView(index, va); });
+        record(l, set_graphics_root_uav_op(index, va));
 }
 
 void APIENTRY ia_set_index_buffer(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDI_INDEX_BUFFER_VIEW* view) {
     if (CommandListRecord* l = list_of(hlist, "IASetIndexBuffer"))
-        record(l, [](List* e, const D3D12_INDEX_BUFFER_VIEW* v) { e->IASetIndexBuffer(v); },
-               in(reinterpret_cast<const D3D12_INDEX_BUFFER_VIEW*>(view), view ? 1 : 0));
+        record(l, ia_set_index_buffer_op(), in(reinterpret_cast<const D3D12_INDEX_BUFFER_VIEW*>(view), view ? 1 : 0));
 }
 
 void APIENTRY ia_set_vertex_buffers(D3D12DDI_HCOMMANDLIST hlist, UINT start, UINT count,
                                     const D3D12DDI_VERTEX_BUFFER_VIEW* views) {
     CommandListRecord* l = list_of(hlist, "IASetVertexBuffers");
     if (!l) return;
-    if (start >= D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT || count > D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT - start)
-        return invalid(l);
-    record(l, [=](List* e, const D3D12_VERTEX_BUFFER_VIEW* v) { e->IASetVertexBuffers(start, count, v); },
+    if (!vertex_slots_ok(start, count)) return invalid(l);
+    record(l, ia_set_vertex_buffers_op(start, count),
            in(reinterpret_cast<const D3D12_VERTEX_BUFFER_VIEW*>(views), views ? count : 0));
 }
 
@@ -383,6 +434,150 @@ void APIENTRY om_set_render_targets(D3D12DDI_HCOMMANDLIST hlist, UINT count, con
            Snap{reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(dsv), dsv ? 1u : 0u, D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
                 FALSE});
 }
+
+// ---- Direct entries (engine-ddi.h, "Entry path") ----------------------------------------------------------------------
+// Each is the graphics table's entry for its slot while the experiment installs it (install_direct_list): it counts
+// and times the call (entry.h), and in an arm with the direct entry writes the slot's ring entry itself
+// (record_direct); otherwise, or when record_direct declines, it calls the slot as the table held it before (the
+// shell's entry, or in the harness the slot itself), which then validates, reports and records as without it.
+D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 g_direct_fallback{};  // written once by install_direct_list, before any call
+SRWLOCK g_direct_lock = SRWLOCK_INIT;
+bool g_direct_filled = false;                               // under g_direct_lock
+
+void APIENTRY direct_draw_instanced(D3D12DDI_HCOMMANDLIST hlist, UINT vertices, UINT instances, UINT first_vertex,
+                                    UINT first_instance) {
+    EntryTimer timer(EntryClass::DrawInstanced);
+    if (entry_direct_arm() &&
+        record_direct(timer, hlist, draw_instanced_op(vertices, instances, first_vertex, first_instance)))
+        return;
+    g_direct_fallback.pfnDrawInstanced(hlist, vertices, instances, first_vertex, first_instance);
+}
+
+void APIENTRY direct_draw_indexed_instanced(D3D12DDI_HCOMMANDLIST hlist, UINT indices, UINT instances,
+                                            UINT first_index, INT base_vertex, UINT first_instance) {
+    EntryTimer timer(EntryClass::DrawIndexedInstanced);
+    if (entry_direct_arm() &&
+        record_direct(timer, hlist,
+                      draw_indexed_instanced_op(indices, instances, first_index, base_vertex, first_instance)))
+        return;
+    g_direct_fallback.pfnDrawIndexedInstanced(hlist, indices, instances, first_index, base_vertex, first_instance);
+}
+
+void APIENTRY direct_ia_set_topology(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_PRIMITIVE_TOPOLOGY topology) {
+    EntryTimer timer(EntryClass::IaSetTopology);
+    if (entry_direct_arm() && record_direct(timer, hlist, ia_set_topology_op(topology))) return;
+    g_direct_fallback.pfnIaSetTopology(hlist, topology);
+}
+
+void APIENTRY direct_rs_set_viewports(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_VIEWPORT* viewports) {
+    EntryTimer timer(EntryClass::RsSetViewports);
+    if (entry_direct_arm() && viewport_count_ok(count, viewports) &&
+        record_direct(timer, hlist, rs_set_viewports_op(count),
+                      in(reinterpret_cast<const D3D12_VIEWPORT*>(viewports), count)))
+        return;
+    g_direct_fallback.pfnRsSetViewports(hlist, count, viewports);
+}
+
+void APIENTRY direct_rs_set_scissor_rects(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_RECT* rects) {
+    EntryTimer timer(EntryClass::RsSetScissorRects);
+    if (entry_direct_arm() && viewport_count_ok(count, rects) &&
+        record_direct(timer, hlist, rs_set_scissor_rects_op(count), in(rects, count)))
+        return;
+    g_direct_fallback.pfnRsSetScissorRects(hlist, count, rects);
+}
+
+void APIENTRY direct_om_set_blend_factor(D3D12DDI_HCOMMANDLIST hlist, const FLOAT factor[4]) {
+    EntryTimer timer(EntryClass::OmSetBlendFactor);
+    if (entry_direct_arm() && record_direct(timer, hlist, om_set_blend_factor_op(), in(factor, factor ? 4 : 0)))
+        return;
+    g_direct_fallback.pfnOmSetBlendFactor(hlist, factor);
+}
+
+void APIENTRY direct_om_set_stencil_ref(D3D12DDI_HCOMMANDLIST hlist, UINT ref) {
+    EntryTimer timer(EntryClass::OmSetStencilRef);
+    if (entry_direct_arm() && record_direct(timer, hlist, om_set_stencil_ref_op(ref))) return;
+    g_direct_fallback.pfnOmSetStencilRef(hlist, ref);
+}
+
+void APIENTRY direct_set_graphics_root_table(D3D12DDI_HCOMMANDLIST hlist, UINT index,
+                                             D3D12DDI_GPU_DESCRIPTOR_HANDLE base) {
+    EntryTimer timer(EntryClass::SetGraphicsRootDescriptorTable);
+    if (entry_direct_arm() && record_direct(timer, hlist, set_graphics_root_table_op(index, base))) return;
+    g_direct_fallback.pfnSetGraphicsRootDescriptorTable(hlist, index, base);
+}
+
+void APIENTRY direct_set_graphics_root_constant(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT data, UINT offset) {
+    EntryTimer timer(EntryClass::SetGraphicsRoot32BitConstant);
+    if (entry_direct_arm() && record_direct(timer, hlist, set_graphics_root_constant_op(index, data, offset))) return;
+    g_direct_fallback.pfnSetGraphicsRoot32BitConstant(hlist, index, data, offset);
+}
+
+void APIENTRY direct_set_graphics_root_constants(D3D12DDI_HCOMMANDLIST hlist, UINT index, UINT count,
+                                                 const void* data, UINT offset) {
+    EntryTimer timer(EntryClass::SetGraphicsRoot32BitConstants);
+    if (entry_direct_arm() && (!count || data) &&
+        record_direct(timer, hlist, set_graphics_root_constants_op(index, count, offset),
+                      in(static_cast<const UINT*>(data), count)))
+        return;
+    g_direct_fallback.pfnSetGraphicsRoot32BitConstants(hlist, index, count, data, offset);
+}
+
+void APIENTRY direct_set_graphics_root_cbv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
+    EntryTimer timer(EntryClass::SetGraphicsRootConstantBufferView);
+    if (entry_direct_arm() && record_direct(timer, hlist, set_graphics_root_cbv_op(index, va))) return;
+    g_direct_fallback.pfnSetGraphicsRootConstantBufferView(hlist, index, va);
+}
+
+void APIENTRY direct_set_graphics_root_srv(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
+    EntryTimer timer(EntryClass::SetGraphicsRootShaderResourceView);
+    if (entry_direct_arm() && record_direct(timer, hlist, set_graphics_root_srv_op(index, va))) return;
+    g_direct_fallback.pfnSetGraphicsRootShaderResourceView(hlist, index, va);
+}
+
+void APIENTRY direct_set_graphics_root_uav(D3D12DDI_HCOMMANDLIST hlist, UINT index, D3D12DDI_GPU_VIRTUAL_ADDRESS va) {
+    EntryTimer timer(EntryClass::SetGraphicsRootUnorderedAccessView);
+    if (entry_direct_arm() && record_direct(timer, hlist, set_graphics_root_uav_op(index, va))) return;
+    g_direct_fallback.pfnSetGraphicsRootUnorderedAccessView(hlist, index, va);
+}
+
+void APIENTRY direct_ia_set_index_buffer(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDI_INDEX_BUFFER_VIEW* view) {
+    EntryTimer timer(EntryClass::IASetIndexBuffer);
+    if (entry_direct_arm() &&
+        record_direct(timer, hlist, ia_set_index_buffer_op(),
+                      in(reinterpret_cast<const D3D12_INDEX_BUFFER_VIEW*>(view), view ? 1 : 0)))
+        return;
+    // C6387: a null view unbinds the index buffer; the slot takes it as the runtime passed it.
+#pragma warning(suppress : 6387)
+    g_direct_fallback.pfnIASetIndexBuffer(hlist, view);
+}
+
+void APIENTRY direct_ia_set_vertex_buffers(D3D12DDI_HCOMMANDLIST hlist, UINT start, UINT count,
+                                           const D3D12DDI_VERTEX_BUFFER_VIEW* views) {
+    EntryTimer timer(EntryClass::IASetVertexBuffers);
+    if (entry_direct_arm() && vertex_slots_ok(start, count) &&
+        record_direct(timer, hlist, ia_set_vertex_buffers_op(start, count),
+                      in(reinterpret_cast<const D3D12_VERTEX_BUFFER_VIEW*>(views), views ? count : 0)))
+        return;
+    g_direct_fallback.pfnIASetVertexBuffers(hlist, start, count, views);
+}
+
+// The direct entries over table's slots, X(member, function).
+#define ENGINE_DDI_DIRECT_SLOTS(X)                                                                                     \
+    X(pfnDrawInstanced, direct_draw_instanced)                                                                         \
+    X(pfnDrawIndexedInstanced, direct_draw_indexed_instanced)                                                          \
+    X(pfnIaSetTopology, direct_ia_set_topology)                                                                        \
+    X(pfnRsSetViewports, direct_rs_set_viewports)                                                                      \
+    X(pfnRsSetScissorRects, direct_rs_set_scissor_rects)                                                               \
+    X(pfnOmSetBlendFactor, direct_om_set_blend_factor)                                                                 \
+    X(pfnOmSetStencilRef, direct_om_set_stencil_ref)                                                                   \
+    X(pfnSetGraphicsRootDescriptorTable, direct_set_graphics_root_table)                                               \
+    X(pfnSetGraphicsRoot32BitConstant, direct_set_graphics_root_constant)                                              \
+    X(pfnSetGraphicsRoot32BitConstants, direct_set_graphics_root_constants)                                            \
+    X(pfnSetGraphicsRootConstantBufferView, direct_set_graphics_root_cbv)                                              \
+    X(pfnSetGraphicsRootShaderResourceView, direct_set_graphics_root_srv)                                              \
+    X(pfnSetGraphicsRootUnorderedAccessView, direct_set_graphics_root_uav)                                             \
+    X(pfnIASetIndexBuffer, direct_ia_set_index_buffer)                                                                 \
+    X(pfnIASetVertexBuffers, direct_ia_set_vertex_buffers)
 } // namespace
 
 void fill_core_graphics(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
@@ -420,6 +615,36 @@ void fill_list_graphics(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnIASetVertexBuffers = ia_set_vertex_buffers;
     t->pfnSOSetTargets = so_set_targets;
     t->pfnOMSetRenderTargets = om_set_render_targets;
+}
+
+bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
+    if (!t || table_index != 1 || !entry_direct_wanted()) return false;
+    bool ok = true;
+    AcquireSRWLockExclusive(&g_direct_lock);
+    // The first table names the fallback; a later one (another device) must hold the same slots, or keeps its own.
+#define ENGINE_DDI_DIRECT_CHECK(member, function)                                                                      \
+    if (!t->member || t->member == function || (g_direct_filled && g_direct_fallback.member != t->member)) ok = false;
+    ENGINE_DDI_DIRECT_SLOTS(ENGINE_DDI_DIRECT_CHECK)
+#undef ENGINE_DDI_DIRECT_CHECK
+    if (ok && !g_direct_filled) {
+#define ENGINE_DDI_DIRECT_KEEP(member, function) g_direct_fallback.member = t->member;
+        ENGINE_DDI_DIRECT_SLOTS(ENGINE_DDI_DIRECT_KEEP)
+#undef ENGINE_DDI_DIRECT_KEEP
+        g_direct_filled = true;
+    }
+    ReleaseSRWLockExclusive(&g_direct_lock);
+    if (!ok) {
+        log_line("entry path: a graphics table with other slots than the first one's keeps them (no direct entries)");
+        return false;
+    }
+#define ENGINE_DDI_DIRECT_SET(member, function) t->member = function;
+    ENGINE_DDI_DIRECT_SLOTS(ENGINE_DDI_DIRECT_SET)
+#undef ENGINE_DDI_DIRECT_SET
+    return true;
+}
+
+void set_direct_entry(DeviceContext* context, bool on) noexcept {
+    if (context) context->direct.store(on, std::memory_order_release);
 }
 
 } // namespace engine_ddi

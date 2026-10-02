@@ -245,6 +245,8 @@ public:
         recording_={this,&domain_,&bootstrap_,&active_};
         recording_bind_.store(on,std::memory_order_relaxed);
         device_.recording=on && device_.trace_mode!=1 && bootstrap_.valid()?&recording_:nullptr;
+        // The entry path experiment's direct entry is admitted with the binding and cleared with it (engine-ddi.h).
+        engine_ddi::set_direct_entry(context_,device_.recording!=nullptr);
         return device_.recording!=nullptr;
     }
     engine_ddi::DeviceContext* context() const noexcept {return context_;}

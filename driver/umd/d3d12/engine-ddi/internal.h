@@ -283,6 +283,8 @@ public:
     // Deferred command-list replay (set_replay_policy, replay.h), null when off: written before the context is used
     // on another thread, and at teardown; read by every recording slot.
     Replay* replay = nullptr;
+    // The direct entry (set_direct_entry): the shell admits this context; read by every direct entry.
+    std::atomic<bool> direct{false};
 
     // Every report is logged with thread and time, so it can be placed between the begin and end records
     // of the entry that made it. A reported error can surface to the application at a later call.

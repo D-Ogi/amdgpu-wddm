@@ -64,9 +64,22 @@ void notify(ReplayRing* r) noexcept {
     bump(r->notifies);
 }
 
-// After catching up: true when work (or stop) arrived within the spin.
+// After catching up: true when work (or stop) arrived within the spin. Each look reads published, a line the
+// producer writes on every publish; the entry path's arm c (entry.h, g_entry.poll_tsc) looks only every poll TSC ticks,
+// pausing in between, so that a producer in a burst of calls does not find the line taken back after each one.
 bool spin_for_work(ReplayRing* r, uint64_t pos, uint64_t ticks) noexcept {
     const uint64_t start = qpc();
+    const uint64_t poll = g_entry.poll_tsc.load(std::memory_order_relaxed);
+    if (poll) {
+        for (uint64_t next = __rdtsc() + poll;;) {
+            _mm_pause();
+            const uint64_t now = __rdtsc();
+            if (now < next) continue;
+            next = now + poll;
+            if (r->published.load(std::memory_order_relaxed) != pos || r->stop.load(std::memory_order_relaxed)) return true;
+            if (qpc() - start > ticks) return false;
+        }
+    }
     for (uint32_t n = 1;; ++n) {
         _mm_pause();
         if (r->published.load(std::memory_order_relaxed) != pos || r->stop.load(std::memory_order_relaxed)) return true;
@@ -85,30 +98,51 @@ bool yield_for_work(ReplayRing* r, uint64_t pos, uint64_t ticks) noexcept {
     }
 }
 
+// The worker's time by what it does, with the entry statistics on (entry.h): TSC ticks since mark go to counter.
+void account(WorkerStats* stats, std::atomic<uint64_t> WorkerStats::*counter, uint64_t& mark) noexcept {
+    if (!stats) return;
+    const uint64_t now = __rdtsc();
+    entry_bump(stats->*counter, now - mark);
+    mark = now;
+}
+
 void APIENTRY worker_body(void* ring) {
     auto* r = static_cast<ReplayRing*>(ring);
     const uint64_t spin = r->replay->spin_ticks;
     const uint64_t yield = r->replay->yield_ticks;
+    WorkerStats* const stats = r->stats;
+    uint64_t mark = stats ? __rdtsc() : 0;
     uint64_t pos = r->done.load(std::memory_order_relaxed);
     for (;;) {
         const uint64_t end = r->published.load(std::memory_order_acquire);
-        while (pos != end) {
-            const auto* h = reinterpret_cast<const EntryHeader*>(r->bytes + (pos & r->mask));
-            const uint32_t size = h->size;
-            if (const auto run = h->run) {
-                r->running.store(run, std::memory_order_relaxed);
-                run(h);
-                bump(r->worker_entries);
+        if (pos != end) {
+            uint64_t ran = 0;
+            while (pos != end) {
+                const auto* h = reinterpret_cast<const EntryHeader*>(r->bytes + (pos & r->mask));
+                const uint32_t size = h->size;
+                if (const auto run = h->run) {
+                    r->running.store(run, std::memory_order_relaxed);
+                    run(h);
+                    bump(r->worker_entries);
+                    ++ran;
+                }
+                pos += size;
+                r->done.store(pos, std::memory_order_seq_cst);
+                if (pos >= r->next_wake.load(std::memory_order_seq_cst)) notify(r);
             }
-            pos += size;
-            r->done.store(pos, std::memory_order_seq_cst);
-            if (pos >= r->next_wake.load(std::memory_order_seq_cst)) notify(r);
+            account(stats, &WorkerStats::busy, mark);
+            if (stats) entry_bump(stats->entries, ran);
         }
         if (r->stop.load(std::memory_order_acquire)) {
             if (r->published.load(std::memory_order_acquire) == pos) return;
             continue;
         }
-        if (spin_for_work(r, pos, spin) || yield_for_work(r, pos, yield)) continue;
+        const bool spun = spin_for_work(r, pos, spin);
+        account(stats, &WorkerStats::spin, mark);
+        if (spun) continue;
+        const bool yielded = yield_for_work(r, pos, yield);
+        account(stats, &WorkerStats::yield, mark);
+        if (yielded) continue;
         // Sleep on the futex word. A waker exchanges it to 0 first, so a wake that comes before WaitOnAddress makes
         // it return at once; the read-modify-write of published orders this check after the store of sleeping.
         r->sleeping.store(1, std::memory_order_seq_cst);
@@ -118,6 +152,7 @@ void APIENTRY worker_body(void* ring) {
             WaitOnAddress(&r->sleeping, &asleep, sizeof(asleep), kSleepMilliseconds);
         }
         r->sleeping.store(0, std::memory_order_relaxed);
+        account(stats, &WorkerStats::sleep, mark);
     }
 }
 
@@ -270,6 +305,7 @@ ReplayRing* create_ring(Replay* rp, uint32_t index) noexcept {
     r->max_entry = bytes / 8;
     r->tag = uint64_t{index + 1} << 56;
     r->index = index;
+    r->stats = entry_worker_stats(index, rp->serial);
     r->owner = owner;
     r->owner_id = GetCurrentThreadId();
     r->thread = CreateThread(nullptr, 0, worker_thread, r, 0, nullptr);

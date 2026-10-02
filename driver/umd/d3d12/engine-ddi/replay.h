@@ -43,6 +43,7 @@
 //     (a failed Close), cleared by the drain that reports it. CommandPoolRecord::closing: close_list, read by the
 //     pool's reset and by Reset after the application's ordering (an allocator is not free-threaded either).
 #pragma once
+#include "entry.h"
 #include "internal.h"
 #include <cstring>
 #include <new>
@@ -115,6 +116,7 @@ struct ReplayRing {
     uint64_t tag;                               // (index + 1) << 56
     uint32_t index;
     HANDLE thread;
+    WorkerStats* stats;                         // the worker's times (entry.h), null with the statistics off
     // The producer: the owner thread, or under Replay::lock the thread that takes the ring over.
     uint64_t write;                             // the end of the last reserved entry
     uint64_t cached_done;                       // a value of done read earlier: done is at least this
@@ -366,12 +368,14 @@ inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t si
         replay_wake(r);
 }
 
-template <class F, class... A, size_t... I>
+// Direct: the direct entry's encode, which leaves an entry it cannot write to the slot (no fallback drain here; the
+// slot's own record makes it).
+template <bool Direct = false, class F, class... A, size_t... I>
 bool encode(ReplayRing* r, CommandListRecord* l, const F& f, std::index_sequence<I...>, const A&... args) noexcept {
     using L = Layout<F, sizeof...(A)>;
     Plan<sizeof...(A)> p{L::kFixed, {}, false, false};
     (plan(p, I, r, args), ...);
-    if (p.oversize || p.unready) return replay_fallback(r, l, p.oversize);
+    if (p.oversize || p.unready) return Direct ? false : replay_fallback(r, l, p.oversize);
     const size_t size = align_up(p.total, 16);
     uint8_t* e = reserve(r, size);
     const uint64_t end = r->write;
@@ -400,6 +404,51 @@ template <class F, class... A> void record(CommandListRecord* l, const F& f, con
         if (r && replay_detail::encode(r, l, f, std::index_sequence_for<A...>{}, args...)) return;
     }
     f(l->list(), replay_detail::Arg<A>::source(args)...);
+}
+
+// The direct entry (engine-ddi.h, "Entry path"): record()'s deferred half for a call that comes straight from the
+// runtime's table, without the shell's entry. It writes the same entry record() would write (same f, same arguments),
+// and only when that needs nothing but this thread's ring: a live list of a context the shell admits (set_direct_entry,
+// published with the shell's recording binding and cleared with it), deferred replay on, this thread's ring already
+// looked up, the list's pending entries (if any) on that ring, an entry that fits. It makes no engine call, takes no
+// lock, waits only for ring space as record() does (Drain::Space, which calls no hook), and changes nothing when it
+// returns false: the caller then goes to the slot, which validates, reports and records as before.
+template <class F, class... A>
+__forceinline bool record_direct(EntryTimer& timer, D3D12DDI_HCOMMANDLIST h, const F& f, const A&... args) noexcept {
+    static_assert(std::is_trivially_copyable_v<F> && std::is_trivially_destructible_v<F> && alignof(F) <= 16,
+                  "a replay lambda captures plain values only");
+    auto* l = record_of<CommandListRecord>(h.pDrvPrivate, Tag::CommandList);
+    if (!l) {
+        timer.miss(DirectMiss::Record);
+        return false;
+    }
+    DeviceContext* c = l->h.device;
+    if (!c->direct.load(std::memory_order_relaxed)) {
+        timer.miss(DirectMiss::Admission);
+        return false;
+    }
+    Replay* replay = c->replay;
+    if (!replay) {
+        timer.miss(DirectMiss::Replay);
+        return false;
+    }
+    const ReplayThreadCache& cache = t_replay;
+    if (cache.serial != replay->serial || !cache.ring) {
+        timer.miss(DirectMiss::Ring);
+        return false;
+    }
+    ReplayRing* r = cache.ring;
+    const uint64_t tail = l->replay_tail.load(std::memory_order_relaxed);
+    if (tail && (tail & ~kReplayPositionMask) != r->tag) {
+        timer.miss(DirectMiss::Switch);
+        return false;
+    }
+    if (!replay_detail::encode<true>(r, l, f, std::index_sequence_for<A...>{}, args...)) {
+        timer.miss(DirectMiss::Encode);
+        return false;
+    }
+    timer.direct();
+    return true;
 }
 
 } // namespace engine_ddi
