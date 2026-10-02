@@ -104,6 +104,55 @@ void virtual_placement(Env& env, Device& device) {
     destroy_buffer(env, device, texture);
     destroy_buffer(env, device, upload);
 }
+
+// The first refusal of each format by CheckResourceAllocationInfo: a 64 x 64 texture of each candidate the engine has
+// no size for, asked twice, reports E_INVALIDARG twice and gives one line with its description; a candidate the
+// engine sizes gives none. Returns the device errors reported.
+uint32_t allocation_refusals(Env& env, Device& device) {
+    const DXGI_FORMAT candidates[] = {DXGI_FORMAT_YUY2, DXGI_FORMAT_R8G8_B8G8_UNORM, DXGI_FORMAT_G8R8_G8B8_UNORM,
+                                      DXGI_FORMAT_R1_UNORM, DXGI_FORMAT_AI44, DXGI_FORMAT_R8G8B8A8_UNORM};
+    const uint32_t errors_before = device.shell.device_errors;
+    unsigned refused = 0, wrong = 0;
+    std::string first_line, first_want;
+    for (const DXGI_FORMAT format : candidates) {
+        D3D12_RESOURCE_DESC api{D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, 64, 64, 1, 1, format, {1, 0},
+                                D3D12_TEXTURE_LAYOUT_UNKNOWN, D3D12_RESOURCE_FLAG_NONE};
+        const bool engine_refuses = env.engine->GetResourceAllocationInfo(0, 1, &api).SizeInBytes == UINT64_MAX;
+        D3D12DDIARG_CREATERESOURCE_0088 res{};
+        res.ResourceType = D3D12DDI_RT_TEXTURE2D;
+        res.Width = 64;
+        res.Height = 64;
+        res.DepthOrArraySize = 1;
+        res.MipLevels = 1;
+        res.Format = format;
+        res.SampleDesc = {1, 0};
+        res.Layout = D3D12DDI_TL_UNDEFINED;
+        res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
+        const uint32_t errors = device.shell.device_errors;
+        for (int i = 0; i < 2; ++i) {
+            D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
+            env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1,
+                                                    &info);
+        }
+        char prefix[96];
+        std::snprintf(prefix, sizeof(prefix), "CheckResourceAllocationInfo: %08lx reported for the first refusal of "
+                      "format %u:", static_cast<unsigned long>(E_INVALIDARG), static_cast<unsigned>(format));
+        const std::vector<std::string> lines = refusal_lines(prefix);
+        const uint32_t reported = device.shell.device_errors - errors;
+        const bool last_invalid = device.shell.last_device_error == E_INVALIDARG;
+        wrong += engine_refuses ? (lines.size() != 1 || reported != 2 || !last_invalid) : (!lines.empty() || reported);
+        if (engine_refuses && !refused++ && !lines.empty()) {
+            first_line = lines[0];
+            first_want = std::string(prefix) + " type 3, 64 x 64, depth or array 1, mips 1, samples 1, flags 0x0, "
+                                               "layout 0, castable 0, alignment 0, optimization 0x0";
+        }
+    }
+    checkf(refused && !wrong && first_line == first_want,
+           "log lines: one CheckResourceAllocationInfo line per refused format, two E_INVALIDARG reports each (%u of "
+           "%zu candidates refused, %u differ); the first is \"%s\"",
+           refused, sizeof(candidates) / sizeof(candidates[0]), wrong, first_line.c_str());
+    return device.shell.device_errors - errors_before;
+}
 } // namespace
 
 void test_log_lines(Env& env) {
@@ -112,11 +161,12 @@ void test_log_lines(Env& env) {
     checkf(hr == S_OK && device.context, "log lines: device context (hr %08lx)", static_cast<unsigned long>(hr));
     if (hr != S_OK) return;
     virtual_placement(env, device);
+    const uint32_t device_errors = allocation_refusals(env, device);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
-    checkf(hr == S_OK && live == 0 && !device.shell.device_errors && !device.shell.list_errors,
-           "log lines: destroy_device_context S_OK with no live object, no error reported (hr %08lx, %u live, %u "
-           "device, %u list errors)",
+    checkf(hr == S_OK && live == 0 && device.shell.device_errors == device_errors && !device.shell.list_errors,
+           "log lines: destroy_device_context S_OK with no live object, no error reported but the refusals' (hr "
+           "%08lx, %u live, %u device, %u list errors)",
            static_cast<unsigned long>(hr), live, device.shell.device_errors, device.shell.list_errors);
 }
 

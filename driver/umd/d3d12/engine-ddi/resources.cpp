@@ -740,6 +740,10 @@ HRESULT linear_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& des
     return S_OK;
 }
 
+// The first refusal of each format, with its description and the code reported: what the runtime does with that
+// report (the device error callback) is not documented for this slot. Once per format, at most 257 lines a process.
+FormatSet g_allocation_refusals;
+
 void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
                                              D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS optimization,
                                              UINT32 alignment_restriction, UINT,
@@ -765,6 +769,15 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     }
     if (FAILED(hr)) {
         *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+        if (g_allocation_refusals.insert(static_cast<uint32_t>(in->Format)))
+            log_refusal("CheckResourceAllocationInfo: %08lx reported for the first refusal of format %u: type %u, "
+                        "%llu x %u, depth or array %u, mips %u, samples %u, flags 0x%x, layout %u, castable %u, "
+                        "alignment %u, optimization 0x%x",
+                        static_cast<unsigned long>(hr), static_cast<unsigned>(in->Format),
+                        static_cast<unsigned>(in->ResourceType), static_cast<unsigned long long>(in->Width), in->Height,
+                        static_cast<unsigned>(in->DepthOrArraySize), static_cast<unsigned>(in->MipLevels),
+                        in->SampleDesc.Count, static_cast<unsigned>(in->Flags), static_cast<unsigned>(in->Layout),
+                        in->NumCastableFormats, alignment_restriction, static_cast<unsigned>(optimization));
         c->report(hr);
     }
 }
