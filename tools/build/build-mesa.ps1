@@ -53,7 +53,9 @@ param(
     [string]$Ninja,
     [string]$VsInstall,
     # TEMP and TMP for the build (default <BC250_ROOT>\scratch\tmp).
-    [string]$Temp
+    [string]$Temp,
+    # Target architecture: x86 builds the 32-bit (WoW64) DLL with vcvarsamd64_x86.bat (common.ps1).
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,7 +113,7 @@ function Get-MesonProbes([string]$BuildDir) {
 $recipePath = Join-Path $Build 'recipe.json'
 $savedEnv = Save-ProcessEnvironment
 try {
-    $vs = Import-VsDevEnvironment $VsInstall $Temp
+    $vs = Import-VsDevEnvironment $VsInstall $Temp $Arch
     New-Item -ItemType Directory -Force $Temp, $Build | Out-Null
     $env:TEMP = $Temp
     $env:TMP = $Temp
@@ -164,6 +166,7 @@ try {
         ninja_targets   = $targets
         environment     = [ordered]@{
             vs_install          = $vs
+            arch                = $Arch
             vc_tools_version    = $env:VCToolsVersion
             windows_sdk_version = if ($env:WindowsSDKVersion) { $env:WindowsSDKVersion.TrimEnd('\') } else { $null }
             path_prepended      = $pathFront
