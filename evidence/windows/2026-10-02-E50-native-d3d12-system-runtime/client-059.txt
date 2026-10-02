@@ -1,0 +1,79 @@
+{"sequence":0,"elapsed_ms":0,"phase":"after","api":"Effective RADV_EXPERIMENTAL absent","hr":"00000000"}
+{"sequence":1,"elapsed_ms":0,"phase":"before","api":"create-device","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15,"phase":"before","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"after","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"before","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"after","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"before","api":"GetDesc1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"after","api":"GetDesc1","hr":"00000000"}
+runtime=system32/d3d12.dll adapter=BC-250
+{"sequence":1,"elapsed_ms":31,"phase":"before","api":"D3D12CreateDevice FL12_1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":19609,"phase":"after","api":"D3D12CreateDevice FL12_1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":19609,"phase":"after","api":"Reported TiledResourcesTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":19609,"phase":"after","api":"Reported ResourceBindingTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":19609,"phase":"after","api":"Reported ConservativeRasterizationTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":19609,"phase":"after","api":"Reported MaxSupportedFeatureLevel c100","hr":"00000000"}
+{"sequence":1,"elapsed_ms":19609,"phase":"after","api":"create-device","hr":"00000000"}
+{"sequence":2,"elapsed_ms":22969,"phase":"before","api":"create-queue","hr":"00000000"}
+{"sequence":2,"elapsed_ms":22969,"phase":"before","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":23015,"phase":"after","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":23015,"phase":"after","api":"create-queue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28500,"phase":"before","api":"copy","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28500,"phase":"after","api":"Reported TiledResourcesTier 3","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28500,"phase":"after","api":"Pattern seed 9a90601d","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28500,"phase":"before","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28515,"phase":"after","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28515,"phase":"before","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28515,"phase":"after","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28515,"phase":"before","api":"CreateReservedResource 4 tiles","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"after","api":"CreateReservedResource 4 tiles","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"before","api":"CreateHeap 8 tiles","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"after","api":"CreateHeap 8 tiles","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"before","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"after","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"before","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"after","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28547,"phase":"before","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28562,"phase":"after","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28562,"phase":"before","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28562,"phase":"after","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28562,"phase":"before","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28562,"phase":"after","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28562,"phase":"before","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"after","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"before","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"after","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"before","api":"UpdateTileMappings 4 tiles to heap tiles 2-5","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"after","api":"UpdateTileMappings 4 tiles to heap tiles 2-5","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"before","api":"GetDeviceRemovedReason after mapping","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28578,"phase":"after","api":"GetDeviceRemovedReason after mapping","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28594,"phase":"before","api":"CopyBufferRegion UPLOAD to RESERVED","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"after","api":"CopyBufferRegion UPLOAD to RESERVED","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"before","api":"ResourceBarrier COPY_DEST to COPY_SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"after","api":"ResourceBarrier COPY_DEST to COPY_SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"before","api":"CopyBufferRegion RESERVED to READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"after","api":"CopyBufferRegion RESERVED to READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"before","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"after","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28609,"phase":"before","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28625,"phase":"after","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28625,"phase":"before","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28625,"phase":"after","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28625,"phase":"before","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28625,"phase":"after","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"before","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"after","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"before","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"after","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"before","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"after","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"before","api":"Unmap READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"after","api":"Unmap READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"after","api":"Reserved buffer 262144 of 262144 bytes equal, first difference -1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":28640,"phase":"after","api":"copy","hr":"00000000"}
+{"sequence":4,"elapsed_ms":33953,"phase":"before","api":"status","hr":"00000000"}
+{"sequence":4,"elapsed_ms":33953,"phase":"before","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":33953,"phase":"after","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":33953,"phase":"after","api":"status","hr":"00000000"}
+{"sequence":5,"elapsed_ms":41250,"phase":"before","api":"exit","hr":"00000000"}
+{"sequence":5,"elapsed_ms":41265,"phase":"after","api":"exit","hr":"00000000"}

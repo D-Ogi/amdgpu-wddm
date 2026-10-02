@@ -1,0 +1,1 @@
+d3d12-caps instance-policy sparse=1 source=default status=c0000034 unresolved=0 result=00000000

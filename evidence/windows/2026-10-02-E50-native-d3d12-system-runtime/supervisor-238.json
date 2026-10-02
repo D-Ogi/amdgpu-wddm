@@ -1,0 +1,28 @@
+{
+    "status":  "diagnostic-restored",
+    "tree_closed":  true,
+    "baseline_restored":  true,
+    "runtime_functional":  false,
+    "runtime_entered":  true,
+    "caps_succeeded":  true,
+    "artifacts":  {
+                      "amdgpu_wddm_d3d12.dll":  "430CB1AE1B602CD830E2F21219BB19C85A10D05EB4BE8CE3C94CE4CF5F0F0CB9",
+                      "amdgpu_wddm_vkd3d.dll":  "106D09E517C6FE697D4440604B88C8A309BCC15ECE2D823ADB80EF16EBB33BD5",
+                      "amdgpu_wddm_radv.dll":  "DECB5C8A714853BBCD227845C475DBB1435F937D21119EDC91356CB6C065A93E"
+                  },
+    "phases":  [
+                   "Capture",
+                   "Install",
+                   "runtime",
+                   "Restore",
+                   "Verify"
+               ],
+    "errors":  [
+
+               ],
+    "kernel_stream":  {
+                          "collector_ended":  true
+                      },
+    "candidate_retained":  false,
+    "elapsed":  45.6308553
+}
