@@ -495,6 +495,7 @@ struct PipelineRecord {
 struct CommandPoolRecord {
     RecordHeader h;                             // no engine object; allocators below, one reference each
     ID3D12CommandAllocator* allocators[4];      // by D3D12_COMMAND_LIST_TYPE: DIRECT, BUNDLE, COMPUTE, COPY
+    std::atomic<uint32_t> open_lists{0};        // lists between a Reset into this pool and their Close
 };
 
 struct CommandRecorderRecord {
@@ -509,6 +510,7 @@ struct CommandListRecord {
     D3D12_COMMAND_LIST_TYPE type;
     uint32_t table;                             // 0 compute table, 1 graphics table
     bool recording;                             // between a Reset and a Close that both succeeded
+    void* pool;                                 // while recording: the pool record it was reset into (counted there)
     // Deferred replay (replay.h): the ring and the position where the list's last pending entry ends, 0 if none.
     std::atomic<uint64_t> replay_tail{0};
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }

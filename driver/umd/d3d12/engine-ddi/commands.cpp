@@ -71,7 +71,10 @@ void APIENTRY reset_pool(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDPOOL_0040 h) 
         c->report(E_INVALIDARG);
         return;
     }
-    drain_all(c, Drain::Pool);
+    // By API no list recording into the pool's allocators is open here, and every Close drained its list, so none of
+    // the pool's calls is pending: the replay of other pools' lists goes on. A list still open into this pool (an
+    // application error) keeps the drain of every ring, as before.
+    if (p->open_lists.load(std::memory_order_acquire)) drain_all(c, Drain::Pool);
     for (ID3D12CommandAllocator* a : p->allocators) {
         if (!a) continue;
         HRESULT hr = a->Reset();
@@ -122,6 +125,14 @@ void APIENTRY set_pool_as_target(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDRECOR
 }
 
 // ---- Lists -----------------------------------------------------------------------------------------------------
+// A recording list is counted in the pool it was reset into (reset_pool reads the count); its Close, a new Reset and
+// its destroy take it out again. A pool destroyed meanwhile is poisoned and not counted down.
+void leave_pool(CommandListRecord* l) noexcept {
+    if (auto* p = record_of<CommandPoolRecord>(l->pool, Tag::CommandPool, l->h.device))
+        p->open_lists.fetch_sub(1, std::memory_order_release);
+    l->pool = nullptr;
+}
+
 SIZE_T APIENTRY calc_list(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_COMMAND_LIST_0040*) {
     return sizeof(CommandListRecord);
 }
@@ -168,6 +179,7 @@ void APIENTRY destroy_list(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDLIST h) {
         return;
     }
     drain_list(l, Drain::Destroy);
+    if (l->pool) leave_pool(l);
     release_engine(l->h);
     poison(l->h);
     c->live.fetch_sub(1);
@@ -180,8 +192,12 @@ void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     drain_list(l, Drain::Close);
     HRESULT hr = l->list()->Close();
     // A list whose Close failed is not a closed list: it stays what it was.
-    if (FAILED(hr)) l->h.device->report_list(l->rt, hr);
-    else l->recording = false;
+    if (FAILED(hr)) {
+        l->h.device->report_list(l->rt, hr);
+    } else {
+        l->recording = false;
+        if (l->pool) leave_pool(l);
+    }
 }
 
 void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMANDLIST_0040* args) {
@@ -208,8 +224,14 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
         }
     }
     HRESULT hr = l->list()->Reset(a, nullptr);
-    if (FAILED(hr)) c->report_list(l->rt, hr);
-    else l->recording = true;
+    if (FAILED(hr)) {
+        c->report_list(l->rt, hr);
+        return;
+    }
+    if (l->pool) leave_pool(l);                 // a Reset without a Close: the list leaves its earlier pool
+    l->recording = true;
+    l->pool = p;
+    p->open_lists.fetch_add(1, std::memory_order_release);
 }
 
 // ---- List state the runtime sets on every list ---------------------------------------------------------------------
