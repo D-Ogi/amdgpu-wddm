@@ -304,7 +304,23 @@ typedef struct _BC250_DEVICE {
     ULONG InterruptVector;
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
+    // KMD196: the wake of a held submission. gfx.c admits only jobs that share VMID 1's current root (the root
+    // is changed by CPU MMIO, which must not redirect a job still running), so a submission that arrives while
+    // another process's job is on the ring is refused with STATUS_DEVICE_BUSY and has to wait. It used to wait
+    // by sleeping 1 ms at a time, which the clock tick rounds up: session 313 measured the game's packet
+    // reaching the ring 1-2 ms after the DWM packet retired in 465 cases and 14-16 ms (the 15.6 ms default
+    // tick) in 108, 3.1 ms of GFX idle per frame. Retirement signals this event instead, so the waiter wakes on
+    // the fence rather than on the tick; the timed wait that remains is only the fallback for a lost end-of-pipe
+    // interrupt. Both fields are initialized in AddDevice and live as long as the device object, so a waiter
+    // inside a DDI can never outlive them (the Level Three guarantee WddmSummary's comment names).
+    KEVENT GfxRetireEvent;              // NotificationEvent, set by GfxRetireSignal, cleared by the waiter
+    volatile LONG GfxRetireGeneration;  // bumped by every signal; snapshot closes the test/wait window
 } BC250_DEVICE;
+
+// Something a held submission is waiting for has happened: the gfx fence arrived, a completion-queue slot was
+// freed, or the path was closed by a failure, a TDR DDI or the stop. <= DISPATCH_LEVEL, callable with a spin
+// lock held, and never a decision of its own: it only wakes waiters, which retest their own condition.
+void GfxRetireSignal(_Inout_ BC250_DEVICE* Device);
 
 void StartHealthInitialize(BC250_DEVICE* Device);
 void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);

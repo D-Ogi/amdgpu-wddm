@@ -380,6 +380,17 @@ typedef struct _BC250_WDDM {
     volatile LONG64 UmdSubmitTicks;     // QPC elapsed time inside WddmSubmitUmd, including waits
     volatile LONG64 UmdProbeTicks;      // subset spent reading/logging IB and shader contents
     LARGE_INTEGER UmdProfileFrequency;
+    // KMD196: the cost of a submission the gfx ring would not take at once, so that one lab session can price
+    // the event wake against the 1 ms sleep it replaced. Held time is wall clock from the first refusal to the
+    // submit that succeeded or to the refusal that gave up - the GFX pipe is idle for part of it, which is what
+    // session 313 measured as 3.1 ms a frame. Wakes are counted by their source: Event is a retirement that
+    // reached the waiter, Timeout is the lost-interrupt fallback expiring, and a run whose Timeout share is not
+    // small means end-of-pipe interrupts are being missed, not that the wake is slow.
+    volatile LONG SubmitHolds;          // submissions held at least once (node 0, UMD and GPU Present together)
+    volatile LONG64 SubmitHeldUs;       // sum of their held times, microseconds from QPC
+    volatile LONG64 SubmitHeldMaxUs;    // the longest single hold
+    volatile LONG64 SubmitHoldEventWakes;
+    volatile LONG64 SubmitHoldTimeoutWakes;
 
     KTIMER VSyncTimer;
     KDPC VSyncDpc;
@@ -841,6 +852,9 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
     KeReleaseSpinLock(&wddm->Lock,irql);
     if (Node==BC250_WDDM_NODE_COPY) GfxPagingSubmitFail(Device);
     else GfxSubmitFail(Device);
+    // KMD196: node 0's wake is inside GfxSubmitFail; node 1 does not come here on the held path, but the flag
+    // this function just set (WatchdogFaulted) closes node 0's submissions too, so waiters are woken either way.
+    if (Node==BC250_WDDM_NODE_COPY) GfxRetireSignal(Device);
     if (first) GuardLog("wddm: fence %u node %u NOT dispatched; node closed, no completion, recovery required",FenceId,Node);
 }
 
@@ -942,6 +956,9 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     if (done) WddmGfxHeadLocked(wddm);
     KeReleaseSpinLock(&wddm->Lock, irql);
     if (!done) return;
+    // KMD196: a completion-queue slot was freed, which is the other thing a held submission can be waiting for
+    // (BC250_GFX_PENDING_MAX in WddmSubmitHardware). gfx.c signals the fence itself; this signals the queue.
+    GfxRetireSignal(Device);
     if (InterlockedIncrement(&wddm->HwCompleted) <= BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: hardware fence arrived, reporting fence %u", fence);
     WddmQueueReport(wddm);
@@ -1065,6 +1082,108 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     return TRUE;
 }
 
+// ---- KMD196: the held submission ------------------------------------------------------------------------------
+//
+// One IB at a time, and only jobs sharing VMID 1's current root (gfx.c SubmitIbLocked): a submission that
+// arrives while another process's job is on the ring is refused and has to wait for that job's fence. Both
+// waiters below - the UMD one and the GPU Present one - use this state and these two calls, so there is one
+// definition of what "held" means, one deadline and one set of counters.
+//
+// The wait is event-driven. The 1 ms KeDelayExecutionThread it replaced was not slow because 1 ms is long but
+// because a relative sleep expires on a clock tick: session 313 saw the two modes the 15.6 ms default tick
+// makes, 1-2 ms and 14-16 ms, where the ring itself needs 0.63 ms from Start to on-ring when nothing is
+// running. The timed wait that remains is the fallback for a lost end-of-pipe interrupt, and it is the same
+// 1 ms, so a start with no interrupts at all behaves exactly as before this change.
+#define BC250_WDDM_HOLD_WAIT_MS 1       // the lost-interrupt fallback only; the event normally wakes first
+
+typedef struct _BC250_WDDM_HOLD {
+    ULONGLONG Deadline;                 // interrupt time; the BC250_WDDM_SUBMIT_TIMEOUT_MS bound, unchanged
+    LARGE_INTEGER Start;                // QPC at the first refusal, for the held time in microseconds
+    LONG Generation;                    // Device->GfxRetireGeneration as of the last condition test
+    ULONG EventWakes;
+    ULONG TimeoutWakes;
+} BC250_WDDM_HOLD;
+
+// Before the first condition test, so that a retirement between that test and the first wait is not lost.
+static void WddmHoldBegin(_Inout_ BC250_DEVICE* Device, _Out_ BC250_WDDM_HOLD* Hold)
+{
+    Hold->Deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
+    Hold->Start = KeQueryPerformanceCounter(NULL);
+    Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    Hold->EventWakes = 0;
+    Hold->TimeoutWakes = 0;
+}
+
+// TRUE: something may have changed, test the submit condition again. FALSE: the deadline passed, the adapter is
+// stopping, or this thread may not wait - the caller makes its terminal attempt and gives up.
+//
+// Clear, then re-read the generation, then wait. A retirement after the caller's test has already bumped the
+// generation, so this returns at once rather than waiting for a fence that has arrived; and a concurrent
+// waiter's clear cannot swallow this one's wake, because it too bumps nothing and the generation it reads has
+// moved. The event is a NotificationEvent on purpose: one retirement releases every held submission, and they
+// then compete for GfxSubmitMutex exactly as they competed for the ring before.
+static BOOLEAN WddmHoldWait(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm, _Inout_ BC250_WDDM_HOLD* Hold)
+{
+    LARGE_INTEGER timeout;
+    LONG generation;
+    NTSTATUS status;
+
+    // A wait with a timeout needs APC_LEVEL or below, which both call sites already check before they get here;
+    // this is the bound restated where the wait actually happens, not a new policy.
+    if (KeGetCurrentIrql() > APC_LEVEL) return FALSE;
+    // Teardown: once Stopping is set WddmSubmitHardware refuses every submission anyway, so waiting out the
+    // remaining deadline would only delay the stop. WddmStop signals the event after setting it, so this is
+    // observed on the first wake and not on a timeout.
+    if (Wddm != NULL && WddmStopping(Wddm)) return FALSE;
+    if (KeQueryInterruptTime() >= Hold->Deadline) return FALSE;
+
+    KeClearEvent(&Device->GfxRetireEvent);
+    generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    if (generation != Hold->Generation)
+    {
+        Hold->Generation = generation;
+        Hold->EventWakes++;
+        return TRUE;
+    }
+    timeout.QuadPart = -10000ll * BC250_WDDM_HOLD_WAIT_MS;
+    status = KeWaitForSingleObject(&Device->GfxRetireEvent, Executive, KernelMode, FALSE, &timeout);
+    Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    if (status == STATUS_TIMEOUT) Hold->TimeoutWakes++;
+    else Hold->EventWakes++;
+    return TRUE;
+}
+
+// Once per submission that was held at all, whatever its outcome. Microseconds from QPC: the line this replaced
+// printed the loop's iteration count as "1 ms" every time, which is why session 314's 4081 held submits all
+// looked identical and none of them could be added up.
+static void WddmHoldReport(_In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_HOLD* Hold, UINT FenceId,
+                           _In_z_ const char* What)
+{
+    LONGLONG ticks, frequency;
+    ULONG held;
+    LONG64 seen;
+
+    if (Wddm == NULL || (Hold->EventWakes == 0 && Hold->TimeoutWakes == 0)) return;
+    ticks = KeQueryPerformanceCounter(NULL).QuadPart - Hold->Start.QuadPart;
+    frequency = Wddm->UmdProfileFrequency.QuadPart;
+    if (ticks < 0) ticks = 0;
+    held = frequency > 0 ? (ULONG)((ULONGLONG)ticks * 1000000ull / (ULONGLONG)frequency) : 0;
+    InterlockedIncrement(&Wddm->SubmitHolds);
+    InterlockedAdd64(&Wddm->SubmitHeldUs, (LONG64)held);
+    InterlockedAdd64(&Wddm->SubmitHoldEventWakes, (LONG64)Hold->EventWakes);
+    InterlockedAdd64(&Wddm->SubmitHoldTimeoutWakes, (LONG64)Hold->TimeoutWakes);
+    for (;;)
+    {
+        seen = InterlockedCompareExchange64(&Wddm->SubmitHeldMaxUs, 0, 0);
+        if ((LONG64)held <= seen) break;
+        if (InterlockedCompareExchange64(&Wddm->SubmitHeldMaxUs, (LONG64)held, seen) == seen) break;
+    }
+    // Uncapped, like the line it replaces: 4081 lines in 220 s is 18 a second, and the per-submission
+    // distribution is the whole point of the comparison the summary counters only total up.
+    GuardLog("wddm: %s submit fence %u held %lu us for the gfx ring (%lu event, %lu timeout wakes)",
+             What, FenceId, held, Hold->EventWakes, Hold->TimeoutWakes);
+}
+
 // BGP1 may arrive in a burst when CDD stops pacing to vblank (M659).
 // Idle is not a submission prerequisite: the lower layer admits same-root jobs
 // and reports temporary ring/root-switch pressure. Match the UMD ready-or-busy
@@ -1072,20 +1191,24 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
 static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
     _In_ const BC250_WDDM_OBJECT* Context, ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
 {
-    const ULONGLONG deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
-    LARGE_INTEGER tick;
-    tick.QuadPart = -10000ll;
+    BC250_WDDM_HOLD hold;
+
+    WddmHoldBegin(Device, &hold);
     for (;;) {
         if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
-            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) return TRUE;
+            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) {
+            WddmHoldReport(Wddm, &hold, FenceId, "present");
+            return TRUE;
+        }
         // Refresh retirement before the terminal retry: a completion can race
         // the separate ready/busy observations or release the last queue slot.
         WddmGpuFence(Device);
-        if (!GfxSubmitBusy(Device) || KeQueryInterruptTime() >= deadline) {
-            return (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
+        if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold)) {
+            BOOLEAN submitted = (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                 WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node);
+            WddmHoldReport(Wddm, &hold, FenceId, "present");
+            return submitted;
         }
-        KeDelayExecutionThread(KernelMode, FALSE, &tick);
     }
 }
 
@@ -1715,6 +1838,13 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->UmdProfileCalls, Wddm->UmdSubmitTicks, Wddm->UmdProfileFrequency.QuadPart);
     GuardLog("wddm profile: probe enabled %u, calls %ld, elapsed ticks %lld (included in umd)",
              Wddm->TraceUmdProbes, Wddm->UmdProbeCalls, Wddm->UmdProbeTicks);
+    // KMD196. Mean held time is Us/holds; a tick-bound run (the 1 ms sleep this replaced) sits near 4800 us by
+    // session 313's measurement, an event-woken one near the ring's own 630 us. Timeout wakes near zero means
+    // the end-of-pipe interrupt is doing the waking; a large share means it is being missed and the fallback is
+    // carrying the path, which is a correctness question and not a performance one.
+    GuardLog("wddm profile: holds %ld, held %lld us (worst %lld), wakes %lld event %lld timeout",
+             Wddm->SubmitHolds, Wddm->SubmitHeldUs, Wddm->SubmitHeldMaxUs,
+             Wddm->SubmitHoldEventWakes, Wddm->SubmitHoldTimeoutWakes);
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
              Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
@@ -2196,6 +2326,11 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     if (wddm->VSyncArmed) { wddm->VSyncArmed = FALSE; KeCancelTimer(&wddm->VSyncTimer); }
     if (Device->DcnVsyncArmed != 0) (void)DcnVsyncEnable(Device, FALSE);
     KeReleaseSpinLock(&wddm->Lock, irql);
+    // KMD196: after Stopping, before anything is freed. A held submission wakes, sees Stopping and drops its own
+    // deadline; WddmHoldWait reads that flag under the lock, so the order here is the order it observes. A
+    // waiter that had already read Stopping as FALSE cannot sleep through this either: it finds the generation
+    // moved past its snapshot and retests instead of waiting, and WddmSubmitHardware then refuses it.
+    GfxRetireSignal(Device);
 
     KeCancelTimer(&wddm->VSyncTimer);   // again, unconditionally: cheap, and it cannot be armed any more
     KeCancelTimer(&wddm->SubmitTimer);
@@ -4512,13 +4647,12 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
     // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
     // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
     // would signal the monitored fence for an IB the GPU never fetched. This DDI is PASSIVE_LEVEL,
-    // so wait the same bound the watchdog uses, polling the fence, and try again. Anything else
+    // so wait the same bound the watchdog uses, on the retirement event, and try again. Anything else
     // (gate closed, ring abandoned, a bad blob) does not get that wait.
     if (st == UMD_BLOB_OK && ib.single_ib && Node == BC250_WDDM_NODE_3D && Context->RootPhysical != 0 &&
         Wddm != NULL && KeGetCurrentIrql() == PASSIVE_LEVEL)
     {
-        LARGE_INTEGER tick;
-        ULONG waited = 0;
+        BC250_WDDM_HOLD hold;
         ULONGLONG ibPhys = 0, ibLeaf = 0;
         BOOLEAN ibSystem = FALSE;
         BOOLEAN ibMapped;
@@ -4581,30 +4715,30 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
             InterlockedIncrement(&Wddm->UmdProbeCalls);
         }
 
-        tick.QuadPart = -10000ll;
+        WddmHoldBegin(Device, &hold);
         for (;;)
         {
             if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                 WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
             {
-                if (waited != 0)
-                    GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring", Submit->SubmissionFenceId, waited);
+                WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
                 if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
                     GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
                              ib.ib_va, ib.ib_bytes);
                 return STATUS_SUCCESS;
             }
+            // Refresh retirement before the terminal retry, the same reason WddmSubmitPresentHardware does it:
+            // a completion can race the separate ready/busy observations or release the last queue slot.
+            WddmGpuFence(Device);
             // Not busy: either the ring will not take an IB, or the one it held finished between
             // the ready check and this one. Try once more in the second case, and do not spin in
             // the first. A timeout is the same refusal the watchdog already makes.
-            if (!GfxSubmitBusy(Device) || waited >= BC250_WDDM_SUBMIT_TIMEOUT_MS)
+            if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold))
             {
                 if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                     WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
                 {
-                    if (waited != 0)
-                        GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring",
-                                 Submit->SubmissionFenceId, waited);
+                    WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
                     if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
                         GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
                                  ib.ib_va, ib.ib_bytes);
@@ -4612,12 +4746,8 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
                 }
                 break;
             }
-            WddmGpuFence(Device);
-            KeDelayExecutionThread(KernelMode, FALSE, &tick);
-            waited += 1;
         }
-        if (waited != 0)
-            GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring", Submit->SubmissionFenceId, waited);
+        WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
     }
     if (st != UMD_BLOB_OK) why = UmdBlobStatusText(st);
     else if (!ib.single_ib) { why = "multiple ibs"; nIbs = ib.num_ibs; }
@@ -4937,6 +5067,11 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
     StartHealthClose((BC250_DEVICE*)hAdapter);
     (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetEngine);
+    // KMD196: this refusal changes no submission gate, so a held submission would keep waiting out its deadline
+    // while the scheduler moves on to ResetFromTimeout (which does close the path, through GfxSubmitFail). Wake
+    // the waiters anyway: one extra retest on a TDR path is cheaper than reasoning about which recovery DDI the
+    // scheduler happens to call first.
+    if (hAdapter != NULL) GfxRetireSignal((BC250_DEVICE*)hAdapter);
     GuardLog("wddm: *** ResetEngine node %u engine %u: refused, this part has no engine reset ***",
              pResetEngine->NodeOrdinal, pResetEngine->EngineOrdinal);
     return STATUS_NOT_SUPPORTED;

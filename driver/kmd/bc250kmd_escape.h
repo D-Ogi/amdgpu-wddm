@@ -35,7 +35,14 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C1u       // revision 193: hang instrumentation for the 147/208/209/245 VM-fault
+#define BC250_KMD_VERSION 0x000700C4u       // revision 196: a held UMD or Present submission waits on the gfx
+                                            // retirement event instead of sleeping 1 ms at a time, and the
+                                            // guard log reports the held time in microseconds from QPC with
+                                            // cumulative counters in the wddm profile summary (wddm.c
+                                            // WddmHoldBegin/Wait/Report, gfx.c GfxRetireSignal). No escape
+                                            // struct and no journal record layout changed; the constant moves
+                                            // because packagecheck VRS010 matches it against the INF revision.
+                                            // 193: hang instrumentation for the 147/208/209/245 VM-fault
                                             // class - UTCL2 faults logged once a second with the latched GCVM
                                             // status, a CP/GRBM/GCVM snapshot at each HARDWARE FENCE TIMEOUT,
                                             // and process/thread/context identity in the paging journal

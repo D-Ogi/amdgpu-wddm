@@ -19,6 +19,8 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
     KeInitializeEvent(&device->GfxAccessDrained, NotificationEvent, TRUE);
+    // KMD196: unsignalled, because nothing is held yet; a waiter clears it before every wait anyway.
+    KeInitializeEvent(&device->GfxRetireEvent, NotificationEvent, FALSE);
     device->GfxAccessClosed = TRUE;
     *MiniportDeviceContext = device;
     return STATUS_SUCCESS;

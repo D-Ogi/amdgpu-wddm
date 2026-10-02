@@ -968,6 +968,10 @@ static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
     if (InterlockedExchange(&gfx->SubmitFailed, 1) == 0)
         GuardLog("gfx: submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
                  gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
+    // KMD196: unconditionally, not only on the first call. A held submission is waiting for a fence that will
+    // now never come; GfxSubmitArmed is false from here, so it wakes, fails its submission and lets the OS TDR
+    // path have the fence. Before this it sat out its whole 500 ms bound after the ring was already abandoned.
+    GfxRetireSignal(Device);
 }
 
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
@@ -979,6 +983,15 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
     }
     GfxSubmitFailAccess(Device);
     GfxAccessRelease(Device);
+}
+
+// KMD196. The generation is bumped before the event is set, so a waiter that cleared the event and then found
+// the generation moved retests instead of sleeping through its own wake, and a second waiter's clear cannot
+// swallow the first one's. IO_NO_INCREMENT: a submit thread owes nothing to the DPC that woke it.
+void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
+{
+    InterlockedIncrement(&Device->GfxRetireGeneration);
+    KeSetEvent(&Device->GfxRetireEvent, IO_NO_INCREMENT, FALSE);
 }
 
 static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
@@ -997,7 +1010,13 @@ static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
         // clear a newer producer's marker after observing an earlier fence.
         if (pending && bc250_fence_reached(observed, (ULONG)pending) &&
             InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
+        {
             DpmBusyEnd(&Device->Dpm);     // the ring went idle: the DPM governor's busy share (dpm.h)
+            // KMD196: this CAS is the one place that turns "a job is in flight" into "none is", which is exactly
+            // the condition SubmitIbLocked refuses a foreign root on. Whoever observed the fence - the IH DPC,
+            // the watchdog, a submit - the waiters are woken from here.
+            GfxRetireSignal(Device);
+        }
     }
     return TRUE;
 }
