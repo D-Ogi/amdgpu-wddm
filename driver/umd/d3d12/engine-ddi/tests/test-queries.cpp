@@ -30,11 +30,12 @@ bool typeless_parent(DXGI_FORMAT f) {
 // whose support answer carries MULTISAMPLE_RENDERTARGET (or a typeless parent, D3D11.3 functional spec 19.2.3), 4x
 // and (below 128 bits) 8x for every such format (19.2.5), 1 level at 1 sample and 0 at 0 and 33 (WDK d3d10umddi
 // pfnd3dwddm1_3ddi_checkmultisamplequalitylevels), and no device error for any value, known or not. NOT_SUPPORTED
-// only for R10G10B10_XR_BIAS_A2_UNORM, as its only bit, and exactly while the engine makes no 2D texture of it.
+// only for R10G10B10_XR_BIAS_A2_UNORM, as its only bit, and exactly while the engine makes no 2D texture of it;
+// UAV_READS only with UAV_WRITES and never on a video format.
 void test_format_walk(Env& env, Device& device) {
     const uint32_t errors_before = device.shell.device_errors;
     unsigned formats = 0, supported = 0, msaa_rt = 0, bad_levels = 0, bad_required = 0, bad_edges = 0;
-    unsigned bad_allowed = 0, bad_unsupported = 0, short_formats = 0;
+    unsigned bad_allowed = 0, bad_unsupported = 0, bad_reads = 0, short_formats = 0;
     // D3D11 video processing and decode have no counterpart in this DDI: engine-ddi reports none of these bits.
     constexpr UINT kVideoBits = D3D12DDI_FORMAT_SUPPORT_DECODER_OUTPUT | D3D12DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT |
                                 D3D12DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT;
@@ -71,6 +72,15 @@ void test_format_walk(Env& env, Device& device) {
                 checkf(false, "format walk: format %u: support %#x has bits %#x the format list does not allow", f,
                        bits, bits & ~allowed);
         }
+        // Typed UAV loads only with typed UAV stores, and never on a video format, not even one the engine loads
+        // (NV12, P010 and P016 on the lab, 266): DirectX-Specs d3d/UAVTypedLoad.md.
+        const bool video = (format >= DXGI_FORMAT_AYUV && format <= DXGI_FORMAT_A8P8) ||
+                           (format >= DXGI_FORMAT_P208 && format <= DXGI_FORMAT_V408);
+        if ((bits & D3D12DDI_FORMAT_SUPPORT_UAV_READS) && (video || !(bits & D3D12DDI_FORMAT_SUPPORT_UAV_WRITES))) {
+            if (!bad_reads++)
+                checkf(false, "format walk: format %u: support %#x has UAV_READS %s", f, bits,
+                       video ? "on a video format" : "without UAV_WRITES");
+        }
         const UINT missing = entry ? entry->required & ~bits & ~kVideoBits : 0;
         if (missing) {
             ++short_formats;
@@ -103,10 +113,11 @@ void test_format_walk(Env& env, Device& device) {
     env.core.pfnCheckFormatSupport(device.h(), static_cast<DXGI_FORMAT>(0xFFFFFFFFu), &bits);
     checkf(bits == 0 && levels_of(0xFFFFFFFFu, 4) == 0, "format walk: format 0xFFFFFFFF: support %#x, x4 %u levels",
            bits, levels_of(0xFFFFFFFFu, 4));
-    checkf(!bad_levels && !bad_required && !bad_edges && !bad_allowed && !bad_unsupported,
+    checkf(!bad_levels && !bad_required && !bad_edges && !bad_allowed && !bad_unsupported && !bad_reads,
            "format walk: %u values, %u with support bits, %u multisample targets; %u MSAA mismatches, %u missing "
-           "x4/x8, %u wrong x0/x1/x33 answers, %u bits outside the format list, %u misplaced NOT_SUPPORTED",
-           formats, supported, msaa_rt, bad_levels, bad_required, bad_edges, bad_allowed, bad_unsupported);
+           "x4/x8, %u wrong x0/x1/x33 answers, %u bits outside the format list, %u misplaced NOT_SUPPORTED, %u "
+           "misplaced UAV_READS",
+           formats, supported, msaa_rt, bad_levels, bad_required, bad_edges, bad_allowed, bad_unsupported, bad_reads);
     // R10G10B10_XR_BIAS_A2_UNORM: answered 0, the runtime still offered it as a display format (266).
     {
         D3D12_FEATURE_DATA_FORMAT_SUPPORT s{DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM};
