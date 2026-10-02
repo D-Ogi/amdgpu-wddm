@@ -16,6 +16,10 @@ void check(bool ok, const char* what);
 void checkf(bool ok, const char* format, ...);
 int failure_count();
 
+// The log_refusal lines of the whole run so far that start with prefix, in order (engine_ddi::harness_set_log_observer,
+// installed before the first device). The once-only diagnostic lines are counted per process, as they are written.
+std::vector<std::string> refusal_lines(const char* prefix);
+
 // Runtime-owned private storage: filled with 0xCD like fresh runtime memory, with a canary behind the size the
 // driver asked for. Blocks live until the harness ends.
 class Storage {

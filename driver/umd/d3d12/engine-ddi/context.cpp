@@ -22,6 +22,10 @@ bool debugger_lines() noexcept {
     return on;
 }
 std::atomic<int> debugger_budget{1024};
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+std::atomic<LogObserver> log_observer{nullptr};
+std::atomic<void*> log_observer_user{nullptr};
+#endif
 } // namespace
 
 void log_line(const char* format, ...) noexcept {
@@ -50,6 +54,9 @@ void log_refusal(const char* format, ...) noexcept {
     char line[540];
     std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s\n", text);
     OutputDebugStringA(line);
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    if (const LogObserver observer = log_observer.load()) observer(text, log_observer_user.load());
+#endif
 }
 
 // ---- Release sequence ------------------------------------------------------------------------------------------
@@ -695,6 +702,10 @@ uint32_t harness_live_objects(DeviceContext* c) noexcept { return c->live.load()
 uint64_t harness_deferred_retire_points(DeviceContext* c) noexcept { return c->retire_deferred.load(); }
 IUnknown* harness_engine_object(const void* storage) noexcept {
     return storage ? static_cast<const RecordHeader*>(storage)->engine : nullptr;
+}
+void harness_set_log_observer(LogObserver observer, void* user) noexcept {
+    log_observer_user.store(user);
+    log_observer.store(observer);
 }
 #endif
 

@@ -4,7 +4,10 @@
 #include "harness.h"
 #include "format-list.h"
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace harness {
 namespace {
@@ -160,6 +163,33 @@ void test_format_walk(Env& env, Device& device) {
     }
     std::printf("note  format walk: %u listed formats lack a non-video bit the FL11_1 format list requires\n",
                 short_formats);
+    // The diagnostic line of CheckFormatSupport: one for each value below 256 and one for every larger value together,
+    // however often the walk asked; R8G8B8A8_UNORM's carries the engine's raw answer next to the DDI answer.
+    {
+        unsigned wrong = 0;
+        for (UINT f = 0; f < 256; ++f) {
+            char prefix[48];
+            std::snprintf(prefix, sizeof(prefix), "CheckFormatSupport: format %u:", f);
+            wrong += refusal_lines(prefix).size() != 1 ? 1u : 0u;
+        }
+        const char kPrefix[] = "CheckFormatSupport: format ";
+        size_t beyond = 0;
+        for (const std::string& line : refusal_lines(kPrefix))
+            beyond += std::strtoull(line.c_str() + sizeof(kPrefix) - 1, nullptr, 10) >= 256 ? 1 : 0;
+        D3D12_FEATURE_DATA_FORMAT_SUPPORT s{DXGI_FORMAT_R8G8B8A8_UNORM};
+        const HRESULT hr = env.engine->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s));
+        UINT answer = 0;
+        env.core.pfnCheckFormatSupport(device.h(), DXGI_FORMAT_R8G8B8A8_UNORM, &answer);
+        char want[160];
+        std::snprintf(want, sizeof(want), "CheckFormatSupport: format %u: engine %08lx, Support1 %#x, Support2 %#x; "
+                      "answer %#x", static_cast<unsigned>(DXGI_FORMAT_R8G8B8A8_UNORM), static_cast<unsigned long>(hr),
+                      static_cast<unsigned>(s.Support1), static_cast<unsigned>(s.Support2), answer);
+        const std::vector<std::string> rgba = refusal_lines("CheckFormatSupport: format 28:");
+        checkf(!wrong && beyond == 1 && rgba.size() == 1 && rgba[0] == want,
+               "format walk: one CheckFormatSupport line per format value below 256 (%u values differ) and one for "
+               "all others (%zu); R8G8B8A8_UNORM's is \"%s\"",
+               wrong, beyond, rgba.empty() ? "" : rgba[0].c_str());
+    }
     checkf(device.shell.device_errors == errors_before, "format walk: no device error reported (%u new)",
            device.shell.device_errors - errors_before);
 }

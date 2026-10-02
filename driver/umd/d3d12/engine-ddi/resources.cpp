@@ -840,6 +840,14 @@ UINT format_list_allowed(DXGI_FORMAT format) noexcept {
     return 0;
 }
 
+// The engine's D3D12_FEATURE_FORMAT_SUPPORT answer for format, *hr its result; no support bits when it refuses.
+D3D12_FEATURE_DATA_FORMAT_SUPPORT engine_format(DeviceContext* c, DXGI_FORMAT format, HRESULT* hr) noexcept {
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
+    *hr = c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s));
+    if (FAILED(*hr)) s = D3D12_FEATURE_DATA_FORMAT_SUPPORT{format};
+    return s;
+}
+
 // The engine's D3D12_FEATURE_FORMAT_SUPPORT answer as D3D12DDI_FORMAT_SUPPORT bits, limited to the bits the D3D11.3
 // format list allows for the format (an engine answer beyond it, such as SHADER_GATHER on a stencil view, or DISPLAY,
 // which the DDI defines only from version 107 on, is dropped); 0 (no optional capability) when the engine refuses
@@ -847,9 +855,8 @@ UINT format_list_allowed(DXGI_FORMAT format) noexcept {
 // merger's logic op. MULTISAMPLE_RENDERTARGET means a render target or depth-stencil target with some sample count
 // above 1 (d3d12umddi.h), so it stays only while the engine reports quality levels for such a count: then this
 // answer and CheckMultisampleQualityLevels agree.
-UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
-    D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
-    if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s)))) return 0;
+UINT ddi_format_support(DeviceContext* c, const D3D12_FEATURE_DATA_FORMAT_SUPPORT& s) noexcept {
+    const DXGI_FORMAT format = s.Format;
     struct Bit { UINT api; UINT ddi; };
     static const Bit one[] = {
         {D3D12_FORMAT_SUPPORT1_BUFFER, D3D12DDI_FORMAT_SUPPORT_BUFFER},
@@ -886,6 +893,11 @@ UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
         if (!any) bits &= ~static_cast<UINT>(D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
     }
     return bits;
+}
+
+UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
+    HRESULT hr = S_OK;
+    return ddi_format_support(c, engine_format(c, format, &hr));
 }
 
 // The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer for Flags NONE and TILED_RESOURCE (the values are
@@ -926,6 +938,10 @@ D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device,
     return (r->backing && r->backing->imported) ? r->backing->memory.allocation : 0;
 }
 
+// The first answer for each format value, logged with the engine's own: what the runtime was told and from which
+// engine answer. Once per format, so at most 257 lines a process.
+FormatSet g_format_answers;
+
 // The engine's answer (engine_format_support), with one exception. The runtime does not take 0 as "no such format"
 // for R10G10B10_XR_BIAS_A2_UNORM: answered 0 while the engine had no such format, it offered the application a
 // displayable 2D texture format with TEXTURE2D, DISPLAY, BACK_BUFFER_CAST and TILED (266), and a texture of it would
@@ -938,13 +954,15 @@ void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, 
         c->report(E_INVALIDARG);
         return;
     }
-    *out = engine_format_support(c, format);
-    if (format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM) {
-        D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
-        if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s))) ||
-            !(s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D))
-            *out = D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
-    }
+    HRESULT hr = S_OK;
+    const D3D12_FEATURE_DATA_FORMAT_SUPPORT s = engine_format(c, format, &hr);
+    *out = ddi_format_support(c, s);
+    if (format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM && !(s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D))
+        *out = D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
+    if (g_format_answers.insert(static_cast<uint32_t>(format)))
+        log_refusal("CheckFormatSupport: format %u: engine %08lx, Support1 %#x, Support2 %#x; answer %#x",
+                    static_cast<unsigned>(format), static_cast<unsigned long>(hr), static_cast<unsigned>(s.Support1),
+                    static_cast<unsigned>(s.Support2), *out);
 }
 
 // ---- Command-list slots -------------------------------------------------------------------------------------------
