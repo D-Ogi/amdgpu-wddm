@@ -75,6 +75,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
 
     status = GuardInit(RegistryPath);
     if (!NT_SUCCESS(status)) return status;
+    PagingJournalInit();
     GuardStage(StageDriverEntry);
 
     status = WddmGateOpen() ? InitializeFullWddm(DriverObject, RegistryPath)

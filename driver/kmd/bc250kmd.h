@@ -9,9 +9,27 @@
 // wddm.c (M7 stage A: the full WDDM table behind the EnableFullWddm gate, ADR 0008).
 #pragma once
 
-// M7, ADR 0008 point 2: the whole binary is compiled at the WDDM 2.0 DDI interface version, which is the version
-// the full table is declared with. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8,
-// exactly as it does today; that value is a run-time field, not this macro.
+// ADR 0019 stage B1 (was M7, ADR 0008 point 2 at WDDM 2.0): the whole binary is compiled at the WDDM 2.9 DDI
+// interface version (0xE003), which is the version the full table is declared with. Only the interface version
+// moves in B1: DXGK_DRIVERCAPS.WDDMVersion stays DXGKDDI_WDDMv2 (wddm.c), and every DDI and cap the 2.9 headers add
+// stays NULL or zero. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8, exactly as it
+// does today; that value is a run-time field, not this macro.
+//
+// Why 0xE003 and not 3.1 (0x10004, KMD 186-189): from DRIVER_INITIALIZATION_DATA.Version 0xF002 (WDDM 3.0) on, the
+// lab's VidMm (dxgmms2 22621.6199, VIDMM_GLOBAL::CreateOneAllocation, RVA 0xa9015) refuses a CpuVisible allocation
+// whose supported segment set has no aperture segment unless dxgkrnl tagged it primary ("CPUVisible allocations
+// must include an aperture segment in the supported segment set"). The CDD shadow (standard allocation type 2) is
+// CpuVisible in VRAM only, so dxgkrnl destroyed shadow and primary after every commit and the desktop stayed
+// blank (186, 189; static decode <BC250_ROOT>\scratch\m15\offgpu\wddm-uplift\b1\primary-shadow-decode.md).
+// 0xE003 is the newest public version below that rule; going to 3.x needs the aperture segment in every CpuVisible
+// non-primary allocation first (ADR 0019 B1 option A). At 0xE003 the lab's dxgkrnl copies 0x4F0 bytes of the
+// table (DpiGetDriverDataSizeFromVersion), DXGK_DRIVERCAPS is 0x250 (GetDriverCapsSizeFromDdiVersion, >= 0xE003)
+// and DXGKRNL_INTERFACE.Size 0x240 (>= 0xD001, DpiFdoStartAdapter RVA 0x2009ee). The first two equal our sizeof
+// below; our DXGKRNL_INTERFACE is 0x238 (the 3.1 DxgkCbDisconnectDoorbell is not compiled), and pnp.c copies
+// min(Size, sizeof), so the tail dxgkrnl offers is not read.
+// 2.9 keeps what B1 is for: target-mode wire formats (>= 2.2) and the colorimetry paths for HDR and 10-bit.
+//
+// History, kept because the arguments still hold:
 //
 // One version for one binary, not one per translation unit: this macro changes the shape of DXGKRNL_INTERFACE and
 // of most DXGKARG_* structures, and BC250_DEVICE carries a DXGKRNL_INTERFACE, so two translation units compiled at
@@ -38,8 +56,10 @@
 // only inside the WIN8 prefix and never assign the whole structure: DXGK_CHILD_STATUS (0x0C at WIN8, 0x10 from
 // WDDM 1.3 on; see pnp.c's Bc250QueryChildStatus) and DXGKRNL_INTERFACE (0x100 at WIN8, 0x138 at 2.0), which
 // pnp.c already copies with min(DxgkInterface->Size, sizeof(device->Dxgk)) for exactly this reason.
+// At 2.9 the same argument holds with new numbers: DXGK_CHILD_STATUS stays 0x10, DXGKRNL_INTERFACE is 0x238
+// and dxgkrnl hands 0x240 (the min() copy reads our 0x238); the asserts after the includes pin both.
 // The literal is what the preprocessor needs here; the assert below binds it to the header's own constant.
-#define DXGKDDI_INTERFACE_VERSION 0x5023
+#define DXGKDDI_INTERFACE_VERSION 0xE003
 
 #include <ntifs.h>        // superset of ntddk.h; the token checks of the escape need it
 #include <windef.h>
@@ -49,8 +69,40 @@
 #include "paging_capture.h"
 #include "smu.h"
 #include "start_health.h"
+#include "progress.h"
+#include "cumode.h"
+#include "dpm.h"
+#include "interop.h"
 
-C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
+C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
+
+// ADR 0019 B1 ABI gate. Sizes are the ones the lab's dxgkrnl (22621.6199) copies or allocates for a 0xE003
+// table, read statically (see above); offsets are the members this driver fills or reads, and each equals its
+// value at 0x5023 (WDK 10.0.26100 record layouts, <BC250_ROOT>\scratch\m15\offgpu\wddm-uplift\b1\abi). A WDK
+// update or a version change that moves any of them stops the build here instead of at the lab.
+C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) == 0x4F0);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, Version) == 0);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiQueryAdapterInfo) == 136);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVidPnSourceAddress) == 320);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetScanLine) == 368);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiControlInterrupt) == 384);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPresent) == 432);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetNodeMetadata) == 664);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCalibrateGpuClock) == 696);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSubmitCommandVirtual) == 720);
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetStablePowerState) == 816);
+C_ASSERT(sizeof(DXGK_DRIVERCAPS) == 0x250);
+C_ASSERT(FIELD_OFFSET(DXGK_DRIVERCAPS, SchedulingCaps) == 64);
+C_ASSERT(FIELD_OFFSET(DXGK_DRIVERCAPS, WDDMVersion) == 0x150);
+C_ASSERT(sizeof(DXGKRNL_INTERFACE) == 0x238);
+C_ASSERT(sizeof(DXGK_CHILD_STATUS) == 0x10);
+C_ASSERT(sizeof(KMDDOD_INITIALIZATION_DATA) == 0x150);
+C_ASSERT(sizeof(D3DKMDT_VIDPN_TARGET_MODE) == 80);
+C_ASSERT(FIELD_OFFSET(D3DKMDT_VIDPN_TARGET_MODE, WireFormatAndPreference) == 64);   // was Preference at 2.0
+// sizeof(D3DKMDT_VIDPN_TARGET_MODE) is the 2.9 layout; a V1 VidPN mode info ends before MinimumVSyncFreq (68):
+// display.c never touches it (188 did and bugchecked 0x113 in dxgkrnl AddMode).
+C_ASSERT(FIELD_OFFSET(D3DKMDT_VIDPN_TARGET_MODE, MinimumVSyncFreq) == 68);
+C_ASSERT(FIELD_OFFSET(DXGK_NODEMETADATA, GpuMmuSupported) == 72);
 
 #define BC250_TAG 'dK52'
 #define BC250_CHILD_UID 0x250001        // the one DisplayPort output, as far as this driver is concerned
@@ -100,6 +152,9 @@ typedef struct _BC250_VISIBILITY_EVENT {
 
 typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_STATE StartHealth;
+    BC250_CU_MODE_STATE CuMode;        // cumode.c: 24 or 40 CUs, the boot guard, what the caps report
+    BC250_DPM_STATE Dpm;               // dpm.c: the load-driven clock governor, its guard and telemetry
+    BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -186,6 +241,15 @@ typedef struct _BC250_DEVICE {
                                          // BAR5 stays mapped for the whole device start; counted, not assumed impossible)
     volatile LONG DcnVsyncDeferred;      // completion observation deferred (may report the old buffer)
     volatile LONG DcnVsyncOldBufferReports; // vblanks preserved with a distinct observed scanout
+    // Diagnostic-only exits after consuming a VSync ACK; last times use interrupt100ns.
+    volatile LONG DcnVsyncSkipOddGeneration;
+    volatile LONG DcnVsyncSkipReadFailure;
+    volatile LONG DcnVsyncSkipSameAddress;
+    volatile LONG DcnVsyncSkipChangedGeneration;
+    volatile LONG64 DcnVsyncSkipOddGenerationTime;
+    volatile LONG64 DcnVsyncSkipReadFailureTime;
+    volatile LONG64 DcnVsyncSkipSameAddressTime;
+    volatile LONG64 DcnVsyncSkipChangedGenerationTime;
     volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
     volatile LONG DcnLockTimeouts;      // bounded OTG update-lock acknowledgement expired
     volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress translation/range or programming refused
@@ -240,7 +304,23 @@ typedef struct _BC250_DEVICE {
     ULONG InterruptVector;
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
+    // KMD196: the wake of a held submission. gfx.c admits only jobs that share VMID 1's current root (the root
+    // is changed by CPU MMIO, which must not redirect a job still running), so a submission that arrives while
+    // another process's job is on the ring is refused with STATUS_DEVICE_BUSY and has to wait. It used to wait
+    // by sleeping 1 ms at a time, which the clock tick rounds up: session 313 measured the game's packet
+    // reaching the ring 1-2 ms after the DWM packet retired in 465 cases and 14-16 ms (the 15.6 ms default
+    // tick) in 108, 3.1 ms of GFX idle per frame. Retirement signals this event instead, so the waiter wakes on
+    // the fence rather than on the tick; the timed wait that remains is only the fallback for a lost end-of-pipe
+    // interrupt. Both fields are initialized in AddDevice and live as long as the device object, so a waiter
+    // inside a DDI can never outlive them (the Level Three guarantee WddmSummary's comment names).
+    KEVENT GfxRetireEvent;              // NotificationEvent, set by GfxRetireSignal, cleared by the waiter
+    volatile LONG GfxRetireGeneration;  // bumped by every signal; snapshot closes the test/wait window
 } BC250_DEVICE;
+
+// Something a held submission is waiting for has happened: the gfx fence arrived, a completion-queue slot was
+// freed, or the path was closed by a failure, a TDR DDI or the stop. <= DISPATCH_LEVEL, callable with a spin
+// lock held, and never a decision of its own: it only wakes waiters, which retest their own condition.
+void GfxRetireSignal(_Inout_ BC250_DEVICE* Device);
 
 void StartHealthInitialize(BC250_DEVICE* Device);
 void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
@@ -255,6 +335,41 @@ void StartHealthDisplayLocked(BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Mod
 void StartHealthVisibilityLocked(BC250_DEVICE* Device, BOOLEAN Visible);
 void StartHealthCompleted(BC250_DEVICE* Device, ULONG Sequence);
 void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, BOOLEAN Admin, ULONG EscapeFlags);
+BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation);
+
+// cumode.c
+struct _BC250_ESCAPE_CU_MODE;
+void CuModeInitialize(BC250_DEVICE* Device);
+void CuModeBegin(BC250_DEVICE* Device);
+void CuModePrepare(BC250_DEVICE* Device);
+void CuModeFinish(BC250_DEVICE* Device);
+NTSTATUS CuModeConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+void CuModeRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CU_MODE* Data, BOOLEAN Admin, ULONG EscapeFlags);
+void CuModePatchCaps(BC250_DEVICE* Device, _Inout_updates_bytes_(Bytes) PVOID Caps, ULONG Bytes);
+
+// dpm.c
+struct _BC250_ESCAPE_DPM;
+struct _BC250_ESCAPE_DPM_TUNE;
+void DpmInitialize(BC250_DEVICE* Device);
+void DpmStart(BC250_DEVICE* Device);
+void DpmStop(BC250_DEVICE* Device);
+void DpmPause(BC250_DEVICE* Device);
+void DpmResume(BC250_DEVICE* Device);
+void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
+NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+void DpmLogSummary(BC250_DEVICE* Device);
+void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULONG EscapeFlags);
+void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN Admin, ULONG EscapeFlags);
+
+// interop.c
+struct _BC250_ESCAPE_INTEROP;
+void InteropInitialize(BC250_DEVICE* Device);
+void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN* CddInterop);
+BOOLEAN InteropUserBegin(BC250_DEVICE* Device);
+void InteropUserEnd(BC250_DEVICE* Device);
+void InteropStop(BC250_DEVICE* Device);
+void InteropLogSummary(BC250_DEVICE* Device);
+void InteropRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_INTEROP* Data, ULONG EscapeFlags);
 NTSTATUS GuardConfirmStartDurable(void);
 
 
@@ -291,6 +406,11 @@ NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable); // full table needs a 
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value); // absent is STATUS_OBJECT_NAME_NOT_FOUND
+NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written and flushed
+NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
+NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
+NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
 
 // The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.
@@ -300,6 +420,24 @@ void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
 void GuardLogKeep(void);                                        // the ring into a file under C:\BC250\kmdlog; PASSIVE_LEVEL
+// Where the ring and its cursor live, for hang.c's dump pages. Static storage: no lock, any IRQL.
+void GuardLogDumpRegion(_Outptr_ const void** Ring, _Out_ SIZE_T* RingBytes, _Outptr_ const void** Cursor);
+
+// hang.c: progress records and the test-only hang detector (docs/design/hang-detector.md). The recorders take no
+// lock, allocate nothing, touch no register and never log: callable at any IRQL, the interrupt routine's included.
+extern BC250_PROGRESS g_Bc250Progress;
+void ProgressEnter(BC250_PROGRESS_SITE_ID Site);
+void ProgressEnterInput(BC250_PROGRESS_SITE_ID Site, LONG Input);
+void ProgressExit(BC250_PROGRESS_SITE_ID Site, LONG Value);
+void ProgressIhVector(ULONG ClientId, ULONG SourceId);
+void ProgressIhDone(ULONG Passes, BOOLEAN Requeued);
+void ProgressDrainDone(ULONG Iterations, ULONG Retired, ULONG Exit);   // Exit: PAGING_DRAIN_EXIT
+// PASSIVE_LEVEL, serialized by dxgkrnl's PnP and power calls (Level Three). Start after the WDDM state exists and
+// the device is marked started; Stop before any of it goes. Stop is idempotent. Pause/Resume bracket power changes.
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorStart(_In_ const BC250_DEVICE* Device);
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorStop(void);
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorPause(void);
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorResume(void);
 
 // mmio.c
 NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device);
@@ -524,8 +662,18 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_S
 //   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
 //                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
 //                    only safe answer to a submission that never completed.
+// KMD193 (bsod-245 item 4): who the submission belongs to, as values. gfx.c does not know what a WDDM context
+// is and must not learn; it copies these three words into the journal's BC250_PJ_GFX_SUBMIT record and into its
+// own job-frame log line, and dereferences nothing. NULL from a caller with no context (the IB_AT escape).
+typedef struct _BC250_GFX_SUBMIT_IDENTITY {
+    ULONGLONG Context;          // the submitting KMD context object, as a value
+    ULONG ProcessId;            // the process that created that context
+    ULONG ContextFlags;         // BC250_PJ_CTX_* (bc250kmd_escape.h)
+    ULONG Fence;                // the OS SubmissionFenceId this IB carries
+    ULONG Node;                 // the scheduler node it was submitted on
+} BC250_GFX_SUBMIT_IDENTITY;
 NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
-                     ULONG SizeBytes, _Out_ ULONG* Seq);
+                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq);
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
@@ -689,6 +837,23 @@ DXGKDDI_QUERY_DEVICE_DESCRIPTOR Bc250QueryDeviceDescriptor;
 DXGKDDI_SET_POWER_STATE Bc250SetPowerState;
 DXGKDDI_UNLOAD Bc250Unload;
 DXGKDDI_STOP_DEVICE_AND_RELEASE_POST_DISPLAY_OWNERSHIP Bc250StopDeviceAndReleasePostDisplayOwnership;
+
+// paging_journal.c: the ring of VidMm's paging operations (paging_journal.h, record kinds in bc250kmd_escape.h)
+struct _BC250_PAGING_JOURNAL_RECORD;
+void PagingJournalInit(void);
+void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG SliceStart, ULONG SliceCount,
+                         ULONGLONG Dma, BOOLEAN Cpu);
+void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags);
+// KMD193 (bsod-245 items 3 and 4): the destroy's own caller and the allocation's creator, and one record per
+// GFX IB that reached the ring. Same record layout; paging_identity.h packs the fields each kind left unused.
+void PagingJournalDestroy(ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONG Flags, ULONG Creator,
+                          ULONG BlobVersion, ULONGLONG GemFlags);
+void PagingJournalGfxSubmit(ULONG Seq, ULONG Fence, ULONGLONG Ib1, ULONGLONG Root, ULONGLONG Context, ULONG Node,
+                            ULONG Process, ULONG ContextFlags);
+void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence);
+void PagingJournalStampSeq(ULONG Fence, ULONG Seq);
+ULONG PagingJournalRead(ULONGLONG From, _Out_writes_to_(Max, return) struct _BC250_PAGING_JOURNAL_RECORD* Page, ULONG Max,
+                        _Out_ ULONGLONG* Next, _Out_ ULONGLONG* Total, _Out_ ULONGLONG* Lost);
 
 // display.c
 DXGKDDI_QUERYADAPTERINFO Bc250QueryAdapterInfo;

@@ -68,6 +68,15 @@ static void MailboxDelay(void* context,unsigned usec)
     UNREFERENCED_PARAMETER(context);
     KeStallExecutionProcessor(usec); // AMD poll interval, bounded by transport.
 }
+static void ClockDelay(void* context,unsigned usec)
+{
+    LARGE_INTEGER interval;
+    UNREFERENCED_PARAMETER(context);
+    // The clock transaction's settle pause (bc250_clock.c): a sleep, not a stall. The owner is PASSIVE only
+    // (OwnerBegin) and its lock a push lock, so the thread may wait; the wait may run to the timer resolution.
+    interval.QuadPart=-10ll*(LONGLONG)usec;
+    KeDelayExecutionThread(KernelMode,FALSE,&interval);
+}
 static int Temperature(void* context,int* value)
 {
     BC250_SMU_OWNER* owner=context;
@@ -85,7 +94,10 @@ static int Message(void* context,unsigned message,unsigned parameter,unsigned* v
 {
     BC250_SMU_OWNER* owner=context;
     struct bc250_smu_report report;
-    int result=bc250_smu_message_locked(&owner->Transport,message,parameter,&report);
+    int result;
+    // The allowlist of docs/hardware.md, enforced here and not only reviewed: nothing else reaches the mailbox.
+    if(!bc250_clock_message_allowed(message))return -22;
+    result=bc250_smu_message_locked(&owner->Transport,message,parameter,&report);
     if(!result)*value=report.value;
     return result;
 }
@@ -155,8 +167,24 @@ NTSTATUS SmuReadFirmwareVersion(BC250_SMU_OWNER* owner,ULONG* version)
 }
 NTSTATUS SmuPrepareClock(BC250_SMU_OWNER* owner,struct bc250_clock_report* report)
 {
-    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message};
-    return ResultStatus(bc250_clock_prepare(&io,1000,820,report));
+    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
+    return ResultStatus(bc250_clock_prepare(&io,BC250_CLOCK_FLOOR_MHZ,BC250_CLOCK_FLOOR_MV,report));
+}
+NTSTATUS SmuSetPoint(BC250_SMU_OWNER* owner,ULONG mhz,ULONG mv,struct bc250_clock_report* report)
+{
+    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
+    return ResultStatus(bc250_clock_prepare(&io,mhz,mv,report));
+}
+NTSTATUS SmuReadTemperature(BC250_SMU_OWNER* owner,LONG* temperature)
+{
+    int degrees=0,result;
+    *temperature=0;
+    result=OwnerBegin(owner);
+    if(result)return ResultStatus(result);
+    result=Temperature(owner,&degrees); // one BAR read, no mailbox message
+    OwnerEnd(owner);
+    if(!result)*temperature=degrees;
+    return ResultStatus(result);
 }
 NTSTATUS SmuReadClock(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* temperature)
 {
@@ -178,7 +206,7 @@ void SmuClockRequest(BC250_SMU_OWNER* owner, BC250_ESCAPE_CLOCK* data,
 {
     NTSTATUS status=STATUS_INVALID_PARAMETER;
     struct bc250_clock_report report;
-    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message};
+    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
     data->Version=BC250_KMD_VERSION;
     data->Status=BC250_ESCAPE_STATUS_REFUSED;
     data->ObservedMHz=data->ObservedVid=0;
@@ -193,6 +221,8 @@ void SmuClockRequest(BC250_SMU_OWNER* owner, BC250_ESCAPE_CLOCK* data,
         data->Ready=NT_SUCCESS(status)?1u:0u;
     } else if(data->Op==BC250_CLOCK_OP_SET) {
         if(!hardwareAccess || noAdapterSynchronization)goto Done;
+        // The DPM governor owns the operating point while it runs (dpm.c); two writers would fight.
+        if(InterlockedCompareExchange(&owner->GovernorActive,0,0)) { status=STATUS_DEVICE_BUSY;goto Done; }
         status=ResultStatus(bc250_clock_prepare(&io,data->RequestedMHz,data->RequestedMv,&report));
         data->ObservedMHz=report.observed_mhz;data->ObservedVid=report.observed_vid;
         data->TemperatureMc=report.temperature_mc;

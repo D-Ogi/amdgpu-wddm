@@ -17,17 +17,17 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 
 ## Limits for our experiments
 
-- GPU clock and voltage stay at firmware defaults until M5 is reached. If ever changed: not above 1500 MHz / 900 mV without a written reason in the experiment.
+- GPU clock and voltage: only the points of the DPM table in `docs/design/dpm.md` (1000 MHz / 820 mV to 2000 MHz / 1000 mV), which is the written reason for going above 1500 MHz / 900 mV (owner decision 2026-09-30). The default ceiling is 1500 MHz; above it only with an explicit `DpmMaxMHz`. Nothing above 1000 mV. Thermal: no raise at 87 C (owner decision 2026-10-01, was 85 C), the floor at 90 C.
 - SMU messages: the native KMD sends only `GetSmuVersion` (parameter 0),
   `GetGfxFrequency` (0), `GetGfxVid` (0), `RequestGfxclk` and `ForceGfxVid` through
-  its serialized owner. The setters follow the Cyan Skillfish clock policy and
-  the clock/voltage limits above. Linux `cyan_skillfish_ppt.c` maps the version
-  query and setters; AMD `smu_v11_8_ppsmc.h` names the two telemetry getters,
-  validated on unit A in [M22 and M441](facts.md). Additional messages require
-  named upstream semantics and a recorded experiment; header presence alone
-  does not authorize use. There is no raw user SMU interface. The private call
-  graph enforces this operation set; the transport itself has ownership and
-  timeout checks, not a numeric message filter.
+  its serialized owner, with the argument ranges Linux uses. The setters follow the
+  Cyan Skillfish clock policy and the clock/voltage limits above. Linux
+  `cyan_skillfish_ppt.c` maps the version query and setters; AMD `smu_v11_8_ppsmc.h`
+  names the two telemetry getters, validated on unit A in [M22 and M441](facts.md).
+  Additional messages require named upstream semantics and a recorded experiment;
+  header presence alone does not authorize use. There is no raw user SMU interface.
+  The private call graph enforces this operation set and `bc250_clock_message_allowed`
+  carries the allowlist; the transport itself has ownership and timeout checks.
 - No writes to SPI flash, CMOS or UEFI variables from our code.
 
 ## Dev setup

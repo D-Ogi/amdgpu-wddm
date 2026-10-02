@@ -14,16 +14,18 @@ typedef struct LIST_ENTRY {struct LIST_ENTRY *Flink,*Blink;} LIST_ENTRY;
 typedef struct BC250_PAGING_JOB {struct BC250_PAGING_JOB*Next;} BC250_PAGING_JOB;
 typedef struct {LIST_ENTRY Link;} BC250_WDDM_OBJECT;
 typedef struct {
-    int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer;
-    int SubmitDpc,PagingSubmitDpc,VSyncDpc,ReportDpc;
+    int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
+    int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
     long LastCompletedFence,VSyncTicks;
     BC250_PAGING_JOB *PagingHead,*PagingTail;
     LIST_ENTRY Objects;
+    struct {void *Buckets;} ObjectIndex;
 } BC250_WDDM;
 typedef struct {
     BC250_WDDM *Wddm;
     int Smu,Started,ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm,SystemDisplayReady;
     volatile long DcnVsyncArmed;
+    BOOLEAN InheritedSignalValid;
     BOOLEAN PostDisplayStopAttempted;
     NTSTATUS PostDisplayStopStatus;
     void *Framebuffer;
@@ -68,9 +70,17 @@ static int IsListEmpty(LIST_ENTRY*h){return h->Flink==h;}
 static LIST_ENTRY*RemoveHeadList(LIST_ENTRY*h){LIST_ENTRY*e=h->Flink;h->Flink=e->Flink;h->Flink->Blink=h;return e;}
 static void WddmReleaseCaptures(BC250_WDDM_OBJECT*o){(void)o;CHECK(model.restores==1);}
 static void ExFreePoolWithTag(void*p,int tag){(void)p;(void)tag;CHECK(model.restores==1 && model.vidmm==1);model.objects++;}
+static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   /* KMD172: before any teardown */
+static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardStage(int s){(void)s;}
 static void GuardLogKeep(void){}
+static unsigned dpmStops;
+/* KMD175: the DPM governor puts the floor back while the SMU owner is still online, before any teardown. */
+static void DpmStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.restores==0);dpmStops++;}
 static void SmuOwnerStop(int*s){(void)s;model.smu++;}
+static unsigned interopStops;
+/* KMD181: the interop session marker goes after WddmStop (DDI devices are gone), registry only. */
+static void InteropStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==1);interopStops++;}
 #define STOP_STUB(n) static void n(BC250_DEVICE*d){(void)d;CHECK(model.smu && model.restores==1);}
 STOP_STUB(IhStop)
 STOP_STUB(GfxPrepareStop)
@@ -95,7 +105,8 @@ int main(void)
     BC250_DEVICE d;BC250_WDDM w;BC250_WDDM_OBJECT o;DXGK_DISPLAY_INFORMATION info;
     init(&d,&w,&o);
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
-    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==2 && model.unmaps==1);
+    /* Three pool blocks: the one object, the object index's buckets (KMD 0.7.192) and the adapter state. */
+    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1);
     CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
     CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));

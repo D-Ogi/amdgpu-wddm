@@ -47,6 +47,22 @@ static unsigned int PagingAligned(unsigned int ndw)
 	return (ndw + align_mask) & ~align_mask;
 }
 
+/* The room check every builder here makes before it writes a dword. A full OS DMA buffer is the
+ * expected answer, not a ring overflow: the builder reports INSUFFICIENT and VidMm submits the buffer
+ * and calls again with an empty one. amdgpu_ring_alloc() logs an oversized request with dev_err(),
+ * which on a real ring means a driver bug; on this throwaway ring it filled game session 208's KMD log
+ * with 113 false "ring alloc of 16 dwords exceeds max_dw N" errors (FLUSH_TLB at a buffer's end). So
+ * the size is checked here first and the refusal stays quiet. The overflow guard mirrors
+ * amdgpu_ring_alloc()'s own, since PagingAligned() would wrap. */
+static int PagingReserve(struct amdgpu_ring *ring, unsigned int ndw)
+{
+	unsigned int align_mask = ring->funcs->align_mask;
+
+	if (ndw > ~0u - align_mask || PagingAligned(ndw) > ring->max_dw)
+		return -1;
+	return amdgpu_ring_alloc(ring, ndw);
+}
+
 int bc250_sdma_paging_copy(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
                            u64 src_mc, u64 dst_mc, unsigned int bytes, unsigned int *dwords_written)
 {
@@ -60,7 +76,7 @@ int bc250_sdma_paging_copy(struct amdgpu_device *adev, u32 *buffer, unsigned int
 	ndw = bc250_sdma_copy_linear_size(bytes);
 	PagingRingInit(&ring, adev, buffer, buffer_dwords);
 
-	r = amdgpu_ring_alloc(&ring, ndw);
+	r = PagingReserve(&ring, ndw);
 	if (r != 0) {
 		*dwords_written = PagingAligned(ndw);
 		return BC250_SDMA_PAGING_INSUFFICIENT;
@@ -89,7 +105,7 @@ int bc250_sdma_paging_fill(struct amdgpu_device *adev, u32 *buffer, unsigned int
 	ndw = bc250_sdma_fill_size(bytes);
 	PagingRingInit(&ring, adev, buffer, buffer_dwords);
 
-	r = amdgpu_ring_alloc(&ring, ndw);
+	r = PagingReserve(&ring, ndw);
 	if (r != 0) {
 		*dwords_written = PagingAligned(ndw);
 		return BC250_SDMA_PAGING_INSUFFICIENT;
@@ -142,7 +158,7 @@ int bc250_sdma_paging_write_ptes(struct amdgpu_device *adev, u32 *buffer,
 		return BC250_SDMA_PAGING_EINVAL;
 	ndw = 4u + count * 2u;
 	PagingRingInit(&ring, adev, buffer, buffer_dwords);
-	if (amdgpu_ring_alloc(&ring, ndw) != 0) {
+	if (PagingReserve(&ring, ndw) != 0) {
 		*dwords_written = PagingAligned(ndw);
 		return BC250_SDMA_PAGING_INSUFFICIENT;
 	}
@@ -205,7 +221,7 @@ int bc250_sdma_paging_invalidate_vmid(struct amdgpu_device *adev, u32 *buffer,
 		return BC250_SDMA_PAGING_EINVAL;
 	value = hub->vmhub_funcs->get_invalidate_req(vmid, 0);
 	PagingRingInit(&ring, adev, buffer, buffer_dwords);
-	if (amdgpu_ring_alloc(&ring, ndw) != 0) {
+	if (PagingReserve(&ring, ndw) != 0) {
 		*dwords_written = PagingAligned(ndw);
 		return BC250_SDMA_PAGING_INSUFFICIENT;
 	}
@@ -263,7 +279,7 @@ int bc250_sdma_paging_update_ptes(struct amdgpu_device *adev, u32 *buffer,
     // Reserve the complete write and barrier before touching the OS buffer.
     ndw = 4u + 2u * count + 10u;
     PagingRingInit(&ring, adev, buffer, buffer_dwords);
-    if (amdgpu_ring_alloc(&ring, ndw) != 0) {
+    if (PagingReserve(&ring, ndw) != 0) {
         *dwords_written = PagingAligned(ndw);
         return BC250_SDMA_PAGING_INSUFFICIENT;
     }
@@ -315,7 +331,7 @@ int bc250_sdma_paging_set_aperture(struct amdgpu_device *adev, u32 *buffer,
         return BC250_SDMA_PAGING_EINVAL;
     ndw=29u+2u*count;
     PagingRingInit(&ring,adev,buffer,buffer_dwords);
-    if (amdgpu_ring_alloc(&ring,ndw)!=0) {
+    if (PagingReserve(&ring, ndw)!=0) {
         *dwords_written=PagingAligned(ndw);
         return BC250_SDMA_PAGING_INSUFFICIENT;
     }
@@ -366,7 +382,7 @@ int bc250_sdma_paging_mapped_transfer(struct amdgpu_device *adev, u32 *buffer,
 	ndw = 2u * (4u + 2u * map->page_count) + 3u * 10u + 2u * 15u + (map->fill ? 5u : 7u);
 	if (map->staging_mc) ndw+=7u+10u;
 	PagingRingInit(&ring, adev, buffer, buffer_dwords);
-	if (amdgpu_ring_alloc(&ring, ndw) != 0) {
+	if (PagingReserve(&ring, ndw) != 0) {
 		*dwords_written = PagingAligned(ndw);
 		return BC250_SDMA_PAGING_INSUFFICIENT;
 	}
@@ -416,7 +432,7 @@ int bc250_sdma_paging_copy_bytes(struct amdgpu_device *adev, u32 *buffer,
     }
     // Bound the temporary ring to this transaction, independent of caller size.
     PagingRingInit(&ring,adev,buffer,required);
-    if (amdgpu_ring_alloc(&ring,ndw)!=0) {
+    if (PagingReserve(&ring, ndw)!=0) {
         *dwords_written=required;
         return BC250_SDMA_PAGING_INSUFFICIENT;
     }

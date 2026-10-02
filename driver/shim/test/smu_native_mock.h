@@ -4,6 +4,7 @@
 #include <string.h>
 #undef WIN32_NO_STATUS
 #include <ntstatus.h>
+#include "bc250_clock.h"
 typedef SRWLOCK EX_PUSH_LOCK;
 typedef HANDLE PETHREAD;
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
@@ -27,3 +28,11 @@ static ULONG64 KeQueryInterruptTimePrecise(PULONG64 qpc) {
     CHECK(qpc!=NULL);*qpc=GetTickCount64();return *qpc*10000;
 }
 static void KeStallExecutionProcessor(unsigned usec) { CHECK(usec==1); }
+// Only the clock transaction's settle pause sleeps (smu.c ClockDelay): relative, BC250_CLOCK_SETTLE_US.
+#define KernelMode 0
+static volatile LONG native_settle_sleeps;
+static NTSTATUS KeDelayExecutionThread(int mode,BOOLEAN alertable,PLARGE_INTEGER interval) {
+    CHECK(mode==KernelMode && !alertable && interval->QuadPart==-10ll*BC250_CLOCK_SETTLE_US);
+    InterlockedIncrement(&native_settle_sleeps);
+    return STATUS_SUCCESS;
+}

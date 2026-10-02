@@ -137,13 +137,6 @@ const struct amdgpu_ring_funcs *bc250_sdma_ring_funcs(void);
  * ring, which is the same refusal the emitter makes. */
 unsigned int bc250_sdma_fence_size(const struct amdgpu_ring *ring, unsigned int flags);
 
-// Internal bring-up/recovery oracle: WRITE_LINEAR content followed by a fresh
-// 64-bit fence, then independently observed empty transport. Slot ownership and
-// CPU poisoning belong to the caller; neither operation allocates/frees backing.
-int bc250_sdma_recovery_probe_submit(struct amdgpu_ring *ring, u64 content_addr,
-                                    u64 fence_addr, u32 pattern, u32 sequence);
-int bc250_sdma_recovery_transport(struct amdgpu_ring *ring, u64 *rptr, u64 *wptr);
-
 /* sdma_v5_0.c:523 sdma_v5_0_ring_emit_fence(). Writes into a ring the caller has already reserved
  * space in with amdgpu_ring_alloc(); it does not commit. Returns BC250_EINVAL without writing a
  * single dword if the ring is wrong or the address is not 4-byte aligned. */

@@ -723,6 +723,20 @@ struct amdgpu_gfx {
 	 * AMDGPU_MAX_COMPUTE_QUEUES; eight queues fit in a u64 and gfx10_kiq_set_resources()
 	 * already folds it into a 64-bit queue_mask. */
 	u64			mec_queue_bitmap;
+
+	/* [shim] BC-250 CU mode (bc250_cu_mode.h). Installed by the miniport's startup for the whole
+	 * device start (a retained-power resume re-runs the constants stage); bc250_get_cu_tcc_info()
+	 * calls it where the unlock reference writes, with the select transcription as the third
+	 * argument. Host replays leave it NULL, so the traced register stream is unchanged. */
+	void			(*cu_mode_hook)(struct amdgpu_device *adev, void *ctx,
+						void (*select)(struct amdgpu_device *adev, u32 se, u32 sh,
+							       u32 instance));
+	void			*cu_mode_ctx;
+	/* [shim] The same device start's check after the RLC stage (bc250_cu_mode_after_rlc()), called
+	 * by bc250_gfx_rlc_resume() once amdgpu's sequence has turned power gating off. NULL in replays. */
+	void			(*cu_mode_rlc_hook)(struct amdgpu_device *adev, void *ctx,
+						    void (*select)(struct amdgpu_device *adev, u32 se, u32 sh,
+								   u32 instance));
 };
 
 /* [amdgpu] amdgpu_sdma.h: struct amdgpu_sdma_instance and struct amdgpu_sdma, cut down to the ring

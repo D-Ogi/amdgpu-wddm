@@ -236,12 +236,12 @@
     {
       "id": "R20-WDDMVERSION-VS-INTERFACE",
       "declaration": "DXGK_DRIVERCAPS.WDDMVersion = DXGKDDI_WDDMv2 (0x2000)",
-      "requires_text": "the table declares DXGKDDI_INTERFACE_VERSION_WDDM2_0 and the whole binary is compiled at that interface version (>= 0x5000), so that DXGK_DRIVERCAPS is the 0x240-byte shape dxgkrnl sizes the buffer to",
-      "source": "DXGKRNL dxgk_caps_static.md 2.1 GetDriverCapsSizeFromDdiVersion: 'version >= 0x5011 -> 0x240'; 2.2 the WDDMVersion normalisation at +0x676 ('0x2000: pass'); 2.6 at +0x1031 the accepted set 0x1200, 0x1300, 0x2000 ... 0x3100; docs/facts.md M63 measured the 576-byte buffer on the lab machine",
+      "requires_text": "the table declares the interface version the whole binary is compiled at, and that version is >= 0x5000 (WDDMVersion 2.x needs a WDDM 2.0 or later table), so that DXGK_DRIVERCAPS, DRIVER_INITIALIZATION_DATA and DXGKRNL_INTERFACE have the shapes dxgkrnl sizes them to for the declared version (ADR 0019 B1: 0x10004 -> 0x250, 0x560, 0x240; at 0x5023 they were 0x240, 0x340, 0x138)",
+      "source": "DXGKRNL dxgk_caps_static.md 2.1 GetDriverCapsSizeFromDdiVersion: 'version >= 0x5011 -> 0x240', and for 22621.6199 also >= 0x9002 -> 0x248, >= 0xE003 -> 0x250 (scratch/m15/offgpu/wddm-uplift/b1/dxgk); DpiGetDriverDataSizeFromVersion 0x560 at >= 0x10004; DpiFdoStartAdapter+0x4de (RVA 0x2009ee) DXGKRNL_INTERFACE.Size 0x240 at >= 0xD001; 2.2 the WDDMVersion normalisation at +0x676 ('0x2000: pass'); 2.6 at +0x1031 the accepted set 0x1200, 0x1300, 0x2000 ... 0x3100; docs/facts.md M63 measured the 576-byte buffer on the lab machine at 0x5023",
       "when": [{"wddm_version_is": "DXGKDDI_WDDMv2"}],
       "require": [
         {"interface_at_least": "0x5000"},
-        {"table_version_is": "DXGKDDI_INTERFACE_VERSION_WDDM2_0"}
+        {"table_version_matches_interface": true}
       ]
     },
     {
@@ -423,6 +423,13 @@
       "source": "LEARN enumerating-gpu-nodes: DxgkDdiGetNodeMetadata 'must return STATUS_INVALID_PARAMETER for NodeOrdinal >= GetNumNodes()', and the same ordinal space indexes DXGKARG_CREATECONTEXT.NodeOrdinal (LEARN ns-d3dkmddi-_dxgkarg_createcontext, 'Node targetted for this context'); SAMPLE RosKmdAdapter.cpp rejects an out-of-range node in CreateContext before allocating anything",
       "when": [{"cap_nonzero": "GpuEngineTopology.NbAsymetricProcessingNodes"}],
       "require": [{"ctx_node_checked": true}]
+    },
+    {
+      "id": "R39-SEGMENT-BUDGET-GROUPS",
+      "declaration": "DXGK_QUERYSEGMENTOUT4 declares the adapter's segments",
+      "requires_text": "every memory segment carries Flags.LocalBudgetGroup alone and every aperture segment carries Flags.NonLocalBudgetGroup alone, so that system memory reached through the aperture is not counted into the local budget",
+      "source": "WDK d3dkmddi.h DXGK_SEGMENTFLAGS LocalBudgetGroup (bit 19) / NonLocalBudgetGroup (bit 20); LEARN memory-management-strategies (local and non-local budgets of DXGI QueryVideoMemoryInfo). Measured: 0.7.182.1 declared the aperture in no group and the lab reported local 11339 MiB = segments 1 + 3 + SharedSystemMemory - 768 MiB, non-local 0; a budget-sized client then overflowed segment 1 (trial 211)",
+      "require": [{"segment_budget_groups": true}]
     }
   ]
 }

@@ -66,6 +66,9 @@ no code from Microsoft's MS-PL sample.
   and the kernel checks that identity before it writes 0 and flushes the key (M457). The display-only table keeps
   the older rule (`LastStage` 61 and 60 s up). By hand it is `bc250kmd_cli confirm` (`tools/win/bc250kmd_cli`)
   or `mon.py action kmd.confirm`, recorded as a human decision. Installing the package resets the counter.
+- **Hang evidence** (0.7.172). `g_Bc250Progress` records entries and exits of the ISR, DPCs and submission
+  paths, and `EnableHangBugcheck=1` arms a test-only detector that bugchecks with `0xBC250BAD` when ordinary
+  threads stop running. Default off. See `docs/design/hang-detector.md`.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and
@@ -94,15 +97,18 @@ full table (M727 reports health flags 15, of which flag 1 is full WDDM, see `too
 The gate is read once, in `DriverEntry`, before the driver object is touched, so at 0 not a line of `wddm.c` runs.
 Both paths are counted by the same start budget, because both can cost a boot.
 
-**One binary, one interface version.** The whole driver is compiled at `DXGKDDI_INTERFACE_VERSION_WDDM2_0`
+**One binary, one interface version.** The whole driver is compiled at `DXGKDDI_INTERFACE_VERSION_WDDM2_9`
 (`bc250kmd.h` says why, with the measurement behind it): the WDK headers change the *shape* of `DXGKRNL_INTERFACE`
 and of most `DXGKARG_*` structures with that macro, and `BC250_DEVICE` embeds a `DXGKRNL_INTERFACE`, so two
 translation units at two versions would disagree about the layout of this driver's own device structure. The
 display-only table is unaffected: `KMDDOD_INITIALIZATION_DATA` and all 30 of its members are identical at both
 versions, and so are every member of `DXGK_DRIVERCAPS`, `DXGKARG_QUERYADAPTERINFO` and `DXGKARG_ESCAPE` that
 `display.c` reads or writes. `Version` inside each table is a run-time value and is unchanged in either path.
-ADR 0019 (accepted direction, 2026-09-27) moves the binary to the newest version the WDK offers; the code is still
-at 0x5023 (`bc250kmd.h`).
+ADR 0019 stage B1 moved the interface version from 0x5023 to 0xE003 (WDDM 2.9), the newest public version below
+the `DRIVER_INITIALIZATION_DATA.Version` 0xF002 rule that would require the aperture segment in every CpuVisible
+non-primary allocation; 0x10004 (3.1) was built as KMD 186-189 and never deployed, because VidMm at that version
+refuses the VRAM-only CpuVisible shadow. `DXGK_DRIVERCAPS.WDDMVersion` stays 2.0 and every DDI the 2.1-3.1 headers
+add stays NULL until the WDDMVersion steps of stage B4 (`bc250kmd.h`, `wddm.c` `WddmCheckReserved`).
 
 ### What stage A is, and is not
 

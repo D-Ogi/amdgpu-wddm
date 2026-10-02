@@ -1,6 +1,7 @@
 #ifndef BC250_GDI_PRIVATE_H
 #define BC250_GDI_PRIVATE_H
 #include "dcn_translate.h"
+#include "surface_format.h"
 
 // Windows ABI: 32-bit unsigned long, 64-bit unsigned long long.
 #define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
@@ -77,11 +78,21 @@ static __inline int WddmSurfaceGeometry(const BC250_WDDM_ALLOCATION_PRIVATE* Sur
         Surface->Version!=1 || Type>8 || Surface->Size>~0ull-4095ull) return 0;
     if (!Type) {
         /* Legacy UMD producers may add pitch/row padding. Bound the footprint,
-         * but do not require the standard-GDI producer's exact layout. */
-        return Bpp==4 && DcnSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,&size) &&
+         * but do not require the standard-GDI producer's exact layout. The
+         * bytes of a pixel are the format row's: 4, or 8 for an FP16 buffer. */
+        return DcnLinearSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,Bpp,&size) &&
             Surface->Size>=size;
     }
     return WddmGdiLayout(Surface->Width,Surface->Height,Type,Bpp,&pitch,&size) &&
         Surface->Pitch==pitch && Surface->Size==size;
+}
+
+/* The one admission of a received LB7A blob: type 0 is a UMD-described
+ * (composed) surface, 1..8 a standard GDI one; the format's row says whether
+ * that stage takes it and at how many bytes a pixel. */
+static __inline int WddmSurfaceAdmitted(const BC250_WDDM_ALLOCATION_PRIVATE* Surface,unsigned long Type)
+{
+    return Surface && WddmSurfaceGeometry(Surface,Type,
+        WddmSurfaceFormatBpp(Surface->Format,Type ? BC250_SURFACE_GDI : BC250_SURFACE_COMPOSED));
 }
 #endif

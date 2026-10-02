@@ -12,6 +12,8 @@
 #define BC250_WDDM_SUBMIT_TIMEOUT_MS 500
 #define BC250_WDDM_TAG 1
 #include "paging_private.h"
+#include "paging_drain.h"
+#include "progress.h"
 #define C_ASSERT(e) typedef char assert_job_fits[(e)?1:-1]
 #define RtlZeroMemory(p,n) memset(p,0,n)
 typedef unsigned char UCHAR;
@@ -32,11 +34,12 @@ typedef void* PVOID;
 typedef struct {
  BC250_PAGING_JOB *PagingHead,*PagingTail;
  ULONGLONG PagingDeadline,PagingHwEpoch;
- BC250_WDDM_FENCE_LEDGER FenceLedger[2];
+ /* FENCE_LEDGER_FIELD */
  int Stopping,WatchdogFaulted[2],PagingHwPending,PagingDeferredValid,PreemptionPending[2];
  ULONG PagingHwSeq;
  UINT PagingHwFence;
- int Lock,PagingSubmitTimer,PagingSubmitDpc;
+ /* Timer and DPC stand-ins count arms; PagingDrainDpc keeps the drain timer's last due time. */
+ int Lock,PagingSubmitTimer,PagingSubmitDpc,PagingDrainTimer,PagingDrainDpc;
  LONG PagingQueueBorrowed,PagingHwSubmitted,PagingHwCompleted,PagingHwRefused,PagingHwTimeouts;
 } BC250_WDDM;
 typedef struct { void* Wddm; } BC250_DEVICE;
@@ -50,9 +53,19 @@ static void KeAcquireSpinLock(int*l,KIRQL*i){(void)l;*i=0;check(!lockHeld,"nonre
 static void KeReleaseSpinLock(int*l,KIRQL i){(void)l;(void)i;lockHeld=0;}
 static ULONGLONG KeQueryInterruptTime(void){return now;}
 static int KeCancelTimer(int*t){(void)t;return 0;}
-static int KeSetTimer(int*t,LARGE_INTEGER d,int*p){(void)t;(void)d;(void)p;return 0;}
+static int KeSetTimer(int*t,LARGE_INTEGER d,int*p)
+{check(lockHeld,"timers armed under Lock");(*t)++;*p=(int)d.QuadPart;return 0;}
 static LONG InterlockedIncrement(LONG*p){return ++*p;}
 static void GuardLog(const char*f,...){(void)f;}
+/* KMD180 paging journal: the drain stamps each hardware submit's sequence; memory only, nothing to check here. */
+static void PagingJournalStampSeq(ULONG fence,ULONG seq){(void)fence;(void)seq;}
+/* KMD172 progress recorders: sites must balance; the drain's own summary is kept for the quota checks. */
+static int progressOpen,quotaExits;
+static ULONG drainExit,drainRetired;
+static void ProgressEnter(BC250_PROGRESS_SITE_ID s){(void)s;progressOpen++;}
+static void ProgressExit(BC250_PROGRESS_SITE_ID s,LONG v){(void)s;(void)v;progressOpen--;}
+static void ProgressDrainDone(ULONG it,ULONG ret,ULONG ex)
+{(void)it;drainRetired=ret;drainExit=ex;if(ex==PagingDrainExitQuota)quotaExits++;}
 static BC250_PAGING_JOB* completionSlots[256];
 static int RecordWord(void* unused,const PAGING_PRIVATE_SPAN* span)
 {
@@ -79,7 +92,24 @@ static void WddmRecordCompletionLocked(BC250_WDDM*w,UINT fence,UINT node)
  }
  fences[completionCount++]=fence;
 }
-static void WddmQueueReport(BC250_WDDM*w){(void)w;check(!lockHeld,"report outside lock");reports++;}
+/* The second caller. A report runs with Lock released, between two passes of the drain that retired;
+ * another processor's drain (the IH DPC, the watchdog, a submit) can run exactly there. While helperBudget lasts,
+ * the actual drain runs once more as that caller: it finds the hardware idle and publishes the head, and the GPU
+ * finishes the packet at once, so the first caller's next pass has one more retirement. */
+void WddmGpuFencePaging(BC250_DEVICE* Device);
+static BC250_DEVICE* helperDevice;
+static int helperBudget,inHelper,helperRuns,stopAtReport;
+static void WddmQueueReport(BC250_WDDM*w)
+{
+ check(!lockHeld,"report outside lock");reports++;
+ if(stopAtReport && reports==stopAtReport)w->Stopping=1;   /* WddmStop sets it under Lock, from another CPU */
+ if(helperBudget>0 && !inHelper && helperDevice) {
+  helperBudget--;helperRuns++;inHelper=1;
+  WddmGpuFencePaging(helperDevice);
+  inHelper=0;
+  if(activeSeq)arrived=activeSeq;
+ }
+}
 static void WddmFailSubmission(BC250_DEVICE*d,UINT fence,UINT node)
 {(void)d;(void)fence;(void)node;failureCount++;}
 static void GfxPagingSubmitFail(BC250_DEVICE*d){(void)d;failureCount++;}

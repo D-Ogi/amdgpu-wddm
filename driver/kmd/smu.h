@@ -12,6 +12,8 @@ typedef struct _BC250_SMU_OWNER {
     DECLSPEC_ALIGN(8) volatile LONG64 FirmwareSnapshot;
     volatile ULONG* Registers;
     struct bc250_smu Transport;
+    // Set by the DPM governor while it runs (dpm.c): the administrator's SET escape is refused then.
+    volatile LONG GovernorActive;
 } BC250_SMU_OWNER;
 // AddDevice before publication; object storage lives with BC250_DEVICE.
 void SmuOwnerInitialize(BC250_SMU_OWNER* Owner);
@@ -21,6 +23,10 @@ NTSTATUS SmuOwnerStart(BC250_SMU_OWNER* Owner, volatile ULONG* Registers);
 // Close/join under the same lock, BEFORE MMIO unmap. Waiters see offline.
 void SmuOwnerStop(BC250_SMU_OWNER* Owner);
 NTSTATUS SmuPrepareClock(BC250_SMU_OWNER* Owner, struct bc250_clock_report* Report);
+// Any point of the bc250_clock.h table, through the same transaction (the DPM governor, dpm.c).
+NTSTATUS SmuSetPoint(BC250_SMU_OWNER* Owner, ULONG MHz, ULONG Mv, struct bc250_clock_report* Report);
+// THM_TCON_CUR_TMP only, under the owner lock, no mailbox message: cheap enough for every governor tick.
+NTSTATUS SmuReadTemperature(BC250_SMU_OWNER* Owner, LONG* TemperatureMc);
 // A paired read uses the same transaction owner as clock preparation.
 NTSTATUS SmuReadClock(BC250_SMU_OWNER* Owner, ULONG* MHz, ULONG* Vid, LONG* TemperatureMc);
 

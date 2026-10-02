@@ -51,6 +51,14 @@ static NTSTATUS OpenParameters(HANDLE*k){*k=(void*)1;return openStatus;}
 static NTSTATUS WriteDword(HANDLE k,const unsigned short*n,ULONG v){(void)k;(void)n;CHECK(v==0 && spins==0 && mutexes==1);writes++;return writeStatus;}
 static NTSTATUS ZwFlushKey(HANDLE k){(void)k;CHECK(spins==0 && mutexes==1);flushes++;if(faultDuringFlush)StartHealthFault(live);return flushStatus;}
 static void ZwClose(HANDLE k){(void)k;closes++;}
+#define RtlZeroMemory(p,n) memset((p),0,(n))
+// cumode.c: a durable start-health confirmation also confirms a pending 40 CU request, under Lifecycle,
+// with no spin lock held (it does registry I/O).
+static unsigned cuConfirms;
+static NTSTATUS CuModeConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);cuConfirms++;return STATUS_SUCCESS;}
+// dpm.c: the same for a pending DPM start, right after the CU mode, under the same conditions.
+static unsigned dpmConfirms;
+static NTSTATUS DpmConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHECK(spins==0 && mutexes==1);dpmConfirms++;return STATUS_SUCCESS;}
 #include "confirm_actual.inc"
 #include "start_health_actual.inc"
 static BC250_ESCAPE_START_HEALTH query(BC250_DEVICE*d,int confirm)
@@ -77,12 +85,14 @@ int main(void)
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
-    r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==1 && flushes==1);
+    r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && writes==1 && flushes==1 && cuConfirms==1 && dpmConfirms==1);
+    CHECK(StartHealthIsReady(&d,&generation) && generation==d.StartHealth.Generation);
     // Unchanged visibility and one repeated primary cannot manufacture progress.
     epoch=d.StartHealth.Epoch;count=d.StartHealth.Completed;
     StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
     StartHealthCompleted(&d,24);CHECK(d.StartHealth.Epoch==epoch && d.StartHealth.Completed==count);
-    advance(15001);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==1);
+    advance(15001);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==1 && cuConfirms==1);
+    CHECK(!StartHealthIsReady(&d,&generation)); // stale completions: not the milestone either
     ready(&d);advance(60000);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY); // no completed primary
     ready(&d);advance(59999);StartHealthCompleted(&d,2);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY);
     advance(1);r=query(&d,1);CHECK(r.Status==0);
@@ -95,7 +105,7 @@ int main(void)
     r=query(&d,1);CHECK(!(r.Flags&4) && r.Status==2); // visibility cannot undo path power-off
     healthy(&d);openStatus=STATUS_ACCESS_DENIED;old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)openStatus && writes==old && !(r.Flags&8));openStatus=0;
     healthy(&d);writeStatus=STATUS_ACCESS_DENIED;old=flushes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)writeStatus && flushes==old && !(r.Flags&8));writeStatus=0;
-    healthy(&d);flushStatus=STATUS_UNSUCCESSFUL;r=query(&d,1);CHECK(r.NtStatus==(ULONG)flushStatus && !(r.Flags&8));flushStatus=0;
+    old=cuConfirms;healthy(&d);flushStatus=STATUS_UNSUCCESSFUL;r=query(&d,1);CHECK(r.NtStatus==(ULONG)flushStatus && !(r.Flags&8) && cuConfirms==old && dpmConfirms==old);flushStatus=0;
     healthy(&d);epoch=d.StartHealth.Epoch;faultDuringFlush=1;old=writes;r=query(&d,1);faultDuringFlush=0;
     CHECK(r.NtStatus==(ULONG)STATUS_RETRY && r.Epoch!=epoch && !(r.Flags&(2|8)) && writes==old+1);
     CHECK(d.StartHealth.ConfirmedEpoch==epoch); // old interval only, no compensating counter rewrite

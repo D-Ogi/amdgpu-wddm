@@ -9,7 +9,9 @@ static void legacy(void) {
 
 static void reset(void) {
  check(!allocated,"all legacy allocations retired");
+ check(!progressOpen,"every progress site entered was left");
  lockHeld=submitted=completionCount=reports=failureCount=immediateFence=0;
+ helperDevice=NULL;helperBudget=inHelper=helperRuns=quotaExits=stopAtReport=0;drainExit=drainRetired=0;
  nextSeq=activeSeq=arrived=0;now=0;memset(completionSlots,0,sizeof(completionSlots));
 }
 static void borrowed(void) {
@@ -110,7 +112,67 @@ static void built_records(void) {
  check(submittedBytes[0]==headers[0][3]&&submittedBytes[1]==headers[1][3],"queue preserves actual direct/native command interpretation");
  free(data[0]);free(data[1]);
 }
+/* KMD172 quota (docs/design/hang-detector.md). Jobs are independent OS buffers admitted through the actual submit path; job 1 is
+ * published by its own admission. */
+#define QUOTA_JOBS 20
+static __declspec(align(8)) unsigned quotaBuffers[QUOTA_JOBS][64];
+static BC250_PAGING_JOB* quotaSlots[QUOTA_JOBS];
+static void quota_fixture(BC250_WDDM* w,BC250_DEVICE* d,unsigned n) {
+ unsigned i,size=PagingPrivateQueuedSize(PAGING_PRIVATE_QUEUED_DIRECT,12);
+ reset();memset(w,0,sizeof(*w));memset(quotaBuffers,0,sizeof(quotaBuffers));
+ for(i=0;i<n;i++) {
+  quotaBuffers[i][6]=i+1;
+  check(PagingPrivateQueuedHeader(quotaBuffers[i],sizeof(quotaBuffers[i]),0,0x10000,12),"quota job construction");
+  quotaSlots[i]=PagingPrivateQueueSlot(quotaBuffers[i],size,0x10000,4,TRUE);
+  completionSlots[100+i]=quotaSlots[i];
+  check(WddmSubmitPagingHardware(d,w,quotaBuffers[i],size,0x10000,4,TRUE,100+i),"quota job admitted");
+ }
+ check(submitted==1&&w->PagingHwPending&&w->PagingQueueBorrowed==(LONG)n,"one packet in flight, the rest queued");
+}
+static int quota_fifo(unsigned n) {
+ unsigned i;
+ if(completionCount!=(int)n)return 0;
+ for(i=0;i<n;i++)if(fences[i]!=100+i||submittedBytes[i]!=i+1)return 0;
+ return 1;
+}
+static void quota(void) {
+ BC250_WDDM w;BC250_DEVICE d={&w};unsigned rounds;
+ // Success path: one caller retires the finished packet and publishes the next. No yield, no requeue.
+ quota_fixture(&w,&d,3);
+ arrived=activeSeq;WddmGpuFencePaging(&d);
+ check(quota_fifo(1)&&w.PagingHwPending&&w.PagingHead==quotaSlots[1],"single caller retires one and publishes the next");
+ check(drainExit==PagingDrainExitIdle&&!quotaExits&&!w.PagingDrainTimer,"single caller never reaches the quota");
+ // The case only the requeue covers: a second caller publishes between the first caller's passes, then
+ // stops. The quota exit leaves the ninth job queued with no packet in flight, so no interrupt will come for it.
+ quota_fixture(&w,&d,12);helperDevice=&d;helperBudget=PAGING_DRAIN_QUOTA-1;
+ arrived=activeSeq;WddmGpuFencePaging(&d);
+ check(quota_fifo(PAGING_DRAIN_QUOTA)&&drainRetired==PAGING_DRAIN_QUOTA&&helperRuns==PAGING_DRAIN_QUOTA-1,"interleaved callers: the first yields at the quota");
+ check(drainExit==PagingDrainExitQuota&&quotaExits==1&&reports==PAGING_DRAIN_QUOTA,"quota exit counted, every retirement reported");
+ check(!w.PagingHwPending&&!activeSeq&&w.PagingHead==quotaSlots[PAGING_DRAIN_QUOTA],"head queued, nothing in flight");
+ check(w.PagingDrainTimer==1&&w.PagingDrainDpc==-1,"requeue armed for the next clock tick");
+ // The timer fires: the drain DPC publishes the head; each modeled interrupt then retires and publishes.
+ helperDevice=NULL;WddmPagingDrainDpcRoutine(NULL,&d,NULL,NULL);
+ check(w.PagingHwPending&&activeSeq&&completionCount==PAGING_DRAIN_QUOTA&&drainExit==PagingDrainExitIdle,"requeued drain publishes the waiting head");
+ for(rounds=0;rounds<40&&w.PagingHead;rounds++){arrived=activeSeq;WddmGpuFencePaging(&d);}
+ check(quota_fifo(12)&&!w.PagingHead&&!w.PagingTail&&!w.PagingHwPending&&w.PagingDrainTimer==1,"all jobs retire in FIFO order after the requeue");
+ // Sustained contention: the second caller never stops. Each invocation is bounded by the quota; the requeue carries the rest.
+ quota_fixture(&w,&d,QUOTA_JOBS);helperDevice=&d;helperBudget=1000;
+ arrived=activeSeq;WddmGpuFencePaging(&d);
+ check(drainRetired==PAGING_DRAIN_QUOTA&&drainExit==PagingDrainExitQuota&&w.PagingDrainTimer==1,"sustained interleaving: first invocation bounded");
+ WddmPagingDrainDpcRoutine(NULL,&d,NULL,NULL);
+ check(drainRetired==PAGING_DRAIN_QUOTA&&w.PagingDrainTimer==2&&completionCount==2*PAGING_DRAIN_QUOTA,"sustained interleaving: requeued invocation bounded");
+ WddmPagingDrainDpcRoutine(NULL,&d,NULL,NULL);
+ check(drainRetired==QUOTA_JOBS-2*PAGING_DRAIN_QUOTA&&drainExit==PagingDrainExitIdle&&w.PagingDrainTimer==2,"sustained interleaving: the remainder ends idle");
+ check(quota_fifo(QUOTA_JOBS)&&!w.PagingHead&&!w.PagingHwPending&&quotaExits==2,"sustained interleaving keeps FIFO and ownership");
+ // Boundary: a stop that lands during the quota's last report. The drain still yields, the requeue is not armed.
+ quota_fixture(&w,&d,12);helperDevice=&d;helperBudget=PAGING_DRAIN_QUOTA-1;stopAtReport=PAGING_DRAIN_QUOTA;
+ arrived=activeSeq;WddmGpuFencePaging(&d);
+ check(drainExit==PagingDrainExitQuota&&!w.PagingDrainTimer,"no requeue once stopping");
+ TestStopDrain(&w);
+ check(!w.PagingHead&&!w.PagingTail&&!quotaSlots[PAGING_DRAIN_QUOTA]->Borrowed,"stop drain releases what the quota left queued");
+ reset();
+}
 int main(void) {
- legacy();borrowed();retention();built_records();
+ legacy();borrowed();retention();built_records();quota();
  printf("%d checks, %d failures\n",checks,failures);return failures?1:0;
 }

@@ -35,6 +35,7 @@
                                      // comes from regcalc, same as dcn.c's own sh_mask include
 #include "bc250_gmc.h"
 #include "bc250_ih.h"
+#include "ih_fault.h"               // KMD193: the UTCL2 fault decode and its per-second bucket, host-tested
 
 #define BC250_IH_TAG 'hI2B'
 #define BC250_IH_RB_ENABLE 0x00000001ul     // IH_RB_CNTL.RB_ENABLE (osssys_5_0_0_sh_mask.h), for the "is it off" read only
@@ -75,6 +76,9 @@ typedef struct _BC250_IH {
     KSPIN_LOCK StatsLock;
     BC250_IH_STATS Stats;
     BC250_IH_STATS Snapshot;            // the escape's, under GartLock
+    // KMD193: UTCL2 VM faults, under StatsLock like Stats. The registers and the log line are the DPC's, after
+    // the lock is released (ih_fault.h; bsod-245 item 1).
+    BC250_IH_FAULT_STATE Faults;
 } BC250_IH;
 
 // ---- the DPC's registers ---------------------------------------------------------------------------------------------
@@ -114,6 +118,7 @@ static void Note(_Inout_ BC250_IH_STATS* Ih, _In_ const struct bc250_iv_entry* E
     BC250_ESCAPE_IV* last = &Ih->Last[Ih->LastNext];
     ULONG i;
 
+    ProgressIhVector(Entry->client_id, Entry->src_id);   // lock-free, for a dump (hang.c); Kinds is the escape's
     Ih->EntryCount++;
     for (i = 0; i < Ih->KindCount; i++)
         if (Ih->Kinds[i].ClientId == Entry->client_id && Ih->Kinds[i].SourceId == Entry->src_id) break;
@@ -137,12 +142,43 @@ static void Note(_Inout_ BC250_IH_STATS* Ih, _In_ const struct bc250_iv_entry* E
     if (Ih->LastCount < BC250_IH_MAX_LAST) Ih->LastCount++;
 }
 
+// KMD193 (bsod-245 item 1). At DISPATCH_LEVEL, with the stats lock NOT held: the bucket said this vector opened
+// a new second of faults, so one line goes into the ring and the gfxhub's fault latch is read once. The latch
+// belongs to the first fault of the burst and MORE_FAULTS counts the rest, which is why reading it once per
+// burst is the right number of reads and reading it per vector would be 225 of them inside one DPC.
+//
+// Reads only, through MmioRead's general read table (the three offsets come from tools/regcalc through
+// regs.generated.h). A refused read logs as zero rather than silently vanishing. Nothing here clears the latch:
+// clearing it is a write, and this driver does not write GCVM registers.
+static void IhFaultReport(_In_ const BC250_DEVICE* Device, _In_ const BC250_IH_FAULT_STATE* Fault)
+{
+    ULONG status = 0, lo = 0, hi = 0, refused = 0;
+    ULONGLONG latched;
+
+    if (!NT_SUCCESS(MmioRead(Device, BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_STATUS, &status))) refused++;
+    if (!NT_SUCCESS(MmioRead(Device, BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_LO32, &lo))) refused++;
+    if (!NT_SUCCESS(MmioRead(Device, BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_HI32, &hi))) refused++;
+    latched = (((ULONGLONG)hi << 32) | lo) << 12;        // the registers hold the page frame, not the byte
+    GuardLog("ih: GPU FAULT va 0x%llX vmid %lu %s %s ring 0x%lX src 0x%lX src1 0x%lX, %lu in the second before, "
+             "%llu total, burst %lu",
+             Fault->FirstVa, Fault->VmId, Fault->Write ? "write" : "read", Fault->Retry ? "retry" : "no-retry",
+             Fault->RingId, Fault->SourceId, Fault->SrcData1, Fault->PreviousInSecond, Fault->Total,
+             Fault->Bursts);
+    GuardLog("ih: GPU FAULT latch status 0x%08X cid %lu %s vmid %lu rw %lu perm 0x%lX walker 0x%lX more %lu "
+             "mapping %lu page 0x%llX, %lu register(s) refused", status, BC250_GCVM_FAULT_CID(status),
+             Bc250GfxhubClientName(BC250_GCVM_FAULT_CID(status)), BC250_GCVM_FAULT_VMID(status),
+             BC250_GCVM_FAULT_RW(status), BC250_GCVM_FAULT_PERMISSIONS(status),
+             BC250_GCVM_FAULT_WALKER_ERROR(status), BC250_GCVM_FAULT_MORE(status),
+             BC250_GCVM_FAULT_MAPPING(status), latched, refused);
+}
+
 // At DISPATCH_LEVEL. amdgpu_ih_process(): consume up to the write pointer, publish the read pointer, look again. Every
 // vector advances the read pointer whether its source is known or not: an unknown source must not wedge the ring.
-static BOOLEAN Consume(_Inout_ BC250_IH* ih)
+static BOOLEAN Consume(_In_ const BC250_DEVICE* Device, _Inout_ BC250_IH* ih)
 {
     struct amdgpu_device* adev;
     struct bc250_iv_entry entry;
+    BC250_IH_FAULT_STATE faultReport = { 0 };       // KMD193: a copy taken under the lock, logged after it
     ULONG round, budget;
     u32 wptr, rptr;
     bool overflowed;
@@ -152,6 +188,10 @@ static BOOLEAN Consume(_Inout_ BC250_IH* ih)
     for (round = 0; round < BC250_IH_DPC_ROUNDS; round++)
     {
         ULONG errors = 0;
+        BOOLEAN reportFault = FALSE;
+        // KMD193: one whole second is the fault bucket. Taken once per round, outside the lock, and callable
+        // at any IRQL (ntddk.h); the bucket key must not depend on how many vectors the round decodes.
+        ULONGLONG second = KeQueryInterruptTime() / 10000000ull;
 
         wptr = bc250_ih_get_wptr(adev, &overflowed);
         // A refused access stops the DPC's sequence (sequence.c: reads answer all ones from then on, which would look
@@ -172,6 +212,15 @@ static BOOLEAN Consume(_Inout_ BC250_IH* ih)
             if (bc250_ih_decode(adev, &rptr, &entry) != 0) { errors++; rptr = wptr; break; }
             if (entry.client_id == BC250_IH_DCE_CLIENT && entry.src_id == BC250_IH_OTG0_VUPDATE_SOURCE)
                 InterlockedExchange(&ih->VsyncPending, 1);
+            // KMD193: a UTCL2 VM fault. The bucket is memory, like everything else under this lock; the
+            // register read and the log line wait for the release below.
+            if (entry.client_id == BC250_IH_UTCL2_CLIENT &&
+                Bc250IhFaultNote(&ih->Faults, second, entry.vmid, entry.ring_id, entry.src_id,
+                                 entry.src_data[0], entry.src_data[1]))
+            {
+                faultReport = ih->Faults;
+                reportFault = TRUE;
+            }
             Note(&ih->Stats, &entry);
             budget--;
         }
@@ -179,6 +228,8 @@ static BOOLEAN Consume(_Inout_ BC250_IH* ih)
         ih->Stats.Rptr = rptr;
         KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
 
+        // KMD193: before the Active check below - a fault matters most on the way down.
+        if (reportFault) IhFaultReport(Device, &faultReport);
         if (ih->Active == 0) return FALSE;
         ih->Rptr = rptr;
         // Publish even an unchanged RPTR: a serviced MSI must be rearmed.
@@ -218,30 +269,38 @@ static BOOLEAN Consume(_Inout_ BC250_IH* ih)
 void IhDpc(_Inout_ BC250_DEVICE* Device)
 {
     BC250_IH* ih = (BC250_IH*)Device->Ih;
-    BOOLEAN pending;
+    BOOLEAN pending, requeued = FALSE;
+    ULONG passes = 0;
 
     if (ih == NULL || ih->Active == 0) return;
     InterlockedIncrement(&ih->DpcCount);
+    // KMD172: the returns of this loop became breaks, so that one progress exit records every way out. The passes
+    // count shows the DpcAgain handoff: each restart is a fresh Consume budget within this one invocation.
+    ProgressEnter(ProgressSiteIhDpc);
     for (;;)
     {
         if (InterlockedCompareExchange(&ih->InDpc, 1, 0) != 0)
         {
             InterlockedExchange(&ih->DpcAgain, 1);
-            if (ih->InDpc != 0) return;
+            if (ih->InDpc != 0) break;
             continue;
         }
         InterlockedExchange(&ih->DpcAgain, 0);
-        pending = Consume(ih);
+        pending = Consume(Device, ih);
+        passes++;
         InterlockedExchange(&ih->InDpc, 0);
         if (pending && ih->Active != 0)
         {
             // Yield after the work budget. Reusing DpcAgain here would spin in
             // this invocation instead of returning execution to the scheduler.
             Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
-            return;
+            requeued = TRUE;
+            break;
         }
-        if (InterlockedExchange(&ih->DpcAgain, 0) == 0 || ih->Active == 0) return;
+        if (InterlockedExchange(&ih->DpcAgain, 0) == 0 || ih->Active == 0) break;
     }
+    ProgressIhDone(passes, requeued);
+    ProgressExit(ProgressSiteIhDpc, (LONG)passes);
 }
 
 // Consume only the notification latch, never hold the IH stats lock across DCN.

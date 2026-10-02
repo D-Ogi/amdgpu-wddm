@@ -246,7 +246,8 @@ an acute accent. A hotkey another process already holds is refused silently by W
 warning when a registration fails rather than leaving a dead key.
 
 Buttons today: STOP, clear stop, 1000 MHz / 820 mV, stock 1500 MHz, hide, back to click-through.
-Temperature colours: green below 85 C, amber from 85 C, red from 92 C (Tctl).
+Temperature colours: green below 87 C, amber from 87 C (the stop limit; 85 C before 2026-10-01), red from 92 C
+(Tctl).
 
 ## Build and deploy
 

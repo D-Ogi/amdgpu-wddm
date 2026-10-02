@@ -14,7 +14,7 @@ typedef int KIRQL;
 typedef int64_t LONGLONG;
 typedef int64_t LONG64;
 typedef struct {LONGLONG QuadPart;} LARGE_INTEGER;
-typedef struct {int Lock,Stopping,VSyncArmed,VSyncTimer,VSyncDpc,VSyncEnabled;long VSyncTicks;} BC250_WDDM;
+typedef struct {int Lock,Stopping,VSyncArmed,VSyncTimer,VSyncDpc;long VSyncTicks;} BC250_WDDM;
 typedef struct { unsigned VidPnSourceId;BOOLEAN Visible;} DXGKARG_SETVIDPNSOURCEVISIBILITY;
 typedef struct {struct {unsigned PathPowerTransition,PathPoweredOff;} Flags;} DXGKARG_COMMITVIDPN;
 /* VISIBILITY_EVENT_TYPE */
@@ -110,13 +110,6 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
     else {CHECK(0);return STATUS_INVALID_PARAMETER;}
     return STATUS_SUCCESS;
 }
-typedef int DXGK_INTERRUPT_TYPE;
-#define DXGK_INTERRUPT_CRTC_VSYNC 1
-#define DXGK_INTERRUPT_DMA_COMPLETED 2
-#define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
-#define WddmOf(h) (((BC250_DEVICE*)(h))->Wddm)
-#define WddmDdiControlInterrupt 0
-#define WddmFirstCalls(w,n) ((void)(w),(void)(n),0)
 /* ACTUAL_SOURCE */
 int main(void)
 {
@@ -226,38 +219,5 @@ int main(void)
      CHECK(show->Requested && show->Status==STATUS_IO_TIMEOUT && show->EndQpc-show->BeginQpc==500001);
      CHECK(!hide->Requested && hide->Status==STATUS_SUCCESS && hide->Blanked);
      CHECK(d.VisibilityFailures==4 && d.VisibilityLastTrueStatus==STATUS_IO_TIMEOUT && d.VisibilityLastStatus==STATUS_SUCCESS);}
-    // Exercise the actual DDI, including retry after an arm failure.
-    d.Mmio=&model;d.DcnWriteEnabled=TRUE;d.VidPnFlipEnabled=TRUE;
-    d.DcnVsyncArmed=0;w.Stopping=0;w.VSyncEnabled=FALSE;
-    model.sync_status=STATUS_IO_TIMEOUT;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_IO_TIMEOUT);
-    CHECK(!w.VSyncEnabled && !d.DcnVsyncArmed);
-    model.sync_status=STATUS_SUCCESS;TestReadFail=1;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_DEVICE_NOT_READY);
-    CHECK(!w.VSyncEnabled && !d.DcnVsyncArmed);
-    w.VSyncEnabled=TRUE;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_DEVICE_NOT_READY);
-    CHECK(w.VSyncEnabled);w.VSyncEnabled=FALSE;
-    TestReadFail=0;d.DcnWriteEnabled=FALSE;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_DEVICE_NOT_READY);
-    CHECK(!w.VSyncEnabled && !d.DcnVsyncArmed);
-    d.DcnWriteEnabled=TRUE;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS);
-    CHECK(w.VSyncEnabled && d.DcnVsyncArmed);
-    writes=model.writes;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS);
-    CHECK(model.writes==writes);
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,FALSE)==STATUS_SUCCESS);
-    CHECK(!w.VSyncEnabled && d.DcnVsyncArmed);
-    w.Stopping=1;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_DEVICE_NOT_READY);
-    CHECK(!w.VSyncEnabled);
-    w.Stopping=0;d.VidPnFlipEnabled=FALSE;w.VSyncArmed=FALSE;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS);
-    CHECK(w.VSyncEnabled && w.VSyncArmed);
-    d.Wddm=NULL;
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_DEVICE_NOT_READY);
-    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_DMA_COMPLETED,TRUE)==STATUS_SUCCESS);
-    CHECK(Bc250WddmControlInterrupt(&d,99,TRUE)==STATUS_NOT_SUPPORTED);
     printf("display visibility/sync: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

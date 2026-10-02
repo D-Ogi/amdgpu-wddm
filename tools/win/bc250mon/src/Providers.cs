@@ -25,7 +25,7 @@ namespace Bc250Mon
         public string Name { get { return "gpu"; } }
         public TimeSpan Period { get { return TimeSpan.FromSeconds(2); } }
 
-        public const double WarnC = 85, ErrorC = 92;
+        public const double WarnC = 87, ErrorC = 92;     // amber at the lab's stop limit (87 C since 2026-10-01, was 85)
 
         public void Poll(State state)
         {

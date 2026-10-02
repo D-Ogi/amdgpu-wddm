@@ -2,6 +2,7 @@
 // CPU copy into the firmware's framebuffer. No MMIO. Written against the documented display-only DDI.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "paging_journal.h"
 #include "display_timing.h"
 
 static ULONG g_Presents;
@@ -158,6 +159,7 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     case BC250_ESCAPE_VRAM_READ:
     case BC250_ESCAPE_GET_LOG:
     case BC250_ESCAPE_LOG_SUMMARY:
+    case BC250_ESCAPE_GET_PAGING_JOURNAL:
     case BC250_ESCAPE_RUN_DCN:
     case BC250_ESCAPE_RUN_FBDUMP:
         return TRUE;
@@ -172,22 +174,192 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     }
 }
 
+// The two reads a lab sampler polls during a trial, answered with NoAdapterSynchronization alone from 0.7.184.1 on.
+// What they touch, and nothing else:
+// - the log ring (guard.c: g_Log under g_LogLock) or the paging journal (paging_journal.c: g_PagingJournal under
+//   g_PagingJournalLock), driver-image globals set up in DriverEntry (entry.c, GuardInit and PagingJournalInit) that
+//   live until the image unloads;
+// - the caller's token (CallerIsAdmin), a nonpaged bounce page of our own, and the captured escape buffer;
+// - for the reply's Flags, three scalars of the adapter context (FullWddm, Mmio compared with NULL, VramEnabled),
+//   read and never dereferenced. RUN_START_HEALTH, RUN_CU_MODE, RUN_DPM and RUN_INTEROP already reach the same
+//   context with NoAdapterSynchronization (Bc250Escape).
+// No register, no device memory, no SMU message, no state a stop frees or a power transition turns off. So they need
+// neither the Level Two exclusion a HardwareAccess escape buys nor Bc250Escape's power-phase check, and dxgkrnl
+// takes no adapter lock for them. Up to 0.7.183.1 they came as HardwareAccess calls, and a lab profile of a Witcher 3 session
+// (2026-10-01) put the game's main thread in WrResource waits readied by bc250kmd_cli, 1.2-1.3 ms per frame.
+// LOG_SUMMARY is not one of them: WddmSummary walks the WDDM block WddmStop frees and DcnLogVsyncSnapshot reads OTG
+// registers, so it stays a HardwareAccess (Level Two) call and LogEscape still refuses it otherwise.
+// tools/win/bc250kmd_cli/test_escape_flags.py keeps this list equal to the CLI's SoftwareRead().
+static BOOLEAN SoftwareReadEscape(ULONG Command)
+{
+    switch (Command) {
+    case BC250_ESCAPE_GET_LOG:
+    case BC250_ESCAPE_GET_PAGING_JOURNAL:
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
+
+// BC250_ESCAPE_GET_PAGING_JOURNAL: the paging journal (paging_journal.c), a page of records at a time, like the log:
+// no gate, no register, administrators only (the records name allocation handles and GPU addresses), and a nonpaged
+// bounce buffer because the copy happens under a spin lock. Reached with HardwareAccess or, from 0.7.184.1, with
+// NoAdapterSynchronization alone (SoftwareReadEscape).
+static NTSTATUS PagingJournalEscape(_In_ const BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* Escape)
+{
+    BC250_ESCAPE_PAGING_JOURNAL* journal = (BC250_ESCAPE_PAGING_JOURNAL*)Escape->pPrivateDriverData;
+    BC250_PAGING_JOURNAL_RECORD* page;
+    ULONGLONG next = 0, total = 0, lost = 0;
+    ULONG returned;
+
+    if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_PAGING_JOURNAL)) return STATUS_INVALID_PARAMETER;
+    journal->Version = BC250_KMD_VERSION;
+    if (!CallerIsAdmin()) { journal->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; return STATUS_SUCCESS; }
+    page = (BC250_PAGING_JOURNAL_RECORD*)ExAllocatePool2(POOL_FLAG_NON_PAGED,
+                                                         BC250_PAGING_JOURNAL_MAX * sizeof(BC250_PAGING_JOURNAL_RECORD),
+                                                         BC250_TAG);
+    if (page == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    returned = PagingJournalRead(journal->From, page, BC250_PAGING_JOURNAL_MAX, &next, &total, &lost);
+    RtlCopyMemory(journal->Records, page, (SIZE_T)returned * sizeof(BC250_PAGING_JOURNAL_RECORD));
+    ExFreePoolWithTag(page, BC250_TAG);
+    journal->NtStatus = 0;
+    journal->Flags = device->FullWddm ? BC250_ESCAPE_FLAG_FULL_WDDM : 0;
+    journal->Capacity = BC250_PAGING_JOURNAL_ENTRIES;
+    journal->Returned = returned;
+    journal->Next = next;
+    journal->Total = total;
+    journal->Lost = lost;
+    journal->Status = BC250_ESCAPE_STATUS_DONE;
+    return STATUS_SUCCESS;
+}
+
+// BC250_ESCAPE_GET_LOG and BC250_ESCAPE_LOG_SUMMARY. The driver's own log, a page of lines at a time. This is how an
+// experiment reads the trail on a headless machine with no kernel debugger and no DebugView, so it needs no gate: it
+// touches no register, no memory of the device and nothing the caller did not already own. Administrators only all
+// the same, because the lines name physical addresses. LOG_SUMMARY first writes the WDDM counter tables into the
+// ring, so that one call gets both; with the gate closed that is a single line saying so. The caller decided
+// `summary` from one read of the command: a command that changes between two looks at the buffer must not be able
+// to get a summary past the check that guards it.
+static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* Escape, BOOLEAN summary)
+{
+    BC250_ESCAPE_LOG* log = (BC250_ESCAPE_LOG*)Escape->pPrivateDriverData;
+    BC250_LOG_LINE* page;
+    ULONG from, total, lost, above, next, returned, summaryFrom = 0;
+
+    if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_LOG)) return STATUS_INVALID_PARAMETER;
+    log->Version = BC250_KMD_VERSION;   // before any refusal, so that a refused caller still learns the build
+    if (!CallerIsAdmin()) { log->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; return STATUS_SUCCESS; }
+
+    // The summary walks the WDDM state that WddmStop frees, and what keeps the two apart is dxgkrnl's
+    // synchronization (see WddmSummary). With HardwareAccess, and without NoAdapterSynchronization, the escape
+    // is a Level Two call, which is a guarantee about this call and not only about StopDevice; bc250kmd_cli
+    // asks for exactly that, and a caller that does not is refused rather than trusted.
+    if (summary && (!Escape->Flags.HardwareAccess || Escape->Flags.NoAdapterSynchronization))
+    {
+        log->Status = BC250_ESCAPE_STATUS_REFUSED;
+        log->NtStatus = (ULONG)STATUS_INVALID_DEVICE_REQUEST;
+        return STATUS_SUCCESS;
+    }
+
+    // The lines are read into pool of our own and copied out afterwards, not read straight into the caller's
+    // buffer. GuardLogRead fills its output under a spin lock, i.e. at DISPATCH_LEVEL, and nothing documents
+    // pPrivateDriverData as nonpaged - dxgkrnl captures it, but at what pool type is not stated anywhere. A
+    // page fault there would be a bugcheck on the first `bc250kmd_cli log`, so this does not rely on it. It
+    // also keeps the lock hold to one page of copying instead of one page plus a user buffer, and every
+    // GuardLog on every other processor waits behind that lock.
+    page = (BC250_LOG_LINE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, BC250_LOG_MAX_LINES * sizeof(BC250_LOG_LINE),
+                                            BC250_TAG);
+    if (page == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+
+    from = log->From;
+    if (summary)
+    {
+        // Where the summary starts, taken before it is written, so that `log summary` can print only the
+        // lines it caused instead of the whole ring again. Another processor logging in between lands in the
+        // same window; that is one or two extra lines, not a wrong answer.
+        summaryFrom = GuardLogSequence();
+        WddmSummary(device);
+        if (from == BC250_LOG_FROM_SUMMARY) from = summaryFrom;
+    }
+    else if (from == BC250_LOG_FROM_SUMMARY)
+    {
+        from = 0;                       // the sentinel means nothing without a summary; do not read past the end
+    }
+    log->SummaryFrom = summaryFrom;
+    log->NtStatus = 0;
+    log->Flags = (device->FullWddm ? BC250_ESCAPE_FLAG_FULL_WDDM : 0) |
+                 (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) |
+                 (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0);
+    log->HeadLines = BC250_LOG_HEAD_LINES;
+    log->RingLines = BC250_LOG_RING_LINES;
+    log->From = from;                   // what was actually read, so the sentinel is visible as a number
+    // Both calls write their outputs under the log's spin lock, so they get locals, for the reason the lines
+    // get the bounce buffer. The copy length is the local as well: a count read back from the caller's buffer
+    // is a count the caller can change between the two lines.
+    GuardLogStats(&total, &lost, &above);
+    returned = GuardLogRead(from, page, BC250_LOG_MAX_LINES, &next);
+    RtlCopyMemory(log->Lines, page, (SIZE_T)returned * sizeof(BC250_LOG_LINE));
+    ExFreePoolWithTag(page, BC250_TAG);
+    log->Total = total;
+    log->Lost = lost;
+    log->Above = above;
+    log->Next = next;
+    log->Returned = returned;
+    log->Status = BC250_ESCAPE_STATUS_DONE;
+    return STATUS_SUCCESS;
+}
+
 NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Escape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_ESCAPE* data = (BC250_ESCAPE*)Escape->pPrivateDriverData;
+    D3DDDI_ESCAPEFLAGS softwareRead = {0};
+    ULONG command;
 
     if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE) || data == NULL || data->Magic != BC250_ESCAPE_MAGIC)
         return STATUS_INVALID_PARAMETER;
+    // GET_LOG and GET_PAGING_JOURNAL with NoAdapterSynchronization alone (0.7.184.1): driver-image state only, so
+    // they are answered ahead of the power-phase check (SoftwareReadEscape). The command is read once, so the read
+    // that runs is the read that was admitted; every other flag combination takes the path below, as before.
+    command = data->Command;
+    softwareRead.NoAdapterSynchronization = 1;
+    if (SoftwareReadEscape(command) && Escape->Flags.Value == softwareRead.Value)
+        return command == BC250_ESCAPE_GET_LOG ? LogEscape(device, Escape, FALSE) : PagingJournalEscape(device, Escape);
     // Dispatch the adapter-owned snapshot before touching subsystem/lifecycle fields.
     if (data->Command == BC250_ESCAPE_RUN_START_HEALTH) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_START_HEALTH)) return STATUS_INVALID_PARAMETER;
         StartHealthRequest(device,(BC250_ESCAPE_START_HEALTH*)data,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
-    // Only adapter-owned health and the separately joined SMU owner support
-    // NoAdapterSynchronization. Other diagnostics rely on OS Level Two/Three
-    // exclusion and must not enter a powered-down/partially restored subsystem.
+    // CU mode: adapter-owned software snapshot as well (cumode.c), no BAR access.
+    if (data->Command == BC250_ESCAPE_RUN_CU_MODE) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_CU_MODE)) return STATUS_INVALID_PARAMETER;
+        CuModeRequest(device,(BC250_ESCAPE_CU_MODE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // DPM: the governor's published snapshot, software state as well (dpm.c).
+    if (data->Command == BC250_ESCAPE_RUN_DPM) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM)) return STATUS_INVALID_PARAMETER;
+        DpmRequest(device,(BC250_ESCAPE_DPM*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // DPM runtime tuning (0.7.185): thresholds and floor the governor thread takes at its next tick; software state,
+    // locking and lifetime argued at DpmTuneRequest (dpm.c).
+    if (command == BC250_ESCAPE_RUN_DPM_TUNE) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM_TUNE)) return STATUS_INVALID_PARAMETER;
+        DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // Interop switches: the start's decision and the session marker, software state as well (interop.c).
+    if (data->Command == BC250_ESCAPE_RUN_INTEROP) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_INTEROP)) return STATUS_INVALID_PARAMETER;
+        InteropRequest(device,(BC250_ESCAPE_INTEROP*)data,Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // Only adapter-owned health, the separately joined SMU owner and the two
+    // software reads above support NoAdapterSynchronization. Other diagnostics
+    // rely on OS Level Two/Three exclusion and must not enter a
+    // powered-down/partially restored subsystem.
     if (data->Command!=BC250_ESCAPE_RUN_CLOCK &&
         (Escape->Flags.NoAdapterSynchronization ||
          InterlockedCompareExchange(&device->RetainedPowerPhase,0,0)!=0)) {
@@ -310,82 +482,9 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (!CallerIsAdmin()) sdmacopy->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else SdmaCopyEscape(device, sdmacopy);
         return STATUS_SUCCESS;
     }
-    if (data->Command == BC250_ESCAPE_GET_LOG || data->Command == BC250_ESCAPE_LOG_SUMMARY)
-    {
-        BC250_ESCAPE_LOG* log = (BC250_ESCAPE_LOG*)Escape->pPrivateDriverData;
-        BC250_LOG_LINE* page;
-        ULONG from, total, lost, above, next, returned, summaryFrom = 0;
-        // Read once: the buffer is the caller's, and a command that changes between two looks at it must not be
-        // able to get a summary past the check that guards it.
-        BOOLEAN summary = (data->Command == BC250_ESCAPE_LOG_SUMMARY);
-
-        // The driver's own log, a page of lines at a time. This is how an experiment reads the trail on a headless
-        // machine with no kernel debugger and no DebugView, so it needs no gate: it touches no register, no memory
-        // of the device and nothing the caller did not already own. Administrators only all the same, because the
-        // lines name physical addresses. LOG_SUMMARY first writes the WDDM counter tables into the ring, so that
-        // one call gets both; with the gate closed that is a single line saying so.
-        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_LOG)) return STATUS_INVALID_PARAMETER;
-        log->Version = BC250_KMD_VERSION;   // before any refusal, so that a refused caller still learns the build
-        if (!CallerIsAdmin()) { log->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; return STATUS_SUCCESS; }
-
-        // The summary walks the WDDM state that WddmStop frees, and what keeps the two apart is dxgkrnl's
-        // synchronization (see WddmSummary). With HardwareAccess, and without NoAdapterSynchronization, the escape
-        // is a Level Two call, which is a guarantee about this call and not only about StopDevice; bc250kmd_cli
-        // asks for exactly that, and a caller that does not is refused rather than trusted.
-        if (summary && (!Escape->Flags.HardwareAccess || Escape->Flags.NoAdapterSynchronization))
-        {
-            log->Status = BC250_ESCAPE_STATUS_REFUSED;
-            log->NtStatus = (ULONG)STATUS_INVALID_DEVICE_REQUEST;
-            return STATUS_SUCCESS;
-        }
-
-        // The lines are read into pool of our own and copied out afterwards, not read straight into the caller's
-        // buffer. GuardLogRead fills its output under a spin lock, i.e. at DISPATCH_LEVEL, and nothing documents
-        // pPrivateDriverData as nonpaged - dxgkrnl captures it, but at what pool type is not stated anywhere. A
-        // page fault there would be a bugcheck on the first `bc250kmd_cli log`, so this does not rely on it. It
-        // also keeps the lock hold to one page of copying instead of one page plus a user buffer, and every
-        // GuardLog on every other processor waits behind that lock.
-        page = (BC250_LOG_LINE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, BC250_LOG_MAX_LINES * sizeof(BC250_LOG_LINE),
-                                                BC250_TAG);
-        if (page == NULL) return STATUS_INSUFFICIENT_RESOURCES;
-
-        from = log->From;
-        if (summary)
-        {
-            // Where the summary starts, taken before it is written, so that `log summary` can print only the
-            // lines it caused instead of the whole ring again. Another processor logging in between lands in the
-            // same window; that is one or two extra lines, not a wrong answer.
-            summaryFrom = GuardLogSequence();
-            WddmSummary(device);
-            if (from == BC250_LOG_FROM_SUMMARY) from = summaryFrom;
-        }
-        else if (from == BC250_LOG_FROM_SUMMARY)
-        {
-            from = 0;                       // the sentinel means nothing without a summary; do not read past the end
-        }
-        log->SummaryFrom = summaryFrom;
-        log->NtStatus = 0;
-        log->Flags = (device->FullWddm ? BC250_ESCAPE_FLAG_FULL_WDDM : 0) |
-                     (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) |
-                     (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0);
-        log->HeadLines = BC250_LOG_HEAD_LINES;
-        log->RingLines = BC250_LOG_RING_LINES;
-        log->From = from;                   // what was actually read, so the sentinel is visible as a number
-        // Both calls write their outputs under the log's spin lock, so they get locals, for the reason the lines
-        // get the bounce buffer. The copy length is the local as well: a count read back from the caller's buffer
-        // is a count the caller can change between the two lines.
-        GuardLogStats(&total, &lost, &above);
-        returned = GuardLogRead(from, page, BC250_LOG_MAX_LINES, &next);
-        RtlCopyMemory(log->Lines, page, (SIZE_T)returned * sizeof(BC250_LOG_LINE));
-        ExFreePoolWithTag(page, BC250_TAG);
-        log->Total = total;
-        log->Lost = lost;
-        log->Above = above;
-        log->Next = next;
-        log->Returned = returned;
-        log->Status = BC250_ESCAPE_STATUS_DONE;
-        return STATUS_SUCCESS;
-    }
+    if (command == BC250_ESCAPE_GET_PAGING_JOURNAL) return PagingJournalEscape(device, Escape);
+    if (command == BC250_ESCAPE_GET_LOG || command == BC250_ESCAPE_LOG_SUMMARY)
+        return LogEscape(device, Escape, command == BC250_ESCAPE_LOG_SUMMARY);
     // 2026-09-22: every gate this driver has, not only the four READ_REG/WRITE_REG cared about before - the
     // overlay's live panel reads GET_INFO for exactly this, and a caller that only ever checked the first four
     // bits sees the same answer it always did (they are unchanged).
@@ -529,7 +628,13 @@ static NTSTATUS OfferTargetMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK
     if (NT_SUCCESS(status))
     {
         status=FillSignalInfo(Device, &mode->VideoSignalInfo);
-        mode->Preference = D3DKMDT_MP_PREFERRED;
+        // From interface 2.2 the preference shares one word with the wire formats the target accepts, and a
+        // target mode must name at least one (186 named none: seven commits on the lab, all blank, no mode set).
+        // The inherited GOP signal is 8-bit RGB. MinimumVSyncFreq (2.9) is not part of a V1 mode info: dxgkrnl
+        // allocates the V1 size, and 188's write past it ended in bugcheck 0x113 (7, ..., C0000005) in AddMode.
+        mode->WireFormatAndPreference.Value = 0;
+        mode->WireFormatAndPreference.Preference = D3DKMDT_MP_PREFERRED;
+        mode->WireFormatAndPreference.Rgb = D3DKMDT_BITS_PER_COMPONENT_08;
         if (NT_SUCCESS(status)) status = set->pfnAddMode(hSet, mode);
         if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(hSet, mode);
     }

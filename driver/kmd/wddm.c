@@ -18,11 +18,22 @@
 #include "gfx_blt.h"
 #include "gfx_copy.h"
 #include "paging_private.h"
+#include "paging_drain.h"
+#include "object_index.h"
+#include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
+#include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
+#include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
 #include <ntstrsafe.h>
 
 #define BC250_WDDM_TAG 'wW2B'
 #define BC250_WDDM_LOG_CALLS 8              // how many first calls of each DDI reach the guard log
 #define BC250_WDDM_PRESENT_LIST_QWORDS 12u  // how much of a present's allocation list is read: 3 entries of either arm
+// KMD196: buckets of the held-submission histogram, microseconds. The edges are chosen so that the regimes this
+// change is about fall in different buckets and cannot be confused in a summary: the spin catch (<100, 100-199),
+// the plain submit cost of about 550 us plus the ~130 us the blocking job still had to run (500-999), the 4.7 ms
+// hold being removed (2000-4999), and the 14-16 ms clock-tick mode of the LOW session (10000-19999). The edges
+// themselves are in WddmHoldBucket, next to the names.
+#define BC250_WDDM_HOLD_BUCKETS 9
 
 // Segment ids are one-based: DXGK_QUERYSEGMENTOUT4.PagingBufferSegmentId is "the index (starting from 1)".
 #define BC250_WDDM_SEGMENT_VRAM 1u
@@ -67,6 +78,19 @@
 #define BC250_WDDM_MAGIC_RESOURCE   'sR7M'
 #define BC250_WDDM_MAGIC_ALLOCATION 'lA7M'
 #define BC250_WDDM_MAGIC_OPENED     'pO7M'  // an allocation opened on a device: what a DXGK_ALLOCATIONLIST entry names
+
+// KMD183: the index of BC250_WDDM.PagingXferCount/PagingXferBytes. Virtual transfers are sorted by
+// TransferVirtual.TransferDirection (d3dkmddi.h DXGK_MEMORY_TRANSFER_DIRECTION), physical ones by which end is
+// segment 0 (system memory). WddmCountTransfer is the only writer.
+typedef enum _BC250_WDDM_XFER {
+    BC250WddmXferVirtualToSystem = 0,   // DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM
+    BC250WddmXferVirtualFromSystem,     // DXGK_MEMORY_TRANSFER_SYSTEM_TO_LOCAL
+    BC250WddmXferVirtualOther,          // DXGK_MEMORY_TRANSFER_LOCAL_TO_LOCAL and anything newer
+    BC250WddmXferPhysicalToSystem,      // Transfer.Destination.SegmentId == 0
+    BC250WddmXferPhysicalFromSystem,    // Transfer.Source.SegmentId == 0
+    BC250WddmXferPhysicalOther,         // segment to segment
+    BC250WddmXferKinds
+} BC250_WDDM_XFER;
 
 // The DDIs this file adds, in the order the table declares them. Only used to count calls for the log.
 typedef enum _BC250_WDDM_DDI {
@@ -151,13 +175,17 @@ typedef struct _BC250_PRESENT_PACKET {
 
 typedef struct _BC250_WDDM_OBJECT {
     LIST_ENTRY Link;                    // BC250_WDDM::Objects: the stop frees whatever is still on this list
+    void* HashNext;                     // BC250_WDDM::ObjectIndex chain (object_index.h), under BC250_WDDM::Lock
+    ULONGLONG Serial;                   // adapter-unique, nonzero, never reused: given under the lock at insertion
     ULONG Magic;
     BC250_DEVICE* Device;
     UINT NodeOrdinal;                   // contexts
     ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
     PAGING_CAPTURE_OWNER Captures;     // contexts: CPU-only plans, released on completion or object teardown
     HANDLE OwnerDevice;                 // contexts/opened allocations: DDI device identity
-    HANDLE BackingAllocation;           // opened: verified CreateAllocation object, never guessed
+    HANDLE BackingAllocation;           // opened: verified CreateAllocation object, never guessed. A value only:
+    ULONGLONG BackingSerial;            // valid while an indexed ALLOCATION at that address has this Serial
+                                        // (WddmBackingAllocationLocked); nothing clears it when the allocation goes
     UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
     ULONG GdiType;                      // retained standard-surface contract, zero for legacy LB7A
@@ -171,6 +199,13 @@ typedef struct _BC250_WDDM_OBJECT {
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
     ULONGLONG UmdRequestedVa;
+    // KMD193 (bsod-245 items 3 and 4): identity the journal records of this object's destroy and of every job
+    // submitted on it would otherwise not have. Values only, taken at CreateAllocation/CreateContext; a dump
+    // reader reads them out of the journal, never out of the object, which may be freed by then.
+    unsigned long UmdBlobVersion;       // allocations: the BC2A version word (0 = not a UMD allocation)
+    ULONGLONG UmdGemFlags;              // allocations: the BC2A gem_flags
+    unsigned long CreatorProcessId;     // allocations and contexts: PsGetCurrentProcessId at creation
+    volatile LONG InteropUser;          // devices: 1 once an interop Blt present of it was counted (interop.c)
 } BC250_WDDM_OBJECT;
 
 #define BC250_PRESENT_OBSERVATIONS 16
@@ -202,24 +237,12 @@ typedef struct _BC250_PRESENT_OBSERVATION {
 typedef struct _BC250_PAGING_JOB {
     struct _BC250_PAGING_JOB* Next;
     ULONGLONG Start;
-    ULONGLONG Epoch; // borrowed queue ownership cannot migrate to a new recovery epoch
     ULONG ByteCount, PrivateBytes;
     UINT Fence;
     BOOLEAN VirtualAddress, Borrowed;
     const UCHAR* Data;
 } BC250_PAGING_JOB;
 C_ASSERT(sizeof(BC250_PAGING_JOB)<=PAGING_PRIVATE_JOB_BYTES);
-
-// OS ownership, actual GPU execution and notification are distinct histories.
-// Submitted includes successful DDIs whose undispatched packet needs recovery;
-// Hardware never includes software completion or a rejected virtual submission.
-// Lock protects this owner-local epoch and every ledger field. Future recovery
-// must close/join publishers before advancing the epoch; power suspend retains it.
-typedef struct _BC250_WDDM_FENCE_LEDGER {
-    ULONGLONG Epoch;
-    UINT Submitted, Hardware;
-    BOOLEAN SubmittedValid, HardwareValid;
-} BC250_WDDM_FENCE_LEDGER;
 
 typedef struct _BC250_WDDM {
     BC250_DEVICE* Device;
@@ -248,6 +271,10 @@ typedef struct _BC250_WDDM {
     BOOLEAN RetainedPowerPause; // Stopping also closes private work during retained suspend
     LIST_ENTRY Objects;                 // devices, contexts, processes and allocations alive
     LONG ObjectCount;
+    // The same objects by address, for membership tests without a scan (object_index.h). Joined and left in the
+    // critical sections that join and leave Objects; the stop drains Objects and frees the buckets.
+    BC250_OBJECT_INDEX ObjectIndex;
+    ULONGLONG ObjectSerial;             // last BC250_WDDM_OBJECT::Serial given, under Lock
 
     // Submission. The DDI records the fence and queues ReportDpc; the report happens there, after the DDI has
     // returned, so that nothing calls back into dxgkrnl from inside a submit. A completion of fence N retires
@@ -259,7 +286,6 @@ typedef struct _BC250_WDDM {
     volatile LONG SubmittedFence[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG SubmittedNode[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG ActiveSubmissions[BC250_WDDM_NODE_COUNT_MAX];
-    BC250_WDDM_FENCE_LEDGER FenceLedger[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG LastReportedFence[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN LastReportedValid[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN RefusalPending[BC250_WDDM_NODE_COUNT_MAX]; // valid DMA never dispatched; cannot retire in software
@@ -290,12 +316,13 @@ typedef struct _BC250_WDDM {
     BOOLEAN PagingHwPending;
     ULONG PagingHwSeq;                  // gfx.c's PagingSubmitSeq of the submission in flight
     UINT PagingHwFence;
-    ULONGLONG PagingHwEpoch;
     // Legacy software-deferral fields; queued node-1 software work now uses FIFO jobs.
     BOOLEAN PagingDeferredValid;
     UINT PagingDeferredFence;
     KTIMER PagingSubmitTimer;
     KDPC PagingSubmitDpc;
+    KTIMER PagingDrainTimer;            // KMD172: the drain's quota requeue (WddmRequeuePagingDrain)
+    KDPC PagingDrainDpc;
     volatile LONG PagingQueueBorrowed;
     volatile LONG PagingHwSubmitted;
     volatile LONG PagingHwCompleted;
@@ -309,6 +336,10 @@ typedef struct _BC250_WDDM {
     volatile LONG PagingMapsBuilt;
     volatile LONG PagingUnmapsBuilt;
     volatile LONG64 PagingBytesMoved;
+    // KMD183: built transfers by kind and direction, count and bytes, indexed by BC250_WDDM_XFER (trial 211 could
+    // not tell evictions to system memory from restores without the journal, which wrapped).
+    volatile LONG PagingXferCount[BC250WddmXferKinds];
+    volatile LONG64 PagingXferBytes[BC250WddmXferKinds];
     volatile LONG PagingInsufficientBuffer;
     volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
     // Per-buffer private data owns commands; these counters track node routing only.
@@ -321,17 +352,16 @@ typedef struct _BC250_WDDM {
     volatile LONG64 PagingNativePtes;
     volatile LONG64 PagingNativeTransfers, PagingNativeFills, PagingNativeBytes, PagingDmaGapProofs;
 
-    // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, bounded ring and completion capacity) and its fence is
+    // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, one in flight at most) and its fence is
     // reported when the hardware's arrives - from the IH DPC, from the submit itself if the interrupt won the race,
     // or from the watchdog. Software completions that come while one is in flight are held back and published
     // with it: a completion of fence N retires every fence up to N, so N + 1 must not be reported first.
     // All of it under Lock.
-    FAST_MUTEX GfxSubmitMutex;          // serialize submit + completion publication
+    FAST_MUTEX GfxSubmitMutex;
     BC250_GFX_COMPLETION_QUEUE GfxPending;
-    BOOLEAN HwPending;                 // mirrors GfxPending head for recovery/preemption
+    BOOLEAN HwPending;
     ULONG HwSeq;                        // gfx.c's sequence number of the submission in flight
     UINT HwFence;
-    ULONGLONG HwEpoch;
     UINT HwNode;
     BOOLEAN DeferredValid;
     UINT DeferredFence;
@@ -346,6 +376,8 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocs;
     volatile LONG UmdAllocRefused;
     volatile LONG UmdContexts;
+    volatile LONG ContextsLogged;       // KMD193: the capped "context %p pid ..." identity line, every kind
+    volatile LONG FaultSnapshots;       // KMD193: HARDWARE FENCE TIMEOUT register snapshots taken
     volatile LONG UmdSubmitHw;
     volatile LONG UmdSubmitSoft;
     BOOLEAN TraceUmdProbes;             // diagnostic reads only; no synchronization policy
@@ -354,6 +386,21 @@ typedef struct _BC250_WDDM {
     volatile LONG64 UmdSubmitTicks;     // QPC elapsed time inside WddmSubmitUmd, including waits
     volatile LONG64 UmdProbeTicks;      // subset spent reading/logging IB and shader contents
     LARGE_INTEGER UmdProfileFrequency;
+    // KMD196: the cost of a submission the gfx ring would not take at once, so that one lab session can price
+    // the spin-then-event wait against the 1 ms sleep it replaced. Held time is wall clock from the first
+    // refusal to the submit that succeeded or to the refusal that gave up - the GFX pipe is idle for part of
+    // it, which is what sessions 313/314 measured as 2.9-4.0 ms a frame. The three wake sources are counted
+    // apart on purpose: Spins says the bounded spin was enough, Event says a retirement reached a real wait,
+    // and a Timeout share that is not small means end-of-pipe interrupts are being missed - a correctness
+    // signal, not a slow wake.
+    volatile LONG SubmitHolds;          // submissions held at least once (node 0, UMD and GPU Present together)
+    volatile LONG64 SubmitHeldUs;       // sum of their held times, microseconds from QPC
+    volatile LONG64 SubmitHeldMaxUs;    // the longest single hold
+    volatile LONG64 SubmitHoldSpins;    // phase 1 stalls over all holds
+    volatile LONG SubmitHoldSpinOnly;   // of SubmitHolds, those the spin resolved without any wait
+    volatile LONG64 SubmitHoldEventWakes;
+    volatile LONG64 SubmitHoldTimeoutWakes;
+    volatile LONG SubmitHeldHistogram[BC250_WDDM_HOLD_BUCKETS];  // held time by bucket, g_WddmHoldBucketNames
 
     KTIMER VSyncTimer;
     KDPC VSyncDpc;
@@ -378,8 +425,8 @@ typedef struct _BC250_WDDM {
     BOOLEAN BlitGate;
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
-    BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
-    BOOLEAN CddDwmInterop; // explicit diagnostic capability, default off and start-latched
+    BOOLEAN GpuPresentGate; // EnableGpuPresentBlit: producer/consumer gate, no interop cap implied (interop.c)
+    BOOLEAN CddDwmInterop; // EnableCddDwmInterop: DRIVERCAPS interop cap; both default on since 0.7.181, start-latched
     volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
     volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
     volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
@@ -513,7 +560,8 @@ static BC250_WDDM* WddmOf(_In_ const HANDLE hAdapter)
 // ---- objects ---------------------------------------------------------------------------------------------------
 
 // Every object is on the adapter's list from the moment it exists, so that a process or a device that dxgkrnl
-// never tears down is freed by the stop instead of leaked for the life of the boot.
+// never tears down is freed by the stop instead of leaked for the life of the boot. It is in the adapter's object
+// index for exactly as long, which is what membership tests consult instead of walking the list.
 // Captures stays caller-owned on refusal. On success, ownership moves before
 // list publication, so StopDevice never sees a partly prepared reservation.
 static BC250_WDDM_OBJECT* WddmNewObjectPrepared(_Inout_ BC250_DEVICE* Device, ULONG Magic,
@@ -531,7 +579,8 @@ static BC250_WDDM_OBJECT* WddmNewObjectPrepared(_Inout_ BC250_DEVICE* Device, UL
     if(Captures)object->Captures=*Captures;
 
     // The Stopping check and the insertion are one critical section: an object that got onto the list after the
-    // stop had drained it would never be freed.
+    // stop had drained it would never be freed. The list and the index change together, and the serial is given
+    // before either publishes the object.
     KeAcquireSpinLock(&wddm->Lock, &irql);
     if (wddm->Stopping)
     {
@@ -540,7 +589,9 @@ static BC250_WDDM_OBJECT* WddmNewObjectPrepared(_Inout_ BC250_DEVICE* Device, UL
         return NULL;
     }
     if(Captures)RtlZeroMemory(Captures,sizeof(*Captures));
+    object->Serial = ++wddm->ObjectSerial;
     InsertTailList(&wddm->Objects, &object->Link);
+    Bc250ObjectIndexInsert(&wddm->ObjectIndex, object);
     wddm->ObjectCount++;
     KeReleaseSpinLock(&wddm->Lock, irql);
     return object;
@@ -560,21 +611,16 @@ static BC250_WDDM_OBJECT* WddmObject(_In_opt_ const HANDLE Handle, ULONG Magic)
 
 // For a handle that did not come back through a DDI's own handle parameter but out of an array dxgkrnl filled - the
 // DXGK_ALLOCATIONLIST entries of a Present (review 16). Nothing is read through the value: it is compared against the
-// objects on the adapter's list under the lock, and only a match is dereferenced. <= DISPATCH_LEVEL.
-static BC250_WDDM_OBJECT* WddmListedObject(_In_ BC250_WDDM* Wddm, _In_opt_ const HANDLE Handle, ULONG Magic)
+// adapter's live objects in the index under the lock, and only a match is dereferenced. <= DISPATCH_LEVEL.
+static BC250_WDDM_OBJECT* WddmIndexedObject(_In_ BC250_WDDM* Wddm, _In_opt_ const HANDLE Handle, ULONG Magic)
 {
-    BC250_WDDM_OBJECT* found = NULL;
-    const LIST_ENTRY* entry;
+    BC250_WDDM_OBJECT* found;
     KIRQL irql;
 
     if (Handle == NULL) return NULL;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
-    for (entry = Wddm->Objects.Flink; entry != &Wddm->Objects; entry = entry->Flink)
-    {
-        BC250_WDDM_OBJECT* object = CONTAINING_RECORD(entry, BC250_WDDM_OBJECT, Link);
-
-        if ((HANDLE)object == Handle) { found = (object->Magic == Magic) ? object : NULL; break; }
-    }
+    found = (BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&Wddm->ObjectIndex, Handle);
+    if (found != NULL && found->Magic != Magic) found = NULL;
     KeReleaseSpinLock(&Wddm->Lock, irql);
     return found;
 }
@@ -636,16 +682,10 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
         // it would race the drain and free it twice. The removal and the decision are one critical section.
         KeAcquireSpinLock(&wddm->Lock, &irql);
         if (wddm->Stopping) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
-        if (Object->Magic==BC250_WDDM_MAGIC_ALLOCATION) {
-            LIST_ENTRY* entry;
-            // Invalidate all open snapshots before this pool address can be
-            // reused by a different allocation with identical geometry.
-            for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
-                BC250_WDDM_OBJECT* opened=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
-                if (opened->Magic==BC250_WDDM_MAGIC_OPENED && opened->BackingAllocation==Object)
-                    opened->BackingAllocation=NULL;
-            }
-        }
+        // Leaving the index ends every opened object's binding to this allocation: WddmBackingAllocationLocked
+        // finds nothing at this address any more, or, once the pool reuses it, an object with another serial.
+        // That replaces the scan that cleared each BackingAllocation here before KMD 0.7.192.
+        (void)Bc250ObjectIndexRemove(&wddm->ObjectIndex, Object);
         RemoveEntryList(&Object->Link);
         wddm->ObjectCount--;
         KeReleaseSpinLock(&wddm->Lock, irql);
@@ -725,31 +765,6 @@ static void WddmQueueReport(_Inout_ BC250_WDDM* Wddm)
 // inside the submit path re-enters the scheduler with the submit still on the stack.
 // Caller holds Lock. Publish completion atomically with clearing hardware-pending state:
 // otherwise a preemption DPC can observe idle hardware before its completion is queued.
-// Caller owns Lock. Signed fence deltas preserve wrap and do not move history
-// backwards when VidSch replays queued paging packets with their original IDs.
-static void WddmRecordFenceLedgerLocked(BC250_WDDM* Wddm, UINT Node,
-    ULONGLONG Epoch, UINT Fence, BOOLEAN Hardware)
-{
-    BC250_WDDM_FENCE_LEDGER* ledger=&Wddm->FenceLedger[Node];
-    UINT* value=Hardware ? &ledger->Hardware : &ledger->Submitted;
-    BOOLEAN* valid=Hardware ? &ledger->HardwareValid : &ledger->SubmittedValid;
-    if (Epoch!=ledger->Epoch) return;
-    if (!*valid || (LONG)(Fence-*value)>0) *value=Fence;
-    *valid=TRUE;
-}
-
-// Caller owns Lock. A submit can publish and complete before its DDI returns;
-// only the joined snapshot is suitable for a recovery ownership decision.
-static BOOLEAN WddmSnapshotFenceLedgerLocked(const BC250_WDDM* Wddm, UINT Node,
-    BC250_WDDM_FENCE_LEDGER* Ledger, UINT* Reported, BOOLEAN* ReportedValid)
-{
-    if (Node>=Wddm->NodeCount || Wddm->ActiveSubmissions[Node]) return FALSE;
-    *Ledger=Wddm->FenceLedger[Node];
-    *Reported=(UINT)Wddm->LastReportedFence[Node];
-    *ReportedValid=Wddm->LastReportedValid[Node];
-    return TRUE;
-}
-
 static void WddmRecordCompletionLocked(BC250_WDDM* Wddm, UINT FenceId, UINT NodeOrdinal)
 {
     Wddm->SubmittedNode[NodeOrdinal] = (LONG)NodeOrdinal;
@@ -847,7 +862,66 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
     KeReleaseSpinLock(&wddm->Lock,irql);
     if (Node==BC250_WDDM_NODE_COPY) GfxPagingSubmitFail(Device);
     else GfxSubmitFail(Device);
+    // KMD196: node 0's wake is inside GfxSubmitFail; node 1 does not come here on the held path, but the flag
+    // this function just set (WatchdogFaulted) closes node 0's submissions too, so waiters are woken either way.
+    if (Node==BC250_WDDM_NODE_COPY) GfxRetireSignal(Device);
     if (first) GuardLog("wddm: fence %u node %u NOT dispatched; node closed, no completion, recovery required",FenceId,Node);
+}
+
+// KMD193 (bsod-245 item 2): what the CP and the GCVM fault latch held when the 500 ms watchdog gave up. In 245
+// the ring, the IB1 address and the fault page all came out of the dump afterwards; none of it was in the live
+// log, and there is no dump when the machine survives the TDR. Read-only, at DISPATCH_LEVEL in the watchdog
+// DPC, outside wddm->Lock, once per timeout.
+//
+// Two honest limits of these reads, stated here so that nobody reads the line as more than it is:
+//   - GRBM_STATUS_SE0 and the CP_IB*/CP_STAT family are banked by GRBM_GFX_INDEX, which this driver must not
+//     write (no new register writes): they are whatever bank was selected last, which on the submit path is
+//     the one the shim left behind.
+//   - CP_IB1/CP_IB2 are the command processor's live fetch registers, so they describe where the CP is now,
+//     not necessarily the timed-out job; the journal's BC250_PJ_GFX_SUBMIT record is what names the job.
+static void WddmTimeoutSnapshot(_In_ const BC250_DEVICE* Device, ULONG Seq, UINT Fence, UINT Node)
+{
+    static const struct { const char* Name; ULONG Offset; } registers[] = {
+        { "CP_RB0_RPTR", BC250_REG_GC_CP_RB0_RPTR }, { "CP_RB0_WPTR", BC250_REG_GC_CP_RB0_WPTR },
+        { "CP_IB1_BASE_LO", BC250_REG_GC_CP_IB1_BASE_LO }, { "CP_IB1_BASE_HI", BC250_REG_GC_CP_IB1_BASE_HI },
+        { "CP_IB1_BUFSZ", BC250_REG_GC_CP_IB1_BUFSZ },
+        { "CP_IB2_BASE_LO", BC250_REG_GC_CP_IB2_BASE_LO }, { "CP_IB2_BASE_HI", BC250_REG_GC_CP_IB2_BASE_HI },
+        { "CP_IB2_BUFSZ", BC250_REG_GC_CP_IB2_BUFSZ },
+        { "CP_STAT", BC250_REG_GC_CP_STAT }, { "CP_BUSY_STAT", BC250_REG_GC_CP_BUSY_STAT },
+        { "CP_STALLED_STAT1", BC250_REG_GC_CP_STALLED_STAT1 },
+        { "CP_STALLED_STAT2", BC250_REG_GC_CP_STALLED_STAT2 },
+        { "CP_STALLED_STAT3", BC250_REG_GC_CP_STALLED_STAT3 },
+        { "CP_CPF_STATUS", BC250_REG_GC_CP_CPF_STATUS }, { "CP_ME_CNTL", BC250_REG_GC_CP_ME_CNTL },
+        { "GRBM_STATUS", BC250_REG_GC_GRBM_STATUS }, { "GRBM_STATUS2", BC250_REG_GC_GRBM_STATUS2 },
+        { "GRBM_STATUS_SE0", BC250_REG_GC_GRBM_STATUS_SE0 },
+        { "GCVM_FAULT_STATUS", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_STATUS },
+        { "GCVM_FAULT_ADDR_LO32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_LO32 },
+        { "GCVM_FAULT_ADDR_HI32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_HI32 },
+    };
+    // 21 registers, three to a line: seven lines in the ring per timeout, and a timeout already means the
+    // device is finished for this start.
+    ULONG values[21];
+    ULONG i, refused = 0, status;
+    ULONGLONG page;
+
+    C_ASSERT(RTL_NUMBER_OF(registers) == RTL_NUMBER_OF(values));
+    C_ASSERT(RTL_NUMBER_OF(values) % 3 == 0);
+    for (i = 0; i < RTL_NUMBER_OF(values); i++)
+        if (!NT_SUCCESS(MmioRead(Device, registers[i].Offset, &values[i]))) { values[i] = 0; refused++; }
+    for (i = 0; i < RTL_NUMBER_OF(values); i += 3)
+        GuardLog("wddm: timeout seq %lu fence %u node %u %s 0x%08X %s 0x%08X %s 0x%08X", Seq, Fence, Node,
+                 registers[i].Name, values[i], registers[i + 1].Name, values[i + 1],
+                 registers[i + 2].Name, values[i + 2]);
+    // The latch of the first fault of a burst, decoded. ADDR_LO32/HI32 hold the page frame, not the byte
+    // address (amdgpu gmc_v10_0 prints "page starting at"), so the page is the pair shifted by 12.
+    status = values[18];
+    page = (((ULONGLONG)values[20] << 32) | values[19]) << 12;
+    GuardLog("wddm: timeout seq %lu fault cid %lu %s vmid %lu rw %lu perm 0x%lX walker 0x%lX more %lu "
+             "mapping %lu page 0x%llX, %lu register(s) refused", Seq, BC250_GCVM_FAULT_CID(status),
+             Bc250GfxhubClientName(BC250_GCVM_FAULT_CID(status)), BC250_GCVM_FAULT_VMID(status),
+             BC250_GCVM_FAULT_RW(status), BC250_GCVM_FAULT_PERMISSIONS(status),
+             BC250_GCVM_FAULT_WALKER_ERROR(status), BC250_GCVM_FAULT_MORE(status),
+             BC250_GCVM_FAULT_MAPPING(status), page, refused);
 }
 
 // Caller owns Lock. Keep the oldest deadline; appending work must not extend
@@ -862,7 +936,6 @@ static void WddmGfxHeadLocked(BC250_WDDM* Wddm)
     Wddm->HwSeq = job->Seq;
     Wddm->HwFence = job->Fence;
     Wddm->HwNode = job->Node;
-    Wddm->HwEpoch = job->Epoch;
     now = KeQueryInterruptTime();
     due.QuadPart = job->Deadline > now ? -(LONGLONG)(job->Deadline - now) : -1;
     if (!Wddm->Stopping) KeSetTimer(&Wddm->SubmitTimer, due, &Wddm->SubmitDpc);
@@ -878,13 +951,11 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     if (wddm == NULL) return;
     KeAcquireSpinLock(&wddm->Lock, &irql);
     while ((job = Bc250GfxQueueHead(&wddm->GfxPending)) != NULL &&
-           job->Epoch == wddm->FenceLedger[job->Node].Epoch &&
            GfxFenceArrived(Device, job->Seq))
     {
         done = TRUE;
         node = job->Node;
         fence = job->ReportFence;
-        WddmRecordFenceLedgerLocked(wddm, node, job->Epoch, job->Fence, TRUE);
         Bc250GfxQueuePop(&wddm->GfxPending);
         if (!wddm->GfxPending.Count && wddm->DeferredValid) {
             fence = wddm->DeferredFence;
@@ -895,19 +966,24 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     if (done) WddmGfxHeadLocked(wddm);
     KeReleaseSpinLock(&wddm->Lock, irql);
     if (!done) return;
+    // KMD196: a completion-queue slot was freed, which is the other thing a held submission can be waiting for
+    // (BC250_GFX_PENDING_MAX in WddmSubmitHardware). gfx.c signals the fence itself; this signals the queue.
+    GfxRetireSignal(Device);
     if (InterlockedIncrement(&wddm->HwCompleted) <= BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: hardware fence arrived, reporting fence %u", fence);
     WddmQueueReport(wddm);
 }
 
 static KDEFERRED_ROUTINE WddmSubmitDpcRoutine;
-static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+static KDEFERRED_ROUTINE WddmSubmitDpcCheck;
+static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)Context;
     BC250_WDDM* wddm;
     BOOLEAN timedOut = FALSE;
     UINT fence = 0, node = 0;
-    ULONG seq = 0;
+    ULONG seq = 0, process = 0, contextFlags = 0;
+    ULONGLONG context = 0;
     KIRQL irql;
 
     UNREFERENCED_PARAMETER(Dpc);
@@ -919,10 +995,14 @@ static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
     if (wddm->HwPending && !wddm->WatchdogFaulted[wddm->HwNode] &&
         KeQueryInterruptTime() >= Bc250GfxQueueHead(&wddm->GfxPending)->Deadline)
     {
+        const BC250_GFX_COMPLETION* head = Bc250GfxQueueHead(&wddm->GfxPending);
         timedOut = TRUE;
         fence = wddm->HwFence;
         node = wddm->HwNode;
         seq = wddm->HwSeq;
+        context = head->Context;            // KMD193: read under the lock, logged outside it
+        process = head->ProcessId;
+        contextFlags = head->ContextFlags;
         wddm->WatchdogFaulted[node] = TRUE;
         wddm->DeferredValid = FALSE;
         // Preserve HwPending: timeout is not a hardware completion.
@@ -935,7 +1015,21 @@ static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
     GfxSubmitFail(device);
     GuardLog("wddm: HARDWARE FENCE TIMEOUT after %u ms (sequence %u): fence %u remains pending for OS TDR, ring path closed",
              (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
+    // KMD193: who the job belonged to, then what the hardware held. Both once per timeout; the identity comes
+    // out of the queue entry, which keeps it from the submit (bsod-245 items 2 and 4).
+    GuardLog("wddm: timeout seq %lu fence %u node %u ctx 0x%llX pid %lu ctxflags 0x%lX", seq, fence, node,
+             context, process, contextFlags);
+    if (InterlockedIncrement(&wddm->FaultSnapshots) <= BC250_WDDM_LOG_CALLS)
+        WddmTimeoutSnapshot(device, seq, fence, node);
     // No DMA_COMPLETED or preemption notification is synthesized here.
+}
+
+// Progress record around the check, outside it so that none of its early returns can skip the exit (hang.c).
+static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    ProgressEnter(ProgressSiteSubmitWatchdogDpc);
+    WddmSubmitDpcCheck(Dpc, Context, Arg1, Arg2);
+    ProgressExit(ProgressSiteSubmitWatchdogDpc, 0);
 }
 
 // PASSIVE_LEVEL (SubmitCommandVirtual). TRUE = the packet is on the ring and its completion will come by itself.
@@ -946,16 +1040,25 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     NTSTATUS status;
     KIRQL irql;
     BC250_GFX_COMPLETION job;
+    BC250_GFX_SUBMIT_IDENTITY identity;
     BOOLEAN allowed;
+    // KMD193: values only, copied once here, so that the ring, the journal and the pending queue all name the
+    // same context without gfx.c ever holding a pointer to a WDDM object.
+    identity.Context = (ULONGLONG)(ULONG_PTR)Context;
+    identity.ProcessId = Context->CreatorProcessId;
+    identity.ContextFlags = (Context->UmdContext ? BC250_PJ_CTX_UMD : 0u) |
+                            (Context->SystemContext ? BC250_PJ_CTX_SYSTEM : 0u);
+    identity.Fence = FenceId;
+    identity.Node = Node;
     ExAcquireFastMutex(&Wddm->GfxSubmitMutex);
     WddmGpuFence(Device);
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     allowed = !Wddm->Stopping && !Wddm->WatchdogFaulted[Node] &&
               Wddm->GfxPending.Count < BC250_GFX_PENDING_MAX;
-    job.Epoch = Wddm->FenceLedger[Node].Epoch;
+    job.Epoch = 0; //151 baseline has adapter-lifetime ownership, no recovery ledger
     KeReleaseSpinLock(&Wddm->Lock, irql);
     if (!allowed) { ExReleaseFastMutex(&Wddm->GfxSubmitMutex); return FALSE; }
-    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &seq);
+    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &identity, &seq);
     if (!NT_SUCCESS(status))
     {
         ExReleaseFastMutex(&Wddm->GfxSubmitMutex);
@@ -967,6 +1070,9 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     job.Seq = seq;
     job.Fence = job.ReportFence = FenceId;
     job.Node = Node;
+    job.Context = identity.Context;
+    job.ProcessId = identity.ProcessId;
+    job.ContextFlags = identity.ContextFlags;
     job.Deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     // A software-only fence between two HW jobs belongs to the older tail,
@@ -986,6 +1092,176 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     return TRUE;
 }
 
+// ---- KMD196: the held submission ------------------------------------------------------------------------------
+//
+// One IB at a time, and only jobs sharing VMID 1's current root (gfx.c SubmitIbLocked): a submission that
+// arrives while another process's job is on the ring is refused and has to wait for that job's fence. Both
+// waiters below - the UMD one and the GPU Present one - use this state and these two calls, so there is one
+// definition of what "held" means, one deadline and one set of counters.
+//
+// The wait has two phases, and the order is what the measurement of sessions 313/314 dictates (both aligned to
+// the microsecond against dxgkrnl ETW):
+//
+//   - DWM's composition job is 0.29 ms long (p10-p90 0.26-0.31).
+//   - dxgkrnl's node-0 worker calls SubmitCommand for the game's next packet 0.14 ms after that job started,
+//     which is about 0.13 ms BEFORE DWM's completion interrupt. So at the moment of the refusal the blocking
+//     job has roughly 0.13 ms left to run.
+//   - The KeDelayExecutionThread(1 ms) this replaces actually lasted p50 4.2 ms / p90 5.6 ms in the HIGH
+//     session and p50 2.3 / p90 14.2 ms in the LOW one: a relative sleep expires on a clock tick, so the
+//     "1 ms" was a tick, not a millisecond. Readied-to-running was only 0.04-0.06 ms, so nothing was starved
+//     of CPU - the timer simply fired late.
+//   - Cost: 4.7 ms per DWM-to-game handover, 0.6-1.0 holds a frame, 2.9-4.0 ms of GFX idle a frame.
+//
+// Phase 1 is therefore a bounded spin of BC250_WDDM_HOLD_SPIN_US, which is long enough to cover that 0.13 ms
+// several times over and short enough to be cheap: a submission caught here costs no context switch at all and
+// no timer at all. Phase 2 is the event wait, for the cases the spin does not catch - a longer blocking job, a
+// queue slot, several waiters - with a BC250_WDDM_HOLD_WAIT_MS fallback timeout so that a lost end-of-pipe
+// interrupt still ends the wait. A bare KeDelayExecutionThread appears nowhere in either phase.
+//
+// The spin runs at APC_LEVEL or below, never at DISPATCH_LEVEL, so the fence DPC that ends it can preempt this
+// thread on the same core; and every spin step calls WddmGpuFence through the caller's loop, which reads the
+// fence page directly, so the spin does not actually depend on that DPC being scheduled at all.
+#define BC250_WDDM_HOLD_SPIN_US 500     // phase 1 budget: the blocking job has ~130 us left at the refusal
+#define BC250_WDDM_HOLD_SPIN_STEP_US 20 // one stall between retries; 25 retries fill the budget
+#define BC250_WDDM_HOLD_WAIT_MS 1       // phase 2 fallback only; the event normally wakes it first
+
+static const char* const g_WddmHoldBucketNames[BC250_WDDM_HOLD_BUCKETS] = {
+    "<100", "100", "200", "500", "1k", "2k", "5k", "10k", "20k+"
+};
+
+// WddmSummaryOf prints the nine buckets by name in one line, one argument pair each: adding a bucket means
+// growing that line, so it is pinned here rather than left to be noticed in a log that silently lost a column.
+C_ASSERT(BC250_WDDM_HOLD_BUCKETS == 9);
+
+static ULONG WddmHoldBucket(ULONG HeldUs)
+{
+    if (HeldUs < 100) return 0;
+    if (HeldUs < 200) return 1;
+    if (HeldUs < 500) return 2;
+    if (HeldUs < 1000) return 3;
+    if (HeldUs < 2000) return 4;
+    if (HeldUs < 5000) return 5;
+    if (HeldUs < 10000) return 6;
+    if (HeldUs < 20000) return 7;
+    return 8;
+}
+
+typedef struct _BC250_WDDM_HOLD {
+    ULONGLONG Deadline;                 // interrupt time; the BC250_WDDM_SUBMIT_TIMEOUT_MS bound, unchanged
+    LARGE_INTEGER Start;                // QPC at the first refusal, for the held time in microseconds
+    LARGE_INTEGER Frequency;            // QPC frequency, read once with Start
+    LONG Generation;                    // Device->GfxRetireGeneration as of the last condition test
+    ULONG Spins;                        // phase 1 stalls
+    ULONG EventWakes;
+    ULONG TimeoutWakes;
+} BC250_WDDM_HOLD;
+
+// Microseconds since the first refusal. The frequency comes out of the same KeQueryPerformanceCounter call as
+// Start, so this needs nothing from the adapter block and works before WddmStart has recorded a frequency.
+static ULONG WddmHoldElapsedUs(_In_ const BC250_WDDM_HOLD* Hold)
+{
+    LONGLONG ticks = KeQueryPerformanceCounter(NULL).QuadPart - Hold->Start.QuadPart;
+
+    if (ticks < 0 || Hold->Frequency.QuadPart <= 0) return 0;
+    return (ULONG)((ULONGLONG)ticks * 1000000ull / (ULONGLONG)Hold->Frequency.QuadPart);
+}
+
+// Before the first condition test, so that a retirement between that test and the first wait is not lost.
+static void WddmHoldBegin(_Inout_ BC250_DEVICE* Device, _Out_ BC250_WDDM_HOLD* Hold)
+{
+    Hold->Deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
+    Hold->Start = KeQueryPerformanceCounter(&Hold->Frequency);
+    Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    Hold->Spins = 0;
+    Hold->EventWakes = 0;
+    Hold->TimeoutWakes = 0;
+}
+
+// TRUE: something may have changed, test the submit condition again. FALSE: the deadline passed, the adapter is
+// stopping, or this thread may not wait - the caller makes its terminal attempt and gives up.
+//
+// Phase 2's shape: clear, then re-read the generation, then wait. A retirement after the caller's test has
+// already bumped the generation, so this returns at once rather than waiting for a fence that has arrived; and
+// a concurrent waiter's clear cannot swallow this one's wake, because the generation it reads has moved too.
+// The event is a NotificationEvent on purpose: one retirement releases every held submission, and they then
+// compete for GfxSubmitMutex exactly as they competed for the ring before.
+static BOOLEAN WddmHoldWait(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm, _Inout_ BC250_WDDM_HOLD* Hold)
+{
+    LARGE_INTEGER timeout;
+    LONG generation;
+    NTSTATUS status;
+
+    // A wait with a timeout needs APC_LEVEL or below, which both call sites already check before they get here;
+    // this is the bound restated where the waiting happens, not a new policy. It governs the spin as well: a
+    // spin at DISPATCH_LEVEL could outlast the DPC that would end it.
+    if (KeGetCurrentIrql() > APC_LEVEL) return FALSE;
+    // Teardown: once Stopping is set WddmSubmitHardware refuses every submission anyway, so waiting out the
+    // remaining deadline would only delay the stop. WddmStop signals the event after setting it, so this is
+    // observed on the first wake and not on a timeout.
+    if (Wddm != NULL && WddmStopping(Wddm)) return FALSE;
+    if (KeQueryInterruptTime() >= Hold->Deadline) return FALSE;
+
+    // Phase 1. Measured by QPC, not by counting stalls: KeStallExecutionProcessor is a lower bound on the
+    // delay, so a counted budget would be a budget only on paper.
+    if (WddmHoldElapsedUs(Hold) < BC250_WDDM_HOLD_SPIN_US)
+    {
+        KeStallExecutionProcessor(BC250_WDDM_HOLD_SPIN_STEP_US);
+        Hold->Spins++;
+        // The generation is refreshed so that phase 2, if it is reached, does not treat a retirement the spin
+        // already saw as a reason to skip its wait.
+        Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+        return TRUE;
+    }
+
+    // Phase 2.
+    KeClearEvent(&Device->GfxRetireEvent);
+    generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    if (generation != Hold->Generation)
+    {
+        Hold->Generation = generation;
+        Hold->EventWakes++;
+        return TRUE;
+    }
+    timeout.QuadPart = -10000ll * BC250_WDDM_HOLD_WAIT_MS;
+    status = KeWaitForSingleObject(&Device->GfxRetireEvent, Executive, KernelMode, FALSE, &timeout);
+    Hold->Generation = InterlockedCompareExchange(&Device->GfxRetireGeneration, 0, 0);
+    if (status == STATUS_TIMEOUT) Hold->TimeoutWakes++;
+    else Hold->EventWakes++;
+    return TRUE;
+}
+
+// Once per submission that was held at all, whatever its outcome. Microseconds from QPC: the line this replaced
+// printed the loop's iteration count as "1 ms" every time, which is why session 314's 4081 held submits all
+// looked identical and none of them could be added up.
+static void WddmHoldReport(_In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_HOLD* Hold, UINT FenceId,
+                           _In_z_ const char* What)
+{
+    ULONG held;
+    LONG64 seen;
+
+    if (Wddm == NULL || (Hold->Spins == 0 && Hold->EventWakes == 0 && Hold->TimeoutWakes == 0)) return;
+    held = WddmHoldElapsedUs(Hold);
+    InterlockedIncrement(&Wddm->SubmitHolds);
+    InterlockedAdd64(&Wddm->SubmitHeldUs, (LONG64)held);
+    InterlockedAdd64(&Wddm->SubmitHoldSpins, (LONG64)Hold->Spins);
+    InterlockedAdd64(&Wddm->SubmitHoldEventWakes, (LONG64)Hold->EventWakes);
+    InterlockedAdd64(&Wddm->SubmitHoldTimeoutWakes, (LONG64)Hold->TimeoutWakes);
+    InterlockedIncrement(&Wddm->SubmitHeldHistogram[WddmHoldBucket(held)]);
+    // A submission the spin caught never reached the event wait: counting those separately is how the lab run
+    // tells "the spin was the right call" from "the spin only burned CPU".
+    if (Hold->EventWakes == 0 && Hold->TimeoutWakes == 0) InterlockedIncrement(&Wddm->SubmitHoldSpinOnly);
+    for (;;)
+    {
+        seen = InterlockedCompareExchange64(&Wddm->SubmitHeldMaxUs, 0, 0);
+        if ((LONG64)held <= seen) break;
+        if (InterlockedCompareExchange64(&Wddm->SubmitHeldMaxUs, (LONG64)held, seen) == seen) break;
+    }
+    // Uncapped, like the line it replaces: 4081 lines in 220 s is 18 a second, and the per-submission
+    // distribution is the whole point of the comparison the summary counters only total up.
+    GuardLog("wddm: %s submit fence %u held %lu us (%lu spins, %lu event, %lu timeout)",
+             What, FenceId, held, Hold->Spins, Hold->EventWakes, Hold->TimeoutWakes);
+}
+
 // BGP1 may arrive in a burst when CDD stops pacing to vblank (M659).
 // Idle is not a submission prerequisite: the lower layer admits same-root jobs
 // and reports temporary ring/root-switch pressure. Match the UMD ready-or-busy
@@ -993,20 +1269,24 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
 static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
     _In_ const BC250_WDDM_OBJECT* Context, ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
 {
-    const ULONGLONG deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
-    LARGE_INTEGER tick;
-    tick.QuadPart = -10000ll;
+    BC250_WDDM_HOLD hold;
+
+    WddmHoldBegin(Device, &hold);
     for (;;) {
         if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
-            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) return TRUE;
+            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) {
+            WddmHoldReport(Wddm, &hold, FenceId, "present");
+            return TRUE;
+        }
         // Refresh retirement before the terminal retry: a completion can race
         // the separate ready/busy observations or release the last queue slot.
         WddmGpuFence(Device);
-        if (!GfxSubmitBusy(Device) || KeQueryInterruptTime() >= deadline) {
-            return (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
+        if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold)) {
+            BOOLEAN submitted = (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                 WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node);
+            WddmHoldReport(Wddm, &hold, FenceId, "present");
+            return submitted;
         }
-        KeDelayExecutionThread(KernelMode, FALSE, &tick);
     }
 }
 
@@ -1018,14 +1298,37 @@ static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ B
 // GfxSubmitPaging instead, which takes no lock beyond gfx.c's own Sdma0RingLock. The two channels fail
 // independently: a node-1 timeout calls GfxPagingSubmitFail, never GfxSubmitFail, and vice versa.
 
+// A drain that stopped at its quota may leave the head queued with no packet in flight, so no interrupt will come
+// for it: the next invocation has to be arranged here. A timer rather than KeInsertQueueDpc: a DPC
+// queued from a DPC can run in the same DPC drain, with no return to PASSIVE_LEVEL in between. A relative due time
+// of -1 asks for the earliest expiry; it does not promise that threads run before it, nor any bound on latency
+// under load; both are left to measurement. Armed under Lock against Stopping, like every other timer of this
+// file, so WddmStop's cancel is final.
+static void WddmRequeuePagingDrain(_Inout_ BC250_WDDM* Wddm)
+{
+    LARGE_INTEGER due;
+    KIRQL irql;
+
+    due.QuadPart = -1;
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    if (!Wddm->Stopping) KeSetTimer(&Wddm->PagingDrainTimer, due, &Wddm->PagingDrainDpc);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+}
+
 // Has node 1's in-flight fence arrived? Same shape as WddmGpuFence, called from the same places (the IH DPC,
 // the submit itself, the watchdog), at <= DISPATCH_LEVEL.
 // One GPU packet at a time preserves the shared temporary mapping window.
 // Later OS packets retain their private command storage in FIFO order.
+// KMD172: at most PAGING_DRAIN_QUOTA retirements per invocation (paging_drain.h). Until 171 a caller retired for
+// as long as other callers kept publishing packets the GPU finished in between, at DISPATCH_LEVEL, with no bound.
 void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
+    unsigned retiredCount=0;
+    ULONG iterations=0;
+    PAGING_DRAIN_EXIT exitReason=PagingDrainExitIdle;
     if (!wddm) return;
+    ProgressEnter(ProgressSitePagingDrain);
     for (;;) {
         BC250_PAGING_JOB* retired=NULL;
         BOOLEAN completed=FALSE, failed=FALSE;
@@ -1034,18 +1337,16 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
         NTSTATUS status;
         KIRQL irql;
         LARGE_INTEGER due;
+        PAGING_DRAIN_NEXT next;
+        iterations++;
         KeAcquireSpinLock(&wddm->Lock,&irql);
-        if (wddm->Stopping || (wddm->PagingHead &&
-            wddm->PagingHead->Epoch!=wddm->FenceLedger[BC250_WDDM_NODE_COPY].Epoch) ||
-            (wddm->PagingHwPending &&
-            wddm->PagingHwEpoch!=wddm->FenceLedger[BC250_WDDM_NODE_COPY].Epoch)) {
+        if (wddm->Stopping) {
             KeReleaseSpinLock(&wddm->Lock,irql);
-            return;
+            exitReason=PagingDrainExitStopping;
+            break;
         }
         if (wddm->PagingHwPending && GfxPagingFenceArrived(Device,wddm->PagingHwSeq)) {
             retired=wddm->PagingHead;
-            WddmRecordFenceLedgerLocked(wddm,BC250_WDDM_NODE_COPY,wddm->PagingHwEpoch,
-                wddm->PagingHwFence,TRUE);
             wddm->PagingHwPending=FALSE;
             KeCancelTimer(&wddm->PagingSubmitTimer);
             completed=TRUE;
@@ -1064,8 +1365,8 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
                 if (NT_SUCCESS(status)) {
                     wddm->PagingHwPending=TRUE;
                     wddm->PagingHwSeq=seq;
-                    wddm->PagingHwEpoch=job->Epoch;
                     wddm->PagingHwFence=job->Fence;
+                    PagingJournalStampSeq(job->Fence,seq);
                     wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*BC250_WDDM_SUBMIT_TIMEOUT_MS;
                     due.QuadPart=-10000ll*BC250_WDDM_SUBMIT_TIMEOUT_MS;
                     KeSetTimer(&wddm->PagingSubmitTimer,due,&wddm->PagingSubmitDpc);
@@ -1093,13 +1394,22 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
         }
         KeReleaseSpinLock(&wddm->Lock,irql);
         if (failed) WddmFailSubmission(Device,fence,BC250_WDDM_NODE_COPY);
-        if (!completed) return; // no polling loop while the GPU is executing
-        WddmQueueReport(wddm);
+        if (completed) WddmQueueReport(wddm);   // every retirement is reported, the quota's last one included
+        next=PagingDrainNext(&retiredCount,completed,PAGING_DRAIN_QUOTA);
+        if (next==PagingDrainContinue) continue;
+        if (next==PagingDrainYield) {
+            WddmRequeuePagingDrain(wddm);
+            exitReason=PagingDrainExitQuota;
+        } else if (failed) exitReason=PagingDrainExitRefused;
+        break;                  // no polling loop while the GPU is executing
     }
+    ProgressDrainDone(iterations,retiredCount,(ULONG)exitReason);
+    ProgressExit(ProgressSitePagingDrain,(LONG)exitReason);
 }
 
 static KDEFERRED_ROUTINE WddmPagingSubmitDpcRoutine;
-static void WddmPagingSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+static KDEFERRED_ROUTINE WddmPagingSubmitDpcCheck;
+static void WddmPagingSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)Context;
     BC250_WDDM* wddm;
@@ -1135,6 +1445,28 @@ static void WddmPagingSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _
     // No completion report for a fence that has not arrived.
 }
 
+static void WddmPagingSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    ProgressEnter(ProgressSitePagingWatchdogDpc);
+    WddmPagingSubmitDpcCheck(Dpc, Context, Arg1, Arg2);
+    ProgressExit(ProgressSitePagingWatchdogDpc, 0);
+}
+
+// The quota requeue (WddmRequeuePagingDrain): one more drain invocation, a clock tick after the last one yielded.
+static KDEFERRED_ROUTINE WddmPagingDrainDpcRoutine;
+static void WddmPagingDrainDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+
+    UNREFERENCED_PARAMETER(Dpc);
+    UNREFERENCED_PARAMETER(Arg1);
+    UNREFERENCED_PARAMETER(Arg2);
+    if (device == NULL) return;
+    ProgressEnter(ProgressSitePagingDrainDpc);
+    WddmGpuFencePaging(device);         // reads Device->Wddm itself: NULL once the stop has detached it
+    ProgressExit(ProgressSitePagingDrainDpc, 0);
+}
+
 // Accept driver-built work independently of whether the preceding GPU packet
 // has retired. Every builder reserves queue storage; submission never allocates.
 static BOOLEAN WddmSubmitPagingHardwareRoot(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
@@ -1159,7 +1491,6 @@ static BOOLEAN WddmSubmitPagingHardwareRoot(_Inout_ BC250_DEVICE* Device, _Inout
     // All live slot ownership changes are serialized with queue retirement.
     // Replaying a still-owned start cannot overwrite its existing fence/link.
     job->Next=NULL;job->Borrowed=TRUE;
-    job->Epoch=Wddm->FenceLedger[BC250_WDDM_NODE_COPY].Epoch;
     job->Start=Start;job->ByteCount=ByteCount;job->PrivateBytes=PrivateBytes;
     job->Fence=FenceId;job->VirtualAddress=VirtualAddress;
     job->Data=(const UCHAR*)PrivateData;
@@ -1199,7 +1530,8 @@ static void WddmReleasePreemptedPagingLocked(BC250_WDDM* Wddm)
 // is what makes DmaPreempted.LastCompletedFenceId the fence dxgkrnl has just been told about, and it means a
 // packet is never reported as completed after it has been declared preempted.
 static KDEFERRED_ROUTINE WddmReportDpcRoutine;
-static void WddmReportDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+static KDEFERRED_ROUTINE WddmReportDpcPublish;
+static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)Context;
     BC250_WDDM* wddm;
@@ -1311,6 +1643,13 @@ static void WddmReportDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
     KeReleaseSpinLock(&wddm->Lock, reportIrql);
 }
 
+static void WddmReportDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    ProgressEnter(ProgressSiteReportDpc);
+    WddmReportDpcPublish(Dpc, Context, Arg1, Arg2);
+    ProgressExit(ProgressSiteReportDpc, 0);
+}
+
 // Sample one stable programming generation around the hardware pending test.
 // A writer starting during the sample invalidates it; retry at the next vblank,
 // never wait here (the writer may be the interrupt that preempted this DPC).
@@ -1333,7 +1672,8 @@ static BOOLEAN WddmReadCompletedPrimary(_In_ BC250_DEVICE* Device, _In_ BC250_WD
 // ---- the software VSync ------------------------------------------------------------------------------------------
 
 static KDEFERRED_ROUTINE WddmVSyncDpcRoutine;
-static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+static KDEFERRED_ROUTINE WddmVSyncDpcTick;
+static void WddmVSyncDpcTick(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)Context;
     BC250_WDDM* wddm;
@@ -1359,6 +1699,14 @@ static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_
     WddmReport(device, &data);
 }
 
+// Progress record around the tick, outside it so that none of its early returns can skip the exit (hang.c).
+static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    ProgressEnter(ProgressSiteVSyncDpc);
+    WddmVSyncDpcTick(Dpc, Context, Arg1, Arg2);
+    ProgressExit(ProgressSiteVSyncDpc, 0);
+}
+
 // On while a source is visible, off otherwise. No hardware is touched either way with Device->VidPnFlipEnabled
 // closed - the software timer below is byte for byte 0.7.23's. Open, the "source" the flip needs is the DCN
 // hardware interrupt instead (ADR 0011 point 3 step 3): the branch just below does the same job the timer code
@@ -1372,29 +1720,25 @@ static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_
 // WDDM lock orders decisions against stop; DcnVsyncEnable then uses the graphics
 // interrupt-synchronization callback to serialize MMIO and armed state with ISR.
 // The synchronized callback never takes this WDDM lock (one-way lock order).
-static NTSTATUS WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
+static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     LARGE_INTEGER due;
     BOOLEAN changed = FALSE;
     KIRQL irql;
-    NTSTATUS status = STATUS_SUCCESS;
 
-    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    if (wddm == NULL) return;
 
     if (Device->VidPnFlipEnabled)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return STATUS_DEVICE_NOT_READY; }
+        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
         if (On != (Device->DcnVsyncArmed != 0))
-        {
-            status = DcnVsyncEnable(Device, On);
-            changed = NT_SUCCESS(status);
-        }
+            changed = NT_SUCCESS(DcnVsyncEnable(Device, On));
         KeReleaseSpinLock(&wddm->Lock, irql);
         if (changed)
             GuardLog("wddm: hardware vsync %s (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)", On ? "on" : "off");
-        return status;
+        return;
     }
 
     due.QuadPart = -((LONGLONG)BC250_WDDM_VSYNC_MS * 10000);
@@ -1403,7 +1747,7 @@ static NTSTATUS WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     if (wddm->Stopping && On)
     {
         KeReleaseSpinLock(&wddm->Lock, irql);   // the stop does the disarm; nothing may arm behind it
-        return STATUS_DEVICE_NOT_READY;
+        return;
     }
     if (On != wddm->VSyncArmed)
     {
@@ -1413,14 +1757,13 @@ static NTSTATUS WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
         else KeCancelTimer(&wddm->VSyncTimer);
     }
     KeReleaseSpinLock(&wddm->Lock, irql);
-    if (!changed) return STATUS_SUCCESS;        // logging stays outside the lock
+    if (!changed) return;                       // logging stays outside the lock
 
     if (On)
         GuardLog("wddm: software vsync on, %u ms period, target %u", (ULONG)BC250_WDDM_VSYNC_MS,
                  (ULONG)wddm->VSyncTargetId);
     else
         GuardLog("wddm: software vsync off after %ld ticks", wddm->VSyncTicks);
-    return STATUS_SUCCESS;
 }
 
 // display.c's SetVidPnSourceVisibility calls this; it is the earliest point at which a flip can be queued.
@@ -1457,13 +1800,33 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
         LONG generation;
         InterlockedIncrement(&Device->DcnVsyncDeferred); // completion deferred, not necessarily the vblank
         generation = InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
-        if (generation & 1) return;
-        if (!NT_SUCCESS(DcnReadScanoutAddress(Device, &scanned))) return;
+        if (generation & 1)
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipOddGeneration);
+            InterlockedExchange64(&Device->DcnVsyncSkipOddGenerationTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
+        if (!NT_SUCCESS(DcnReadScanoutAddress(Device, &scanned)))
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipReadFailure);
+            InterlockedExchange64(&Device->DcnVsyncSkipReadFailureTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
         // If the pending bit outlives the address latch, reporting the requested
         // address would still retire the flip early. Only the distinct previous
         // buffer is safe here; a matching address needs the completed path above.
-        if (scanned == (ULONGLONG)InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0)) return;
-        if (InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0) != generation) return;
+        if (scanned == (ULONGLONG)InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0))
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipSameAddress);
+            InterlockedExchange64(&Device->DcnVsyncSkipSameAddressTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
+        if (InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0) != generation)
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipChangedGeneration);
+            InterlockedExchange64(&Device->DcnVsyncSkipChangedGenerationTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
         data.CrtcVsync.PhysicalAddress.QuadPart = (LONGLONG)scanned;
         InterlockedIncrement(&Device->DcnVsyncOldBufferReports);
     } else {
@@ -1524,6 +1887,21 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Calls[WddmDdiCreateContext], Wddm->Calls[WddmDdiDestroyContext],
              Wddm->Calls[WddmDdiCreateProcess], Wddm->Calls[WddmDdiDestroyProcess],
              Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation], Wddm->ObjectCount);
+    {
+        // The three move together under the lock; read apart, a concurrent create would look like a mismatch.
+        ULONG indexed, misses;
+        LONG alive;
+        KIRQL irql;
+
+        KeAcquireSpinLock(&Wddm->Lock, &irql);
+        indexed = Wddm->ObjectIndex.Count;
+        misses = Wddm->ObjectIndex.Misses;
+        alive = Wddm->ObjectCount;
+        KeReleaseSpinLock(&Wddm->Lock, irql);
+        if (misses != 0 || indexed != (ULONG)alive)
+            GuardLog("wddm summary: OBJECT INDEX %lu indexed for %ld alive, %lu removals of unindexed objects",
+                     indexed, alive, misses);
+    }
     GuardLog("wddm summary: allocations opened/closed: %ld/%ld calls", Wddm->Calls[WddmDdiOpenAllocation], Wddm->Calls[WddmDdiCloseAllocation]);
     GuardLog("wddm summary: submissions %ld physical + %ld virtual, %ld preemptions, last completed fence %ld",
              Wddm->Calls[WddmDdiSubmitCommand], Wddm->Calls[WddmDdiSubmitCommandVirtual],
@@ -1538,6 +1916,27 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->UmdProfileCalls, Wddm->UmdSubmitTicks, Wddm->UmdProfileFrequency.QuadPart);
     GuardLog("wddm profile: probe enabled %u, calls %ld, elapsed ticks %lld (included in umd)",
              Wddm->TraceUmdProbes, Wddm->UmdProbeCalls, Wddm->UmdProbeTicks);
+    // KMD196. Mean held time is Us/holds. The sleep this replaced measured 4700 us a hold over sessions 313/314;
+    // the spin-then-event wait should land near 130 us (what the blocking job still had to run) plus the ~550 us
+    // a plain submit costs. SpinOnly/holds is the share the bounded spin resolved with no wait at all. Timeout
+    // wakes near zero means the end-of-pipe interrupt is doing the waking; a large share means it is being
+    // missed and the fallback is carrying the path, which is a correctness question, not a performance one.
+    GuardLog("wddm profile: holds %ld (spin-only %ld), held %lld us worst %lld, %lld spins",
+             Wddm->SubmitHolds, Wddm->SubmitHoldSpinOnly, Wddm->SubmitHeldUs, Wddm->SubmitHeldMaxUs,
+             Wddm->SubmitHoldSpins);
+    GuardLog("wddm profile: hold wakes %lld event, %lld timeout",
+             Wddm->SubmitHoldEventWakes, Wddm->SubmitHoldTimeoutWakes);
+    // The histogram, one line. Nine counts and nine names, so a reader needs neither this file nor the edges.
+    GuardLog("wddm profile: held us %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld",
+             g_WddmHoldBucketNames[0], Wddm->SubmitHeldHistogram[0],
+             g_WddmHoldBucketNames[1], Wddm->SubmitHeldHistogram[1],
+             g_WddmHoldBucketNames[2], Wddm->SubmitHeldHistogram[2],
+             g_WddmHoldBucketNames[3], Wddm->SubmitHeldHistogram[3],
+             g_WddmHoldBucketNames[4], Wddm->SubmitHeldHistogram[4],
+             g_WddmHoldBucketNames[5], Wddm->SubmitHeldHistogram[5],
+             g_WddmHoldBucketNames[6], Wddm->SubmitHeldHistogram[6],
+             g_WddmHoldBucketNames[7], Wddm->SubmitHeldHistogram[7],
+             g_WddmHoldBucketNames[8], Wddm->SubmitHeldHistogram[8]);
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
              Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
@@ -1558,6 +1957,15 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingDmaLastRoot,Wddm->PagingDmaLastPa,Wddm->PagingDmaLastCpu);
     GuardLog("wddm summary: BuildPagingBuffer: %ld transfers, %ld fills, %lld bytes, %ld insufficient-buffer",
              Wddm->PagingTransfersBuilt, Wddm->PagingFillsBuilt, Wddm->PagingBytesMoved, Wddm->PagingInsufficientBuffer);
+    // BC250_LOG_TEXT is 160 bytes: count/bytes pairs keep realistic values (6-digit counts, 11-digit bytes) in one line.
+    GuardLog("wddm summary: virtual transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld",
+             Wddm->PagingXferCount[BC250WddmXferVirtualToSystem], Wddm->PagingXferBytes[BC250WddmXferVirtualToSystem],
+             Wddm->PagingXferCount[BC250WddmXferVirtualFromSystem], Wddm->PagingXferBytes[BC250WddmXferVirtualFromSystem],
+             Wddm->PagingXferCount[BC250WddmXferVirtualOther], Wddm->PagingXferBytes[BC250WddmXferVirtualOther]);
+    GuardLog("wddm summary: physical transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld",
+             Wddm->PagingXferCount[BC250WddmXferPhysicalToSystem], Wddm->PagingXferBytes[BC250WddmXferPhysicalToSystem],
+             Wddm->PagingXferCount[BC250WddmXferPhysicalFromSystem], Wddm->PagingXferBytes[BC250WddmXferPhysicalFromSystem],
+             Wddm->PagingXferCount[BC250WddmXferPhysicalOther], Wddm->PagingXferBytes[BC250WddmXferPhysicalOther]);
     GuardLog("wddm summary: aperture map batches %ld, unmap batches %ld",Wddm->PagingMapsBuilt,Wddm->PagingUnmapsBuilt);
     GuardLog("wddm summary: paging TLB invalidations %ld, PTE update batches %ld",
              Wddm->PagingFlushesBuilt,Wddm->PagingUpdatesBuilt);
@@ -1667,6 +2075,15 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred,
              Wddm->Device->DcnVsyncOldBufferReports);
     // Independently sampled counters/times: no interrupt lock and no per-frame logging.
+    // Counters/times are independently sampled, not an atomic incident record.
+    GuardLog("vsync skip: odd %ld read %ld same %ld changed %ld",
+             Wddm->Device->DcnVsyncSkipOddGeneration, Wddm->Device->DcnVsyncSkipReadFailure,
+             Wddm->Device->DcnVsyncSkipSameAddress, Wddm->Device->DcnVsyncSkipChangedGeneration);
+    GuardLog("vsync skip100ns: odd %lld read %lld same %lld changed %lld",
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipOddGenerationTime,0,0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipReadFailureTime,0,0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipSameAddressTime,0,0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipChangedGenerationTime,0,0));
     GuardLog("vsync vector: DPC polls %ld ACKs %ld sync-failures %ld",
              Wddm->Device->DcnVsyncDpcPolls, Wddm->Device->DcnVsyncDpcAcked,
              Wddm->Device->DcnVsyncDpcSyncFailures);
@@ -1715,6 +2132,8 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         return;
     }
     DcnLogVsyncSnapshot(Device);
+    DpmLogSummary(Device);
+    InteropLogSummary(Device);
     WddmSummaryOf(wddm);
     VidMmSummary();
 }
@@ -1739,6 +2158,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm;
     BC250_START_REPORT* startup=NULL;
+    void** buckets;
     BOOLEAN vidmmPrepared=FALSE;
     NTSTATUS status;
     ULONGLONG segmentOffset, segmentLength, tableOffset, tableLength;
@@ -1753,6 +2173,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     if (wddm == NULL) { GuardLog("wddm: no pool for the adapter state"); return STATUS_INSUFFICIENT_RESOURCES; }
     startup=(BC250_START_REPORT*)ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*startup),BC250_WDDM_TAG);
     if (!startup) { ExFreePoolWithTag(wddm,BC250_WDDM_TAG); return STATUS_INSUFFICIENT_RESOURCES; }
+    // Nonpaged and zeroed: lookups run under the spin lock at DISPATCH_LEVEL.
+    buckets=(void**)ExAllocatePool2(POOL_FLAG_NON_PAGED,BC250_OBJECT_INDEX_BYTES,BC250_WDDM_TAG);
+    if (!buckets) {
+        GuardLog("wddm: no pool for the object index");
+        ExFreePoolWithTag(startup,BC250_WDDM_TAG);
+        ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    Bc250ObjectIndexInit(&wddm->ObjectIndex,buckets,(unsigned long)FIELD_OFFSET(BC250_WDDM_OBJECT,HashNext));
     wddm->Device = Device;
     wddm->NativePteCopies=(GuardReadSetting(L"EnableNativePteCopy",0)==1);
     wddm->TraceUmdProbes = (GuardReadSetting(L"TraceUmdProbes", 0) == 1);
@@ -1760,17 +2189,13 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     ExInitializePushLock(&wddm->PagingBuildLock);
     KeInitializeSpinLock(&wddm->Lock);
     ExInitializeFastMutex(&wddm->GfxSubmitMutex);
-    {
-        UINT node;
-        for (node=0;node<BC250_WDDM_NODE_COUNT_MAX;node++) wddm->FenceLedger[node].Epoch=1;
-    }
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
     wddm->HandleIdentityProbe = (GuardReadSetting(L"EnableHandleIdentityProbe", 0) == 1);
-    // Start-latched: changing registry values does not enable existing unbound opens.
-    wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
-    wddm->CddDwmInterop = (GuardReadSetting(L"EnableCddDwmInterop", 0) == 1);
+    // Start-latched: changing registry values does not enable existing unbound opens. Absent = on since
+    // 0.7.181; closed for this start after an unclean boot, an invalid value or a registry failure (interop.c).
+    InteropStart(Device, &wddm->GpuPresentGate, &wddm->CddDwmInterop);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
@@ -1780,6 +2205,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->NodeCount = (GuardReadSetting(L"EnablePagingNode", 0) == 1) ? BC250_WDDM_NODE_COPY + 1u : BC250_WDDM_NODE_COUNT;
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
+    KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
+    KeInitializeTimer(&wddm->PagingDrainTimer);
     KeInitializeTimerEx(&wddm->VSyncTimer, SynchronizationTimer);
     // The one target this driver has. Every VidPN target is a child's UID and Bc250QueryChildRelations reports
     // exactly one child, so this is the only id a CRTC_VSYNC report or a GetScanLine question can carry. 0.7.1
@@ -1831,6 +2258,7 @@ Failed:
     if (vidmmPrepared) VidMmStop();
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
     ExFreePoolWithTag(startup,BC250_WDDM_TAG);
+    ExFreePoolWithTag(wddm->ObjectIndex.Buckets,BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm,BC250_WDDM_TAG);
     return status;
 }
@@ -1885,9 +2313,11 @@ NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device)
     KeCancelTimer(&wddm->VSyncTimer);
     KeCancelTimer(&wddm->SubmitTimer);
     KeCancelTimer(&wddm->PagingSubmitTimer);
+    KeCancelTimer(&wddm->PagingDrainTimer);  // idle means no queued paging job, so nothing is owed a drain
     KeReleaseSpinLock(&wddm->Lock,irql);
     KeRemoveQueueDpc(&wddm->SubmitDpc);
     KeRemoveQueueDpc(&wddm->PagingSubmitDpc);
+    KeRemoveQueueDpc(&wddm->PagingDrainDpc);
     KeRemoveQueueDpc(&wddm->VSyncDpc);
     KeRemoveQueueDpc(&wddm->ReportDpc);
     KeFlushQueuedDpcs();
@@ -1988,12 +2418,19 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     if (wddm->VSyncArmed) { wddm->VSyncArmed = FALSE; KeCancelTimer(&wddm->VSyncTimer); }
     if (Device->DcnVsyncArmed != 0) (void)DcnVsyncEnable(Device, FALSE);
     KeReleaseSpinLock(&wddm->Lock, irql);
+    // KMD196: after Stopping, before anything is freed. A held submission wakes, sees Stopping and drops its own
+    // deadline; WddmHoldWait reads that flag under the lock, so the order here is the order it observes. A
+    // waiter that had already read Stopping as FALSE cannot sleep through this either: it finds the generation
+    // moved past its snapshot and retests instead of waiting, and WddmSubmitHardware then refuses it.
+    GfxRetireSignal(Device);
 
     KeCancelTimer(&wddm->VSyncTimer);   // again, unconditionally: cheap, and it cannot be armed any more
     KeCancelTimer(&wddm->SubmitTimer);
     KeCancelTimer(&wddm->PagingSubmitTimer);
+    KeCancelTimer(&wddm->PagingDrainTimer);
     KeRemoveQueueDpc(&wddm->SubmitDpc);
     KeRemoveQueueDpc(&wddm->PagingSubmitDpc);
+    KeRemoveQueueDpc(&wddm->PagingDrainDpc);
     KeRemoveQueueDpc(&wddm->VSyncDpc);
     KeRemoveQueueDpc(&wddm->ReportDpc);
     InterlockedExchangePointer(&Device->Wddm, NULL);
@@ -2017,7 +2454,8 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     WddmSummaryOf(wddm);
 
     // Whatever dxgkrnl did not destroy is ours to free: a process or a device left behind would otherwise live
-    // until the next boot. No lock is needed now, nothing else can reach the list.
+    // until the next boot. No lock is needed now, nothing else can reach the list. The list is the drain's one
+    // owner of every object; the index only points into it and goes as a whole, after the last object.
     while (!IsListEmpty(&wddm->Objects))
     {
         entry = RemoveHeadList(&wddm->Objects);
@@ -2027,6 +2465,7 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     }
     GuardLog("wddm: stop, last completed fence %ld, %lu vsync ticks, %lu objects freed at the stop",
              wddm->LastCompletedFence, (ULONG)wddm->VSyncTicks, freed);
+    ExFreePoolWithTag(wddm->ObjectIndex.Buckets, BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm, BC250_WDDM_TAG);
 }
 
@@ -2196,6 +2635,12 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
         descriptor->Flags.Aperture = 1;
         descriptor->Flags.CacheCoherent = 1;
         descriptor->Flags.CpuVisible = 1;
+        // Revision 183: system memory reached through the aperture counts against the NON-local budget group
+        // (d3dkmddi.h DXGK_SEGMENTFLAGS). With no segment in that group dxgkrnl reported a UMA-style budget:
+        // local 11339 MiB = segments 1 + 3 + SharedSystemMemory - 768 MiB, non-local 0. A budget-sized client
+        // then overflowed segment 1 by up to 3.4 GiB, and VidMm evicted into the RAM the OS runs on (trial 211,
+        // K48). Placement is unchanged: segment ids, segment sets and the paging buffer segment stay as they were.
+        descriptor->Flags.NonLocalBudgetGroup = 1;
         descriptor->BaseAddress.QuadPart = (LONGLONG)Device->WddmAperture.mc;
         descriptor->CpuTranslatedAddress.QuadPart = (LONGLONG)0xFFFFFFFE00000000ull;
         descriptor->Size = (SIZE_T)Device->WddmAperture.bytes;
@@ -2360,7 +2805,8 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // What was promised, and into how large a structure: the size says which DXGK_DRIVERCAPS this dxgkrnl thinks
     // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
     // the 160 bytes of a log line: count before adding a field. Our own sizeof and the paging node are not in
-    // it: both are constants of the build (576 at interface 0x5023, which is what dxgkrnl offers; node 0).
+    // it: both are constants of the build (592 = 0x250 at interface 0xE003, which is what the lab's dxgkrnl offers
+    // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0).
     if (WddmAnswersLogged(Device))
         GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u "
                  "tdr %u dflip %u rot %u",
@@ -2465,6 +2911,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         firmware.smc_version=smuVersion;
         RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
         RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
+        // num_cu, and with it RADV's scratch sizing, follows the registers of this start (cumode.c).
+        CuModePatchCaps(device,QueryAdapterInfo->pOutputData,UMD_CAPS_BYTES);
         // DXGK_START_INFO.AdapterLuid is supplied by dxgkrnl at StartDevice.
         // Keep old-sized queries byte-compatible; never emit a partial trailer.
         if (QueryAdapterInfo->OutputDataSize >= BC250_ADAPTER_CAPS_BYTES) {
@@ -2515,8 +2963,11 @@ static NTSTATUS Bc250WddmGetNodeMetadata(_In_ const HANDLE hAdapter, UINT NodeOr
     // stage D: wddm->NodeCount, not the compile-time constant, docs/design/paging-node.md section 6).
     if (node >= nodeCount || adapter != 0) return STATUS_INVALID_PARAMETER;
 
-    // At WDDM 2.0 the member after FriendlyName is a reserved UINT32, not DXGK_NODEMETADATA_FLAGS (that arrives at
-    // WDDM 2.2); zeroing covers it either way.
+    // At interface 0xE003 the member after FriendlyName is DXGK_NODEMETADATA_FLAGS (a reserved UINT32 at 2.0).
+    // Zeroing it is the honest answer: no ContextSchedulingSupported (no hardware scheduling), no
+    // RingBufferFenceRelease, no SupportTrackedWorkload, no UserModeSubmission. The lab's dxgkrnl reads these flags
+    // for a table that declares interface 0x9000 or later (static reading, ADR 0019 B1), so this zero is now a
+    // statement and not padding.
     RtlZeroMemory(pGetNodeMetadata, sizeof(*pGetNodeMetadata));
     if (node == BC250_WDDM_NODE_COPY)
     {
@@ -2560,6 +3011,8 @@ static NTSTATUS Bc250WddmDestroyDevice(_In_ const HANDLE hDevice)
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls((BC250_WDDM*)object->Device->Wddm, WddmDdiDestroyDevice)) GuardLog("wddm: DestroyDevice");
+    // The last device that used the interop path ends the session (DWM exits before a clean shutdown ends).
+    if (InterlockedExchange(&object->InteropUser, 0) == 1) InteropUserEnd(object->Device);
     WddmFreeObject(object);
     return STATUS_SUCCESS;
 }
@@ -2604,6 +3057,9 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     object->OwnerDevice = hDevice;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
     object->SystemContext = (BOOLEAN)pCreateContext->Flags.SystemContext;
+    // KMD193: every BC250_PJ_GFX_SUBMIT record of a job on this context carries this process ID, so that a
+    // faulting job in a dump names the process that owns the context rather than only a pointer value.
+    object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
     if (umd)
     {
         object->UmdContext = TRUE;
@@ -2654,6 +3110,11 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     if (umd && parentWddm != NULL && InterlockedIncrement(&parentWddm->UmdContexts) <= BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: umd context node %u ip %u, private slot %u", pCreateContext->NodeOrdinal,
                  umdView.ip_type, (ULONG)UMD_BLOB_SUBMIT_BYTES);
+    // KMD193: one line per context, capped like every other first-calls log, so that the context value in a
+    // GFX_SUBMIT journal record or a Blt observation can be traced back to a process and a kind.
+    if (parentWddm != NULL && InterlockedIncrement(&parentWddm->ContextsLogged) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: context %p pid %lu node %u umd %u system %u ip %lu", object, object->CreatorProcessId,
+                 object->NodeOrdinal, (UINT)object->UmdContext, (UINT)object->SystemContext, object->UmdIpType);
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCreateContext))
     {
         GuardLog("wddm: CreateContext node %u engine 0x%X flags 0x%08X private %u", pCreateContext->NodeOrdinal,
@@ -2758,15 +3219,14 @@ C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
 C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
 C_ASSERT(D3DKMDT_GDISURFACE_LOOKUPTABLE==4);
 C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE_CPUVISIBLE_CROSSADAPTER==8);
-static ULONG WddmSurfacePixelBytes(ULONG Format)
-{
-    switch (Format) {
-    case D3DDDIFMT_A8: return 1;
-    case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
-    case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: return 4;
-    default: return 0;
-    }
-}
+// The shared format table and surface_format.h are plain integers; these tie them to the WDK's D3DDDIFORMAT.
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A8R8G8B8==D3DDDIFMT_A8R8G8B8);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_X8R8G8B8==D3DDDIFMT_X8R8G8B8);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A2B10G10R10==D3DDDIFMT_A2B10G10R10);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A8B8G8R8==D3DDDIFMT_A8B8G8R8);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A16B16G16R16F==D3DDDIFMT_A16B16G16R16F);
+C_ASSERT(BC250_FORMAT_A8==D3DDDIFMT_A8);
+C_ASSERT(BC250_FORMAT_X8B8G8R8==D3DDDIFMT_X8B8G8R8);
 
 static DXGKDDI_GETSTANDARDALLOCATIONDRIVERDATA Bc250WddmGetStandardAllocationDriverData;
 static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdapter,
@@ -2840,7 +3300,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     {
         if (pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE) {
             if (!WddmGdiLayout(private.Width,private.Height,(ULONG)pData->pCreateGdiSurfaceData->Type,
-                    WddmSurfacePixelBytes(private.Format),&private.Pitch,&private.Size))
+                    WddmSurfaceFormatBpp(private.Format,BC250_SURFACE_GDI),&private.Pitch,&private.Size))
                 return STATUS_INVALID_PARAMETER;
         } else {
             if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
@@ -2966,6 +3426,11 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
             object->UmdBytes = view.bytes;
             object->UmdHeap = view.heap;
             object->UmdRequestedVa = view.requested_va;
+            // KMD193: kept for the DESTROY journal record. 245's four freed objects carried UmdAlloc, UmdHeap
+            // and UmdBytes and still could not say which process had asked for them or with what intent.
+            object->UmdBlobVersion = view.version;
+            object->UmdGemFlags = view.gem_flags;
+            object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
             segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
             align = 4096;
             if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
@@ -3000,7 +3465,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
             private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
             !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
-            !WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) ||
+            !WddmSurfaceAdmitted(private,gdiType) ||
             !WddmGdiAllocationPolicy(gdiType,sharedCpu,cachedCpu,&policy) ||
             (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
         {
@@ -3066,8 +3531,15 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
 
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiDestroyAllocation))
         GuardLog("wddm: DestroyAllocation %u allocations", pDestroyAllocation->NumAllocations);
-    for (i = 0; i < pDestroyAllocation->NumAllocations; i++)
-        WddmFreeObject(WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION));
+    for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
+        BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
+        if (object != NULL)
+            PagingJournalDestroy(object->UmdRequestedVa, pDestroyAllocation->pAllocationList[i],
+                                 object->UmdAlloc ? object->UmdBytes : object->Allocation.Size,
+                                 object->UmdAlloc ? BC250_PJ_FLAG_UMD_ALLOCATION : 0u,
+                                 object->CreatorProcessId, object->UmdBlobVersion, object->UmdGemFlags);
+        WddmFreeObject(object);
+    }
     if (pDestroyAllocation->Flags.DestroyResource && pDestroyAllocation->hResource != NULL)
         WddmFreeObject(WddmObject(pDestroyAllocation->hResource, BC250_WDDM_MAGIC_RESOURCE));
     return STATUS_SUCCESS;
@@ -3141,7 +3613,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         }
         else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
             private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
-            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) &&
+            WddmSurfaceAdmitted(private,gdiType) &&
             WddmGdiAllocationPolicy(gdiType,0,0,&policy))
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
@@ -3174,9 +3646,9 @@ static NTSTATUS Bc250WddmCloseAllocation(_In_ const HANDLE hDevice, _In_ const D
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCloseAllocation))
         GuardLog("wddm: CloseAllocation %u allocations", pCloseAllocation->NumAllocations);
     // pOpenHandleList carries what OpenAllocation handed out: our opened objects, or NULL where it handed out nothing.
-    // Looked up on the list before being freed, as the blit does, never dereferenced as given.
+    // Looked up in the object index before being freed, as the blit does, never dereferenced as given.
     for (i = 0; i < pCloseAllocation->NumAllocations; i++)
-        WddmFreeObject(WddmListedObject((BC250_WDDM*)parent->Device->Wddm, pCloseAllocation->pOpenHandleList[i], BC250_WDDM_MAGIC_OPENED));
+        WddmFreeObject(WddmIndexedObject((BC250_WDDM*)parent->Device->Wddm, pCloseAllocation->pOpenHandleList[i], BC250_WDDM_MAGIC_OPENED));
     return STATUS_SUCCESS;
 }
 
@@ -3935,6 +4407,24 @@ static NTSTATUS WddmBuildPhysicalTransfer(BC250_DEVICE* Device, DXGKARG_BUILDPAG
     return status;
 }
 
+// Where a build lands in the paging buffer, for the paging journal: the same position the private record header
+// binds (WddmPublishPagingRecordCore), which SubmitCommand's DmaBufferVirtualAddress/DmaBufferSize range covers.
+static ULONGLONG WddmPagingBuildPosition(_In_ const DXGKARG_BUILDPAGINGBUFFER* Build)
+{
+    return Build->DmaBufferGpuVirtualAddress + Build->DmaBufferWriteOffset;
+}
+
+// A built transfer: the old totals plus the KMD183 split by kind and direction (BC250_WDDM_XFER).
+static void WddmCountTransfer(_Inout_ BC250_WDDM* Wddm, _In_ BC250_WDDM_XFER Kind, _In_ ULONGLONG Moved)
+{
+    InterlockedIncrement(&Wddm->PagingTransfersBuilt);
+    InterlockedAdd64(&Wddm->PagingBytesMoved,(LONG64)Moved);
+    if ((ULONG)Kind < BC250WddmXferKinds) {
+        InterlockedIncrement(&Wddm->PagingXferCount[Kind]);
+        InterlockedAdd64(&Wddm->PagingXferBytes[Kind],(LONG64)Moved);
+    }
+}
+
 static DXGKDDI_BUILDPAGINGBUFFER Bc250WddmBuildPagingBuffer;
 static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKARG_BUILDPAGINGBUFFER* pBuildPagingBuffer)
 {
@@ -3980,6 +4470,8 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            PagingJournalNote(BC250_PJ_FILL,0,pBuildPagingBuffer->Fill.hAllocation,moved,
+                WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -3997,6 +4489,8 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            PagingJournalNote(BC250_PJ_VIRTUAL_FILL,pBuildPagingBuffer->FillVirtual.DestinationVirtualAddress,
+                pBuildPagingBuffer->FillVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4012,8 +4506,14 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             status=WddmBuildCapturedVirtualTransfer((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,
                 context?&context->Captures:NULL,pBuildPagingBuffer,&moved);
         if (moved) {
-            InterlockedIncrement(&wddm->PagingTransfersBuilt);
-            InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            DXGK_MEMORY_TRANSFER_DIRECTION direction=pBuildPagingBuffer->TransferVirtual.TransferDirection;
+            WddmCountTransfer(wddm,direction==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ? BC250WddmXferVirtualToSystem :
+                direction==DXGK_MEMORY_TRANSFER_SYSTEM_TO_LOCAL ? BC250WddmXferVirtualFromSystem :
+                BC250WddmXferVirtualOther,moved);
+            PagingJournalNote(BC250_PJ_VIRTUAL_TRANSFER,pBuildPagingBuffer->TransferVirtual.SourceVirtualAddress,
+                pBuildPagingBuffer->TransferVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),
+                pBuildPagingBuffer->TransferVirtual.TransferDirection==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ?
+                    BC250_PJ_FLAG_TO_SYSTEM : 0u);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4023,8 +4523,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         ULONGLONG moved=0;
         NTSTATUS status=WddmBuildPhysicalTransfer((BC250_DEVICE*)hAdapter,pBuildPagingBuffer,&moved);
         if (moved) {
-            InterlockedIncrement(&wddm->PagingTransfersBuilt);
-            InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            WddmCountTransfer(wddm,pBuildPagingBuffer->Transfer.Destination.SegmentId==0 ? BC250WddmXferPhysicalToSystem :
+                pBuildPagingBuffer->Transfer.Source.SegmentId==0 ? BC250WddmXferPhysicalFromSystem :
+                BC250WddmXferPhysicalOther,moved);
+            PagingJournalNote(BC250_PJ_TRANSFER,0,pBuildPagingBuffer->Transfer.hAllocation,moved,
+                WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4033,8 +4536,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
     // Paging-process CPU_VIRTUAL initialization must be immediate, including when
     // pDmaBuffer is NULL. GPU_PHYSICAL updates use the ordered path below.
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE &&
-        pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL)
+        pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL) {
         VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);
+        PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,0,pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries,
+                            0,TRUE);
+    }
 
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_COPY_PAGE_TABLE_ENTRIES) {
         BC250_WDDM_OBJECT* context=WddmObject(pBuildPagingBuffer->hSystemContext,BC250_WDDM_MAGIC_CONTEXT);
@@ -4081,6 +4587,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             if (update) InterlockedIncrement(&wddm->PagingUpdatesBuilt);
             else InterlockedIncrement(&wddm->PagingFlushesBuilt);
             if (!update) InterlockedAdd64(&wddm->PagingBytesMoved, (LONG64)(nextByte - startByte));
+            // The journal's record of this slice, at the position the record header above bound it to.
+            if (update)
+                PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,startByte,nextByte-startByte,
+                                    WddmPagingBuildPosition(pBuildPagingBuffer),FALSE);
+            else PagingJournalNote(BC250_PJ_FLUSH_TLB,0,NULL,0,WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         else if (unsupported > BC250PagingSupported && unsupported < RTL_NUMBER_OF(wddm->PagingUnsupported))
         {
@@ -4104,6 +4615,7 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGB
     BC250_WDDM* wddm=WddmOf(hAdapter);
     NTSTATUS status;
     if (!wddm) return WddmBuildPagingBufferImpl(hAdapter,Build);
+    ProgressEnterInput(ProgressSiteBuildPagingBuffer,(LONG)Build->Operation); // before the lock: a wait counts as inside
     KeEnterCriticalRegion();ExAcquirePushLockExclusive(&wddm->PagingBuildLock);
     if (Build->DmaBufferGpuVirtualAddress) {
         InterlockedIncrement64(&wddm->PagingDmaVaBuilds);
@@ -4127,6 +4639,7 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGB
     } else InterlockedIncrement64(&wddm->PagingDmaZeroVaBuilds);
     status=WddmBuildPagingBufferImpl(hAdapter,Build);
     ExReleasePushLockExclusive(&wddm->PagingBuildLock);KeLeaveCriticalRegion();
+    ProgressExit(ProgressSiteBuildPagingBuffer,(LONG)Build->Operation);
     return status;
 }
 
@@ -4169,16 +4682,18 @@ static DXGKDDI_SUBMITCOMMAND Bc250WddmSubmitCommand;
 static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
 {
     BC250_WDDM* wddm = WddmOf(hAdapter);
-    BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
-    UINT node = context != NULL ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
-    BOOLEAN tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
+    BC250_WDDM_OBJECT* context;
+    UINT node;
+    BOOLEAN tracked;
     NTSTATUS status;
     KIRQL irql;
-    ULONGLONG epoch=0;
+    ProgressEnterInput(ProgressSiteSubmitCommand, (LONG)pSubmitCommand->SubmissionFenceId);   // before WddmObject: its list walk counts as inside
+    context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
+    node = context != NULL ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
+    tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        epoch=wddm->FenceLedger[node].Epoch;
         wddm->ActiveSubmissions[node]++;
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
@@ -4186,14 +4701,11 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        // STATUS_SUCCESS transfers responsibility to the driver, even when
-        // RefusalPending retains a valid but undispatched packet for OS TDR.
-        if (NT_SUCCESS(status))
-            WddmRecordFenceLedgerLocked(wddm,node,epoch,pSubmitCommand->SubmissionFenceId,FALSE);
         wddm->ActiveSubmissions[node]--;
         KeReleaseSpinLock(&wddm->Lock, irql);
         WddmQueueReport(wddm);
     }
+    ProgressExit(ProgressSiteSubmitCommand, (LONG)pSubmitCommand->SubmissionFenceId);
     return status;
 }
 
@@ -4224,16 +4736,15 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
         return STATUS_INVALID_PARAMETER;
     }
 
-    // Capacity is bounded by CP read-pointer space and seven completion records. A submit before
+    // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
     // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
     // would signal the monitored fence for an IB the GPU never fetched. This DDI is PASSIVE_LEVEL,
-    // so wait the same bound the watchdog uses, polling the fence, and try again. Anything else
+    // so wait the same bound the watchdog uses, on the retirement event, and try again. Anything else
     // (gate closed, ring abandoned, a bad blob) does not get that wait.
     if (st == UMD_BLOB_OK && ib.single_ib && Node == BC250_WDDM_NODE_3D && Context->RootPhysical != 0 &&
         Wddm != NULL && KeGetCurrentIrql() == PASSIVE_LEVEL)
     {
-        LARGE_INTEGER tick;
-        ULONG waited = 0;
+        BC250_WDDM_HOLD hold;
         ULONGLONG ibPhys = 0, ibLeaf = 0;
         BOOLEAN ibSystem = FALSE;
         BOOLEAN ibMapped;
@@ -4296,30 +4807,30 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
             InterlockedIncrement(&Wddm->UmdProbeCalls);
         }
 
-        tick.QuadPart = -10000ll;
+        WddmHoldBegin(Device, &hold);
         for (;;)
         {
             if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                 WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
             {
-                if (waited != 0)
-                    GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring", Submit->SubmissionFenceId, waited);
+                WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
                 if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
                     GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
                              ib.ib_va, ib.ib_bytes);
                 return STATUS_SUCCESS;
             }
+            // Refresh retirement before the terminal retry, the same reason WddmSubmitPresentHardware does it:
+            // a completion can race the separate ready/busy observations or release the last queue slot.
+            WddmGpuFence(Device);
             // Not busy: either the ring will not take an IB, or the one it held finished between
             // the ready check and this one. Try once more in the second case, and do not spin in
             // the first. A timeout is the same refusal the watchdog already makes.
-            if (!GfxSubmitBusy(Device) || waited >= BC250_WDDM_SUBMIT_TIMEOUT_MS)
+            if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold))
             {
                 if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                     WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
                 {
-                    if (waited != 0)
-                        GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring",
-                                 Submit->SubmissionFenceId, waited);
+                    WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
                     if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
                         GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
                                  ib.ib_va, ib.ib_bytes);
@@ -4327,12 +4838,8 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
                 }
                 break;
             }
-            WddmGpuFence(Device);
-            KeDelayExecutionThread(KernelMode, FALSE, &tick);
-            waited += 1;
         }
-        if (waited != 0)
-            GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring", Submit->SubmissionFenceId, waited);
+        WddmHoldReport(Wddm, &hold, Submit->SubmissionFenceId, "umd");
     }
     if (st != UMD_BLOB_OK) why = UmdBlobStatusText(st);
     else if (!ib.single_ib) { why = "multiple ibs"; nIbs = ib.num_ibs; }
@@ -4398,6 +4905,9 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
         context != NULL && !context->UmdContext && pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
         pSubmitCommand->DmaBufferSize != 0 && KeGetCurrentIrql() <= APC_LEVEL)
     {
+        // Before the submit: a submit that goes to the hardware at once stamps the sequence by this fence.
+        PagingJournalStampFence(pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
+                                pSubmitCommand->SubmissionFenceId);
         if (WddmSubmitPagingHardwareRoot(device,wddm,pSubmitCommand->pDmaBufferPrivateData,
                 pSubmitCommand->DmaBufferPrivateDataSize,pSubmitCommand->DmaBufferVirtualAddress,
                 pSubmitCommand->DmaBufferSize,TRUE,pSubmitCommand->SubmissionFenceId,context->RootPhysical)) return STATUS_SUCCESS;
@@ -4525,16 +5035,18 @@ static DXGKDDI_SUBMITCOMMANDVIRTUAL Bc250WddmSubmitCommandVirtual;
 static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* pSubmitCommand)
 {
     BC250_WDDM* wddm = WddmOf(hAdapter);
-    BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
-    UINT node = context != NULL ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
-    BOOLEAN tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
+    BC250_WDDM_OBJECT* context;
+    UINT node;
+    BOOLEAN tracked;
     NTSTATUS status;
     KIRQL irql;
-    ULONGLONG epoch=0;
+    ProgressEnterInput(ProgressSiteSubmitCommandVirtual, (LONG)pSubmitCommand->SubmissionFenceId);    // before WddmObject: its list walk counts as inside
+    context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
+    node = context != NULL ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
+    tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        epoch=wddm->FenceLedger[node].Epoch;
         wddm->ActiveSubmissions[node]++;
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
@@ -4549,14 +5061,11 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ c
                 wddm->RejectedFence[node]=pSubmitCommand->SubmissionFenceId;
             wddm->RejectedPending[node]=TRUE;
         }
-        // STATUS_SUCCESS transfers responsibility to the driver, even when
-        // RefusalPending retains a valid but undispatched packet for OS TDR.
-        if (NT_SUCCESS(status))
-            WddmRecordFenceLedgerLocked(wddm,node,epoch,pSubmitCommand->SubmissionFenceId,FALSE);
         wddm->ActiveSubmissions[node]--;
         KeReleaseSpinLock(&wddm->Lock, irql);
         WddmQueueReport(wddm);
     }
+    ProgressExit(ProgressSiteSubmitCommandVirtual, (LONG)pSubmitCommand->SubmissionFenceId);
     return status;
 }
 
@@ -4650,21 +5159,11 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
     StartHealthClose((BC250_DEVICE*)hAdapter);
     (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetEngine);
-    {
-        BC250_WDDM* wddm=WddmOf(hAdapter);
-        BC250_WDDM_FENCE_LEDGER ledger={0};
-        UINT reported=0;
-        BOOLEAN valid=FALSE,reportedValid=FALSE;
-        KIRQL irql;
-        if (wddm) {
-            KeAcquireSpinLock(&wddm->Lock,&irql);
-            valid=WddmSnapshotFenceLedgerLocked(wddm,pResetEngine->NodeOrdinal,&ledger,&reported,&reportedValid);
-            KeReleaseSpinLock(&wddm->Lock,irql);
-        }
-        if (valid) GuardLog("wddm: reset fence snapshot epoch %llu submitted %u/%u hardware %u/%u reported %u/%u",
-            ledger.Epoch,ledger.SubmittedValid,ledger.Submitted,ledger.HardwareValid,ledger.Hardware,
-            reportedValid,reported);
-    }
+    // KMD196: this refusal changes no submission gate, so a held submission would keep waiting out its deadline
+    // while the scheduler moves on to ResetFromTimeout (which does close the path, through GfxSubmitFail). Wake
+    // the waiters anyway: one extra retest on a TDR path is cheaper than reasoning about which recovery DDI the
+    // scheduler happens to call first.
+    if (hAdapter != NULL) GfxRetireSignal((BC250_DEVICE*)hAdapter);
     GuardLog("wddm: *** ResetEngine node %u engine %u: refused, this part has no engine reset ***",
              pResetEngine->NodeOrdinal, pResetEngine->EngineOrdinal);
     return STATUS_NOT_SUPPORTED;
@@ -4692,14 +5191,14 @@ static NTSTATUS Bc250WddmCollectDbgInfo(_In_ const HANDLE hAdapter, _In_ const D
 // Required next to CalibrateGpuClock: the lab's dxgkrnl (10.0.22621.6199) refuses a render adapter whose table is
 // "compiled against WDDM2_0_M2_2_1 or greater, but does not fill in the pfnCalibrateGpuClock or
 // pfnSetStablePowerState DDI" (facts M64; E16 run 003 stopped at a point consistent with that check, which is
-// not the same as having seen it fail). What it asks for - clocks
-// that do not move while a profiler looks - is what this part has anyway: one fixed clock, set once by the startup
-// task (1000 MHz), and no power management in the driver. So there is nothing to do, and the DDI returns nothing.
+// not the same as having seen it fail). What it asks for - clocks that do not move while a profiler looks - is the
+// lab floor (1000 MHz): fixed-lab never leaves it, and the DPM governor pins itself there while this is on (dpm.c).
 static DXGKDDI_SETSTABLEPOWERSTATE Bc250WddmSetStablePowerState;
 static VOID Bc250WddmSetStablePowerState(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETSTABLEPOWERSTATE* pArgs)
 {
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetStablePowerState))
-        GuardLog("wddm: SetStablePowerState enabled %u (clocks are fixed: nothing to do)", pArgs->Enabled ? 1u : 0u);
+        GuardLog("wddm: SetStablePowerState enabled %u (the DPM governor pins the floor)", pArgs->Enabled ? 1u : 0u);
+    DpmSetStable((BC250_DEVICE*)hAdapter, pArgs->Enabled ? TRUE : FALSE);
 }
 
 static DXGKDDI_CALIBRATEGPUCLOCK Bc250WddmCalibrateGpuClock;
@@ -4866,7 +5365,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         {
             c = prefer[pi];
             handle = (HANDLE)(ULONG_PTR)raw[candidates[c][0]];
-            object = WddmListedObject(wddm, handle, BC250_WDDM_MAGIC_OPENED);
+            object = WddmIndexedObject(wddm, handle, BC250_WDDM_MAGIC_OPENED);
             va = raw[candidates[c][1]];
             reading = c + 1;
         }
@@ -4940,7 +5439,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // firmware framebuffer while the hardware flip gate remains closed.
     if (raw[8] != 0)
     {
-        BC250_WDDM_OBJECT* destination = WddmListedObject(wddm, (HANDLE)(ULONG_PTR)raw[8], BC250_WDDM_MAGIC_OPENED);
+        BC250_WDDM_OBJECT* destination = WddmIndexedObject(wddm, (HANDLE)(ULONG_PTR)raw[8], BC250_WDDM_MAGIC_OPENED);
         ULONGLONG dstFirst = 0, dstLast = 0, primaryPhysical = 0;
         const BC250_WDDM_ALLOCATION_PRIVATE* d = destination ? &destination->Allocation : NULL;
         if (d == NULL || d->Width == 0 || d->Height == 0 || d->Pitch < d->Width * 4ull ||
@@ -5233,6 +5732,18 @@ static void WddmObservePresent(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT
     InterlockedExchange(&o->Published,1);
 }
 
+// The first Blt present of a DDI device while either interop switch is open marks the session (interop.c), so a
+// death from here on closes both switches at the next start. Once per device; DestroyDevice ends it.
+static void WddmInteropUse(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Present)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
+    BC250_WDDM_OBJECT* owner;
+    if (!wddm || !Present->Flags.Blt || (!wddm->GpuPresentGate && !wddm->CddDwmInterop)) return;
+    owner=WddmObject(Context->OwnerDevice,BC250_WDDM_MAGIC_DEVICE);
+    if (!owner || InterlockedCompareExchange(&owner->InteropUser,1,0)!=0) return;
+    if (!InteropUserBegin(Context->Device)) InterlockedExchange(&owner->InteropUser,0);
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -5243,6 +5754,7 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     // submission: a legal scheduler resubmission must retain the same record.
     Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
     if (context) WddmObservePresent(context,pPresent);
+    if (context) WddmInteropUse(context,pPresent);
 
     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
     // software packet below; its pixels are copied only at SubmitCommandVirtual.
@@ -5387,7 +5899,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             BC250_WDDM_OBJECT* allocation=WddmObject(pSetVidPnSourceAddress->hAllocation,BC250_WDDM_MAGIC_ALLOCATION);
             if (!allocation || allocation->UmdAlloc || allocation->Allocation.Width!=device->Post.Width ||
                 allocation->Allocation.Height!=device->Post.Height ||
-                (allocation->Allocation.Format!=D3DDDIFMT_A8R8G8B8 && allocation->Allocation.Format!=D3DDDIFMT_X8R8G8B8) ||
+                WddmSurfaceFormatBpp(allocation->Allocation.Format,BC250_SURFACE_SCANOUT)!=4 ||
                 !DcnSurfaceBytes(allocation->Allocation.Width,allocation->Allocation.Height,allocation->Allocation.Pitch,&bytes) ||
                 bytes>allocation->Allocation.Size) status=STATUS_INVALID_PARAMETER;
             else { pitch=allocation->Allocation.Pitch; status=STATUS_SUCCESS; }
@@ -5442,12 +5954,9 @@ static NTSTATUS Bc250WddmControlInterrupt(_In_ const HANDLE hAdapter, _In_ const
         // otherwise wait on a timer nothing had armed.
         if (wddm != NULL)
         {
-            // Publish enabled reporting only after its timing source is armed.
-            // A failed MMIO/synchronization operation must reach the caller;
-            // retain the previous reporting state so a retry can recover.
-            if (EnableInterrupt) status = WddmVSyncArm(device, TRUE);
-            if (NT_SUCCESS(status)) wddm->VSyncEnabled = EnableInterrupt;
-        } else status = STATUS_DEVICE_NOT_READY;
+            wddm->VSyncEnabled = EnableInterrupt;
+            if (EnableInterrupt) WddmVSyncArm(device, TRUE);
+        }
         break;
     case DXGK_INTERRUPT_DMA_COMPLETED:
         // Always on and not ours to switch off: a submission is completed whether or not anyone asked for it.
@@ -5517,10 +6026,16 @@ C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, Version) == 0);
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiPresent) > FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiDestroyDevice));
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSubmitCommandVirtual) > FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSubmitCommand));
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiGetNodeMetadata) > FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiCreateContext));
-// Nothing after the WDDM 2.0 block exists: SetVideoProtectedRegion is that block's last member, so if the
-// structure ends right after it, every WDDM 2.1 and later member is structurally absent, not a NULL we defend.
+// At interface 0x5023 this said that nothing after the WDDM 2.0 block exists. ADR 0019 B1 compiles the 2.9 table,
+// so the WDDM 2.1-2.9 members do exist now and are NULLs we defend instead: the 2.0 block still ends where it did
+// (SetVideoProtectedRegion is its last member), the structure ends at the 2.9 block's last member
+// (SetInterruptTargetPresentId, so nothing of 3.x is compiled in), and WddmCheckReserved checks at run time that
+// the whole tail between the two is NULL. A stage that fills a member of that tail moves BC250_WDDM_TABLE_TAIL_START or adds an exception there.
+C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID) == 832);
 C_ASSERT(sizeof(DRIVER_INITIALIZATION_DATA) ==
-         FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID));
+         FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetInterruptTargetPresentId) + sizeof(PVOID));
+#define BC250_WDDM_TABLE_TAIL_START \
+    (FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiSetVideoProtectedRegion) + sizeof(PVOID))
 // Swizzling ranges are gone from WDDM, so the two DDIs must stay NULL and the cap must stay 0; the pair is here so
 // that the connection is visible where the table is built.
 C_ASSERT(FIELD_OFFSET(DRIVER_INITIALIZATION_DATA, DxgkDdiReleaseSwizzlingRange) >
@@ -5554,9 +6069,15 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
     };
     ULONG i;
 
+    SIZE_T offset;
+
     for (i = 0; i < RTL_NUMBER_OF(reserved); i++)
         if (*(PVOID* const*)((const UCHAR*)Data + reserved[i].Offset) != NULL)
             GuardLog("wddm: table member %s must be zero and is not", reserved[i].Name);
+    // ADR 0019 B1: every WDDM 2.1-3.1 member stays NULL while WDDMVersion is 2.0 (see the asserts above).
+    for (offset = BC250_WDDM_TABLE_TAIL_START; offset < sizeof(*Data); offset += sizeof(PVOID))
+        if (*(PVOID const*)((const UCHAR*)Data + offset) != NULL)
+            GuardLog("wddm: table member at offset %u (after the WDDM 2.0 block) must be NULL and is not", (ULONG)offset);
 }
 
 // ---- the display side, traced -----------------------------------------------------------------------------------
@@ -5623,7 +6144,9 @@ BC250_WDDM_TRACED_DDI(DXGKDDI_QUERYVIDPNHWCAPABILITY, QueryVidPnHWCapability, DX
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 {
     RtlZeroMemory(Data, sizeof(*Data));
-    Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;
+    // ADR 0019 B1: the table version is the compiled interface version (bc250kmd.h says why 2.9); the WDDM
+    // feature level is DXGK_DRIVERCAPS.WDDMVersion, which stays 2.0 until stage B4.
+    Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_9;
 
     // The 28 pointers the display-only table already has; since 0.7.6 the child and VidPN ones go through the
     // tracing wrappers above, which change no answer. PresentDisplayOnly is the one member with no
@@ -5701,13 +6224,16 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
     // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat, RenderKm,
-    // RenderGdi, ControlInterrupt2 (WDDM 2.1+, and it does not exist at 2.0), CancelCommand (CancelCommandAware
-    // = 0), MapCpuHostAperture and UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and the
-    // hardware-scheduling DDIs, which do not exist at all at WDDM 2.0. QueryInterface, ControlEtwLogging,
+    // RenderGdi, ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
+    // UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and everything the 2.1-3.1 headers append
+    // after SetStablePowerState: the hardware-queue and hardware-scheduling DDIs (no HWS), the native-fence and
+    // doorbell DDIs (no native fence, no user-mode submission), the flip-queue DDIs, SetTargetGamma and
+    // SetTargetAdjustedColorimetry (not before stage B4), and the diagnostic DDIs, which dxgkrnl requires in
+    // pairs (QueryDiagnosticTypesSupport with ControlDiagnosticReporting, from WDDMVersion 2.4). The interface
+    // version alone obliges none of them; WDDMVersion stays 2.0 (ADR 0019 B1). QueryInterface, ControlEtwLogging,
     // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, GetChildContainerId, SetPowerComponentFState,
     // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
     // display-only table today. ControlInterrupt and GetScanLine are **not** in this list any more: the flip
     // path above sets both. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
     WddmCheckReserved(Data);
 }
-

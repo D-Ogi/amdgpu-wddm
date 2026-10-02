@@ -3,10 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "dcn_translate.h"
+#include "surface_format.h"
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
 typedef int64_t LONGLONG;
+typedef int64_t LONG64;
 typedef uint64_t ULONGLONG;
 typedef int BOOLEAN;
 typedef void *HANDLE;
@@ -49,6 +51,9 @@ typedef struct {
     BC250_WDDM *Wddm;
     int VidPnFlipEnabled;
     volatile LONG DcnVsyncAcked, DcnVsyncDeferred, DcnVsyncOldBufferReports;
+    volatile LONG DcnVsyncSkipOddGeneration, DcnVsyncSkipReadFailure, DcnVsyncSkipSameAddress, DcnVsyncSkipChangedGeneration;
+    volatile LONG64 DcnVsyncSkipOddGenerationTime, DcnVsyncSkipReadFailureTime, DcnVsyncSkipSameAddressTime,
+        DcnVsyncSkipChangedGenerationTime;
 } BC250_DEVICE;
 #define BC250_WDDM_MAGIC_ALLOCATION 123
 #define D3DDDIFMT_A8R8G8B8 21
@@ -67,6 +72,7 @@ static LONGLONG InterlockedCompareExchange64(volatile LONGLONG *p,LONGLONG value
 static LONGLONG InterlockedExchange64(volatile LONGLONG *p,LONGLONG value){LONGLONG old=*p;*p=value;return old;}
 static LONG InterlockedIncrement(volatile LONG *p){return ++*p;}
 static int KeGetCurrentIrql(void){return irq;}
+static ULONGLONG KeQueryInterruptTime(void){return 1;}
 static BC250_WDDM *WddmOf(HANDLE h){return ((BC250_DEVICE*)h)->Wddm;}
 static int WddmFirstCalls(BC250_WDDM *w,int call){(void)w;(void)call;return 0;}
 static void WddmVSyncArm(BC250_DEVICE *d,int on){(void)d;CHECK(on && irq<=DISPATCH_LEVEL);++arms;}
@@ -197,6 +203,21 @@ int main(void)
             request.hAllocation=&allocation;allocation.Allocation.Size--;
             CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
             CHECK(hardware==6 && !(w.PrimarySequence&1));
+            {
+                // The flip never programs a pixel format: only the firmware plane's own two are scanned
+                // out. A8B8G8R8, A2B10G10R10 (DXGI R10G10B10A2) and the rest are refused before hardware.
+                static const ULONG refused[]={0,28,31,32,33,35,113};
+                unsigned k;
+                allocation.Allocation.Size=5888ull*768;request.PrimaryAddress.QuadPart=50;
+                for(k=0;k<sizeof(refused)/sizeof(refused[0]);k++){
+                    allocation.Allocation.Format=refused[k];
+                    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                }
+                CHECK(hardware==6 && w.PrimaryAddress.QuadPart==40 && !(w.PrimarySequence&1));
+                allocation.Allocation.Format=D3DDDIFMT_X8R8G8B8;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                CHECK(hardware==7 && w.PrimaryAddress.QuadPart==50 && programmed_pitch==5888);
+            }
         }
         request.hAllocation=NULL;request.PrimaryAddress=w.PrimaryAddress;
         w.PrimaryNeedsRestore=TRUE;before=hardware;hardware_result=STATUS_IO_TIMEOUT;

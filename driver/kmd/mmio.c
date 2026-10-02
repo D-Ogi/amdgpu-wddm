@@ -109,6 +109,13 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnVsyncTicks = 0;
     Device->DcnVsyncRefused = 0;
     Device->DcnVsyncDeferred = 0;
+    Device->DcnVsyncOldBufferReports = 0;
+    Device->DcnVsyncDpcPolls = Device->DcnVsyncDpcAcked = Device->DcnVsyncDpcSyncFailures = 0;
+    // Keep all VSync diagnostic witnesses in the same device-start epoch.
+    Device->DcnVsyncSkipOddGeneration = Device->DcnVsyncSkipReadFailure = 0;
+    Device->DcnVsyncSkipSameAddress = Device->DcnVsyncSkipChangedGeneration = 0;
+    Device->DcnVsyncSkipOddGenerationTime = Device->DcnVsyncSkipReadFailureTime = 0;
+    Device->DcnVsyncSkipSameAddressTime = Device->DcnVsyncSkipChangedGenerationTime = 0;
     Device->DcnFlipsHardware = 0;
     Device->DcnFlipRefused = 0;
     // 2026-09-22 (ADR 0011 consequences): the present path's own destination mapping, same reset rule and the

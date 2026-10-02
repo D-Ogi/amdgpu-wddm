@@ -171,8 +171,10 @@ Segment 2 has not been seen by a lab dxgkrnl yet; it is here as the compiled dri
 
 ## (d) DRIVER_INITIALIZATION_DATA
 
-832 bytes, 60 DDI pointers set plus `Version` (`wddm.c:2110`). `Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0`,
-the binary compiled at `DXGKDDI_INTERFACE_VERSION 0x5023` (`bc250kmd.h`). Stage B and stage C added code
+1376 bytes (832 before ADR 0019 B1), 60 DDI pointers set plus `Version` (`wddm.c` `WddmBuildTable`).
+`Version = DXGKDDI_INTERFACE_VERSION_WDDM3_1`, the binary compiled at `DXGKDDI_INTERFACE_VERSION 0x10004`
+(`bc250kmd.h`); every member after the WDDM 2.0 block (offset 832 on) is NULL and checked so at run time, and
+`WDDMVersion` stays `DXGKDDI_WDDMv2`. Stage B and stage C added code
 behind these pointers but no pointer: the table is the same 60 it was before the ring path existed, which is
 what "no new capability and no new DDI" looks like from dxgkrnl's side.
 

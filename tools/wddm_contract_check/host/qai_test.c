@@ -441,6 +441,21 @@ static void dump_segment(const char* title)
 
         printf("  segment %u Flags.Value             0x%08X%s\n", i, flags, (flags & 1u) ? "  (Aperture)" : "");
     }
+    /* Budget groups (DXGK_SEGMENTFLAGS: LocalBudgetGroup 0x00080000, NonLocalBudgetGroup 0x00100000). Every
+     * declared segment is in exactly one group: the aperture in the non-local one, the memory segments in the
+     * local one. With the non-local group empty, dxgkrnl reported a UMA-style local budget that included shared
+     * system memory (trial 211, revision 183). */
+    for (i = 1; i <= seg.nb_segment; i++)
+    {
+        unsigned flags = bc250h_segment_flags(payload(&desc), bc250h_segment_descriptor_stride(), seg.nb_segment, i);
+        unsigned local = (flags & 0x00080000u) != 0, nonlocal = (flags & 0x00100000u) != 0, aperture = (flags & 1u) != 0;
+        char what[96], detail[160];
+
+        snprintf(what, sizeof(what), "segment %u is in the %s budget group only", i, aperture ? "non-local" : "local");
+        snprintf(detail, sizeof(detail), "Flags.Value 0x%08X: Aperture %u, LocalBudgetGroup %u, NonLocalBudgetGroup %u",
+                 flags, aperture, local, nonlocal);
+        report(aperture ? (nonlocal && !local) : (local && !nonlocal), what, detail);
+    }
     if (seg.nb_segment != 0)
     {
         printf("  segment 1 BaseAddress             0x%016llX\n", seg.base_address);

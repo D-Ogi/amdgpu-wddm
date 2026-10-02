@@ -85,7 +85,13 @@ SEQUENCES = [
       ("GC", "mmSDMA0_FREEZE", "not traced: AMD queue quiescence, M370"),
       ("GC", "mmSDMA1_FREEZE", "not traced: AMD queue quiescence, M370"),
       ("GC", "mmSDMA0_STATUS1_REG", "not traced: AMD idle fallback, M370"),
-      ("GC", "mmSDMA1_STATUS1_REG", "not traced: AMD idle fallback, M370")]
+      ("GC", "mmSDMA1_STATUS1_REG", "not traced: AMD idle fallback, M370"),
+      # The CU mode (docs/design/cu-mode.md, driver/shim/bc250_cu_mode.c): amdgpu never touches the SPI's
+      # dispatch gate, the bc250-40cu-unlock reference writes it next to CC_GC_SHADER_ARRAY_CONFIG (already
+      # here from the trace). Written only when CuMode is 40, or to put back this boot's stock value. The RLC's
+      # always-on WGP mask is read, never written; RLC_PG_CNTL (traced) is read as the precondition of 40.
+      ("GC", "mmSPI_PG_ENABLE_STATIC_WGP_MASK", "not traced: CU mode dispatch gate, docs/design/cu-mode.md"),
+      ("GC", "mmRLC_PG_ALWAYS_ON_WGP_MASK", "not traced: CU mode observation, read only")]
      + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
@@ -111,6 +117,8 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmGCMC_VM_FB_OFFSET"), ("GC", "mmGCMC_VM_FB_LOCATION_BASE"), ("GC", "mmGCMC_VM_FB_LOCATION_TOP"),
          # gfx.c: read-only RLC retirement observation, no new write permission
          ("GC", "mmGRBM_STATUS2"), ("GC", "mmRLC_CNTL"),
+         # dpm.c: the busy sampler's second engine, the paging node's SDMA0 (read only)
+         ("GC", "mmSDMA0_STATUS_REG"),
          # gfx.c: are the engines halted?
          ("GC", "mmCP_ME_CNTL"), ("GC", "mmCP_MEC_CNTL"), ("GC", "mmSDMA0_F32_CNTL"), ("GC", "mmSDMA1_F32_CNTL"),
          # gfx.c: a stage that stopped half way must not leave a me/pipe/queue selected
@@ -119,6 +127,18 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
          ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD"),
+         # KMD193, ih.c: the UTCL2 fault latch the gfxhub keeps for the first fault of a burst, read once per
+         # burst in the IH DPC (read only; amdgpu reads the same three in gfxhub_v2_0_print_l2_protection_fault_status).
+         ("GC", "mmGCVM_L2_PROTECTION_FAULT_STATUS"), ("GC", "mmGCVM_L2_PROTECTION_FAULT_ADDR_LO32"),
+         ("GC", "mmGCVM_L2_PROTECTION_FAULT_ADDR_HI32"),
+         # KMD193, wddm.c: the CP/GRBM snapshot taken once per HARDWARE FENCE TIMEOUT (read only). GRBM_STATUS,
+         # GRBM_STATUS2 and CP_ME_CNTL are already named above for gfx.c.
+         ("GC", "mmCP_RB0_RPTR"), ("GC", "mmCP_RB0_WPTR"),
+         ("GC", "mmCP_IB1_BASE_LO"), ("GC", "mmCP_IB1_BASE_HI"), ("GC", "mmCP_IB1_BUFSZ"),
+         ("GC", "mmCP_IB2_BASE_LO"), ("GC", "mmCP_IB2_BASE_HI"), ("GC", "mmCP_IB2_BUFSZ"),
+         ("GC", "mmCP_STAT"), ("GC", "mmCP_BUSY_STAT"),
+         ("GC", "mmCP_STALLED_STAT1"), ("GC", "mmCP_STALLED_STAT2"), ("GC", "mmCP_STALLED_STAT3"),
+         ("GC", "mmCP_CPF_STATUS"), ("GC", "mmGRBM_STATUS_SE0"),
          # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
          ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"), ("OSSSYS", "mmIH_STATUS"),
          # dcn.c: the eight registers its decoded summary reads by name (ADR 0011 point 3), out of the 75 on

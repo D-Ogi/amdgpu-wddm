@@ -87,10 +87,16 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 void bc250_shim_wdoorbell32(struct amdgpu_device *adev, unsigned int index, unsigned int value)
 { (void)adev; (void)index; (void)value; }
 
+/* Error-level lines the code under test logged. A full OS DMA buffer is an expected answer, so a
+ * refusal must not add to this (case_insufficient). */
+static unsigned int g_error_lines;
+
 void bc250_shim_log(int level, void *dev, const char *fmt, ...)
 {
 	va_list ap;
-	(void)level; (void)dev;
+	(void)dev;
+	if (level >= 2)
+		g_error_lines++;
 	va_start(ap, fmt);
 	vprintf(fmt, ap);
 	va_end(ap);
@@ -223,6 +229,7 @@ static void case_insufficient(void)
 	static u32 buf[TEST_BUF_DWORDS];
 	u64 src = 0x0000005000000000ULL, dst = 0x0000006000000000ULL;
 	unsigned int written = 0;
+	unsigned int errors_before = g_error_lines;
 
 	memset(buf, 0xCC, sizeof(buf));    /* not zero, so a stray write would be caught either way */
 
@@ -244,6 +251,10 @@ static void case_insufficient(void)
 	check(bc250_sdma_paging_copy(&g_adev, buf, 0, src, dst, 12288, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
 	      "zero dwords of room also refuses");
 	check(all_pattern(buf, TEST_BUF_DWORDS, 0xCCCCCCCCu), "and still writes nothing");
+
+	/* A full DMA buffer is the protocol, not a fault: VidMm submits and calls again. Game session
+	 * 208 logged 113 "ring alloc of 16 dwords exceeds max_dw N" errors for these answers. */
+	check(g_error_lines == errors_before, "no refusal above logs an error line");
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -321,7 +332,7 @@ static void case_gart_invalidate(void)
 {
 	static const struct amdgpu_vmhub_funcs funcs = {NULL,test_invalidate_req};
 	struct amdgpu_vmhub *hub=&g_adev.vmhub[AMDGPU_GFXHUB(0)];
-	u32 buf[32];unsigned int cap,written;
+	u32 buf[32];unsigned int cap,written,errors_before;
 	const u32 write=SDMA_PKT_HEADER_OP(SDMA_OP_SRBM_WRITE)|SDMA_PKT_SRBM_WRITE_HEADER_BYTE_EN(0xfu);
 	const u32 poll=SDMA_PKT_HEADER_OP(SDMA_OP_POLL_REGMEM)|SDMA_PKT_POLL_REGMEM_HEADER_FUNC(3);
 	const u32 retry=SDMA_PKT_POLL_REGMEM_DW5_RETRY_COUNT(0xfff)|SDMA_PKT_POLL_REGMEM_DW5_INTERVAL(10);
@@ -332,6 +343,9 @@ static void case_gart_invalidate(void)
 	check(buf[3]==poll && buf[4]==TEST_REQ_ID*4 && buf[5]==0 && buf[6]==0 && buf[7]==0 && buf[8]==retry,"flush includes request read cycle before ACK");
 	check(buf[9]==poll && buf[10]==TEST_ACK_ID*4 && buf[11]==0 && buf[12]==1 && buf[13]==1 && buf[14]==retry,"flush waits for VMID0 acknowledge");
 	check(all_pattern(buf+15,17,0xCCCCCCCCu),"flush has no extra writes/root changes or trailing corruption");
+	/* FLUSH_TLB's builder (gfx.c GfxPagingBuildFlush) has no room check of its own, so these refusals
+	 * are what the end of every full DMA buffer produces on the lab: VidMm submits and calls again. */
+	errors_before=g_error_lines;
 	for(cap=0;cap<16;cap++) {
 		memset(buf,0xCC,sizeof(buf));
 		check(bc250_sdma_paging_invalidate_gart(&g_adev,buf,cap,&written)==BC250_SDMA_PAGING_INSUFFICIENT && written==16,"flush refuses undersized reservation");
@@ -348,6 +362,7 @@ static void case_gart_invalidate(void)
         check(bc250_sdma_paging_invalidate_vmid(&g_adev,buf,15,test_expected_vmid,&written)==BC250_SDMA_PAGING_INSUFFICIENT && written==16,"VMID flush requires aligned room");
         check(all_pattern(buf,32,0xCCCCCCCCu),"VMID insufficient writes nothing");
     }
+    check(g_error_lines==errors_before,"flush refusals log no error line (208: 113 false ring-overflow errors)");
     test_expected_vmid=0;test_request_calls=0;
     check(bc250_sdma_paging_invalidate_vmid(&g_adev,buf,32,16,&written)==BC250_SDMA_PAGING_EINVAL && !written,"out-of-range VMID refused");
     check(bc250_sdma_paging_invalidate_vmid(&g_adev,buf,32,~0u,&written)==BC250_SDMA_PAGING_EINVAL && !written,"large VMID refused before shift");

@@ -35,6 +35,9 @@ static NTSTATUS MmioDcnWriteEx(BC250_DEVICE*d,ULONG reg,ULONG v,BOOLEAN quiet){(
 static void queue(void*p){(void)p;queues++;}
 static NTSTATUS sync_call(void*d,BOOLEAN(*cb)(PVOID),PVOID ctx,ULONG n,BOOLEAN*ret){(void)d;(void)n;if(fail_sync)return -1;synchronized=1;*ret=cb(ctx);synchronized=0;return 0;}
 #include "vsync_vector_actual.inc"
+/* hang.c's progress recorders: interlocked stores with no effect on the DPC's control flow. */
+#define ProgressEnter(site) ((void)0)
+#define ProgressExit(site,value) ((void)(value))
 static void IhDpc(BC250_DEVICE*d){(void)d;}
 static BOOLEAN IhTakeVsync(BC250_DEVICE*d){int old=vector_pending;(void)d;vector_pending=0;return old!=0;}
 static void WddmGpuFence(BC250_DEVICE*d){(void)d;}

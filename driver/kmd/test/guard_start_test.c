@@ -46,6 +46,9 @@ static void GuardLog(const char* format,...){logs++;strcpy_s(lastLog,sizeof(last
 static void GuardStage(ULONG stage){if(stage==StageStartGuardPassed)admissions++;}
 #include "guard_actual.inc"
 #include "gate_actual.inc"
+// The start bookkeeping after the guard (start_health.c, cumode.c) is not what this test is about.
+static void StartHealthBegin(BC250_DEVICE* d,BOOLEAN full){(void)d;(void)full;}
+static void CuModeBegin(BC250_DEVICE* d){(void)d;}
 #include "pnp_actual.inc"
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)

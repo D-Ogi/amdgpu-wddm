@@ -22,6 +22,8 @@ clock does. The limits are in `docs/hardware.md`, and so is the allow-list: only
 3. Every step is preceded by a Linux measurement on the same unit: available operating points, clocks and voltage
    under load and idle, temperatures, the messages amdgpu sends (wishlist). Nothing is extrapolated from other boards.
 4. The 85 C stop rule is enforced in the driver once it owns the clocks, not only in the lab procedure.
+   Amendment, 2026-10-01: the limit moved to 87 C by owner decision (KMD 0.7.184.1, `BC250_CLOCK_HOT_MC`; the DPM
+   release threshold moved from 80 C to 82 C with it, the 90 C floor is unchanged; `docs/design/dpm.md`).
 
 ## Consequences
 

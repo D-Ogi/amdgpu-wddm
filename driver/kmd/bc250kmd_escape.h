@@ -29,7 +29,35 @@
 #define BC250_ESCAPE_RUN_CLOCK 19u             // typed SMU telemetry or complete operating-point transaction
 #define BC250_ESCAPE_OBSERVE_DCN 20u       // named, read-only scanout and timing observations
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
-#define BC250_KMD_VERSION 0x00070095u       // revision 149: Zero exception to Valid and input diagnostics
+#define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
+#define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
+#define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
+                                                // record on (page table updates, fills, transfers, flushes, destroys)
+#define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
+#define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
+#define BC250_KMD_VERSION 0x000700C4u       // revision 196: a held UMD or Present submission waits on the gfx
+                                            // retirement event instead of sleeping 1 ms at a time, and the
+                                            // guard log reports the held time in microseconds from QPC with
+                                            // cumulative counters in the wddm profile summary (wddm.c
+                                            // WddmHoldBegin/Wait/Report, gfx.c GfxRetireSignal). No escape
+                                            // struct and no journal record layout changed; the constant moves
+                                            // because packagecheck VRS010 matches it against the INF revision.
+                                            // 193: hang instrumentation for the 147/208/209/245 VM-fault
+                                            // class - UTCL2 faults logged once a second with the latched GCVM
+                                            // status, a CP/GRBM/GCVM snapshot at each HARDWARE FENCE TIMEOUT,
+                                            // and process/thread/context identity in the paging journal
+                                            // (ih_fault.h, paging_identity.h, journal version 2). No escape
+                                            // struct and no journal record layout changed; the constant moves
+                                            // because packagecheck VRS010 matches it against the INF revision.
+                                            // 192: O(1) object index and allocation serials instead of
+                                            // adapter-list scans on the close, bind and Present paths
+                                            // (object_index.h, wddm.c); 191: FP16 (A16B16G16R16F) swap-chain
+                                            // buffers admitted as composed LB7A surfaces at 8 bytes a pixel
+                                            // (surface_format.h, gdi_private.h); 190: DDI interface version 0xE003
+                                            // (WDDM 2.9; 3.x makes VidMm refuse the VRAM-only CpuVisible CDD
+                                            // shadow); 189: target modes name their wire format (8-bit RGB),
+                                            // which interface 2.2+ needs (display.c OfferTargetMode); 185: DPM
+                                            // governor thresholds and a runtime clock floor (dpm.c)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -104,6 +132,158 @@ typedef struct _BC250_ESCAPE_START_HEALTH {
     unsigned long long ExpectedGeneration, ExpectedEpoch;
     unsigned long Reserved[2];
 } BC250_ESCAPE_START_HEALTH; // 96 bytes on Windows, ABI 1
+
+// CU mode (driver/kmd/cumode.c, docs/design/cu-mode.md). Adapter-owned software snapshot taken at the
+// end of the start's GFX bring-up: no BAR access, so both operations take NoAdapterSynchronization=1
+// and every other D3DDDI_ESCAPEFLAGS bit zero. READ is open to every caller. CONFIRM needs an
+// administrator, the Generation a READ of this start returned, and a start-health READY adapter; it
+// clears the pending mark of a 40 CU start, which a later start would otherwise treat as a crash.
+// Registers are the values read back after the stage, per shader array (index se * 2 + sh).
+// Reason is enum bc250_cu_reason (driver/shim/include/bc250_cu_mode.h).
+#define BC250_CU_MODE_ABI 1u
+#define BC250_CU_MODE_OP_READ 0u
+#define BC250_CU_MODE_OP_CONFIRM 1u
+#define BC250_CU_MODE_FLAG_VALID 1u          // the stage ran this start; the caps follow ActiveWgps
+#define BC250_CU_MODE_FLAG_PENDING 2u        // 40 applied, not confirmed: a restart now falls back to 24
+#define BC250_CU_MODE_FLAG_CONFIRMED 4u      // 40 applied and confirmed (this start or an earlier one)
+#define BC250_CU_MODE_FLAG_STOCK_RECORD 8u   // stock came from this boot's record: an earlier start wrote
+#define BC250_CU_MODE_FLAG_CONSISTENT 16u    // CC and SPI name the same WGPs on every shader array
+#define BC250_CU_MODE_FLAG_WROTE 32u         // this start wrote CC/SPI (the stock of a cold boot needs none)
+#define BC250_CU_MODE_SA_COUNT 4u
+typedef struct _BC250_ESCAPE_CU_MODE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Requested;                // CuMode as read at start, 0 when absent
+    unsigned long Applied;                  // 24 or 40, 0 when unknown (not run, restore failed)
+    unsigned long Reason, ActiveCus, DisableMask, PciId;
+    unsigned long RlcPgCntl, RlcAonWgpMask;
+    unsigned long StockCc[BC250_CU_MODE_SA_COUNT], StockSpi[BC250_CU_MODE_SA_COUNT];
+    unsigned long Cc[BC250_CU_MODE_SA_COUNT], User[BC250_CU_MODE_SA_COUNT], Spi[BC250_CU_MODE_SA_COUNT];
+    unsigned long ActiveWgps[BC250_CU_MODE_SA_COUNT];
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in, CONFIRM
+    unsigned long Reserved[2];
+} BC250_ESCAPE_CU_MODE; // 184 bytes on Windows, ABI 1
+
+// DPM (driver/kmd/dpm.c, docs/design/dpm.md). Adapter-owned software snapshot the governor publishes
+// every tick: no BAR access, no SMU message, so both operations take NoAdapterSynchronization=1 and
+// every other D3DDDI_ESCAPEFLAGS bit zero. READ is open to every caller. CONFIRM needs an
+// administrator, the Generation a READ of this start returned, and a start-health READY adapter; it
+// clears the pending mark of a DPM start, which a later start would otherwise treat as a crash.
+// Mode is BC250_DPM_MODE_*, Reason enum bc250_dpm_reason, Throttle enum bc250_dpm_throttle
+// (driver/shim/include/bc250_dpm.h). CurrentMHz/CurrentMv are the level the governor committed;
+// ObservedMHz/ObservedVid the SMU's readback, at most a second old (FLAG_CLOCK). Since 0.7.177 BusyPermille is
+// the share of GRBM_STATUS.GUI_ACTIVE samples when FLAG_HW_BUSY is set, else the GFX ring's submit-to-fence share;
+// SubmitBusyPermille is the latter always, SdmaBusyPermille the share of SDMA0 not-idle samples (the paging node).
+// Both were Reserved (zero) in 0.7.175-176: a caller still sends them as zero, so the ABI stays 1.
+#define BC250_DPM_ABI 1u
+#define BC250_DPM_OP_READ 0u
+#define BC250_DPM_OP_CONFIRM 1u
+#define BC250_DPM_FLAG_RUNNING 1u            // the governor thread runs (fixed-lab too: it samples and logs)
+#define BC250_DPM_FLAG_GOVERNING 2u          // mode DPM and not given up: it changes the clock
+#define BC250_DPM_FLAG_PENDING 4u            // DPM, not confirmed: a restart now falls back to fixed-lab
+#define BC250_DPM_FLAG_CONFIRMED 8u          // DPM, confirmed (this start or an earlier one)
+#define BC250_DPM_FLAG_PAUSED 16u            // a power transition holds the governor
+#define BC250_DPM_FLAG_STABLE 32u            // SetStablePowerState(TRUE): pinned to the floor
+#define BC250_DPM_FLAG_SESSION 64u           // DpmSession is on disk: this start is above the floor now or was lately
+#define BC250_DPM_FLAG_TEMPERATURE 128u      // TemperatureMc is this tick's reading
+#define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
+#define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
+typedef struct _BC250_ESCAPE_DPM {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Mode, Requested, Reason, Throttle;
+    unsigned long MaxMHz, CapMHz, TargetMHz, WantMHz;   // setting, thermal cap, last applied, load demand
+    unsigned long CurrentMHz, CurrentMv, ObservedMHz, ObservedVid;
+    long TemperatureMc;
+    unsigned long BusyPermille, BusyAvgPermille;         // last tick, exponential average
+    unsigned long Raises, Lowers, ThermalEvents, Errors, Resyncs;
+    unsigned long long Ticks;
+    unsigned long long BusyTime100ns;                    // GFX ring busy since the governor started
+    unsigned long long UptimeMs;                         // since the governor started
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in, CONFIRM
+    unsigned long SubmitBusyPermille;       // out; in: zero
+    unsigned long SdmaBusyPermille;         // out; in: zero
+} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+
+// DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
+// thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state
+// only: the escape stores the values under the DPM state's locks and the governor thread takes them at its next tick
+// (25 ms); no BAR access, no SMU message from the escape. So every operation takes NoAdapterSynchronization=1 and every
+// other D3DDDI_ESCAPEFLAGS bit zero, as RUN_DPM. READ is open to every caller. THRESHOLDS, FLOOR and RESET need an
+// administrator and ExpectedGeneration equal to the Generation a READ of this start returned (STATUS_RETRY otherwise);
+// THRESHOLDS and FLOOR also need a running DPM start (STATUS_INVALID_DEVICE_STATE: fixed-lab, governor stopped or gave
+// up). Nothing is persisted: every device start begins with the defaults. A refused write leaves the values as they
+// were and names the reason in Error (enum bc250_dpm_tune_error, driver/shim/include/bc250_dpm.h): ranges, the order
+// down < target < up, invariant 1 (a one-step lowering never lands at or above up), invariant 2 (a raise never lands
+// below down), the hold, the floor. FloorMHz in: a clock of the table up to the start's ceiling (MaxMHz), 0 or 1000 for
+// no runtime floor; out: 0 when there is none. Every accepted change is logged in the driver log with its old and new
+// values. Serial counts the changes since the driver loaded; Applied is the serial the governor thread runs with.
+// The 160-byte RUN_DPM structure and BC250_DPM_ABI are unchanged.
+#define BC250_DPM_TUNE_ABI 1u
+#define BC250_DPM_TUNE_OP_READ 0u
+#define BC250_DPM_TUNE_OP_THRESHOLDS 1u      // in: UpPermille, TargetPermille, DownPermille, DownHoldMs
+#define BC250_DPM_TUNE_OP_FLOOR 2u           // in: FloorMHz
+#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds and floor back to the defaults
+#define BC250_DPM_TUNE_FLAG_GOVERNING 1u     // a DPM start's governor thread runs and has not given up: writes are taken
+#define BC250_DPM_TUNE_FLAG_THRESHOLDS 2u    // the thresholds were set at run time (else the defaults)
+#define BC250_DPM_TUNE_FLAG_FLOOR 4u         // a runtime floor is set (else none)
+#define BC250_DPM_TUNE_FLAG_APPLIED 8u       // the governor thread runs with the values below (Applied == Serial)
+typedef struct _BC250_ESCAPE_DPM_TUNE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long UpPermille, TargetPermille, DownPermille, DownHoldMs;      // in: THRESHOLDS; out: in force
+    unsigned long FloorMHz;                 // in: FLOOR; out: in force, 0 for none
+    unsigned long Error;                    // out: enum bc250_dpm_tune_error of a refused write, else 0
+    unsigned long MaxMHz;                   // out: the start's ceiling (DpmMaxMHz), the highest floor admitted
+    unsigned long Mode;                     // out: BC250_DPM_MODE_* of this start
+    unsigned long DefaultUpPermille, DefaultTargetPermille, DefaultDownPermille, DefaultDownHoldMs;    // out
+    unsigned long Serial, Applied;          // out
+    unsigned long long FloorTicks;          // out: governor ticks in which the floor lifted the clock above the load's want
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: THRESHOLDS, FLOOR, RESET
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_DPM_TUNE; // 120 bytes on Windows, ABI 1
+
+// GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
+// software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes
+// NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, and is open to every caller. There is no
+// write operation: the operator changes EnableGpuPresentBlit/EnableCddDwmInterop in the registry and restarts.
+// Requested/Effective are BC250_INTEROP_SWITCH_* bits, Reason and ClosedReason enum bc250_interop_reason
+// (driver/kmd/interop_policy.h). BlitSetting/CddSetting are the raw values read at start, 0 when the matching
+// *_ABSENT or *_UNREADABLE flag is set. SessionBootId is the InteropSession value the start found (0 when none),
+// BootId this boot's KUSER_SHARED_DATA.BootId. PreviousEnd is InteropLastEnd as the start found it, LastEnd this
+// start's last unmark: BC250_INTEROP_END_*. Reserved: zero in, zero out.
+#define BC250_INTEROP_ABI 1u
+#define BC250_INTEROP_OP_READ 0u
+#define BC250_INTEROP_SWITCH_BLIT 1u             // EnableGpuPresentBlit: a Blt present is one GPU copy
+#define BC250_INTEROP_SWITCH_CDD 2u              // EnableCddDwmInterop: DRIVERCAPS DriverSupportsCddDwmInterop
+#define BC250_INTEROP_FLAG_VALID 1u              // a full WDDM start decided; else Reason is not-run
+#define BC250_INTEROP_FLAG_SESSION 2u            // InteropSession is on disk now: a device of this start uses the path
+#define BC250_INTEROP_FLAG_UNCLEAN 4u            // the start found a marker of an earlier boot
+#define BC250_INTEROP_FLAG_STALE 8u              // the start found a marker of this boot (a restart without unmark)
+#define BC250_INTEROP_FLAG_CLOSED_BY_DRIVER 16u  // the switches are 0 because the driver wrote them so (ClosedReason)
+#define BC250_INTEROP_FLAG_PERSISTED 32u         // this start wrote the durable close and it reached the disk
+#define BC250_INTEROP_FLAG_PERSIST_FAILED 64u    // this start's durable close failed: the marker stays for the next one
+#define BC250_INTEROP_FLAG_BLIT_ABSENT 128u      // EnableGpuPresentBlit absent: default 1
+#define BC250_INTEROP_FLAG_CDD_ABSENT 256u       // EnableCddDwmInterop absent: default 1
+#define BC250_INTEROP_FLAG_BLIT_UNREADABLE 512u  // not a REG_DWORD, or the read failed
+#define BC250_INTEROP_FLAG_CDD_UNREADABLE 1024u
+#define BC250_INTEROP_END_NONE 0u
+#define BC250_INTEROP_END_STOP 1u                // the device stopped with the session marked
+#define BC250_INTEROP_END_USERS 2u               // the last device that used the path was destroyed (DWM exit)
+typedef struct _BC250_ESCAPE_INTEROP {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Requested, Effective, Reason, ClosedReason;
+    unsigned long BlitSetting, CddSetting;
+    unsigned long BootId, SessionBootId;
+    unsigned long Users, Marks, Unmarks, MarkFailures;   // devices using the path now; marker writes/deletes/failures
+    unsigned long PreviousEnd, LastEnd;
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long Reserved[2];
+} BC250_ESCAPE_INTEROP; // 104 bytes on Windows, ABI 1
 
 // Read-only diagnostics, not an atomic hardware snapshot. Require administrator,
 // HardwareAccess=1 and every other D3DDDI_ESCAPEFLAGS bit zero: Level Two keeps
@@ -585,6 +765,12 @@ typedef struct _BC250_ESCAPE_FENCE {
 // BC250_ESCAPE_LOG_SUMMARY is refused (REFUSED, STATUS_INVALID_DEVICE_REQUEST) unless D3DKMT_ESCAPE.Flags has
 // HardwareAccess set and NoAdapterSynchronization clear: the summary reads state that a device stop frees, and
 // that flag is what makes dxgkrnl serialize the two.
+//
+// BC250_ESCAPE_GET_LOG and BC250_ESCAPE_GET_PAGING_JOURNAL, from 0.7.184.1 on, are also answered with
+// NoAdapterSynchronization alone (every other flag 0), in any power phase: they copy driver-image rings and touch
+// no hardware, so dxgkrnl need not take the adapter lock for them (display.c, SoftwareReadEscape). Up to 0.7.183.1
+// that combination is refused (REFUSED, STATUS_DEVICE_NOT_READY from the escape) and a reader must use
+// HardwareAccess, which bc250kmd_cli falls back to by itself.
 #define BC250_LOG_FROM_SUMMARY 0xFFFFFFFFu
 
 typedef struct _BC250_LOG_LINE {
@@ -632,3 +818,82 @@ typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4288) ? 1 
 typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_SDMACOPY_SIZE_CHECK[(sizeof(BC250_ESCAPE_SDMACOPY) == 88) ? 1 : -1];
 typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 524416) ? 1 : -1];
+
+// ---- the paging journal (paging_journal.c, docs/design/paging-journal.md) ---------------------------------------
+// One record per BuildPagingBuffer slice, TLB flush and DestroyAllocation. The kernel dump reader decodes the same
+// layout from g_PagingJournal, so the record is plain fixed-width data with no pointers.
+#define BC250_PJ_UPDATE_CPU 1u                  // UPDATE_PAGE_TABLE, CPU_VIRTUAL: written at once, no paging buffer
+#define BC250_PJ_UPDATE_GPU 2u                  // UPDATE_PAGE_TABLE, GPU_PHYSICAL: built into the paging buffer at Dma
+#define BC250_PJ_VIRTUAL_FILL 3u                // VIRTUAL_FILL: Va the destination, Offset the bytes moved
+#define BC250_PJ_VIRTUAL_TRANSFER 4u            // VIRTUAL_TRANSFER: Va the source, Offset the bytes, Flags the direction
+#define BC250_PJ_FLUSH_TLB 5u                   // FLUSH_TLB: only its position in the paging buffer
+#define BC250_PJ_DESTROY_ALLOCATION 6u          // DestroyAllocation: Va the UMD's requested address, Offset the size
+#define BC250_PJ_TRANSFER 7u                    // TRANSFER (physical): Offset the bytes moved
+#define BC250_PJ_FILL 8u                        // FILL (physical): Offset the bytes moved
+#define BC250_PJ_GFX_SUBMIT 9u                  // KMD193: one GFX IB reached the ring (gfx.c SubmitIbLocked).
+                                                // Seq the GFX sequence, Fence the OS SubmissionFenceId, Va the
+                                                // IB1 GPU address, Offset the context's root page table,
+                                                // Allocation the KMD context object as a value, Level the
+                                                // scheduler node, Index the process that created the context,
+                                                // Count BC250_PJ_CTX_*. Valid and Dma unused.
+#define BC250_PJ_FLAG_REPEAT 1u                 // UPDATE: DXGK_UPDATEPAGETABLEFLAGS.Repeat (one entry for the whole range)
+#define BC250_PJ_FLAG_INITIAL 2u                // UPDATE: .InitialUpdate
+#define BC250_PJ_FLAG_EVICTION 4u               // UPDATE: .NotifyEviction, VidMm evicts the allocation
+#define BC250_PJ_FLAG_64KB 8u                   // UPDATE: .Use64KBPages (this driver refuses it)
+#define BC250_PJ_FLAG_TO_SYSTEM 16u             // VIRTUAL_TRANSFER: local to system (paging out); else system to local
+#define BC250_PJ_FLAG_UMD_ALLOCATION 32u        // DESTROY: a UMD allocation (Offset is its UmdBytes)
+// KMD193 (0.7.193.1 and later), no layout change: the fields a kind left unused now carry the identity the
+// 245 dump could not name (scratch game-recon bsod-245, REPORT-245.md item 3).
+//   DESTROY  Level  the process that called DxgkDdiDestroyAllocation (the System worker for a VidMm-deferred
+//                   destroy), Index its thread, Count the process that created the allocation, Valid the BC2A
+//                   blob version (0 when it is not a UMD allocation), Dma the BC2A gem_flags.
+//   UPDATE   with no hAllocation (every unmap), Allocation carries DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE
+//                   .hProcess instead, and BC250_PJ_FLAG_PROCESS says so.
+// Older drivers leave all of it zero, and g_PagingJournal.Version (BC250_PAGING_JOURNAL_VERSION) is 2 from
+// this revision on, so a dump reader need not guess.
+#define BC250_PJ_FLAG_PROCESS 64u               // UPDATE: Allocation holds hProcess, not an allocation handle
+#define BC250_PJ_CTX_UMD 1u                     // GFX_SUBMIT, Count: the context arrived as a BC2C blob
+#define BC250_PJ_CTX_SYSTEM 2u                  // GFX_SUBMIT, Count: DXGK_CREATECONTEXTFLAGS.SystemContext
+// UPDATE, KMD183 (0.7.183.1 and later): bits 16-31 are a mask of the DXGK_PTE.Segment values the slice's valid
+// entries carry: bit 16 + s for segment s < 15 (16 = system memory, 17 = segment 1, 18 = 2, 19 = 3), bit 31 for any
+// segment from 15 up. All zero on older drivers and for a slice with no valid entry. Record size and layout unchanged.
+#define BC250_PJ_FLAG_SEGMENT_SHIFT 16u
+#define BC250_PJ_FLAG_SEGMENT_MASK 0xFFFF0000u
+#define BC250_PJ_FLAG_SEGMENT(s) (((s) < 15u) ? (1u << (BC250_PJ_FLAG_SEGMENT_SHIFT + (s))) : 0x80000000u)
+
+typedef struct _BC250_PAGING_JOURNAL_RECORD {
+    unsigned long long Time;                // KeQueryInterruptTime() when recorded (100 ns since boot; the log's
+                                            // Milliseconds are (Time - the log's start) / 10000)
+    unsigned long long Va;                  // UPDATE: the GPU VA the slice's first entry maps; fills/transfers: see the kind
+    unsigned long long Allocation;          // the driver's allocation handle (its BC250_WDDM_OBJECT), 0 when none
+    unsigned long long Offset;              // UPDATE: AllocationOffsetInBytes; others: bytes (see the kind)
+    unsigned long long Dma;                 // GPU path: DmaBufferGpuVirtualAddress + DmaBufferWriteOffset at the build; 0 = none
+    unsigned long Kind;                     // BC250_PJ_*
+    unsigned long Level;                    // UPDATE: page table level
+    unsigned long Index;                    // UPDATE: StartIndex + slice start, entries into the table
+    unsigned long Count;                    // UPDATE: entries in the slice
+    unsigned long Valid;                    // UPDATE: entries of the slice with the Windows Valid bit; the rest zero theirs
+    unsigned long Flags;                    // BC250_PJ_FLAG_*
+    unsigned long Fence;                    // OS SubmissionFenceId of the paging buffer that carried it (0: CPU path, or
+                                            // not submitted yet)
+    unsigned long Seq;                      // the SDMA sequence GfxSubmitPaging gave that buffer (0: not yet)
+} BC250_PAGING_JOURNAL_RECORD;
+#define BC250_PAGING_JOURNAL_MAX 64u        // records one escape returns
+
+typedef struct _BC250_ESCAPE_PAGING_JOURNAL {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_GET_PAGING_JOURNAL
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Returned;                 // out: records in Records[]
+    unsigned long Capacity;                 // out: records the ring holds
+    unsigned long long From;                // in: the first record index wanted
+    unsigned long long Total;               // out: records written since this driver load; indices run 0..Total-1
+    unsigned long long Next;                // out: the index to ask for next; Returned 0 means the end
+    unsigned long long Lost;                // out: requested records the ring had already overwritten
+    BC250_PAGING_JOURNAL_RECORD Records[BC250_PAGING_JOURNAL_MAX];
+} BC250_ESCAPE_PAGING_JOURNAL;
+typedef char BC250_PAGING_JOURNAL_RECORD_SIZE_CHECK[(sizeof(BC250_PAGING_JOURNAL_RECORD) == 72) ? 1 : -1];
+typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) == 4672) ? 1 : -1];

@@ -28,7 +28,6 @@
 #include "bc250kmd.h"
 #include "bc250_fence_order.h"
 #include "bc250_sdma_virtual_ptes.h"
-#include "gfx_recovery.h"
 #include "paging_intervals.h"
 #include "paging_permutation.h"
 #include "bc250kmd_escape.h"
@@ -300,9 +299,9 @@ static int SetUp(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     // amdgpu's kernel log on unit A (E03 dmesg): "SE 2, SH per SE 2, CU per SH 10". Backends per SE is not in the log
     // and in no register amdgpu touched; it only scales a software mask (bc250_gfx.h). 2 is the value of every other
     // GC 10.1 part with this SE/SH layout; docs/linux-session-wishlist.md asks for the discovery table.
-    inputs.max_shader_engines = 2;
-    inputs.max_sh_per_se = 2;
-    inputs.max_cu_per_sh = 10;
+    inputs.max_shader_engines = BC250_SHADER_ENGINES;
+    inputs.max_sh_per_se = BC250_SH_PER_SE;
+    inputs.max_cu_per_sh = BC250_MAX_CU_PER_SH;    // cumode.h: the CU mode needs the same number
     inputs.max_backends_per_se = 2;
     inputs.async_gfx_ring = true;       // the trace: no CP_RB0 programming, a KIQ MAP_QUEUES for the gfx queue
     // Full WDDM uses AMD's no-GFXOFF startup policy until its power lifecycle
@@ -969,6 +968,10 @@ static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
     if (InterlockedExchange(&gfx->SubmitFailed, 1) == 0)
         GuardLog("gfx: submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
                  gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
+    // KMD196: unconditionally, not only on the first call. A held submission is waiting for a fence that will
+    // now never come; GfxSubmitArmed is false from here, so it wakes, fails its submission and lets the OS TDR
+    // path have the fence. Before this it sat out its whole 500 ms bound after the ring was already abandoned.
+    GfxRetireSignal(Device);
 }
 
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
@@ -980,6 +983,15 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
     }
     GfxSubmitFailAccess(Device);
     GfxAccessRelease(Device);
+}
+
+// KMD196. The generation is bumped before the event is set, so a waiter that cleared the event and then found
+// the generation moved retests instead of sleeping through its own wake, and a second waiter's clear cannot
+// swallow the first one's. IO_NO_INCREMENT: a submit thread owes nothing to the DPC that woke it.
+void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
+{
+    InterlockedIncrement(&Device->GfxRetireGeneration);
+    KeSetEvent(&Device->GfxRetireEvent, IO_NO_INCREMENT, FALSE);
 }
 
 static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
@@ -996,8 +1008,15 @@ static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
         if (!bc250_fence_reached(observed, Seq)) return FALSE;
         // Store the outstanding sequence, not a boolean. An old DPC may not
         // clear a newer producer's marker after observing an earlier fence.
-        if (pending && bc250_fence_reached(observed, (ULONG)pending))
-            (void)InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending);
+        if (pending && bc250_fence_reached(observed, (ULONG)pending) &&
+            InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
+        {
+            DpmBusyEnd(&Device->Dpm);     // the ring went idle: the DPM governor's busy share (dpm.h)
+            // KMD196: this CAS is the one place that turns "a job is in flight" into "none is", which is exactly
+            // the condition SubmitIbLocked refuses a foreign root on. Whoever observed the fence - the IH DPC,
+            // the watchdog, a submit - the waiters are woken from here.
+            GfxRetireSignal(Device);
+        }
     }
     return TRUE;
 }
@@ -1017,7 +1036,8 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 // With GartLock held, the gfx sequence installed as adev->backend and a GpuMem sequence open. GfxSubmitIb is this plus
 // all three; GfxFenceEscape's IB_AT mode calls it directly, because it already holds them.
 static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev,
-                               ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes, _Out_ ULONG* Seq)
+                               ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes,
+                               _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq)
 {
     struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
     ULONG seq, previousSeq;
@@ -1060,7 +1080,9 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     // invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
     if (Vmid != 0)
     {
+        ProgressEnter(ProgressSiteVmFlush);
         result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
+        ProgressExit(ProgressSiteVmFlush, (LONG)result);
         GuardLog("gfx: VMID %lu root 0x%llX flush -> %d", Vmid, RootPhysical, result);
         if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
             return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
@@ -1084,6 +1106,12 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     else
     {
         GuardLog("gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000");
+        // KMD193: the one line that names the submitter of the job frame above. 245 found the faulting job in
+        // the ring with nothing anywhere to say whose context it was on.
+        if (Identity != NULL)
+            GuardLog("gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX",
+                     seq, Identity->Fence, Identity->Node, GpuAddress, SizeBytes / 4, Identity->Context,
+                     Identity->ProcessId, Identity->ContextFlags);
         result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
@@ -1096,6 +1124,13 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     }
 
     Gfx->SubmitVmid = Vmid;
+    // KMD193: committed, so the journal gets its BC250_PJ_GFX_SUBMIT record here - before the DPM call and
+    // before this function can take any other exit. The record is what lets a dump put a faulting sequence
+    // next to the unmap that took its memory away (bsod-245 item 4).
+    if (Identity != NULL)
+        PagingJournalGfxSubmit(seq, Identity->Fence, GpuAddress, RootPhysical, Identity->Context, Identity->Node,
+                               Identity->ProcessId, Identity->ContextFlags);
+    DpmBusyBegin(&Device->Dpm);     // committed: the ring is busy from here (dpm.h)
     if (InterlockedIncrement(&Gfx->PipelineSamples) <= 16) {
         ULONG observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
         GuardLog("gfx: pipeline queued seq%lu prior%lu observed_after_doorbell%lu overlap%u",
@@ -1107,7 +1142,7 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
 }
 
 NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
-                     ULONG SizeBytes, _Out_ ULONG* Seq)
+                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq)
 {
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
@@ -1117,6 +1152,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
     ULONG vram, gtt;
 
     *Seq = 0;
+    ProgressEnter(ProgressSiteGfxSubmit);   // before GartLock: a wait for it counts as inside
     // PASSIVE_LEVEL only, because of this: DxgkDdiSubmitCommandVirtual is annotated PASSIVE_LEVEL
     // (d3dkmddi.h) and DxgkDdiSubmitCommand is not, which is exactly why the paging path may not come here.
     ExAcquireFastMutex(&Device->GartLock);
@@ -1130,11 +1166,12 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
         adev->backend = &gfx->Sequence;
         SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
         GpuMemBeginSequence(Device, NULL, 0);
-        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Seq);
+        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Identity, Seq);
         (void)GpuMemEndSequence(Device, &vram, &gtt);
         adev->backend = previousBackend;
     }
     ExReleaseFastMutex(&Device->GartLock);
+    ProgressExit(ProgressSiteGfxSubmit, (LONG)*Seq);
     return status;
 }
 
@@ -1331,8 +1368,10 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             // one that runs; GfxSubmitIb itself would deadlock on GartLock here.
             ULONG seq = 0;
 
+            // No identity: the IB_AT escape has no WDDM context and no OS fence, so it writes no
+            // BC250_PJ_GFX_SUBMIT record (KMD193).
             status = SubmitIbLocked(Device, gfx, adev, Data->Vmid, Data->RootPhysical, Data->IbAddress,
-                                    Data->Dwords * 4u, &seq);
+                                    Data->Dwords * 4u, NULL, &seq);
             if (NT_SUCCESS(status))
             {
                 Data->LastSeq = seq;
@@ -3280,13 +3319,16 @@ NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, 
                           ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
 {
     NTSTATUS result;
+    ProgressEnter(ProgressSitePagingSubmit);
     if (GfxAccessAcquire(Device) == NULL)
     {
         *Seq = 0;
+        ProgressExit(ProgressSitePagingSubmit, 0);
         return STATUS_DEVICE_NOT_READY;
     }
     result = GfxSubmitPagingAccess(Device, PrivateData, PrivateBytes, Start, ByteCount, VirtualAddress, Seq);
     GfxAccessRelease(Device);
+    ProgressExit(ProgressSitePagingSubmit, (LONG)*Seq);
     return result;
 }
 
@@ -3453,134 +3495,6 @@ NTSTATUS GfxSetPowerRetained(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     ExReleaseFastMutex(&Device->GartLock);
     ExReleasePushLockExclusive(&Device->GfxPagingLock);
     KeLeaveCriticalRegion();
-    return status;
-}
-
-// ---- Unpublished SDMA0 recovery witness --------------------------------------
-// Slots0/1 are startup ring tests,2/3 diagnostic fences,4 paging completion,
-//5 paging marker. These two additional private slots never alias an OS fence.
-#define BC250_RECOVERY_CONTENT_SLOT 6u
-#define BC250_RECOVERY_FENCE_SLOT 7u
-
-NTSTATUS GfxRecoverSdma0Unpublished(BC250_DEVICE* Device, BC250_SDMA0_RECOVERY_REPORT* Report)
-{
-    BC250_GFX* gfx;
-    struct amdgpu_device* adev=NULL;
-    struct amdgpu_ring* ring;
-    void* previousBackend=NULL;
-    volatile u64* content;
-    volatile u64* fence;
-    u64 contentAddr,fenceAddr;
-    ULONG sequence,pattern,i;
-    BOOLEAN enabled=FALSE,sequenceActive=FALSE;
-    NTSTATUS status=STATUS_INVALID_DEVICE_STATE;
-    KIRQL irql;
-    int result=0;
-    if (!Report) return STATUS_INVALID_PARAMETER;
-    RtlZeroMemory(Report,sizeof(*Report));
-    Report->Stage=BC250_SDMA0_RECOVERY_ADMISSION;
-    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL || Device->Started ||
-        Device->Wddm || !Device->FullWddm) goto Done;
-    KeEnterCriticalRegion();
-    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
-    ExAcquireFastMutex(&Device->GartLock);
-    gfx=(BC250_GFX*)Device->Gfx;
-    // Do not reset a live WDDM queue or unilaterally adopt an already closed
-    // lifecycle owner. GartLock serializes all changes to that owner.
-    if (Device->Started || Device->Wddm || !gfx || Device->GfxStopPrepared ||
-        Device->GpuStopUnconfirmed || Device->GfxTlbBootstrap || !Device->MmioGfxEnabled ||
-        !gfx->SetUp || gfx->PowerSuspended || gfx->Failed || gfx->SubmitFailed ||
-        gfx->StagesDone!=BC250_GFX_STAGE_INTERRUPTS || !gfx->PagingReady ||
-        !gfx->PagingGate || !gfx->SdmaFencePage || !NT_SUCCESS(gfx->Sequence.Fault) ||
-        !PspIsLoaded(Device) || !IhIsActive(Device)) goto Unlock;
-    KeAcquireSpinLock(&Device->GfxAccessLock,&irql);
-    enabled=!Device->GfxAccessClosed;
-    KeReleaseSpinLock(&Device->GfxAccessLock,irql);
-    if (!enabled) goto Unlock;
-    status=GartDevice(Device,&adev,&enabled);
-    if (!NT_SUCCESS(status)) goto Unlock;
-    status=STATUS_DEVICE_NOT_READY;
-    if (!enabled || !adev || adev!=gfx->PagingDevicePtr || adev->sdma.num_instances<2 ||
-        gfx->PagingRing!=&adev->sdma.instance[0].ring || !adev->sdma.fence_mem.cpu ||
-        adev->sdma.fence_mem.size<(BC250_RECOVERY_FENCE_SLOT+1u)*8u) goto Unlock;
-    ring=gfx->PagingRing;
-    contentAddr=bc250_sdma_fence_addr(adev,BC250_RECOVERY_CONTENT_SLOT);
-    fenceAddr=bc250_sdma_fence_addr(adev,BC250_RECOVERY_FENCE_SLOT);
-    if (!contentAddr || !fenceAddr || (contentAddr&7u) || (fenceAddr&7u)) goto Unlock;
-    // Close and join bounded CPU references, including IH fence observers, while
-    // builders/diagnostics are excluded by GfxPagingLock/GartLock. No spinlock is
-    // held across hardware polling. This is not a wait for a hung GPU fence.
-    GfxAccessClose(Device);
-    Report->PriorPagingSeq=gfx->PagingSubmitSeq;
-    Report->PriorPagingInFlight=(ULONG)gfx->PagingSubmitInFlight;
-    Report->PriorPagingFailed=(ULONG)gfx->PagingSubmitFailed;
-    Report->PriorRingOwes=gfx->RingOwes[BC250_FENCE_RING_SDMA0];
-    previousBackend=adev->backend;adev->backend=&gfx->Sequence;
-    SequenceBegin(&gfx->Sequence,Device,FALSE,NULL,0);
-    sequenceActive=TRUE;
-    Report->Stage=BC250_SDMA0_RECOVERY_RESET;
-    result=bc250_sdma_reset_retained_instance(adev,0,&Report->Reset);
-    status=STATUS_IO_DEVICE_ERROR;
-    if (result || !NT_SUCCESS(gfx->Sequence.Fault) ||
-        Report->Reset.stage!=BC250_SDMA_RESET_PROGRAMMED) goto Finish;
-    Report->Stage=BC250_SDMA0_RECOVERY_PROBE;
-    sequence=(ULONG)InterlockedIncrement(&gfx->FenceSeq);
-    if (!sequence) sequence=(ULONG)InterlockedIncrement(&gfx->FenceSeq);
-    pattern=sequence^0xa5c39e71u;
-    Report->ProbeSequence=sequence;
-    Report->ExpectedContent=(u64)pattern | ((u64)(~pattern)<<32);
-    content=(volatile u64*)((char*)adev->sdma.fence_mem.cpu+BC250_RECOVERY_CONTENT_SLOT*8u);
-    fence=(volatile u64*)((char*)adev->sdma.fence_mem.cpu+BC250_RECOVERY_FENCE_SLOT*8u);
-    *content=~Report->ExpectedContent;
-    *fence=~(u64)sequence;
-    KeMemoryBarrier();
-    // A failed probe keeps selected-ring ownership and backing intact. Reset has
-    // already discarded its old transport, but never reports old OS work done.
-    gfx->RingOwes[BC250_FENCE_RING_SDMA0]=sequence;
-    gfx->RingOwesSlot[BC250_FENCE_RING_SDMA0]=BC250_RECOVERY_FENCE_SLOT;
-    KeAcquireSpinLock(&gfx->Sdma0RingLock,&irql);
-    result=bc250_sdma_recovery_probe_submit(ring,contentAddr,fenceAddr,pattern,sequence);
-    KeReleaseSpinLock(&gfx->Sdma0RingLock,irql);
-    if (result || !NT_SUCCESS(gfx->Sequence.Fault)) goto Finish;
-    status=STATUS_IO_TIMEOUT;
-    for (i=0;i<BC250_FENCE_TIMEOUT_US;i++) {
-        Report->Polls=i+1;
-        Report->ObservedFence=bc250_sdma_fence_read(adev,BC250_RECOVERY_FENCE_SLOT);
-        if (Report->ObservedFence==sequence) {
-            KeMemoryBarrier();
-            Report->ObservedContent=bc250_sdma_fence_read(adev,BC250_RECOVERY_CONTENT_SLOT);
-            if (Report->ObservedContent!=Report->ExpectedContent) {
-                status=STATUS_DEVICE_DATA_ERROR;break;
-            }
-            result=bc250_sdma_recovery_transport(ring,&Report->ProbeRptr,&Report->ProbeWptr);
-            if (result || !NT_SUCCESS(gfx->Sequence.Fault)) {status=STATUS_IO_DEVICE_ERROR;break;}
-            if (Report->ProbeRptr==Report->ProbeWptr && Report->ProbeWptr==(ring->wptr<<2)) {
-                status=STATUS_SUCCESS;break;
-            }
-        }
-        KeStallExecutionProcessor(1);
-    }
-    if (NT_SUCCESS(status)) {
-        gfx->RingOwes[BC250_FENCE_RING_SDMA0]=0;
-        InterlockedExchange(&gfx->PagingSubmitInFlight,0);
-        InterlockedExchange(&gfx->PagingSubmitFailed,0);
-        Report->Ready=TRUE;
-        Report->Stage=BC250_SDMA0_RECOVERY_READY;
-        GfxAccessOpen(Device);
-    }
-Finish:
-    if (!NT_SUCCESS(gfx->Sequence.Fault)) status=gfx->Sequence.Fault;
-    if (!NT_SUCCESS(status)) InterlockedExchange(&gfx->PagingSubmitFailed,1);
-    Report->ShimResult=result;
-    if (sequenceActive) adev->backend=previousBackend;
-    GuardLog("gfx: unpublished SDMA0 recovery stage %lu status 0x%08X shim %d probe %lu fence 0x%llX content 0x%llX ready %u",
-        Report->Stage,status,result,Report->ProbeSequence,Report->ObservedFence,Report->ObservedContent,Report->Ready);
-Unlock:
-    ExReleaseFastMutex(&Device->GartLock);
-    ExReleasePushLockExclusive(&Device->GfxPagingLock);
-    KeLeaveCriticalRegion();
-Done:
-    Report->Status=status;
     return status;
 }
 
