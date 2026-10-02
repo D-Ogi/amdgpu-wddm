@@ -71,10 +71,11 @@ void APIENTRY reset_pool(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDPOOL_0040 h) 
         c->report(E_INVALIDARG);
         return;
     }
-    // By API no list recording into the pool's allocators is open here, and every Close drained its list, so none of
-    // the pool's calls is pending: the replay of other pools' lists goes on. A list still open into this pool (an
-    // application error) keeps the drain of every ring, as before.
+    // By API no list recording into the pool's allocators is open here, so the pool's pending calls end with its
+    // lists' Close entries: the reset waits for the last of them on each ring, and the replay of other pools' lists
+    // goes on. A list still open into this pool (an application error) keeps the drain of every ring, as before.
     if (p->open_lists.load(std::memory_order_acquire)) drain_all(c, Drain::Pool);
+    else drain_closes(c, p->closing);
     for (ID3D12CommandAllocator* a : p->allocators) {
         if (!a) continue;
         HRESULT hr = a->Reset();
@@ -185,19 +186,37 @@ void APIENTRY destroy_list(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDLIST h) {
     c->live.fetch_sub(1);
 }
 
-// With replay on, the list's pending calls run first, so the engine's Close result is the list's.
+// With replay on, Close is the list's last entry and the worker makes the engine Close: the calling thread no longer
+// waits for the list's calls (306: 0.41 ms per frame of the main thread in that drain, 0.09 in the engine Close). The
+// list counts as closed at once. An engine Close that fails there leaves its result in close_hr, and the list's next
+// drain (ExecuteCommandLists, Reset, ExecuteBundle) reports it on that API thread: the runtime learns it there, not
+// from the Close. The engine Close reaches the list's allocator, so the pool keeps where the entry ends (closing) for
+// its reset and for a Reset into it. Made here (policy off, a thread without a ring), the Close reports its own
+// failure, and a list whose Close failed stays what it was.
 void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     CommandListRecord* l = list_of(h, "CloseCommandList");
     if (!l) return;
-    drain_list(l, Drain::Close);
-    HRESULT hr = l->list()->Close();
-    // A list whose Close failed is not a closed list: it stays what it was.
+    record(l, [hr = &l->close_hr](ID3D12GraphicsCommandList* e) noexcept {
+        const HRESULT result = e->Close();
+        if (FAILED(result)) hr->store(result, std::memory_order_relaxed);
+    });
+    // With the policy off, a tail left from before it was turned off names nothing (the teardown replayed it).
+    Replay* replay = l->h.device->replay;
+    const uint64_t tail = replay ? l->replay_tail.load(std::memory_order_relaxed) : 0;
+    const HRESULT hr = FAILED(l->close_hr.load(std::memory_order_relaxed))
+                           ? l->close_hr.exchange(S_OK, std::memory_order_relaxed) : S_OK;
     if (FAILED(hr)) {
         l->h.device->report_list(l->rt, hr);
-    } else {
-        l->recording = false;
-        if (l->pool) leave_pool(l);
+        if (!tail) return;
     }
+    l->recording = false;
+    if (tail) {
+        // The list is complete: its worker need not wait for a later publish to replay it.
+        wake_for(replay, tail);
+        if (auto* p = l->pool ? record_of<CommandPoolRecord>(l->pool, Tag::CommandPool, l->h.device) : nullptr)
+            p->closing[(tail >> 56) - 1].store(tail & kReplayPositionMask, std::memory_order_relaxed);
+    }
+    if (l->pool) leave_pool(l);
 }
 
 void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMANDLIST_0040* args) {
@@ -213,6 +232,7 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
         c->report_list(l->rt, E_INVALIDARG);
         return;
     }
+    drain_closes(c, p->closing);                // another list's pending Close still reaches the allocator
     ID3D12CommandAllocator*& a = p->allocators[l->type];
     if (!a) {
         HRESULT hr = c->device->CreateCommandAllocator(l->type, __uuidof(ID3D12CommandAllocator),

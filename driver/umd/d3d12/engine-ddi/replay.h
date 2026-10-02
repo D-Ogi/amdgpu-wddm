@@ -11,9 +11,11 @@
 // on the old ring (Drain::Switch). A ring is one fixed region: no allocation per call, at most rings x ring_bytes
 // per device, the space recycled as the worker advances.
 //
-// Drains make published entries replay before the caller continues: a list's entries (drain_list) before its Close,
-// Reset, ExecuteBundle, ExecuteCommandLists and destroy, a direct call, or a move to another ring; every ring's
-// (drain_all) before the destroy of any object an entry can name, a command pool's reset or destroy, and
+// Close is itself an entry, the list's last (close_list). Drains make published entries replay before the caller
+// continues: a list's entries (drain_list) before its Reset, ExecuteBundle, ExecuteCommandLists and destroy, a direct
+// call, or a move to another ring; a pool's last Close entry on each ring (drain_closes) before the pool's reset and a
+// Reset into it, since the engine Close reaches the allocator; every ring's (drain_all) before the destroy of any
+// object an entry can name, a command pool's destroy (or its reset while a list of it is open), and
 // SetPipelineStackSize, whose value the engine reads at record time. A drain waits as long as it takes (a line every
 // second names what it waits for), and gives up only when the worker thread no longer exists.
 //
@@ -25,7 +27,8 @@
 //   R3 An engine object named by a pending entry is alive: every destroy that can free one drains first.
 //   R4 The worker makes no context (HCONTEXT) operation and no error, table or removal callback: the shell's worker
 //      hook runs it in a scope that admits only the runtime callbacks recording needs (hosted-dispatch.h).
-//   R5 A lambda calls engine methods only: no hook, no engine-ddi lock, no record write.
+//   R5 A lambda calls engine methods only: no hook, no engine-ddi lock, no record write. The one exception is the
+//      Close entry, which stores a failure into its list's close_hr (atomic; a drain of the list reads it).
 //   R6 No engine-ddi lock is held while a drain waits; the worker takes no lock but its ring's (a leaf).
 // Fields, writer -> readers:
 //   DeviceContext::replay: set_replay_policy, before the device is used on another thread and at teardown -> every
@@ -36,7 +39,9 @@
 //     worker (seq_cst, after the entry's engine call returned). sleeping: the worker; wakers clear it by exchange.
 //     next_wake: waiters under the ring's lock, the worker reads it lock-free.
 //   CommandListRecord::replay_tail: the thread recording the list, or a drain of the list; other threads read it
-//     after the application's own ordering (a list is not free-threaded).
+//     after the application's own ordering (a list is not free-threaded). CommandListRecord::close_hr: the worker
+//     (a failed Close), cleared by the drain that reports it. CommandPoolRecord::closing: close_list, read by the
+//     pool's reset and by Reset after the application's ordering (an allocator is not free-threaded either).
 #pragma once
 #include "internal.h"
 #include <cstring>
@@ -48,10 +53,9 @@ namespace engine_ddi {
 
 // CommandListRecord::replay_tail: ((ring index + 1) << 56) | the ring position where the list's last entry ended.
 inline constexpr uint64_t kReplayPositionMask = (uint64_t{1} << 56) - 1;
-inline constexpr uint32_t kMaxReplayRings = 16;
 
 enum class Drain : uint32_t {
-    Close, Reset, Bundle, Ecl, Switch, Direct, Destroy, Pool, Stack, Space, Slots, Teardown, Count
+    Reset, Bundle, Ecl, Switch, Direct, Destroy, Pool, Closes, Stack, Space, Slots, Teardown, Count
 };
 
 // The start of every entry. run null: a skip to the end of the ring. size: the entry's bytes, a multiple of 16.
@@ -179,6 +183,7 @@ bool replay_fallback(ReplayRing* ring, CommandListRecord* list, bool oversize) n
 bool replay_snapshot_ready(ReplayRing* ring, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT count) noexcept;
 void replay_snapshot(ReplayRing* ring, const Snap& snap, D3D12_CPU_DESCRIPTOR_HANDLE* out, uint64_t end) noexcept;
 void replay_drain_list(Replay* replay, CommandListRecord* list, Drain kind) noexcept;
+void replay_drain_closes(Replay* replay, const std::atomic<uint64_t>* closing) noexcept;
 void replay_drain_all(Replay* replay, Drain kind) noexcept;
 // Teardown: drains every ring, stops and joins every worker, frees everything; the context's replay is null after.
 void replay_off(DeviceContext* context) noexcept;
@@ -192,9 +197,18 @@ inline ReplayRing* replay_ring(Replay* replay) noexcept {
 inline void drain_list(CommandListRecord* list, Drain kind) noexcept {
     if (Replay* replay = list->h.device->replay) replay_drain_list(replay, list, kind);
 }
+// A pool's last Close entry on each ring (CommandPoolRecord::closing) has replayed.
+inline void drain_closes(DeviceContext* context, const std::atomic<uint64_t>* closing) noexcept {
+    if (Replay* replay = context->replay) replay_drain_closes(replay, closing);
+}
 // Every entry published so far, on every ring of the device.
 inline void drain_all(DeviceContext* context, Drain kind) noexcept {
     if (Replay* replay = context->replay) replay_drain_all(replay, kind);
+}
+// Wakes the worker of the ring that holds an entry ending at tail (a list's replay_tail), if it sleeps.
+inline void wake_for(Replay* replay, uint64_t tail) noexcept {
+    ReplayRing* r = replay->rings[(tail >> 56) - 1];
+    if (r->sleeping.load(std::memory_order_relaxed)) replay_wake(r);
 }
 
 namespace replay_detail {
@@ -344,8 +358,8 @@ inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t si
     // runs its own code longer than the worker's spin, records a few more, and a wake per such burst cost the
     // recording thread a system call each (304: 1.2 ms per frame of the main thread in WakeByAddressSingle).
     // While it sleeps the worker writes nothing, so done is the position it caught up to. Entries below the bound
-    // wait at most until the next drain (every Close drains its list and wakes the worker), the next publish past the
-    // bound or the worker's own timeout: latency, never an entry.
+    // wait at most until the next Close (it wakes the worker), the next drain, the next publish past the bound or the
+    // worker's own timeout: latency, never an entry.
     if (r->sleeping.load(std::memory_order_relaxed) &&
         end - r->done.load(std::memory_order_relaxed) >= r->replay->wake_bytes)
         replay_wake(r);

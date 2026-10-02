@@ -280,10 +280,11 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
 // calling thread, as before this policy existed: no ring, no thread. On, a recording slot still validates,
 // translates and reports on the calling thread, then writes the engine call, with a copy of every array and
 // descriptor the engine reads through a pointer, into the calling thread's ring; each ring's worker thread makes
-// the engine calls in order (replay.h: topology, drains, ownership rules). Close, Reset, ExecuteBundle,
-// ExecuteCommandLists and the destroy of a list wait for that list's pending calls, so the engine's Close result
-// still reaches the runtime from the Close itself; the destroy of any object a pending call can name, a command
-// pool's reset and destroy, and SetPipelineStackSize wait for every ring. Up to rings recording threads (1 to 16)
+// the engine calls in order (replay.h: topology, drains, ownership rules). Close is the list's last entry, made by
+// the worker; Reset, ExecuteBundle, ExecuteCommandLists and the destroy of a list wait for that list's pending calls,
+// and the first of them reports a failed engine Close to the runtime (the destroy drops it). A command pool's reset
+// and a Reset into the pool wait for the pool's pending Closes; the destroy of any object a pending call can name, a
+// command pool's destroy, and SetPipelineStackSize wait for every ring. Up to rings recording threads (1 to 16)
 // get a ring of ring_bytes each (a power of two, 64 KiB to 64 MiB); a thread beyond them records directly.
 //   worker(shell, body, ring): the start of each worker thread, called once on it; it must call body(ring), which
 //     returns at teardown. The worker makes engine command-list calls only, and the engine's recording may call

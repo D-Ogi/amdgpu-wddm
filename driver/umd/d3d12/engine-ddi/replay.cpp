@@ -11,8 +11,8 @@
 namespace engine_ddi {
 
 namespace {
-constexpr const char* kDrainNames[] = {"close", "reset", "bundle", "ecl", "switch", "direct",
-                                       "destroy", "pool", "stack", "space", "slots", "teardown"};
+constexpr const char* kDrainNames[] = {"reset", "bundle", "ecl", "switch", "direct", "destroy",
+                                       "pool", "closes", "stack", "space", "slots", "teardown"};
 static_assert(std::size(kDrainNames) == static_cast<size_t>(Drain::Count), "drain names");
 // Snapshot slots by descriptor heap type (CBV_SRV_UAV, SAMPLER, RTV, DSV). OMSetRenderTargets names up to eight
 // RTVs and a DSV per call, a clear one view; a slot is free again as soon as the worker has passed its entry.
@@ -40,7 +40,7 @@ void bump(std::atomic<uint64_t>& counter, uint64_t by = 1) noexcept {
 // The drains of DDI calls: the shell's drained hook runs after them (a removal the worker found is reported there).
 bool ddi_drain(Drain kind) noexcept {
     switch (kind) {
-    case Drain::Close: case Drain::Reset: case Drain::Bundle: case Drain::Ecl: case Drain::Destroy: case Drain::Pool:
+    case Drain::Reset: case Drain::Bundle: case Drain::Ecl: case Drain::Destroy: case Drain::Pool: case Drain::Closes:
     case Drain::Stack: return true;
     default: return false;
     }
@@ -417,13 +417,45 @@ void replay_snapshot(ReplayRing* r, const Snap& snap, D3D12_CPU_DESCRIPTOR_HANDL
 void replay_drain_list(Replay* rp, CommandListRecord* l, Drain kind) noexcept {
     drain_list_impl(rp, l, kind);
     if (ddi_drain(kind)) rp->policy.drained(rp->policy.shell);
-    if (kind != Drain::Close) return;
-    const uint64_t closes = rp->drains[static_cast<size_t>(Drain::Close)].calls.load(std::memory_order_relaxed);
-    if (closes >= 64 && power_of_two(closes)) {
+    // A failed engine Close the worker made (close_list) reaches the runtime from this drain, on its API thread. The
+    // destroy of the list drops it: the runtime's list is going away.
+    if (FAILED(l->close_hr.load(std::memory_order_relaxed))) {
+        const HRESULT hr = l->close_hr.exchange(S_OK, std::memory_order_relaxed);
+        log_line("CloseCommandList: the engine Close failed on the replay worker (%08lx), %s at the list's %s",
+                 static_cast<unsigned long>(hr), kind == Drain::Destroy ? "dropped" : "reported",
+                 kDrainNames[static_cast<size_t>(kind)]);
+        if (kind != Drain::Destroy) l->h.device->report_list(l->rt, hr);
+    }
+    if (kind != Drain::Ecl) return;
+    const uint64_t executes = rp->drains[static_cast<size_t>(Drain::Ecl)].calls.load(std::memory_order_relaxed);
+    if (executes >= 64 && power_of_two(executes)) {
         char why[32];
-        std::snprintf(why, sizeof(why), "at close %llu", static_cast<unsigned long long>(closes));
+        std::snprintf(why, sizeof(why), "at ecl drain %llu", static_cast<unsigned long long>(executes));
         summary(rp, why);
     }
+}
+
+// Positions above a ring's published end are from a replay turned off since (set_replay_policy): nothing to wait for.
+void replay_drain_closes(Replay* rp, const std::atomic<uint64_t>* closing) noexcept {
+    const uint32_t n = rp->count.load(std::memory_order_acquire);
+    bool pending = false, waited = false;
+    uint64_t ticks = 0;
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint64_t target = closing[i].load(std::memory_order_relaxed);
+        ReplayRing* r = rp->rings[i];
+        if (!target || r->done.load(std::memory_order_acquire) >= target ||
+            target > r->published.load(std::memory_order_acquire))
+            continue;
+        pending = true;
+        uint64_t t = 0;
+        if (wait_until(r, target, Drain::Closes, &t)) {
+            waited = true;
+            ticks += t;
+        }
+    }
+    if (!pending) return;                       // counted and hooked only when a Close was still pending
+    count_drain(rp, Drain::Closes, waited, ticks);
+    rp->policy.drained(rp->policy.shell);
 }
 
 void replay_drain_all(Replay* rp, Drain kind) noexcept {

@@ -10,8 +10,10 @@
 //      the engine list with the same calls and arguments. With the policy on the worker is held until the whole
 //      sequence is recorded, and every array and descriptor the slots were given is overwritten after its call: a
 //      call that kept a pointer instead of a copy would see the overwrite.
-//   3. Drains: Close, where an error latched by a deferred call reaches the runtime from that Close; Reset;
-//      ExecuteBundle; ExecuteCommandLists; the destroy of a list; a pool's reset and destroy; SetPipelineStackSize.
+//   3. Drains: Close, which waits for nothing and is the list's last entry, and whose engine failure reaches the
+//      runtime from the list's next drain; Reset; ExecuteBundle; ExecuteCommandLists; the destroy of a list; a pool's
+//      reset and destroy; a pool's reset and a Reset into it waiting for the pool's pending Close only;
+//      SetPipelineStackSize.
 //      The shell's drained hook runs once per drain a DDI call makes. Here and below, a drain that must wait is made
 //      with the worker held at the list's gate until the drain waits (held, Opener): no check depends on timing.
 //   4. Order across threads: a list recorded by a second thread (Switch) and by a thread without a ring (Direct).
@@ -936,7 +938,13 @@ struct Fixture {
         args.hDrvCommandRecorder.pDrvPrivate = &(p ? p : &pool)->recorder;
         g_list.pfnResetCommandList(l.h, &args);
     }
-    void close(const ListBox& l) { g_list.pfnCloseCommandList(l.h); }
+    // Close, then the list's drain, so that the checks after it read a complete list: with the policy on, the engine
+    // Close is the list's last entry, made by the worker (close_list). The drain is of a kind no DDI call makes, so
+    // the drain counts the checks read stay those of the DDI calls; it reports a failed Close as the next drain would.
+    void close(const ListBox& l) {
+        g_list.pfnCloseCommandList(l.h);
+        drain_list(const_cast<CommandListRecord*>(&l.record), Drain::Teardown);
+    }
     void draws(const ListBox& l, UINT first, UINT count) {
         for (UINT k = 0; k < count; ++k) g_list.pfnDrawInstanced(l.h, first + k, 1, 0, 0);
     }
@@ -1409,9 +1417,9 @@ int main() {
         }
         check(covered == std::size(kMethods), "exactness: %zu of %zu converted engine methods reached%s", covered,
               std::size(kMethods), missing.c_str());
-        check(held == 1 && b.engine.caller_calls == 2 && !b.engine.gate_timeouts,
-              "exactness: every recorded call ran on the worker after the sequence (engine calls before the gate "
-              "opened %llu: the Reset; on the recording thread %llu: Reset and Close)",
+        check(held == 1 && b.engine.caller_calls == 1 && !b.engine.gate_timeouts,
+              "exactness: every recorded call and the Close ran on the worker after the sequence (engine calls before "
+              "the gate opened %llu: the Reset; on the recording thread %llu: the Reset)",
               ull(held), ull(b.engine.caller_calls));
         check(!a.engine.unexpected && !b.engine.unexpected && !b.engine.crossed && !b.engine.stale &&
                   !f.shell.list_errors && !f.shell.device_errors && !f.device.unexpected,
@@ -1432,26 +1440,31 @@ int main() {
         check(f.on(), "drains: policy on");
         const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         auto hold = [&](ListBox& l) {                               // before the list's Reset, made on this thread
+            drain_all(&f.context, Drain::Teardown);                 // nothing of an earlier list waits at the gate
             ResetEvent(gate);
             l.engine.caller = self;
             l.engine.gate = gate;
         };
 
-        // Close: an error a deferred call latched in the engine list reaches the runtime from the Close itself.
+        // Close: the list's last entry. It returns with the worker still held, the list closed; the engine Close runs
+        // after the list's calls, and the E_OUTOFMEMORY a deferred call latched there reaches the runtime from the
+        // list's next drain, here its Reset.
         ListBox& a = f.list();
         hold(a);
         f.reset(a);
         f.draws(a, 1, 20);
         g_list.pfnOmSetStencilRef(a.h, FakeList::kLatchStencil);
         f.draws(a, 21, 5);
-        const uint64_t ran = a.engine.calls.load();
         const uint32_t errors = f.shell.list_errors.load();
-        const bool closed = held(f.replay(), gate, [&] { f.close(a); });
+        g_list.pfnCloseCommandList(a.h);
+        const bool at_once = a.engine.calls == 1 && !a.record.recording && f.shell.list_errors == errors;
+        const bool reopened = held(f.replay(), gate, [&] { f.reset(a); });
         const std::vector<std::string> a_lines = lines_of(a.engine.log);
-        check(closed && ran == 1 && a.engine.calls == 28 && f.shell.list_errors == errors + 1 &&
-                  f.shell.list_error == E_OUTOFMEMORY && a.record.recording && starts(a_lines.back(), "Close("),
-              "drains: Close waits for the list's 26 calls, runs the engine Close last and reports its E_OUTOFMEMORY "
-              "from the Close; the list stays open");
+        check(at_once && reopened && a.engine.calls == 29 && a_lines.size() == 29 && starts(a_lines[27], "Close(") &&
+                  starts(a_lines[28], "Reset(") && f.shell.list_errors == errors + 1 &&
+                  f.shell.list_error == E_OUTOFMEMORY && a.record.recording,
+              "drains: Close returns before the list's 26 calls run, the list closed; the engine Close runs on the "
+              "worker after them, and its E_OUTOFMEMORY reaches the runtime from the Reset that drains the list");
 
         // Reset of a list that is still recording.
         ListBox& r = f.list();
@@ -1542,6 +1555,38 @@ int main() {
               ull(allocator->calls_at_reset), ull(allocator->calls_at_release));
         f.close(user);
 
+        // With no list of the pool open, its reset and a Reset into it wait for the pool's pending Close only: the
+        // engine Close reaches the allocator.
+        PoolBox pool2;
+        f.make_pool(pool2);
+        ListBox& closer = f.list();
+        hold(closer);
+        f.reset(closer, &pool2);
+        auto* allocator2 = static_cast<FakeAllocator*>(pool2.pool.allocators[D3D12_COMMAND_LIST_TYPE_DIRECT]);
+        allocator2->watched = &closer.engine;
+        f.draws(closer, 1, 20);
+        g_list.pfnCloseCommandList(closer.h);
+        const uint64_t pool_drains = f.calls(Drain::Pool), close_waits = f.waits(Drain::Closes);
+        const bool closes_reset =
+            held(f.replay(), gate, [&] { g_core.pfnResetCommandPool(f.hdevice, {&pool2.pool}); });
+        const bool reset_after_close = allocator2->calls_at_reset == 22 && f.calls(Drain::Pool) == pool_drains &&
+                                       f.waits(Drain::Closes) == close_waits + 1;
+        hold(closer);
+        f.reset(closer, &pool2);
+        f.draws(closer, 1, 20);
+        g_list.pfnCloseCommandList(closer.h);
+        ListBox& next = f.list();
+        next.engine.caller = self;
+        const bool closes_list = held(f.replay(), gate, [&] { f.reset(next, &pool2); });
+        const std::vector<std::string> c_lines = lines_of(closer.engine.log);
+        check(closes_reset && reset_after_close && closes_list && starts(c_lines.back(), "Close(") &&
+                  next.engine.calls == 1 && f.waits(Drain::Closes) == close_waits + 2,
+              "drains: ResetCommandPool with no list of the pool open, and a Reset into the pool, wait for the pool's "
+              "pending Close only (allocator reset after %llu calls, Close waits %llu)",
+              ull(allocator2->calls_at_reset), ull(f.waits(Drain::Closes) - close_waits));
+        f.close(next);
+        g_core.pfnDestroyCommandPool(f.hdevice, {&pool2.pool});
+
         // SetPipelineStackSize: every ring, so the size lands after the calls recorded before it.
         ListBox& rt = f.list();
         hold(rt);
@@ -1558,7 +1603,7 @@ int main() {
 
         uint64_t hooked = 0;
         for (Drain k :
-             {Drain::Close, Drain::Reset, Drain::Bundle, Drain::Ecl, Drain::Destroy, Drain::Pool, Drain::Stack})
+             {Drain::Reset, Drain::Bundle, Drain::Ecl, Drain::Destroy, Drain::Pool, Drain::Closes, Drain::Stack})
             hooked += f.calls(k);
         check(hooked > 0 && f.shell.drained == hooked && !f.calls(Drain::Switch) && !f.calls(Drain::Direct),
               "drains: the drained hook ran once per drain of a DDI call (%llu), never for an encode-side drain",
@@ -1591,11 +1636,12 @@ int main() {
         const bool parked = held(f.replay(), gate, [&] {           // first is alive: second gets a ring of its own
             std::thread([&] { f.draws(w, 31, 30); }).join();
         });
+        // Read before this thread's Close, which is an entry too: it gets this thread a ring and a switch of its own.
+        const bool switched = f.replay()->count == 2 && f.calls(Drain::Switch) == 1 && f.waits(Drain::Switch) == 1;
         SetEvent(release);
         first.join();
         f.close(w);
-        check(parked && !w.engine.disorder && w.engine.calls == 62 && !w.engine.gate_timeouts &&
-                  f.replay()->count == 2 && f.calls(Drain::Switch) == 1 && f.waits(Drain::Switch) == 1,
+        check(parked && switched && !w.engine.disorder && w.engine.calls == 62 && !w.engine.gate_timeouts,
               "switch: a second thread waits for the list's calls on the first thread's ring, and the order holds "
               "(calls %llu, out of order %llu)",
               ull(w.engine.calls), ull(w.engine.disorder));
@@ -1673,7 +1719,7 @@ int main() {
         f.close(big);
         const std::vector<std::string> lines = lines_of(big.engine.log);
         check(parked && lines.size() == 23 && starts(lines[11], "SetGraphicsRoot32BitConstants(0,4096,[") &&
-                  !big.engine.disorder && big.engine.caller_calls == 3 && f.replay()->oversize == 1 &&
+                  !big.engine.disorder && big.engine.caller_calls == 2 && f.replay()->oversize == 1 &&
                   f.calls(Drain::Direct) == 1 && f.waits(Drain::Direct) == 1,
               "oversize: a call over the entry limit is made directly, after the list's calls on the ring");
         check(f.off(), "bounds: policy off");
@@ -1706,7 +1752,7 @@ int main() {
         f.close(w);
         const std::vector<std::string> lines = lines_of(w.engine.log);
         check(parked && lines.size() == 19 && starts(lines[6], "OMSetRenderTargets(2,0,[") &&
-                  starts(lines[12], "ClearRenderTargetView([") && !w.engine.disorder && w.engine.caller_calls == 4 &&
+                  starts(lines[12], "ClearRenderTargetView([") && !w.engine.disorder && w.engine.caller_calls == 3 &&
                   f.replay()->fallbacks == 2 && f.waits(Drain::Direct) == 2 && !f.device.heaps_made,
               "no snapshot heap: the calls that need one wait for the list's calls on the ring and are made directly "
               "(fallbacks %llu)",
@@ -2005,7 +2051,8 @@ int main() {
             }
         }
         std::printf("measure  per call on the recording thread: off %.1f ns; on %.1f ns to record, %.1f ns with "
-                    "the Close drain (%llu calls in render passes); DrawInstanced alone: off %.1f ns, on %.1f ns; "
+                    "the Close and the list's drain (%llu calls in render passes); DrawInstanced alone: off %.1f ns, "
+                    "on %.1f ns; "
                     "waits for room %llu, for snapshot slots %llu\n",
                     record[0], record[1], with_close[1], ull(kCalls), draws[0], draws[1], ull(space), ull(slots));
         check(!allocations[0] && !allocations[1],
