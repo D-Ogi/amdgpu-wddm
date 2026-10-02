@@ -153,7 +153,8 @@ struct Replay {
     ReplayPolicy policy{};
     uint64_t serial = 0;                        // identity for the thread caches, never reused
     uint64_t qpf = 1;                           // QueryPerformanceFrequency
-    uint64_t spin_ticks = 0;                    // the worker's spin before it sleeps
+    uint64_t spin_ticks = 0;                    // the worker's spin before it yields
+    uint64_t yield_ticks = 0;                   // then its yielding before it sleeps
     uint64_t wake_bytes = 0;                    // a publish wakes a sleeping worker once this much is pending
     SRWLOCK lock = SRWLOCK_INIT;                // the thread lookup: rings, count, ring owners
     ReplayRing* rings[kMaxReplayRings]{};

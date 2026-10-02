@@ -21,7 +21,12 @@ constexpr uint32_t kSnapshotSlots[4] = {1024, 0, 4096, 1024};
 constexpr uint64_t kRingHeader = 64 * 1024;
 static_assert(replay_detail::align_up(sizeof(ReplayRing), 64) + sizeof(uint64_t) * (1024 + 4096 + 1024) <= kRingHeader,
               "ring header");
-constexpr uint32_t kSpinMicroseconds = 20;      // the worker spins this long for more work before it sleeps
+constexpr uint32_t kSpinMicroseconds = 20;      // the worker spins this long for more work before it yields
+// Then it yields its processor to ready threads, looking for work between yields, this long before it sleeps. A
+// sleeping worker costs the recording thread a wake (a system call) per burst: 310 measured 0.57 ms per frame of the
+// main thread in replay_wake, publishes and Closes together. Yielding costs the worker's processor only when no other
+// thread is ready to run on it.
+constexpr uint32_t kYieldMicroseconds = 1000;
 constexpr DWORD kSleepMilliseconds = 100;       // a sleeping worker looks again at least this often
 constexpr uint32_t kWakeKilobytes = 8;          // pending entries that wake a sleeping worker (about 80 calls)
 
@@ -69,9 +74,21 @@ bool spin_for_work(ReplayRing* r, uint64_t pos, uint64_t ticks) noexcept {
     }
 }
 
+// After the spin: the same, yielding between looks (a short pause instead when nothing else was ready to run).
+bool yield_for_work(ReplayRing* r, uint64_t pos, uint64_t ticks) noexcept {
+    const uint64_t start = qpc();
+    for (;;) {
+        if (r->published.load(std::memory_order_relaxed) != pos || r->stop.load(std::memory_order_relaxed)) return true;
+        if (qpc() - start > ticks) return false;
+        if (!SwitchToThread())
+            for (uint32_t k = 0; k < 32; ++k) _mm_pause();
+    }
+}
+
 void APIENTRY worker_body(void* ring) {
     auto* r = static_cast<ReplayRing*>(ring);
     const uint64_t spin = r->replay->spin_ticks;
+    const uint64_t yield = r->replay->yield_ticks;
     uint64_t pos = r->done.load(std::memory_order_relaxed);
     for (;;) {
         const uint64_t end = r->published.load(std::memory_order_acquire);
@@ -91,7 +108,7 @@ void APIENTRY worker_body(void* ring) {
             if (r->published.load(std::memory_order_acquire) == pos) return;
             continue;
         }
-        if (spin_for_work(r, pos, spin)) continue;
+        if (spin_for_work(r, pos, spin) || yield_for_work(r, pos, yield)) continue;
         // Sleep on the futex word. A waker exchanges it to 0 first, so a wake that comes before WaitOnAddress makes
         // it return at once; the read-modify-write of published orders this check after the store of sleeping.
         r->sleeping.store(1, std::memory_order_seq_cst);
@@ -523,10 +540,11 @@ HRESULT set_replay_policy(DeviceContext* c, const ReplayPolicy* policy) noexcept
     rp->serial = g_serial.fetch_add(1) + 1;
     rp->qpf = static_cast<uint64_t>(frequency.QuadPart);
     rp->spin_ticks = rp->qpf * kSpinMicroseconds / 1000000;
+    rp->yield_ticks = rp->qpf * kYieldMicroseconds / 1000000;
     rp->wake_bytes = uint64_t{kWakeKilobytes} << 10;
     c->replay = rp;
-    log_line("replay policy: on, up to %u rings of %u KiB, worker spin %u us, wake at %u KiB pending", policy->rings,
-             policy->ring_bytes >> 10, kSpinMicroseconds, kWakeKilobytes);
+    log_line("replay policy: on, up to %u rings of %u KiB, worker spin %u us, yield %u us, wake at %u KiB pending",
+             policy->rings, policy->ring_bytes >> 10, kSpinMicroseconds, kYieldMicroseconds, kWakeKilobytes);
     return S_OK;
 }
 
