@@ -244,7 +244,7 @@ public:
     bool bind_recording(bool on) noexcept {
         recording_={this,&domain_,&bootstrap_,&active_};
         recording_bind_.store(on,std::memory_order_relaxed);
-        device_.recording=on && device_.trace_mode!=1?&recording_:nullptr;
+        device_.recording=on && device_.trace_mode!=1 && bootstrap_.valid()?&recording_:nullptr;
         return device_.recording!=nullptr;
     }
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
