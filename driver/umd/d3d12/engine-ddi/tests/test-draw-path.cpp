@@ -13,6 +13,10 @@
 // change the engine failed to bind leaves the previous cell's tag, and a format change it failed to bind draws a
 // triangle where none belongs.
 //
+// Query reuse: occlusion queries over three lists, the second after a reset of the first's pool, the third on a new
+// pool. The engine's command allocator borrows Vulkan query pools from the device and resets a pool lent again over
+// the queries it handed out last; each query's count must be the one its own draws give.
+//
 // Cost: the recording thread's time per draw for a list of such draws, with the buffer sets repeated unchanged and
 // with the vertex buffer alternating, and per call of ranged and simple descriptor copies. The figures are printed
 // ("measure" lines), not checked; the drawn image is.
@@ -539,6 +543,111 @@ void test_buffer_rebinds(Env& env, Device& device, const Pipeline& pipeline, Tar
               "buffer rebinds: destroy_engine_queue reports Retired");
 }
 
+// ---- Query reuse ------------------------------------------------------------------------------------------------------
+// Round r records kCounts[r] occlusion queries of one heap; query i counts a full-target triangle (every one of the
+// target's 4096 samples) when i + r is even and holds no draw otherwise. Round 1 reuses round 0's pool after
+// ResetCommandPool and hands out two queries round 0 never did; round 2 records on a new pool after round 0's is
+// destroyed. A query lent again without its reset keeps the previous round's count or fails validation.
+void test_query_reuse(Env& env, Device& device, const Pipeline& pipeline, Target& target,
+                      D3D12DDI_GPU_VIRTUAL_ADDRESS a) {
+    constexpr UINT kQueries = 8, kRounds = 3;
+    constexpr UINT kCounts[kRounds] = {6, 8, 3};
+    constexpr UINT64 kFull = UINT64{kSize} * kSize;
+    const uint32_t errors_before = device.shell.device_errors;
+    D3D12DDIARG_CREATE_QUERY_HEAP_0001 heap_args{D3D12DDI_QUERY_HEAP_TYPE_OCCLUSION, kQueries, 0};
+    void* heap = env.storage.alloc(env.core.pfnCalcPrivateQueryHeapSize(device.h(), &heap_args));
+    if (heap && env.core.pfnCreateQueryHeap(device.h(), &heap_args, D3D12DDI_HQUERYHEAP{heap}) != S_OK) heap = nullptr;
+    const D3D12DDI_HQUERYHEAP hheap{heap};
+    Buffer results;
+    bool made = heap && create_buffer(env, device, HeapKind::Readback, UINT64{kRounds} * kQueries * 8, false,
+                                      results) == S_OK;
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    made = made && engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue) == S_OK && queue;
+    checkf(made && device.shell.device_errors == errors_before,
+           "query reuse: occlusion query heap of %u, READBACK buffer, DIRECT queue", kQueries);
+
+    Recording rec;
+    for (UINT r = 0; made && r < kRounds; ++r) {
+        if (r == 1) {
+            // The pool of round 0 again: its allocator returns the query pools it borrowed and borrows them back.
+            env.core.pfnResetCommandPool(device.h(), D3D12DDI_HCOMMANDPOOL_0040{rec.pool});
+            D3D12DDIARG_RESETCOMMANDLIST_0040 reset{D3D12DDI_HCOMMANDRECORDER_0040{rec.recorder}, 1,
+                                                   D3D12DDI_COMMAND_LIST_FLAG_NONE};
+            env.lists[rec.table].pfnResetCommandList(rec.hlist(), &reset);
+        } else {
+            destroy_recording(env, device, rec);
+            if (open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec) != S_OK || rec.table != 1) {
+                checkf(false, "query reuse: DIRECT list for round %u", r);
+                break;
+            }
+        }
+        const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[1];
+        const D3D12DDI_HCOMMANDLIST l = rec.hlist();
+        const D3D12DDI_VERTEX_BUFFER_VIEW view{a, 3 * sizeof(Vertex), sizeof(Vertex)};
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_target =
+            transition(target.texture, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RENDER_TARGET);
+        t.pfnResourceBarrier(l, 1, &to_target);
+        t.pfnOMSetRenderTargets(l, 1, &target.rtv, TRUE, nullptr);
+        const D3D12DDI_VIEWPORT viewport{0.0f, 0.0f, static_cast<FLOAT>(kSize), static_cast<FLOAT>(kSize), 0.0f, 1.0f};
+        t.pfnRsSetViewports(l, 1, &viewport);
+        const D3D12DDI_RECT scissor{0, 0, static_cast<LONG>(kSize), static_cast<LONG>(kSize)};
+        t.pfnRsSetScissorRects(l, 1, &scissor);
+        t.pfnSetGraphicsRootSignature(l, pipeline.hrs());
+        t.pfnSetPipelineState(l, pipeline.hpso());
+        t.pfnSetGraphicsRoot32BitConstant(l, 0, kSeed, 0);
+        t.pfnIaSetTopology(l, D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        t.pfnIASetVertexBuffers(l, 0, 1, &view);
+        for (UINT i = 0; i < kCounts[r]; ++i) {
+            t.pfnBeginQuery(l, hheap, D3D12DDI_QUERY_TYPE_OCCLUSION, i);
+            if ((i + r) % 2 == 0) t.pfnDrawInstanced(l, 3, 1, 0, 0);
+            t.pfnEndQuery(l, hheap, D3D12DDI_QUERY_TYPE_OCCLUSION, i);
+        }
+        t.pfnResolveQueryData(l, hheap, D3D12DDI_QUERY_TYPE_OCCLUSION, 0, kCounts[r], results.hres(),
+                              UINT64{r} * kQueries * 8);
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_common =
+            transition(target.texture, D3D12DDI_RESOURCE_STATE_RENDER_TARGET, D3D12DDI_RESOURCE_STATE_COMMON);
+        t.pfnResourceBarrier(l, 1, &to_common);
+        t.pfnCloseCommandList(l);
+        const D3D12DDI_HCOMMANDLIST lists[] = {l};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        made = hr == S_OK && !device.shell.list_errors && wait_queue_idle(env, queue, "query reuse");
+        checkf(made, "query reuse: round %u, %u occlusion queries, resolve, execute (hr %08lx)", r, kCounts[r],
+               static_cast<unsigned long>(hr));
+    }
+    destroy_recording(env, device, rec);
+
+    if (made) {
+        UINT bad = 0, first = 0;
+        UINT64 first_value = 0;
+        void* cpu = nullptr;
+        if (env.core.pfnMapHeap(device.h(), results.hheap(), &cpu) == S_OK && cpu) {
+            const auto* values = static_cast<const UINT64*>(cpu);
+            for (UINT r = 0; r < kRounds; ++r) {
+                for (UINT i = 0; i < kCounts[r]; ++i) {
+                    const UINT64 v = values[r * kQueries + i];
+                    if (v != ((i + r) % 2 == 0 ? kFull : 0)) {
+                        if (!bad) first = r * kQueries + i, first_value = v;
+                        ++bad;
+                    }
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), results.hheap());
+        } else {
+            bad = ~0u;
+        }
+        checkf(!bad, "query reuse: each query counts its own draws, %llu samples or none (%u differ, first round %u "
+                     "query %u: %llu)",
+               static_cast<unsigned long long>(kFull), bad, first / kQueries, first % kQueries,
+               static_cast<unsigned long long>(first_value));
+    }
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "query reuse: destroy_engine_queue reports Retired");
+    destroy_buffer(env, device, results);
+    if (heap) env.core.pfnDestroyQueryHeap(device.h(), hheap);
+}
+
 // ---- Cost -------------------------------------------------------------------------------------------------------------
 void measure_draw_path(Env& env, Device& device, Target& target, const Buffer& readback,
                        D3D12DDI_GPU_VIRTUAL_ADDRESS a, D3D12DDI_GPU_VIRTUAL_ADDRESS ib) {
@@ -789,6 +898,7 @@ void test_draw_path(Env& env, Device& device) {
                  "and scratch buffers");
     if (made) {
         test_buffer_rebinds(env, device, pipeline, target, readback, a, d, ib_va, ib, scratch);
+        test_query_reuse(env, device, pipeline, target, a);
         measure_draw_path(env, device, target, readback, a, ib_va);
     }
     destroy_buffer(env, device, vb_a);
