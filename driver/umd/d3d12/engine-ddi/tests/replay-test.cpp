@@ -24,6 +24,9 @@
 //   7. Rings: the cap (a thread beyond it records directly), an exited thread's ring taken over, teardown with
 //      entries pending, every worker joined and every snapshot heap released.
 //   8. Cost on the calling thread, off and on (printed, not a gate), and no allocation while recording.
+//   9. Diagnostics and priority: a worker at its owner's level, lifted one level above a drain that waits for it and
+//      back after; the long wait counted by kind with a line of its own, the held entry as the worker's stuck
+//      stretch, the summary at close 64 and at teardown, all through the policy's log hook.
 #include "internal.h"
 #include "replay.h"
 #include <atomic>
@@ -31,6 +34,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <io.h>
 #include <iterator>
 #include <memory>
@@ -849,6 +853,8 @@ public:
 struct Shell {
     std::atomic<uint32_t> device_errors{0}, list_errors{0}, started{0}, ended{0}, drained{0};
     std::atomic<HRESULT> list_error{S_OK};
+    std::mutex lines_lock;
+    std::vector<std::string> lines;                         // the log hook's (section 9)
 };
 void APIENTRY device_error(void* shell, HRESULT) { ++static_cast<Shell*>(shell)->device_errors; }
 void APIENTRY list_error(void* shell, D3D12DDI_HRTCOMMANDLIST, HRESULT hr) {
@@ -865,6 +871,11 @@ void APIENTRY replay_worker(void* shell, ReplayBody body, void* ring) {
     ++s->ended;
 }
 void APIENTRY replay_drained(void* shell) { ++static_cast<Shell*>(shell)->drained; }
+void APIENTRY replay_log(void* shell, const char* line) {
+    auto* s = static_cast<Shell*>(shell);
+    std::lock_guard<std::mutex> hold(s->lines_lock);
+    s->lines.emplace_back(line);
+}
 
 D3D12DDI_DEVICE_FUNCS_CORE_0088 g_core{};
 D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 g_list{};             // the graphics table
@@ -908,9 +919,21 @@ struct Fixture {
     ~Fixture() { off(); }
     Fixture(const Fixture&) = delete;
     Fixture& operator=(const Fixture&) = delete;
-    bool on(uint32_t rings = 8, uint32_t bytes = 4u << 20) {
-        const ReplayPolicy p{sizeof(ReplayPolicy), 1, rings, bytes, &shell, replay_worker, replay_drained};
+    bool on(uint32_t rings = 8, uint32_t bytes = 4u << 20, bool logged = false) {
+        const ReplayPolicy p{sizeof(ReplayPolicy), 1, rings, bytes, &shell, replay_worker, replay_drained,
+                             logged ? replay_log : nullptr};
         return set_replay_policy(&context, &p) == S_OK;
+    }
+    // The first line of the log hook's that starts with prefix and contains every text in also; empty if none.
+    std::string line(const char* prefix, std::initializer_list<const char*> also = {}) {
+        std::lock_guard<std::mutex> hold(shell.lines_lock);
+        for (const std::string& l : shell.lines) {
+            if (l.rfind(prefix, 0) != 0) continue;
+            bool all = true;
+            for (const char* text : also) all = all && l.find(text) != std::string::npos;
+            if (all) return l;
+        }
+        return {};
     }
     bool off() {
         ReplayPolicy p{};
@@ -1262,7 +1285,8 @@ void sequence(const ListBox& l, Objects& o, Sources& s) {
 // its lock (the worker clears it after its next entry, which the gate would hold).
 class Opener {
 public:
-    Opener(Replay* rp, HANDLE gate) {
+    // parked: run on the opener's thread once the drain waits, before the gate opens.
+    Opener(Replay* rp, HANDLE gate, std::function<void()> parked = {}) : action_(std::move(parked)) {
         for (uint32_t i = 0; i < rp->count.load(); ++i) rp->rings[i]->next_wake.store(UINT64_MAX);
         thread_ = std::thread([this, rp, gate] { run(rp, gate); });
     }
@@ -1282,14 +1306,16 @@ private:
         for (; !parked_ && qpc() < until; Sleep(1))
             for (uint32_t i = 0; i < rp->count.load(); ++i)
                 if (rp->rings[i]->next_wake.load() != UINT64_MAX) parked_ = true;
+        if (parked_ && action_) action_();
         SetEvent(gate);                                 // the last access: the drain cannot end before it
     }
+    std::function<void()> action_;
     bool parked_ = false;
     std::thread thread_;
 };
 // Makes call, which drains, while the worker is held at gate until the drain waits. True if the drain waited.
-template <class F> bool held(Replay* rp, HANDLE gate, F&& call) {
-    Opener open(rp, gate);
+template <class F> bool held(Replay* rp, HANDLE gate, F&& call, std::function<void()> parked = {}) {
+    Opener open(rp, gate, std::move(parked));
     call();
     return open.parked();
 }
@@ -2132,6 +2158,70 @@ int main() {
         check(root_lines[0] == expected, "clear root arguments: every argument zeroed in order, signatures kept%s%s",
               root_lines[0] == expected ? "" : "; got\n", root_lines[0] == expected ? "" : root_lines[0].c_str());
         check(root_lines[1] == root_lines[0], "clear root arguments: the same calls with the replay policy on");
+    }
+
+    // 9. Diagnostics and priority. A recording thread at ABOVE_NORMAL; the drain after its Close waits while the
+    //    worker is held at the list's gate, and the opener keeps it there 30 ms after the drain parks. The engine
+    //    Close is the list's last replay entry, so the wait is the fixture's own drain (teardown), not a Close.
+    {
+        Fixture f;
+        check(f.on(8, 4u << 20, true), "diagnostics: policy on with the log hook");
+        ListBox& l = f.list();
+        ListBox& m = f.list();
+        const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        int created = THREAD_PRIORITY_ERROR_RETURN, lifted = THREAD_PRIORITY_ERROR_RETURN;
+        int after = THREAD_PRIORITY_ERROR_RETURN;
+        bool parked = false;
+        std::thread([&] {
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+            l.engine.caller = GetCurrentThreadId();
+            l.engine.gate = gate;
+            f.reset(l);
+            f.draws(l, 1, 10);
+            const HANDLE worker = f.replay()->rings[0]->thread;
+            created = GetThreadPriority(worker);
+            parked = held(f.replay(), gate, [&] { f.close(l); }, [&] {
+                lifted = GetThreadPriority(worker);
+                Sleep(30);
+            });
+            after = GetThreadPriority(worker);
+            // 64 ecl drains: the summary at ecl drain 64.
+            m.engine.caller = GetCurrentThreadId();
+            for (int k = 0; k < 64; ++k) {
+                f.reset(m);
+                f.draws(m, 1, 2);
+                g_list.pfnCloseCommandList(m.h);
+                drain_list(const_cast<CommandListRecord*>(&m.record), Drain::Ecl);
+            }
+        }).join();
+        const Replay* rp = f.replay();
+        const ReplayDrainCounter& held_wait = rp->drains[static_cast<size_t>(Drain::Teardown)];
+        const uint64_t ms = rp->qpf / 1000;
+        check(parked && created == THREAD_PRIORITY_ABOVE_NORMAL && lifted == THREAD_PRIORITY_HIGHEST &&
+                  after == THREAD_PRIORITY_ABOVE_NORMAL && rp->boosts >= 1,
+              "priority: the worker starts at its owner's level (%d), runs one above it while the drain waits (%d) "
+              "and returns after (%d); %llu lifts", created, lifted, after, ull(rp->boosts));
+        check(held_wait.over_1ms >= 1 && held_wait.over_10ms >= 1 && held_wait.longest >= 25 * ms &&
+                  rp->long_waits >= 1 && rp->rings[0]->stuck_longest >= 25 * ms && rp->rings[0]->stuck_run,
+              "diagnostics: the drain's wait counted as 1 and 10 ms or more (%llu, %llu), longest %llu us, %llu long "
+              "waits; the held entry seen as the worker's stuck stretch (%llu us)",
+              ull(held_wait.over_1ms), ull(held_wait.over_10ms), ull(held_wait.longest * 1000000 / rp->qpf),
+              ull(rp->long_waits), ull(rp->rings[0]->stuck_longest * 1000000 / rp->qpf));
+        const std::string wait = f.line("replay long-wait: ", {"kind=teardown", " worker_priority=1/2 ", " asleep=0 "});
+        double entry_ms = 0;
+        const size_t at = wait.find(" stuck_ms=");
+        if (at != std::string::npos) entry_ms = std::atof(wait.c_str() + at + 10);
+        check(!wait.empty() && wait.find(" stuck_rva=0x0") == std::string::npos && entry_ms >= 25.0,
+              "diagnostics: a long-wait line for the drain names the levels and the held entry (%.1f ms): %s", entry_ms,
+              wait.substr(0, 200).c_str());
+        check(!f.line("replay at ecl drain 64: ").empty() &&
+                  !f.line("replay at ecl drain 64 long drains", {" teardown "}).empty() &&
+                  !f.line("replay at ecl drain 64 workers: ", {"base levels 1"}).empty(),
+              "diagnostics: the summary at ecl drain 64 through the hook, with the long drain and the worker's level");
+        check(f.off() && !f.line("replay teardown drains").empty() && !f.line("replay policy: off").empty() &&
+                  !f.line("replay policy: on").empty() && !f.line("replay: ring 0 of 8 for thread ").empty(),
+              "diagnostics: policy off; the policy, ring and teardown lines reached the hook");
+        CloseHandle(gate);
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

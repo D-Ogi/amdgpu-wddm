@@ -292,6 +292,12 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
 //     those need on the thread and keeps out what a recording call must not do there.
 //   drained(shell): on a DDI thread, after each drain that a DDI call makes, with no engine-ddi lock held; the shell
 //     reports there what a worker could not (a device removal it saw).
+//   log(shell, line): optional (null: none). Every replay line (the policy, rings, the summaries, long waits and
+//     stalls), one call per line without its newline, on whichever thread writes it, with no engine-ddi lock held;
+//     the same lines also go where engine-ddi's other lines go. For a process whose stderr nobody reads.
+// A worker starts at the priority of the thread whose ring it serves (and of a thread that takes the ring over); while
+// a drain waits for it past its spin, the worker runs one level above the waiting thread (at most HIGHEST, unless
+// the waiter is above that), and returns to its own level when the last such wait ends.
 // enabled 0 on a context with the policy on drains every ring, stops and joins the workers and frees the rings;
 // destroy_device_context does the same before it frees the context. Call it with enabled 1 like set_retire_policy:
 // after create_device_context, before the context is used on another thread. E_INVALIDARG, with the policy held
@@ -306,6 +312,7 @@ struct ReplayPolicy {
     void* shell;                                // passed back unchanged
     void (APIENTRY* worker)(void* shell, ReplayBody body, void* ring);
     void (APIENTRY* drained)(void* shell);
+    void (APIENTRY* log)(void* shell, const char* line);
 };
 HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
 

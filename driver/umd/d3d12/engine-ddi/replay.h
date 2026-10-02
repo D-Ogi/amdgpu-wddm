@@ -19,6 +19,10 @@
 // SetPipelineStackSize, whose value the engine reads at record time. A drain waits as long as it takes (a line every
 // second names what it waits for), and gives up only when the worker thread no longer exists.
 //
+// Priority: a worker runs at its owner thread's level. A drain that waits past its spin lifts the worker one level
+// above the waiting thread until the last such wait ends: the waiter is blocked on the worker's calls, which would
+// otherwise compete at the waiter's own level (or below) with every other thread of the process.
+//
 // Ownership, the rules the code keeps:
 //   R1 Published entries are immutable; the producer writes only free space.
 //   R2 An engine list is touched by one thread at a time; the hand-overs are a publish (to the worker) and a drain
@@ -37,7 +41,9 @@
 //     another thread only under Replay::lock, after its owner thread has exited.
 //   Ring bytes in [done, published): immutable, read by the worker. published: the producer (release). done: the
 //     worker (seq_cst, after the entry's engine call returned). sleeping: the worker; wakers clear it by exchange.
-//     next_wake: waiters under the ring's lock, the worker reads it lock-free.
+//     next_wake: waiters under the ring's lock, the worker reads it lock-free. base_priority, applied_priority,
+//     boosters, stuck_longest, stuck_run: under the ring's lock (the owner at creation and take-over, waiters
+//     around and during a slow wait).
 //   CommandListRecord::replay_tail: the thread recording the list, or a drain of the list; other threads read it
 //     after the application's own ordering (a list is not free-threaded). CommandListRecord::close_hr: the worker
 //     (a failed Close), cleared by the drain that reports it. CommandPoolRecord::closing: close_list, read by the
@@ -117,6 +123,14 @@ struct ReplayRing {
     uint32_t index;
     HANDLE thread;
     WorkerStats* stats;                         // the worker's times (entry.h), null with the statistics off
+    // The worker's priority (ring lock): the owner's level, the level set now, and the waits that lifted it.
+    int base_priority;
+    int applied_priority;
+    uint32_t boosters;
+    // The longest stretch a slow wait saw without the worker finishing an entry (QPC ticks), and the entry it was
+    // running then (ring lock). The waiters measure it in their 2 ms slices: the worker pays nothing for it.
+    uint64_t stuck_longest;
+    void (*stuck_run)(const EntryHeader*) noexcept;
     // The producer: the owner thread, or under Replay::lock the thread that takes the ring over.
     uint64_t write;                             // the end of the last reserved entry
     uint64_t cached_done;                       // a value of done read earlier: done is at least this
@@ -148,6 +162,10 @@ struct ReplayDrainCounter {
     std::atomic<uint64_t> calls{0};
     std::atomic<uint64_t> waits{0};
     std::atomic<uint64_t> qpc{0};               // QueryPerformanceCounter ticks spent waiting
+    std::atomic<uint64_t> over_1ms{0};          // waits of 1 ms or more (a drain_all: its rings' waits together)
+    std::atomic<uint64_t> over_10ms{0};
+    std::atomic<uint64_t> over_50ms{0};
+    std::atomic<uint64_t> longest{0};           // QPC ticks
 };
 
 struct Replay {
@@ -158,6 +176,7 @@ struct Replay {
     uint64_t spin_ticks = 0;                    // the worker's spin before it yields
     uint64_t yield_ticks = 0;                   // then its yielding before it sleeps
     uint64_t wake_bytes = 0;                    // a publish wakes a sleeping worker once this much is pending
+    uint64_t qpc0 = 0, tsc0 = 0;                // QPC and TSC when the policy went on: thread cycles to time
     SRWLOCK lock = SRWLOCK_INIT;                // the thread lookup: rings, count, ring owners
     ReplayRing* rings[kMaxReplayRings]{};
     std::atomic<uint32_t> count{0};
@@ -168,6 +187,10 @@ struct Replay {
     std::atomic<uint64_t> reclaimed{0};         // rings taken over from an exited thread
     std::atomic<uint64_t> stalls{0};            // stall lines
     std::atomic<uint64_t> ring_failures{0};     // rings that could not be created
+    std::atomic<uint64_t> asleep_waits{0};      // slow waits that found the worker asleep with work behind it
+    std::atomic<uint64_t> boosts{0};            // worker priority lifts by a waiting drain
+    std::atomic<uint64_t> long_waits{0};        // ring waits of kLongWaitMilliseconds or more
+    std::atomic<uint64_t> next_summary{UINT64_MAX};   // QPC of the next timed summary, after the one at close 64
 };
 
 // The calling thread's ring for one Replay: serial names the Replay (0: none), ring is null for a direct thread.
@@ -353,7 +376,10 @@ inline uint8_t* reserve(ReplayRing* r, size_t size) noexcept {
 }
 
 inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t size) noexcept {
-    r->published.store(end, std::memory_order_release);
+    // seq_cst store and load (an xchg here): the load of sleeping below must not pass the store, or a worker that
+    // stores sleeping and then reads published (seq_cst both) between them misses this entry while this publish
+    // misses its sleep, and the entry waits for the next publish, a drain or the worker's 100 ms timeout.
+    r->published.store(end, std::memory_order_seq_cst);
     l->replay_tail.store(r->tag | end, std::memory_order_relaxed);
     r->entries.store(r->entries.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     r->entry_bytes.store(r->entry_bytes.load(std::memory_order_relaxed) + size, std::memory_order_relaxed);
@@ -363,7 +389,10 @@ inline void publish(ReplayRing* r, CommandListRecord* l, uint64_t end, size_t si
     // While it sleeps the worker writes nothing, so done is the position it caught up to. Entries below the bound
     // wait at most until the next Close (it wakes the worker), the next drain, the next publish past the bound or the
     // worker's own timeout: latency, never an entry.
-    if (r->sleeping.load(std::memory_order_relaxed) &&
+    // The load of sleeping is seq_cst against the seq_cst store above. A relaxed load may pass that store. A worker
+    // that stores sleeping and then reads the old published between the two misses this entry, while this publish
+    // misses the sleep.
+    if (r->sleeping.load(std::memory_order_seq_cst) &&
         end - r->done.load(std::memory_order_relaxed) >= r->replay->wake_bytes)
         replay_wake(r);
 }
