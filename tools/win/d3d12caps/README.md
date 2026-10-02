@@ -13,9 +13,12 @@ onto a different path; this tool puts all of them side by side.
 ## Build
 
 ```
-powershell -File build.ps1 -Kits <workspace>\toolchain\nuget                          # plain variant
-powershell -File build.ps1 -Kits <workspace>\toolchain\nuget -AgilitySdkVersion 619    # Agility SDK variant
+pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget                          # plain variant
+pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget -AgilitySdkVersion 619    # Agility SDK variant
 ```
+
+PowerShell 7: under Windows PowerShell 5.1 the bad-argument check stops the script, because the tool's message on
+stderr becomes a terminating error there.
 
 Output defaults to `<workspace>\scratch\m15\d3d12caps\build` (`-Out` to change): `amdgpu_wddm_d3d12caps.exe` and
 `amdgpu_wddm_d3d12caps_agility<n>.exe`. Static CRT, so the lab needs no runtime install. A rebuild keeps the
@@ -100,5 +103,40 @@ cannot be read. The dump tool's own zero exit proves only that the JSON was writ
 size once came back as the negated alignment while no driver call failed. Run the check on each document
 separately; a document from a route whose device creation failed (for example `D3D12_ERROR_INVALID_REDIST`
 without the game's core) has no allocations and fails here by design, so record it apart from the API results.
+
+## Allocation refusal probe
+
+`amdgpu_wddm_d3d12allocprobe.exe` asks whether a texture the driver cannot size costs the application its device.
+Our engine has no layout for YUY2 and R8G8_B8G8_UNORM, and the shell reports `E_INVALIDARG` through the device
+error callback (`pfnSetErrorCb`) when `CheckResourceAllocationInfo` is asked about one. The D3D12 DDI reference
+names no error for that function. The rules for that callback ("Handling Errors",
+learn.microsoft.com/windows-hardware/drivers/display/handling-errors, written for the D3D10 DDI) make an error a
+function does not allow critical: the runtime removes the device. Whether the D3D12 runtime asks the driver about
+these formats at all, and what it does with the error, is what the probe measures.
+
+For R8G8B8A8_UNORM (the control), YUY2, R8G8_B8G8_UNORM and R8G8B8A8_UNORM again, it runs four steps on a 64 x 64
+2D texture (one mip, one sample, layout UNKNOWN, no flags, state COMMON): `GetResourceAllocationInfo`,
+`CreateCommittedResource` on a DEFAULT heap, `CreateHeap` (4 MiB, DEFAULT, `ALLOW_ONLY_NON_RT_DS_TEXTURES`) and
+`CreatePlacedResource` at offset 0. `GetDeviceRemovedReason` is read right after each step. The format's
+`FORMAT_SUPPORT` answer is read last. Before each format, a removed device is released and a new one created at the
+same level (`0_new_device`), so one removal does not hide the later answers.
+
+```
+pwsh -File build.ps1 -Kits <workspace>\toolchain\nuget -Tool d3d12allocprobe [-Out <dir>]
+amdgpu_wddm_d3d12allocprobe.exe [adapter-index] [output-path] [--progress]
+```
+
+The command line and the document's format are those of the dump. `device.created_at`,
+`device.D3D12CreateDevice`, the level list and tiled tier under `device.features`, `device.GetDeviceRemovedReason`
+(of the last device, at the end) and `modules` carry the dump's key names. A trial's caps profile can therefore run
+the probe in place of the dump. The results are under `probe.<n>_<format>.<step>`: `hr`, the sizes
+(`SizeInBytes` and `Alignment`, `UINT64_MAX` being the runtime's error marker) and `GetDeviceRemovedReason`.
+Unlike the dump, the probe loads `d3d12.dll` and `dxgi.dll` from System32 only, so the system runtime and the
+registered driver answer whatever lies next to it.
+
+Exit 0 when the document was written, a removed device included; 1 when writing failed; 2 for a bad command line;
+3 when a step did not return within 12 s. In that last case a deadline thread writes the document as it was, with
+`deadline.hit` and the step that did not return, and ends the process. The build checks that path by stopping the
+main thread in its first step (`D3D12ALLOCPROBE_TEST_STALL=dxgi`), before any device is created.
 
 Diabeł tkwi w szczegółach - the devil is in the details, and here they are all on one page.

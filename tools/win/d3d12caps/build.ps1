@@ -4,7 +4,9 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     # Export D3D12SDKVersion = <n> and D3D12SDKPath = .\D3D12_0\ so that d3d12.dll loads the Agility SDK core placed
     # next to the executable, as a game that ships one does. 0 builds the plain variant without those exports.
-    [ValidateRange(0, 100000)][int]$AgilitySdkVersion = 0
+    [ValidateRange(0, 100000)][int]$AgilitySdkVersion = 0,
+    # d3d12caps: the capability dump; d3d12allocprobe: the probe of textures the driver cannot size (README.md).
+    [ValidateSet('d3d12caps', 'd3d12allocprobe')][string]$Tool = 'd3d12caps'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,7 +23,7 @@ $root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
 $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
-$name = if ($AgilitySdkVersion) { "amdgpu_wddm_d3d12caps_agility$AgilitySdkVersion" } else { 'amdgpu_wddm_d3d12caps' }
+$name = if ($AgilitySdkVersion) { "amdgpu_wddm_${Tool}_agility$AgilitySdkVersion" } else { "amdgpu_wddm_$Tool" }
 
 # A reviewed artifact is never lost to a rebuild: the existing binary is kept under retained\ by its full hash.
 $previous = Join-Path $Out "$name.exe"
@@ -42,7 +44,7 @@ $variant = @(); if ($AgilitySdkVersion) { $variant = @("/DCAPS_AGILITY_SDK_VERSI
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
-    "/Fe$Out\$name.exe", (Join-Path $here 'd3d12caps.cpp'), '/link',
+    "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'version.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$|^\s*Creating library|\.exp$') { Write-Host "  $_" } }
@@ -60,6 +62,17 @@ if ($imports -match '(?im)^\s+(d3d12|dxgi)\.dll\s*$') { throw 'd3d12.dll or dxgi
 if ($LASTEXITCODE -ne 0) { throw 'help check failed' }
 & "$Out\$name.exe" not-a-number 2>$null
 if ($LASTEXITCODE -ne 2) { throw 'invalid adapter index accepted' }
+if ($Tool -eq 'd3d12allocprobe') {
+    # The deadline: a main thread stuck in its first step, before any device, still leaves a document naming the
+    # step, and exit code 3.
+    $stalled = Join-Path $Out 'deadline-test.json'
+    Remove-Item -LiteralPath $stalled -ErrorAction SilentlyContinue
+    $env:D3D12ALLOCPROBE_TEST_STALL = 'dxgi'
+    try { & "$Out\$name.exe" 0 $stalled 2>$null } finally { Remove-Item Env:D3D12ALLOCPROBE_TEST_STALL }
+    if ($LASTEXITCODE -ne 3) { throw "deadline test: exit $LASTEXITCODE, expected 3" }
+    $doc = Get-Content -LiteralPath $stalled -Raw | ConvertFrom-Json
+    if (-not $doc.deadline.hit -or $doc.deadline.step -ne 'dxgi') { throw 'deadline test: the document lacks the step' }
+}
 Get-Item "$Out\$name.exe" | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }
 
 python -B -m unittest discover -s $here -p 'test_*.py'
