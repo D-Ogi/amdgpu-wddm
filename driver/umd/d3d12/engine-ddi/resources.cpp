@@ -1053,10 +1053,14 @@ void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, 
     *out = ddi_format_support(c, s);
     if (format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM && !(s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D))
         *out = D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
-    if (g_format_answers.insert(static_cast<uint32_t>(format)))
-        log_refusal("CheckFormatSupport: format %u: engine %08lx, Support1 %#x, Support2 %#x; answer %#x",
-                    static_cast<unsigned>(format), static_cast<unsigned long>(hr), static_cast<unsigned>(s.Support1),
-                    static_cast<unsigned>(s.Support2), *out);
+    if (g_format_answers.insert(static_cast<uint32_t>(format))) {
+        // A stored format's line names the view format the engine was asked about.
+        char view[32] = "";
+        if (stored) std::snprintf(view, sizeof(view), " view format %u,", static_cast<unsigned>(stored->view));
+        log_refusal("CheckFormatSupport: format %u:%s engine %08lx, Support1 %#x, Support2 %#x; answer %#x",
+                    static_cast<unsigned>(format), view, static_cast<unsigned long>(hr),
+                    static_cast<unsigned>(s.Support1), static_cast<unsigned>(s.Support2), *out);
+    }
 }
 
 // ---- Command-list slots -------------------------------------------------------------------------------------------

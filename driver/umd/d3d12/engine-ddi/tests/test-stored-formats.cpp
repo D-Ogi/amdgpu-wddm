@@ -162,6 +162,20 @@ void test_stored_formats(Env& env, Device& device) {
     }
     checkf(!wrong_support, "stored formats: support of each is sample, gather and typed UAV writes, AYUV also render "
                            "target and blend (%u differ)", wrong_support);
+    // The diagnostic line of each answer names the view format the engine was asked about next to the video format.
+    unsigned wrong_lines = 0;
+    std::string yuy2_line;
+    for (const Case& k : kCases) {
+        char prefix[64], want[96];
+        std::snprintf(prefix, sizeof(prefix), "CheckFormatSupport: format %u:", static_cast<unsigned>(k.format));
+        std::snprintf(want, sizeof(want), "%s view format %u, engine ", prefix,
+                      static_cast<unsigned>(engine_ddi::stored_format(k.format)->view));
+        const std::vector<std::string> lines = refusal_lines(prefix);
+        wrong_lines += lines.size() != 1 || lines[0].compare(0, std::strlen(want), want) != 0;
+        if (k.format == DXGI_FORMAT_YUY2 && !lines.empty()) yuy2_line = lines[0];
+    }
+    checkf(!wrong_lines, "stored formats: one CheckFormatSupport line each, naming the view format (%u differ): \"%s\"",
+           wrong_lines, yuy2_line.c_str());
 
     // The round trip of each format: A filled from an UPLOAD footprint; B cleared to (1, 0, 0, 1) through a UAV that
     // names the video format (engine-ddi gives the engine the view format), then pixels (2, 0)-(6, 2) of A copied to
