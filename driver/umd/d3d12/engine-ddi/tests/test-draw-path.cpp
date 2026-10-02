@@ -7,6 +7,9 @@
 // null size arrays, fills a shader-visible heap with a permutation of eight buffer UAVs; a dispatch through each
 // table slot writes its own seed, and every buffer must come back with the seed of the slot its descriptor went to.
 //
+// Root tables: dispatches through descriptor tables set and set again over two root signatures that order the same
+// three tables differently; each table's slot must take the value of the last dispatch that named it.
+//
 // Buffer rebinds: sixteen 16x16 cells of one target, one draw each under its own scissor, between which the vertex
 // and index buffers are set again unchanged, or changed in exactly one of buffer, offset, size, stride or index
 // format. The draw's tag comes from the vertex the bound buffers select (the fixture shaders of test_graphics), so a
@@ -26,6 +29,7 @@
 #include "harness.h"
 #include "fixture-cs.h"
 #include "fixture-gfx.h"
+#include "fixture-tables.h"
 #include <cstdio>
 #include <cstring>
 
@@ -405,6 +409,183 @@ void test_descriptor_ranges(Env& env, Device& device) {
     if (pso) env.core.pfnDestroyPipelineState(device.h(), D3D12DDI_HPIPELINESTATE{pso});
     if (cs_storage) env.core.pfnDestroyShader(device.h(), D3D12DDI_HSHADER{cs_storage});
     if (rs) env.core.pfnDestroyRootSignature(device.h(), hrs);
+}
+
+// ---- Root tables ------------------------------------------------------------------------------------------------------
+// Two root signatures over the fixture-tables program, its three UAV tables at different parameter indices around a
+// root constant: A = {Table(u2), Constants(b0), Table(u0), Table(u1)}, B = {Table(u1), Table(u0), Constants(b0),
+// Table(u2)}. Six dispatches on one list, each followed by a UAV barrier: all tables set on A, one changed, a switch to
+// B with all set, one changed, back to A with all set, one changed. A dispatch stores seed ^ tag into the slot each
+// table names (twelve 16-byte slots of one buffer, a raw UAV each), and every slot must hold the value of the last
+// dispatch that named it: a table a set left out, or a table order taken from the other signature, shows up as another
+// seed or tag.
+void test_root_tables(Env& env, Device& device) {
+    constexpr UINT kSlots = 12, kSlotBytes = 16, kParams = 4, kSeedBase = 0x7AB1E000u;
+    constexpr UINT kTagOf[3] = {0x10000000u, 0x20000000u, 0x30000000u};     // fixture-tables: tags of u0, u1, u2
+    struct Layout {
+        UINT constant;      // parameter of b0
+        int reg[kParams];   // UAV register of each table parameter, -1 for the constant
+    };
+    const Layout layouts[2] = {{1, {2, -1, 0, 1}}, {2, {1, 0, -1, 2}}};
+    struct Step {
+        int layout;   // root signature set before the tables, -1: the bound one kept
+        UINT count;
+        UINT param[3];
+        UINT slot[3];
+    };
+    const Step steps[] = {
+        {0, 3, {0, 2, 3}, {0, 1, 2}}, {-1, 1, {3}, {3}}, {1, 3, {0, 1, 3}, {4, 5, 6}},
+        {-1, 1, {1}, {7}},            {0, 3, {0, 2, 3}, {8, 9, 10}}, {-1, 1, {0}, {11}},
+    };
+    constexpr UINT kSteps = sizeof(steps) / sizeof(steps[0]);
+    const uint32_t errors_before = device.shell.device_errors;
+
+    D3D12DDI_DESCRIPTOR_RANGE_0013 ranges[3];
+    for (UINT r = 0; r < 3; ++r)
+        ranges[r] = {D3D12DDI_DESCRIPTOR_RANGE_TYPE_UAV, 1, r, 0, D3D12DDI_DESCRIPTOR_RANGE_FLAG_0013_NONE,
+                     D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
+    void* rs[2] = {};
+    void* cs_storage[2] = {};
+    void* pso[2] = {};
+    int pso_rt[2] = {};
+    DdiShader cs;
+    bool made = ddi_form(g_fixture_tables, sizeof(g_fixture_tables), cs);
+    for (UINT l = 0; l < 2 && made; ++l) {
+        D3D12DDI_ROOT_PARAMETER_0013 params[kParams]{};
+        for (UINT p = 0; p < kParams; ++p) {
+            params[p].ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
+            if (layouts[l].reg[p] < 0) {
+                params[p].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+                params[p].Constants = {0, 0, 1};
+            } else {
+                params[p].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                params[p].DescriptorTable = {1, &ranges[layouts[l].reg[p]]};
+            }
+        }
+        rs[l] = create_root_signature(env, device, kParams, params);
+        const D3D12DDI_HROOTSIGNATURE hrs{rs[l]};
+        cs_storage[l] = rs[l] ? create_shader(env, device, env.core.pfnCreateComputeShader, cs, hrs) : nullptr;
+        D3D12DDIARG_CREATE_PIPELINE_STATE_0075 pso_args{};
+        pso_args.hComputeShader = D3D12DDI_HSHADER{cs_storage[l]};
+        pso_args.hRootSignature = hrs;
+        pso[l] = cs_storage[l] ? env.storage.alloc(env.core.pfnCalcPrivatePipelineStateSize(device.h(), &pso_args))
+                               : nullptr;
+        if (pso[l] && env.core.pfnCreatePipelineState(device.h(), &pso_args, D3D12DDI_HPIPELINESTATE{pso[l]},
+                                                      D3D12DDI_HRTPIPELINESTATE{&pso_rt[l]}) != S_OK)
+            pso[l] = nullptr;
+        made = pso[l] != nullptr;
+    }
+
+    Buffer out, readback;
+    made = made && create_buffer(env, device, HeapKind::Default, kSlots * kSlotBytes, true, out) == S_OK &&
+           create_buffer(env, device, HeapKind::Readback, kSlots * kSlotBytes, false, readback) == S_OK;
+    D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu{};
+    D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu{};
+    void* heap = create_view_heap(env, device, kSlots, true, cpu, &gpu);
+    const UINT inc = env.core.pfnGetDescriptorSizeInBytes(device.h(), D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    made = made && heap && cpu.ptr && gpu.ptr && inc;
+    if (made) {
+        for (UINT k = 0; k < kSlots; ++k) {
+            D3D12DDIARG_CREATE_UNORDERED_ACCESS_VIEW_0002 uav{};
+            uav.hDrvResource = out.hres();
+            uav.Format = DXGI_FORMAT_R32_TYPELESS;
+            uav.ResourceDimension = D3D12DDI_RD_BUFFER;
+            uav.Buffer.FirstElement = UINT64{k} * kSlotBytes / 4;
+            uav.Buffer.NumElements = kSlotBytes / 4;
+            uav.Buffer.Flags = D3D12DDI_BUFFER_UAV_FLAG_RAW;
+            env.core.pfnCreateUnorderedAccessView(device.h(), &uav, {cpu.ptr + SIZE_T{k} * inc});
+        }
+        made = device.shell.device_errors == errors_before;
+    }
+    checkf(made, "root tables: two root signatures with three UAV tables in different orders, a compute pipeline on "
+                 "each, a DEFAULT and a READBACK buffer, twelve raw UAVs in a shader-visible heap");
+
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    Recording rec;
+    if (made) {
+        made = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue) == S_OK && queue &&
+               open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE, rec) == S_OK && rec.table == 0;
+        checkf(made, "root tables: COMPUTE queue and list");
+    }
+    if (made) {
+        const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[0];
+        D3D12DDI_HDESCRIPTORHEAP heaps[] = {D3D12DDI_HDESCRIPTORHEAP{heap}};
+        t.pfnSetDescriptorHeaps(rec.hlist(), 1, heaps);
+        D3D12DDIARG_RESOURCE_BARRIER_0022 barrier =
+            transition(out, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS);
+        t.pfnResourceBarrier(rec.hlist(), 1, &barrier);
+        D3D12DDIARG_RESOURCE_BARRIER_0022 uav{};
+        uav.Type = D3D12DDI_RESOURCE_BARRIER_TYPE_UAV;
+        UINT expected[kSlots] = {};
+        UINT table_slot[kParams] = {};
+        int bound = -1;
+        for (UINT d = 0; d < kSteps; ++d) {
+            const Step& s = steps[d];
+            if (s.layout >= 0) {
+                bound = s.layout;
+                t.pfnSetComputeRootSignature(rec.hlist(), D3D12DDI_HROOTSIGNATURE{rs[bound]});
+                t.pfnSetPipelineState(rec.hlist(), D3D12DDI_HPIPELINESTATE{pso[bound]});
+            }
+            for (UINT k = 0; k < s.count; ++k) {
+                t.pfnSetComputeRootDescriptorTable(rec.hlist(), s.param[k], {gpu.ptr + UINT64{s.slot[k]} * inc});
+                table_slot[s.param[k]] = s.slot[k];
+            }
+            t.pfnSetComputeRoot32BitConstant(rec.hlist(), layouts[bound].constant, kSeedBase + d, 0);
+            t.pfnDispatch(rec.hlist(), 1, 1, 1);
+            t.pfnResourceBarrier(rec.hlist(), 1, &uav);
+            for (UINT p = 0; p < kParams; ++p) {
+                if (layouts[bound].reg[p] >= 0)
+                    expected[table_slot[p]] = (kSeedBase + d) ^ kTagOf[layouts[bound].reg[p]];
+            }
+        }
+        barrier = transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+        t.pfnResourceBarrier(rec.hlist(), 1, &barrier);
+        D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
+        dst.BaseAddress.UMD = {readback.hres(), 0};
+        src.BaseAddress.UMD = {out.hres(), 0};
+        t.pfnCopyBufferRegion(rec.hlist(), dst, src, kSlots * kSlotBytes);
+        t.pfnCloseCommandList(rec.hlist());
+        const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        checkf(hr == S_OK && !device.shell.list_errors,
+               "root tables: six dispatches over two root signatures with some tables set again, copy, execute "
+               "(hr %08lx)",
+               static_cast<unsigned long>(hr));
+        wait_queue_idle(env, queue, "root tables");
+        void* mapped = nullptr;
+        UINT bad = 0, first = kSlots, got = 0;
+        if (env.core.pfnMapHeap(device.h(), readback.hheap(), &mapped) == S_OK && mapped) {
+            const auto* words = static_cast<const UINT32*>(mapped);
+            for (UINT k = 0; k < kSlots; ++k) {
+                if (words[k * kSlotBytes / 4] != expected[k]) {
+                    if (!bad) {
+                        first = k;
+                        got = words[k * kSlotBytes / 4];
+                    }
+                    ++bad;
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        } else {
+            bad = ~0u;
+        }
+        checkf(!bad, "root tables: every slot holds seed ^ tag of the last dispatch whose table named it (%u slots "
+                     "differ, first %u: %08x, expected %08x)",
+               bad, first, got, first < kSlots ? expected[first] : 0u);
+    }
+    destroy_recording(env, device, rec);
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "root tables: destroy_engine_queue reports Retired");
+    if (heap) env.core.pfnDestroyDescriptorHeap(device.h(), D3D12DDI_HDESCRIPTORHEAP{heap});
+    destroy_buffer(env, device, out);
+    destroy_buffer(env, device, readback);
+    for (UINT l = 0; l < 2; ++l) {
+        if (pso[l]) env.core.pfnDestroyPipelineState(device.h(), D3D12DDI_HPIPELINESTATE{pso[l]});
+        if (cs_storage[l]) env.core.pfnDestroyShader(device.h(), D3D12DDI_HSHADER{cs_storage[l]});
+        if (rs[l]) env.core.pfnDestroyRootSignature(device.h(), D3D12DDI_HROOTSIGNATURE{rs[l]});
+    }
 }
 
 // ---- Buffer rebinds ---------------------------------------------------------------------------------------------------
@@ -1077,6 +1258,7 @@ void measure_draw_path(Env& env, Device& device, Target& target, const Buffer& r
 
 void test_draw_path(Env& env, Device& device) {
     test_descriptor_ranges(env, device);
+    test_root_tables(env, device);
 
     D3D12DDI_ROOT_PARAMETER_0013 constant{};
     constant.ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
