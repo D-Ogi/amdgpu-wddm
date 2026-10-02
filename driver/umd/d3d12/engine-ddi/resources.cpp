@@ -1098,6 +1098,51 @@ void log_virtual_placement(const char* side, const D3D12DDIARG_BUFFER_PLACEMENT*
                 static_cast<unsigned long long>(p->BaseAddress.UMD.Offset), b);
 }
 
+// Copies between a footprint and a depth-stencil texture: Vulkan wants a multiple of 4 as the buffer offset of a
+// depth or stencil aspect, and the engine states no restriction (UnrestrictedBufferTextureCopyPitchSupported). The
+// first such copy of a process is logged, and the first whose footprint offset is not a multiple of 4: two lines at
+// most, the same one when the first copy is that. Once the first is written, only a footprint at an offset not a
+// multiple of 4 makes a copy read the texture's record; once both are, a copy costs two relaxed loads.
+LogOnce g_depth_copy, g_depth_copy_unaligned;
+
+bool depth_stencil_texture(const D3D12_RESOURCE_DESC1& desc) noexcept {
+    switch (desc.Format) {
+    case DXGI_FORMAT_D16_UNORM: case DXGI_FORMAT_D24_UNORM_S8_UINT: case DXGI_FORMAT_D32_FLOAT:
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+        return true;
+    default:
+        return (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
+    }
+}
+
+void log_depth_copy(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* pdst,
+                    const D3D12_TEXTURE_COPY_LOCATION& d, const D3D12DDIARG_BUFFER_PLACEMENT* psrc,
+                    const D3D12_TEXTURE_COPY_LOCATION& s) noexcept {
+    if (g_depth_copy.done() && g_depth_copy_unaligned.done()) return;
+    constexpr auto kIndex = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    constexpr auto kFootprint = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    const bool up = d.Type == kIndex && s.Type == kFootprint;
+    if (!up && !(d.Type == kFootprint && s.Type == kIndex)) return;
+    const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& f = (up ? s : d).PlacedFootprint;
+    if (g_depth_copy.done() && f.Offset % 4 == 0) return;
+    const auto* r = record_of<ResourceRecord>((up ? pdst : psrc)->BaseAddress.UMD.hResource.pDrvPrivate, Tag::Resource,
+                                              l->h.device);
+    if (!r || !depth_stencil_texture(r->desc)) return;
+    const UINT subresource = (up ? d : s).SubresourceIndex;
+    const bool first = g_depth_copy.first();
+    const bool first_unaligned = f.Offset % 4 != 0 && g_depth_copy_unaligned.first();
+    if (!first && !first_unaligned) return;
+    const UINT mips = r->desc.MipLevels ? r->desc.MipLevels : 1;
+    const UINT layers =
+        r->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : std::max<UINT>(1, r->desc.DepthOrArraySize);
+    log_refusal("CopyTextureRegion: first depth-stencil copy%s, %s a footprint: resource format %u, subresource %u, "
+                "plane %u, footprint format %u, offset %llu (%% 4 = %u, %% 512 = %u), pitch %u",
+                first_unaligned ? " with an offset not a multiple of 4" : "", up ? "from" : "to",
+                static_cast<unsigned>(r->desc.Format), subresource, subresource / (mips * layers),
+                static_cast<unsigned>(f.Footprint.Format), static_cast<unsigned long long>(f.Offset),
+                static_cast<unsigned>(f.Offset % 4), static_cast<unsigned>(f.Offset % 512), f.Footprint.RowPitch);
+}
+
 // One CopyTextureRegion of a split placement as one engine copy per slice. The other side is a subresource: a
 // buffer-to-buffer copy is not a texture copy. Source slices come from the box (or the whole footprint); destination
 // slices from the box (or the whole source subresource, sized from the shell's record of the source resource).
@@ -1162,6 +1207,7 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
         // Diagnostic lines, before the box is checked: they describe the call as the slot received it.
         log_virtual_placement("destination", pdst, dst, box);
         log_virtual_placement("source", psrc, src, box);
+        log_depth_copy(l, pdst, d, psrc, s);
     }
     if (SUCCEEDED(hr) && box && (box->Left < 0 || box->Top < 0 || box->Front < 0 || box->Right < box->Left ||
                                  box->Bottom < box->Top || box->Back < box->Front))

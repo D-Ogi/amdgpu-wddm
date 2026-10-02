@@ -4,6 +4,7 @@
 // are written once a process, so they are counted over the whole run (refusal_lines).
 #include "harness.h"
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -153,6 +154,108 @@ uint32_t allocation_refusals(Env& env, Device& device) {
            refused, sizeof(candidates) / sizeof(candidates[0]), wrong, first_line.c_str());
     return device.shell.device_errors - errors_before;
 }
+
+// Copies between a footprint and a depth-stencil texture: a D32_FLOAT 8 x 8 depth buffer filled from an UPLOAD buffer
+// at offset 260 (a multiple of 4, not of 512: the first such copy, one line) and read back into a READBACK buffer at
+// offset 1024 (nothing), run on an engine queue and compared; then twice at offset 258 in a second list, each refused
+// by its box after the slot saw it, so the engine never gets an offset Vulkan forbids for a depth aspect (the first
+// unaligned copy: one line, the second nothing). Returns the list errors those two refusals reported.
+uint32_t depth_copies(Env& env, Device& device) {
+    constexpr UINT kUp = 260, kDown = 1024, kPitch = 256;
+    auto depth_at = [](UINT x, UINT y) { return static_cast<float>(y * 8 + x + 1) / 128.0f; };
+    Buffer upload, readback, depth;
+    const HRESULT hr_u = create_buffer(env, device, HeapKind::Upload, 4096, false, upload);
+    const HRESULT hr_r = create_buffer(env, device, HeapKind::Readback, 4096, false, readback);
+    const HRESULT hr_d =
+        create_texture(env, device, DXGI_FORMAT_D32_FLOAT, 8, 8, D3D12DDI_RESOURCE_FLAG_0003_DEPTH_STENCIL, depth);
+    checkf(hr_u == S_OK && hr_r == S_OK && hr_d == S_OK,
+           "log lines: UPLOAD and READBACK buffers and a D32_FLOAT 8x8 depth buffer (hr %08lx %08lx %08lx)",
+           static_cast<unsigned long>(hr_u), static_cast<unsigned long>(hr_r), static_cast<unsigned long>(hr_d));
+    const uint32_t list_errors = device.shell.list_errors;
+    engine_ddi::EngineQueue* queue = nullptr;
+    Recording rec, refused;
+    HRESULT hr = hr_u == S_OK && hr_r == S_OK && hr_d == S_OK ? S_OK : E_FAIL;
+    void* cpu = nullptr;
+    if (hr == S_OK) hr = env.core.pfnMapHeap(device.h(), upload.hheap(), &cpu);
+    if (hr == S_OK && cpu) {
+        for (UINT y = 0; y < 8; ++y)
+            for (UINT x = 0; x < 8; ++x) {
+                const float v = depth_at(x, y);
+                std::memcpy(static_cast<BYTE*>(cpu) + kUp + y * kPitch + x * 4, &v, sizeof(v));
+            }
+        env.core.pfnUnmapHeap(device.h(), upload.hheap());
+    }
+    if (hr == S_OK) {
+        BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+        hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
+    }
+    if (hr == S_OK) hr = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec);
+    if (hr == S_OK) hr = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, refused);
+    if (hr == S_OK) {
+        const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT footprint{DXGI_FORMAT_D32_FLOAT, 8, 8, 1, kPitch,
+                                                                        8 * kPitch};
+        const D3D12DDIARG_PLACED_RESOURCE pitched{D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &footprint};
+        const D3D12DDIARG_PLACED_RESOURCE subresource{D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr};
+        const D3D12DDIARG_BUFFER_PLACEMENT tex = at(depth, 0), up = at(upload, kUp), down = at(readback, kDown),
+                                           unaligned = at(upload, kUp - 2);
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_dest =
+            transition(depth, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST);
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
+            transition(depth, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+        const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[rec.table];
+        t.pfnResourceBarrier(rec.hlist(), 1, &to_dest);
+        t.pfnCopyTextureRegion(rec.hlist(), &tex, subresource, 0, 0, 0, &up, pitched, nullptr);
+        t.pfnResourceBarrier(rec.hlist(), 1, &to_source);
+        t.pfnCopyTextureRegion(rec.hlist(), &down, pitched, 0, 0, 0, &tex, subresource, nullptr);
+        t.pfnCloseCommandList(rec.hlist());
+        const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
+        hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        const bool idle = hr == S_OK && wait_queue_idle(env, queue, "log lines");
+        UINT differ = 64;
+        if (idle && env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu) == S_OK && cpu) {
+            differ = 0;
+            for (UINT y = 0; y < 8; ++y)
+                for (UINT x = 0; x < 8; ++x) {
+                    float v = 0;
+                    std::memcpy(&v, static_cast<const BYTE*>(cpu) + kDown + y * kPitch + x * 4, sizeof(v));
+                    if (v != depth_at(x, y)) ++differ;
+                }
+            env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        }
+        checkf(idle && device.shell.list_errors == list_errors && differ == 0,
+               "log lines: a depth buffer filled from a footprint and read back into another, every value in place "
+               "(hr %08lx, %u of 64 differ)",
+               static_cast<unsigned long>(hr), differ);
+        const D3D12DDI_BOX inverted{8, 0, 0, 0, 8, 1};      // right below left: refused after the slot saw the call
+        const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& u = env.lists[refused.table];
+        u.pfnCopyTextureRegion(refused.hlist(), &tex, subresource, 0, 0, 0, &unaligned, pitched, &inverted);
+        u.pfnCopyTextureRegion(refused.hlist(), &tex, subresource, 0, 0, 0, &unaligned, pitched, &inverted);
+        u.pfnCloseCommandList(refused.hlist());
+    }
+    const uint32_t reported = device.shell.list_errors - list_errors;
+    const std::vector<std::string> aligned = refusal_lines("CopyTextureRegion: first depth-stencil copy, ");
+    const std::vector<std::string> odd =
+        refusal_lines("CopyTextureRegion: first depth-stencil copy with an offset not a multiple of 4");
+    const char* want_aligned = "CopyTextureRegion: first depth-stencil copy, from a footprint: resource format 40, "
+                               "subresource 0, plane 0, footprint format 40, offset 260 (% 4 = 0, % 512 = 260), "
+                               "pitch 256";
+    const char* want_odd = "CopyTextureRegion: first depth-stencil copy with an offset not a multiple of 4, from a "
+                           "footprint: resource format 40, subresource 0, plane 0, footprint format 40, "
+                           "offset 258 (% 4 = 2, % 512 = 258), pitch 256";
+    checkf(aligned.size() == 1 && aligned[0] == want_aligned && odd.size() == 1 && odd[0] == want_odd &&
+               reported == 2 && device.shell.last_list_error == E_INVALIDARG,
+           "log lines: one line for the first depth-stencil copy and one for the first at an offset not a multiple of "
+           "4 (%zu, %zu; %u refusals reported): \"%s\", \"%s\"",
+           aligned.size(), odd.size(), reported, aligned.empty() ? "" : aligned[0].c_str(),
+           odd.empty() ? "" : odd[0].c_str());
+    destroy_recording(env, device, refused);
+    destroy_recording(env, device, rec);
+    if (queue) engine_ddi::destroy_engine_queue(queue);
+    destroy_buffer(env, device, depth);
+    destroy_buffer(env, device, readback);
+    destroy_buffer(env, device, upload);
+    return reported;
+}
 } // namespace
 
 void test_log_lines(Env& env) {
@@ -162,9 +265,11 @@ void test_log_lines(Env& env) {
     if (hr != S_OK) return;
     virtual_placement(env, device);
     const uint32_t device_errors = allocation_refusals(env, device);
+    const uint32_t list_errors = depth_copies(env, device);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
-    checkf(hr == S_OK && live == 0 && device.shell.device_errors == device_errors && !device.shell.list_errors,
+    checkf(hr == S_OK && live == 0 && device.shell.device_errors == device_errors &&
+               device.shell.list_errors == list_errors,
            "log lines: destroy_device_context S_OK with no live object, no error reported but the refusals' (hr "
            "%08lx, %u live, %u device, %u list errors)",
            static_cast<unsigned long>(hr), live, device.shell.device_errors, device.shell.list_errors);
