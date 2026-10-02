@@ -554,6 +554,7 @@ int wmain(int argc, wchar_t** argv) {
         test_copy(env, device);
         test_copy_slices(env, device);
         test_copy_bc_volume(env, device);
+        test_stored_formats(env, device);
         test_compute(env, device);
         test_graphics(env, device);
         test_device_queries(env, device);

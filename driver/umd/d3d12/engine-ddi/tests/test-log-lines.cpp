@@ -124,8 +124,10 @@ D3D12DDIARG_CREATERESOURCE_0088 texture_description(DXGI_FORMAT format) {
 // The first refusal of each format by CheckResourceAllocationInfo: a 64 x 64 texture of each candidate the engine has
 // no size for, asked twice, gets ResourceDataSize UINT64_MAX with the default 64 KiB alignment (no additional data,
 // layout as asked) both times, reports no error and gives one line with its description; a candidate the engine
-// sizes gets its size and gives none. A malformed call, without a description or with a castable count and no list,
-// still reports E_INVALIDARG and leaves the answer zeroed. Returns the device errors reported.
+// sizes, or one engine-ddi stores as a format the engine sizes (YUY2, internal.h StoredFormat), gets its size and
+// adds no line (test_stored_formats has had the YUY2 line, for an odd width). A malformed call, without a description
+// or with a castable count and no list, still reports E_INVALIDARG and leaves the answer zeroed. Returns the device
+// errors reported.
 uint32_t allocation_refusals(Env& env, Device& device) {
     const DXGI_FORMAT candidates[] = {DXGI_FORMAT_YUY2, DXGI_FORMAT_R8G8_B8G8_UNORM, DXGI_FORMAT_G8R8_G8B8_UNORM,
                                       DXGI_FORMAT_R1_UNORM, DXGI_FORMAT_AI44, DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -136,8 +138,13 @@ uint32_t allocation_refusals(Env& env, Device& device) {
     for (const DXGI_FORMAT format : candidates) {
         D3D12_RESOURCE_DESC api{D3D12_RESOURCE_DIMENSION_TEXTURE2D, 0, 64, 64, 1, 1, format, {1, 0},
                                 D3D12_TEXTURE_LAYOUT_UNKNOWN, D3D12_RESOURCE_FLAG_NONE};
-        const bool engine_refuses = env.engine->GetResourceAllocationInfo(0, 1, &api).SizeInBytes == UINT64_MAX;
+        const bool engine_refuses = !engine_ddi::stored_format(format) &&
+                                    env.engine->GetResourceAllocationInfo(0, 1, &api).SizeInBytes == UINT64_MAX;
         const D3D12DDIARG_CREATERESOURCE_0088 res = texture_description(format);
+        char prefix[112];
+        std::snprintf(prefix, sizeof(prefix), "CheckResourceAllocationInfo: UINT64_MAX answered for the first refusal "
+                      "of format %u (%08lx):", static_cast<unsigned>(format), static_cast<unsigned long>(E_INVALIDARG));
+        const size_t lines_before = refusal_lines(prefix).size();
         const uint32_t errors = device.shell.device_errors;
         unsigned answers_wrong = 0;
         for (int i = 0; i < 2; ++i) {
@@ -151,12 +158,9 @@ uint32_t allocation_refusals(Env& env, Device& device) {
             const bool sized = info.ResourceDataSize && info.ResourceDataSize != UINT64_MAX;
             answers_wrong += engine_refuses ? !unsized : !sized;
         }
-        char prefix[112];
-        std::snprintf(prefix, sizeof(prefix), "CheckResourceAllocationInfo: UINT64_MAX answered for the first refusal "
-                      "of format %u (%08lx):", static_cast<unsigned>(format), static_cast<unsigned long>(E_INVALIDARG));
         const std::vector<std::string> lines = refusal_lines(prefix);
         const uint32_t reported = device.shell.device_errors - errors;
-        wrong += answers_wrong || reported || lines.size() != (engine_refuses ? 1u : 0u);
+        wrong += answers_wrong || reported || lines.size() != (engine_refuses ? 1u : lines_before);
         if (engine_refuses && !refused++ && !lines.empty()) {
             first_line = lines[0];
             first_want = std::string(prefix) + " type 3, 64 x 64, depth or array 1, mips 1, samples 1, flags 0x0, "

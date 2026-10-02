@@ -390,7 +390,40 @@ struct ResourceRecord {
     ResourceRecord* init_next;
     uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
     uint64_t linear_size;                       // the size of its backing as asked of the shell
+    DXGI_FORMAT stored_from;                    // the video format desc stores (stored_format), else UNKNOWN
 };
+
+// A packed video format the engine has no image of, stored as the typeless format of its element (INTEGRATION.md,
+// "Packed video formats"). The DXGI_FORMAT reference names the view formats of each: the storage's family, which a
+// typeless image allows, and R32_UINT for a UAV of a 4-byte element, which the engine adds to a typeless image with
+// ALLOW_UNORDERED_ACCESS. A 4:2:2 element holds two pixels: the resource's width and every x the application gives
+// are in pixels, the engine's in elements, and "one view provides a straightforward mapping of the entire surface".
+struct StoredFormat {
+    DXGI_FORMAT format;                         // as the application names it
+    DXGI_FORMAT storage;                        // the engine's resource format
+    DXGI_FORMAT view;                           // what a view naming the video format (or no format) gets
+    UINT pixels;                                // pixels per element
+};
+inline const StoredFormat* stored_format(DXGI_FORMAT f) noexcept {
+    static constexpr StoredFormat kStored[] = {
+        {DXGI_FORMAT_AYUV, DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM, 1},
+        {DXGI_FORMAT_Y410, DXGI_FORMAT_R10G10B10A2_TYPELESS, DXGI_FORMAT_R10G10B10A2_UNORM, 1},
+        {DXGI_FORMAT_Y416, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 1},
+        {DXGI_FORMAT_YUY2, DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UNORM, 2},
+        {DXGI_FORMAT_Y210, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 2},
+        {DXGI_FORMAT_Y216, DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UNORM, 2},
+    };
+    for (const StoredFormat& s : kStored)
+        if (s.format == f) return &s;
+    return nullptr;
+}
+
+// The format a view of r is created with: the view format of a stored video format named by the view, or by the
+// resource when the view names none; any other format as given.
+inline DXGI_FORMAT view_format(const ResourceRecord* r, DXGI_FORMAT format) noexcept {
+    const StoredFormat* s = stored_format(format == DXGI_FORMAT_UNKNOWN && r ? r->stored_from : format);
+    return s ? s->view : format;
+}
 inline constexpr uint32_t kInitNone = 0;
 inline constexpr uint32_t kInitQueued = 1;
 inline constexpr uint32_t kInitRecorded = 2;    // named by a batch that may still run

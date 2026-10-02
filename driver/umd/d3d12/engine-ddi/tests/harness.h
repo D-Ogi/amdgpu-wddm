@@ -185,6 +185,8 @@ HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory
 void test_copy(Env& env, Device& device);
 void test_copy_slices(Env& env, Device& device);
 void test_copy_bc_volume(Env& env, Device& device);
+// The packed video formats engine-ddi stores as typeless formats: sized, created, viewed, copied and read back.
+void test_stored_formats(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_graphics(Env& env, Device& device);
 void test_retirement(Env& env);

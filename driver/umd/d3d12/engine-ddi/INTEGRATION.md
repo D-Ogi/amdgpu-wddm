@@ -346,11 +346,11 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 
 | Slot | Answer | Status |
 |---|---|---|
-| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format, except NOT_SUPPORTED for R10G10B10_XR_BIAS_A2_UNORM without an engine 2D texture (the runtime offers that format as a display format over a 0, 266) | engine answer |
+| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format, except NOT_SUPPORTED for R10G10B10_XR_BIAS_A2_UNORM without an engine 2D texture (the runtime offers that format as a display format over a 0, 266); a packed video format engine-ddi stores gets its view format's answer within the bits the format list allows it ("Packed video formats" below) | engine answer |
 | CheckMultisampleQualityLevels, Flags NONE | the engine's MULTISAMPLE_QUALITY_LEVELS; 0 when the engine refuses | engine answer |
 | CheckMultisampleQualityLevels, Flags TILED_RESOURCE | the engine's MULTISAMPLE_QUALITY_LEVELS with the TILED_RESOURCE flag; 0 when the engine refuses | engine answer |
 | GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
-| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data. A description CheckResourceAllocationInfo cannot size gets ResourceDataSize UINT64_MAX, the API's error answer, with the default alignment for its sample count. Measured on unit A (native-caps284, 285, 64 x 64 YUY2 and R8G8_B8G8_UNORM textures): with E_INVALIDARG reported instead, the runtime removed the device at GetResourceAllocationInfo (DXGI_ERROR_DRIVER_INTERNAL_ERROR, SizeInBytes 0); with UINT64_MAX it answered SizeInBytes 0xFFFFFFFFFFFF0000 (UINT64_MAX aligned down to 64 KiB, no wrap), CreateCommittedResource E_OUTOFMEMORY, CreatePlacedResource E_INVALIDARG, and the device stayed | engine answer |
+| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description (for a stored packed video format, the description of its storage); no additional data. A description CheckResourceAllocationInfo cannot size gets ResourceDataSize UINT64_MAX, the API's error answer, with the default alignment for its sample count. Measured on unit A (native-caps284, 285, 64 x 64 YUY2 and R8G8_B8G8_UNORM textures): with E_INVALIDARG reported instead, the runtime removed the device at GetResourceAllocationInfo (DXGI_ERROR_DRIVER_INTERNAL_ERROR, SizeInBytes 0); with UINT64_MAX it answered SizeInBytes 0xFFFFFFFFFFFF0000 (UINT64_MAX aligned down to 64 KiB, no wrap), CreateCommittedResource E_OUTOFMEMORY, CreatePlacedResource E_INVALIDARG, and the device stayed | engine answer |
 | EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
 | CheckDriverMatchingIdentifier | UNRECOGNIZED | exact: engine-ddi serializes nothing |
 | ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE |
@@ -360,6 +360,43 @@ are all `_Out_` zeroes them before it reports E_NOTIMPL, and each of these is a 
 E_NOTIMPL report is the difference from the table above): CheckSubresourceInfo,
 GetMetaCommandRequiredParameterInfo. The first lab log of
 D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
+
+### Packed video formats
+
+FL11_1 requires 2D textures of AYUV, Y410, Y416, YUY2, Y210 and Y216, and the runtime adds that support whatever
+CheckFormatSupport answers (284: YUY2 answered 0 came back with TEXTURE2D and SHADER_SAMPLE). The engine has no image
+of any of them. engine-ddi stores each as the typeless format of its element (internal.h, `StoredFormat`): AYUV and
+YUY2 as R8G8B8A8_TYPELESS, Y410 as R10G10B10A2_TYPELESS, Y416, Y210 and Y216 as R16G16B16A16_TYPELESS. A 4:2:2 element
+(YUY2, Y210, Y216) holds two pixels: the engine's width is half the resource's. The DXGI_FORMAT reference names the
+view formats of each; they are the storage's family, plus R32_UINT for a UAV of a 4-byte element, which the engine
+adds to a 4-byte typeless image with ALLOW_UNORDERED_ACCESS.
+
+- Sizing and creation: one translation of the description serves CheckResourceAllocationInfo and
+  CreateHeapAndResource, so the size answered is the size created. Only a single-sample 2D texture is stored; a
+  4:2:2 texture also needs an even width and exactly one mip level (its mip widths in pixels and in elements part
+  ways). Any other description of these formats gets UINT64_MAX and E_INVALIDARG.
+- Views: an SRV, UAV or RTV format passes as given, except that a view naming the video format, or no format, of a
+  stored resource gets the format's default view: R8G8B8A8_UNORM, R10G10B10A2_UNORM or R16G16B16A16_UNORM.
+- Copies: CopyTextureRegion makes a footprint of a video format one of its storage, as many elements wide as its
+  pixels fill, and divides a 4:2:2 copy's destination x and source box by two, the box's right edge rounded up.
+  CopyResource copies storage to storage.
+- Support: CheckFormatSupport answers the default view format's engine answer within the bits the format list allows
+  the video format (sample, gather and typed UAV writes; AYUV also render target and blend).
+  CheckMultisampleQualityLevels answers the view format's levels at one sample, none above.
+- Harness (`tests/test-stored-formats.cpp`): each format sized as its storage; three 8 x 4 textures of each, one
+  filled from a footprint, one cleared through a UAV naming the video format, one through the UINT view (R32_UINT for
+  a 4-byte element); copies with a box and an offset in pixels, from a footprint and between textures; all read back
+  byte for byte. Without the copy translation the 4:2:2 rows differ; without the view translation the engine finds no
+  view format ("Failed to find format") and the harness dies. Not yet run on unit A.
+
+Known gaps, refused (UINT64_MAX, E_INVALIDARG) while the runtime still offers their FL11_1 support:
+
+- R8G8_B8G8_UNORM and G8R8_G8B8_UNORM: a sampled view reconstructs the shared channel per pixel, which no store as a
+  typeless element gives.
+- NV11: planar, two planes.
+- A mip chain of a 4:2:2 format. YUY2's legacy R8G8_B8G8_UNORM view at twice the width reaches the engine as given and
+  is refused there.
+- A reserved (tiled) texture of a stored format is created, with the storage's tile shape and coordinates; untested.
 
 ### Heap memory: allocate_memory and free_memory
 
