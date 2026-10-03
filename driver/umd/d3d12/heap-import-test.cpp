@@ -16,6 +16,7 @@ static UINT64 gpu_address=UINT64_C(0x100000000);
 static D3DKMT_HANDLE next_allocation=50;
 static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false,fail_deallocate=false;
 static bool resident_pending=false,fail_wait=false,fail_evict=false;
+static bool fail_lock=false,fail_unlock=false;  // BD-045: the kernel refuses Lock2 or Unlock2
 static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
 static unsigned long surface_format=0;
@@ -99,8 +100,8 @@ static HRESULT APIENTRY wait_cpu_cb(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATI
  if(fail_wait)return E_FAIL;
  completed=a->FenceValueArray[0];return S_OK;
 }
-static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){a->pData=mapped;events+='L';return S_OK;}
-static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return S_OK;}
+static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){events+='L';if(fail_lock)return E_FAIL;a->pData=mapped;return S_OK;}
+static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return fail_unlock?E_FAIL:S_OK;}
 static void VKAPI_CALL memory_properties(VkPhysicalDevice d,VkPhysicalDeviceMemoryProperties* out){
  assert(d==handle<VkPhysicalDevice>(3));*out={};out->memoryTypeCount=4;
  out->memoryTypes[0].propertyFlags=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -246,6 +247,30 @@ int main(){
  owner.return_backing(memory.allocation);assert(owner.borrow_backing(memory.allocation));owner.return_backing(memory.allocation);
  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD" && !owner.borrow_backing(memory.allocation));
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
+ // BD-045: a lock the ICD left (its Unlock2 failed, then vkFreeMemory gave the BO up) belongs to the release.
+ // The shell unlocks it after vkFreeMemory, before the unmap: V N E U D.
+ {
+  const auto saved_type=expected_type;const auto saved_page=heap.CPUPageProperty;
+  expected_type=1;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI");
+  D3DKMT_LOCK2 lock{};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK);
+  assert(owner.free(&memory)==S_OK && events=="AMZILVNEUD" && owner.last_free_report().unlocked);
+  // The shell's own Unlock2 fails: the release stops there, the record keeps the lock and the allocation,
+  // and close retries it, then releases the rest.
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK);
+  lock={};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK);
+  fail_unlock=true;assert(owner.free(&memory)==E_FAIL && events=="AMZILVN" && owner.owns_allocation(memory.allocation) &&
+                          owner.last_free_report().stage==FreeStage::Unlock && !owner.last_free_report().unlocked);
+  events.clear();assert(owner.close_after_engine_retirement()==E_FAIL && events=="N" && owner.owns_allocation(memory.allocation));
+  fail_unlock=false;events.clear();
+  assert(owner.close_after_engine_retirement()==S_OK && events=="NEUDP" && !owner.owns_allocation(memory.allocation));
+  // A failed Lock2 leaves no lock: free unlocks nothing.
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK);
+  lock={};lock.hAllocation=memory.allocation;fail_lock=true;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==E_FAIL);fail_lock=false;
+  assert(owner.free(&memory)==S_OK && events=="AMZILVEUD" && !owner.last_free_report().unlocked);
+  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
+  expected_type=saved_type;heap.CPUPageProperty=saved_page;
+ }
  // The linear primary: all three flags on a PRIMARY heap. The memory type is one of the image's, no
  // buffer is probed, the address needs the image's alignment only, and the kernel gets the LB7A
  // description with the image's pitch and the backing's size.
@@ -583,7 +608,7 @@ int main(){
   }
   assert(surfaces==13);
  }
- std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
+ std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release)");
 }

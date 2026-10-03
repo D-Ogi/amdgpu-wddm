@@ -22,7 +22,8 @@ enum class ImportStage : uint32_t {
 };
 // Where the latest free() ended, by the same rule.
 enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocate,
-    Quarantined                                 // appended: the import is held mapped (ImportReleasePolicy)
+    Quarantined,                                // appended: the import is held mapped (ImportReleasePolicy)
+    Unlock                                      // appended: the shell's own Unlock2 of a lock the ICD left (BD-045)
 };
 struct FreeReport {
     FreeStage stage{};
@@ -34,6 +35,7 @@ struct FreeReport {
     uint32_t held_count{};
     uint64_t held_bytes{};
     uint32_t released{};                        // quarantined imports this call drained (0 or more)
+    bool unlocked{};                            // the release unlocked a lock the ICD had left (BD-045)
 };
 // The shell's half of the release gate (M15.8, fixes F2 and F3 of the trial 245 report). A released import
 // stays mapped and allocated until both hold:
@@ -106,6 +108,7 @@ class RuntimeHeapImports final {
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
     HRESULT release(Record&) noexcept;
     HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
+    HRESULT unlock_for_release(Record&) noexcept;               // a CPU lock the ICD left on it
     HRESULT release_owned(Record&) noexcept;                    // the mapping and the runtime allocation
     void detach(Record*) noexcept;                // out of records_, under lock_
     void deposit(Record*) noexcept;               // into the quarantine, under lock_

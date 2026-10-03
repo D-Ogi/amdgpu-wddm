@@ -236,9 +236,28 @@ HRESULT RuntimeHeapImports::release_import(Record& record,VkDeviceMemory memory)
     // RADV may call Unlock2 from vkFreeMemory, on this thread; keep the allocation record live.
     free_report_.stage=FreeStage::VulkanFree;
     if(memory)free_(device_,memory,nullptr);
-    bool locked=false;
-    {Exclusive held(lock_);locked=record.locked;}
-    return locked?E_UNEXPECTED:S_OK;
+    return unlock_for_release(record);
+}
+// BD-045: a CPU lock belongs to whoever releases the allocation. RADV unlocks a mapped import in
+// vkFreeMemory; when its Unlock2 failed, the ICD gave its pointer up and the lock is still on the record.
+// The releasing thread unlocks it itself, by dispatch()'s protocol. If that fails too, the record keeps
+// the lock and stays retired and owned, and the next release point (close_after_engine_retirement) tries
+// again through release().
+HRESULT RuntimeHeapImports::unlock_for_release(Record& record) noexcept {
+    const DWORD self=GetCurrentThreadId();
+    {
+        Exclusive held(lock_);
+        if(!record.locked)return S_OK;
+        if(record.busy || (record.releasing && record.releasing!=self) || !kernel_.pfnUnlock2Cb)return E_UNEXPECTED;
+        record.busy=true;
+    }
+    free_report_.stage=FreeStage::Unlock;
+    D3DDDICB_UNLOCK2 b{};b.hAllocation=record.handle;
+    const HRESULT hr=kernel_.pfnUnlock2Cb(runtime_.handle,&b);
+    Exclusive held(lock_);record.busy=false;
+    if(hr!=S_OK)return FAILED(hr)?hr:E_FAIL;
+    record.locked=false;free_report_.unlocked=true;
+    return S_OK;
 }
 HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
     free_report_.stage=FreeStage::Unmap;
