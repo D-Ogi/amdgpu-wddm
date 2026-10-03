@@ -41,9 +41,17 @@ powershell -NoProfile -File tools/build/build-radv-queue-tests.ps1 `
 ```
 
 The runner compiles the patch's test source with the build's recorded flags and
-links the actual winsys objects used by the DLL. Each of twelve cases has its
-own process and a 60-second timeout. It records source, object, library and DLL
-hashes. Always rebuild first; the runner does not establish object freshness.
+links the actual winsys objects used by the DLL; when the tree has
+radv_wddm2_hosted_sync_test.c it builds that one too, against the runtime
+libraries. It runs every case of each file's tests[] table, each in its own
+process with a 60-second timeout, with the BC250_* winsys knobs removed and the
+deferred destroy log and configuration pointed into the output directory. It
+records source, object, library and DLL hashes. Always rebuild first; the runner
+does not establish object freshness.
+
+Up to 2026-10-03 the runner ran a fixed list of twelve cases and named its
+executable queue-test.exe; deferred_witness, which checks its own module name in
+the logged destroy stack, failed under that name only.
 
 On 2026-09-28, both the reviewed series build and the integrated owned-tree build
 passed 224 checks with zero failures. The latter DLL SHA-256 is
