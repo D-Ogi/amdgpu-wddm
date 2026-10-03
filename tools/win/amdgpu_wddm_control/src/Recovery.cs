@@ -48,7 +48,10 @@ namespace AmdgpuWddmControl
         // observers saw in this session of this boot, this reading included.
         public DwmReading DwmNow { get; set; }
         public DwmObservations DwmHistory { get; set; }
-        public string RouteWrittenUtc { get; set; }     // the newest backup of an action that wrote DwmForceCpu
+        // The newest DwmForceCpu write that read back (route-written.json, written by the helper after the read-back):
+        // its time and the value written (null: removed). A backup alone is an attempt, not a write.
+        public string RouteWrittenUtc { get; set; }
+        public long? RouteWrittenValue { get; set; }
 
         public RecoverySnapshot() { Parameters = new Dictionary<string, long>(); DwmRoute = "unknown"; }
 
@@ -182,6 +185,27 @@ namespace AmdgpuWddmControl
         public List<DwmInstance> Instances { get; set; }
 
         public DwmObservations() { Schema = 1; Instances = new List<DwmInstance>(); }
+    }
+
+    // dwm-observations.json: one record per session epoch, the newest 8 (another user's session must not erase this
+    // one's history).
+    public sealed class DwmObservationsFile
+    {
+        public int Schema { get; set; }
+        public List<DwmObservations> Records { get; set; }
+
+        public DwmObservationsFile() { Schema = 2; Records = new List<DwmObservations>(); }
+    }
+
+    // route-written.json: the newest DwmForceCpu write that read back. The helper removes it before such a write and
+    // writes it after the read-back, so a failed or rolled-back attempt leaves none.
+    public sealed class RouteRecord
+    {
+        public int Schema { get; set; }
+        public string Utc { get; set; }
+        public long? Value { get; set; }      // null: the value was removed
+        public string Action { get; set; }
+        public string RunId { get; set; }
     }
 
     public static class Recovery
@@ -357,9 +381,19 @@ namespace AmdgpuWddmControl
 
         // ---- the desktop compositor (BD-060) ----------------------------------------------------------------------
 
+        // A reading counts only when every identity field is valid: boot, a session above 0, a session start and a
+        // creation time that parse, a process id above 0.
         public static bool Complete(DwmReading r)
         {
-            return r != null && r.BootId != null && r.Session != null && r.SessionStartUtc != null && r.Pid != null && r.CreatedUtc != null;
+            return r != null && r.BootId != null && r.Session != null && r.Session.Value > 0 && Utc(r.SessionStartUtc) != null &&
+                r.Pid != null && r.Pid.Value > 0 && Utc(r.CreatedUtc) != null;
+        }
+
+        // A stored instance counts only with a process id above 0 and creation and first-seen times that parse: a
+        // damaged entry can never make a second instance (reviewer 911).
+        public static bool Valid(DwmInstance i)
+        {
+            return i != null && i.Pid > 0 && Utc(i.CreatedUtc) != null && Utc(i.FirstSeenUtc) != null;
         }
 
         static bool SameSession(DwmObservations o, DwmReading r)
@@ -376,7 +410,7 @@ namespace AmdgpuWddmControl
             var o = new DwmObservations { BootId = now.BootId.Value, Session = now.Session.Value, SessionStartUtc = now.SessionStartUtc };
             foreach (var r in (records ?? Enumerable.Empty<DwmObservations>()).Where(r => SameSession(r, now)))
                 foreach (var i in r.Instances ?? new List<DwmInstance>())
-                    if (i != null && i.CreatedUtc != null) AddInstance(o, i);
+                    if (Valid(i)) AddInstance(o, i);
             AddInstance(o, new DwmInstance { Pid = now.Pid.Value, CreatedUtc = now.CreatedUtc, FirstSeenUtc = nowUtc, Observer = observer });
             o.Instances = o.Instances.OrderBy(i => i.CreatedUtc, StringComparer.Ordinal).ToList();
             return o;
@@ -456,7 +490,7 @@ namespace AmdgpuWddmControl
         public static string DwmVerdict(RecoverySnapshot s)
         {
             var h = s.DwmHistory;
-            if (h == null || !SameSession(h, s.DwmNow) || h.Instances.Count == 0) return "unknown";
+            if (h == null || !SameSession(h, s.DwmNow) || h.Instances == null || h.Instances.Count == 0 || !h.Instances.All(Valid)) return "unknown";
             return h.Instances.Count > 1 ? "observed" : "unknown-history";
         }
 
@@ -620,7 +654,8 @@ namespace AmdgpuWddmControl
             string seen = s.DwmRoute == "unknown" ? "" : " Active now: the " + s.DwmRoute.ToUpperInvariant() + " route" + (string.IsNullOrEmpty(s.DwmRouteDetail) ? "" : " (" + s.DwmRouteDetail + ")") + ".";
             string selected = (s.DwmForceCpu ?? 0) != 0 ? "cpu" : "gpu";
             var dwmStart = Utc(s.DwmNow != null ? s.DwmNow.CreatedUtc : null);
-            var written = Utc(s.RouteWrittenUtc);
+            // Timing only from a write that read back the value selected now; anything else: no timing (unknown).
+            var written = s.RouteWrittenValue == s.DwmForceCpu ? Utc(s.RouteWrittenUtc) : null;
             bool pending = dwmStart != null && written != null && written.Value > dwmStart.Value;      // written after this DWM started
             bool afterWrite = dwmStart != null && written != null && dwmStart.Value > written.Value;   // this DWM started after the write
             string sel = selected.ToUpperInvariant(), act = s.DwmRoute.ToUpperInvariant();

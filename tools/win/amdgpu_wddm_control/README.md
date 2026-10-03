@@ -67,15 +67,21 @@ WinUI 3 content (the Explorer command bar, Task Manager) without mouse input unt
 does not help. Every change is written and takes effect at the next restart of Windows; the window then offers
 "Restart now", a normal restart through `ExitWindowsEx` (`EWX_REBOOT`, planned) after a confirmation, so programs can
 keep unsaved work. The helper reports such a change as "written, pending until the next restart of Windows", never as
-a completed switch. A unit test reads every source file and fails on `Kill()` outside the bug report's own child tool
-and the operator escape (below), on `TerminateProcess`, `taskkill`, `shutdown.exe` or a forced restart, on any use of
-the `dwm` process other than reading it, on a sign-out remedy, and when the window names the escape.
+a completed switch. A unit test reads every source file and fails on `Kill()` outside the bug report's own child tool,
+on `TerminateProcess` outside the operator escape (below), on `taskkill`, `shutdown.exe` or a forced restart, on any
+use of the `dwm` process other than reading it, on a sign-out remedy, and when the window names the escape.
 
-The desktop composition state keeps the selected route and the active route apart. A route written (the newest
-backup that holds `DwmForceCpu`) after the running DWM started is "pending until Windows restarts". When the DWM that
-started after the write loaded the selected route, the state says so ("the DWM that started after the change loaded
-it"); when it loaded the other route, the state is a warning that asks for a bug report. Reading the active route
-needs administrator; without it the state says that the active route cannot be read, and never calls a route active.
+The desktop composition state keeps the selected route and the active route apart. The helper removes
+`route-written.json` (control directory, owned by Administrators) before it writes `DwmForceCpu` and writes it again,
+with the time and the value, only after the value reads back; a failed or rolled-back attempt leaves no record, and a
+backup alone is never taken as a write. When that record holds the value selected now and is newer than the running
+DWM, the route is "pending until Windows restarts". When the DWM that started after the write loaded the selected
+route, the state says so ("the DWM that started after the change loaded it"); when it loaded the other route, the
+state is a warning that asks for a bug report. Without such a record the timing is unknown and neither is said. The
+active route comes from the modules of the one DWM the state names (process id, session and creation time checked
+through the same process handle before and after the module list; a change during the read gives "unknown"), never
+from another session's DWM. Reading it needs administrator; without it the state says that the active route cannot
+be read, and never calls a route active.
 
 | Action (`--action`) | Writes | Takes effect | Refused when |
 |---|---|---|---|
@@ -110,8 +116,10 @@ amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.
 ```
 
 Without `--accept-bd060` the action is refused (exit 3). It changes no setting: for the CPU route after the restart,
-run `desktop-cpu` first. The helper records the running DWM, stops it (only the DWM of the active session, and only
-when its process id and creation time still match), waits up to 20 s for the new one, records it and logs both. Warning:
+run `desktop-cpu` first. The helper records the running DWM and opens one handle to it (query, terminate and
+synchronize access), checks the process id, session, creation time and that it still runs through that handle, and
+terminates that same handle; any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
+session created after the stopped one, records it for that session and logs both. Warning:
 after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
 clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
 
@@ -134,10 +142,14 @@ The Overview's "Desktop compositor" row, the first Recovery state, `--status` an
 `recovery-states.txt` report only a DWM replacement that an observer saw. Each observer reads the active interactive
 session's DWM (process id and creation time, from the system's process list; from session 0 the console session),
 the boot (`BootId` under `Session Manager\Memory Management\PrefetchParameters`) and the session start (creation time
-of the session's first `winlogon.exe`), and records it in `dwm-observations.json`: the user's copy in
-`%LOCALAPPDATA%\amdgpu-wddm`, the administrator's copy in `%ProgramData%\amdgpu-wddm\control` (owned by
-Administrators). Both copies are merged; a record of another boot, session or session start is dropped, so a new
-session starts a new baseline. The installer's record, `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (written by its
+of the session's first `winlogon.exe`), and records it in `dwm-observations.json` (schema 2, one record per session
+epoch, the newest 8): the user's copy in `%LOCALAPPDATA%\amdgpu-wddm`, the administrator's copy in
+`%ProgramData%\amdgpu-wddm\control` (owned by Administrators). Each write re-reads the copy, merges and replaces it
+(a unique temporary file and `File.Replace`) under one named mutex per copy; a lock not taken within 2 s skips that
+write and the file keeps its history. Both copies are merged; only the record of this boot, session and session start
+counts, so a new session starts a new baseline. Every entry is validated before it counts: a process id above 0, a
+session above 0, creation, first-seen and session-start times that parse; a damaged entry is dropped and a live reading
+with a damaged field records nothing, so neither can make a replacement. The installer's record, `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (written by its
 start-confirm task at each administrator logon, format in `tools/release/installer/dwm-session.ps1`), is merged too and
 never written: its record of this epoch (the same session, boot time and logon time within 2 s) counts as an
 observation by "the installer's start-confirm task at logon" at its `recorded_utc`; a record of another epoch is not a

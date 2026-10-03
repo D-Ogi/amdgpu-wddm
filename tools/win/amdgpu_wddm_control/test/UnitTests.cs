@@ -580,7 +580,10 @@ static class UnitTests
         var cp = line(Recovery.Describe(cpuPending), "Desktop composition");
         Check(cp.Text.StartsWith("Selected: the CPU route; the running DWM loaded the GPU route. A route chosen in this session applies at the next restart of Windows.") &&
             cp.Action == "restart" && cp.Severity == "info", "CPU selected, GPU active, timing unknown: restart recommended, not a completed switch");
-        cpuPending.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z"); cpuPending.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        cpuPending.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z"); cpuPending.RouteWrittenUtc = "2026-10-03T18:10:00.000Z"; cpuPending.RouteWrittenValue = 0;
+        Check(line(Recovery.Describe(cpuPending), "Desktop composition").Text.StartsWith("Selected: the CPU route; the running DWM loaded the GPU route."),
+            "a route record of another value (an older write, or a failed one) gives no timing");
+        cpuPending.RouteWrittenValue = 1;
         cp = line(Recovery.Describe(cpuPending), "Desktop composition");
         Check(cp.Text.StartsWith("Selected for the next start: the CPU route, pending until Windows restarts. Active now: the GPU route") && cp.Action == "restart",
             "CPU route written after this DWM started: pending until the restart");
@@ -592,18 +595,20 @@ static class UnitTests
         var gp = line(Recovery.Describe(gpuPending), "Desktop composition");
         Check(gp.Text.StartsWith("Selected: the GPU route; the running DWM loaded the CPU route.") && gp.Action == "restart", "GPU selected, CPU active: restart recommended");
         var verified = Open(); verified.DwmForceCpu = 0; verified.DwmRoute = "gpu";
-        verified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); verified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        verified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); verified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z"; verified.RouteWrittenValue = 0;
         Check(line(Recovery.Describe(verified), "Desktop composition").Text.StartsWith("GPU route: selected and active (the DWM that started after the change loaded it).") &&
             line(Recovery.Describe(verified), "Desktop composition").Action == "desktop-cpu", "GPU route verified on the DWM started after the change");
         verified.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z");
         Check(line(Recovery.Describe(verified), "Desktop composition").Text.StartsWith("GPU route: selected and active. "), "GPU active before the write: not called verified by the change");
-        var cpuVerified = Closed(); cpuVerified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); cpuVerified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        var cpuVerified = Closed(); cpuVerified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); cpuVerified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z"; cpuVerified.RouteWrittenValue = 1;
         Check(line(Recovery.Describe(cpuVerified), "Desktop composition").Text.EndsWith("Active now: the CPU route. The DWM that started after the change loaded it."), "CPU route verified on the DWM started after the change");
         var blind = Open(); blind.DwmForceCpu = 0; blind.DwmRoute = "unknown";
-        blind.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z"); blind.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        blind.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z"); blind.RouteWrittenUtc = "2026-10-03T18:10:00.000Z"; blind.RouteWrittenValue = 0;
         var bl = line(Recovery.Describe(blind), "Desktop composition");
         Check(bl.Text == "Selected for the next start: the GPU route, pending until Windows restarts. The active route cannot be read." && bl.Action == "restart",
             "pending write, active route unreadable: pending, never verified");
+        blind.RouteWrittenUtc = null; blind.RouteWrittenValue = null;
+        Check(!line(Recovery.Describe(blind), "Desktop composition").Text.Contains("pending"), "no route record (only a backup, or a rolled-back attempt): not pending");
 
         // The operator escape: never a window action, refused without --accept-bd060, writes nothing.
         Check(!Recovery.Actions.Contains(Recovery.OperatorEscape), "the operator escape is not a window action");
@@ -738,6 +743,49 @@ static class UnitTests
         var merged = Recovery.Observe(new[] { userCopy, null, adminCopy }, first, "status", "2026-10-03T18:05:00.000Z");
         Check(merged.Instances.Count == 1 && merged.Instances[0].Observer == "helper" && merged.Instances[0].FirstSeenUtc == "2026-10-03T18:00:20.000Z", "dwm: two copies merge");
 
+        // Damaged entries of the app's own copies never make a replacement (reviewer 911's reproduction).
+        var stored = new DwmObservations { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z" };
+        stored.Instances.Add(new DwmInstance { Pid = 900, CreatedUtc = "2026-10-03T18:00:03.000Z", FirstSeenUtc = "2026-10-03T18:00:40.000Z", Observer = "window" });
+        var v = Closed(); v.DwmNow = first; v.DwmHistory = Recovery.Observe(new[] { stored }, first, "status", "2026-10-03T19:00:00.000Z");
+        Check(v.DwmHistory.Instances.Count == 1 && Recovery.DwmVerdict(v) == "unknown-history", "own copy: the same valid identity, one instance");
+        foreach (var bad in new[]
+        {
+            new DwmInstance { Pid = 900, CreatedUtc = "bad", FirstSeenUtc = "2026-10-03T18:00:40.000Z", Observer = "window" },
+            new DwmInstance { Pid = 0, CreatedUtc = "2026-10-03T18:00:03.000Z", FirstSeenUtc = "2026-10-03T18:00:40.000Z", Observer = "window" },
+            new DwmInstance { Pid = -7, CreatedUtc = "2026-10-03T18:10:00.000Z", FirstSeenUtc = "2026-10-03T18:10:40.000Z", Observer = "window" },
+            new DwmInstance { Pid = 901, CreatedUtc = null, FirstSeenUtc = "2026-10-03T18:10:40.000Z", Observer = "window" },
+            new DwmInstance { Pid = 901, CreatedUtc = "2026-10-03T18:10:00.000Z", FirstSeenUtc = "never", Observer = "window" },
+            null,
+        })
+        {
+            var damaged = new DwmObservations { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z" };
+            damaged.Instances.Add(bad);
+            var d = Closed(); d.DwmNow = first; d.DwmHistory = Recovery.Observe(new[] { damaged }, first, "status", "2026-10-03T19:00:00.000Z");
+            string what = bad == null ? "null" : "pid " + bad.Pid + " created " + (bad.CreatedUtc ?? "null") + " first seen " + bad.FirstSeenUtc;
+            Check(d.DwmHistory.Instances.Count == 1 && Recovery.DwmVerdict(d) == "unknown-history", "own copy with a damaged entry (" + what + "): ignored, never observed");
+            var raw = Closed(); raw.DwmNow = first; raw.DwmHistory = new DwmObservations { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z" };
+            raw.DwmHistory.Instances.Add(stored.Instances[0]); raw.DwmHistory.Instances.Add(bad);
+            Equal("unknown", Recovery.DwmVerdict(raw), "a history holding a damaged entry (" + what + ") is unknown, never observed");
+        }
+        foreach (var live in new[]
+        {
+            new DwmReading { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z", Pid = 0, CreatedUtc = "2026-10-03T18:30:00.000Z" },
+            new DwmReading { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z", Pid = 950, CreatedUtc = "bad" },
+            new DwmReading { BootId = 53, Session = 0, SessionStartUtc = "2026-10-03T18:00:00.000Z", Pid = 950, CreatedUtc = "2026-10-03T18:30:00.000Z" },
+            new DwmReading { BootId = 53, Session = 1, SessionStartUtc = "garbage", Pid = 950, CreatedUtc = "2026-10-03T18:30:00.000Z" },
+        })
+        {
+            Equal(null, Recovery.Observe(new[] { stored }, live, "status", "2026-10-03T19:00:00.000Z"), "a damaged live reading (pid " + live.Pid + ", created " + live.CreatedUtc + ", session " + live.Session + ") records nothing");
+            var lv = Closed(); lv.DwmNow = live; lv.DwmHistory = stored;
+            Equal("unknown", Recovery.DwmVerdict(lv), "a damaged live reading is unknown, never observed");
+        }
+        var fileJson = new JavaScriptSerializer();
+        var obsFile = new DwmObservationsFile(); obsFile.Records.Add(stored);
+        var obsBack = fileJson.Deserialize<DwmObservationsFile>(fileJson.Serialize(obsFile));
+        Check(obsBack.Schema == 2 && obsBack.Records.Count == 1 && obsBack.Records[0].Instances[0].Pid == 900, "observation file JSON round-trip");
+        var routeBack = fileJson.Deserialize<RouteRecord>(fileJson.Serialize(new RouteRecord { Schema = 1, Utc = "2026-10-03T18:10:00.000Z", Value = null, Action = "undo" }));
+        Check(routeBack.Value == null && routeBack.Action == "undo", "route record JSON round-trip, removed value");
+
         // The installer's record (start-confirm at logon, dwm-baseline.json as dwm-session.ps1 writes it) is one more
         // observer of the same epoch; this app only reads it.
         const string baseline = @"{""schema"":1,""records"":[" +
@@ -838,28 +886,42 @@ static class UnitTests
         {
             var name = Path.GetFileName(f);
             var text = File.ReadAllText(f);
-            foreach (var bad in new[] { "TerminateProcess", "taskkill", "shutdown.exe", "uxsms", "CloseMainWindow", "EWX_FORCE", "EwxForce", "InitiateSystemShutdown", "NtTerminateProcess", "DebugActiveProcess" })
+            foreach (var bad in new[] { "taskkill", "shutdown.exe", "uxsms", "CloseMainWindow", "EWX_FORCE", "EwxForce", "InitiateSystemShutdown", "NtTerminateProcess", "DebugActiveProcess" })
                 Check(!text.Contains(bad), "static check: " + name + " has no " + bad);
+            var terminate = System.Text.RegularExpressions.Regex.Matches(text, @"TerminateProcess\(");
+            if (name != "RecoveryActions.cs") Check(!text.Contains("TerminateProcess"), "static check: " + name + " has no TerminateProcess");
             foreach (var promise in new[] { "sign out", "Sign out", "sign-out", "log off", "Log off" })
                 Check(!text.Contains(promise), "static check: " + name + " promises no sign-out remedy (" + promise + ")");
             var matches = System.Text.RegularExpressions.Regex.Matches(text, @"\.Kill\s*\(");
             int k = matches.Count;
             if (name == "BugReport.cs") Equal(1, k, "static check: BugReport.cs kills only its own timed-out child tool");
-            else if (name == "RecoveryActions.cs")
+            else Equal(0, k, "static check: " + name + " calls no Kill()");
+            if (name == "RecoveryActions.cs")
             {
-                Equal(1, k, "static check: RecoveryActions.cs has one Kill(), the operator escape's");
-                int from = text.IndexOf("static int StopCompositor(", StringComparison.Ordinal), to = text.IndexOf("static BackupRecord Backup(", StringComparison.Ordinal);
-                Check(k == 1 && from > 0 && from < matches[0].Index && matches[0].Index < to, "static check: the Kill() is inside StopCompositor");
+                // The escape: one TerminateProcess call besides its declaration, inside StopCompositor, on the handle that
+                // DwmHandle.Open checked; the terminate access is asked for nowhere else (reviewer 911).
+                int from = text.IndexOf("static int StopCompositor(", StringComparison.Ordinal), to = text.IndexOf("static List<RecoveryProbe.Started> Starts(", StringComparison.Ordinal);
+                Equal(2, terminate.Count, "static check: RecoveryActions.cs declares TerminateProcess and calls it once");
+                Check(terminate.Count == 2 && text.Contains("public static extern bool TerminateProcess(SafeProcessHandle process, uint code);") &&
+                    from > 0 && from < terminate[1].Index && terminate[1].Index < to && text.Substring(terminate[1].Index - 10, 10).EndsWith("DwmHandle."),
+                    "static check: the TerminateProcess call is inside StopCompositor");
+                var access = System.Text.RegularExpressions.Regex.Matches(text, @"DwmHandle\.Terminate\b");
+                Check(access.Count == 1 && from < access[0].Index && access[0].Index < terminate[1].Index &&
+                    text.Substring(from, to - from).Contains("using (var h = DwmHandle.Open(old, DwmHandle.QueryLimited | DwmHandle.Terminate | DwmHandle.Synchronize, out why))") &&
+                    text.Substring(from, to - from).Contains("DwmHandle.TerminateProcess(h, 1)"), "static check: the escape terminates the handle it opened and checked");
                 Check(text.Contains("if (plan.RestartCompositor) return StopCompositor(s);") && System.Text.RegularExpressions.Regex.Matches(text, @"StopCompositor\(").Count == 2,
                     "static check: StopCompositor is reached only from a RestartCompositor plan");
+                int c0 = text.IndexOf("static DwmObservations Commit(", StringComparison.Ordinal), c1 = text.IndexOf("public static void ReadCompositor(", StringComparison.Ordinal);
+                var commit = c0 > 0 && c1 > c0 ? text.Substring(c0, c1 - c0) : "";
+                Check(commit.Contains("new Mutex(false, LockName(path))") && commit.Contains("WaitOne(2000)") && commit.Contains("var records = Load(path, admin);") &&
+                    commit.Contains("File.Replace(temp, path, null, true)") && !commit.Contains(".partial"), "static check: observations are re-read, merged and replaced under one lock");
             }
-            else Equal(0, k, "static check: " + name + " calls no Kill()");
             kills += k;
             // Every line naming the dwm process only reads it.
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(2, kills, "static check: two Kill() in all sources");
+        Equal(1, kills, "static check: one Kill() in all sources (the bug report's child tool)");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");

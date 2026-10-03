@@ -204,6 +204,20 @@ namespace BuildGate { public static class Wts {
             Remove-Item $baseline
             Write-Host "  installer record: read as this session's first observation"
         }
+        # Eight observers at once on an empty record: the lock and the atomic replace leave one valid file with this
+        # session's DWM and no temporary files (reviewer 911).
+        $observations = Join-Path $env:AMDGPU_WDDM_CONTROL_STATE 'dwm-observations.json'
+        Remove-Item $observations
+        $racers = 1..8 | ForEach-Object {
+            Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--status', '--out', "`"$(Join-Path $obj "status-race-$_.txt")`"" -PassThru -WindowStyle Hidden
+        }
+        foreach ($p in $racers) { if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'a concurrent --status did not exit within 60 s' } if ($p.ExitCode -ne 0) { throw "a concurrent --status failed (exit $($p.ExitCode))" } }
+        $file = Get-Content $observations -Raw | ConvertFrom-Json
+        $leftover = @(Get-ChildItem $env:AMDGPU_WDDM_CONTROL_STATE -Filter '*.tmp')
+        if ($file.Schema -ne 2 -or @($file.Records).Count -ne 1 -or @($file.Records[0].Instances).Count -ne 1 -or $leftover.Count) {
+            throw "concurrent observers left a bad record ($(@($file.Records).Count) records, $($leftover.Count) temporary files): $(Get-Content $observations -Raw)"
+        }
+        Write-Host "  observers: 8 concurrent --status, one valid record, no temporary files"
     }
     # A real run writes --out too. Only where it cannot change anything: without administrator it stops at once.
     $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)

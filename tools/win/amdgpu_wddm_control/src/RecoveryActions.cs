@@ -34,6 +34,7 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 
 namespace AmdgpuWddmControl
 {
@@ -82,27 +83,42 @@ namespace AmdgpuWddmControl
                 new[] { "bc250d3d_router.dll", "bc250d3d_zink.dll", "amdgpu_wddm_radv.dll" }.All(f => File.Exists(Path.Combine(installDir, "desktop", f)));
             ReadDefaults(s, installDir);
 
-            string error;
-            var modules = DwmModules(out error);
-            if (error != null) s.DwmRouteDetail = error;
-            else
-            {
-                s.DwmRoute = Recovery.RouteFromModules(modules);
-                s.DwmRouteDetail = string.Join(", ", modules.Select(Path.GetFileName).Where(f => f.StartsWith("bc250", StringComparison.OrdinalIgnoreCase) ||
-                    f.StartsWith("amdgpu_wddm", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase));
-            }
             ReadTask(s);
             ReadCompositor(s, observer);
-            var route = Safe(Backups).Where(b => b.Values.Any(v => v.Path == Recovery.RouterPath && v.Name == "DwmForceCpu"))
-                .OrderBy(b => Recovery.Utc(b.Utc) ?? DateTime.MinValue).LastOrDefault();
-            if (route != null) s.RouteWrittenUtc = Stamp(Recovery.Utc(route.Utc));
+            ReadRoute(s);
+            var route = LoadRouteRecord();
+            if (route != null) { s.RouteWrittenUtc = Stamp(Recovery.Utc(route.Utc)); s.RouteWrittenValue = route.Value; }
             s.ConfirmLogLast = LastLine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "start-confirm.log"));
             return s;
         }
 
-        static List<BackupRecord> Safe(Func<List<BackupRecord>> read)
+        // The active route from the modules of the session's DWM that DwmNow names, read through one handle that is
+        // checked against that reading before and after the module list; anything else is unknown (reviewer 911).
+        static void ReadRoute(RecoverySnapshot s)
         {
-            try { return read(); } catch (Exception) { return new List<BackupRecord>(); }
+            string why;
+            using (var h = DwmHandle.Open(s.DwmNow, DwmHandle.QueryInformation | DwmHandle.VmRead, out why))
+            {
+                if (h == null) { s.DwmRouteDetail = why; return; }
+                var modules = DwmHandle.Modules(h);
+                if (modules == null || !DwmHandle.Matches(h, s.DwmNow)) { s.DwmRouteDetail = "DWM process " + s.DwmNow.Pid + " changed while its files were read"; return; }
+                s.DwmRoute = Recovery.RouteFromModules(modules);
+                s.DwmRouteDetail = string.Join(", ", modules.Select(Path.GetFileName).Where(f => f.StartsWith("bc250", StringComparison.OrdinalIgnoreCase) ||
+                    f.StartsWith("amdgpu_wddm", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+
+        public static string RouteRecordPath { get { return Path.Combine(StateOverride ?? ControlDirectory, "route-written.json"); } }
+
+        static RouteRecord LoadRouteRecord()
+        {
+            try
+            {
+                if (!File.Exists(RouteRecordPath) || (StateOverride == null && !Trusted(RouteRecordPath))) return null;
+                var r = new JavaScriptSerializer().Deserialize<RouteRecord>(File.ReadAllText(RouteRecordPath));
+                return r != null && r.Schema == 1 && Recovery.Utc(r.Utc) != null ? r : null;
+            }
+            catch (Exception) { return null; }
         }
 
         static long? Dword(RegistryKey k, string name)
@@ -224,14 +240,15 @@ namespace AmdgpuWddmControl
         }
 
         // The boot, its start (the session's winlogon) and the session's DWM; read only, nothing is opened (BD-060).
-        public static DwmReading ReadDwm()
+        // pinned names the session (the escape's wait); otherwise the active one.
+        public static DwmReading ReadDwm(int? pinned = null)
         {
             var r = new DwmReading();
             try
             {
                 using (var k = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters"))
                     if (k != null && k.GetValue("BootId") is int) r.BootId = (uint)(int)k.GetValue("BootId");
-                int session = ActiveSession();
+                int session = pinned ?? ActiveSession();
                 r.Session = session;
                 // The session's first winlogon starts the session; the newest DWM is the one running now (an old one
                 // may still be exiting).
@@ -269,16 +286,74 @@ namespace AmdgpuWddmControl
             catch (Exception) { return null; }
         }
 
-        static DwmObservations Load(string path, bool adminOwned)
+        // The records of one copy; empty when it is missing, damaged or (the administrator's copy) not owned by
+        // Administrators or SYSTEM. Recovery.Observe validates every entry.
+        static List<DwmObservations> Load(string path, bool adminOwned)
         {
             try
             {
-                if (!File.Exists(path)) return null;
-                if (adminOwned && !Trusted(path)) return null;
-                var o = new JavaScriptSerializer().Deserialize<DwmObservations>(File.ReadAllText(path));
-                return o != null && o.Schema == 1 && o.Instances != null ? o : null;
+                if (!File.Exists(path)) return new List<DwmObservations>();
+                if (adminOwned && !Trusted(path)) return new List<DwmObservations>();
+                var f = new JavaScriptSerializer().Deserialize<DwmObservationsFile>(File.ReadAllText(path));
+                return f != null && f.Schema == 2 && f.Records != null ? f.Records.Where(r => r != null && r.Instances != null).ToList() : new List<DwmObservations>();
+            }
+            catch (Exception) { return new List<DwmObservations>(); }
+        }
+
+        // The mutex that serializes the read, merge and replace of one copy, named after its path.
+        static string LockName(string path)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                return @"Global\amdgpu-wddm-dwm-observations-" + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())), 0, 8).Replace("-", "");
+        }
+
+        // Re-reads the copy, merges this session's history into it and replaces the file atomically, all under one
+        // cross-process lock, so that no observer's instance is lost to another's older snapshot (reviewer 911). A lock
+        // not taken within 2 s skips this write: the file keeps what it has. Returns the merged history, or null.
+        static DwmObservations Commit(string path, bool admin, DwmObservations history, DwmReading now, string observer, string nowUtc)
+        {
+            string temp = null;
+            try
+            {
+                using (var m = new Mutex(false, LockName(path)))
+                {
+                    bool held;
+                    try { held = m.WaitOne(2000); } catch (AbandonedMutexException) { held = true; }
+                    if (!held) return null;
+                    try
+                    {
+                        var records = Load(path, admin);
+                        var merged = Recovery.Observe(records.Concat(new[] { history }), now, observer, nowUtc);
+                        if (merged == null) return null;
+                        // At most 64 instances: a DWM that restarts in a loop is a defect, and the first and the last tell it.
+                        if (merged.Instances.Count > 64) merged.Instances.RemoveRange(1, merged.Instances.Count - 64);
+                        var mine = records.FirstOrDefault(r => r.BootId == merged.BootId && r.Session == merged.Session && r.SessionStartUtc == merged.SessionStartUtc);
+                        var json = new JavaScriptSerializer();
+                        if (mine != null && json.Serialize(mine) == json.Serialize(merged)) return merged;
+                        var file = new DwmObservationsFile();
+                        file.Records.AddRange(records.Where(r => r != mine).OrderBy(r => r.Instances.Select(i => i.FirstSeenUtc).DefaultIfEmpty("").Max(), StringComparer.Ordinal)
+                            .Reverse().Take(7).Reverse());
+                        file.Records.Add(merged);
+                        if (admin) RecoveryRunner.PrepareDirectory();
+                        Directory.CreateDirectory(Path.GetDirectoryName(path));
+                        temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                        File.WriteAllText(temp, json.Serialize(file));
+                        if (admin)
+                        {
+                            var owner = new FileSecurity();
+                            owner.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
+                            File.SetAccessControl(temp, owner);
+                        }
+                        if (File.Exists(path)) File.Replace(temp, path, null, true);
+                        else File.Move(temp, path);
+                        temp = null;
+                        return merged;
+                    }
+                    finally { m.ReleaseMutex(); }
+                }
             }
             catch (Exception) { return null; }
+            finally { if (temp != null) try { File.Delete(temp); } catch (Exception) { } }
         }
 
         static bool Trusted(string path)
@@ -290,37 +365,23 @@ namespace AmdgpuWddmControl
         // The DWM of the active session against what observers saw before in this session. With an observer the
         // merged record is saved when it changed: as administrator to the control directory, otherwise to the user's
         // copy.
-        public static void ReadCompositor(RecoverySnapshot s, string observer)
+        public static void ReadCompositor(RecoverySnapshot s, string observer, int? session = null)
         {
             try
             {
-                s.DwmNow = ReadDwm();
+                s.DwmNow = ReadDwm(session);
+                string nowUtc = Stamp(DateTime.UtcNow);
                 var user = Load(UserObservations, false);
-                var machine = StateOverride == null ? Load(MachineObservations, true) : null;
+                var machine = StateOverride == null ? Load(MachineObservations, true) : new List<DwmObservations>();
                 var installer = LoadInstallerBaseline(s.DwmNow);
-                s.DwmHistory = Recovery.Observe(new[] { user, machine, installer }, s.DwmNow, observer ?? "dry-run", Stamp(DateTime.UtcNow));
+                s.DwmHistory = Recovery.Observe(user.Concat(machine).Concat(new[] { installer }), s.DwmNow, observer ?? "dry-run", nowUtc);
                 if (s.DwmHistory == null || observer == null) return;
-                // At most 64 instances: a DWM that restarts in a loop is a defect, and the first and the last tell it.
-                if (s.DwmHistory.Instances.Count > 64) s.DwmHistory.Instances.RemoveRange(1, s.DwmHistory.Instances.Count - 64);
                 bool admin = Program.IsElevated() && StateOverride == null;
-                var mine = admin ? machine : user;
-                var json = new JavaScriptSerializer().Serialize(s.DwmHistory);
-                if (mine != null && new JavaScriptSerializer().Serialize(mine) == json) return;
-                if (admin) RecoveryRunner.PrepareDirectory();
-                var path = admin ? MachineObservations : UserObservations;
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllText(path + ".partial", json);
-                if (admin)
-                {
-                    var owner = new FileSecurity();
-                    owner.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
-                    File.SetAccessControl(path + ".partial", owner);
-                }
-                if (File.Exists(path)) File.Delete(path);
-                File.Move(path + ".partial", path);
+                s.DwmHistory = Commit(admin ? MachineObservations : UserObservations, admin, s.DwmHistory, s.DwmNow, observer, nowUtc) ?? s.DwmHistory;
             }
             catch (Exception) { }
         }
+
 
         // The states as text: the compositor line for scripts, then every state line.
         public static string StatusText(RecoverySnapshot s)
@@ -333,19 +394,6 @@ namespace AmdgpuWddmControl
             return w.ToString();
         }
 
-        // The modules of every running DWM. Needs administrator; otherwise error says so.
-        public static List<string> DwmModules(out string error)
-        {
-            error = null;
-            var list = new List<string>();
-            var dwm = Process.GetProcessesByName("dwm");
-            if (dwm.Length == 0) { error = "no DWM is running"; return list; }
-            foreach (var p in dwm)
-                using (p)
-                    try { foreach (ProcessModule m in p.Modules) list.Add(m.FileName); }
-                    catch (Exception) { error = "DWM's files can only be checked as administrator"; }
-            return list;
-        }
 
         // The scheduled task through the Task Scheduler's scripting objects, late bound (no interop assembly).
         static void ReadTask(RecoverySnapshot s)
@@ -410,6 +458,74 @@ namespace AmdgpuWddmControl
         {
             try { return File.ReadAllLines(ActionsLog).Where(l => l.Contains(" " + runId + " ")).ToList(); }
             catch (Exception) { return new List<string>(); }
+        }
+    }
+
+    // One DWM process opened by id and checked through the same handle (reviewer 911): while the handle is open the id
+    // cannot name another process, so what the checks saw is what the handle reads or stops.
+    static class DwmHandle
+    {
+        public const uint Terminate = 0x0001, VmRead = 0x0010, QueryInformation = 0x0400, QueryLimited = 0x1000, Synchronize = 0x00100000;
+        const int StillActive = 259;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern SafeProcessHandle OpenProcess(uint access, bool inherit, int pid);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool GetProcessTimes(SafeProcessHandle process, out long creation, out long exit, out long kernel, out long user);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool ProcessIdToSessionId(int pid, out int session);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool GetExitCodeProcess(SafeProcessHandle process, out int code);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool TerminateProcess(SafeProcessHandle process, uint code);
+
+        [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "K32EnumProcessModulesEx")]
+        static extern bool EnumProcessModulesEx(SafeProcessHandle process, [Out] IntPtr[] modules, int bytes, out int needed, int filter);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "K32GetModuleFileNameExW")]
+        static extern int GetModuleFileNameEx(SafeProcessHandle process, IntPtr module, StringBuilder name, int size);
+
+        // The handle when the process is the reading's DWM (id, session, creation time) and still runs; null otherwise.
+        public static SafeProcessHandle Open(DwmReading r, uint access, out string why)
+        {
+            why = null;
+            if (!Recovery.Complete(r)) { why = "the DWM of the active session cannot be read"; return null; }
+            var h = OpenProcess(access, false, r.Pid.Value);
+            if (h.IsInvalid)
+            {
+                int error = Marshal.GetLastWin32Error();
+                h.Dispose();
+                why = error == 5 ? "DWM's files can only be checked as administrator" : "DWM process " + r.Pid + " cannot be opened (error " + error + ")";
+                return null;
+            }
+            if (!Matches(h, r)) { h.Dispose(); why = "process " + r.Pid + " is no longer the DWM that was read"; return null; }
+            return h;
+        }
+
+        public static bool Matches(SafeProcessHandle h, DwmReading r)
+        {
+            long creation, exit, kernel, user; int session, code;
+            return GetProcessTimes(h, out creation, out exit, out kernel, out user) && Recovery.Stamp(DateTime.FromFileTimeUtc(creation)) == r.CreatedUtc &&
+                ProcessIdToSessionId(r.Pid.Value, out session) && session == r.Session.Value && GetExitCodeProcess(h, out code) && code == StillActive;
+        }
+
+        // The module files of the process; null when they cannot be listed.
+        public static List<string> Modules(SafeProcessHandle h)
+        {
+            var modules = new IntPtr[1024];
+            int needed;
+            if (!EnumProcessModulesEx(h, modules, modules.Length * IntPtr.Size, out needed, 3)) return null;
+            var list = new List<string>();
+            for (int i = 0; i < Math.Min(needed / IntPtr.Size, modules.Length); i++)
+            {
+                var name = new StringBuilder(1024);
+                if (GetModuleFileNameEx(h, modules[i], name, name.Capacity) > 0) list.Add(name.ToString());
+            }
+            return list;
         }
     }
 
@@ -505,7 +621,7 @@ namespace AmdgpuWddmControl
 
         // ---- the elevated run --------------------------------------------------------------------------------------
 
-        static string _runId;
+        static string _runId, _action;
         static StringBuilder _runText = new StringBuilder();
 
         static void Log(string text)
@@ -540,7 +656,7 @@ namespace AmdgpuWddmControl
         static int Execute(Options o)
         {
             if (!Program.IsElevated()) { Fail("--action needs administrator (or --dry-run)"); return NeedsAdministrator; }
-            _runId = o.RunId;
+            _runId = o.RunId; _action = o.Action;
             try { PrepareDirectory(); }
             catch (Exception e) { Fail("cannot prepare " + RecoveryProbe.ControlDirectory + ": " + e.Message); return Failed; }
             Log("start " + o.Action + (o.Mode != null ? " mode " + o.Mode : "") + (o.Ceiling != null ? " ceiling " + o.Ceiling : "") + ", " + Program.ProductName + " " + Program.VersionText);
@@ -568,33 +684,73 @@ namespace AmdgpuWddmControl
         }
 
         // The operator escape (restart-compositor --accept-bd060): stops the DWM of the active session and waits up to
-        // 20 s for the new one, which Windows starts. The only place in this app that stops DWM (BD-060).
+        // 20 s for the new one, which Windows starts. The only place in this app that stops DWM (BD-060). One handle is
+        // opened, checked against the reading (id, session, creation time, still running) and terminated: the id
+        // cannot name another process while that handle is open. The wait stays on the same session and accepts only
+        // a DWM created after the stopped one (reviewer 911).
         static int StopCompositor(RecoverySnapshot s)
         {
             var old = s.DwmNow;
-            if (old == null || old.Pid == null) { Log("result: failed: the DWM of the active session cannot be read"); return Failed; }
+            if (!Recovery.Complete(old)) { Log("result: failed: the DWM of the active session cannot be read"); return Failed; }
+            int session = old.Session.Value;
             Log("warning: after a DWM restart some Windows 11 apps can ignore mouse clicks until Windows restarts (BD-060)");
-            Log("stopping DWM process " + old.Pid + " (started " + old.CreatedUtc + ") in session " + old.Session);
-            if (!RecoveryProbe.Starts("dwm.exe").Any(x => x.Pid == old.Pid && x.Session == old.Session && RecoveryProbe.Stamp(x.Utc) == old.CreatedUtc))
-            { Log("result: failed: process " + old.Pid + " is no longer that DWM; nothing was stopped"); return Failed; }
-            using (var p = Process.GetProcessById(old.Pid.Value)) p.Kill();
+            string why;
+            using (var h = DwmHandle.Open(old, DwmHandle.QueryLimited | DwmHandle.Terminate | DwmHandle.Synchronize, out why))
+            {
+                if (h == null) { Log("result: failed: " + why + "; nothing was stopped"); return Failed; }
+                Log("stopping DWM process " + old.Pid + " (started " + old.CreatedUtc + ") in session " + session);
+                if (!DwmHandle.TerminateProcess(h, 1)) { Log("result: failed: TerminateProcess error " + Marshal.GetLastWin32Error()); return Failed; }
+            }
+            var stopped = Recovery.Utc(old.CreatedUtc).Value.AddMilliseconds(1);
             var clock = Stopwatch.StartNew();
             while (clock.Elapsed.TotalSeconds < 20)
             {
                 Thread.Sleep(500);
-                var now = RecoveryProbe.ReadDwm();
-                if (now.Pid != null && now.CreatedUtc != old.CreatedUtc)
+                var fresh = Starts("dwm.exe").Where(x => x.Session == session && x.Utc >= stopped && !(x.Pid == old.Pid && Stamp(x.Utc) == old.CreatedUtc))
+                    .OrderBy(x => x.Utc).LastOrDefault();
+                if (fresh != null)
                 {
                     var after = new RecoverySnapshot();
-                    RecoveryProbe.ReadCompositor(after, "escape");
-                    Log("new DWM process " + now.Pid + " started " + now.CreatedUtc + "; " + Recovery.CompositorStatusLine(after));
+                    RecoveryProbe.ReadCompositor(after, "escape", session);
+                    Log("new DWM process " + fresh.Pid + " started " + Stamp(fresh.Utc) + " in session " + session + "; " + Recovery.CompositorStatusLine(after));
                     Log("result: done: the desktop compositor was restarted. Restart Windows as soon as you can (BD-060).");
                     return Done;
                 }
             }
-            Log("result: failed: no new DWM in session " + old.Session + " after 20 s; restart Windows");
+            Log("result: failed: no new DWM in session " + session + " after 20 s; restart Windows");
             return Failed;
         }
+
+        static List<RecoveryProbe.Started> Starts(string image) { return RecoveryProbe.Starts(image); }
+        static string Stamp(DateTime? utc) { return Recovery.Stamp(utc); }
+
+        // route-written.json: removed before a DwmForceCpu write, written after its read-back (reviewer 911).
+        static void RouteRecordBefore(List<RegWrite> writes)
+        {
+            if (!writes.Any(IsRoute)) return;
+            if (File.Exists(RecoveryProbe.RouteRecordPath)) { File.Delete(RecoveryProbe.RouteRecordPath); Log("route record removed before the write"); }
+        }
+
+        static void RouteRecordAfter(List<RegWrite> writes)
+        {
+            var w = writes.LastOrDefault(IsRoute);
+            if (w == null) return;
+            try
+            {
+                var r = new RouteRecord { Schema = 1, Utc = Stamp(DateTime.UtcNow), Value = w.Delete ? (long?)null : w.Number, Action = _action, RunId = _runId };
+                var path = RecoveryProbe.RouteRecordPath;
+                var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllText(temp, new JavaScriptSerializer().Serialize(r));
+                var owner = new FileSecurity();
+                owner.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
+                File.SetAccessControl(temp, owner);
+                if (File.Exists(path)) File.Replace(temp, path, null, true); else File.Move(temp, path);
+                Log("route record: DwmForceCpu " + (r.Value == null ? "removed" : r.Value.Value.ToString(CultureInfo.InvariantCulture)) + " read back at " + r.Utc);
+            }
+            catch (Exception e) { Log("route record not written (" + e.Message + "): the route timing reads as unknown"); }
+        }
+
+        static bool IsRoute(RegWrite w) { return w.Path == Recovery.RouterPath && w.Name == "DwmForceCpu"; }
 
         static BackupRecord Backup(Options o, ActionPlan plan, RecoverySnapshot s)
         {
@@ -664,6 +820,7 @@ namespace AmdgpuWddmControl
         {
             try
             {
+                RouteRecordBefore(writes);
                 foreach (var w in writes) { Write(w); Log("wrote: " + w); }
                 bool ok = true;
                 foreach (var w in writes)
@@ -672,7 +829,7 @@ namespace AmdgpuWddmControl
                     Log((back ? "read back OK: " : "read back MISMATCH: ") + w);
                     ok &= back;
                 }
-                if (ok) return true;
+                if (ok) { RouteRecordAfter(writes); return true; }
             }
             catch (Exception e) { Log("write failed: " + e.Message); }
             foreach (var v in backup.Values.Where(v => writes.Any(w => w.Path == v.Path && w.Name == v.Name)))
