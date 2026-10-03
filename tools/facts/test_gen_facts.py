@@ -1,0 +1,124 @@
+"""Run: python -m unittest discover -s tools/facts"""
+
+import contextlib
+import io
+import tempfile
+import unittest
+from pathlib import Path
+
+import gen_facts
+
+GOOD = '''\
+area: hw
+order: 1
+title: "Hardware"
+description: "Test area."
+facts:
+  - id: M1
+    status: MEASURED
+    date: "2026-09-21"
+    claim: "A | B, see `evidence/linux/run-1/`"
+    evidence: "[run](../evidence/linux/run-1/log.txt)"
+  - id: M2
+    status: REFUTED
+    date: "2026-09-22"
+    claim: "M1 was wrong"
+    status_text: "REFUTED (by M3)"
+    edges:
+      - {"type": "uses", "to": "M1"}
+  - id: M3
+    status: CONFIRMED
+    date: "2026-09-23"
+    date_from: "git"
+    claim: "Corrects M2"
+    edges:
+      - {"type": "refutes", "to": "M2", "auto": true, "cue": "Corrects M2"}
+'''
+
+
+class FactsGate(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / 'evidence' / 'linux' / 'run-1').mkdir(parents=True)
+        (self.root / 'evidence' / 'linux' / 'run-1' / 'log.txt').write_text('x')
+        self.data = self.root / 'docs' / 'facts' / 'data'
+        self.data.mkdir(parents=True)
+        self.write(GOOD)
+        self.assertEqual(self.run_gen('--write'), 0)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, text):
+        (self.data / 'hw.yaml').write_text(text, encoding='utf-8')
+
+    def run_gen(self, *args):
+        self.output = io.StringIO()
+        with contextlib.redirect_stdout(self.output):
+            return gen_facts.main(['--root', str(self.root), *args])
+
+    def assertFails(self, needle):
+        self.assertEqual(self.run_gen('--check'), 1)
+        self.assertIn(needle, self.output.getvalue())
+
+    def test_good_data_passes_and_renders(self):
+        self.assertEqual(self.run_gen('--check'), 0)
+        page = (self.root / 'docs' / 'facts' / 'hw.md').read_text(encoding='utf-8')
+        self.assertIn('A \\| B', page)  # pipes escaped in table cells
+        self.assertIn('](../../evidence/linux/run-1/log.txt)', page)  # links rewritten one level down
+        self.assertIn('refuted by [M3](#m3)', page)
+        current = (self.root / 'docs' / 'facts' / 'current.md').read_text(encoding='utf-8')
+        self.assertNotIn('[M2]', current)  # REFUTED is not live
+        self.assertIn('[M3]', current)
+        self.assertEqual(gen_facts.dump_area(gen_facts.parse_area_file(self.data / 'hw.yaml')),
+                         (self.data / 'hw.yaml').read_text(encoding='utf-8'))
+
+    def test_duplicate_id(self):
+        self.write(GOOD.replace('id: M3', 'id: M1'))
+        self.assertFails('duplicate id')
+
+    def test_dangling_edge(self):
+        self.write(GOOD.replace('"to": "M1"', '"to": "M9"'))
+        self.assertFails('target does not resolve')
+
+    def test_missing_evidence_path(self):
+        self.write(GOOD.replace('run-1/`', 'run-2/`'))
+        self.assertFails('cited path does not exist: evidence/linux/run-2/')
+
+    def test_missing_linked_file(self):
+        self.write(GOOD.replace('log.txt)', 'gone.txt)'))
+        self.assertFails('cited path does not exist: ../evidence/linux/run-1/gone.txt')
+
+    def test_bad_status(self):
+        self.write(GOOD.replace('status: CONFIRMED', 'status: PROBABLY'))
+        self.assertFails("status 'PROBABLY'")
+
+    def test_status_text_must_agree(self):
+        self.write(GOOD.replace('"REFUTED (by M3)"', '"MEASURED (by M3)"'))
+        self.assertFails('status_text does not start with status')
+
+    def test_stale_view(self):
+        page = self.root / 'docs' / 'facts' / 'hw.md'
+        page.write_text(page.read_text(encoding='utf-8') + 'hand edit\n', encoding='utf-8')
+        self.assertFails('FAIL stale: docs')
+
+    def test_stale_after_data_edit(self):
+        self.write(GOOD.replace('"M1 was wrong"', '"M1 was wrong, says M3"'))
+        self.assertFails('out of date')
+
+    def test_non_canonical_data(self):
+        self.write(GOOD.replace('  - id: M2', '\n  - id: M2'))  # blank line: valid, but not canonical
+        self.assertFails('FAIL stale: docs')
+
+    def test_not_the_subset(self):
+        self.write(GOOD.replace('claim: "Corrects M2"', 'claim: Corrects M2'))
+        self.assertFails('FAIL data')
+
+    def test_next_id(self):
+        self.assertEqual(self.run_gen('next-id'), 0)
+        self.assertEqual(self.output.getvalue().strip(), 'M4')
+
+
+if __name__ == '__main__':
+    unittest.main()
