@@ -76,6 +76,9 @@ $stubExisted = $false
 if ($state -and $state.stub_existed) { $stubExisted = $true }
 if (-not $stubExisted) { Invoke-Change "remove $stub" { Remove-PathOrSchedule $stub } | Out-Null }
 else { Write-Info "$stub was there before the install: kept" }
+foreach ($o in @(Get-ChildItem -LiteralPath (Split-Path $stub) -File -Filter 'bc250umd.dll.old-*' -ErrorAction SilentlyContinue)) {
+    Invoke-Change "remove $($o.FullName) (old copy of a stub replaced while in use)" { Remove-PathOrSchedule $o.FullName } | Out-Null
+}
 $fwExisted = $false
 if ($state -and $state.firmware_dir_existed) { $fwExisted = $true }
 if (-not $fwExisted) {

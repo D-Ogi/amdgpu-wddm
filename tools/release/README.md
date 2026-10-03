@@ -11,6 +11,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`.
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd` (package root) and the PowerShell 5.1 scripts. |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
+| `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once

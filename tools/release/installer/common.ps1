@@ -17,8 +17,10 @@ $script:TaskName         = 'amdgpu-wddm start confirm'
 $script:FirmwareDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
-$script:DryRunMode           = $false
+$script:DryRunMode       = $false
 $script:LogPath          = $null
+$script:CurrentStep      = '(before the first change)'
+$script:ScheduleOldCopies = $true                              # host tests set $false: no MoveFileEx on the test PC
 
 function Write-Step([string]$Text)  { Write-Host ''; Write-Host "== $Text" -ForegroundColor Cyan; Write-Log "== $Text" }
 function Write-Info([string]$Text)  { Write-Host "   $Text"; Write-Log "   $Text" }
@@ -32,9 +34,20 @@ function Write-Log([string]$Text) {
 # One change to the system. $Action runs only in a real run; a dry run prints the description.
 function Invoke-Change {
     param([Parameter(Mandatory)][string]$Description, [Parameter(Mandatory)][scriptblock]$Action)
+    $script:CurrentStep = $Description
     if ($script:DryRunMode) { Write-Host "   [dry run] would: $Description" -ForegroundColor DarkYellow; return $null }
     Write-Info "doing: $Description"
     return (& $Action)
+}
+# The message for a step that threw: which step, why, and that a re-run with the same package finishes the job.
+function Write-StepFailure($ErrorRecord) {
+    Write-Fail "stopped at step: $($script:CurrentStep)"
+    Write-Fail "$($ErrorRecord.Exception.Message) $($ErrorRecord.InvocationInfo.PositionMessage)"
+    Write-Host ''
+    Write-Host 'Nothing after this step ran. The steps before it are done and stay done.' -ForegroundColor Yellow
+    Write-Host 'Fix the cause if the message names one, then run install.cmd again from the same package folder:' -ForegroundColor Yellow
+    Write-Host 'it skips what is already in place and continues from here.' -ForegroundColor Yellow
+    if ($script:LogPath) { Write-Host "Log: $($script:LogPath)" -ForegroundColor Yellow }
 }
 
 # A native program, its stdout and stderr as one text, and its exit code. Windows PowerShell 5.1 turns a stderr line
@@ -103,6 +116,12 @@ function Save-InstallState($State) {
 }
 function Set-StateValue($State, [string]$Name, $Value) {
     if ($State.PSObject.Properties[$Name]) { $State.$Name = $Value } else { $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
+}
+# A fact about the computer before the install (did this file exist?): the first run records it, a re-run over a
+# partial install keeps it, because by then the installer itself made the file exist.
+function Set-StateValueOnce($State, [string]$Name, $Value) {
+    if ($null -eq $State.PSObject.Properties[$Name]) { $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
+    return $State.$Name
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -227,6 +246,58 @@ public static extern bool MoveFileEx(string existing, string replacement, int fl
     }
     return [AmdgpuWddmInstaller.Native]::MoveFileEx($Path, $null, 4)
 }
+# Installs one file so that a re-run with the same package always finishes:
+#  - target with the same SHA256: nothing to do ("already current");
+#  - target absent or writable: copied;
+#  - target in use (a DLL that DWM or an application has loaded cannot be overwritten, but it can be renamed):
+#    renamed to <name>.old-<utc>, the new file copied in, the old one scheduled for deletion at the next restart
+#    (needs administrator rights; otherwise, and as a second chance, verify removes *.old-* files).
+# Returns 'current', 'copied' or 'replaced-in-use'.
+function Copy-FileSafe {
+    param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Destination, [bool]$ScheduleOld = $script:ScheduleOldCopies)
+    if (Test-Path -LiteralPath $Destination -PathType Leaf) {
+        if ((Get-Sha256 $Destination) -eq (Get-Sha256 $Source)) { Write-Log "   already current: $Destination"; return 'current' }
+        try { Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop; Write-Log "   copied: $Destination"; return 'copied' }
+        catch {
+            Write-Log "   cannot overwrite $Destination ($($_.Exception.Message)): replacing by rename"
+            $old = $Destination + '.old-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
+            [IO.File]::Move($Destination, $old)
+            try { Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop }
+            catch { [IO.File]::Move($old, $Destination); throw }
+            $scheduled = $false
+            if ($ScheduleOld) { try { $scheduled = Remove-FileAtReboot $old } catch { $scheduled = $false } }
+            Write-Info "in use, replaced: $Destination (old copy $(Split-Path $old -Leaf) $(if ($scheduled) { 'is deleted at the next restart' } else { 'is deleted by verify' }))"
+            return 'replaced-in-use'
+        }
+    }
+    [void][IO.Directory]::CreateDirectory((Split-Path $Destination))
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+    Write-Log "   copied: $Destination"
+    return 'copied'
+}
+# Every file of a directory tree, through Copy-FileSafe.
+function Copy-TreeSafe {
+    param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$Destination)
+    $n = @{ current = 0; copied = 0; 'replaced-in-use' = 0 }
+    foreach ($f in Get-ChildItem -LiteralPath $Source -Recurse -File) {
+        $rel = $f.FullName.Substring($Source.TrimEnd('\').Length + 1)
+        $n[(Copy-FileSafe -Source $f.FullName -Destination (Join-Path $Destination $rel))]++
+    }
+    Write-Info ("{0}: {1} copied, {2} already current, {3} replaced in use" -f $Destination, $n.copied, $n.current, $n['replaced-in-use'])
+    return $n
+}
+# Old copies left by Copy-FileSafe (<name>.old-<utc>). Verify and uninstall call it; a copy still in use stays for
+# the deletion scheduled at restart. Returns the number removed.
+function Remove-OldCopies([string]$Directory, [string]$Filter = '*.old-*', [switch]$Recurse) {
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { return 0 }
+    $n = 0
+    foreach ($i in @(Get-ChildItem -LiteralPath $Directory -File -Filter $Filter -Recurse:$Recurse -ErrorAction SilentlyContinue)) {
+        if ($i.Name -notmatch '\.old-\d{8}T\d{6,9}Z$') { continue }
+        try { Remove-Item -LiteralPath $i.FullName -Force -ErrorAction Stop; $n++; Write-Log "   removed old copy $($i.FullName)" } catch { }
+    }
+    return $n
+}
+
 function Remove-PathOrSchedule([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return }
     $files = @()

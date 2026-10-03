@@ -26,6 +26,14 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 $script:DryRunMode = [bool]$DryRun
+$script:InPhase2 = $false
+# Any step that throws ends here: the step, the reason, and the re-run hint. Phase 2 is idempotent, so a re-run with
+# the same package skips what is in place and finishes.
+trap {
+    Write-StepFailure $_
+    if ($script:InPhase2 -and $state -and -not $script:DryRunMode) { try { Save-Phase 'install-incomplete' } catch { } }
+    exit 6
+}
 
 # ---- 64-bit, elevated ------------------------------------------------------------------------------------------
 if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
@@ -179,6 +187,11 @@ function Invoke-Verify {
         if ($Ok) { Write-Host ('   [pass] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Green } else { Write-Host ('   [FAIL] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Red }
         Write-Log ('   verify {0}: {1} {2}' -f $Name, $Ok, $Detail)
     }
+    if (-not $script:DryRunMode) {
+        # Files replaced while in use: the restart deletes their old copies; this catches any it could not.
+        $n = (Remove-OldCopies -Directory $InstallRoot -Recurse) + (Remove-OldCopies -Directory (Join-Path $env:windir 'System32') -Filter 'bc250umd.dll.old-*')
+        if ($n) { Write-Info "removed $n old copies of replaced files" }
+    }
     $dev = @(Get-Bc250Device)
     if ($dev.Count -ne 1) { Add-Result 'device' $false 'BC-250 GPU not found'; return $results }
     $id = $dev[0].DeviceID
@@ -314,6 +327,10 @@ if ($state.phase -eq 'testsigning-pending') {
 # ---- phase 2: install ------------------------------------------------------------------------------------------
 Write-Step 'Phase 2: install'
 if (-not $script:DryRunMode -and -not $script:TestSigningActive) { Write-Fail 'test signing is not active'; exit 5 }
+# Every step below can run again over its own result: files are compared by SHA256 and a file in use is replaced
+# by rename, registry values and the task are overwritten, pnputil accepts a package that is already there.
+$script:InPhase2 = $true
+if ($state.phase -notin @('testsigning-active')) { Write-Info "continuing an earlier run (phase $($state.phase)): finished steps are skipped" }
 
 $cer = Join-Path $package 'payload\cert\amdgpu-wddm-release.cer'
 $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList $cer
@@ -327,31 +344,39 @@ $dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'tools')
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
-    Invoke-Change "copy payload\$d -> $InstallRoot\$d" {
-        [void][IO.Directory]::CreateDirectory((Join-Path $InstallRoot $d))
-        Copy-Item -Path (Join-Path $src '*') -Destination (Join-Path $InstallRoot $d) -Recurse -Force
+    Invoke-Change "copy payload\$d -> $InstallRoot\$d (same SHA256: kept; in use: replaced by rename)" {
+        Copy-TreeSafe -Source $src -Destination (Join-Path $InstallRoot $d)
     } | Out-Null
 }
 Invoke-Change "copy the installer's own scripts to $InstallRoot\installer (uninstall works without the package folder)" {
-    [void][IO.Directory]::CreateDirectory((Join-Path $InstallRoot 'installer'))
-    Copy-Item -Path (Join-Path $here '*') -Destination (Join-Path $InstallRoot 'installer') -Force
-    Copy-Item -LiteralPath (Join-Path $package 'manifest.json') -Destination (Join-Path $InstallRoot 'manifest.json') -Force
-    Copy-Item -LiteralPath (Join-Path $package 'uninstall.cmd') -Destination (Join-Path $InstallRoot 'uninstall.cmd') -Force
-    Copy-Item -LiteralPath (Join-Path $package 'verify.cmd') -Destination (Join-Path $InstallRoot 'verify.cmd') -Force
+    Copy-TreeSafe -Source $here -Destination (Join-Path $InstallRoot 'installer')
+    foreach ($f in 'manifest.json', 'uninstall.cmd', 'verify.cmd') { [void](Copy-FileSafe -Source (Join-Path $package $f) -Destination (Join-Path $InstallRoot $f)) }
 } | Out-Null
+# Facts about the computer before the install are recorded once and saved before the step that changes them.
 $stub = Join-Path $env:windir 'System32\bc250umd.dll'
-Set-StateValue $state 'stub_existed' (Test-Path -LiteralPath $stub)
-Invoke-Change "copy payload\system32\bc250umd.dll -> $stub (the D3D9 slot of UserModeDriverName)" {
-    Copy-Item -LiteralPath (Join-Path $package 'payload\system32\bc250umd.dll') -Destination $stub -Force
+[void](Set-StateValueOnce $state 'stub_existed' (Test-Path -LiteralPath $stub))
+$bc250Dir = Split-Path -Parent $script:FirmwareDir
+[void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
+$fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareDir)
+if (-not $script:DryRunMode) { Save-InstallState $state }
+Invoke-Change "copy payload\system32\bc250umd.dll -> $stub (the D3D9 slot of UserModeDriverName; same SHA256: kept; in use: replaced by rename)" {
+    $r = Copy-FileSafe -Source (Join-Path $package 'payload\system32\bc250umd.dll') -Destination $stub
+    Write-Info "$stub`: $r"
 } | Out-Null
-Set-StateValue $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareDir)
-Set-StateValue $state 'bc250_dir_existed' (Test-Path -LiteralPath 'C:\BC250')
-Invoke-Change "copy the 8 GPU firmware files (linux-firmware cyan_skillfish2_*.bin) -> $($script:FirmwareDir); C:\BC250 writable by administrators only" {
-    [void][IO.Directory]::CreateDirectory($script:FirmwareDir)
-    # C:\ lets every user create and change folders; the KMD loads this firmware, so only administrators may change it.
-    $n = Invoke-Native icacls.exe @('C:\BC250', '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX')
-    if ($n.code -ne 0) { throw "icacls C:\BC250 failed: $($n.text)" }
-    Copy-Item -Path (Join-Path $package 'payload\firmware\*.bin') -Destination $script:FirmwareDir -Force
+$fwAcl = $(if ($fwExisted) { 'its existing access rights are kept' } else { 'created writable by administrators only' })
+Invoke-Change "copy the 8 GPU firmware files (linux-firmware cyan_skillfish2_*.bin) -> $($script:FirmwareDir); $fwAcl; $bc250Dir itself is not changed" {
+    # An existing C:\BC250 may hold other files: its access rights stay as they are. Only the firmware folder that
+    # this installer creates gets its own rights: C:\ lets every user create and change folders, and the KMD loads
+    # this firmware, so only administrators may change it.
+    if (-not (Test-Path -LiteralPath $bc250Dir)) { [void][IO.Directory]::CreateDirectory($bc250Dir) }
+    if (-not $fwExisted) {
+        [void][IO.Directory]::CreateDirectory($script:FirmwareDir)
+        $n = Invoke-Native icacls.exe @($script:FirmwareDir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX')
+        if ($n.code -ne 0) { throw "icacls $($script:FirmwareDir) failed: $($n.text)" }
+    }
+    foreach ($f in Get-ChildItem -LiteralPath (Join-Path $package 'payload\firmware') -File -Filter '*.bin') {
+        [void](Copy-FileSafe -Source $f.FullName -Destination (Join-Path $script:FirmwareDir $f.Name))
+    }
 } | Out-Null
 Save-Phase 'files-copied'
 
@@ -360,16 +385,20 @@ Save-Phase 'files-copied'
 Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install' {
     $n = Invoke-Native pnputil.exe @('/add-driver', (Join-Path $package 'payload\kmd\bc250kmd.inf'), '/install')
     Write-Log $n.text
-    if ($n.code -ne 0 -and $n.code -ne 3010) { throw "pnputil failed ($($n.code)): $($n.text)" }
+    # 3010: done, restart needed. 259: the package is in the driver store and no device needed an update, which is
+    # what a re-run over an earlier run's install sees; the binding check below decides.
+    if ($n.code -notin @(0, 3010, 259)) { throw "pnputil failed ($($n.code)): $($n.text)" }
+    if ($n.code -eq 259) { Write-Info 'pnputil: package already in the driver store, no device update needed' }
 } | Out-Null
 $instance = $null
 if ($script:Device) { $instance = $script:Device.DeviceID }
 $classKey = $null
 if (-not $script:DryRunMode) {
     $svc = Get-DeviceServiceName -InstanceId $instance
-    if ($svc -ne $script:ServiceName) { Write-Fail "the GPU is on '$svc' after pnputil, not on $($script:ServiceName)"; Save-Phase 'install-failed'; exit 6 }
+    $script:CurrentStep = 'check that the GPU is bound to the new driver package'
+    if ($svc -ne $script:ServiceName) { throw "the GPU is on '$svc' after pnputil, not on $($script:ServiceName)" }
     $classKey = Get-DeviceDriverKey -InstanceId $instance
-    if (-not $classKey) { Write-Fail 'no software key for the GPU'; Save-Phase 'install-failed'; exit 6 }
+    if (-not $classKey) { throw 'no software key for the GPU' }
     Set-StateValue $state 'class_key' $classKey
 } else { $classKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$($script:DisplayClassGuid)\<device's key after install>" }
 Save-Phase 'driver-installed'

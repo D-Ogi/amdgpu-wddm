@@ -76,7 +76,7 @@ account that is not an administrator, the task does not run, and the driver fall
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `tools`, `control`) and `C:\Windows\System32\bc250umd.dll` |
 | Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
-| GPU firmware | `C:\BC250\firmware` (8 files from linux-firmware; `LICENSE.amdgpu` in the package) |
+| GPU firmware | `C:\BC250\firmware` (8 files from linux-firmware; `LICENSE.amdgpu` in the package). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` |
 
@@ -99,6 +99,11 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 ## If something fails
 
 - Preflight `fail`: correct the item that the table names, then run `install.cmd` again.
+- The installer stops with `stopped at step: ...`: the message names the step and the cause. Correct the cause if
+  you can, then run `install.cmd` again from the same package folder. The installer skips the steps that are
+  complete and continues at the step that failed.
+- A file that Windows uses (for example a user-mode driver that the desktop has loaded) cannot be overwritten. The
+  installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
   button. After two failed starts, Windows uses Microsoft Basic Display Adapter again.
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
