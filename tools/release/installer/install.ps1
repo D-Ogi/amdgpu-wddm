@@ -136,7 +136,7 @@ function Invoke-Preflight {
 
 function Set-ResumeAtLogon([string]$Command) {
     Invoke-Change "RunOnce entry '$($script:RunOnceName)' -> $Command (runs at the next logon)" {
-        New-Item -Path $script:RunOnceKey -Force | Out-Null
+        Initialize-RegistryKey $script:RunOnceKey
         Set-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -Value ('"' + $Command + '"')
     } | Out-Null
 }
@@ -305,6 +305,16 @@ function Invoke-Verify {
 }
 
 if ($script:VerifyOnly) {
+    # Phase 2 ended in this boot: the driver runs with the old settings until the restart, and the start-confirm
+    # task was registered for the next logon. Verifying now would only report the restart that is still due.
+    if ($state.phase -eq 'installed' -and $state.updated_utc) {
+        $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
+        $done = ([DateTime]::Parse([string]$state.updated_utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)).ToUniversalTime()
+        if ($boot -lt $done) {
+            Write-Host "Restart pending: the installation finished at $($done.ToString('u')), after this start ($($boot.ToString('u'))). Restart the computer; verify runs by itself after the logon." -ForegroundColor Yellow
+            exit 7
+        }
+    }
     $r = Invoke-Verify
     $bad = @($r | Where-Object { -not $_.pass })
     if (-not $DryRun) { Save-Phase $(if ($bad.Count) { 'verify-failed' } else { 'verified' }) }
@@ -477,7 +487,7 @@ $params = [ordered]@{
 }
 if ($CuMode) { $params['CuMode'] = $CuMode }
 Invoke-Change ("set $($params.Count) DWORD values in $($script:ParametersKey): " + (($params.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ' ')) {
-    New-Item -Path $script:ParametersKey -Force | Out-Null
+    Initialize-RegistryKey $script:ParametersKey
     foreach ($e in $params.GetEnumerator()) { New-ItemProperty -LiteralPath $script:ParametersKey -Name $e.Key -Value ([int]$e.Value) -PropertyType DWord -Force | Out-Null }
 } | Out-Null
 
@@ -489,7 +499,7 @@ Invoke-Change ("$classKey UserModeDriverName = " + ($umd -join ' | ') + "; Vulka
     New-ItemProperty -LiteralPath $classKey -Name VulkanDriverName -Value ([string[]]@($icdJson)) -PropertyType MultiString -Force | Out-Null
 } | Out-Null
 Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
-    New-Item -Path $script:KhronosKey -Force | Out-Null
+    Initialize-RegistryKey $script:KhronosKey
     New-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
@@ -500,14 +510,14 @@ Set-StateValue $state 'khronos_value' $icdJson
 # switches the route by this one value. D3D11 applications run on the CPU UMD unless allowed.
 Invoke-Change "$($script:SoftwareKey)\DesktopRouter: CpuUmdPath, DwmForceCpu 1 (desktop on the CPU route, BD-058), RequireKmdSwitches 1" {
     $k = "$($script:SoftwareKey)\DesktopRouter"
-    New-Item -Path $k -Force | Out-Null
+    Initialize-RegistryKey $k
     New-ItemProperty -LiteralPath $k -Name CpuUmdPath -Value (Join-Path $InstallRoot 'desktop\bc250d3d.dll') -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name DwmForceCpu -Value 1 -PropertyType DWord -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name RequireKmdSwitches -Value 1 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Invoke-Change "$($script:SoftwareKey)\AppRouter: Mode allowlist, GpuUmdPath d3d11, Allow dxdiag.exe, Deny witcher3.exe" {
     $k = "$($script:SoftwareKey)\AppRouter"
-    New-Item -Path $k -Force | Out-Null
+    Initialize-RegistryKey $k
     New-ItemProperty -LiteralPath $k -Name Mode -Value 'allowlist' -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name GpuUmdPath -Value (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll') -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name Allow -Value ([string[]]@('dxdiag.exe')) -PropertyType MultiString -Force | Out-Null
@@ -516,12 +526,12 @@ Invoke-Change "$($script:SoftwareKey)\AppRouter: Mode allowlist, GpuUmdPath d3d1
 $w3 = 'present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay'
 Invoke-Change "$($script:SoftwareKey)\D3D12\Applications\witcher3.exe Experiment = $w3" {
     $k = "$($script:SoftwareKey)\D3D12\Applications\witcher3.exe"
-    New-Item -Path $k -Force | Out-Null
+    Initialize-RegistryKey $k
     New-ItemProperty -LiteralPath $k -Name Experiment -Value $w3 -PropertyType String -Force | Out-Null
 } | Out-Null
 Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallDir, InstallRoot, InstalledUtc" {
     $k = "$($script:SoftwareKey)\Release"
-    New-Item -Path $k -Force | Out-Null
+    Initialize-RegistryKey $k
     New-ItemProperty -LiteralPath $k -Name Version -Value ([string]$script:Manifest.version) -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstallDir -Value $InstallRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstallRoot -Value $InstallRoot -PropertyType String -Force | Out-Null

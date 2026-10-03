@@ -27,7 +27,13 @@ v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs
 `C:\BC250\firmware`; reproducible rebuild of every component; the control application edits the D3D11 allowlist; the KMD's
 adapter string ("BC-250 GPU (bc250kmd, display-only, lab build)") names the release and the mode it runs in; the
 .sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.197.100 against the file's
-0.7.197.1); one bc250kmd_cli.c for the CLI and bc250control.dll, so the CLI has the `health` commands again.
+0.7.197.1); one bc250kmd_cli.c for the CLI and bc250control.dll, so the CLI has the `health` commands again; the INF
+Provider string ("BC-250 lab (D-Ogi)") names the project instead of the lab; an upgrade keeps the tester's own
+settings (DpmMaxMHz, the D3D11 allowlist) instead of writing the defaults again.
+
+install.ps1 exit codes: 0 done (or already installed and verified), 2 preflight refused, 3 verification failed,
+4 not confirmed, 5 test signing not active, 6 a step failed (run again), 7 verify before the pending restart,
+10 handed to an elevated window.
 
 `build-release.ps1` and `test-dryrun.ps1` need PowerShell 7 (`headless.ps1` starts every child process without a
 window, with stdin closed and a time bound). The installer itself is Windows PowerShell 5.1.

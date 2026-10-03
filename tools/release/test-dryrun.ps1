@@ -121,6 +121,25 @@ foreach ($c in $cases) {
     Remove-Item -LiteralPath $dir -Recurse -Force
 }
 
+Check ($src -notmatch 'New-Item -Path [^\r\n]*-Force') 'install.ps1 never runs New-Item -Force on a registry key (it deletes the key''s values)'
+
+'verify before and after the restart (test state, phase installed)'
+foreach ($c in @(
+        @{ name = 'verify before the restart'; utc = [DateTime]::UtcNow.ToString('o'); code = 7; expect = 'Restart pending: the installation finished' }
+        @{ name = 'verify after the restart'; utc = '2000-01-01T00:00:00.0000000Z'; code = 3; expect = 'BC-250 GPU not found' })) {
+    $dir = Join-Path $WorkBase ('state-verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+    [void][IO.Directory]::CreateDirectory($dir)
+    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = $c.utc }
+    [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+    $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-Verify') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+    Check ($r.code -eq $c.code) "$($c.name): exit $($r.code) (expected $($c.code))"
+    Check ($r.text -match $c.expect) "$($c.name): '$($c.expect)'"
+    Check ($r.text -notmatch 'waiting for the start-confirm task') "$($c.name): no wait for the task"
+    if ($r.code -ne $c.code) { $r.text }
+    Remove-Item -LiteralPath $dir -Recurse -Force
+}
+
 'start-confirm.ps1 -Probe (read-only; compiles the bc250control.dll interop and calls Bc250StartHealth READ)'
 $r = Invoke-Ps51 @((Join-Path $Package 'payload\tools\start-confirm.ps1'), '-Probe')
 $r.text

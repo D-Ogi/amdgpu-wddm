@@ -114,6 +114,13 @@ function Save-InstallState($State) {
     [void][IO.Directory]::CreateDirectory($script:StateDir)
     [IO.File]::WriteAllText($script:StatePath, ($State | ConvertTo-Json -Depth 6))
 }
+# Creates a registry key if it is missing and leaves an existing one alone. Never `New-Item -Force` on a key that may
+# exist: the registry provider then deletes and recreates it, with all its values and subkeys (measured under 5.1).
+# That wiped the KMD's own state in Services\bc250kmd\Parameters, every other RunOnce entry and every other Vulkan
+# driver registration up to tester.5.
+function Initialize-RegistryKey([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
+}
 function Set-StateValue($State, [string]$Name, $Value) {
     if ($State.PSObject.Properties[$Name]) { $State.$Name = $Value } else { $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
 }

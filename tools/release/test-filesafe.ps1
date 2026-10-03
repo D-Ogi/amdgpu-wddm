@@ -98,6 +98,25 @@ $v1 = Set-StateValueOnce $st 'stub_existed' $false
 $v2 = Set-StateValueOnce $st 'stub_existed' $true
 Check (($v1 -eq $false) -and ($v2 -eq $false) -and ($st.stub_existed -eq $false)) 'a re-run keeps the first run''s stub_existed'
 
+Write-Host 'registry keys (a scratch key under HKCU\Software, removed at the end)'
+$rk = 'HKCU:\Software\amdgpu-wddm-installer-selftest-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+try {
+    New-Item -Path $rk -Force | Out-Null
+    New-ItemProperty -LiteralPath $rk -Name Keep -Value 1 -PropertyType DWord | Out-Null
+    New-Item -Path "$rk\Sub" | Out-Null
+    New-Item -Path $rk -Force | Out-Null
+    $wiped = @((Get-Item -LiteralPath $rk).GetValueNames()).Count -eq 0
+    Check $wiped 'positive control: New-Item -Force on an existing key deletes its values'
+    New-ItemProperty -LiteralPath $rk -Name Keep -Value 1 -PropertyType DWord -Force | Out-Null
+    New-Item -Path "$rk\Sub" -Force | Out-Null
+    Initialize-RegistryKey $rk
+    Initialize-RegistryKey "$rk\New\Deep"
+    $item = Get-Item -LiteralPath $rk
+    Check ((@($item.GetValueNames()) -contains 'Keep') -and (@($item.GetSubKeyNames()) -contains 'Sub')) 'Initialize-RegistryKey keeps the values and subkeys of an existing key'
+    Check (Test-Path -LiteralPath "$rk\New\Deep") 'Initialize-RegistryKey creates a missing key with its parents'
+} finally { Remove-Item -LiteralPath $rk -Recurse -Force -ErrorAction SilentlyContinue }
+Check (-not (Test-Path -LiteralPath $rk)) 'scratch registry key removed'
+
 if ($fail) { Write-Host "$fail check(s) failed"; exit 1 }
 Write-Host 'file checks passed'
 exit 0
