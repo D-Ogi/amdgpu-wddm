@@ -117,7 +117,7 @@ pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget 
 ```
 
 Compilers from the installed Visual Studio (Roslyn `csc` for .NET Framework 4.8, which Windows 10 and 11 carry, and
-`cl` for the DLL), headers and import libraries from the SDK NuGet packages. Deterministic output. The gates, each of
+`cl` for the DLL and the CLI), headers and import libraries from the SDK NuGet packages. Deterministic output. The gates, each of
 which stops the build: `test/UnitTests.cs` (reply offsets computed from the text of `driver/kmd/bc250kmd_escape.h`,
 the profile catalog against every `ddi_experiment("...")` call in `driver/umd/d3d12`, profile editing, DPM ranges
 against `docs/design/dpm.md`, redaction, the manifest, and every Recovery rule and refusal, with its constants checked
@@ -132,5 +132,7 @@ write `--out`) and `--smoke-render <dir> <scale>` at 1, 1.25 and 1.5 (every page
 window, with an unsaved demo profile on Applications, and the whole page as `<page>-full.png`; the build fails when
 two sibling controls overlap, a page is wider than the window or its last control lies outside the scroll range).
 
-The output folder holds `amdgpu_wddm_control.exe` and `bc250control.dll`; the release installer puts both, and
-`amdgpu_wddm_d3d12caps.exe`, in one directory.
+The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
+as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release
+installer puts the first two, and `amdgpu_wddm_d3d12caps.exe`, in one directory, and the CLI and a copy of the DLL in
+`tools`.
