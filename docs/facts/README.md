@@ -6,6 +6,31 @@ one table per area (`<area>.md`), the live list [`current.md`](current.md), the 
 and the mermaid graphs in [`graphs/`](graphs/). Generated pages start with a "Generated ... Do not edit"
 comment. Statuses and what a fact needs: [`../01-evidence-rules.md`](../01-evidence-rules.md).
 
+## Areas
+
+A fact goes to the area of the component whose behaviour it establishes, not of the tool or the OS that
+observed it: a register value read under Linux is `hardware`, what amdgpu or Mesa do under Linux is `linux`.
+`games` and `tooling` take precedence over the component areas; between the others, the borders are:
+
+- `kmd` / `display`: the kernel driver's Present, Blt, flip, VidPN and scanout code is `display`; its memory,
+  paging, submission and start/stop are `kmd`.
+- `display` / `d3d`: a DWM or desktop trial (does the desktop compose, what is on the screen) is `display`;
+  the D3D user-mode driver measured with test clients is `d3d`.
+- `d3d` / `icd`: a RADV change measured through Vulkan (CTS, a standalone ICD control) is `icd`; measured through
+  the D3D runtime or the DXVK/vkd3d-proton engines it is `d3d`.
+- `icd` / `kmd`: the user-mode half of a winsys or allocation contract is `icd`, the kernel half `kmd`.
+
+| Area | What belongs there |
+|---|---|
+| `games` | Games, game-like demos and benchmarks: frame rates, frame times, presets, throughput, comparisons with Linux |
+| `tooling` | Build, signing, audits and quality gates, host-only harnesses, lab infrastructure (monitor overlay, remote access, deployment and rollback helpers, power) |
+| `linux` | What amdgpu, Mesa and X11 do under Linux on unit A: the reference the Windows work is compared with |
+| `display` | What ends on the screen: display engine and scanout, VidPN, flips and vsync, the kernel Present and Blt paths, DWM and desktop composition trials, the Vulkan WSI |
+| `d3d` | Direct3D 9-12 and DXGI: the system runtime and its DDI, our D3D10/11 and D3D12 user-mode drivers (shells, hosted Zink, DXVK and vkd3d-proton engines), their test clients, feature levels, DXR |
+| `icd` | The Vulkan driver in user mode (RADV with the WDDM winsys, Mesa changes, CTS) and what runs only on it: OpenGL through Zink, OpenCL, compute workloads such as llama.cpp |
+| `kmd` | Our kernel-mode driver and the WDDM kernel contracts: start and stop, dxgkrnl and VidMm DDIs, paging, GART and page tables, submission, fences, residency, interrupts as the driver handles them, TDR and bugchecks, installation |
+| `hardware` | Register-level behaviour of the GPU and the platform, whatever driver touched it: IP blocks and their bring-up (PSP, RLC, SMU, MEC/KIQ, SDMA, IH), clocks, voltage, temperature, memory map, firmware and BIOS |
+
 ## How to add a fact
 
 1. Get the ID: `python tools/facts/gen_facts.py next-id` prints the next free `M` number (say `M788`).
