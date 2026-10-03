@@ -158,16 +158,17 @@ bc250kmd.sys
 AddService = bc250kmd, 0x00000002, Bc250_Service
 
 [Bc250_Service]
-DisplayName   = %DeviceName%
+DisplayName   = %ServiceName%
 ServiceType   = 1
 StartType     = 3
 ErrorControl  = 0
 ServiceBinary = %13%\\bc250kmd.sys
 
 [Strings]
-Provider   = "BC-250 lab (D-Ogi)"
-DiskName   = "bc250kmd installation media"
-DeviceName = "BC-250 GPU (bc250kmd, lab build)"
+Provider    = "amdgpu-wddm"
+DiskName    = "bc250kmd installation media"
+DeviceName  = "BC-250 GPU (amdgpu-wddm)"
+ServiceName = "amdgpu-wddm kernel-mode driver"
 """
 
 UMD_SECTIONS = """\

@@ -1,4 +1,4 @@
-; bc250kmd: WDDM display-only miniport for the ASRock BC-250 GPU (milestone M3, ADR 0006).
+; bc250kmd: full WDDM miniport for the ASRock BC-250 GPU.
 ; Test-signed lab driver. Matches exactly one device; everything else keeps its own driver.
 
 [Version]
@@ -94,7 +94,7 @@ HKR, "Interrupt Management\MessageSignaledInterruptProperties", MessageNumberLim
 AddService = bc250kmd, 0x00000002, Bc250_Service
 
 [Bc250_Service]
-DisplayName   = %DeviceName%
+DisplayName   = %ServiceName%
 ServiceType   = 1                   ; SERVICE_KERNEL_DRIVER
 StartType     = 3                   ; SERVICE_DEMAND_START
 ErrorControl  = 0                   ; SERVICE_ERROR_IGNORE: a failed start must never stop the boot
@@ -139,6 +139,7 @@ HKR, Parameters, EnableHangBugcheck, 0x00010001, 0
 HKR, Parameters, KeepLog,           0x00010003, 0
 
 [Strings]
-Provider   = "BC-250 lab (D-Ogi)"
-DiskName   = "bc250kmd installation media"
-DeviceName = "BC-250 GPU (bc250kmd, display-only, lab build)"
+Provider    = "amdgpu-wddm"
+DiskName    = "bc250kmd installation media"
+DeviceName  = "BC-250 GPU (amdgpu-wddm)"
+ServiceName = "amdgpu-wddm kernel-mode driver"
