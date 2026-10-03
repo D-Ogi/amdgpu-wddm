@@ -79,7 +79,9 @@ Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
     "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" (Get-ChildItem "$here\src\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 
-# 4. Smoke run: no window, exits by itself.
+# 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
+$env:AMDGPU_WDDM_CONTROL_STATE = Join-Path $obj 'state'
+Remove-Item -Recurse -Force $env:AMDGPU_WDDM_CONTROL_STATE -ErrorAction SilentlyContinue
 if (-not $NoSmoke) {
     $smoke = Join-Path $obj 'smoke.txt'
     Remove-Item $smoke -ErrorAction SilentlyContinue
@@ -134,6 +136,7 @@ if (-not $NoSmoke) {
         'reset-defaults'  = @(0, 'set HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter DwmForceCpu = 1 (DWord)')
         'undo'            = @(3, 'refused: There is no action to undo')
         'set-clocks'      = @(0, "delete $params DpmMaxMHz")
+        'restart-compositor' = @(3, 'refused: restart-compositor is an operator escape', '--accept-bd060')
     }
     foreach ($e in $expect.GetEnumerator()) {
         $extra = @(switch ($e.Key) { 'enable-dpm' { '--ceiling', '1700' } 'set-clocks' { '--mode', 'unset', '--ceiling', 'unset' } })
@@ -154,9 +157,22 @@ if (-not $NoSmoke) {
         $u = Invoke-DryRun @('--action', $a, '--dry-run', '--snapshot', $snapshot) "no-dwm-$a"
         if ($u.Text -match 'restart DWM|DWM restart|watchdog') { throw "dry run $a still names a DWM restart: $($u.Text)" }
     }
-    $st = Invoke-DryRun @('--status') 'status'
-    if ($st.Code -ne 0 -or $st.Text -notmatch '(?m)^compositor-restarted: (yes|no|unknown) \(session') { throw "--status failed (exit $($st.Code)): $($st.Text)" }
-    $statusLine = (($st.Text -split "`r?`n") | Where-Object { $_ -like 'compositor-restarted:*' } | Select-Object -First 1)
+    $u = Invoke-DryRun @('--action', 'restart-compositor', '--accept-bd060', '--dry-run', '--snapshot', $snapshot) 'escape-accepted'
+    if ($u.Code -ne 0 -or -not $u.Text.Contains('stop DWM in the active session') -or -not $u.Text.Contains('BD-060')) { throw "dry run of the accepted escape (exit $($u.Code)): $($u.Text)" }
+    # --status records the session's DWM (the smoke runs above already did, into obj\state); a later reading keeps the
+    # first observation, and one instance is unknown history, never "observed" without a replacement.
+    $since = @()
+    foreach ($n in 1, 2) {
+        $st = Invoke-DryRun @('--status') "status-$n"
+        if ($st.Code -ne 0 -or $st.Text -notmatch '(?m)^dwm-restart: (observed|unknown-history|unknown) \(boot') { throw "--status failed (exit $($st.Code)): $($st.Text)" }
+        $statusLine = (($st.Text -split "`r?`n") | Where-Object { $_ -like 'dwm-restart:*' } | Select-Object -First 1)
+        $since += if ($statusLine -match 'watched since (\S+ by \w+)\)') { $Matches[1] } else { '-' }
+    }
+    if ($statusLine -notlike 'dwm-restart: unknown *') {
+        $rec = Join-Path $env:AMDGPU_WDDM_CONTROL_STATE 'dwm-observations.json'
+        if (-not (Test-Path $rec)) { throw "--status did not record the session's DWM in $rec" }
+        if ($since[0] -eq '-' -or $since[0] -ne $since[1]) { throw "--status did not keep the first observation: $($since -join ' / ')" }
+    }
     # A real run writes --out too. Only where it cannot change anything: without administrator it stops at once.
     $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $admin) {

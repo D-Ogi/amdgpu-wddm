@@ -41,7 +41,7 @@ namespace AmdgpuWddmControl
         {
             progress("Reading the driver state");
             Add("driver-state.txt", "Driver snapshots: clocks, temperature, DPM, desktop composition, start health", DriverState());
-            Add("recovery-states.txt", "The Recovery states, with a desktop compositor restart in this session (BD-060)", RecoveryStates());
+            Add("recovery-states.txt", "The Recovery states, with the DWM replacements seen in this session (BD-060)", RecoveryStates());
             progress("Reading the driver log");
             Add("driver-log.txt", "The kernel driver's log ring", DriverLog());
             progress("Reading installed files");
@@ -211,7 +211,7 @@ namespace AmdgpuWddmControl
 
         static string RecoveryStates()
         {
-            try { return RecoveryProbe.StatusText(RecoveryProbe.Read()); }
+            try { return RecoveryProbe.StatusText(RecoveryProbe.Read("report")); }
             catch (Exception e) { return "The states cannot be read: " + e.Message; }
         }
 

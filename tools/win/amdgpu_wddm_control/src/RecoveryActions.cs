@@ -5,11 +5,16 @@
 //   2. writes, logging each step to control-actions.log in the same directory,
 //   3. reads every value back and reports the result (a failed write restores the backup at once),
 //   4. never restarts, stops or signals DWM (BD-060): every change takes effect at the next restart of Windows,
-//      which the window offers.
+//      which the window offers. The one exception is the operator escape restart-compositor, which the window does
+//      not offer and which needs --accept-bd060.
 // --dry-run prints the states and the plan and writes nothing; --snapshot <json> (dry run only) plans from a
 // recorded snapshot instead of this PC.
 //
 // --status prints the states without an action (the installer's verify, the bug report).
+//
+// Every reading except the dry run records the active session's DWM (process id and creation time) in
+// dwm-observations.json: the user's copy under %LOCALAPPDATA%\amdgpu-wddm, the administrator's copy in the control
+// directory. A later reading that finds another DWM in the same session of the same boot is an observed restart.
 //
 // Exit codes: 0 done, 1 failed, 2 usage, 3 refused, 5 needs administrator (4 was "fell back to the CPU route" of the
 // DWM watchdog, removed with the DWM restart).
@@ -41,7 +46,9 @@ namespace AmdgpuWddmControl
 
         public static string ActionsLog { get { return Path.Combine(ControlDirectory, "control-actions.log"); } }
 
-        public static RecoverySnapshot Read()
+        // observer names who reads (window, status, report, helper, escape) and records the DWM it sees; null reads
+        // without recording (the dry run).
+        public static RecoverySnapshot Read(string observer = null)
         {
             var s = new RecoverySnapshot();
             using (var k = Registry.LocalMachine.OpenSubKey(Recovery.ParametersPath))
@@ -83,9 +90,17 @@ namespace AmdgpuWddmControl
                     f.StartsWith("amdgpu_wddm", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase));
             }
             ReadTask(s);
-            ReadCompositor(s);
+            ReadCompositor(s, observer);
+            var route = Safe(Backups).Where(b => b.Values.Any(v => v.Path == Recovery.RouterPath && v.Name == "DwmForceCpu"))
+                .OrderBy(b => Recovery.Utc(b.Utc) ?? DateTime.MinValue).LastOrDefault();
+            if (route != null) s.RouteWrittenUtc = Stamp(Recovery.Utc(route.Utc));
             s.ConfirmLogLast = LastLine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "start-confirm.log"));
             return s;
+        }
+
+        static List<BackupRecord> Safe(Func<List<BackupRecord>> read)
+        {
+            try { return read(); } catch (Exception) { return new List<BackupRecord>(); }
         }
 
         static long? Dword(RegistryKey k, string name)
@@ -118,12 +133,18 @@ namespace AmdgpuWddmControl
         const int SystemProcessInformation = 5;
         const int StatusInfoLengthMismatch = unchecked((int)0xC0000004);
 
-        // Session and start time (UTC) of every process with this image name, from the system's process list
-        // (SYSTEM_PROCESS_INFORMATION, x64: CreateTime at 0x20, ImageName at 0x38, SessionId at 0x64). No process is
-        // opened: a normal user may not open DWM or winlogon at all.
-        static List<KeyValuePair<int, DateTime>> Starts(string image)
+        public sealed class Started
         {
-            var list = new List<KeyValuePair<int, DateTime>>();
+            public int Session, Pid;
+            public DateTime Utc;
+        }
+
+        // Session, process id and start time (UTC) of every process with this image name, from the system's process
+        // list (SYSTEM_PROCESS_INFORMATION, x64: CreateTime at 0x20, ImageName at 0x38, UniqueProcessId at 0x50,
+        // SessionId at 0x64). No process is opened: a normal user may not open DWM or winlogon at all.
+        public static List<Started> Starts(string image)
+        {
+            var list = new List<Started>();
             int size = 1 << 20;
             for (int attempt = 0; attempt < 4; attempt++)
             {
@@ -142,7 +163,7 @@ namespace AmdgpuWddmControl
                         int nameBytes = Marshal.ReadInt16(entry, 0x38) & 0xFFFF;
                         var name = Marshal.ReadIntPtr(entry, 0x40);
                         if (name != IntPtr.Zero && nameBytes > 0 && string.Equals(Marshal.PtrToStringUni(name, nameBytes / 2), image, StringComparison.OrdinalIgnoreCase))
-                            list.Add(new KeyValuePair<int, DateTime>(Marshal.ReadInt32(entry, 0x64), DateTime.FromFileTimeUtc(Marshal.ReadInt64(entry, 0x20))));
+                            list.Add(new Started { Session = Marshal.ReadInt32(entry, 0x64), Pid = (int)Marshal.ReadIntPtr(entry, 0x50).ToInt64(), Utc = DateTime.FromFileTimeUtc(Marshal.ReadInt64(entry, 0x20)) });
                         if (next == 0) break;
                         offset += next;
                     }
@@ -153,33 +174,100 @@ namespace AmdgpuWddmControl
             return list;
         }
 
-        // The desktop compositor of the interactive session (this process's session, or the console session from
-        // session 0): when its DWM started, against the session's winlogon (which starts the session's first DWM)
-        // and against the boot. Read only: start times, nothing is opened for writing (BD-060).
-        public static void ReadCompositor(RecoverySnapshot s)
+        public static string Stamp(DateTime? utc)
+        {
+            return utc == null ? null : utc.Value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+        }
+
+        // The active interactive session: this process's session, or the console session from session 0.
+        public static int ActiveSession()
+        {
+            using (var self = Process.GetCurrentProcess())
+                return self.SessionId != 0 ? self.SessionId : (int)WTSGetActiveConsoleSessionId();
+        }
+
+        // The boot, its start (the session's winlogon) and the session's DWM; read only, nothing is opened (BD-060).
+        public static DwmReading ReadDwm()
+        {
+            var r = new DwmReading();
+            try
+            {
+                using (var k = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters"))
+                    if (k != null && k.GetValue("BootId") is int) r.BootId = (uint)(int)k.GetValue("BootId");
+                int session = ActiveSession();
+                r.Session = session;
+                // The session's first winlogon starts the session; the newest DWM is the one running now (an old one
+                // may still be exiting).
+                var logon = Starts("winlogon.exe").Where(x => x.Session == session).OrderBy(x => x.Utc).FirstOrDefault();
+                if (logon != null) r.SessionStartUtc = Stamp(logon.Utc);
+                var dwm = Starts("dwm.exe").Where(x => x.Session == session).OrderBy(x => x.Utc).LastOrDefault();
+                if (dwm != null) { r.Pid = dwm.Pid; r.CreatedUtc = Stamp(dwm.Utc); }
+            }
+            catch (Exception) { }
+            return r;
+        }
+
+        // AMDGPU_WDDM_CONTROL_STATE moves both copies to one directory (the build's gates, so that a build records
+        // nothing in the profile of the PC that builds).
+        static string StateOverride { get { var d = Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_STATE"); return string.IsNullOrEmpty(d) ? null : d; } }
+
+        static string UserObservations
+        {
+            get { return Path.Combine(StateOverride ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "amdgpu-wddm"), "dwm-observations.json"); }
+        }
+
+        static string MachineObservations { get { return StateOverride == null ? Path.Combine(ControlDirectory, "dwm-observations.json") : UserObservations; } }
+
+        static DwmObservations Load(string path, bool adminOwned)
         {
             try
             {
-                int session;
-                using (var self = Process.GetCurrentProcess()) session = self.SessionId;
-                if (session == 0) session = (int)WTSGetActiveConsoleSessionId();
-                s.DwmSession = session;
-                var dwm = Started("dwm.exe", session);
-                if (dwm == null) return;
-                s.DwmStartUtc = dwm.Value.ToString("yyyy-MM-dd HH:mm:ss'Z'", CultureInfo.InvariantCulture);
-                var logon = Started("winlogon.exe", session);
-                if (logon != null) s.DwmStartAfterSessionSeconds = Math.Round((dwm.Value - logon.Value).TotalSeconds);
-                var boot = DateTime.UtcNow - TimeSpan.FromMilliseconds(GetTickCount64());
-                s.DwmStartAfterBootSeconds = Math.Round((dwm.Value - boot).TotalSeconds);
+                if (!File.Exists(path)) return null;
+                if (adminOwned && !Trusted(path)) return null;
+                var o = new JavaScriptSerializer().Deserialize<DwmObservations>(File.ReadAllText(path));
+                return o != null && o.Schema == 1 && o.Instances != null ? o : null;
             }
-            catch (Exception) { }
+            catch (Exception) { return null; }
         }
 
-        // The earliest start (UTC) of the processes with this image name in one session; null when there is none.
-        static DateTime? Started(string image, int session)
+        static bool Trusted(string path)
         {
-            var times = Starts(image).Where(x => x.Key == session).Select(x => x.Value).ToList();
-            return times.Count == 0 ? (DateTime?)null : times.Min();
+            var trusted = new[] { new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) };
+            return trusted.Contains(File.GetAccessControl(path, AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier)));
+        }
+
+        // The DWM of the active session against what observers saw before in this session. With an observer the
+        // merged record is saved when it changed: as administrator to the control directory, otherwise to the user's
+        // copy.
+        public static void ReadCompositor(RecoverySnapshot s, string observer)
+        {
+            try
+            {
+                s.DwmNow = ReadDwm();
+                var user = Load(UserObservations, false);
+                var machine = StateOverride == null ? Load(MachineObservations, true) : null;
+                s.DwmHistory = Recovery.Observe(new[] { user, machine }, s.DwmNow, observer ?? "dry-run", Stamp(DateTime.UtcNow));
+                if (s.DwmHistory == null || observer == null) return;
+                // At most 64 instances: a DWM that restarts in a loop is a defect, and the first and the last tell it.
+                if (s.DwmHistory.Instances.Count > 64) s.DwmHistory.Instances.RemoveRange(1, s.DwmHistory.Instances.Count - 64);
+                bool admin = Program.IsElevated() && StateOverride == null;
+                var mine = admin ? machine : user;
+                var json = new JavaScriptSerializer().Serialize(s.DwmHistory);
+                if (mine != null && new JavaScriptSerializer().Serialize(mine) == json) return;
+                if (admin) RecoveryRunner.PrepareDirectory();
+                var path = admin ? MachineObservations : UserObservations;
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path + ".partial", json);
+                if (admin)
+                {
+                    var owner = new FileSecurity();
+                    owner.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
+                    File.SetAccessControl(path + ".partial", owner);
+                }
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(path + ".partial", path);
+            }
+            catch (Exception) { }
         }
 
         // The states as text: the compositor line for scripts, then every state line.
@@ -251,13 +339,11 @@ namespace AmdgpuWddmControl
         {
             var list = new List<BackupRecord>();
             if (!Directory.Exists(ControlDirectory)) return list;
-            var trusted = new[] { new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) };
             foreach (var path in Directory.GetFiles(ControlDirectory, "backup-*.json"))
                 try
                 {
                     // Only the helper's own files: an elevated process creates them with Administrators as owner.
-                    var owner = File.GetAccessControl(path, AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier));
-                    if (!trusted.Contains(owner)) continue;
+                    if (!Trusted(path)) continue;
                     var b = new JavaScriptSerializer().Deserialize<BackupRecord>(File.ReadAllText(path));
                     if (b == null || b.Schema != 1 || b.Values == null) continue;
                     b.File = Path.GetFileName(path);
@@ -283,7 +369,7 @@ namespace AmdgpuWddmControl
         {
             public string Action, SnapshotFile, OutFile, RunId;
             public uint? Mode, Ceiling;
-            public bool DryRun, ModeGiven, CeilingGiven;
+            public bool DryRun, ModeGiven, CeilingGiven, AcceptBd060;
         }
 
         static Options Parse(string[] args)
@@ -295,6 +381,7 @@ namespace AmdgpuWddmControl
                 string a = args[i];
                 uint n;
                 if (a == "--dry-run") o.DryRun = true;
+                else if (a == "--accept-bd060") o.AcceptBd060 = true;
                 else if (i + 1 >= args.Length) return null;
                 else if (a == "--snapshot") o.SnapshotFile = args[++i];
                 else if (a == "--out") o.OutFile = args[++i];
@@ -320,6 +407,7 @@ namespace AmdgpuWddmControl
             {
                 Console.Error.WriteLine("usage: --action <" + string.Join("|", Recovery.Actions) + "> [--ceiling MHz] [--dry-run [--snapshot file]] [--out file]");
                 Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
+                Console.Error.WriteLine("       --action " + Recovery.OperatorEscape + " --accept-bd060   (operator escape for a desktop that does not respond; see README)");
                 return Usage;
             }
             if (o.DryRun) return DryRun(o);
@@ -349,7 +437,7 @@ namespace AmdgpuWddmControl
             w.AppendLine(Program.ProductName + " " + Program.VersionText + " dry run, " + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss'Z'", CultureInfo.InvariantCulture) +
                 ", snapshot " + (o.SnapshotFile ?? "of this PC"));
             w.Append(RecoveryProbe.StatusText(s));
-            var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, backups);
+            var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, backups, o.AcceptBd060);
             w.AppendLine("plan:");
             foreach (var line in plan.Text().TrimEnd().Split('\n')) w.AppendLine("  " + line.TrimEnd('\r'));
             w.AppendLine("dry run: nothing was written");
@@ -385,7 +473,7 @@ namespace AmdgpuWddmControl
 
         // %ProgramData%\amdgpu-wddm\control: administrators and SYSTEM write, users read. Undo applies these files as
         // administrator, so nobody else may put one there.
-        static void PrepareDirectory()
+        public static void PrepareDirectory()
         {
             var sec = new DirectorySecurity();
             sec.SetAccessRuleProtection(true, false);
@@ -406,9 +494,10 @@ namespace AmdgpuWddmControl
             Log("start " + o.Action + (o.Mode != null ? " mode " + o.Mode : "") + (o.Ceiling != null ? " ceiling " + o.Ceiling : "") + ", " + Program.ProductName + " " + Program.VersionText);
             try
             {
-                var s = RecoveryProbe.Read();
-                var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups());
+                var s = RecoveryProbe.Read(o.Action == Recovery.OperatorEscape ? "escape" : "helper");
+                var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups(), o.AcceptBd060);
                 if (plan.Refused) { Log("result: refused: " + plan.Refusal); return Refused; }
+                if (plan.RestartCompositor) return StopCompositor(s);
                 var backup = Backup(o, plan, s);
                 Log("backup " + backup.File);
 
@@ -418,10 +507,41 @@ namespace AmdgpuWddmControl
                     if (why != null) { Log("result: failed: " + why); return Failed; }
                 }
                 if (!Apply(plan.Writes, backup)) { Log("result: failed: a write did not read back; the old values were restored"); return Failed; }
-                Log("result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
+                // A change that applies at the next restart is written, not done: the active route stays until then.
+                Log(plan.OfferRestart ? "result: written, pending until the next restart of Windows: " + plan.Change
+                    : "result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
                 return Done;
             }
             catch (Exception e) { Log("result: failed: " + e.GetType().Name + ": " + e.Message); return Failed; }
+        }
+
+        // The operator escape (restart-compositor --accept-bd060): stops the DWM of the active session and waits up to
+        // 20 s for the new one, which Windows starts. The only place in this app that stops DWM (BD-060).
+        static int StopCompositor(RecoverySnapshot s)
+        {
+            var old = s.DwmNow;
+            if (old == null || old.Pid == null) { Log("result: failed: the DWM of the active session cannot be read"); return Failed; }
+            Log("warning: after a DWM restart some Windows 11 apps can ignore mouse clicks until Windows restarts (BD-060)");
+            Log("stopping DWM process " + old.Pid + " (started " + old.CreatedUtc + ") in session " + old.Session);
+            if (!RecoveryProbe.Starts("dwm.exe").Any(x => x.Pid == old.Pid && x.Session == old.Session && RecoveryProbe.Stamp(x.Utc) == old.CreatedUtc))
+            { Log("result: failed: process " + old.Pid + " is no longer that DWM; nothing was stopped"); return Failed; }
+            using (var p = Process.GetProcessById(old.Pid.Value)) p.Kill();
+            var clock = Stopwatch.StartNew();
+            while (clock.Elapsed.TotalSeconds < 20)
+            {
+                Thread.Sleep(500);
+                var now = RecoveryProbe.ReadDwm();
+                if (now.Pid != null && now.CreatedUtc != old.CreatedUtc)
+                {
+                    var after = new RecoverySnapshot();
+                    RecoveryProbe.ReadCompositor(after, "escape");
+                    Log("new DWM process " + now.Pid + " started " + now.CreatedUtc + "; " + Recovery.CompositorStatusLine(after));
+                    Log("result: done: the desktop compositor was restarted. Restart Windows as soon as you can (BD-060).");
+                    return Done;
+                }
+            }
+            Log("result: failed: no new DWM in session " + old.Session + " after 20 s; restart Windows");
+            return Failed;
         }
 
         static BackupRecord Backup(Options o, ActionPlan plan, RecoverySnapshot s)

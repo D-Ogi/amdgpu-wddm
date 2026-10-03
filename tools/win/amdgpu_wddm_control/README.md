@@ -57,7 +57,8 @@ last result and `start-confirm.log`, and the `"defaults"` of `<InstallDir>\manif
 the elevated helper plan every action through it, so the confirmation dialog, `--dry-run` and the helper's writes are
 the same list. The states: driver start (confirmed or not, `UnconfirmedStarts` against the limit of 2, `LastStage`),
 GPU desktop path (`EnableGpuPresentBlit`, `EnableCddDwmInterop`, `InteropClosedReason`, the escape's effective
-switches, users and last session end), desktop composition (`DwmForceCpu` and the route DWM really loaded), clock
+switches, users and last session end), desktop composition (the selected route, `DwmForceCpu`, and the active route,
+the modules the running DWM loaded), clock
 control (`DpmMode`, `DpmPending`, `DpmConfirmed`, the running mode and the reason of a fallback), the start
 confirmation task, and the desktop compositor (below).
 
@@ -65,9 +66,16 @@ No action restarts, stops or signals DWM (BD-060): on this Windows 11 build a fo
 WinUI 3 content (the Explorer command bar, Task Manager) without mouse input until a new boot, and restarting Explorer
 does not help. Every change is written and takes effect at the next restart of Windows; the window then offers
 "Restart now", a normal restart through `ExitWindowsEx` (`EWX_REBOOT`, planned) after a confirmation, so programs can
-keep unsaved work. A unit test reads every source file and fails on `Kill()` outside the bug report's own child tool,
-on `TerminateProcess`, `taskkill`, `shutdown.exe` or a forced restart, and on any use of the `dwm` process other than
-reading it.
+keep unsaved work. The helper reports such a change as "written, pending until the next restart of Windows", never as
+a completed switch. A unit test reads every source file and fails on `Kill()` outside the bug report's own child tool
+and the operator escape (below), on `TerminateProcess`, `taskkill`, `shutdown.exe` or a forced restart, on any use of
+the `dwm` process other than reading it, on a sign-out remedy, and when the window names the escape.
+
+The desktop composition state keeps the selected route and the active route apart. A route written (the newest
+backup that holds `DwmForceCpu`) after the running DWM started is "pending until Windows restarts". When the DWM that
+started after the write loaded the selected route, the state says so ("the DWM that started after the change loaded
+it"); when it loaded the other route, the state is a warning that asks for a bug report. Reading the active route
+needs administrator; without it the state says that the active route cannot be read, and never calls a route active.
 
 | Action (`--action`) | Writes | Takes effect | Refused when |
 |---|---|---|---|
@@ -79,6 +87,7 @@ reading it.
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
 | `reset-defaults` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason` | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; all at their defaults already |
 | `undo` | the values the newest undoable backup found | next restart (offered) | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
+| `restart-compositor --accept-bd060` | nothing; stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
 limits, firmware paths, other KMD service values, BIOS or firmware settings, or test signing. The reset takes no
@@ -90,6 +99,21 @@ since undo applies these files), writes, logs every step to `control-actions.log
 value back (a failed write restores the backup at once) and reports the result. Exit codes: 0 done, 1 failed,
 2 usage, 3 refused, 5 needs administrator (4, "fell back to the CPU route", belonged to the DWM watchdog of 0.3 and
 earlier, which restarted DWM).
+
+### Operator escape: restart-compositor
+
+For a desktop that does not respond (no window draws, no input) when Windows cannot be restarted the normal way, an
+operator can restart the desktop compositor from an elevated prompt or over SSH:
+
+```powershell
+amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.txt
+```
+
+Without `--accept-bd060` the action is refused (exit 3). It changes no setting: for the CPU route after the restart,
+run `desktop-cpu` first. The helper records the running DWM, stops it (only the DWM of the active session, and only
+when its process id and creation time still match), waits up to 20 s for the new one, records it and logs both. Warning:
+after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
+clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
 
 ```powershell
 amdgpu_wddm_control.exe --action reopen-gpu-path --dry-run --out plan.txt    # states and plan, nothing written, no UAC
@@ -104,24 +128,37 @@ A close mark (`InteropClosedReason` 4) means different things by driver version.
 session ended without a clean shutdown (power loss, crash or reset); on 0.7.197 and earlier it names BD-059. The
 version comes from the driver's interop, start health or DPM reply; without one, both causes are named.
 
-## Desktop compositor restarted (BD-060)
+## Desktop compositor replaced (BD-060)
 
 The Overview's "Desktop compositor" row, the first Recovery state, `--status` and the bug report's
-`recovery-states.txt` say whether the interactive session's DWM is the session's first one. Winlogon starts the first
-DWM with the session; a DWM that started more than 120 s after the session's `winlogon.exe` replaced it (killed,
-crashed, or the display driver was restarted, for example by a driver update without a reboot). Without a readable
-winlogon start, the reference is the boot with a 300 s bound. A restarted compositor reads "Desktop compositor
-restarted in this session (DWM started <time> after the session began). Some Windows 11 apps, for example the Explorer
-command bar and Task Manager, ignore mouse clicks until Windows restarts (BD-060).", with "Restart Windows" as the
-remedy. From session 0 (an elevated script over SSH) the console session is read.
+`recovery-states.txt` report only a DWM replacement that an observer saw. Each observer reads the active interactive
+session's DWM (process id and creation time, from the system's process list; from session 0 the console session),
+the boot (`BootId` under `Session Manager\Memory Management\PrefetchParameters`) and the session start (creation time
+of the session's first `winlogon.exe`), and records it in `dwm-observations.json`: the user's copy in
+`%LOCALAPPDATA%\amdgpu-wddm`, the administrator's copy in `%ProgramData%\amdgpu-wddm\control` (owned by
+Administrators). Both copies are merged; a record of another boot, session or session start is dropped, so a new
+session starts a new baseline. The observers: the window (every 2 s while it is open), `--status`, the bug report,
+the elevated helper and the operator escape. The dry run reads but records nothing.
+
+| Verdict | When | Text |
+|---|---|---|
+| `observed` (warning, "Restart Windows") | more than one DWM seen in this session | "The desktop compositor (DWM) was replaced in this session: N replacement(s) seen; the DWM now running (process P) started T. After a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse clicks until Windows restarts (BD-060): restart Windows. If nobody restarted DWM on purpose, create a bug report: a DWM crash can be a driver defect." |
+| `unknown-history` (information) | one DWM seen so far | "No replacement of the desktop compositor (DWM) seen since T (first seen by O, D after the session began). A replacement before that would not be seen." |
+| `unknown` (information) | the session's DWM, winlogon or the boot cannot be read | "The desktop compositor (DWM) of the active session cannot be read." |
+
+A first observation is never "restarted" and never "healthy": a DWM that started long after its session can be the
+session's first one, and the history before the first observation is unknown. Restarting Windows is the only remedy
+named. The release's start-confirm task can run `--status` at logon to start the record early.
 
 ```powershell
-amdgpu_wddm_control.exe --status --out status.txt    # no window, nothing written, no UAC
+amdgpu_wddm_control.exe --status --out status.txt    # no window, no UAC; records the session's DWM
 ```
 
 The second line of the file is for scripts such as the installer's verify:
-`compositor-restarted: yes|no|unknown (session N, DWM started <utc>, <s> s after the session, <s> s after boot)`,
-followed by every Recovery state.
+`dwm-restart: observed|unknown-history|unknown (boot B, session N, session start <utc>, DWM process P started <utc>,
+instances seen K, watched since <utc> by <observer>)`, with `-` for a value that cannot be read, followed by every
+Recovery state. `AMDGPU_WDDM_CONTROL_STATE=<dir>` moves both copies of the record to one directory (the build's
+gates use it, so a build records nothing in the profile of the PC that builds).
 
 ## Bug report
 

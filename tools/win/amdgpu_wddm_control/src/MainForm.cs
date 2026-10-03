@@ -293,7 +293,14 @@ namespace AmdgpuWddmControl
             BuildOverview(); BuildPerformance(); BuildApplications(); BuildRecovery(); BuildDiagnostics();
             Controls.Add(_content); Controls.Add(nav); Controls.Add(footer);
 
-            _timer.Tick += (s, e) => { if (WindowState != FormWindowState.Minimized && (_page == "Overview" || _page == "Performance")) RefreshLive(); };
+            _timer.Tick += (s, e) =>
+            {
+                // The window watches the session's DWM while it is open, so that a replacement is seen (BD-060).
+                var dwm = new RecoverySnapshot();
+                RecoveryProbe.ReadCompositor(dwm, "window");
+                SetCompositorRow(dwm);
+                if (WindowState != FormWindowState.Minimized && (_page == "Overview" || _page == "Performance")) RefreshLive();
+            };
             ShowPage("Overview");
             if (!_smoke)
             {
@@ -789,17 +796,19 @@ namespace AmdgpuWddmControl
 
         uint? RecoveryCeiling() { return _recoveryCeilingOn.Checked ? _recoveryCeiling.Value : (uint?)null; }
 
+        void SetCompositorRow(RecoverySnapshot s)
+        {
+            _driver.Set("Desktop compositor", Recovery.CompositorOverview(s), Recovery.DwmVerdict(s) == "observed" ? (Color?)Theme.Warn : null);
+        }
+
         void RefreshRecovery()
         {
             RecoverySnapshot snapshot;
             List<BackupRecord> backups;
-            try { snapshot = RecoveryProbe.Read(); backups = RecoveryProbe.Backups(); }
+            try { snapshot = RecoveryProbe.Read("window"); backups = RecoveryProbe.Backups(); }
             catch (Exception e) { _driver.Set("Recovery", "Cannot read the states: " + e.Message, Theme.Warn); return; }
             _stateLines = Recovery.Describe(snapshot);
-            var restarted = Recovery.CompositorRestarted(snapshot);
-            _driver.Set("Desktop compositor", restarted == null ? "-" : restarted.Value
-                ? "Restarted in this session: restart Windows (BD-060, see Recovery)" : "Running since the session began",
-                restarted == true ? (Color?)Theme.Warn : null);
+            SetCompositorRow(snapshot);
             _states.Controls.Clear();
             foreach (var line in _stateLines)
             {
@@ -832,7 +841,7 @@ namespace AmdgpuWddmControl
         {
             result = result ?? _recoveryResult;
             RecoverySnapshot snapshot;
-            try { snapshot = RecoveryProbe.Read(); }
+            try { snapshot = RecoveryProbe.Read("window"); }
             catch (Exception e) { result.Text = "Cannot read the driver's state: " + e.Message; result.ForeColor = Theme.Warn; return; }
             var plan = Recovery.Plan(action, snapshot, mode, ceiling, RecoveryProbe.Backups());
             if (plan.Refused && result == _perfResult) { result.Text = plan.Refusal; result.ForeColor = Theme.Warn; return; }
@@ -904,7 +913,7 @@ namespace AmdgpuWddmControl
             foreach (var line in new[]
             {
                 "- the driver log and the driver state (clocks, temperature, settings)",
-                "- the Recovery states, including a desktop compositor restart in this session",
+                "- the Recovery states, including a desktop compositor (DWM) replacement seen in this session",
                 "- the installed driver files with versions and checksums",
                 "- DirectX diagnostics (dxdiag) and the D3D12 and Vulkan capability checks",
                 "- Windows events of the last 24 hours from the display drivers",

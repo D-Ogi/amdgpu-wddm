@@ -528,8 +528,9 @@ static class UnitTests
         foreach (var snap in new[] { Closed(), Open(), cpuUnknown, onGpu })
             foreach (var a in Recovery.Actions)
             {
-                var plan = Recovery.Plan(a, snap, 1, 1600, new[] { b1, b3 });
+                var plan = Recovery.Plan(a, snap, 1, 1600, new[] { b1, b3 }, true);
                 Check(plan.Writes.All(w => Recovery.Allowed(w.Path, w.Name)), a + " writes only allowed values");
+                Check(!plan.RestartCompositor, a + " never stops DWM");
             }
 
         // The states.
@@ -573,13 +574,45 @@ static class UnitTests
         var bare = Recovery.Describe(new RecoverySnapshot());
         Check(bare.Count == 2 && bare[0].Topic == "Desktop compositor" && bare[1].Topic == "Driver", "not installed: the compositor line and the driver line");
 
-        // Pending route changes: written, used at the next restart.
+        // The selected route (DwmForceCpu) and the active route (the running DWM's modules) are separate; a write
+        // after this DWM started is pending until the restart (codex 907).
         var cpuPending = Open(); cpuPending.DwmForceCpu = 1; cpuPending.DwmRoute = "gpu";
         var cp = line(Recovery.Describe(cpuPending), "Desktop composition");
-        Check(cp.Text.StartsWith("CPU route selected for the next start") && cp.Action == "restart", "CPU route chosen, DWM still on the GPU route: restart recommended");
+        Check(cp.Text.StartsWith("Selected: the CPU route; the running DWM loaded the GPU route. A route chosen in this session applies at the next restart of Windows.") &&
+            cp.Action == "restart" && cp.Severity == "info", "CPU selected, GPU active, timing unknown: restart recommended, not a completed switch");
+        cpuPending.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z"); cpuPending.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        cp = line(Recovery.Describe(cpuPending), "Desktop composition");
+        Check(cp.Text.StartsWith("Selected for the next start: the CPU route, pending until Windows restarts. Active now: the GPU route") && cp.Action == "restart",
+            "CPU route written after this DWM started: pending until the restart");
+        cpuPending.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z");
+        cp = line(Recovery.Describe(cpuPending), "Desktop composition");
+        Check(cp.Severity == "warn" && cp.Text.StartsWith("The CPU route was selected at 2026-10-03 18:10:00 UTC, but the DWM that started after it loaded the GPU route.") &&
+            cp.Text.EndsWith("Create a bug report."), "a DWM started after the write on the other route: verification failed, bug report");
         var gpuPending = Open(); gpuPending.DwmForceCpu = 0; gpuPending.DwmRoute = "cpu";
         var gp = line(Recovery.Describe(gpuPending), "Desktop composition");
-        Check(gp.Text.StartsWith("GPU route selected, but DWM runs on the CPU route") && gp.Action == "restart", "GPU route chosen, DWM on the CPU route: restart recommended");
+        Check(gp.Text.StartsWith("Selected: the GPU route; the running DWM loaded the CPU route.") && gp.Action == "restart", "GPU selected, CPU active: restart recommended");
+        var verified = Open(); verified.DwmForceCpu = 0; verified.DwmRoute = "gpu";
+        verified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); verified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        Check(line(Recovery.Describe(verified), "Desktop composition").Text.StartsWith("GPU route: selected and active (the DWM that started after the change loaded it).") &&
+            line(Recovery.Describe(verified), "Desktop composition").Action == "desktop-cpu", "GPU route verified on the DWM started after the change");
+        verified.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z");
+        Check(line(Recovery.Describe(verified), "Desktop composition").Text.StartsWith("GPU route: selected and active. "), "GPU active before the write: not called verified by the change");
+        var cpuVerified = Closed(); cpuVerified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); cpuVerified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        Check(line(Recovery.Describe(cpuVerified), "Desktop composition").Text.EndsWith("Active now: the CPU route. The DWM that started after the change loaded it."), "CPU route verified on the DWM started after the change");
+        var blind = Open(); blind.DwmForceCpu = 0; blind.DwmRoute = "unknown";
+        blind.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z"); blind.RouteWrittenUtc = "2026-10-03T18:10:00.000Z";
+        var bl = line(Recovery.Describe(blind), "Desktop composition");
+        Check(bl.Text == "Selected for the next start: the GPU route, pending until Windows restarts. The active route cannot be read." && bl.Action == "restart",
+            "pending write, active route unreadable: pending, never verified");
+
+        // The operator escape: never a window action, refused without --accept-bd060, writes nothing.
+        Check(!Recovery.Actions.Contains(Recovery.OperatorEscape), "the operator escape is not a window action");
+        var esc = Recovery.Plan(Recovery.OperatorEscape, Closed());
+        Check(esc.Refused && esc.Refusal.Contains("--accept-bd060") && esc.Refusal.Contains("BD-060") && !esc.RestartCompositor, "the escape is refused without --accept-bd060");
+        esc = Recovery.Plan(Recovery.OperatorEscape, new RecoverySnapshot(), null, null, null, true);
+        Check(!esc.Refused && esc.RestartCompositor && !esc.Undoable && esc.Writes.Count == 0 && esc.Notes.Any(n => n.Contains("BD-060") && n.Contains("Restart Windows as soon as you can")),
+            "the accepted escape stops DWM, writes nothing, names BD-060 and the restart, and needs no driver");
+        Check(esc.Text().Contains("stop DWM in the active session") && esc.Text().Contains("undo: no"), "the escape's plan text");
 
         Compositor();
 
@@ -644,42 +677,88 @@ static class UnitTests
         Equal("", Show(DpmSettings.PlanWrites(null, 1700, false, 1700)), "clocks: a stored ceiling shown checked is not rewritten");
     }
 
-    // BD-060: a DWM that started long after its session replaced the session's first one.
+    static DwmReading Reading(int pid, string created)
+    {
+        return new DwmReading { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z", Pid = pid, CreatedUtc = created };
+    }
+
+    // BD-060 (codex 907): only a replacement an observer saw is a restart; a first observation is unknown history,
+    // never "restarted" and never "healthy"; a new session or boot starts a new baseline.
     static void Compositor()
     {
         var s = Closed();
-        Equal(null, Recovery.CompositorRestarted(s), "compositor: no readings, unknown");
-        Check(Recovery.CompositorStatusLine(s).StartsWith("compositor-restarted: unknown"), "compositor: unknown in the status line");
-        s.DwmStartAfterSessionSeconds = 3; s.DwmStartAfterBootSeconds = 40; s.DwmSession = 1; s.DwmStartUtc = "2026-10-03 18:00:03Z";
-        Equal(false, Recovery.CompositorRestarted(s), "compositor: DWM 3 s after winlogon is the session's first");
-        Check(Recovery.CompositorText(s).StartsWith("Running since the session began"), "compositor: first DWM text");
-        Equal("compositor-restarted: no (session 1, DWM started 2026-10-03 18:00:03Z, 3 s after the session, 40 s after boot)", Recovery.CompositorStatusLine(s), "compositor: status line");
-        Check(line0(s).Severity == "ok" && line0(s).Action == null, "compositor: first DWM, ok, no action");
-        s.DwmStartAfterSessionSeconds = Recovery.CompositorSessionBoundSeconds;
-        Equal(false, Recovery.CompositorRestarted(s), "compositor: at the bound, not restarted");
-        s.DwmStartAfterSessionSeconds = 1800; s.DwmStartAfterBootSeconds = 1840;
-        Equal(true, Recovery.CompositorRestarted(s), "compositor: DWM 30 min after winlogon was restarted");
-        Equal("Desktop compositor restarted in this session (DWM started 30 min after the session began). Some Windows 11 apps, for example the Explorer command bar and Task Manager, ignore mouse clicks until Windows restarts (BD-060).",
-            Recovery.CompositorText(s), "compositor: restarted text names the consequence and the remedy");
-        Check(line0(s).Severity == "warn" && line0(s).Action == "restart", "compositor: restarted, warn, restart recommended");
-        Check(Recovery.CompositorStatusLine(s).StartsWith("compositor-restarted: yes"), "compositor: yes in the status line");
-        s.DwmStartAfterSessionSeconds = 664773;
-        Check(Recovery.CompositorText(s).Contains("DWM started 8 days after the session began"), "compositor: days for a long session");
-        s.DwmStartAfterSessionSeconds = 10800;
-        Check(Recovery.CompositorText(s).Contains("DWM started 3 h after"), "compositor: hours");
-        var late = Closed(); late.DwmStartAfterSessionSeconds = 2; late.DwmStartAfterBootSeconds = 7200;
-        Equal(false, Recovery.CompositorRestarted(late), "compositor: a session begun 2 h after boot (logon after logoff) is not a restart");
-        var bootOnly = Closed(); bootOnly.DwmStartAfterBootSeconds = 200;
-        Equal(false, Recovery.CompositorRestarted(bootOnly), "compositor: without winlogon, 200 s after boot is within the boot bound");
-        bootOnly.DwmStartAfterBootSeconds = 900;
-        Equal(true, Recovery.CompositorRestarted(bootOnly), "compositor: without winlogon, 15 min after boot is a restart");
-        Check(Recovery.CompositorText(bootOnly).Contains("15 min after Windows started"), "compositor: boot reference named");
+        Equal("unknown", Recovery.DwmVerdict(s), "dwm: no reading, unknown");
+        Equal("dwm-restart: unknown (boot -, session -, session start -, DWM process - started -, instances seen -, watched since -)", Recovery.CompositorStatusLine(s), "dwm: unknown status line");
+        Check(line0(s).Severity == "info" && line0(s).Action == null && line0(s).Text == "The desktop compositor (DWM) of the active session cannot be read.", "dwm: unknown, info");
+        Equal("-", Recovery.CompositorOverview(s), "dwm: unknown overview");
+
+        var first = Reading(900, "2026-10-03T18:00:03.000Z");
+        var h = Recovery.Observe(null, first, "status", "2026-10-03T18:00:40.000Z");
+        s.DwmNow = first; s.DwmHistory = h;
+        Equal("unknown-history", Recovery.DwmVerdict(s), "dwm: a first observation is unknown history, even 3 s after the session began");
+        Equal("No replacement of the desktop compositor (DWM) seen since 2026-10-03 18:00:40 UTC (first seen by --status, 40 s after the session began). A replacement before that would not be seen.",
+            Recovery.CompositorText(s), "dwm: unknown history text");
+        Equal("dwm-restart: unknown-history (boot 53, session 1, session start 2026-10-03T18:00:00.000Z, DWM process 900 started 2026-10-03T18:00:03.000Z, instances seen 1, watched since 2026-10-03T18:00:40.000Z by status)",
+            Recovery.CompositorStatusLine(s), "dwm: unknown history status line");
+        Check(line0(s).Severity == "info" && line0(s).Action == null, "dwm: unknown history is info, not ok");
+        Equal("No replacement seen since 2026-10-03 18:00:40 UTC (earlier: not known)", Recovery.CompositorOverview(s), "dwm: unknown history overview");
+
+        // The false positive of the start-time rule: a DWM created days after the session, first seen late.
+        var lateDwm = Reading(4242, "2026-10-08T22:24:14.000Z");
+        var late = Closed(); late.DwmNow = lateDwm; late.DwmHistory = Recovery.Observe(null, lateDwm, "window", "2026-10-09T08:00:00.000Z");
+        Equal("unknown-history", Recovery.DwmVerdict(late), "dwm: a late DWM seen once is not called a restart");
+        Check(Recovery.CompositorText(late).Contains("6 days after the session began"), "dwm: the late observer is named with its delay");
+
+        var again = Recovery.Observe(new[] { h }, first, "window", "2026-10-03T19:00:00.000Z");
+        Check(again.Instances.Count == 1 && again.Instances[0].FirstSeenUtc == "2026-10-03T18:00:40.000Z" && again.Instances[0].Observer == "status", "dwm: the same instance keeps its first observation");
+
+        // Replacement observed; the same process id with another creation time is another instance.
+        var second = Reading(900, "2026-10-03T18:30:00.000Z");
+        var r = Recovery.Observe(new[] { again }, second, "window", "2026-10-03T18:30:02.000Z");
+        s.DwmNow = second; s.DwmHistory = r;
+        Equal("observed", Recovery.DwmVerdict(s), "dwm: a reused process id with a new creation time is a replacement");
+        Equal("The desktop compositor (DWM) was replaced in this session: 1 replacement seen; the DWM now running (process 900) started 2026-10-03 18:30:00 UTC. " +
+            "After a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse clicks until Windows restarts (BD-060): restart Windows. " +
+            "If nobody restarted DWM on purpose, create a bug report: a DWM crash can be a driver defect.", Recovery.CompositorText(s), "dwm: observed text, restart remedy, bug report kept");
+        Check(line0(s).Severity == "warn" && line0(s).Action == "restart", "dwm: observed, warn, restart recommended");
+        Equal("dwm-restart: observed (boot 53, session 1, session start 2026-10-03T18:00:00.000Z, DWM process 900 started 2026-10-03T18:30:00.000Z, instances seen 2, watched since 2026-10-03T18:00:40.000Z by status)",
+            Recovery.CompositorStatusLine(s), "dwm: observed status line");
+        Equal("Replaced in this session: restart Windows (BD-060, see Recovery)", Recovery.CompositorOverview(s), "dwm: observed overview");
+        var third = Reading(950, "2026-10-03T18:45:00.000Z");
+        s.DwmNow = third; s.DwmHistory = Recovery.Observe(new[] { r }, third, "status", "2026-10-03T18:46:00.000Z");
+        Check(Recovery.CompositorText(s).Contains("2 replacements seen"), "dwm: replacements counted");
+
+        // The user's and the administrator's copies merge; the earliest observation wins.
+        var userCopy = Recovery.Observe(null, first, "window", "2026-10-03T18:01:00.000Z");
+        var adminCopy = Recovery.Observe(null, first, "helper", "2026-10-03T18:00:20.000Z");
+        var merged = Recovery.Observe(new[] { userCopy, null, adminCopy }, first, "status", "2026-10-03T18:05:00.000Z");
+        Check(merged.Instances.Count == 1 && merged.Instances[0].Observer == "helper" && merged.Instances[0].FirstSeenUtc == "2026-10-03T18:00:20.000Z", "dwm: two copies merge");
+
+        // A new session, a new logon in a reused session id, a new boot: each starts a new baseline.
+        var other = Reading(5000, "2026-10-03T20:00:05.000Z"); other.Session = 2; other.SessionStartUtc = "2026-10-03T20:00:00.000Z";
+        var ns = Recovery.Observe(new[] { r }, other, "status", "2026-10-03T20:01:00.000Z");
+        Check(ns.Instances.Count == 1 && ns.Session == 2, "dwm: a new session starts a new baseline");
+        var relogon = Reading(5000, "2026-10-03T21:00:05.000Z"); relogon.SessionStartUtc = "2026-10-03T21:00:00.000Z";
+        Equal(1, Recovery.Observe(new[] { r }, relogon, "status", "2026-10-03T21:01:00.000Z").Instances.Count, "dwm: a new logon in the same session id starts a new baseline");
+        var reboot = Reading(900, "2026-10-03T18:30:00.000Z"); reboot.BootId = 54;
+        Equal(1, Recovery.Observe(new[] { r }, reboot, "status", "2026-10-03T22:00:00.000Z").Instances.Count, "dwm: a new boot starts a new baseline");
+        Equal(null, Recovery.Observe(new[] { r }, new DwmReading { BootId = 53, Session = 1 }, "status", "2026-10-03T22:00:00.000Z"), "dwm: no DWM read, nothing recorded");
+        var stale = Closed(); stale.DwmNow = reboot; stale.DwmHistory = r;
+        Equal("unknown", Recovery.DwmVerdict(stale), "dwm: a record of another boot is not this session's history");
+
+        var json = new JavaScriptSerializer();
+        var back = json.Deserialize<DwmObservations>(json.Serialize(r));
+        Check(back.Schema == 1 && back.BootId == 53 && back.Instances.Count == 2 && back.Instances[1].CreatedUtc == "2026-10-03T18:30:00.000Z", "dwm: record JSON round-trip");
+        var snap = json.Deserialize<RecoverySnapshot>(json.Serialize(s));
+        Equal("observed", Recovery.DwmVerdict(snap), "dwm: snapshot JSON keeps the reading and the history");
     }
 
     static StateLine line0(RecoverySnapshot s) { return Recovery.Describe(s).First(l => l.Topic == "Desktop compositor"); }
 
-    // BD-060, statically: no source stops, kills or signals DWM, and none restarts Windows other than through
-    // WindowsRestart (ExitWindowsEx without force). The one Kill() allowed ends the bug report's own child tool.
+    // BD-060, statically: no source stops, kills or signals DWM except the operator escape, and none restarts Windows
+    // other than through WindowsRestart (ExitWindowsEx without force). The Kill() calls allowed: the bug report's own
+    // timed-out child tool, and StopCompositor of the escape, reached only from a plan with RestartCompositor, which
+    // only restart-compositor with --accept-bd060 gives and the window never asks for.
     static void NoDwmRestart(string root)
     {
         var dir = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src");
@@ -692,15 +771,31 @@ static class UnitTests
             var text = File.ReadAllText(f);
             foreach (var bad in new[] { "TerminateProcess", "taskkill", "shutdown.exe", "uxsms", "CloseMainWindow", "EWX_FORCE", "EwxForce", "InitiateSystemShutdown", "NtTerminateProcess", "DebugActiveProcess" })
                 Check(!text.Contains(bad), "static check: " + name + " has no " + bad);
-            var k = System.Text.RegularExpressions.Regex.Matches(text, @"\.Kill\s*\(").Count;
+            foreach (var promise in new[] { "sign out", "Sign out", "sign-out", "log off", "Log off" })
+                Check(!text.Contains(promise), "static check: " + name + " promises no sign-out remedy (" + promise + ")");
+            var matches = System.Text.RegularExpressions.Regex.Matches(text, @"\.Kill\s*\(");
+            int k = matches.Count;
             if (name == "BugReport.cs") Equal(1, k, "static check: BugReport.cs kills only its own timed-out child tool");
+            else if (name == "RecoveryActions.cs")
+            {
+                Equal(1, k, "static check: RecoveryActions.cs has one Kill(), the operator escape's");
+                int from = text.IndexOf("static int StopCompositor(", StringComparison.Ordinal), to = text.IndexOf("static BackupRecord Backup(", StringComparison.Ordinal);
+                Check(k == 1 && from > 0 && from < matches[0].Index && matches[0].Index < to, "static check: the Kill() is inside StopCompositor");
+                Check(text.Contains("if (plan.RestartCompositor) return StopCompositor(s);") && System.Text.RegularExpressions.Regex.Matches(text, @"StopCompositor\(").Count == 2,
+                    "static check: StopCompositor is reached only from a RestartCompositor plan");
+            }
             else Equal(0, k, "static check: " + name + " calls no Kill()");
             kills += k;
             // Every line naming the dwm process only reads it.
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
-                Check(l.Contains("GetProcessesByName(\"dwm\")") || l.Contains("Started(\"dwm\""), "static check: " + name + " only reads the dwm process: " + l.Trim());
+                Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(1, kills, "static check: one Kill() in all sources");
+        Equal(2, kills, "static check: two Kill() in all sources");
+        var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
+        Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
+            "static check: only the accepted escape plans a DWM stop");
+        var form = File.ReadAllText(Path.Combine(dir, "MainForm.cs"));
+        Check(!form.Contains("restart-compositor") && !form.Contains("OperatorEscape") && !form.Contains("--accept-bd060"), "static check: the window never offers the escape");
         Check(File.ReadAllText(Path.Combine(dir, "Native.cs")).Contains("ExitWindowsEx(EwxReboot, "), "static check: the restart is ExitWindowsEx EWX_REBOOT without force");
     }
 
