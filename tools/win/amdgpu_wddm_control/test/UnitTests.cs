@@ -773,6 +773,36 @@ static class UnitTests
         Equal(1, Recovery.ParseBaseline(@"{""schema"":1,""records"":{""boot_utc"":""2026-10-03T17:59:21Z"",""session"":1,""logon_utc"":""2026-10-03T18:00:31Z"",""dwm_pid"":5,""dwm_created_utc"":""2026-10-03T18:00:03Z"",""recorded_utc"":""2026-10-03T18:00:35Z""}}").Count,
             "installer record: a single record not in a list is read");
 
+        // Malformed fields (reviewer 910): the record reads as no record, never as an observed replacement.
+        const string good = @"""boot_utc"":""2026-10-03T17:59:21Z"",""session"":1,""logon_utc"":""2026-10-03T18:00:31Z"",""dwm_created_utc"":""2026-10-03T18:00:03Z"",""recorded_utc"":""2026-10-03T18:00:35Z""";
+        var broken = new[]
+        {
+            new[] { "dwm_pid missing", "{" + good + "}" },
+            new[] { "dwm_pid null", "{" + good + @",""dwm_pid"":null}" },
+            new[] { "dwm_pid 0", "{" + good + @",""dwm_pid"":0}" },
+            new[] { "dwm_pid negative", "{" + good + @",""dwm_pid"":-4}" },
+            new[] { "dwm_pid as text", "{" + good + @",""dwm_pid"":""1234""}" },
+            new[] { "dwm_pid fractional", "{" + good + @",""dwm_pid"":1234.5}" },
+            new[] { "dwm_pid too large", "{" + good + @",""dwm_pid"":4294967296}" },
+            new[] { "dwm_pid an object", "{" + good + @",""dwm_pid"":{""a"":1}}" },
+            new[] { "session 0", "{" + good.Replace(@"""session"":1", @"""session"":0") + @",""dwm_pid"":1234}" },
+            new[] { "boot_utc invalid", "{" + good.Replace("2026-10-03T17:59:21Z", "yesterday") + @",""dwm_pid"":1234}" },
+            new[] { "logon_utc missing", "{" + good.Replace(@"""logon_utc"":""2026-10-03T18:00:31Z"",", "") + @",""dwm_pid"":1234}" },
+            new[] { "dwm_created_utc invalid", "{" + good.Replace("2026-10-03T18:00:03Z", "2026-13-45T99:00:00Z") + @",""dwm_pid"":1234}" },
+            new[] { "dwm_created_utc a number", "{" + good.Replace(@"""2026-10-03T18:00:03Z""", "5") + @",""dwm_pid"":1234}" },
+            new[] { "recorded_utc empty", "{" + good.Replace(@"""recorded_utc"":""2026-10-03T18:00:35Z""", @"""recorded_utc"":""""") + @",""dwm_pid"":1234}" },
+        };
+        foreach (var b in broken)
+        {
+            var parsed = Recovery.ParseBaseline(@"{""schema"":1,""records"":[" + b[1] + "]}");
+            Equal(0, parsed.Count, "installer record with " + b[0] + ": skipped");
+            Equal(null, Recovery.FromBaseline(parsed, first), "installer record with " + b[0] + ": no record for this epoch");
+            var h0 = Closed(); h0.DwmNow = first; h0.DwmHistory = Recovery.Observe(new[] { Recovery.FromBaseline(parsed, first) }, first, "status", "2026-10-03T19:00:00.000Z");
+            Check(Recovery.DwmVerdict(h0) == "unknown-history" && h0.DwmHistory.Instances.Count == 1 && h0.DwmHistory.Instances[0].Observer == "status",
+                "installer record with " + b[0] + ": unknown history from this reading only, never observed");
+        }
+        Equal(1, Recovery.ParseBaseline(@"{""schema"":1,""records"":[{" + good + @",""dwm_pid"":1234}]}").Count, "installer record: the well-formed control of the malformed cases is read");
+
         // A new session, a new logon in a reused session id, a new boot: each starts a new baseline.
         var other = Reading(5000, "2026-10-03T20:00:05.000Z"); other.Session = 2; other.SessionStartUtc = "2026-10-03T20:00:00.000Z";
         var ns = Recovery.Observe(new[] { r }, other, "status", "2026-10-03T20:01:00.000Z");

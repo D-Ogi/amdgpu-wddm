@@ -398,7 +398,8 @@ namespace AmdgpuWddmControl
             else if (string.CompareOrdinal(i.FirstSeenUtc ?? "", known.FirstSeenUtc ?? "") < 0) { known.FirstSeenUtc = i.FirstSeenUtc; known.Observer = i.Observer; }
         }
 
-        // The installer's records, parsed. A damaged file gives none; a damaged record is skipped.
+        // The installer's records, parsed. A damaged file gives none; a damaged record (a missing or invalid process id,
+        // session or time) is skipped, so it reads as no record (unknown history), never as a replacement.
         public static List<DwmBaselineRecord> ParseBaseline(string json)
         {
             var list = new List<DwmBaselineRecord>();
@@ -415,10 +416,12 @@ namespace AmdgpuWddmControl
                     var r = item as IDictionary<string, object>;
                     if (r == null) continue;
                     Func<string, string> text = k => r.ContainsKey(k) && r[k] is string ? (string)r[k] : null;
+                    // Whole JSON numbers only: a missing, null, text, fractional or out-of-range id is a damaged record.
+                    Func<string, int> number = k => !r.ContainsKey(k) ? 0 : r[k] is int ? (int)r[k] : r[k] is long && (long)r[k] > 0 && (long)r[k] <= int.MaxValue ? (int)(long)r[k] : 0;
                     var x = new DwmBaselineRecord
                     {
                         BootUtc = text("boot_utc"), LogonUtc = text("logon_utc"), CreatedUtc = text("dwm_created_utc"), RecordedUtc = text("recorded_utc"),
-                        RecordedBy = text("recorded_by"), Session = Convert.ToInt32(r["session"], CultureInfo.InvariantCulture), Pid = Convert.ToInt32(r["dwm_pid"], CultureInfo.InvariantCulture),
+                        RecordedBy = text("recorded_by"), Session = number("session"), Pid = number("dwm_pid"),
                     };
                     if (Utc(x.BootUtc) == null || Utc(x.LogonUtc) == null || Utc(x.CreatedUtc) == null || Utc(x.RecordedUtc) == null || x.Pid <= 0 || x.Session <= 0) continue;
                     list.Add(x);
