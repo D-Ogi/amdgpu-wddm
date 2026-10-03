@@ -24,14 +24,16 @@ namespace AmdgpuWddmControl
 
     public sealed class InteropState
     {
-        public uint Version, Flags, Requested, Effective, Reason, ClosedReason, Users;
-        public const uint SwitchBlit = 1, SwitchCdd = 2, FlagValid = 1, FlagSession = 2, FlagClosedByDriver = 16;
+        public uint Version, Flags, Requested, Effective, Reason, ClosedReason, BlitSetting, CddSetting, BootId, SessionBootId;
+        public uint Users, Marks, Unmarks, MarkFailures, PreviousEnd, LastEnd;
+        public ulong Generation;
+        public const uint SwitchBlit = 1, SwitchCdd = 2, FlagValid = 1, FlagSession = 2, FlagUnclean = 4, FlagStale = 8, FlagClosedByDriver = 16;
     }
 
     public sealed class StartHealthState
     {
         public uint Version, Flags;
-        public ulong Generation, Completed, ReadyAgeMs;
+        public ulong Generation, Epoch, Completed, LastCompletionAgeMs, ReadyAgeMs;
         public const uint Full = 1, Ready = 2, Visible = 4, Confirmed = 8;
     }
 
@@ -91,7 +93,9 @@ namespace AmdgpuWddmControl
             return new InteropState
             {
                 Version = U(b, 3), Flags = U(b, 7), Requested = U(b, 8), Effective = U(b, 9), Reason = U(b, 10),
-                ClosedReason = U(b, 11), Users = U(b, 16),
+                ClosedReason = U(b, 11), BlitSetting = U(b, 12), CddSetting = U(b, 13), BootId = U(b, 14), SessionBootId = U(b, 15),
+                Users = U(b, 16), Marks = U(b, 17), Unmarks = U(b, 18), MarkFailures = U(b, 19), PreviousEnd = U(b, 20), LastEnd = U(b, 21),
+                Generation = Q(b, 88),
             };
         }
 
@@ -99,7 +103,11 @@ namespace AmdgpuWddmControl
         {
             Head(b, StartHealthBytes, CmdStartHealth);
             if (U(b, 5) != 1) throw new FormatException("start health ABI " + U(b, 5) + ", 1 expected");
-            return new StartHealthState { Version = U(b, 3), Flags = U(b, 7), Generation = Q(b, 32), Completed = Q(b, 48), ReadyAgeMs = Q(b, 64) };
+            return new StartHealthState
+            {
+                Version = U(b, 3), Flags = U(b, 7), Generation = Q(b, 32), Epoch = Q(b, 40), Completed = Q(b, 48),
+                LastCompletionAgeMs = Q(b, 56), ReadyAgeMs = Q(b, 64),
+            };
         }
 
         public static VideoMemoryState ParseVideoMemory(byte[] b)
@@ -200,8 +208,8 @@ namespace AmdgpuWddmControl
         }
 
         // The release's desktop router (HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter DwmForceCpu) wins over the KMD's
-        // interop decision: with DwmForceCpu 1 DWM loads the CPU UMD whatever the switches say. Read-only: the app
-        // has no control that changes the route.
+        // interop decision: with DwmForceCpu 1 DWM loads the CPU UMD whatever the switches say. Changed only by the
+        // Recovery page's actions (Recovery.cs).
         public const string DesktopRouterPath = @"SOFTWARE\amdgpu-wddm\DesktopRouter";
 
         public static string CompositionLine(uint? dwmForceCpu, InteropState interop, string interopError)

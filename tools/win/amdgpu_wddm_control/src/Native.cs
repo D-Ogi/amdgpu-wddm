@@ -1,7 +1,8 @@
-// The KMD through bc250control.dll (tools/win/bc250kmd_cli/bc250kmd_cli.c built with BC250_CONTROL_DLL). Every call
+// The KMD through bc250control.dll (tools/win/bc250kmd_cli/bc250kmd_cli.c built with BC250_CONTROL_DLL). Every read
 // here is a software-state escape with NoAdapterSynchronization alone: no HardwareAccess (Level Two) escape, which
-// would idle the GPU and stall a running game (BD-054). The app never writes to the KMD through an escape; settings
-// go to the registry and take effect at the next driver start.
+// would idle the GPU and stall a running game (BD-054). The one write is ConfirmStart, the start-health CONFIRM the
+// release's logon task sends as well: administrator only, HardwareAccess, once per Recovery action. Settings go to
+// the registry and take effect at the next driver start.
 using System;
 using System.Runtime.InteropServices;
 
@@ -58,6 +59,13 @@ namespace AmdgpuWddmControl
         public static KmdResult<StartHealthState> StartHealth()
         {
             return Call(KmdReply.StartHealthBytes, b => Bc250StartHealth(0, 0, 0, b, (uint)b.Length), KmdReply.ParseStartHealth);
+        }
+
+        // BC250_START_HEALTH_CONFIRM with the generation and epoch of the reading it confirms; the KMD checks its own
+        // milestone again and the DLL checks that the reply has CONFIRMED set for that start.
+        public static KmdResult<StartHealthState> ConfirmStart(ulong generation, ulong epoch)
+        {
+            return Call(KmdReply.StartHealthBytes, b => Bc250StartHealth(1, generation, epoch, b, (uint)b.Length), KmdReply.ParseStartHealth);
         }
 
         public static KmdResult<VideoMemoryState> VideoMemory()

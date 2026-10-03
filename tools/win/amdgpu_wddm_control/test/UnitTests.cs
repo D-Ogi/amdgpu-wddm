@@ -1,12 +1,15 @@
 // Host tests of the control application's pure parts: KMD reply parsing (with offsets computed from the header text
 // of driver/kmd/bc250kmd_escape.h, so a moved field fails here and not on a tester's PC), profile editing, DPM setting
-// checks and redaction. No driver, no registry. Usage: unit-tests.exe <repository root>
+// checks, redaction, the manifest, and the Recovery rules and plans (every refusal included). No driver, no registry.
+// Usage: unit-tests.exe <repository root> [<start-confirm-core.ps1 of the release installer>]
+// With the second argument the confirmation rule is also compared with the installer's own (Test-StartConfirmEligible).
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 using AmdgpuWddmControl;
 
 static class UnitTests
@@ -94,8 +97,11 @@ static class UnitTests
         b = new byte[KmdReply.InteropBytes];
         Put(b, io["Magic"], KmdReply.Magic); Put(b, io["Command"], 25u); Put(b, io["AbiVersion"], 1u);
         Put(b, io["Flags"], 1u | 2u); Put(b, io["Effective"], 3u); Put(b, io["Users"], 2u);
+        Put(b, io["ClosedReason"], 4u); Put(b, io["LastEnd"], 2u); Put(b, io["SessionBootId"], 9u); Put(b, io["Generation"], 77UL);
         var i = KmdReply.ParseInterop(b);
         Equal("GPU (2 devices on the GPU path)", KmdReply.CompositionText(i), "interop in use");
+        Equal(4u, i.ClosedReason, "interop closed reason"); Equal(2u, i.LastEnd, "interop last end");
+        Equal(9u, i.SessionBootId, "interop session boot"); Equal(77UL, i.Generation, "interop generation");
         Put(b, io["Effective"], 0u); Put(b, io["Flags"], 1u | 16u);
         Check(KmdReply.CompositionText(KmdReply.ParseInterop(b)).StartsWith("CPU (the driver closed"), "interop closed by the driver");
         Put(b, io["Flags"], 0u);
@@ -105,9 +111,11 @@ static class UnitTests
         Equal(KmdReply.StartHealthBytes, size, "start health size from the header");
         b = new byte[KmdReply.StartHealthBytes];
         Put(b, sh["Magic"], KmdReply.Magic); Put(b, sh["Command"], 21u); Put(b, sh["AbiVersion"], 1u); Put(b, sh["Flags"], 15u);
-        Put(b, sh["Generation"], 7UL); Put(b, sh["Completed"], 99UL); Put(b, sh["ReadyAgeMs"], 61000UL);
+        Put(b, sh["Generation"], 7UL); Put(b, sh["Epoch"], 3UL); Put(b, sh["Completed"], 99UL);
+        Put(b, sh["LastCompletionAgeMs"], 1200UL); Put(b, sh["ReadyAgeMs"], 61000UL);
         var h = KmdReply.ParseStartHealth(b);
         Equal(7UL, h.Generation, "health generation"); Equal(99UL, h.Completed, "health completed"); Equal(61000UL, h.ReadyAgeMs, "health ready age");
+        Equal(3UL, h.Epoch, "health epoch"); Equal(1200UL, h.LastCompletionAgeMs, "health completion age");
 
         var log = Layout(header, "BC250_ESCAPE_LOG", out size);   // stops at Lines[]: a struct type
         Equal(KmdReply.LogHeadBytes, log["SummaryFrom"] + 4, "log head size from the header");
@@ -286,9 +294,290 @@ static class UnitTests
         Equal("not loaded", KmdReply.CompositionLine(null, null, "not loaded"), "no interop reply");
     }
 
+    // ---- Recovery ----------------------------------------------------------------------------------------------
+
+    static StartHealthState Eligible() { return new StartHealthState { Flags = 7, Generation = 5, Epoch = 2, Completed = 40, ReadyAgeMs = 70000, LastCompletionAgeMs = 800 }; }
+
+    // The state BD-059 leaves behind: switches closed by the driver after a restart it took as unclean, desktop on
+    // the CPU route (release default), clocks fell back to fixed after the same "unclean" stop, start not confirmed.
+    static RecoverySnapshot Closed()
+    {
+        return new RecoverySnapshot
+        {
+            DriverInstalled = true, RouterInstalled = true, DwmForceCpu = 1, RequireKmdSwitches = 1, GpuDesktopModules = true,
+            Parameters = new Dictionary<string, long>
+            {
+                { "EnableGpuPresentBlit", 0 }, { "EnableCddDwmInterop", 0 }, { "InteropClosedReason", 4 }, { "InteropLastState", 0x300 },
+                { "InteropLastReason", 4 }, { "UnconfirmedStarts", 1 }, { "LastStage", 61 }, { "DpmMode", 0 }, { "DpmMaxMHz", 1500 },
+                { "DpmLastMode", 0 }, { "DpmLastReason", 4 },
+            },
+            Interop = new InteropState { Flags = InteropState.FlagValid | InteropState.FlagClosedByDriver | InteropState.FlagUnclean, Requested = 3, Effective = 0, Reason = 4, ClosedReason = 4 },
+            Health = Eligible(),
+            Dpm = new DpmState { Mode = 0, Reason = 4 },
+            DwmRoute = "cpu", TaskFound = true, TaskResult = 1, TaskLastRun = "2026-10-03 10:00",
+            DefaultParameters = new Dictionary<string, long> { { "EnableGpuPresentBlit", 1 }, { "EnableCddDwmInterop", 1 }, { "DpmMode", 1 }, { "DpmMaxMHz", 1500 }, { "EnableMmio", 1 } },
+            DefaultRouter = new Dictionary<string, long> { { "DwmForceCpu", 1 } },
+        };
+    }
+
+    static RecoverySnapshot Open()
+    {
+        var s = Closed();
+        s.Parameters["EnableGpuPresentBlit"] = 1; s.Parameters["EnableCddDwmInterop"] = 1; s.Parameters.Remove("InteropClosedReason");
+        s.Parameters["InteropLastState"] = 0x303; s.Parameters["InteropLastReason"] = 0;
+        s.Interop = new InteropState { Flags = InteropState.FlagValid, Requested = 3, Effective = 3, Reason = 0 };
+        return s;
+    }
+
+    static bool Writes(ActionPlan p, params string[] expected)
+    {
+        var got = p.Writes.Select(w => w.Name + (w.Delete ? "-" : "=" + w.Number)).ToArray();
+        return got.SequenceEqual(expected);
+    }
+
+    static void RecoveryRules(string root, string header, string startConfirmCore)
+    {
+        // Constants against the KMD sources.
+        Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_REQUIRED " + Recovery.ConfirmRequiredFlags + @"u\b"), "confirm flags = BC250_START_HEALTH_REQUIRED");
+        Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_MIN_MS " + Recovery.ConfirmMinReadyMs + @"ull\b"), "confirm ready = BC250_START_HEALTH_MIN_MS");
+        var kmdh = File.ReadAllText(Path.Combine(root, @"driver\kmd\bc250kmd.h"));
+        Check(Regex.IsMatch(kmdh, @"#define BC250_MAX_UNCONFIRMED_STARTS " + Recovery.MaxUnconfirmedStarts + @"\b"), "unconfirmed start limit = BC250_MAX_UNCONFIRMED_STARTS");
+        var stages = Regex.Match(kmdh, @"typedef enum _BC250_STAGE \{(?<b>.*?)\} BC250_STAGE;", RegexOptions.Singleline).Groups["b"].Value;
+        foreach (Match m in Regex.Matches(stages, @"(\w+) = (\d+),"))
+            Check(!Recovery.StageText(uint.Parse(m.Groups[2].Value)).StartsWith("stage "), "stage " + m.Groups[1].Value + " has a text");
+        var policy = File.ReadAllText(Path.Combine(root, @"driver\kmd\interop_policy.h"));
+        foreach (Match m in Regex.Matches(policy, @"BC250_INTEROP_REASON_(\w+) = (\d+),"))
+            Check(!Recovery.InteropReasonText(uint.Parse(m.Groups[2].Value)).StartsWith("reason "), "interop reason " + m.Groups[1].Value + " has a text");
+        foreach (var flag in new[] { "VALID 1u", "SESSION 2u", "UNCLEAN 4u", "STALE 8u", "CLOSED_BY_DRIVER 16u" })
+            Check(Regex.IsMatch(header, @"#define BC250_INTEROP_FLAG_" + flag + @"\b"), "interop flag " + flag);
+        Check(InteropState.FlagUnclean == 4 && InteropState.FlagStale == 8 && InteropState.FlagClosedByDriver == 16, "interop flag constants");
+        var interopC = File.ReadAllText(Path.Combine(root, @"driver\kmd\interop.c"));
+        foreach (var n in new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "InteropLastState" })
+            Check(interopC.Contains("L\"" + n + "\""), "interop.c names " + n);
+        var dpmC = File.ReadAllText(Path.Combine(root, @"driver\kmd\dpm.c"));
+        foreach (var n in new[] { "DpmMode", "DpmMaxMHz", "DpmPending", "DpmConfirmed", "DpmLastMode", "DpmLastReason" })
+            Check(dpmC.Contains("L\"" + n + "\""), "dpm.c names " + n);
+
+        // The installer's own rule, when the build passes its file.
+        if (startConfirmCore != null)
+        {
+            var ps = File.ReadAllText(startConfirmCore);
+            Check(Regex.IsMatch(ps, @"\$script:StartConfirmMinReadyMs = " + Recovery.ConfirmMinReadyMs + @"\b"), "start-confirm-core ready bound");
+            Check(Regex.IsMatch(ps, @"\$script:StartConfirmFreshMs = " + Recovery.ConfirmFreshMs + @"\b"), "start-confirm-core fresh bound");
+            var rule = Regex.Match(ps, @"function Test-StartConfirmEligible \{(?<b>.*?)\n\}", RegexOptions.Singleline).Groups["b"].Value;
+            foreach (var part in new[] { @"($Reading.flags -band 7) -eq 7", "$Reading.completed -gt 0", "$Reading.ready_ms -ge $script:StartConfirmMinReadyMs", "$Reading.age_ms -le $script:StartConfirmFreshMs" })
+                Check(rule.Contains(part), "Test-StartConfirmEligible has " + part);
+            Equal(4, Regex.Matches(rule, @"-and").Count + 1, "Test-StartConfirmEligible has exactly four terms");
+            Check(ps.Contains("($Reading.flags -band 9) -eq 9"), "start-confirm-core confirmed = flags 9");
+        }
+
+        // The confirmation rule.
+        Check(Recovery.ConfirmEligible(Eligible()), "eligible reading");
+        var h = Eligible(); h.ReadyAgeMs = 60000; h.LastCompletionAgeMs = 5000;
+        Check(Recovery.ConfirmEligible(h), "eligible at both bounds");
+        h = Eligible(); h.Flags = 6; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("not a full"), "not full: refused");
+        h = Eligible(); h.Flags = 5; Check(Recovery.ConfirmBlocker(h, false).Contains("not finished"), "not ready: refused");
+        h = Eligible(); h.Flags = 3; Check(Recovery.ConfirmBlocker(h, false).Contains("screen"), "not visible: refused");
+        h = Eligible(); h.Completed = 0; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("any work"), "no completions: refused");
+        h = Eligible(); h.ReadyAgeMs = 59999; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("1 s left"), "ready 59.999 s: refused");
+        h = Eligible(); h.LastCompletionAgeMs = 5001;
+        Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, true) != null && Recovery.ConfirmBlocker(h, false) == null, "stale completion: the helper waits, the window does not refuse");
+        h = Eligible(); h.Flags = 15; Check(Recovery.Confirmed(h), "flags 15 confirmed");
+        h.Flags = 8; Check(!Recovery.Confirmed(h), "CONFIRMED without FULL is not confirmed");
+
+        // The allow-list.
+        foreach (var n in Recovery.ParameterNames) Check(Recovery.Allowed(Recovery.ParametersPath, n), "allowed " + n);
+        Check(Recovery.Allowed(Recovery.RouterPath, "DwmForceCpu"), "allowed DwmForceCpu");
+        foreach (var n in new[] { "UnconfirmedStarts", "EnableMmio", "EnableFullWddm", "KeepLog", "CuMode", "DpmPending", "InteropSession", "DwmForceCpu", "ImagePath" })
+            Check(!Recovery.Allowed(Recovery.ParametersPath, n), "not allowed: Parameters " + n);
+        foreach (var path in new[] { @"SYSTEM\CurrentControlSet\Services\bc250kmd", @"SYSTEM\CurrentControlSet\Control\CI\Policy", @"SOFTWARE\amdgpu-wddm\AppRouter" })
+            Check(!Recovery.Allowed(path, "EnableGpuPresentBlit") && !Recovery.Allowed(path, "DwmForceCpu"), "not allowed: " + path);
+
+        // Not installed: every action refused.
+        foreach (var a in Recovery.Actions)
+            Check(Recovery.Plan(a, new RecoverySnapshot(), 1, 1500).Refused, a + " refused without the driver");
+        Check(Recovery.Plan("format-c", Closed()).Refusal.StartsWith("unknown action"), "unknown action refused");
+
+        // 1. Reopen.
+        var p = Recovery.Plan("reopen-gpu-path", Closed());
+        Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "InteropClosedReason-"), "reopen writes both switches and deletes the close mark");
+        Check(p.OfferRestart && p.Undoable && !p.RestartDwm && p.Effect.Contains("next restart"), "reopen: next restart, undoable, no DWM restart");
+        Check(p.Notes.Any(n => n.Contains("BD-059")), "reopen names BD-059");
+        Check(Recovery.Plan("reopen-gpu-path", Open()).Refusal.Contains("open already"), "reopen refused when open");
+        var pending = Closed(); pending.Parameters["EnableGpuPresentBlit"] = 1; pending.Parameters["EnableCddDwmInterop"] = 1; pending.Parameters.Remove("InteropClosedReason");
+        Check(Recovery.Plan("reopen-gpu-path", pending).Refusal.Contains("restart Windows"), "reopen refused when reopened, restart pending");
+        var off = Closed(); off.Parameters.Remove("InteropClosedReason");
+        Check(Writes(Recovery.Plan("reopen-gpu-path", off), "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1"), "reopen of switches the operator closed: no delete");
+
+        // 2. Desktop route.
+        p = Recovery.Plan("desktop-gpu", Closed());
+        Check(p.Refused && p.Refusal.Contains("Reopen the GPU desktop path"), "GPU route refused while the switches are closed, pointing to the reopen");
+        Check(Recovery.Plan("desktop-gpu", pending).Refused, "GPU route refused while the reopen waits for a restart");
+        var half = Open(); half.Interop.Effective = 1;
+        Check(Recovery.Plan("desktop-gpu", half).Refused, "GPU route refused with one switch effective");
+        var stale = Open(); stale.Parameters["InteropLastState"] = 0x301;
+        Check(Recovery.Plan("desktop-gpu", stale).Refused, "GPU route refused when the router's InteropLastState is not 3");
+        var undecided = Open(); undecided.Interop.Flags = 0;
+        Check(Recovery.Plan("desktop-gpu", undecided).Refused, "GPU route refused when the start did not decide");
+        var down = Open(); down.Interop = null; down.Health = null; down.Dpm = null; down.DriverError = "not loaded";
+        Check(Recovery.Plan("desktop-gpu", down).Refusal.Contains("not running"), "GPU route refused without the driver");
+        var noFiles = Open(); noFiles.GpuDesktopModules = false;
+        Check(Recovery.Plan("desktop-gpu", noFiles).Refusal.Contains("files"), "GPU route refused without the GPU desktop files");
+        var noRouter = Open(); noRouter.RouterInstalled = false;
+        Check(Recovery.Plan("desktop-gpu", noRouter).Refusal.Contains("router"), "GPU route refused without the router");
+        p = Recovery.Plan("desktop-gpu", Open());
+        Check(!p.Refused && Writes(p, "DwmForceCpu=0") && p.RestartDwm && p.WatchDwm && p.DwmForceCpuAfter == 0 && p.Undoable, "GPU route: DwmForceCpu 0, DWM restart, watched");
+        var onGpu = Open(); onGpu.DwmForceCpu = 0; onGpu.DwmRoute = "gpu";
+        Check(Recovery.Plan("desktop-gpu", onGpu).Refusal.Contains("already"), "GPU route refused when DWM is on it already");
+        onGpu.DwmRoute = "unknown";
+        Check(!Recovery.Plan("desktop-gpu", onGpu).Refused, "GPU route allowed when the running route is unknown (restart re-checks)");
+        p = Recovery.Plan("desktop-cpu", Closed());
+        Check(Recovery.Plan("desktop-cpu", Closed()).Refusal.Contains("already"), "CPU route refused when DWM is on it already");
+        var cpuUnknown = Closed(); cpuUnknown.DwmRoute = "unknown";
+        p = Recovery.Plan("desktop-cpu", cpuUnknown);
+        Check(!p.Refused && Writes(p, "DwmForceCpu=1") && p.RestartDwm && !p.WatchDwm && p.DwmForceCpuAfter == 1, "CPU route: DwmForceCpu 1, DWM restart, not watched");
+        Check(!Recovery.Plan("desktop-cpu", onGpu).Refused, "CPU route allowed from the GPU route");
+
+        // 3. Confirm.
+        p = Recovery.Plan("confirm-start", Closed());
+        Check(!p.Refused && p.ConfirmStart && p.Writes.Count == 0 && !p.Undoable, "confirm: the escape only, not undoable");
+        var c = Closed(); c.Health.Flags = 15;
+        Check(Recovery.Plan("confirm-start", c).Refusal.Contains("confirmed already"), "confirm refused when confirmed");
+        c = Closed(); c.Health.ReadyAgeMs = 30000;
+        Check(Recovery.Plan("confirm-start", c).Refusal.Contains("60 seconds"), "confirm refused before 60 s");
+        c = Closed(); c.Health.Flags = 6;
+        Check(Recovery.Plan("confirm-start", c).Refused, "confirm refused on a display-only start");
+        Check(Recovery.Plan("confirm-start", down).Refusal.Contains("not running"), "confirm refused without the driver");
+
+        // 4. Clocks.
+        p = Recovery.Plan("enable-dpm", Closed(), null, 1800);
+        Check(!p.Refused && Writes(p, "DpmMode=1", "DpmMaxMHz=1800") && p.OfferRestart && p.Undoable, "enable-dpm writes mode 1 and the ceiling");
+        Check(p.Notes.Any(n => n.Contains("hotter")), "a ceiling above 1500 warns");
+        Check(Writes(Recovery.Plan("enable-dpm", Closed()), "DpmMode=1", "DpmMaxMHz=1500"), "enable-dpm default ceiling 1500");
+        foreach (uint bad in new uint[] { 900, 1550, 2100, 0 })
+            Check(Recovery.Plan("enable-dpm", Closed(), null, bad).Refused, "ceiling " + bad + " refused");
+        var dpmOn = Closed(); dpmOn.Parameters["DpmMode"] = 1;
+        Check(Recovery.Plan("enable-dpm", dpmOn, null, 1500).Refusal.Contains("stored already"), "enable-dpm refused when stored");
+        Check(Recovery.Plan("set-clocks", Closed(), 2, 1500).Refused, "clock mode 2 refused");
+        Check(Recovery.Plan("set-clocks", Closed(), null, 1500).Refused, "set-clocks without a mode refused");
+        Check(Writes(Recovery.Plan("set-clocks", dpmOn, 0, 1500), "DpmMode=0", "DpmMaxMHz=1500"), "set-clocks to fixed");
+
+        // 5. Reset.
+        p = Recovery.Plan("reset-defaults", Closed());
+        Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "InteropClosedReason-"), "reset writes the manifest defaults");
+        Check(p.Notes.Any(n => n.Contains("EnableMmio")), "reset names the defaults it leaves to the installer");
+        Check(p.OfferRestart && p.Undoable, "reset: next restart, undoable");
+        var noDefaults = Closed(); noDefaults.DefaultParameters = null; noDefaults.DefaultsError = "manifest.json has no \"defaults\"";
+        Check(Recovery.Plan("reset-defaults", noDefaults).Refusal.Contains("no list of default settings"), "reset refused without manifest defaults");
+        var badDefault = Closed(); badDefault.DefaultParameters["DpmMaxMHz"] = 2500;
+        Check(Recovery.Plan("reset-defaults", badDefault).Refused, "reset refused with a ceiling default out of range");
+        badDefault = Closed(); badDefault.DefaultParameters["EnableGpuPresentBlit"] = 2;
+        Check(Recovery.Plan("reset-defaults", badDefault).Refused, "reset refused with a switch default out of range");
+        badDefault = Closed(); badDefault.DefaultParameters.Remove("DpmMode");
+        Check(Recovery.Plan("reset-defaults", badDefault).Refused, "reset refused when a default is missing");
+        badDefault = Closed(); badDefault.DefaultRouter = new Dictionary<string, long>();
+        Check(Recovery.Plan("reset-defaults", badDefault).Refused, "reset refused without the DwmForceCpu default");
+        var atDefaults = Open(); atDefaults.Parameters["DpmMode"] = 1;
+        Check(Recovery.Plan("reset-defaults", atDefaults).Refusal.Contains("already"), "reset refused at the defaults");
+
+        // Undo.
+        Check(Recovery.Plan("undo", Closed()).Refusal.Contains("no action"), "undo refused without backups");
+        Func<string, string, bool, string, BackupValue[], BackupRecord> rec = (file, action, undoable, undoes, values) =>
+            new BackupRecord { File = file, Action = action, Utc = "2026-10-03T" + file.Substring(16, 6), Undoable = undoable, Undoes = undoes, Values = values.ToList(), RestartsDwm = action.StartsWith("desktop") };
+        var b1 = rec("backup-20260103T100000000Z.json", "reopen-gpu-path", true, null, new[]
+        {
+            new BackupValue { Path = Recovery.ParametersPath, Name = "EnableGpuPresentBlit", Existed = true, Kind = "DWord", Number = 0 },
+            new BackupValue { Path = Recovery.ParametersPath, Name = "InteropClosedReason", Existed = true, Kind = "DWord", Number = 4 },
+            new BackupValue { Path = Recovery.ParametersPath, Name = "EnableCddDwmInterop", Existed = false },
+        });
+        var b2 = rec("backup-20260103T110000000Z.json", "confirm-start", false, null, new BackupValue[0]);
+        p = Recovery.Plan("undo", Closed(), null, null, new[] { b1, b2 });
+        Check(!p.Refused && p.UndoOf == b1.File && Writes(p, "EnableGpuPresentBlit=0", "InteropClosedReason=4", "EnableCddDwmInterop-"), "undo restores the newest undoable backup, deletes what was absent");
+        Check(!p.Undoable && p.OfferRestart && !p.RestartDwm, "undo: not undoable itself, restart offered");
+        var u1 = rec("backup-20260103T120000000Z.json", "undo", false, b1.File, new BackupValue[0]);
+        Check(Recovery.Plan("undo", Closed(), null, null, new[] { b1, b2, u1 }).Refused, "an undone backup is not undone twice");
+        var b3 = rec("backup-20260103T130000000Z.json", "desktop-cpu", true, null, new[] { new BackupValue { Path = Recovery.RouterPath, Name = "DwmForceCpu", Existed = true, Kind = "DWord", Number = 0 } });
+        Equal(b3.File, Recovery.UndoTarget(new[] { b1, b2, u1, b3 }).File, "newest undoable wins");
+        Check(Recovery.Plan("undo", Closed(), null, null, new[] { b3 }).Refusal.Contains("GPU desktop path is closed"), "undo onto the GPU route refused while the switches are closed");
+        p = Recovery.Plan("undo", Open(), null, null, new[] { b3 });
+        Check(!p.Refused && p.RestartDwm && p.WatchDwm && p.DwmForceCpuAfter == 0, "undo onto the GPU route restarts DWM with the watchdog");
+        var evil = rec("backup-20260103T140000000Z.json", "reopen-gpu-path", true, null, new[] { new BackupValue { Path = Recovery.ParametersPath, Name = "UnconfirmedStarts", Existed = true, Kind = "DWord", Number = 2 } });
+        Check(Recovery.Plan("undo", Closed(), null, null, new[] { evil }).Refusal.Contains("does not change"), "undo refuses a backup outside the allow-list");
+        evil = rec("backup-20260103T150000000Z.json", "reopen-gpu-path", true, null, new[] { new BackupValue { Path = @"SYSTEM\CurrentControlSet\Control\CI\Policy", Name = "DwmForceCpu", Existed = false } });
+        Check(Recovery.Plan("undo", Closed(), null, null, new[] { evil }).Refused, "undo refuses a backup of another key");
+
+        // Every allowed plan writes only allowed values.
+        foreach (var snap in new[] { Closed(), Open(), cpuUnknown, onGpu })
+            foreach (var a in Recovery.Actions)
+            {
+                var plan = Recovery.Plan(a, snap, 1, 1600, new[] { b1, b3 });
+                Check(plan.Writes.All(w => Recovery.Allowed(w.Path, w.Name)), a + " writes only allowed values");
+            }
+
+        // The states.
+        var lines = Recovery.Describe(Closed());
+        Func<List<StateLine>, string, StateLine> line = (ls, topic) => ls.First(l => l.Topic == topic);
+        Check(line(lines, "GPU desktop path").Action == "reopen-gpu-path" && line(lines, "GPU desktop path").Severity == "warn", "closed path: warn, recommends the reopen");
+        Check(line(lines, "GPU desktop path").Text.Contains("BD-059"), "closed path names BD-059");
+        Check(line(lines, "Desktop composition").Text.StartsWith("CPU route (GPU route disabled, BD-058)") && line(lines, "Desktop composition").Action == null, "CPU route: release default, no action");
+        Check(line(lines, "Clock control").Action == "enable-dpm", "clock fallback recommends enable-dpm");
+        Check(line(lines, "Driver start").Action == "confirm-start" && line(lines, "Driver start").Text.Contains("1 of 2"), "healthy unconfirmed start recommends the confirmation");
+        Check(line(lines, "Start confirmation task").Severity == "warn" && line(lines, "Start confirmation task").Text.Contains("gave up"), "task result 1 explained");
+        lines = Recovery.Describe(pending);
+        Check(line(lines, "GPU desktop path").Action == "restart", "reopened path recommends a restart");
+        lines = Recovery.Describe(onGpu);
+        Check(line(lines, "Desktop composition").Action == "desktop-cpu" && line(lines, "GPU desktop path").Severity == "ok", "GPU route offers the way back");
+        var gpuClosed = Closed(); gpuClosed.DwmForceCpu = 0;
+        Check(line(Recovery.Describe(gpuClosed), "Desktop composition").Text.Contains("stays on the CPU route"), "GPU route selected with closed switches explained");
+        var refused = Closed(); refused.Interop = null; refused.Health = null; refused.Dpm = null; refused.DriverError = "not loaded";
+        refused.Parameters["UnconfirmedStarts"] = 2; refused.Parameters["LastStage"] = 90;
+        Check(line(Recovery.Describe(refused), "Driver start").Text.Contains("refused to start") && line(Recovery.Describe(refused), "Driver start").Text.Contains("installer"), "guard refusal explained, installer named");
+        var early = Closed(); early.Health.ReadyAgeMs = 1000;
+        Check(line(Recovery.Describe(early), "Driver start").Action == null, "an early start recommends waiting");
+        var trial = Open(); trial.Parameters["DpmMode"] = 1; trial.Parameters["DpmPending"] = 0x10005DC; trial.Dpm = new DpmState { Mode = 1, MaxMHz = 1500 };
+        Check(line(Recovery.Describe(trial), "Clock control").Action == "confirm-start", "clocks on trial recommend the confirmation");
+        Equal(1, Recovery.Describe(new RecoverySnapshot()).Count, "not installed: one line");
+
+        // The watchdog.
+        Equal(null, Recovery.WatchVerdict(null, new int[0], 0, 5, 60), "watch: waiting for DWM");
+        Check(Recovery.WatchVerdict(null, new int[0], 0, 20, 60).StartsWith("no DWM"), "watch: no DWM in 20 s fails");
+        Equal(null, Recovery.WatchVerdict(100, new[] { 100 }, 0, 30, 60), "watch: holding");
+        Equal("ok", Recovery.WatchVerdict(100, new[] { 100 }, 0, 60, 60), "watch: held 60 s");
+        Check(Recovery.WatchVerdict(100, new[] { 100 }, 1, 30, 60).Contains("Application Error 1000"), "watch: a dwm.exe crash fails");
+        Check(Recovery.WatchVerdict(100, new[] { 104 }, 0, 30, 60).Contains("replaced"), "watch: a replaced DWM fails");
+        Check(Recovery.WatchVerdict(100, new[] { 100, 104 }, 0, 30, 60).Contains("second"), "watch: a second DWM fails");
+        Equal("ok", Recovery.WatchVerdict(100, new[] { 100 }, 0, 5, 5), "settle: 5 s on the CPU route");
+
+        Equal("gpu", Recovery.RouteFromModules(new[] { @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll", @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_zink.dll" }), "route from zink");
+        Equal("gpu", Recovery.RouteFromModules(new[] { @"C:\Program Files\amdgpu-wddm\desktop\amdgpu_wddm_radv.dll" }), "route from the desktop RADV");
+        Equal("unknown", Recovery.RouteFromModules(new[] { @"C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_radv.dll" }), "the D3D12 RADV is not the desktop");
+        Equal("cpu", Recovery.RouteFromModules(new[] { @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll", @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d.dll" }), "route from the CPU UMD");
+        Equal("unknown", Recovery.RouteFromModules(null), "no modules");
+
+        Equal("backup-20261003T101112013Z.json", Recovery.BackupFileName(new DateTime(2026, 10, 3, 10, 11, 12, 13, DateTimeKind.Utc)), "backup file name");
+        Check(Recovery.TaskResultText(0).Contains("confirmed") && Recovery.TaskResultText(0x41303).Contains("not run"), "task result texts");
+
+        // JSON: the snapshot (--snapshot) and the backup round-trip.
+        var json = new JavaScriptSerializer();
+        var back = json.Deserialize<RecoverySnapshot>(json.Serialize(Closed()));
+        Check(back.Health.ReadyAgeMs == 70000 && back.Interop.ClosedReason == 4 && back.P("InteropLastState") == 0x300 && back.DwmForceCpu == 1 &&
+            back.DefaultParameters["DpmMaxMHz"] == 1500, "snapshot JSON round-trip");
+        Check(Writes(Recovery.Plan("reset-defaults", back), "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "InteropClosedReason-"), "plans from a round-tripped snapshot match");
+        var bb = json.Deserialize<BackupRecord>(json.Serialize(b1));
+        Check(bb.Values.Count == 3 && bb.Values[1].Number == 4 && !bb.Values[2].Existed && bb.Undoable, "backup JSON round-trip");
+
+        // manifest.json "defaults".
+        var mf = ManifestCheck.Parse(@"{""schema"": 1, ""defaults"": {""parameters"": {""DpmMode"": 1, ""DpmMaxMHz"": 1500}, ""desktop_router"": {""DwmForceCpu"": 1}}}");
+        Check(mf.DefaultParameters["DpmMaxMHz"] == 1500 && mf.DefaultRouter["DwmForceCpu"] == 1, "manifest defaults parsed");
+        Check(ManifestCheck.Parse(@"{""schema"": 1}").DefaultParameters == null, "manifest without defaults");
+        Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": {""parameters"": {""DpmMode"": ""1""}}}"), "manifest default as text refused");
+        Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": {""parameters"": {""DpmMode"": -1}}}"), "negative manifest default refused");
+        Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": [1]}"), "manifest defaults as a list refused");
+    }
+
     static int Main(string[] args)
     {
-        if (args.Length != 1) { Console.WriteLine("usage: unit-tests <repository root>"); return 2; }
+        if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
         Replies(header);
         ShellTokens(args[0]);
@@ -297,6 +586,8 @@ static class UnitTests
         DpmDesignDoc(args[0]);
         Redaction();
         Manifest();
+        RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
+        if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");
         return _failed == 0 ? 0 : 1;
     }

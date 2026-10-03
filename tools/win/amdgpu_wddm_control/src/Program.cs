@@ -4,11 +4,14 @@
 //   amdgpu_wddm_control.exe --smoke <file>           no window: build the pages once, write what they show, exit
 //   amdgpu_wddm_control.exe --smoke-report <zip>    no window: a bug report without dxdiag, the capability tools and
 //                                                    the event logs, written to <zip> (the build's check of that path)
+//   amdgpu_wddm_control.exe --action <name> [--mode 0|1] [--ceiling MHz] --dry-run [--snapshot <json>] [--out <file>]
+//                                                    no window: the Recovery states and the plan of one action, nothing
+//                                                    written (RecoveryActions.cs)
 //   amdgpu_wddm_control.exe --version
-//   (internal, elevated copy) --write-dpm <mode> <MHz> | --write-profile <image> <list> | --remove-profile <image>
+//   (internal, elevated copy) --action <name> ... | --write-profile <image> <list> | --remove-profile <image>
 //
-// Runs as the invoking user. A settings change starts an elevated copy of this program with one --write-* verb,
-// which validates its arguments with the same functions as the window and exits with 0 on success.
+// Runs as the invoking user. A change starts an elevated copy of this program with one verb (one UAC prompt per
+// change), which plans or validates again with the same functions as the window and exits with 0 on success.
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -36,7 +39,7 @@ namespace AmdgpuWddmControl
         static int Main(string[] args)
         {
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
-            if (args.Length > 0 && args[0].StartsWith("--write-") || args.Length > 0 && args[0] == "--remove-profile") return Write(args);
+            if (args.Length > 0 && (args[0] == "--action" || args[0] == "--write-profile" || args[0] == "--remove-profile")) return Dispatch(args);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length == 2 && args[0] == "--smoke") return Smoke(args[1]);
@@ -83,14 +86,12 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static int Write(string[] args)
+        static int Dispatch(string[] args)
         {
+            if (args[0] == "--action") return RecoveryRunner.Run(args);
             try
             {
-                uint a, b;
-                if (args[0] == "--write-dpm" && args.Length == 3 && uint.TryParse(args[1], out a) && uint.TryParse(args[2], out b))
-                    SettingsStore.WriteDpm(a, b);
-                else if (args[0] == "--write-profile" && args.Length == 3)
+                if (args[0] == "--write-profile" && args.Length == 3)
                     SettingsStore.WriteProfile(args[1], args[2]);
                 else if (args[0] == "--remove-profile" && args.Length == 2)
                     SettingsStore.RemoveProfile(args[1]);
@@ -108,11 +109,13 @@ namespace AmdgpuWddmControl
 
         static string Quote(string s) { return "\"" + s.Replace("\"", "") + "\""; }
 
-        // One settings write as administrator. In this process when it is elevated already, else through an elevated
-        // copy (one UAC prompt per change). Returns null on success, else the reason.
-        public static string RunElevated(params string[] verb)
+        public const int NotElevated = -1;
+
+        // One change as administrator. In this process when it is elevated already, else through an elevated copy (one
+        // UAC prompt per change). Returns the verb's exit code, NotElevated when the prompt was declined.
+        public static int RunElevatedCode(params string[] verb)
         {
-            if (IsElevated()) return Write(verb) == 0 ? null : "The change was refused. Check the values and try again.";
+            if (IsElevated()) return Dispatch(verb);
             var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, string.Join(" ", Array.ConvertAll(verb, Quote)))
             {
                 UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden,
@@ -122,10 +125,17 @@ namespace AmdgpuWddmControl
                 using (var p = Process.Start(psi))
                 {
                     p.WaitForExit();
-                    return p.ExitCode == 0 ? null : "The change was refused (exit code " + p.ExitCode + ").";
+                    return p.ExitCode;
                 }
             }
-            catch (System.ComponentModel.Win32Exception) { return "Administrator permission was not given. Nothing was changed."; }
+            catch (System.ComponentModel.Win32Exception) { return NotElevated; }
+        }
+
+        // Returns null on success, else the reason.
+        public static string RunElevated(params string[] verb)
+        {
+            int code = RunElevatedCode(verb);
+            return code == 0 ? null : code == NotElevated ? "Administrator permission was not given. Nothing was changed." : "The change was refused (exit code " + code + ").";
         }
     }
 }

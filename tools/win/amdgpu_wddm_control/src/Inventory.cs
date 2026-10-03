@@ -247,19 +247,6 @@ namespace AmdgpuWddmControl
             return d;
         }
 
-        public static void WriteDpm(uint mode, uint maxMHz)
-        {
-            if (!DpmSettings.IsValidMode(mode) || !DpmSettings.IsValidCeiling(maxMHz)) throw new ArgumentException("DPM setting out of range");
-            using (var key = Registry.LocalMachine.OpenSubKey(DpmSettings.RegistryPath, true))
-            {
-                if (key == null) throw new InvalidOperationException("The bc250kmd driver is not installed (no Parameters key).");
-                key.SetValue("DpmMode", (int)mode, RegistryValueKind.DWord);
-                key.SetValue("DpmMaxMHz", (int)maxMHz, RegistryValueKind.DWord);
-            }
-            if (ReadDword(DpmSettings.RegistryPath, "DpmMode") != mode || ReadDword(DpmSettings.RegistryPath, "DpmMaxMHz") != maxMHz)
-                throw new InvalidOperationException("The DPM values did not read back as written.");
-        }
-
         public static SortedDictionary<string, string> ReadProfiles()
         {
             var d = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);

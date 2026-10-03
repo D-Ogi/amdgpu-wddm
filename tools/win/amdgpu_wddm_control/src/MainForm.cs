@@ -1,6 +1,7 @@
-// The window: a navigation bar on the left and four pages (Overview, Performance, Applications, Diagnostics).
-// Live values come from the KMD's software snapshots every 2 s, and only while Overview or Performance is shown and
-// the window is not minimized. Settings pages write the registry through Program.RunElevated.
+// The window: a navigation bar on the left and five pages (Overview, Performance, Applications, Recovery,
+// Diagnostics). Live values come from the KMD's software snapshots every 2 s, and only while Overview or Performance
+// is shown and the window is not minimized. The Applications page writes the registry through Program.RunElevated;
+// the Recovery page and the clock settings go through the planned actions of Recovery.cs (DoAction).
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -100,6 +101,12 @@ namespace AmdgpuWddmControl
         CheckBox _withDxdiag, _withCaps;
         Button _reportButton, _perfApply;
         InventoryState _inventory;
+        FlowLayoutPanel _states;
+        Label _undoText, _recoveryResult;
+        TextBox _recoveryLog;
+        ComboBox _recoveryCeiling;
+        readonly List<Button> _actionButtons = new List<Button>();
+        List<StateLine> _stateLines = new List<StateLine>();
 
         public MainForm() : this(false) { }
 
@@ -116,7 +123,7 @@ namespace AmdgpuWddmControl
             var sub = Theme.Label("ASRock BC-250", null, Theme.Dim); sub.Margin = new Padding(18, 0, 0, 18);
             var bar = new Panel { Width = 200, Height = 3, BackColor = Theme.Accent, Margin = new Padding(0, 0, 0, 14) };
             nav.Controls.Add(brand); nav.Controls.Add(sub); nav.Controls.Add(bar);
-            foreach (var name in new[] { "Overview", "Performance", "Applications", "Diagnostics" })
+            foreach (var name in new[] { "Overview", "Performance", "Applications", "Recovery", "Diagnostics" })
             {
                 var b = new Button
                 {
@@ -132,7 +139,7 @@ namespace AmdgpuWddmControl
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 28, BackColor = Theme.Nav, Padding = new Padding(12, 5, 12, 0) };
             footer.Controls.Add(_status);
 
-            BuildOverview(); BuildPerformance(); BuildApplications(); BuildDiagnostics();
+            BuildOverview(); BuildPerformance(); BuildApplications(); BuildRecovery(); BuildDiagnostics();
             Controls.Add(_content); Controls.Add(nav); Controls.Add(footer);
 
             _timer.Tick += (s, e) => { if (WindowState != FormWindowState.Minimized && (_page == "Overview" || _page == "Performance")) RefreshLive(); };
@@ -152,6 +159,7 @@ namespace AmdgpuWddmControl
             _content.Controls.Add(_pages[page]);
             foreach (var kv in _nav) kv.Value.BackColor = kv.Key == page ? Theme.Card : Theme.Nav;
             if (page == "Applications") RefreshProfiles();
+            if (page == "Recovery" && !_smoke) RefreshRecovery();
         }
 
         Panel Page(string name, string title, string intro)
@@ -171,7 +179,7 @@ namespace AmdgpuWddmControl
             var p = Page("Overview", "Overview", "The driver and the GPU now. Values update every 2 seconds.");
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(1000, 0) };
             _driver = new Card("Driver");
-            foreach (var k in new[] { "Status", "Release", "GPU", "Kernel driver", "Start check", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition" }) _driver.Row(k);
+            foreach (var k in new[] { "Status", "Release", "GPU", "Kernel driver", "Start check", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition", "Recovery" }) _driver.Row(k);
             _gpu = new Card("GPU now");
             foreach (var k in new[] { "Clock", "Voltage", "Temperature", "Load", "Clock control", "Clock ceiling", "Limited by" }) _gpu.Row(k);
             row.Controls.Add(_driver); row.Controls.Add(_gpu);
@@ -194,6 +202,7 @@ namespace AmdgpuWddmControl
             RefreshLive();
             RefreshStoredDpm();
             RefreshProfiles();
+            RefreshRecovery();
         }
 
         void FillComponents()
@@ -349,13 +358,7 @@ namespace AmdgpuWddmControl
         {
             uint mode = _dpmOn.Checked ? 1u : 0u;
             uint max = DpmSettings.CeilingChoices[Math.Max(0, _ceiling.SelectedIndex)];
-            if (mode == 1 && max > DpmSettings.DefaultMaxMHz &&
-                MessageBox.Show(this, "A ceiling above " + DpmSettings.DefaultMaxMHz + " MHz makes the GPU hotter and uses more power. Make sure the case has good air flow.\n\nApply " + max + " MHz?",
-                    Program.ProductName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
-            var error = Program.RunElevated("--write-dpm", mode.ToString(), max.ToString());
-            _perfResult.Text = error ?? "Saved. Restart Windows to use the new setting.";
-            _perfResult.ForeColor = error == null ? Theme.Good : Theme.Warn;
-            RefreshStoredDpm();
+            DoAction("set-clocks", mode, max, _perfResult);
         }
 
         // ---- Applications ------------------------------------------------------------------------------------------
@@ -472,6 +475,155 @@ namespace AmdgpuWddmControl
             RefreshProfiles();
         }
 
+        // ---- Recovery ----------------------------------------------------------------------------------------------
+
+        void BuildRecovery()
+        {
+            var p = Page("Recovery", "Recovery", "The driver's start and recovery states, and safe ways to change them. Each action asks for administrator permission and saves the old values first.");
+            var states = new Card("States");
+            _states = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            states.Add(_states);
+            p.Controls.Add(states);
+
+            var actions = new Card("Actions");
+            Func<string, string, FlowLayoutPanel> row = (label, action) =>
+            {
+                var r = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+                var b = Theme.Button(label, (s, e) => DoAction(action));
+                _actionButtons.Add(b);
+                r.Controls.Add(b);
+                return r;
+            };
+            actions.Add(Theme.Label("GPU desktop path (takes effect at the next restart):", null, Theme.Dim));
+            actions.Add(row("Reopen the GPU desktop path", "reopen-gpu-path"));
+            actions.Add(Theme.Label("Desktop composition (restarts the desktop now; the GPU route is watched for 60 seconds and falls back to the CPU route on a crash):", null, Theme.Dim));
+            var route = row("Desktop on the CPU route", "desktop-cpu");
+            var gpu = Theme.Button("Desktop on the GPU route", (s, e) => DoAction("desktop-gpu"));
+            _actionButtons.Add(gpu);
+            route.Controls.Add(gpu);
+            actions.Add(route);
+            actions.Add(Theme.Label("Driver start:", null, Theme.Dim));
+            actions.Add(row("Confirm this start", "confirm-start"));
+            actions.Add(Theme.Label("Clock control after a fallback to the fixed clock (takes effect at the next restart):", null, Theme.Dim));
+            var dpm = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            var enable = Theme.Button("Re-enable automatic clocks", (s, e) => DoAction("enable-dpm", null, RecoveryCeiling()));
+            _actionButtons.Add(enable);
+            dpm.Controls.Add(enable);
+            dpm.Controls.Add(Theme.Label("Ceiling:"));
+            _recoveryCeiling = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120, BackColor = Theme.Card, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat };
+            foreach (var mhz in DpmSettings.CeilingChoices) _recoveryCeiling.Items.Add(mhz + " MHz" + (mhz == DpmSettings.DefaultMaxMHz ? " (default)" : ""));
+            _recoveryCeiling.SelectedIndex = Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
+            dpm.Controls.Add(_recoveryCeiling);
+            actions.Add(dpm);
+            actions.Add(Theme.Label("All of the above (takes effect at the next restart):", null, Theme.Dim));
+            actions.Add(row("Reset driver settings to the release defaults", "reset-defaults"));
+            var undo = row("Undo last action", "undo");
+            _undoText = Theme.Label("", null, Theme.Dim);
+            undo.Controls.Add(_undoText);
+            actions.Add(undo);
+            actions.Add(Theme.Label("Not offered here: the temperature limits, firmware, BIOS settings and test signing.", null, Theme.Dim));
+            _recoveryResult = Theme.Label("", null, Theme.Dim);
+            actions.Add(_recoveryResult);
+            _recoveryLog = new TextBox
+            {
+                Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Width = 900, Height = 120,
+                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = new Font("Consolas", 8.5f), BorderStyle = BorderStyle.None,
+            };
+            actions.Add(_recoveryLog);
+            p.Controls.Add(actions);
+            p.Controls.Add(Theme.Button("Refresh", (s, e) => RefreshRecovery()));
+        }
+
+        uint RecoveryCeiling() { return DpmSettings.CeilingChoices[Math.Max(0, _recoveryCeiling.SelectedIndex)]; }
+
+        void RefreshRecovery()
+        {
+            RecoverySnapshot snapshot;
+            List<BackupRecord> backups;
+            try { snapshot = RecoveryProbe.Read(); backups = RecoveryProbe.Backups(); }
+            catch (Exception e) { _driver.Set("Recovery", "Cannot read the states: " + e.Message, Theme.Warn); return; }
+            _stateLines = Recovery.Describe(snapshot);
+            _states.Controls.Clear();
+            foreach (var line in _stateLines)
+            {
+                var block = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
+                block.Controls.Add(Theme.Label(line.Topic, Theme.Bold));
+                var text = Theme.Label(line.Text, null, line.Severity == "warn" ? Theme.Warn : line.Severity == "ok" ? Theme.Good : Theme.Text);
+                text.MaximumSize = new Size(880, 0);
+                block.Controls.Add(text);
+                if (line.Action != null)
+                {
+                    string action = line.Action;
+                    block.Controls.Add(Theme.Button("Recommended: " + line.ActionLabel, (s, e) =>
+                    {
+                        if (action == "restart") OfferRestart("Restart Windows now?");
+                        else DoAction(action, null, action == "enable-dpm" ? RecoveryCeiling() : (uint?)null);
+                    }));
+                }
+                _states.Controls.Add(block);
+            }
+            var target = Recovery.UndoTarget(backups);
+            _undoText.Text = target == null ? "Nothing to undo." : "Restores the values before \"" + target.Action + "\" of " + target.Utc + ".";
+            int warn = _stateLines.Count(l => l.Severity == "warn");
+            _driver.Set("Recovery", warn == 0 ? "No action needed" : warn + (warn == 1 ? " item needs" : " items need") + " attention: see the Recovery page",
+                warn == 0 ? (Color?)null : Theme.Warn);
+        }
+
+        // One planned action: the plan from this window's reading, then a refusal or a confirmation of exactly what
+        // changes, then the elevated helper (which plans again from its own reading), its log and the restart offer.
+        void DoAction(string action, uint? mode = null, uint? ceiling = null, Label result = null)
+        {
+            result = result ?? _recoveryResult;
+            RecoverySnapshot snapshot;
+            try { snapshot = RecoveryProbe.Read(); }
+            catch (Exception e) { result.Text = "Cannot read the driver's state: " + e.Message; result.ForeColor = Theme.Warn; return; }
+            var plan = Recovery.Plan(action, snapshot, mode, ceiling, RecoveryProbe.Backups());
+            if (plan.Refused)
+            {
+                result.Text = plan.Refusal; result.ForeColor = Theme.Warn;
+                MessageBox.Show(this, plan.Refusal, plan.Title ?? Program.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var text = new StringBuilder();
+            text.AppendLine(plan.Change).AppendLine().AppendLine("Takes effect: " + plan.Effect + ".");
+            foreach (var n in plan.Notes) text.AppendLine().AppendLine(n);
+            text.AppendLine().AppendLine("Changes:");
+            foreach (var w in plan.Writes) text.AppendLine("  " + w);
+            if (plan.ConfirmStart) text.AppendLine("  the driver's start confirmation");
+            text.AppendLine().AppendLine(plan.Undoable ? "The old values are saved first; \"Undo last action\" restores them." : "This action cannot be undone.");
+            text.AppendLine().Append("Windows asks for administrator permission next. Continue?");
+            if (MessageBox.Show(this, text.ToString(), plan.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+
+            string runId = Guid.NewGuid().ToString("N").Substring(0, 12);
+            var verb = new List<string> { "--action", action, "--run-id", runId };
+            if (mode != null) { verb.Add("--mode"); verb.Add(mode.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+            if (ceiling != null) { verb.Add("--ceiling"); verb.Add(ceiling.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+            foreach (var b in _actionButtons) b.Enabled = false;
+            _perfApply.Enabled = false;
+            result.Text = plan.RestartDwm ? "Restarting the desktop" + (plan.WatchDwm ? " and watching it for 60 seconds" : "") + "..." : "Working...";
+            result.ForeColor = Theme.Dim;
+            Task.Run(() => Program.RunElevatedCode(verb.ToArray())).ContinueWith(t =>
+            {
+                foreach (var b in _actionButtons) b.Enabled = true;
+                int code = t.Status == TaskStatus.RanToCompletion ? t.Result : RecoveryRunner.Failed;
+                var lines = RecoveryProbe.LogLines(runId);
+                var last = lines.LastOrDefault(l => l.Contains(" result: "));
+                result.Text = code == Program.NotElevated ? "Administrator permission was not given. Nothing was changed." :
+                    last != null ? last.Substring(last.IndexOf(" result: ", StringComparison.Ordinal) + 9) : "Finished with exit code " + code + ".";
+                result.ForeColor = code == RecoveryRunner.Done ? Theme.Good : Theme.Warn;
+                _recoveryLog.Text = string.Join("\r\n", lines);
+                RefreshAll();
+                if (code == RecoveryRunner.Done && plan.OfferRestart) OfferRestart("The change takes effect at the next restart of Windows. Restart now?");
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        void OfferRestart(string question)
+        {
+            if (MessageBox.Show(this, question + "\n\nSave your work in other programs first.", Program.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            try { Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true }); }
+            catch (Exception e) { MessageBox.Show(this, "Windows did not restart: " + e.Message, Program.ProductName); }
+        }
+
         // ---- Diagnostics -------------------------------------------------------------------------------------------
 
         void BuildDiagnostics()
@@ -534,6 +686,9 @@ namespace AmdgpuWddmControl
             w.AppendLine("components: " + _components.Items.Count);
             foreach (ListViewItem i in _components.Items) w.AppendLine("  " + string.Join(" | ", i.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text)));
             w.AppendLine("profiles: " + _profiles.Items.Count);
+            w.AppendLine("recovery: " + _stateLines.Count + " states");
+            foreach (var l in _stateLines) w.AppendLine("  [" + l.Severity + "] " + l.Topic + ": " + l.Text + (l.Action != null ? " -> " + l.Action : ""));
+            w.AppendLine("undo: " + _undoText.Text);
             w.AppendLine("status: " + _status.Text);
             return w.ToString();
         }

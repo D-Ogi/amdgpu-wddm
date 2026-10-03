@@ -4,16 +4,20 @@
 # packages under -Kits. Deterministic: the same sources give the same bytes (csc /deterministic, cl/link /Brepro).
 #
 #   pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\release\control-app\build\app
+#        [-StartConfirmCore <release installer's start-confirm-core.ps1>]
 #
-# Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h and
-# the D3D12 shell's switch names), the DLL and app compiles with warnings as errors, and a smoke run of the exe with
-# --smoke (no window: the pages are built and refreshed once, their text written to smoke.txt). The smoke run passes
-# on a PC without a BC-250 when it reports the driver as not found.
+# Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h, the
+# KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
+# confirmation rule), the DLL and app compiles with warnings as errors, a smoke run of the exe with --smoke (no
+# window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
+# Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC.
+# The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 
 param(
     [Parameter(Mandatory)][string]$Kits,
     [Parameter(Mandatory)][string]$Out,
     [string]$KitVersion = '10.0.26100.0',
+    [string]$StartConfirmCore,
     [switch]$NoSmoke
 )
 
@@ -32,13 +36,14 @@ New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
-$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
     "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'test\UnitTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
-& "$obj\unit-tests.exe" $repo | ForEach-Object { Write-Host "  $_" }
+$unitArgs = @($repo) + @(if ($StartConfirmCore) { (Resolve-Path $StartConfirmCore).Path })
+& "$obj\unit-tests.exe" @unitArgs | ForEach-Object { Write-Host "  $_" }
 if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 
 # 2. bc250control.dll, the same translation unit and flags as tools\win\bc250kmd_cli\build.ps1.
@@ -92,6 +97,41 @@ if (-not $NoSmoke) {
         }
         Write-Host "  report smoke: $($names.Count) files, no user or computer name"
     } finally { $archive.Dispose() }
+
+    # The Recovery dry runs: the plans of the exe itself, from the recorded BD-059 state and from this PC.
+    function Invoke-DryRun([string[]]$ArgList, [string]$Name) {
+        $file = Join-Path $obj "dry-$Name.txt"
+        Remove-Item $file -ErrorAction SilentlyContinue
+        $quoted = $ArgList | ForEach-Object { if ($_ -match ' ') { "`"$_`"" } else { $_ } }
+        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList (@($quoted) + @('--out', "`"$file`"")) -PassThru -WindowStyle Hidden
+        if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "dry run $Name did not exit within 60 s" }
+        [pscustomobject]@{ Code = $p.ExitCode; Text = $(if (Test-Path $file) { Get-Content $file -Raw } else { '' }) }
+    }
+    $snapshot = Join-Path $here 'test\snapshot-bd059.json'
+    $params = 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
+    $expect = [ordered]@{
+        'reopen-gpu-path' = @(0, "set $params EnableGpuPresentBlit = 1 (DWord)", "delete $params InteropClosedReason")
+        'desktop-gpu'     = @(3, 'refused: The GPU desktop path is closed for this start')
+        'desktop-cpu'     = @(3, 'refused: The desktop already runs on the CPU route')
+        'confirm-start'   = @(0, 'confirm this driver start', 'undo: no')
+        'enable-dpm'      = @(0, "set $params DpmMode = 1 (DWord)", "set $params DpmMaxMHz = 1700 (DWord)")
+        'reset-defaults'  = @(0, 'set HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter DwmForceCpu = 1 (DWord)')
+        'undo'            = @(3, 'refused: There is no action to undo')
+    }
+    foreach ($e in $expect.GetEnumerator()) {
+        $extra = if ($e.Key -eq 'enable-dpm') { @('--ceiling', '1700') } else { @() }
+        $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $snapshot)) $e.Key
+        if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 1) {
+            if (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
+        }
+        if (-not $r.Text.Contains('dry run: nothing was written')) { throw "dry run $($e.Key): no closing line" }
+    }
+    $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
+    if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
+    $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'
+    if (($r.Code -ne 0 -and $r.Code -ne 3) -or -not $r.Text.Contains('dry run: nothing was written')) { throw "dry run on this PC failed (exit $($r.Code)): $($r.Text)" }
+    Write-Host "  dry runs: $($expect.Count) actions planned from the BD-059 snapshot as expected; this PC: $((($r.Text -split "`r?`n") | Where-Object { $_ -match '^\s+(refused|change):' } | Select-Object -First 1).Trim())"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

@@ -21,6 +21,9 @@ namespace AmdgpuWddmControl
     {
         public string Release = "", Version = "", KmdVersion = "", ReleaseCertificate = "";
         public readonly List<ManifestComponent> Components = new List<ManifestComponent>();
+        // "defaults": {"parameters": {name: DWORD}, "desktop_router": {name: DWORD}}, the values install.ps1 writes
+        // for a fresh install. null when the manifest has none (releases before the control app's reset).
+        public Dictionary<string, long> DefaultParameters, DefaultRouter;
     }
 
     public static class ManifestCheck
@@ -49,7 +52,31 @@ namespace AmdgpuWddmControl
                         Sha256 = Field(c, "sha256").ToUpperInvariant(),
                     });
                 }
+            object defaults;
+            if (root.TryGetValue("defaults", out defaults) && defaults != null)
+            {
+                var d = defaults as IDictionary<string, object>;
+                if (d == null) throw new FormatException("manifest defaults is not an object");
+                m.DefaultParameters = Dwords(d, "parameters");
+                m.DefaultRouter = Dwords(d, "desktop_router");
+            }
             return m;
+        }
+
+        static Dictionary<string, long> Dwords(IDictionary<string, object> d, string name)
+        {
+            object o;
+            if (!d.TryGetValue(name, out o) || o == null) return null;
+            var table = o as IDictionary<string, object>;
+            if (table == null) throw new FormatException("manifest defaults." + name + " is not an object");
+            var result = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (var kv in table)
+            {
+                if (!(kv.Value is int || kv.Value is long) || Convert.ToInt64(kv.Value) < 0 || Convert.ToInt64(kv.Value) > uint.MaxValue)
+                    throw new FormatException("manifest defaults." + name + "." + kv.Key + " is not a DWORD number");
+                result[kv.Key] = Convert.ToInt64(kv.Value);
+            }
+            return result;
         }
 
         // The manifest's path forms: "<InstallDir>\...", "%SystemRoot%\..." (any environment variable), absolute paths,
