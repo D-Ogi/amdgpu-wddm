@@ -2,7 +2,7 @@
 
 Desk research for a coming milestone, kept as delivered. Everything in here is derived from
 source code and documentation (kernel, libdrm, WDK headers, Microsoft Learn), with citations; **nothing in here is a
-measurement on our hardware**. What turns out to hold on unit A moves to `docs/facts.md` with its evidence; decisions
+measurement on our hardware**. What turns out to hold on unit A becomes a fact (`docs/facts/data/`) with its evidence; decisions
 taken from these notes become ADRs. Since M9 the directory also holds acceptance indexes and audits: they cite facts
 and evidence, they do not replace them, and the deployed state is always workspace `STATE.md`.
 

@@ -11,4 +11,4 @@ Code copied from elsewhere must be declared in the pull request and listed in `T
 ## What is especially welcome
 
 - Runs of the diagnostic USB on other BC-250 units (different BIOS versions), added under `evidence/` following the rules there.
-- Corrections to `docs/facts.md` backed by evidence.
+- Corrections to the facts (`docs/facts/data/`, see `docs/facts/README.md`) backed by evidence.

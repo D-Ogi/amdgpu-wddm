@@ -2,7 +2,11 @@
 
 Short version: a claim about the hardware is worth exactly as much as the file in `evidence/` it points to.
 
-## Statuses used in `facts.md`
+## Where facts live
+
+Facts are kept as a graph in `docs/facts/data/*.yaml`, one file per area, each fact with its ID, status, claim, detail, evidence, date and edges to other facts (`uses`, `supports`, `refutes`, `supersedes`). `docs/facts.md` and the pages under `docs/facts/` are generated from those files by `tools/facts/gen_facts.py`: edit the YAML and run `--write`; the quality gate's `--check` confirms that every cited `evidence/` path exists and that the pages are current. Format and workflow: `docs/facts/README.md`.
+
+## Statuses
 
 | Status | Meaning |
 |---|---|
@@ -32,7 +36,7 @@ All of these must be answered in the experiment write-up, with evidence:
 6. Reference: what does Linux read and write for this register on the same unit (debugfs or `umr`), at which point of init?
 7. Ordering: does Linux touch it only after some other step (PSP/TMR setup, RLC safe mode, GFXOFF disable)?
 
-Only when all seven are answered and the write still has no effect may `facts.md` say the register is not writable from the host in that state. Wording stays factual: "write of X at state Y read back Z", never "impossible".
+Only when all seven are answered and the write still has no effect may a fact say the register is not writable from the host in that state. Wording stays factual: "write of X at state Y read back Z", never "impossible".
 
 ## Experiments
 
@@ -42,7 +46,7 @@ Each experiment lives in `experiments/Exx-name/README.md` and is written before 
 - Procedure (exact tool, version/commit, boot mode)
 - Expected result if the hypothesis holds, and if it does not
 - Result (filled in afterwards, with evidence paths)
-- What changes in `facts.md`
+- What changes in the facts (`docs/facts/data/`)
 
 ## Evidence files
 

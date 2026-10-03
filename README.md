@@ -121,7 +121,7 @@ manifest that `driver/kmd/build.ps1` writes beside the driver.
 | Path | Contents |
 |---|---|
 | `docs/` | Goal and roadmap, evidence rules, ADRs (`adr/`), design notes (`design/`), research notes, [build guide](docs/build.md) |
-| `docs/facts.md` | The only list of established facts. Each entry has a status and an evidence link |
+| `docs/facts.md`, `docs/facts/` | The only list of established facts, generated from the facts graph in `docs/facts/data/`, one page per area. Each entry has a status, an evidence link and its relations to other facts |
 | `experiments/`, `evidence/` | Experiments `Exx` (hypothesis, procedure, expected result, result); raw results from hardware, immutable once added |
 | `journal/`, `regs/` | Lab notebook by day (chronology, not a source of facts); generated register tables (never edited by hand) |
 | `driver/kmd/`, `driver/contract/` | The WDDM kernel-mode driver `bc250kmd`; the private KMD/UMD contract (caps, allocation, context, submission) |

@@ -22,7 +22,7 @@ its 6-12 hour soak profile does not replace M11's 24-hour acceptance criterion.
 
 ## Milestones
 
-Each milestone has an exit criterion that is a measurement. A milestone is closed by a commit that adds the evidence and updates `facts.md`.
+Each milestone has an exit criterion that is a measurement. A milestone is closed by a commit that adds the evidence and updates the facts (`docs/facts/data/`, pages regenerated).
 
 | # | Milestone | Exit criterion |
 |---|---|---|
