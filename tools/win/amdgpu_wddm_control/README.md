@@ -83,7 +83,9 @@ through the same process handle before and after the module list; a change durin
 from another session's DWM. The module list counts only when it is complete: the buffer grows to the size the system
 reports (at most 4 tries, at most 16384 modules), and a failed enumeration or a module name that cannot be read
 gives "unknown", because a list without the Zink library would read as the CPU route. Reading it needs administrator; without it the state says that the active route cannot
-be read, and never calls a route active.
+be read, and never calls a route active. A healthy GPU route recommends nothing (the CPU route stays available on the
+Actions page); `desktop-cpu` is recommended only when the GPU route may be failing, that is when a DWM replacement was
+observed in this session while the GPU route is selected.
 
 | Action (`--action`) | Writes | Takes effect | Refused when |
 |---|---|---|---|

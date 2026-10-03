@@ -766,10 +766,16 @@ namespace AmdgpuWddmControl
             else if (!openNow)
                 add("Desktop composition", "GPU route selected, but the GPU desktop path is closed, so DWM stays on the CPU route." + seen, "warn",
                     requested && closed == null ? "restart" : "reopen-gpu-path", requested && closed == null ? "Restart Windows" : "Reopen the GPU desktop path");
+            else if (DwmVerdict(s) == "observed")
+                // The one sign of a failing GPU route this app can see: a DWM replaced in this session on that route.
+                add("Desktop composition", (s.DwmRoute == "gpu" ? "GPU route: selected and active" : "GPU route selected; the active route cannot be read") +
+                    ", and the desktop compositor (DWM) was replaced in this session. If nobody restarted it on purpose, the GPU route may be failing: " +
+                    "put the desktop on the CPU route and restart Windows." + seen, "warn", "desktop-cpu", "Desktop on the CPU route");
             else
+                // A healthy state recommends nothing; the CPU route stays an available action on the Actions page.
                 add("Desktop composition", (s.DwmRoute == "gpu" ? "GPU route: selected and active" + (afterWrite ? " (the DWM that started after the change loaded it)" : "") + "."
                     : "GPU route selected; the active route cannot be read.") +
-                    " If the desktop goes black or restarts, put it back on the CPU route and restart Windows." + seen, "info", "desktop-cpu", "Desktop on the CPU route");
+                    " If the desktop goes black or restarts, put it back on the CPU route (desktop-cpu) and restart Windows." + seen, "info", null, null);
 
             // Clock control.
             uint? mode = s.P("DpmMode"), max = s.P("DpmMaxMHz"), lastMode = s.P("DpmLastMode"), lastReason = s.P("DpmLastReason");

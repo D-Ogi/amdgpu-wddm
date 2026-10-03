@@ -561,7 +561,8 @@ static class UnitTests
         lines = Recovery.Describe(pending);
         Check(line(lines, "GPU desktop path").Action == "restart", "reopened path recommends a restart");
         lines = Recovery.Describe(onGpu);
-        Check(line(lines, "Desktop composition").Action == "desktop-cpu" && line(lines, "GPU desktop path").Severity == "ok", "GPU route offers the way back");
+        Check(line(lines, "Desktop composition").Action == null && line(lines, "Desktop composition").Text.Contains("(desktop-cpu)") && line(lines, "GPU desktop path").Severity == "ok",
+            "a healthy GPU route recommends nothing and names the way back");
         var gpuClosed = Closed(); gpuClosed.DwmForceCpu = 0;
         Check(line(Recovery.Describe(gpuClosed), "Desktop composition").Text.Contains("stays on the CPU route"), "GPU route selected with closed switches explained");
         var refused = Closed(); refused.Interop = null; refused.Health = null; refused.Dpm = null; refused.DriverError = "not loaded";
@@ -597,7 +598,14 @@ static class UnitTests
         var verified = Open(); verified.DwmForceCpu = 0; verified.DwmRoute = "gpu";
         verified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); verified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z"; verified.RouteWrittenValue = 0;
         Check(line(Recovery.Describe(verified), "Desktop composition").Text.StartsWith("GPU route: selected and active (the DWM that started after the change loaded it).") &&
-            line(Recovery.Describe(verified), "Desktop composition").Action == "desktop-cpu", "GPU route verified on the DWM started after the change");
+            line(Recovery.Describe(verified), "Desktop composition").Action == null && line(Recovery.Describe(verified), "Desktop composition").Severity == "info",
+            "GPU route verified on the DWM started after the change: healthy, nothing recommended");
+        var failing = Open(); failing.DwmForceCpu = 0; failing.DwmRoute = "gpu"; failing.DwmNow = Reading(901, "2026-10-03T18:30:00.000Z");
+        failing.DwmHistory = Recovery.Observe(new[] { Recovery.Observe(null, Reading(900, "2026-10-03T18:00:03.000Z"), "window", "2026-10-03T18:01:00.000Z") },
+            failing.DwmNow, "window", "2026-10-03T18:30:02.000Z");
+        var fg = line(Recovery.Describe(failing), "Desktop composition");
+        Check(Recovery.DwmVerdict(failing) == "observed" && fg.Severity == "warn" && fg.Action == "desktop-cpu" && fg.Text.Contains("may be failing"),
+            "GPU route with a DWM replaced in this session: the CPU route recommended");
         verified.DwmNow = Reading(900, "2026-10-03T18:00:03.000Z");
         Check(line(Recovery.Describe(verified), "Desktop composition").Text.StartsWith("GPU route: selected and active. "), "GPU active before the write: not called verified by the change");
         var cpuVerified = Closed(); cpuVerified.DwmNow = Reading(901, "2026-10-03T18:20:00.000Z"); cpuVerified.RouteWrittenUtc = "2026-10-03T18:10:00.000Z"; cpuVerified.RouteWrittenValue = 1;
