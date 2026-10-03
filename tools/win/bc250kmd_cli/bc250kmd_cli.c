@@ -751,6 +751,58 @@ static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query)
     return D3DKMTQueryStatistics(query);
 }
 
+// ---- the control application's reads (tools/win/amdgpu_wddm_control) ------------------------------------------
+
+// The GPU DWM interop decision of this start (driver/kmd/interop.c): software state, open to every caller. The control
+// application (tools/win/amdgpu_wddm_control) shows from it whether the desktop composes through the GPU path.
+BC250_CONTROL_API LONG WINAPI Bc250Interop(BC250_ESCAPE_INTEROP *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char InteropAbiSizeCheck[(sizeof(BC250_ESCAPE_INTEROP) == 104) ? 1 : -1];
+    (void)sizeof(InteropAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_INTEROP;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_INTEROP_ABI;
+    data->Op = BC250_INTEROP_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_INTEROP ||
+        data->AbiVersion != BC250_INTEROP_ABI || data->Op != BC250_INTEROP_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// One page of the driver log ring from sequence `from` on, GET_LOG with NoAdapterSynchronization alone: answered by
+// 0.7.184.1 and later without the adapter lock, so a bug report taken while a game runs does not stall it (BD-054).
+// No HardwareAccess fallback and no LOG_SUMMARY here: both take the adapter lock. An older driver refuses with
+// STATUS_DEVICE_NOT_READY, and the caller says so.
+BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char LogAbiSizeCheck[(sizeof(BC250_ESCAPE_LOG) == 60 + 64 * 168) ? 1 : -1];
+    (void)sizeof(LogAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || from == BC250_LOG_FROM_SUMMARY) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_GET_LOG;
+    data->From = from;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_GET_LOG ||
+        data->Returned > BC250_LOG_MAX_LINES)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
 // "telemetry [count [interval ms]]": what the monitor's GPU line is made of, one line per sample.
 // "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
 static int Telemetry(int argc, wchar_t **argv)
