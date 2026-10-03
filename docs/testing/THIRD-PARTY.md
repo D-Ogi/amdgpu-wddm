@@ -16,9 +16,9 @@ and NOTICE in the package root).
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `e9f5e701ac0412e1cf39e217075d1f8ed313d120` |
 | `desktop\bc250d3d_router.dll` | amdgpu-wddm `6bbcf4f6bcba577e5d9d170246128496c7eb087d` (`driver/umd/router`) |
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `driver/umd/dxvk` |
-| `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `d8347cf031d2ee3bc2a79b5b142d2612875d96a3` (branch `release/control-app-t11`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`; the build at `a888b2bd` gives the same bytes) |
+| `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `d8347cf031d2ee3bc2a79b5b142d2612875d96a3` (branch `release/control-app-t11`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`; the build at `678e770c` gives the same bytes) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
-| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `a888b2bd212a177ea3b41531d2cd3a7460f00121` (branch `release/control-app-t11`) |
+| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `678e770c82ffc629e6b5af4ba3fc6c95c63197a5` (branch `release/control-app-t11`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 
 ## Third-party code in the package
