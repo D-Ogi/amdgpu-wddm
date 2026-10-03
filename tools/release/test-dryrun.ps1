@@ -89,6 +89,38 @@ Check ($r.text -match 'run install\.cmd again from the same package folder') 'th
 Check ($r.text -notmatch 'not reached') 'nothing after the failed step ran'
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 
+'upgrade and repair over an existing installation (dry runs over a test state file, AMDGPU_WDDM_TEST_STATE_DIR)'
+$pkgVersion = [string]$m.version
+$cases = @(
+    @{ name = 'upgrade from verify-failed'; phase = 'verify-failed'; version = '0.7.197.100-tester.2'; extra = @(); expect = "upgrading 0\.7\.197\.100-tester\.2 -> $([regex]::Escape($pkgVersion)) \(installed phase verify-failed\)"; phase2 = $true }
+    @{ name = 'upgrade from verified, older'; phase = 'verified'; version = '0.7.197.100-tester.1'; extra = @(); expect = "upgrading 0\.7\.197\.100-tester\.1 -> $([regex]::Escape($pkgVersion)) \(installed phase verified\)"; phase2 = $true }
+    @{ name = 'repair: same version, install-incomplete'; phase = 'install-incomplete'; version = $pkgVersion; extra = @(); expect = "repairing $([regex]::Escape($pkgVersion)) \(phase install-incomplete\)"; phase2 = $true }
+    @{ name = 'same version, verified'; phase = 'verified'; version = $pkgVersion; extra = @(); expect = "$([regex]::Escape($pkgVersion)) is already installed and verified"; phase2 = $false }
+    @{ name = 'same version, verified, -Repair'; phase = 'verified'; version = $pkgVersion; extra = @('-Repair'); expect = "repairing $([regex]::Escape($pkgVersion)) \(-Repair, phase verified\)"; phase2 = $true }
+)
+$n = 0
+foreach ($c in $cases) {
+    $n++
+    $dir = Join-Path $WorkBase ('state-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + "-$n")
+    [void][IO.Directory]::CreateDirectory($dir)
+    $st = [ordered]@{ schema = 1; phase = $c.phase; package_version = $c.version; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); testsigning_set_by_installer = $true; updated_utc = '2026-10-03T00:00:00Z' }
+    [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+    $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+    try { $r = Invoke-Ps51 (@((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') + $c.extra) } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+    Check ($r.code -eq 0) "$($c.name): exit $($r.code)"
+    Check ($r.text -match $c.expect) "$($c.name): '$($c.expect)'"
+    if ($c.phase2) {
+        Check (($r.text -match 'would: copy payload\\tools') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -match 'Dry run complete')) "$($c.name): phase 2 runs again"
+        Check ($r.text -notmatch 'would: bcdedit /set') "$($c.name): phase 1 (test signing) is not repeated"
+        Check ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*verify\.cmd") "$($c.name): RunOnce verify armed again"
+        Check ($r.text -match 'would: .*\\Release: Version') "$($c.name): Release\Version rewritten"
+    } else {
+        Check ($r.text -notmatch 'would: copy payload|would: pnputil') "$($c.name): nothing is installed"
+    }
+    if ($r.code -ne 0 -or $r.text -notmatch $c.expect) { $r.text }
+    Remove-Item -LiteralPath $dir -Recurse -Force
+}
+
 'start-confirm.ps1 -Probe (read-only; compiles the bc250control.dll interop and calls Bc250StartHealth READ)'
 $r = Invoke-Ps51 @((Join-Path $Package 'payload\tools\start-confirm.ps1'), '-Probe')
 $r.text

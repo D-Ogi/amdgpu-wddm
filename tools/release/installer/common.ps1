@@ -117,6 +117,28 @@ function Save-InstallState($State) {
 function Set-StateValue($State, [string]$Name, $Value) {
     if ($State.PSObject.Properties[$Name]) { $State.$Name = $Value } else { $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
 }
+# What a run of install.ps1 does with what is already on the computer. Pure: the state, the package version and the
+# installed version in, the action out. Testers get new packages often, so a different version always installs.
+#   install   no state, or phase 1 not finished: the normal run
+#   upgrade   another version is installed (any phase): phase 2 again, files that did not change are kept
+#   repair    the same version in an unfinished or failed phase, or -Repair: phase 2 again
+#   verify    the same version installed and waiting for its restart (phase 'installed'): phase 3 only
+#   already   the same version verified: nothing to do (exit 0)
+function Get-InstallAction {
+    param($State, [string]$PackageVersion, [string]$InstalledVersion, [bool]$Repair)
+    if (-not $State) { return [ordered]@{ action = 'install'; message = $null } }
+    $phase = [string]$State.phase
+    if ($phase -in @('new', 'testsigning-pending', 'testsigning-active')) { return [ordered]@{ action = 'install'; message = $null } }
+    if (-not $InstalledVersion) { $InstalledVersion = '(unknown version)' }
+    if ($InstalledVersion -ne $PackageVersion) {
+        return [ordered]@{ action = 'upgrade'; message = "upgrading $InstalledVersion -> $PackageVersion (installed phase $phase)" }
+    }
+    if ($Repair) { return [ordered]@{ action = 'repair'; message = "repairing $PackageVersion (-Repair, phase $phase)" } }
+    if ($phase -eq 'verified') { return [ordered]@{ action = 'already'; message = "$PackageVersion is already installed and verified. Run verify.cmd to check it again, install.cmd -Repair to install it again, or uninstall.cmd to remove it." } }
+    if ($phase -eq 'installed') { return [ordered]@{ action = 'verify'; message = $null } }
+    return [ordered]@{ action = 'repair'; message = "repairing $PackageVersion (phase $phase)" }
+}
+
 # A fact about the computer before the install (did this file exist?): the first run records it, a re-run over a
 # partial install keeps it, because by then the installer itself made the file exist.
 function Set-StateValueOnce($State, [string]$Name, $Value) {

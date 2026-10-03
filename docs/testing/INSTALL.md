@@ -55,6 +55,11 @@ The installer does not change BIOS or firmware settings.
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
 
+To install a newer package, unpack it to a new folder and run its `install.cmd`. You do not have to uninstall
+first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change, replaces the others and
+restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
+use `install.cmd -Repair` to install it again.
+
 "Test Mode" is shown in the lower-right corner of the desktop while test signing is on. This is normal.
 
 ## The small blue window after logon

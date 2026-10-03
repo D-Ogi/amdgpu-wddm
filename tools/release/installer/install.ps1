@@ -19,6 +19,7 @@ param(
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
+    [switch]$Repair,                        # install the same, already verified version again
     [switch]$DryRunIgnoreBoard              # host test only, honoured with -DryRun: walk all phases on a PC without a BC-250
 )
 $ErrorActionPreference = 'Stop'
@@ -26,6 +27,11 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 $script:DryRunMode = [bool]$DryRun
+# Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
+if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
+    $script:StateDir = $env:AMDGPU_WDDM_TEST_STATE_DIR
+    $script:StatePath = Join-Path $script:StateDir 'state.json'
+}
 $script:InPhase2 = $false
 # Any step that throws ends here: the step, the reason, and the re-run hint. Phase 2 is idempotent, so a re-run with
 # the same package skips what is in place and finishes.
@@ -135,8 +141,20 @@ function Set-ResumeAtLogon([string]$Command) {
     } | Out-Null
 }
 
+# What this run does with what is installed (Get-InstallAction): the package's version against the installed one.
+$packageVersion = $null
+try { $packageVersion = [string](Get-Content -LiteralPath (Join-Path $package 'manifest.json') -Raw | ConvertFrom-Json).version } catch { }
+$installedVersion = $null
+if ($early -and $early.package_version) { $installedVersion = [string]$early.package_version }
+if (-not $installedVersion -and -not ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR)) {
+    $installedVersion = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name Version -ErrorAction SilentlyContinue).Version
+}
+$action = Get-InstallAction -State $early -PackageVersion $packageVersion -InstalledVersion $installedVersion -Repair $Repair
+if ($Verify) { $action = [ordered]@{ action = 'verify'; message = $null } }
+if ($early) { Write-Info "installed: $(if ($installedVersion) { $installedVersion } else { 'unknown version' }), phase $($early.phase); package: $packageVersion; action: $($action.action)" }
+
 # Verification needs no preflight: it reads the installed copy (verify.cmd in the install root) or the package.
-if ($Verify -or ($early -and $early.phase -eq 'installed' -and -not $DryRun)) {
+if ($action.action -eq 'verify' -and -not ($DryRun -and -not $Verify)) {
     $m = Join-Path $package 'manifest.json'
     if (Test-Path -LiteralPath $m) { $script:Manifest = Get-Content -LiteralPath $m -Raw | ConvertFrom-Json }
     $state = $early
@@ -268,9 +286,17 @@ if ($script:VerifyOnly) {
     Write-Host 'Verification passed. The BC-250 runs on the amdgpu-wddm driver.' -ForegroundColor Green
     exit 0
 }
-if ($state.phase -in @('verified', 'verify-failed')) {
-    Write-Host "This computer already has the release installed (phase $($state.phase)). Run verify.cmd to check it, or uninstall.cmd to remove it." -ForegroundColor White
-    exit 0
+switch ($action.action) {
+    'already' { Write-Host $action.message -ForegroundColor White; exit 0 }
+    'verify' { Write-Host "[dry run] $packageVersion is installed and waits for its restart: a real run verifies it (verify.cmd)." -ForegroundColor DarkYellow; exit 0 }
+    { $_ -in @('upgrade', 'repair') } {
+        # Phase 2 again over the installed release: unchanged files are kept, the rest replaced, registry values,
+        # task and Release\Version rewritten, RunOnce verify armed again. Phase 1 (test signing) is done already.
+        Write-Step $action.message
+        Write-Host "   $($action.message)" -ForegroundColor White
+        Set-StateValue $state 'previous_package_version' $installedVersion
+        Set-StateValue $state 'package_version' $packageVersion
+    }
 }
 
 # ---- phase 1: test signing -------------------------------------------------------------------------------------
@@ -501,13 +527,13 @@ if ($controlExe -and $dirs -contains 'control') {
     Set-StateValue $state 'shortcut' $lnk
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
+Save-Phase 'installed'
+Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')
 if ($script:DryRunMode) {
     Write-Host ''
     Write-Host 'Dry run complete: every check ran, nothing was changed.' -ForegroundColor Green
     exit 0
 }
-Save-Phase 'installed'
-Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')
 Write-Host ''
 Write-Host 'Installation complete. After the restart, the installer verifies the driver by itself.' -ForegroundColor Green
 Request-Restart 'the driver starts with its full configuration at the next start.'
