@@ -112,6 +112,9 @@ void bc250_dpm_tune_default(struct bc250_dpm_tune *t)
 	t->down_permille = BC250_DPM_DOWN_PERMILLE;
 	t->down_hold_ms = BC250_DPM_DOWN_HOLD_MS;
 	t->floor_level = BC250_DPM_FLOOR_LEVEL;
+	t->hot_step_ms = BC250_DPM_HOT_STEP_MS;
+	t->soft_delta_mc = BC250_DPM_SOFT_DELTA_MC;
+	t->soft_step_ms = BC250_DPM_SOFT_STEP_MS;
 }
 
 enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level)
@@ -141,6 +144,11 @@ enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, u
 		return BC250_DPM_TUNE_HOLD;
 	if (t->floor_level > max_level || t->floor_level > BC250_DPM_TOP_LEVEL)
 		return BC250_DPM_TUNE_FLOOR;
+	if (t->hot_step_ms < BC250_DPM_TUNE_MIN_HOT_STEP_MS || t->hot_step_ms > BC250_DPM_TUNE_MAX_HOT_STEP_MS ||
+	    (t->soft_delta_mc != 0u &&
+	     (t->soft_delta_mc < BC250_DPM_TUNE_MIN_SOFT_DELTA_MC || t->soft_delta_mc > BC250_DPM_TUNE_MAX_SOFT_DELTA_MC)) ||
+	    t->soft_step_ms < BC250_DPM_TUNE_MIN_SOFT_STEP_MS || t->soft_step_ms > BC250_DPM_TUNE_MAX_SOFT_STEP_MS)
+		return BC250_DPM_TUNE_THERMAL;
 	return BC250_DPM_TUNE_OK;
 }
 
@@ -150,6 +158,7 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->max_level = max_level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : max_level;
 	g->thermal_cap = g->max_level;
 	g->level = BC250_DPM_FLOOR_LEVEL;
+	g->cap_ms = BC250_DPM_CAP_MS_MAX;	/* no change yet: the first hot tick steps at once */
 	bc250_dpm_tune_default(&g->tune);
 }
 
@@ -173,41 +182,79 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 
 	g->avg_permille = (g->avg_permille * 3u + busy + 2u) / 4u;
 
-	/* Thermal first: it bounds whatever the load asks for. */
+	/* Thermal first: it bounds whatever the load asks for. cap_ms is the time since the cap last moved the clock's
+	 * bound (a step down or a raise; the hot entry's clamp to the running clock lowers nothing and does not count):
+	 * the spacing of a re-entry's step is measured from it. */
+	g->cap_ms = g->cap_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->cap_ms + dt;
 	if (!in->temperature_valid || in->temperature_mc >= BC250_DPM_CRITICAL_MC) {
 		if (g->thermal_cap != BC250_DPM_FLOOR_LEVEL || !g->hot) g->thermal_events++;
+		if (g->thermal_cap != BC250_DPM_FLOOR_LEVEL) g->cap_ms = 0;
 		g->thermal_cap = BC250_DPM_FLOOR_LEVEL;
 		g->hot = 1;
 		g->hot_ms = 0;
 		g->release_ms = 0;
+		g->soft_ms = 0;
 		thermal = in->temperature_valid ? BC250_DPM_THROTTLE_THERMAL_HARD : BC250_DPM_THROTTLE_SENSOR;
 	} else if (in->temperature_mc >= BC250_DPM_HOT_MC) {
 		if (!g->hot) {
-			/* At once: one step below where the clock is now, whatever the load. */
+			/* One step below where the clock is now, whatever the load: at once when the cap last changed at
+			 * least a hot step ago. A temperature hovering at 87 C enters again and again, and stepped once per
+			 * crossing before 0.7.197 (BD-055); a re-entry inside the hot step only stops raises (the cap down
+			 * to the clock, which lowers nothing) and its step follows a hot step after the last change. */
 			g->hot = 1;
 			g->hot_ms = 0;
 			g->thermal_events++;
-			if (g->thermal_cap >= cur) g->thermal_cap = cur ? cur - 1u : BC250_DPM_FLOOR_LEVEL;
+			if (g->thermal_cap >= cur) {
+				if (g->cap_ms >= t->hot_step_ms) {
+					g->thermal_cap = cur ? cur - 1u : BC250_DPM_FLOOR_LEVEL;
+					g->cap_ms = 0;
+				} else {
+					g->thermal_cap = cur;
+					g->hot_ms = g->cap_ms;
+				}
+			}
 		} else {
 			g->hot_ms += dt;
-			if (g->hot_ms >= BC250_DPM_HOT_STEP_MS) {
+			if (g->hot_ms >= t->hot_step_ms) {
 				g->hot_ms = 0;
-				if (g->thermal_cap) g->thermal_cap--;
+				if (g->thermal_cap) {
+					g->thermal_cap--;
+					g->cap_ms = 0;
+				}
 			}
 		}
 		g->release_ms = 0;
+		g->soft_ms = 0;
 		thermal = BC250_DPM_THROTTLE_THERMAL_SOFT;
 	} else {
 		g->hot = 0;
 		g->hot_ms = 0;
 		if (in->temperature_mc < BC250_DPM_RELEASE_MC && g->thermal_cap < g->max_level) {
+			g->soft_ms = 0;
 			g->release_ms += dt;
 			if (g->release_ms >= BC250_DPM_RELEASE_STEP_MS) {
 				g->release_ms = 0;
 				g->thermal_cap++;
+				g->cap_ms = 0;
 			}
-		} else g->release_ms = 0;
-		/* Between RELEASE and HOT the cap holds; it still names what holds the clock. */
+		} else if (t->soft_delta_mc && g->thermal_cap < g->max_level &&
+			   in->temperature_mc < BC250_DPM_HOT_MC - (int)t->soft_delta_mc) {
+			/* The soft release: held below the soft threshold for a whole step without a break, one level. A
+			 * thermal change resets the hold (no step down happens below HOT_MC, and the paths above clear
+			 * soft_ms), so a soft raise is at least soft_step_ms after any change of the cap. */
+			g->release_ms = 0;
+			g->soft_ms += dt;
+			if (g->soft_ms >= t->soft_step_ms) {
+				g->soft_ms = 0;
+				g->thermal_cap++;
+				g->cap_ms = 0;
+				g->soft_releases++;
+			}
+		} else {
+			g->release_ms = 0;
+			g->soft_ms = 0;
+		}
+		/* Between the release threshold in force and HOT the cap holds; it still names what holds the clock. */
 		if (g->thermal_cap < g->max_level) thermal = BC250_DPM_THROTTLE_THERMAL_SOFT;
 	}
 

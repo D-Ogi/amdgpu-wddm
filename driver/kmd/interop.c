@@ -6,7 +6,9 @@
 //   this file          the registry around it, the session marker, the snapshot, the escape
 //   wddm.c             the two consumers (DRIVERCAPS, Present) and the hooks: WddmStart calls InteropStart,
 //                      the first interop Blt present of a DDI device InteropUserBegin, its DestroyDevice
-//                      InteropUserEnd; pnp.c Bc250StopDevice calls InteropStop
+//                      InteropUserEnd; pnp.c Bc250StopDevice calls InteropStop, Bc250RemoveDevice InteropRemove,
+//                      Bc250SetPowerState InteropAdapterPower; entry.c DriverEntry InteropDriverInit, Bc250Unload
+//                      InteropDriverUnload (the \Callback\PowerState registration)
 //
 // Settings, all REG_DWORD under Services\bc250kmd\Parameters:
 //   EnableGpuPresentBlit, EnableCddDwmInterop   operator's; absent = 1 since 0.7.181, 0 off, else invalid
@@ -14,13 +16,19 @@
 //   InteropClosedReason   the reason the driver wrote both switches 0 (4, unclean); deleted when they open again
 //   InteropLastState      effective bits | requested bits << 8, written every full start
 //   InteropLastReason     enum bc250_interop_reason, written every full start
-//   InteropLastEnd        how the last session ended: 1 device stop, 2 last user destroyed
+//   InteropLastEnd        how the last session ended: 1 device stop, 2 last user destroyed, 3 a system sleep or
+//                         shutdown began (power callback), 4 the adapter went down for one (BC250_INTEROP_END_*)
 // and the volatile subkey InteropBoot (value Marked = 1): this boot marked a session, so a marker the next start
 // of the same boot finds is stale, not the trace of a dead machine.
 //
 // Why a user count and not the start: dxgkrnl does not stop the adapter at shutdown, so a marker written at start
-// would outlive every clean reboot. DWM's DDI devices are destroyed when its session ends, before the registry
-// is shut down; a marker that is still there at the next start means the machine went down in the middle.
+// would outlive every clean reboot. Nor are DWM's DDI devices destroyed at a clean restart (BD-059: boot 168 to
+// 169 found the marker with no end recorded), so the session also ends where a clean restart can be seen: at the
+// start of a system power transition, while the registry is still up - the \Callback\PowerState notification
+// (PO_CB_SYSTEM_STATE_LOCK, sent before the system set-power IRP), and as a second hook the adapter's D3 for a
+// system action. Nothing marks again until the system is back in S0. A machine that dies with the path in use
+// (hang, 0x116, power loss) dies before either, so a marker still there at the next start means exactly that.
+// The transitions themselves are interop_policy.c's bc250_interop_session_step, host-tested; this file writes.
 // Both switches stay start-latched: dxgkrnl reads DRIVERCAPS once per adapter start and keeps it, and the
 // identity binding of wddm_allocation_identity.inc happens only at OpenAllocation, so a mid-start change would
 // leave opens unbound. Closing takes effect at the next start, which after an unclean boot is this one.
@@ -42,6 +50,20 @@ C_ASSERT(BC250_INTEROP_SWITCH_BLIT == BC250_INTEROP_BLIT && BC250_INTEROP_SWITCH
 C_ASSERT(BC250_INTEROP_FLAG_UNCLEAN == BC250_INTEROP_DECISION_UNCLEAN);
 C_ASSERT(BC250_INTEROP_FLAG_STALE == BC250_INTEROP_DECISION_STALE);
 C_ASSERT(BC250_INTEROP_FLAG_CLOSED_BY_DRIVER == BC250_INTEROP_DECISION_CLOSED_BY_DRIVER);
+C_ASSERT(BC250_INTEROP_END_NONE == BC250_INTEROP_SESSION_END_NONE &&
+         BC250_INTEROP_END_STOP == BC250_INTEROP_SESSION_END_STOP &&
+         BC250_INTEROP_END_USERS == BC250_INTEROP_SESSION_END_USERS &&
+         BC250_INTEROP_END_SYSTEM_POWER == BC250_INTEROP_SESSION_END_SYSTEM_POWER &&
+         BC250_INTEROP_END_ADAPTER_D3 == BC250_INTEROP_SESSION_END_ADAPTER_D3);
+C_ASSERT(PowerActionSleep == 2 && PowerActionShutdownOff == 6);     // bc250_interop_system_action's range
+
+// The adapters the power callback walks: listed by InteropStart, delisted by InteropStop and InteropRemove. Lock
+// order: g_InteropListLock, then an adapter's Lock; nothing takes the list lock while holding an adapter's.
+static LIST_ENTRY g_InteropList;
+static KMUTEX g_InteropListLock;
+static PCALLBACK_OBJECT g_InteropPowerObject;
+static PVOID g_InteropPowerRegistration;
+static volatile LONG g_InteropPowerAbove;       // notifications that came above PASSIVE_LEVEL: nothing written
 
 static void InteropLock(BC250_INTEROP_STATE* S)
 {
@@ -66,6 +88,7 @@ void InteropInitialize(BC250_DEVICE* Device)
     BC250_INTEROP_STATE* s = &Device->Interop;
     KeInitializeMutex(&s->Lock, 0);
     KeInitializeSpinLock(&s->SnapLock);
+    InitializeListHead(&s->Link);
     s->Work.Reason = s->Snap.Reason = BC250_INTEROP_REASON_NOT_RUN;
 }
 
@@ -106,6 +129,122 @@ static ULONG InteropSettingFlags(const struct bc250_interop_value* V, ULONG Abse
     return V->state == BC250_INTEROP_ABSENT ? Absent : V->state == BC250_INTEROP_UNREADABLE ? Unreadable : 0;
 }
 
+static void InteropList(BC250_INTEROP_STATE* S, BOOLEAN In)
+{
+    KeWaitForSingleObject(&g_InteropListLock, Executive, KernelMode, FALSE, NULL);
+    if (In && !S->Listed) InsertTailList(&g_InteropList, &S->Link);
+    if (!In && S->Listed) RemoveEntryList(&S->Link);
+    S->Listed = In;
+    KeReleaseMutex(&g_InteropListLock, FALSE);
+}
+
+// Caller holds Lock. The volatile record first: a marker without it would read as a dead boot on a restart of this
+// one. Best effort: a failure is counted and logged, and the next BEGIN or UP tries again.
+static void InteropMark(BC250_INTEROP_STATE* S, PCSTR Why)
+{
+    ULONG bootId = SharedUserData->BootId;
+    NTSTATUS status = GuardVolatileStore(INTEROP_BOOT_KEY, INTEROP_BOOT_VALUE, 1);
+    if (NT_SUCCESS(status)) status = InteropStore(INTEROP_SETTING_SESSION, bootId);
+    if (NT_SUCCESS(status)) {
+        S->Session.marked = 1;
+        S->Work.Marks++;
+        S->Work.Flags |= BC250_INTEROP_FLAG_SESSION;
+    } else {
+        S->Work.MarkFailures++;
+    }
+    GuardLog("interop: session marked (%s) for boot %lu (users %lu), status 0x%08X", Why, bootId, S->Session.users,
+             status);
+}
+
+// Caller holds Lock. A failed delete keeps the marker and marked: the next event that ends the session tries again.
+static void InteropUnmark(BC250_INTEROP_STATE* S, ULONG End)
+{
+    static const char* const why[] = {"none", "device stop", "last user gone", "system power transition",
+                                      "adapter down for a system action"};
+    NTSTATUS status;
+    (void)InteropStore(INTEROP_SETTING_LAST_END, End);
+    status = InteropDelete(INTEROP_SETTING_SESSION);
+    GuardLog("interop: session unmarked (%s), status 0x%08X", End < RTL_NUMBER_OF(why) ? why[End] : "?", status);
+    if (!NT_SUCCESS(status)) return;
+    S->Session.marked = 0;
+    S->Work.Unmarks++;
+    S->Work.LastEnd = End;
+    S->Work.Flags &= ~BC250_INTEROP_FLAG_SESSION;
+}
+
+// Caller holds Lock: one event through the policy, its answer carried out, the snapshot published.
+static void InteropEvent(BC250_INTEROP_STATE* S, unsigned int Event, PCSTR Why)
+{
+    struct bc250_interop_step step;
+    bc250_interop_session_step(&S->Session, Event, &step);
+    if (step.unmark) InteropUnmark(S, step.unmark);
+    if (step.mark) InteropMark(S, Why);
+    S->Work.Users = S->Session.users;
+    S->Work.Flags = (S->Work.Flags & ~(BC250_INTEROP_FLAG_DOWN | BC250_INTEROP_FLAG_POWER_CALLBACK)) |
+        (S->Session.down ? BC250_INTEROP_FLAG_DOWN : 0) |
+        (g_InteropPowerRegistration ? BC250_INTEROP_FLAG_POWER_CALLBACK : 0);
+    InteropPublish(S);
+}
+
+// \Callback\PowerState. PO_CB_SYSTEM_STATE_LOCK with Argument2 0: a system sleep or shutdown is imminent, sent
+// before the system set-power IRP; 1: the system is back in S0. The registry calls need PASSIVE_LEVEL; a
+// notification above it is counted and left to the adapter's D3.
+static VOID InteropPowerCallback(PVOID Context, PVOID Argument1, PVOID Argument2)
+{
+    PLIST_ENTRY entry;
+    unsigned int event;
+
+    UNREFERENCED_PARAMETER(Context);
+    if ((ULONG_PTR)Argument1 != PO_CB_SYSTEM_STATE_LOCK) return;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) { InterlockedIncrement(&g_InteropPowerAbove); return; }
+    event = Argument2 == NULL ? BC250_INTEROP_EVENT_SYSTEM_DOWN : BC250_INTEROP_EVENT_UP;
+    KeWaitForSingleObject(&g_InteropListLock, Executive, KernelMode, FALSE, NULL);
+    for (entry = g_InteropList.Flink; entry != &g_InteropList; entry = entry->Flink) {
+        BC250_INTEROP_STATE* s = CONTAINING_RECORD(entry, BC250_INTEROP_STATE, Link);
+        InteropLock(s);
+        GuardLog("interop: system power state lock %s (users %lu, marked %d)", event == BC250_INTEROP_EVENT_UP ?
+                 "released, back in S0" : "taken, sleep or shutdown imminent", s->Session.users, s->Session.marked);
+        InteropEvent(s, event, "system back in S0");
+        InteropUnlock(s);
+    }
+    KeReleaseMutex(&g_InteropListLock, FALSE);
+}
+
+// DriverEntry, before the DDI table is handed over. Never fails the load: without the callback the adapter's D3
+// is the only hook, and the escape shows the registration missing (no POWER_CALLBACK flag).
+void InteropDriverInit(void)
+{
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    NTSTATUS status;
+
+    InitializeListHead(&g_InteropList);
+    KeInitializeMutex(&g_InteropListLock, 0);
+    RtlInitUnicodeString(&name, L"\\Callback\\PowerState");
+    InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+    status = ExCreateCallback(&g_InteropPowerObject, &attributes, FALSE, TRUE);
+    if (NT_SUCCESS(status)) {
+        g_InteropPowerRegistration = ExRegisterCallback(g_InteropPowerObject, InteropPowerCallback, NULL);
+        if (g_InteropPowerRegistration == NULL) {
+            ObDereferenceObject(g_InteropPowerObject);
+            g_InteropPowerObject = NULL;
+            status = STATUS_UNSUCCESSFUL;
+        }
+    }
+    GuardLog("interop: \\Callback\\PowerState registration 0x%08X", status);
+}
+
+// Bc250Unload: no adapter is started any more, so the list is empty; ExUnregisterCallback returns after a
+// notification in progress has finished with this image's code.
+void InteropDriverUnload(void)
+{
+    if (g_InteropPowerRegistration) ExUnregisterCallback(g_InteropPowerRegistration);
+    g_InteropPowerRegistration = NULL;
+    if (g_InteropPowerObject) ObDereferenceObject(g_InteropPowerObject);
+    g_InteropPowerObject = NULL;
+    if (g_InteropPowerAbove) GuardLog("interop: %ld power notifications came above PASSIVE_LEVEL", g_InteropPowerAbove);
+}
+
 // WddmStart, before the adapter state is published: decides both switches for this start. PASSIVE_LEVEL.
 // Never fails the start; every read or write failure closes toward "off".
 void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN* CddInterop)
@@ -118,9 +257,10 @@ void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN
     NTSTATUS persist = STATUS_SUCCESS;
 
     *GpuPresent = *CddInterop = FALSE;
+    InteropList(s, TRUE);
     InteropLock(s);
     RtlZeroMemory(&s->Work, sizeof(s->Work));
-    s->Marked = FALSE;
+    RtlZeroMemory(&s->Session, sizeof(s->Session));
     in.blit = InteropQuery(INTEROP_SETTING_BLIT);
     in.cdd = InteropQuery(INTEROP_SETTING_CDD);
     in.session = InteropQuery(INTEROP_SETTING_SESSION);
@@ -155,6 +295,7 @@ void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN
     s->Work.SessionBootId = in.session.state == BC250_INTEROP_PRESENT ? in.session.value : 0;
     s->Work.PreviousEnd = lastEnd.state == BC250_INTEROP_PRESENT ? lastEnd.value : BC250_INTEROP_END_NONE;
     s->Work.Generation = Device->StartHealth.Generation;
+    if (g_InteropPowerRegistration) s->Work.Flags |= BC250_INTEROP_FLAG_POWER_CALLBACK;
     InteropPublish(s);
     InteropUnlock(s);
 
@@ -175,48 +316,17 @@ void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN
              s->Work.Flags, in.blit.value, in.cdd.value, s->Work.PreviousEnd);
 }
 
-// Caller holds Lock.
-static void InteropUnmark(BC250_INTEROP_STATE* S, ULONG End)
-{
-    NTSTATUS status;
-    (void)InteropStore(INTEROP_SETTING_LAST_END, End);
-    status = InteropDelete(INTEROP_SETTING_SESSION);
-    GuardLog("interop: session unmarked (%s), status 0x%08X", End == BC250_INTEROP_END_STOP ? "device stop" : "last user gone",
-             status);
-    if (!NT_SUCCESS(status)) return;
-    S->Marked = FALSE;
-    S->Work.Unmarks++;
-    S->Work.LastEnd = End;
-    S->Work.Flags &= ~BC250_INTEROP_FLAG_SESSION;
-}
-
 // The first interop Blt present of a DDI device (wddm.c): mark the session before the path is used. Present is
 // PASSIVE_LEVEL; anything above is refused (FALSE) and the caller does not count the device. The mark is best
-// effort: a failure is counted and logged, the switches stay as the start latched them.
+// effort: a failure is counted and logged, the switches stay as the start latched them. During a system power
+// transition the device is counted and nothing is marked.
 BOOLEAN InteropUserBegin(BC250_DEVICE* Device)
 {
     BC250_INTEROP_STATE* s = &Device->Interop;
-    NTSTATUS status;
-    ULONG bootId;
 
     if (KeGetCurrentIrql() != PASSIVE_LEVEL) return FALSE;
     InteropLock(s);
-    s->Work.Users++;
-    if (!s->Marked) {
-        bootId = SharedUserData->BootId;
-        // The volatile record first: a marker without it would read as a dead boot on a restart of this one.
-        status = GuardVolatileStore(INTEROP_BOOT_KEY, INTEROP_BOOT_VALUE, 1);
-        if (NT_SUCCESS(status)) status = InteropStore(INTEROP_SETTING_SESSION, bootId);
-        if (NT_SUCCESS(status)) {
-            s->Marked = TRUE;
-            s->Work.Marks++;
-            s->Work.Flags |= BC250_INTEROP_FLAG_SESSION;
-        } else {
-            s->Work.MarkFailures++;
-        }
-        GuardLog("interop: session marked for boot %lu (users %lu), status 0x%08X", bootId, s->Work.Users, status);
-    }
-    InteropPublish(s);
+    InteropEvent(s, BC250_INTEROP_EVENT_BEGIN, "first interop present of a device");
     InteropUnlock(s);
     return TRUE;
 }
@@ -228,9 +338,7 @@ void InteropUserEnd(BC250_DEVICE* Device)
 
     if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
     InteropLock(s);
-    if (s->Work.Users) s->Work.Users--;
-    if (s->Work.Users == 0 && s->Marked) InteropUnmark(s, BC250_INTEROP_END_USERS);
-    InteropPublish(s);
+    InteropEvent(s, BC250_INTEROP_EVENT_END, "");
     InteropUnlock(s);
 }
 
@@ -240,10 +348,34 @@ void InteropStop(BC250_DEVICE* Device)
     BC250_INTEROP_STATE* s = &Device->Interop;
 
     if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    InteropList(s, FALSE);
     InteropLock(s);
-    if (s->Marked) InteropUnmark(s, BC250_INTEROP_END_STOP);
-    s->Work.Users = 0;
-    InteropPublish(s);
+    InteropEvent(s, BC250_INTEROP_EVENT_STOP, "");
+    InteropUnlock(s);
+}
+
+// Bc250RemoveDevice, before the device's memory goes: the power callback must not find it. Idempotent.
+void InteropRemove(BC250_DEVICE* Device)
+{
+    if (KeGetCurrentIrql() == PASSIVE_LEVEL) InteropList(&Device->Interop, FALSE);
+}
+
+// Bc250SetPowerState for the adapter, PASSIVE_LEVEL: down for a system action (sleep, hibernate, shutdown) ends
+// the session like the power callback; D0 is the way back. Device-level transitions (PowerActionNone) leave it.
+void InteropAdapterPower(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action)
+{
+    BC250_INTEROP_STATE* s = &Device->Interop;
+    unsigned int event;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    if (State == PowerDeviceD0) event = BC250_INTEROP_EVENT_UP;
+    else if (bc250_interop_system_action((unsigned int)Action)) event = BC250_INTEROP_EVENT_ADAPTER_DOWN;
+    else return;
+    InteropLock(s);
+    if (event == BC250_INTEROP_EVENT_UP && !s->Session.down) { InteropUnlock(s); return; }
+    GuardLog("interop: adapter to D%d for action %d (users %lu, marked %d)", (int)State - 1, (int)Action,
+             s->Session.users, s->Session.marked);
+    InteropEvent(s, event, "adapter back in D0");
     InteropUnlock(s);
 }
 

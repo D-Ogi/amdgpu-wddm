@@ -65,3 +65,43 @@ struct bc250_interop_decision {
 
 void bc250_interop_decide(const struct bc250_interop_inputs* in, struct bc250_interop_decision* out);
 const char* bc250_interop_reason_name(unsigned int reason);
+
+// The session marker's life within one start (BD-059). interop.c feeds every event in, under its lock, and
+// carries out the answer: write the marker (mark), or delete it with InteropLastEnd = unmark. It sets marked
+// itself, after the registry write or delete succeeded, so that a failed one is retried by the next event.
+//
+// A system power transition ends the session: at a clean restart DWM's devices are never destroyed and dxgkrnl
+// does not stop the adapter, so the marker goes at the transition's start, while the registry is still up
+// (\Callback\PowerState PO_CB_SYSTEM_STATE_LOCK, then the adapter's D3 for the system action), and no event marks
+// again until the system is back in S0. A machine that dies with the path in use dies before any of these, so
+// its marker stays.
+enum bc250_interop_event {
+    BC250_INTEROP_EVENT_BEGIN = 1,          // the first interop Blt present of a DDI device: one more user
+    BC250_INTEROP_EVENT_END = 2,            // DestroyDevice of a counted device: one user less
+    BC250_INTEROP_EVENT_STOP = 3,           // the device stops: no user is left
+    BC250_INTEROP_EVENT_SYSTEM_DOWN = 4,    // \Callback\PowerState: a system sleep or shutdown is imminent
+    BC250_INTEROP_EVENT_ADAPTER_DOWN = 5,   // DxgkDdiSetPowerState: the adapter goes to D1-D3 for a system action
+    BC250_INTEROP_EVENT_UP = 6              // the system (callback) or the adapter (D0) is back
+};
+
+// InteropLastEnd: how a session ended. bc250kmd_escape.h's BC250_INTEROP_END_* carry the same values.
+#define BC250_INTEROP_SESSION_END_NONE 0u
+#define BC250_INTEROP_SESSION_END_STOP 1u           // the device stopped
+#define BC250_INTEROP_SESSION_END_USERS 2u          // the last counted device was destroyed (DWM exit)
+#define BC250_INTEROP_SESSION_END_SYSTEM_POWER 3u   // a system sleep or shutdown began (the power callback)
+#define BC250_INTEROP_SESSION_END_ADAPTER_D3 4u     // the adapter went down for a system action
+
+struct bc250_interop_session {
+    unsigned int users;                     // counted devices alive
+    int marked;                             // InteropSession is on disk for this start (set by the caller)
+    int down;                               // a system power transition began and has not come back: no mark
+};
+
+struct bc250_interop_step {
+    int mark;                               // write the volatile record, then InteropSession
+    unsigned int unmark;                    // delete InteropSession, InteropLastEnd = this; 0 = nothing
+};
+
+void bc250_interop_session_step(struct bc250_interop_session* s, unsigned int event, struct bc250_interop_step* out);
+// A system action of DxgkDdiSetPowerState (POWER_ACTION values): sleep, hibernate, shutdown, reset, off.
+int bc250_interop_system_action(unsigned int action);

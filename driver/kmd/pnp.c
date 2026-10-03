@@ -33,6 +33,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
     DpmStop(device);        // idempotent, like the detector: its thread runs this image's code
     StartHealthRemove(device);
+    InteropRemove(device);  // the power callback must not find the device once its memory goes
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
     ExFreePoolWithTag(device, BC250_TAG);
@@ -345,13 +346,21 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
                             _In_ DEVICE_POWER_STATE DevicePowerState, _In_ POWER_ACTION ActionType)
 {
     BC250_DEVICE* device=(BC250_DEVICE*)MiniportDeviceContext;
+    // BD-059: down for a system sleep or shutdown ends the GPU DWM session while the registry is still up (registry
+    // only, before any hardware step); the way back to D0 marks it again if devices still use the path.
+    if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0)
+        InteropAdapterPower(device,DevicePowerState,ActionType);
     if (DeviceUid==DISPLAY_ADAPTER_HW_ID && device->FullWddm && device->Started) {
         NTSTATUS status;
         // The hang detector judges a started device in D0 only. A failed transition down leaves it paused:
         // silence is the safe side of a diagnostic that bugchecks.
         if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); DpmPause(device); }
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
-        if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) { DpmResume(device); HangDetectorResume(); }
+        if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
+            DpmResume(device);
+            HangDetectorResume();
+            InteropAdapterPower(device,DevicePowerState,ActionType);
+        }
         return status;
     }
     // Display-only/initial PnP handling retains its existing ownership boundary.
@@ -366,5 +375,6 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
 void Bc250Unload(void)
 {
     HangDetectorStop();     // its thread and DPC run this image's code: joined before the image goes
+    InteropDriverUnload();  // likewise the power callback
     GuardCleanup();
 }

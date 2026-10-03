@@ -43,8 +43,9 @@
 
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 160);
 C_ASSERT(BC250_DPM_THROTTLE_COUNT == 8);
-C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 120);
-C_ASSERT(BC250_DPM_TUNE_COUNT == 7);
+C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 152);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_SIZE);
+C_ASSERT(BC250_DPM_TUNE_COUNT == 8);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 
@@ -75,10 +76,16 @@ void DpmInitialize(BC250_DEVICE* Device)
 
 // ---- runtime tuning (0.7.185, BC250_ESCAPE_RUN_DPM_TUNE) ----------------------------------------------------------
 
+static BOOLEAN ThermalEqual(const struct bc250_dpm_tune* A, const struct bc250_dpm_tune* B)
+{
+    return A->hot_step_ms == B->hot_step_ms && A->soft_delta_mc == B->soft_delta_mc && A->soft_step_ms == B->soft_step_ms;
+}
+
 static BOOLEAN TuneEqual(const struct bc250_dpm_tune* A, const struct bc250_dpm_tune* B)
 {
     return A->up_permille == B->up_permille && A->target_permille == B->target_permille &&
-           A->down_permille == B->down_permille && A->down_hold_ms == B->down_hold_ms && A->floor_level == B->floor_level;
+           A->down_permille == B->down_permille && A->down_hold_ms == B->down_hold_ms && A->floor_level == B->floor_level &&
+           ThermalEqual(A, B);
 }
 
 // The floor as the escape and the log give it: the clock, 0 for none (level 0 is the table's own floor).
@@ -95,14 +102,22 @@ static void DpmLogTuneChange(const char* What, const struct bc250_dpm_tune* Old,
              "serial %lu", What, Old->up_permille, New->up_permille, Old->target_permille, New->target_permille,
              Old->down_permille, New->down_permille, Old->down_hold_ms, New->down_hold_ms, TuneFloorMHz(Old),
              TuneFloorMHz(New), Serial);
+    // The thermal timing (0.7.197) on a line of its own, only when it changed: the line above keeps its 0.7.185 shape.
+    if (!ThermalEqual(Old, New))
+        GuardLog("dpm: tune (%s): hot step %lu->%lu ms, soft release delta %lu->%lu mC step %lu->%lu ms, serial %lu",
+                 What, Old->hot_step_ms, New->hot_step_ms, Old->soft_delta_mc, New->soft_delta_mc, Old->soft_step_ms,
+                 New->soft_step_ms, Serial);
 }
 
 // The governor's own values (Gov.tune) next to the telemetry, while they are not the defaults, and in the summary.
-static void DpmLogTune(const char* What, const struct bc250_dpm_tune* T, ULONG Serial, ULONG Applied, ULONG FloorTicks)
+static void DpmLogTune(const char* What, const struct bc250_dpm_tune* T, ULONG Serial, ULONG Applied, ULONG FloorTicks,
+                       ULONG SoftReleases)
 {
     GuardLog("dpm: %s up %lu target %lu down %lu permille, hold %lu ms, floor %lu MHz, serial %lu applied %lu, "
              "floor ticks %lu", What, T->up_permille, T->target_permille, T->down_permille, T->down_hold_ms,
              TuneFloorMHz(T), Serial, Applied, FloorTicks);
+    GuardLog("dpm: %s thermal: hot step %lu ms, soft release delta %lu mC step %lu ms, soft raises %lu", What,
+             T->hot_step_ms, T->soft_delta_mc, T->soft_step_ms, SoftReleases);
 }
 
 // The thread, at the start of a governing tick: the escape's values, copied under SnapLock, at most once per change.
@@ -230,6 +245,7 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.Generation = S->Generation;
     snap.TuneApplied = S->TuneTaken;
     snap.FloorTicks = g->floor_ticks;
+    snap.SoftReleases = g->soft_releases;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
@@ -486,7 +502,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
         bc250_dpm_tune_default(&defaults);
         if (!TuneEqual(&S->Gov.tune, &defaults) || serial != S->TuneTaken)
-            DpmLogTune("tune", &S->Gov.tune, serial, S->TuneTaken, S->Gov.floor_ticks);
+            DpmLogTune("tune", &S->Gov.tune, serial, S->TuneTaken, S->Gov.floor_ticks, S->Gov.soft_releases);
     }
 }
 
@@ -748,7 +764,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
-    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks);
+    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases);
 }
 
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.
@@ -848,28 +864,41 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULO
 // - No hardware: no register, no SMU message, nothing a power transition turns off. A new floor reaches the SMU only
 //   through the thread's next tick and its checked transaction (SmuSetPoint); a paused governor (DpmPause, D3) takes
 //   nothing until DpmResume, and DpmStop joins the thread before the owner stops. PASSIVE_LEVEL (the KMUTEX wait).
-void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN Admin, ULONG EscapeFlags)
+// - Size (0.7.197): display.c admits sizeof (ABI 2) and BC250_DPM_TUNE_ABI1_SIZE only. With the ABI 1 size nothing
+//   past that prefix is read or written (abi2 below guards every ABI 2 field); a size that is not its AbiVersion's is
+//   refused before anything else.
+void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
     D3DDDI_ESCAPEFLAGS expectedFlags = {0};
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     // The inputs, read once; the same fields carry the outputs.
+    const ULONG abi = Data->AbiVersion;
+    const BOOLEAN abi2 = abi == BC250_DPM_TUNE_ABI && Size == sizeof(BC250_ESCAPE_DPM_TUNE);
+    const BOOLEAN abi1 = abi == BC250_DPM_TUNE_ABI_1 && Size == BC250_DPM_TUNE_ABI1_SIZE;
     const ULONG op = Data->Op;
     const BOOLEAN write = op != BC250_DPM_TUNE_OP_READ;
     const ULONG floorMHz = Data->FloorMHz;
     const ULONGLONG expected = Data->ExpectedGeneration;
-    struct bc250_dpm_tune request, old, defaults;
+    struct bc250_dpm_tune request, old, defaults, input;
     enum bc250_dpm_tune_error error = BC250_DPM_TUNE_OK;
     ULONG serial = 0, applied, flags;
     ULONGLONG floorTicks;
     KIRQL irql;
     int floorLevel = floorMHz == 0 ? (int)BC250_DPM_FLOOR_LEVEL : bc250_dpm_level_of(floorMHz);
+    BOOLEAN inputClean = !Data->Reserved[0] && !Data->Reserved[1];
 
-    request.up_permille = Data->UpPermille;
-    request.target_permille = Data->TargetPermille;
-    request.down_permille = Data->DownPermille;
-    request.down_hold_ms = Data->DownHoldMs;
-    request.floor_level = BC250_DPM_FLOOR_LEVEL;
+    RtlZeroMemory(&input, sizeof(input));
+    input.up_permille = Data->UpPermille;
+    input.target_permille = Data->TargetPermille;
+    input.down_permille = Data->DownPermille;
+    input.down_hold_ms = Data->DownHoldMs;
+    if (abi2) {
+        input.hot_step_ms = Data->HotStepMs;
+        input.soft_delta_mc = Data->SoftReleaseDeltaMc;
+        input.soft_step_ms = Data->SoftReleaseStepMs;
+        inputClean = inputClean && !Data->Reserved2[0] && !Data->Reserved2[1];
+    }
     expectedFlags.NoAdapterSynchronization = 1;
     Data->Version = BC250_KMD_VERSION;
     Data->Status = BC250_ESCAPE_STATUS_REFUSED;
@@ -879,8 +908,12 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN A
     Data->DefaultUpPermille = Data->DefaultTargetPermille = Data->DefaultDownPermille = Data->DefaultDownHoldMs = 0;
     Data->Serial = Data->Applied = 0;
     Data->FloorTicks = Data->Generation = 0;
-    if (Data->AbiVersion != BC250_DPM_TUNE_ABI || Data->Reserved[0] || Data->Reserved[1] ||
-        op > BC250_DPM_TUNE_OP_RESET || EscapeFlags != expectedFlags.Value) return;
+    if (abi2) {
+        Data->HotStepMs = Data->SoftReleaseDeltaMc = Data->SoftReleaseStepMs = 0;
+        Data->DefaultHotStepMs = Data->DefaultSoftReleaseDeltaMc = Data->DefaultSoftReleaseStepMs = 0;
+    }
+    if (!(abi1 || abi2) || !inputClean || op > (abi2 ? BC250_DPM_TUNE_OP_THERMAL : BC250_DPM_TUNE_OP_RESET) ||
+        EscapeFlags != expectedFlags.Value) return;
     if (write && !Admin) {
         Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
         Data->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
@@ -901,12 +934,21 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN A
         else if (op != BC250_DPM_TUNE_OP_RESET &&
                  (!s->Created || s->Decision.mode != BC250_DPM_MODE_DPM || s->GaveUp)) status = STATUS_INVALID_DEVICE_STATE;
         else {
-            // Each operation changes its own part and keeps the rest as stored.
-            if (op == BC250_DPM_TUNE_OP_THRESHOLDS) request.floor_level = old.floor_level;
-            else if (op == BC250_DPM_TUNE_OP_FLOOR) {
-                request = old;
+            // Each operation changes its own part and keeps the rest as stored (an ABI 1 THRESHOLDS keeps the thermal
+            // timing an ABI 2 caller set).
+            request = old;
+            if (op == BC250_DPM_TUNE_OP_THRESHOLDS) {
+                request.up_permille = input.up_permille;
+                request.target_permille = input.target_permille;
+                request.down_permille = input.down_permille;
+                request.down_hold_ms = input.down_hold_ms;
+            } else if (op == BC250_DPM_TUNE_OP_FLOOR) {
                 if (floorLevel < 0) error = BC250_DPM_TUNE_FLOOR;       // not a clock of the table
                 else request.floor_level = (unsigned int)floorLevel;
+            } else if (op == BC250_DPM_TUNE_OP_THERMAL) {
+                request.hot_step_ms = input.hot_step_ms;
+                request.soft_delta_mc = input.soft_delta_mc;
+                request.soft_step_ms = input.soft_step_ms;
             } else request = defaults;
             if (error == BC250_DPM_TUNE_OK) error = bc250_dpm_tune_check(&request, s->Decision.max_level);
             if (error != BC250_DPM_TUNE_OK) status = STATUS_INVALID_PARAMETER;
@@ -916,7 +958,8 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN A
                 serial = ++s->TuneSerial;
                 KeReleaseSpinLock(&s->SnapLock, irql);
                 DpmLogTuneChange(op == BC250_DPM_TUNE_OP_THRESHOLDS ? "thresholds" :
-                                 op == BC250_DPM_TUNE_OP_FLOOR ? "floor" : "reset", &old, &request, serial);
+                                 op == BC250_DPM_TUNE_OP_FLOOR ? "floor" :
+                                 op == BC250_DPM_TUNE_OP_THERMAL ? "thermal" : "reset", &old, &request, serial);
             }
         }
         if (!NT_SUCCESS(status))
@@ -940,7 +983,16 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN A
                    request.down_permille != defaults.down_permille || request.down_hold_ms != defaults.down_hold_ms
                    ? BC250_DPM_TUNE_FLAG_THRESHOLDS : 0) |
                   (request.floor_level != BC250_DPM_FLOOR_LEVEL ? BC250_DPM_TUNE_FLAG_FLOOR : 0) |
-                  (applied == serial ? BC250_DPM_TUNE_FLAG_APPLIED : 0);
+                  (applied == serial ? BC250_DPM_TUNE_FLAG_APPLIED : 0) |
+                  (abi2 && !ThermalEqual(&request, &defaults) ? BC250_DPM_TUNE_FLAG_THERMAL : 0);
+    if (abi2) {
+        Data->HotStepMs = request.hot_step_ms;
+        Data->SoftReleaseDeltaMc = request.soft_delta_mc;
+        Data->SoftReleaseStepMs = request.soft_step_ms;
+        Data->DefaultHotStepMs = defaults.hot_step_ms;
+        Data->DefaultSoftReleaseDeltaMc = defaults.soft_delta_mc;
+        Data->DefaultSoftReleaseStepMs = defaults.soft_step_ms;
+    }
     Data->UpPermille = request.up_permille;
     Data->TargetPermille = request.target_permille;
     Data->DownPermille = request.down_permille;

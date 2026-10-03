@@ -26,8 +26,21 @@ bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore
                                                   one gated flip on HUBP0/OTG0 (ADR 0011 point 3 step 2)
 bc250kmd_cli sdmacopy [bytes]                     SDMA copy/fill positive control, read back and compared by the CPU (ADR 0013)
 bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0), assembled from several read-only bands into a BMP
+bc250kmd_cli sdmaib [bytes]                       VMID0 indirect SDMA copy/fill control
+bc250kmd_cli clock read | clock set <MHz> <mV>    one KMD clock sample, or the complete clock policy with readback
+bc250kmd_cli log [from] | log summary [from]      the driver's log ring; plain reads go without adapter synchronization (0.7.184)
 bc250kmd_cli telemetry [count [interval ms]]      DPM snapshot and segment statistics: what the monitor's GPU line shows
 bc250kmd_cli vram [hardware-id]                   dxgkrnl's segment statistics of any adapter, one line per segment
+bc250kmd_cli dpm [count [interval ms]]            the KMD DPM governor's state, with the thresholds and floor in force (docs/design/dpm.md)
+bc250kmd_cli dpm tune <up> <target> <down> [hold_ms] | dpm tune reset
+                                                  governor thresholds (permille) at run time, elevated, not persisted (0.7.185)
+bc250kmd_cli dpm tune thermal <hot_ms> <soft_mC|off> <soft_ms>
+                                                  the thermal cap's hot step and soft release below 87 C (0.7.197, ABI 2)
+bc250kmd_cli dpm floor <MHz|off>                  a runtime clock floor; thermal, critical and max-setting limits still win
+bc250kmd_cli dpm confirm                          clears a pending DPM start (elevated)
+bc250kmd_cli interop                              the GPU DWM interop switches this start runs with, and why
+bc250kmd_cli journal [from]                       the paging journal (docs/design/paging-journal.md)
+bc250kmd_cli journal follow SECONDS [MS]          one process, one held adapter, new records every MS (default 1000)
 ```
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage
@@ -144,9 +157,9 @@ Two more `bc250control.dll` exports feed the monitor's GPU telemetry line (`tool
 - `Bc250Dpm(BC250_ESCAPE_DPM*, 160)`: the DPM governor's published snapshot, `BC250_ESCAPE_RUN_DPM` op READ
   (KMD 0.7.175 and later), with `NoAdapterSynchronization` as the KMD requires and open to non-admin callers.
   A KMD without the command answers `STATUS_DEVICE_NOT_READY` or leaves the status unknown
-  (`STATUS_NOT_SUPPORTED` here). While `driver/kmd/bc250kmd_escape.h` in this tree predates the escape, the
-  structure is a guarded copy of KMD 0.7.177's; `tools/win/bc250mon/test_telemetry.py` checks it against that
-  header.
+  (`STATUS_NOT_SUPPORTED` here). The structure comes from `driver/kmd/bc250kmd_escape.h`; a guarded copy of KMD
+  0.7.177's stays in the source for a header that predates the escape, and `tools/win/bc250mon/test_telemetry.py`
+  checks it against the header.
 - `Bc250VideoMemory(hardware-id or NULL, BC250_VIDEO_MEMORY*, 264)`: `D3DKMTQueryStatistics` per segment of
   the adapter (default the BC-250), summed into memory and aperture segments, with the adapter's
   `KMTQAITYPE_GETSEGMENTSIZE` dedicated size. Limits saturate: an aperture may report a commit limit of 2^64-1
