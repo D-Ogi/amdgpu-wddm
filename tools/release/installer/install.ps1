@@ -469,6 +469,10 @@ Invoke-Change "copy the installer's own scripts to $InstallRoot\installer (unins
     Copy-TreeSafe -Source $here -Destination (Join-Path $InstallRoot 'installer')
     foreach ($f in 'manifest.json', 'uninstall.cmd', 'verify.cmd') { [void](Copy-FileSafe -Source (Join-Path $package $f) -Destination (Join-Path $InstallRoot $f)) }
 } | Out-Null
+Invoke-Change "copy licenses\ and THIRD-PARTY.md -> $InstallRoot\licenses (the licence texts of every installed component)" {
+    Copy-TreeSafe -Source (Join-Path $package 'licenses') -Destination (Join-Path $InstallRoot 'licenses')
+    [void](Copy-FileSafe -Source (Join-Path $package 'THIRD-PARTY.md') -Destination (Join-Path $InstallRoot 'licenses\THIRD-PARTY.md'))
+} | Out-Null
 # Facts about the computer before the install are recorded once and saved before the step that changes them.
 $stub = Join-Path $env:windir 'System32\bc250umd.dll'
 [void](Set-StateValueOnce $state 'stub_existed' (Test-Path -LiteralPath $stub))

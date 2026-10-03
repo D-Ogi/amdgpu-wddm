@@ -68,6 +68,7 @@ Check ($r.text -match 'would: pnputil /add-driver') 'phase 2 shows the driver in
 Check ($r.text -match 'would: set \d+ DWORD values in .*DpmMode=1 DpmMaxMHz=1500') 'phase 2 shows DPM on, 1500 MHz'
 Check ($r.text -match "would: scheduled task 'amdgpu-wddm start confirm'") 'phase 2 shows the start-confirm task'
 Check ($r.text -match 'would: copy payload\\control') 'phase 2 installs the control application'
+Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\licenses') 'phase 2 installs the licence texts'
 Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
 Check ($r.text -match 'DesktopRouter: CpuUmdPath, DwmForceCpu 1') 'desktop on the CPU route (BD-058)'
 Check ($r.text -match 'Dry run complete') 'walk-through completes'
