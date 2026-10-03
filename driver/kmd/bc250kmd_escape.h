@@ -39,6 +39,9 @@
                                             // last cap change, not at every crossing of 87 C, and RUN_DPM_TUNE
                                             // ABI 2 (152 bytes, ABI 1 still taken) sets the hot step and an
                                             // optional soft release below 87 C at run time (BD-055).
+                                            // CalibrateGpuClock answers the SMUIO TSC at 100 MHz
+                                            // (the clock of the GPU's own timestamps) instead of
+                                            // the QPC at 10 MHz (BD-056).
                                             // 196: a held UMD or Present submission waits on the gfx
                                             // retirement event instead of sleeping 1 ms at a time, and the
                                             // guard log reports the held time in microseconds from QPC with
