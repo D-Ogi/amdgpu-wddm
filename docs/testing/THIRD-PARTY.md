@@ -18,7 +18,7 @@ and NOTICE in the package root).
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `driver/umd/dxvk` |
 | `tools\bc250kmd_cli.exe` | amdgpu-wddm `53bdebbe478a206cc787328b9edb624f9cf6ae8d` |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
-| `control\amdgpu_wddm_control.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `630466cc7977f25e66fd02a7f8586b86268491d1` (branch `release/control-app-v0`) |
+| `control\amdgpu_wddm_control.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `867a13588213c01df2893c61d44e1d3a7b4103bd` (branch `release/control-app-v0`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 
 ## Third-party code in the package

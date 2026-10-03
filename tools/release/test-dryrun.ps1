@@ -108,6 +108,8 @@ $pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'pnputil /
 Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$infParameterNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
 Check ($r.text -match 'driver settings before the driver package: \d+ of \d+ values present') 'the walk-through takes the snapshot before pnputil'
 Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
+$common = [IO.File]::ReadAllText((Join-Path $Package 'installer\common.ps1'))
+Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-1-5-32-545:\(OI\)\(CI\)RX") -and ($common -match "'/reset', '/T'") -and ($common -match 'function Set-StateDirAccess \{\s+if \(\$script:DryRunMode\) \{ return \}')) 'the state folder (logs, verify results) gets administrators/SYSTEM full and users read, children reset; not in a dry run'
 Check ([string]$m.kmd_abi -eq '0x000700C6' -or [version]($m.kmd_build) -lt [version]'0.7.198.0') "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 'file replacement and re-run (test-filesafe.ps1 under 5.1, inside a scratch folder)'

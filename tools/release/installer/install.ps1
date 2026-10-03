@@ -58,6 +58,7 @@ if ($FirmwareDir) {
 if (-not $DryRun -and -not (Test-IsAdmin)) { Invoke-SelfElevation -ScriptPath $MyInvocation.MyCommand.Path -Bound $PSBoundParameters }
 if (-not $DryRun) {
     [void][IO.Directory]::CreateDirectory($script:StateDir)
+    Set-StateDirAccess
     $script:LogPath = Join-Path $script:StateDir ('install-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.log')
 }
 

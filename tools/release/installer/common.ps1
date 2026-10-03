@@ -109,6 +109,19 @@ function Read-InstallState {
     if (-not (Test-Path -LiteralPath $script:StatePath)) { return $null }
     return (Get-Content -LiteralPath $script:StatePath -Raw | ConvertFrom-Json)
 }
+# The state folder holds the logs and verify results that testers attach to bug reports: administrators and SYSTEM
+# full control, users read, the same for everything inside it (existing files included), so a tester can read and
+# attach them without elevation whatever the folder held before.
+function Set-StateDirAccess {
+    if ($script:DryRunMode) { return }
+    try {
+        $n = Invoke-Native icacls.exe @($script:StateDir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX', '/Q')
+        if ($n.code -ne 0) { Write-Warn2 "icacls $($script:StateDir): $($n.text)"; return }
+        if (-not @(Get-ChildItem -LiteralPath $script:StateDir -Force -ErrorAction SilentlyContinue).Count) { return }
+        $n = Invoke-Native icacls.exe @((Join-Path $script:StateDir '*'), '/reset', '/T', '/C', '/Q')
+        if ($n.code -ne 0) { Write-Warn2 "icacls /reset under $($script:StateDir): $($n.text)" }
+    } catch { Write-Warn2 "state folder access not set: $($_.Exception.Message)" }
+}
 function Save-InstallState($State) {
     if ($script:DryRunMode) { return }
     [void][IO.Directory]::CreateDirectory($script:StateDir)
