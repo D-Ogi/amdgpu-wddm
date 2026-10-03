@@ -20,6 +20,7 @@ namespace AmdgpuWddmControl
     public sealed class InventoryState
     {
         public bool AdapterFound, DevicePresent;
+        public string ReleaseVersion = "", ReleaseDir = "";
         public string DeviceService = "";
         public uint DeviceProblem;
         public string AdapterName = "", DriverVersion = "", DriverDate = "", Provider = "", InfPath = "";
@@ -39,6 +40,12 @@ namespace AmdgpuWddmControl
             try { ReadService(s); } catch (Exception e) { s.Notes.Add("service key: " + e.Message); }
             try { ReadVulkan(s); } catch (Exception e) { s.Notes.Add("Vulkan drivers: " + e.Message); }
             try { ReadDevice(s); } catch (Exception e) { s.Notes.Add("device status: " + e.Message); }
+            try
+            {
+                using (var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\amdgpu-wddm\Release"))
+                    if (k != null) { s.ReleaseVersion = Convert.ToString(k.GetValue("Version") ?? ""); s.ReleaseDir = Convert.ToString(k.GetValue("InstallDir") ?? ""); }
+            }
+            catch (Exception e) { s.Notes.Add("release key: " + e.Message); }
             foreach (var c in s.Components) Describe(c, hashes);
             return s;
         }
@@ -198,6 +205,7 @@ namespace AmdgpuWddmControl
         {
             var w = new System.Text.StringBuilder();
             w.AppendLine("device present: " + s.DevicePresent + (s.DevicePresent ? ", service " + s.DeviceService + ", " + DeviceProblemText(s.DeviceProblem) : ""));
+            w.AppendLine("release: " + s.ReleaseVersion + " in " + s.ReleaseDir);
             w.AppendLine("adapter found: " + s.AdapterFound);
             w.AppendLine("adapter name: " + s.AdapterName);
             w.AppendLine("driver version (INF): " + s.DriverVersion);

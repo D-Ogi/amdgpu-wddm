@@ -171,7 +171,7 @@ namespace AmdgpuWddmControl
             var p = Page("Overview", "Overview", "The driver and the GPU now. Values update every 2 seconds.");
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(1000, 0) };
             _driver = new Card("Driver");
-            foreach (var k in new[] { "Status", "GPU", "Kernel driver", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition" }) _driver.Row(k);
+            foreach (var k in new[] { "Status", "Release", "GPU", "Kernel driver", "Start check", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition" }) _driver.Row(k);
             _gpu = new Card("GPU now");
             foreach (var k in new[] { "Clock", "Voltage", "Temperature", "Load", "Clock control", "Clock ceiling", "Limited by" }) _gpu.Row(k);
             row.Controls.Add(_driver); row.Controls.Add(_gpu);
@@ -225,6 +225,7 @@ namespace AmdgpuWddmControl
                 present ? (Color?)null : Theme.Warn);
             _driver.Set("Driver package", inv.DriverVersion);
             _driver.Set("Driver date", inv.DriverDate);
+            _driver.Set("Release", inv.ReleaseVersion.Length > 0 ? inv.ReleaseVersion : "not installed by the release installer");
             _driver.Set("Test signing", ts == null ? "unknown" : ts.Value ? "On" : "Off (test-signed drivers do not load)", ts == false ? (Color?)Theme.Warn : null);
             if (dpm.Value == null)
             {
@@ -233,7 +234,7 @@ namespace AmdgpuWddmControl
                 _driver.Set("Kernel driver", !missing ? "-" : !inv.DevicePresent ? "not loaded" :
                     "not loaded; device uses \"" + inv.DeviceService + "\", " + Inventory.DeviceProblemText(inv.DeviceProblem), Theme.Warn);
                 foreach (var k in new[] { "Clock", "Voltage", "Temperature", "Load", "Clock control", "Clock ceiling", "Limited by" }) _gpu.Set(k, "-");
-                foreach (var k in new[] { "Video memory", "Desktop composition" }) _driver.Set(k, "-");
+                foreach (var k in new[] { "Video memory", "Desktop composition", "Start check" }) _driver.Set(k, "-");
                 _perfNow.Set("Running mode", dpm.Error, Theme.Warn);
                 foreach (var k in new[] { "Ceiling", "Clock", "Temperature", "Limited by", "Start decision" }) _perfNow.Set(k, "-");
                 SetStatus(missing ? "Driver not found" : dpm.Error);
@@ -242,6 +243,12 @@ namespace AmdgpuWddmControl
             var d = dpm.Value;
             _driver.Set("Status", "Running", Theme.Good);
             _driver.Set("Kernel driver", KmdReply.VersionText(d.Version));
+            // The release's logon task confirms a healthy start; three unconfirmed starts in a row put the GPU on
+            // Microsoft Basic Display (the KMD's boot-loop guard).
+            var health = Kmd.StartHealth();
+            bool confirmed = health.Value != null && (health.Value.Flags & StartHealthState.Confirmed) != 0;
+            _driver.Set("Start check", health.Value == null ? health.Error : confirmed ? "Confirmed for this start" :
+                "Not confirmed yet (confirmed automatically about a minute after logon)", confirmed ? Theme.Good : Theme.Warn);
             var vram = Kmd.VideoMemory();
             _driver.Set("Video memory", vram.Value == null ? vram.Error :
                 KmdReply.Bytes(vram.Value.LocalResident) + " used of " + KmdReply.Bytes(vram.Value.Dedicated != 0 ? vram.Value.Dedicated : vram.Value.LocalLimit));

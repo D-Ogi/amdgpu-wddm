@@ -236,18 +236,35 @@ namespace AmdgpuWddmControl
             finally { try { File.Delete(temp); } catch (Exception) { } }
         }
 
+        // A tool next to this program, else in the release's tools directory (HKLM\SOFTWARE\amdgpu-wddm\Release InstallDir).
+        static string FindTool(string name)
+        {
+            var local = Path.Combine(Program.AppDirectory, name);
+            if (File.Exists(local)) return local;
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\amdgpu-wddm\Release"))
+                {
+                    var dir = k == null ? null : k.GetValue("InstallDir") as string;
+                    if (!string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, "tools", name))) return Path.Combine(dir, "tools", name);
+                }
+            }
+            catch (Exception) { }
+            return null;
+        }
+
         static string D3d12Caps()
         {
-            var tool = Path.Combine(Program.AppDirectory, "amdgpu_wddm_d3d12caps.exe");
-            if (!File.Exists(tool)) return "{\"error\": \"amdgpu_wddm_d3d12caps.exe is not installed next to the control application\"}";
+            var tool = FindTool("amdgpu_wddm_d3d12caps.exe");
+            if (tool == null) return "{\"error\": \"amdgpu_wddm_d3d12caps.exe was not found next to the control application or in the release's tools directory\"}";
             try { int code; return Run(tool, "0", 60000, out code); }
             catch (Exception e) { return "{\"error\": \"" + e.Message.Replace("\"", "'") + "\"}"; }
         }
 
         static string VulkanSummary()
         {
-            foreach (var candidate in new[] { Path.Combine(Program.AppDirectory, "vulkaninfo.exe"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "vulkaninfo.exe") })
-                if (File.Exists(candidate))
+            foreach (var candidate in new[] { FindTool("vulkaninfo.exe"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "vulkaninfo.exe") })
+                if (candidate != null && File.Exists(candidate))
                 {
                     try { int code; return Run(candidate, "--summary", 60000, out code); }
                     catch (Exception e) { return "vulkaninfo failed: " + e.Message; }
