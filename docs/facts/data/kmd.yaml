@@ -17,12 +17,6 @@ facts:
     date_from: "evidence-path"
     claim: "`D3DKMTEscape` with `D3DKMT_ESCAPE_DRIVERPRIVATE` **does reach `DxgkDdiEscape` of a display-only driver**: an elevated user-mode tool gets `STATUS_SUCCESS` and the driver's data back (`BC250_ESCAPE_GET_INFO`). Without an escape handler of ours the same call returns `STATUS_INVALID_PARAMETER` (Basic Display) or `STATUS_NOT_SUPPORTED` (KMDOD sample). `D3DKMTOpenAdapterFromDeviceName` accepts only interface paths of `GUID_DISPLAY_DEVICE_ARRIVAL`"
     detail: "`evidence/windows/2026-09-21-E06-run-001/kmd-after-install-080531.txt`, `evidence/windows/2026-09-21-escape-probe/`"
-  - id: M30
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "evidence-path"
-    claim: "Register writes work under Windows through our miniport, at regcalc's addresses: `SCRATCH_REG0` (`0x30100`) and `SCRATCH_REG1` (`0x30104`) took `0xCAFEDEAD` / `0x0BC25001` written through a gated escape of `bc250kmd`, an independent driver (`bc250rd`, own mapping) read the same values back, and a full GC sweep shows no other register changed. Reads through both drivers agree bit for bit. With the gates closed, or for offsets outside the generated tables, the driver refuses"
-    detail: "Experiment E07, `evidence/windows/2026-09-21-E07-run-001/`"
   - id: M34
     status: MEASURED
     date: "2026-09-21"
@@ -644,11 +638,6 @@ facts:
     date: "2026-09-23"
     claim: "E27 run002 completes first-post-reset engine bring-up, gfx IB fence control and stories260K16-token Vulkan inference on KMD0.7.56.1. Process returns0 but generated output repeats s instead of reference text. Display-only restored at02:14:05. This is a reproducible correctness failure candidate requiring operator/transfer isolation, not M9 completion."
     detail: "[GPU run002](../evidence/windows/2026-09-23-E27-m9-inference/tiny-gpu-002/README.md)"
-  - id: M154
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "E27 run003 exercises Vulkan0 on KMD0.7.56.1 and passes64 F32 CPY plus11 F32 RMS_NORM comparisons against CPU (75/75, exit0). The selector matched no matrix-multiply or softmax cases, so those remain untested. Display-only restored."
-    detail: "[GPU operator controls](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-003/README.md)"
   - id: M155
     status: MEASURED
     date: "2026-09-23"
@@ -1365,6 +1354,12 @@ facts:
     claim: "Paging context owns non-reused capture tokens and teardown cleanup"
     status_text: "MEASURED (host/source integration only)"
     evidence: "[paging-capture-owner](../evidence/windows/2026-09-23-E27-m9-inference/paging-capture-owner/): registry46checks PASS; actual extracted release64checks PASS. Context destruction joins PagingBuildLock; object/adapter cleanup drains CPU metadata outside spin lock. WDK build PASS, not deployed; builders do not attach captures yet and live concurrency/cancellation remain unverified"
+  - id: M299
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Virtual transfer DDI selects context-owned captured graphs"
+    status_text: "MEASURED (host/source integration only)"
+    evidence: "[owned-graph-route](../evidence/windows/2026-09-23-E27-m9-inference/owned-graph-route/): initial capture, opaque resume, exact publication before cursor advancement, multi-band filling and final release. System/local/mixed full/partial packet replay after VA changes passes; routing23109 checks and WDK build PASS. Not deployed; actual OS/GPU acceptance and general unequal-offset aliases remain open"
   - id: M300
     status: MEASURED
     date: "2026-09-23"
@@ -1521,6 +1516,12 @@ facts:
     claim: "Shader contents survive explicit residency cycles on07104"
     status_text: "MEASURED (unit A)"
     evidence: "[shader-eviction07104](../evidence/windows/2026-09-24-E27-m9-recovery/shader-eviction07104/RESULT.md): identicalM318probe/ICD,type3three4MiBbuffers,16baseline+16evictionrounds CPUoracle match,3cycles; stale control baselinepasses/round1fails/native1. Independent files validatorPASS. Finalgfx34/34,paging15920/15920,noTDR/timeouts/refusals,sameboot. Capture-use logs unavailable after ring wrap; reservation use unproved"
+  - id: M332
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Warm07104 recovery reaches scheduler-read as last persisted checkpoint"
+    status_text: "MEASURED (unit A)"
+    evidence: "[recovered evidence](../evidence/windows/2026-09-24-E27-m9-recovery/warm07104-recovered/RESULT.md): exact104 SYS, new boot03:06:12, healthy display-only; failed02:14:59 startup ends at CP1 scheduler-read, no scheduler-write/done. Stop reaches79 with PSP/GART completion and graphics34/34,paging25559/25559. GuardLogKeep completion versus MMIO remains unresolved; no new GPU trial"
   - id: M335
     status: CONFIRMED
     date: "2026-09-24"
@@ -1890,12 +1891,6 @@ facts:
     claim: "KMD149 native Zero/PRT: real WDK encoding controls pass; Windows supplies Valid1/Zero1. DMA_DATA tests verify initial/unmapped zero reads, alias/rebind contents and discarded hole writes (19 exact comparisons). Ordinary Vulkan8hashes/600cube pass. COPY_DATA hole control on148 still TDRs; shader/image/scalar aliases and Linux parity remain open."
     status_text: "MEASURED (unit A; host encoding controls)"
     evidence: "[native Zero/PRT](../evidence/windows/2026-09-25-E33-zero-prt/RESULT.md)"
-  - id: M485
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Mesa05 candidate17ADD01F implements canonical bit46 scalar aliases, real-zero backing and reservation-grouped paging-fence updates. Native20 exact paired comparisons and release sparse-buffer CTS21/21 pass with experimental sparse; default sparse remains off. Bit47 access TDR and two API/integration failures are preserved. Images, queued PTE relocation and Linux parity remain open."
-    status_text: "MEASURED (unit A; host controls)"
-    evidence: "[scalar aliases and buffer CTS](../evidence/windows/2026-09-25-E33-scalar-alias/RESULT.md)"
   - id: M488
     status: MEASURED
     date: "2026-09-25"
@@ -1908,12 +1903,6 @@ facts:
     claim: "KMD151 integrates virtual PTE copies and submission-time root binding. Three owned GPU remap/overlap controls pass full 4096-byte comparisons; host DDI/queue controls pass. Release sparse CTS gives 41 Pass/1 geometry skip with no new selected faults, but native-copy gate1/ranges0 means the OS DDI route was not exercised. Windows companion execution and Linux parity remain open."
     status_text: "MEASURED (unit A; host controls)"
     evidence: "[PTE hardware controls](../evidence/windows/2026-09-25-E33-virtual-pte-hardware/RESULT.md)"
-  - id: M494
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Asteroids initially fails before GPU submission:16 IBs/2012032bytes exceed the1MiB gather limit. Experimental dynamic gather16CDEA79 gets255 outer Present completions/256 successful Vulkan Present returns, then Windows bugchecks0x116;660-frame acceptance fails. Baseline ICD restored after automatic reboot. No image/performance claim or promotion; TDR cause remains open."
-    status_text: "MEASURED (unit A)"
-    evidence: "[gather and TDR](../evidence/windows/2026-09-25-E33-gather-capacity/RESULT.md)"
   - id: M508
     status: MEASURED
     date: "2026-09-26"

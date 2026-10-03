@@ -13,6 +13,12 @@ facts:
     detail: "Differs from `CYAN_SKILLFISH_GB_ADDR_CONFIG_GOLDEN = 0x00100044` in bit 20. Why is open; do not use the golden value as a positive control for this register"
     edges:
       - {"type": "refutes", "to": "S3", "scope": "partial", "auto": true, "cue_in": "S3", "cue": "(see M4 for the CU registers: MEASURED as stated; M5: the `GB_ADDR_CONFIG` part does not hold on unit A) Stock values: `CC..."}
+  - id: M7
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "git"
+    claim: "Mainline amdgpu initializes this unit without patches"
+    detail: "`modprobe amdgpu` returned 0 after 8.5 s; 12 rings; VRAM 8192M at `0xF400000000`, GTT 3834M; firmware ME 0x63, PFP 0x94, CE 0x25, RLC 0x0D, MEC 0x90, SDMA 0x34. After init `CP_ME_CNTL = 0`, `CP_MEC_CNTL = 0`, `RLC_CNTL = 1`. The only `*ERROR*` lines are display HPD / dummy IRQ noise"
   - id: M10
     status: MEASURED
     date: "2026-09-21"

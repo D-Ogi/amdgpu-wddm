@@ -26,6 +26,11 @@ facts:
     date: "2026-09-23"
     claim: "Windows llama.cpp9564 CPU control on unitA reproduces E14 stories260K and stories15M greedy text exactly after CRLF-to-LF conversion, using matching model hashes and explicit native redirection/stdinNUL. Raw file hashes differ due to line endings. GPU inference remains untested."
     detail: "[CPU harness](../evidence/windows/2026-09-23-E27-m9-inference/cpu-control/README.md)"
+  - id: M154
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "E27 run003 exercises Vulkan0 on KMD0.7.56.1 and passes64 F32 CPY plus11 F32 RMS_NORM comparisons against CPU (75/75, exit0). The selector matched no matrix-multiply or softmax cases, so those remain untested. Display-only restored."
+    detail: "[GPU operator controls](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-003/README.md)"
   - id: M160
     status: MEASURED
     date: "2026-09-23"
@@ -205,6 +210,12 @@ facts:
     evidence: "[native sparse controls](../evidence/windows/2026-09-25-E33-native-sparse/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M480", "auto": true, "cue": "Candidate255534CA release CTS matches M480 (75Pass/5NotSupported); native sparse API ordering and four bound phy..."}
+  - id: M485
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Mesa05 candidate17ADD01F implements canonical bit46 scalar aliases, real-zero backing and reservation-grouped paging-fence updates. Native20 exact paired comparisons and release sparse-buffer CTS21/21 pass with experimental sparse; default sparse remains off. Bit47 access TDR and two API/integration failures are preserved. Images, queued PTE relocation and Linux parity remain open."
+    status_text: "MEASURED (unit A; host controls)"
+    evidence: "[scalar aliases and buffer CTS](../evidence/windows/2026-09-25-E33-scalar-alias/RESULT.md)"
   - id: M486
     status: MEASURED
     date: "2026-09-25"
@@ -298,6 +309,12 @@ facts:
     claim: "Full piglit005 passes the repaired scratch case then stops1225cases at glFlush error validation (1060pass/164skip/1fail). WGL replacement-specific dispatch correction makes unchanged BeginEnd coverage and primitive-restart DISABLE_VBO pass/exit0 on Zink1DAF0B60; GPU session stable and baseline restored. Native ICD loader branch unchanged but not runtime-tested; full rerun pending."
     status_text: "MEASURED (unit A)"
     evidence: "[WGL Flush validation](../evidence/windows/2026-09-26-E33-wgl-flush/RESULT.md)"
+  - id: M514
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Unit A: full piglit006 stopped at1267 cases (1102pass/164skip/1timeout). Swapbuffers readback repeatedly reacquired CPU WSI image0 while Zink sought image1. Rotating idle-image selection fixes unchanged upstream swapbuffers-behavior in probe028 (pixel-pass/exit0), RADV B365C281 + Zink1DAF0B60, same GPU generation589506402/epoch5, baseline restored. Full profile and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[evidence](../evidence/windows/2026-09-26-E33-wsi-acquire-rotation/README.md)"
   - id: M515
     status: MEASURED
     date: "2026-09-26"
@@ -342,6 +359,12 @@ facts:
     claim: "With RADV_EXPERIMENTAL=sparse in the process environment, vkd3d-proton 472989aa over the promoted WDDM RADV ICD 93B1D1FD reports D3D12 feature level 12_1 and TiledResourcesTier 4 for the BC-250 (all other options identical to the default run, which stays at 11_1 / tier 0). The feature level therefore depends only on the port's sparse gate (radv_physical_device.c has_sparse or the experimental flag), not on the pending sparse CTS completion; correctness of sparse under load is not shown here. No swap, no rendering."
     status_text: "MEASURED (unit A)"
     evidence: "[FL with sparse flag](../evidence/windows/2026-09-27-E39-fl-sparse-flag/RESULT.md)"
+  - id: M581
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Creating the exportable monitored fence with Shared/NtSecuritySharing derived from VK_SYNC_IS_SHAREABLE (fork 59f53088; the runtime sets VK_SYNC_IS_SHARED only after the first export, so the previous flags left the object non-shareable and D3DKMTShareObjects failed unchecked) removes vkd3d-proton's d3d12_shared_fence_open_export_kmt VK_ERROR_UNKNOWN (vr -13) failures: zero in the E43 run against four in every earlier run on 93B1D1FD (E40, E41, E42), same game, same package, rendering unchanged. The Win32 external-semaphore CTS cases have not been run yet."
+    status_text: "MEASURED (unit A)"
+    evidence: "[E43](../evidence/windows/2026-09-27-E43-witcher3-dx12-present-log/RESULT.md)"
   - id: M583
     status: MEASURED
     date: "2026-09-27"
@@ -358,12 +381,6 @@ facts:
     evidence: "[ICD promotion CF3948D6](../evidence/windows/2026-09-27-E49-icd-promotion-cf3948d6/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M569", "auto": true, "cue": "...sured as a swap-in candidate in E43, E46, E47 and E48. E38 procedure: M569 keep copy 93B1D1FD accepted as rollback after a hash check, candidate..."}
-  - id: M726
-    status: MEASURED
-    date: "2026-09-28"
-    claim: "Direct-loaded packaged RADV C0CE with engine253A/testEE9C passes5.697s, exit0, exact in-process ICD hash witness; maximumFL11_1 and measured caps produce a108-byte bound configuration. CPU170 unchanged,health15,same boot/DWM,no TDR. System DDI/hosted path and M14 completion remain untested."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Exact-pair capability control002](../evidence/windows/2026-09-28-E34-m14-caps002/RESULT.md)"
   - id: M737
     status: MEASURED
     date: "2026-09-28"
@@ -388,6 +405,12 @@ facts:
     claim: "RT-fixed ICD9496 passes standalone D3D12 engine002 copy/readback and DXIL compute, each0/16384 differences; exact ICD witness. Job closed, CPU171 unchanged25.207s,67C. Non-RT regression only; RT traversal remains unmeasured."
     status_text: "MEASURED (unit A)"
     evidence: "[RT candidate regression](../evidence/windows/2026-09-28-E34-m15-engine002/RESULT.md)"
+  - id: M760
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Exact RT-fixed ICD9496 ray-query triangle flow passes1/1 with default traversal; matching nort negative returns64 values4 versus expected1 and Fail. Live candidate witness, hardware-support flag1; Job closure/CPU171 unchanged21.162s and20.363s,67C. No RT-pipeline/game or ISA witness yet."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Ray-query controls](../evidence/windows/2026-09-28-E34-m15-rt-query001/RESULT.md)"
   - id: M761
     status: MEASURED
     date: "2026-09-28"

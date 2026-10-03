@@ -6,17 +6,14 @@ Table: [`../display.md`](../display.md). Colours: status. Edge types: `supersede
 
 ## Corrections and support
 
-6 facts, 3 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+4 facts, 2 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
-  M455["M455<br/>hardware"]:::MEASURED
-  M456["M456"]:::MEASURED
-  M574["M574"]:::MEASURED
+  M574["M574<br/>d3d"]:::MEASURED
   M575["M575"]:::MEASURED
   M656["M656"]:::MEASURED
   M657["M657<br/>tooling"]:::MEASURED
-  M456 ==>|supersedes| M455
   M575 ==>|supersedes| M574
   M657 ==>|supersedes| M656
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
@@ -24,7 +21,7 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M455,M657 other
+  class M574,M657 other
 ```
 
 ## References
@@ -60,7 +57,7 @@ flowchart LR
   M411["M411"]:::MEASURED
   M430["M430"]:::CONFIRMED
   M431["M431"]:::CONFIRMED
-  M544["M544"]:::MEASURED
+  M544["M544<br/>d3d"]:::MEASURED
   M545["M545"]:::MEASURED
   M546["M546"]:::MEASURED
   M553["M553"]:::MEASURED
@@ -89,7 +86,7 @@ flowchart LR
   M720["M720"]:::MEASURED
   M723["M723"]:::MEASURED
   M724["M724"]:::MEASURED
-  M740["M740"]:::MEASURED
+  M740["M740<br/>tooling"]:::MEASURED
   M743["M743"]:::MEASURED
   M92 --> M85
   M92 --> M86
@@ -138,6 +135,6 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M20,M31,M84,M89,M92,M98,M106,M190,M410,M569,M586,M653,M697 other
+  class M20,M31,M84,M89,M92,M98,M106,M190,M410,M544,M569,M586,M653,M697,M740 other
 ```
 

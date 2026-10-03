@@ -25,7 +25,7 @@ flowchart LR
   M242["M242"]:::CONFIRMED
   M333["M333"]:::CONFIRMED
   M455["M455"]:::MEASURED
-  M456["M456<br/>display"]:::MEASURED
+  M456["M456<br/>tooling"]:::MEASURED
   S1["S1"]:::HYPOTHESIS
   S2["S2"]:::HYPOTHESIS
   S3["S3"]:::HYPOTHESIS
@@ -41,9 +41,9 @@ flowchart LR
   M242 ==>|supersedes| M241
   M333 ==>|supersedes| M35
   M44 ==>|supports| M39
-  M456 ==>|supersedes| M455
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
+  M456 ==>|supersedes| M455
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
@@ -54,7 +54,7 @@ flowchart LR
 
 ## References
 
-46 facts, 40 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+47 facts, 41 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -70,6 +70,7 @@ flowchart LR
   M24["M24"]:::MEASURED
   M25["M25"]:::MEASURED
   M28["M28"]:::MEASURED
+  M30["M30"]:::MEASURED
   M31["M31"]:::MEASURED
   M33["M33"]:::MEASURED
   M34["M34<br/>kmd"]:::MEASURED
@@ -135,6 +136,7 @@ flowchart LR
   M44 --> M39
   M59 --> M55
   M81 --> M28
+  M81 --> M30
   M95 --> M53
   M85 --> M31
   M93 --> M92

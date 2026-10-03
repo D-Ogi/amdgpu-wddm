@@ -45,12 +45,6 @@ facts:
     date_from: "git"
     claim: "State handed over by the BIOS: CP halted, RLC stopped, no page table, SMU answering"
     detail: "Before the driver: `CP_ME_CNTL = 0x15000000`, `CP_MEC_CNTL = 0x50000000`, `RLC_CNTL = 0`, `MMVM_CONTEXT0_PAGE_TABLE_BASE = 0`, `IH_RB_BASE = 0`, `CP_RB0_BASE = 0xFEDCBAEF`; `MP1_SMN_C2PMSG_90 = 1`; `MP0_SMN_C2PMSG_81 = 0x002AFC44` and `C2PMSG_64 = 0x80000000`. VRAM carve-out already programmed: `MMMC_VM_FB_LOCATION_BASE/TOP = 0xF400/0xF5FF`, `HDP_NONSURFACE_BASE = 0xF4000000`"
-  - id: M7
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "git"
-    claim: "Mainline amdgpu initializes this unit without patches"
-    detail: "`modprobe amdgpu` returned 0 after 8.5 s; 12 rings; VRAM 8192M at `0xF400000000`, GTT 3834M; firmware ME 0x63, PFP 0x94, CE 0x25, RLC 0x0D, MEC 0x90, SDMA 0x34. After init `CP_ME_CNTL = 0`, `CP_MEC_CNTL = 0`, `RLC_CNTL = 1`. The only `*ERROR*` lines are display HPD / dummy IRQ noise"
   - id: M8
     status: MEASURED
     date: "2026-09-21"
@@ -174,6 +168,12 @@ facts:
     date_from: "evidence-path"
     claim: "Our own miniport `bc250kmd` (display-only, no MMIO) owns `1002:13FE` on unit A: install without reboot, 1920x1200 on the firmware's framebuffer, breadcrumbs reach stage 61 in order, no GC register outside the noise set changes, survives disable/enable and a restart (start budget 1 -> 2 -> confirmed to 0 by `bc250mon`), rollback to Basic Display and re-install both work. Milestone M3 reached"
     detail: "Experiment E06, `evidence/windows/2026-09-21-E06-run-001/`"
+  - id: M30
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "Register writes work under Windows through our miniport, at regcalc's addresses: `SCRATCH_REG0` (`0x30100`) and `SCRATCH_REG1` (`0x30104`) took `0xCAFEDEAD` / `0x0BC25001` written through a gated escape of `bc250kmd`, an independent driver (`bc250rd`, own mapping) read the same values back, and a full GC sweep shows no other register changed. Reads through both drivers agree bit for bit. With the gates closed, or for offsets outside the generated tables, the driver refuses"
+    detail: "Experiment E07, `evidence/windows/2026-09-21-E07-run-001/`"
   - id: M31
     status: MEASURED
     date: "2026-09-21"
@@ -375,12 +375,6 @@ facts:
     claim: "Current halt witness excludes RLC progress; existing Linux reload reference is incomplete"
     status_text: "CONFIRMED (source/evidence review only)"
     evidence: "[review](../evidence/windows/2026-09-24-E27-m9-recovery/retirement-reference-review/REVIEW.md): shim RLCstop clears enable without post-write progress witness; EnginesHalted checks CP/MEC/SDMA only; PspStop uses GfxStopQuiet. E13boot8 reload has kernel messages, no register trace. No proven RLC-running state or causal failure claim"
-  - id: M332
-    status: MEASURED
-    date: "2026-09-24"
-    claim: "Warm07104 recovery reaches scheduler-read as last persisted checkpoint"
-    status_text: "MEASURED (unit A)"
-    evidence: "[recovered evidence](../evidence/windows/2026-09-24-E27-m9-recovery/warm07104-recovered/RESULT.md): exact104 SYS, new boot03:06:12, healthy display-only; failed02:14:59 startup ends at CP1 scheduler-read, no scheduler-write/done. Stop reaches79 with PSP/GART completion and graphics34/34,paging25559/25559. GuardLogKeep completion versus MMIO remains unresolved; no new GPU trial"
   - id: M333
     status: CONFIRMED
     date: "2026-09-24"

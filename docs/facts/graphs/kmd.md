@@ -73,7 +73,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   M28["M28<br/>hardware"]:::MEASURED
-  M30["M30"]:::MEASURED
+  M30["M30<br/>hardware"]:::MEASURED
   M33["M33<br/>hardware"]:::MEASURED
   M37["M37"]:::MEASURED
   M38["M38"]:::MEASURED
@@ -209,7 +209,7 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M28,M33,M39,M48,M54,M55,M78,M115 other
+  class M28,M30,M33,M39,M48,M54,M55,M78,M115 other
 ```
 
 ### Part 2

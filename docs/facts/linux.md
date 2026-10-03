@@ -2,13 +2,14 @@
 
 # Facts: Linux reference
 
-Measurements on unit A under Linux (amdgpu, Mesa) that serve as the reference for the Windows work. 23 facts (1 HYPOTHESIS, 19 MEASURED, 2 CONFIRMED, 1 REFUTED).
+Measurements on unit A under Linux (amdgpu, Mesa) that serve as the reference for the Windows work. 24 facts (1 HYPOTHESIS, 20 MEASURED, 2 CONFIRMED, 1 REFUTED).
 
 Source: [`data/linux.yaml`](data/linux.yaml). Graphs: [`graphs/linux.md`](graphs/linux.md). All areas: [`../facts.md`](../facts.md). Live facts only: [`current.md`](current.md). Links in the text are relative to `docs/` in the data and rewritten for this page.
 
 | # | Claim | Status | Detail | Evidence | Date | Links |
 |---|---|---|---|---|---|---|
 | <a id="m5"></a>M5 | `GB_ADDR_CONFIG` reads `0x00000044`, before and after amdgpu init, raw and through debugfs | MEASURED | Differs from `CYAN_SKILLFISH_GB_ADDR_CONFIG_GOLDEN = 0x00100044` in bit 20. Why is open; do not use the golden value as a positive control for this register |  | 2026-09-21 (from git) | refutes [S3](hardware.md#s3) (in part); used by [M18](hardware.md#m18) |
+| <a id="m7"></a>M7 | Mainline amdgpu initializes this unit without patches | MEASURED | `modprobe amdgpu` returned 0 after 8.5 s; 12 rings; VRAM 8192M at `0xF400000000`, GTT 3834M; firmware ME 0x63, PFP 0x94, CE 0x25, RLC 0x0D, MEC 0x90, SDMA 0x34. After init `CP_ME_CNTL = 0`, `CP_MEC_CNTL = 0`, `RLC_CNTL = 1`. The only `*ERROR*` lines are display HPD / dummy IRQ noise |  | 2026-09-21 (from git) |  |
 | <a id="m10"></a>M10 | The ASUS USB-AC58 works on the BC-250 with the stock Alpine kernel: WPA2-PSK association, DHCP, SSH | MEASURED | `wpa_state=COMPLETED`, CCMP, 2437 MHz, first configured network; SSH session from the dev PC used to collect this evidence. Observed live, not part of the evidence directory |  | 2026-09-21 (from git) | supports [S4](#s4) |
 | <a id="m12"></a>M12 | Under mainline amdgpu all 12 rings execute commands, including the KIQ | MEASURED | `evidence/linux/2026-09-21-E01-recon/mqd/*.ptrs.txt`: rptr == wptr == driver wptr on every ring (gfx `0x600`, kiq `0xE00`, 8 compute `0x200`, sdma0 `0x4C0`, sdma1 `0xF0`). MQDs of the gfx and compute queues captured as hex words in the same directory: a reference for our own queue setup. Contradicts the predecessor's "KIQ is hardwired to 0" (R3) |  | 2026-09-21 (from evidence-path) | refutes [R3](hardware.md#r3) |
 | <a id="m42"></a>M42 | `modprobe -r amdgpu` hung unit A under Linux (console unbound, the stick's QR viewer stopped, tracefs armed; kernel 6.18.52-0-lts, amdkfd active): the machine stopped answering on the network within seconds and needed the power button. Cause unknown, the trace was in RAM and is lost | MEASURED (n = 1) | E13, journal 2026-09-21. No Linux reference for amdgpu's `hw_fini` on this part exists; a second attempt would need a serial or network console for the kernel log |  | 2026-09-21 (from text) | used by [M54](hardware.md#m54) |

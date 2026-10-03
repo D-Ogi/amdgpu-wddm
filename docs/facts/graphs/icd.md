@@ -49,7 +49,7 @@ flowchart LR
   M515["M515"]:::MEASURED
   M516["M516"]:::MEASURED
   M569["M569<br/>d3d"]:::MEASURED
-  M581["M581<br/>d3d"]:::MEASURED
+  M581["M581"]:::MEASURED
   M583["M583"]:::MEASURED
   M665["M665"]:::MEASURED
   M139 --> M50
@@ -72,6 +72,6 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M46,M139,M166,M274,M413,M415,M467,M508,M509,M569,M581 other
+  class M46,M139,M166,M274,M413,M415,M467,M508,M509,M569 other
 ```
 

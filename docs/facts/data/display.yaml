@@ -225,13 +225,6 @@ facts:
     claim: "Shared startup timing makes VidPn and DescribeAllocation agree at 154000000/2568800 Hz. Five-second Direct3D11 captures change from 41 PRESENT_MODE_CHANGED errors on 142 to zero on 143. Sixteen hardware samples are unblanked; owner confirms visible desktop and then smooth input after observation stops. Host controls 205/0; old-60-Hz mutation fails three checks. Windows/DWM retained; no overall M9 acceptance."
     status_text: "MEASURED (unit A, before/after and owner feedback)"
     evidence: "[shared refresh fix](../evidence/windows/2026-09-25-E27-m9-recovery/shared-refresh143/RESULT.md)"
-  - id: M456
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Explicit user-mode confirmation now checks native RegFlushKey status in CLI and monitor source. Actual-method tests12C/4C# pass; ignored-flush mutations fail. Checked CLI succeeds on unchanged full144 at01:21:57 with budget0/policy2 and retained OS/DWM/overlay. Built monitor not deployed. Corrects M455 zero-budget persistence interpretation: RegistryKey.Flush returning normally did not expose native status; KMD admission flush proof is unaffected. Full-table auto-confirm remains open."
-    evidence: "[checked confirmation](../evidence/windows/2026-09-25-E27-m9-recovery/checked-confirmation144/RESULT.md)"
-    edges:
-      - {"type": "supersedes", "to": "M455", "scope": "partial", "auto": true, "cue_in": "M455", "cue": "...checked managed flush after controls (checked-persistence correction: M456); owner subsequently confirms correct physical image and cursor. No A..."}
   - id: M457
     status: MEASURED
     date: "2026-09-25"
@@ -243,11 +236,6 @@ facts:
     claim: "Unchanged145 passes one AC-cold startup after normal shutdown and31.477s verified relay-off interval. Continuous recorder observes pending guard1/flags7, advancing primaries, automatic60s confirmation and checked kernel flush success, then guard0/flags15. No manual initialization/PnP/DWM restart.64MiB readbacks, eight CPU shader hashes and both E14 model outputs pass; GFX2610/2610,paging6047/6047,noTDR. Owner confirms visible desktop and smooth cursor/overlay after this cold boot; no resume/recovery/soak/fullM9 claim."
     status_text: "MEASURED (unit A)"
     evidence: "[cold145](../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md), [physical feedback](../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)"
-  - id: M464
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Monitor optional LOG_SUMMARY pause validated on146: last summary sequence stays8177 across12s while cached health completed rises800->815 and UI marks counters stale. Only monitor replaced; no Windows/DWM/driver restart. Does not prove a post-S4 stutter fix."
-    evidence: "[diagnostic isolation](../evidence/windows/2026-09-25-E27-m9-recovery/monitor-summary-pause/LIVE.md)"
   - id: M466
     status: MEASURED
     date: "2026-09-25"
@@ -276,12 +264,6 @@ facts:
     claim: "Hosted ABI4 publishes GPU progress fences; run026 orders render->Present->next render through GPU wait/signal callbacks on distinct contexts.120 native Presents pass, final readback0/76800 mismatches; three composed-screen ROIs each contain46800 exact expected pixels. Direct GFX-context Present failed887a0005 in run025 and is not retained. Baselines restored, DWM1052 remains CPU; DISCARD/blit control does not prove no-copy or G0."
     status_text: "MEASURED (unit A)"
     evidence: "[Hosted native Present](../evidence/windows/2026-09-26-E34-hosted-present/RESULT.md)"
-  - id: M544
-    status: MEASURED
-    date: "2026-09-26"
-    claim: "Hosted ABI5 preserves removal HRESULTs as STATUS_DEVICE_REMOVED and reports sticky loss to Vulkan/D3D. Positive run027 passes120 Presents and76800 pixels. Injected third-submit refusal (run028) and invalid local fence observation (run029) yield application Present/GetDeviceRemovedReason887a0005 at frame2, expected exit0. Baselines restored, DWM1052 unchanged. No actual TDR or recovery/leak/no-copy certification."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Hosted device loss](../evidence/windows/2026-09-26-E34-hosted-loss/RESULT.md)"
   - id: M545
     status: MEASURED
     date: "2026-09-26"
@@ -372,12 +354,6 @@ facts:
     evidence: "[Batched draw isolation](../evidence/windows/2026-09-27-E34-batched-draws/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M567", "auto": true, "cue": "... and12288 final-image pixels per renderer, all hashes match; original M567 checks also pass. GPU work deltas23/23, live objects192 unchanged, ba..."}
-  - id: M574
-    status: MEASURED
-    date: "2026-09-27"
-    claim: "WARP086/CPU087 pass eight textured batch snapshots; hosted GPU088/089 terminate0xC0000409 before the first textured result, after eight prior graphics checks pass. Dump089 shows assertion count != 1 in pipe_reference_described via zink_batch_reference_program during Draw (FAST_FAIL_FATAL_APP_EXIT7). Baselines restored, CPU DWM5748 retained; relationship to BD-043 not established."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Textured batch failure](../evidence/windows/2026-09-27-E34-textured-batch-failure/RESULT.md)"
   - id: M575
     status: MEASURED
     date: "2026-09-27"
@@ -825,12 +801,6 @@ facts:
     evidence: "[G0 completion audit](../evidence/windows/2026-09-28-E34-g0-completion-audit/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M723", "auto": true, "cue": "Offline M723 acceptance audit rechecks8 artifact hashes and12 exact DWM module sam..."}
-  - id: M740
-    status: MEASURED
-    date: "2026-09-28"
-    claim: "Console001 SYSTEM helper launches no-GPU fixtures in active console session1; success/error/orphan/timeout cases all close their Job trees. Independent process checks pass, overall18.261s, CPU171 unchanged, task Missing. Establishes launcher control, not native window Present."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Console launcher](../evidence/windows/2026-09-28-E34-m14-console001/RESULT.md)"
   - id: M743
     status: MEASURED
     date: "2026-09-28"

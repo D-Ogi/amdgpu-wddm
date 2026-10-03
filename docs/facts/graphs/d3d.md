@@ -6,7 +6,20 @@ Table: [`../d3d.md`](../d3d.md). Colours: status. Edge types: `supersedes`, `ref
 
 ## Corrections and support
 
-None in this area.
+2 facts, 1 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+
+```mermaid
+flowchart LR
+  M574["M574"]:::MEASURED
+  M575["M575<br/>display"]:::MEASURED
+  M575 ==>|supersedes| M574
+  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
+  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
+  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
+  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
+  classDef other stroke-dasharray:4 3
+  class M575 other
+```
 
 ## References
 
@@ -15,14 +28,14 @@ None in this area.
 ```mermaid
 flowchart LR
   M496["M496"]:::MEASURED
+  M544["M544"]:::MEASURED
+  M545["M545<br/>display"]:::MEASURED
   M546["M546<br/>display"]:::MEASURED
   M563["M563"]:::MEASURED
   M565["M565<br/>kmd"]:::MEASURED
   M569["M569"]:::MEASURED
   M571["M571"]:::MEASURED
   M573["M573<br/>games"]:::MEASURED
-  M581["M581"]:::MEASURED
-  M583["M583<br/>icd"]:::MEASURED
   M585["M585<br/>display"]:::MEASURED
   M586["M586"]:::MEASURED
   M665["M665<br/>icd"]:::MEASURED
@@ -36,8 +49,8 @@ flowchart LR
   M780["M780"]:::MEASURED
   M782["M782"]:::MEASURED
   M767 --> M766
+  M545 --> M544
   M723 --> M697
-  M583 --> M581
   M665 --> M569
   M563 --> M565
   M569 --> M496
@@ -52,6 +65,6 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M546,M565,M573,M583,M585,M665,M723,M754,M765,M767 other
+  class M545,M546,M565,M573,M585,M665,M723,M754,M765,M767 other
 ```
 

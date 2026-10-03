@@ -33,12 +33,6 @@ facts:
     claim: "Captured local/system/mixed graph batches emit matching actual copy packets"
     status_text: "MEASURED (host emitter only)"
     evidence: "[retained-graph-packets](../evidence/windows/2026-09-23-E27-m9-inference/retained-graph-packets/): actual7/83DWORD packet replay preserves bytes after VA changes; capacity refusal and scratch-complete boundaries verified. Routing22817/focused304PASS; broken restore16failures. WDK PASS, not deployed or selected by DDI"
-  - id: M299
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Virtual transfer DDI selects context-owned captured graphs"
-    status_text: "MEASURED (host/source integration only)"
-    evidence: "[owned-graph-route](../evidence/windows/2026-09-23-E27-m9-inference/owned-graph-route/): initial capture, opaque resume, exact publication before cursor advancement, multi-band filling and final release. System/local/mixed full/partial packet replay after VA changes passes; routing23109 checks and WDK build PASS. Not deployed; actual OS/GPU acceptance and general unequal-offset aliases remain open"
   - id: M338
     status: MEASURED
     date: "2026-09-24"
@@ -63,6 +57,12 @@ facts:
     claim: "Explicit D3DKMT mapping COPY passes four sampled A/B readbacks and delayed-fence ordering on KMD151 without a reboot. Native-copy ranges remain zero; UPDATE_PAGE_TABLE increases. This validates the tested API behavior on the OS-selected path, not execution of the new native-copy DDI or relocation while waiting."
     status_text: "MEASURED (unit A)"
     evidence: "[mapping COPY control](../evidence/windows/2026-09-25-E33-explicit-mapping-copy/RESULT.md)"
+  - id: M494
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Asteroids initially fails before GPU submission:16 IBs/2012032bytes exceed the1MiB gather limit. Experimental dynamic gather16CDEA79 gets255 outer Present completions/256 successful Vulkan Present returns, then Windows bugchecks0x116;660-frame acceptance fails. Baseline ICD restored after automatic reboot. No image/performance claim or promotion; TDR cause remains open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[gather and TDR](../evidence/windows/2026-09-25-E33-gather-capacity/RESULT.md)"
   - id: M496
     status: MEASURED
     date: "2026-09-25"
@@ -99,12 +99,6 @@ facts:
     claim: "Zink front/back test reproduced one-image swapchain exhaustion. Win32 requests an extra image when allowed; acquisition bound uses surface minimum. Diagnostic shows2 images and pass; final1EC5E9B4 passes same upstream test, blit control and10 resize transitions with7 exact readbacks. No reset; baseline restored. Full piglit and Linux parity pending."
     status_text: "MEASURED (unit A)"
     evidence: "[Zink front/back fix](../evidence/windows/2026-09-26-E33-zink-front-back/RESULT.md)"
-  - id: M514
-    status: MEASURED
-    date: "2026-09-26"
-    claim: "Unit A: full piglit006 stopped at1267 cases (1102pass/164skip/1timeout). Swapbuffers readback repeatedly reacquired CPU WSI image0 while Zink sought image1. Rotating idle-image selection fixes unchanged upstream swapbuffers-behavior in probe028 (pixel-pass/exit0), RADV B365C281 + Zink1DAF0B60, same GPU generation589506402/epoch5, baseline restored. Full profile and Linux parity remain open."
-    status_text: "MEASURED (unit A)"
-    evidence: "[evidence](../evidence/windows/2026-09-26-E33-wsi-acquire-rotation/README.md)"
   - id: M530
     status: MEASURED
     date: "2026-09-26"
@@ -141,6 +135,12 @@ facts:
     claim: "Persistent hosted Zink screens pass native two-device red/blue/survivor-green readbacks,4096 exact pixels each, run013 exit0. Scoped DDI entry ownership and synchronous program jobs keep callbacks in the runtime domain; no wrong-thread diagnostic. Restoration needed rename after mapped-DLL copy failure; baseline hashes verified by restore013, DWM1052 unchanged. Runtime-surface import, Present and G0 remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[Hosted screens](../evidence/windows/2026-09-26-E34-hosted-screen/RESULT.md)"
+  - id: M544
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Hosted ABI5 preserves removal HRESULTs as STATUS_DEVICE_REMOVED and reports sticky loss to Vulkan/D3D. Positive run027 passes120 Presents and76800 pixels. Injected third-submit refusal (run028) and invalid local fence observation (run029) yield application Present/GetDeviceRemovedReason887a0005 at frame2, expected exit0. Baselines restored, DWM1052 unchanged. No actual TDR or recovery/leak/no-copy certification."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted device loss](../evidence/windows/2026-09-26-E34-hosted-loss/RESULT.md)"
   - id: M549
     status: MEASURED
     date: "2026-09-26"
@@ -206,6 +206,12 @@ facts:
     claim: "The Witcher 3 4.0 DX12 build (bin/x64_dx12, 4.0.0.103190) launched with vkd3d-proton 472989aa and DXVK 3.1.1 dxgi.dll next to it, RADV_EXPERIMENTAL=sparse, on the registered ICD 93B1D1FD renders its main menu correctly (three identical 1920x1200 captures at 21, 62 and 122 s) and stays responsive for the 150 s bound; module witness shows our d3d12/d3d12core/dxgi and vulkan_radeon 93B1D1FD; the vkd3d log shows DXR 1.1 state objects created and four failed shared-fence KMT handle exports that the game tolerates. First D3D12 frame content on the port. Menu only, no gameplay, no timing; game directory and settings restored."
     status_text: "MEASURED (unit A)"
     evidence: "[Witcher 3 DX12 menu](../evidence/windows/2026-09-27-E40-witcher3-dx12-vkd3d/RESULT.md)"
+  - id: M574
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "WARP086/CPU087 pass eight textured batch snapshots; hosted GPU088/089 terminate0xC0000409 before the first textured result, after eight prior graphics checks pass. Dump089 shows assertion count != 1 in pipe_reference_described via zink_batch_reference_program during Draw (FAST_FAIL_FATAL_APP_EXIT7). Baselines restored, CPU DWM5748 retained; relationship to BD-043 not established."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Textured batch failure](../evidence/windows/2026-09-27-E34-textured-batch-failure/RESULT.md)"
   - id: M577
     status: MEASURED
     date: "2026-09-27"
@@ -224,12 +230,6 @@ facts:
     claim: "Candidate042 UMD8CDF2C85/ICD3508416F corrects frontend buffer-release ownership. Unchanged control098 passes viewport and stream/layout images, then fails vb-nooverwrite at4032/4096 pixels (exit2); full matrix and BD-043 remain open. Baselines restored, CPU DWM4400 unchanged."
     status_text: "MEASURED (unit A)"
     evidence: "[Partial buffer ownership validation](../evidence/windows/2026-09-27-E34-buffer-ownership-partial/RESULT.md)"
-  - id: M581
-    status: MEASURED
-    date: "2026-09-27"
-    claim: "Creating the exportable monitored fence with Shared/NtSecuritySharing derived from VK_SYNC_IS_SHAREABLE (fork 59f53088; the runtime sets VK_SYNC_IS_SHARED only after the first export, so the previous flags left the object non-shareable and D3DKMTShareObjects failed unchecked) removes vkd3d-proton's d3d12_shared_fence_open_export_kmt VK_ERROR_UNKNOWN (vr -13) failures: zero in the E43 run against four in every earlier run on 93B1D1FD (E40, E41, E42), same game, same package, rendering unchanged. The Win32 external-semaphore CTS cases have not been run yet."
-    status_text: "MEASURED (unit A)"
-    evidence: "[E43](../evidence/windows/2026-09-27-E43-witcher3-dx12-present-log/RESULT.md)"
   - id: M586
     status: MEASURED
     date: "2026-09-27"
@@ -322,6 +322,12 @@ facts:
     claim: "Frozen DXVK engine b418f55b/DLL3CB26ABF with test06D38402 passes on standalone RADV GFX1013: exit0 in6.884s, DDI-form shaders, caller-owned image,2016 covered pixels,500 frames,1006 caller-thread QueueLock calls and finalRelease0. CPU170 unchanged,health15,no TDR. System DDI/hosted callbacks/Present and M14 completion not demonstrated."
     status_text: "MEASURED (unit A)"
     evidence: "[Standalone engine control002](../evidence/windows/2026-09-28-E34-m14-engine002/RESULT.md)"
+  - id: M726
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Direct-loaded packaged RADV C0CE with engine253A/testEE9C passes5.697s, exit0, exact in-process ICD hash witness; maximumFL11_1 and measured caps produce a108-byte bound configuration. CPU170 unchanged,health15,same boot/DWM,no TDR. System DDI/hosted path and M14 completion remain untested."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Exact-pair capability control002](../evidence/windows/2026-09-28-E34-m14-caps002/RESULT.md)"
   - id: M728
     status: MEASURED
     date: "2026-09-28"

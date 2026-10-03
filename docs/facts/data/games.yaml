@@ -73,12 +73,6 @@ facts:
     evidence: "[E48](../evidence/windows/2026-09-27-E48-witcher3-dx12-cpu-copy-witness/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M607", "cue": "The 6x slower CPU present copy of E47 (M607) is process-specific and is not explained by the memory type the ICD ..."}
-  - id: M760
-    status: MEASURED
-    date: "2026-09-28"
-    claim: "Exact RT-fixed ICD9496 ray-query triangle flow passes1/1 with default traversal; matching nort negative returns64 values4 versus expected1 and Fail. Live candidate witness, hardware-support flag1; Job closure/CPU171 unchanged21.162s and20.363s,67C. No RT-pipeline/game or ISA witness yet."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Ray-query controls](../evidence/windows/2026-09-28-E34-m15-rt-query001/RESULT.md)"
   - id: M772
     status: MEASURED
     date: "2026-10-01"
