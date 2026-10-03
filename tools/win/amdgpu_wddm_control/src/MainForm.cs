@@ -234,7 +234,8 @@ namespace AmdgpuWddmControl
                 _driver.Set("Kernel driver", !missing ? "-" : !inv.DevicePresent ? "not loaded" :
                     "not loaded; device uses \"" + inv.DeviceService + "\", " + Inventory.DeviceProblemText(inv.DeviceProblem), Theme.Warn);
                 foreach (var k in new[] { "Clock", "Voltage", "Temperature", "Load", "Clock control", "Clock ceiling", "Limited by" }) _gpu.Set(k, "-");
-                foreach (var k in new[] { "Video memory", "Desktop composition", "Start check" }) _driver.Set(k, "-");
+                foreach (var k in new[] { "Video memory", "Start check" }) _driver.Set(k, "-");
+                _driver.Set("Desktop composition", KmdReply.CompositionLine(DwmForceCpu(), null, "-"));
                 _perfNow.Set("Running mode", dpm.Error, Theme.Warn);
                 foreach (var k in new[] { "Ceiling", "Clock", "Temperature", "Limited by", "Start decision" }) _perfNow.Set(k, "-");
                 SetStatus(missing ? "Driver not found" : dpm.Error);
@@ -253,7 +254,7 @@ namespace AmdgpuWddmControl
             _driver.Set("Video memory", vram.Value == null ? vram.Error :
                 KmdReply.Bytes(vram.Value.LocalResident) + " used of " + KmdReply.Bytes(vram.Value.Dedicated != 0 ? vram.Value.Dedicated : vram.Value.LocalLimit));
             var interop = Kmd.Interop();
-            _driver.Set("Desktop composition", interop.Value == null ? interop.Error : KmdReply.CompositionText(interop.Value));
+            _driver.Set("Desktop composition", KmdReply.CompositionLine(DwmForceCpu(), interop.Value, interop.Error));
 
             string temp = KmdReply.TemperatureText(d);
             Color? tempColor = d.Has(DpmState.FlagTemperature) && d.TemperatureMc >= 87000 ? Theme.Accent : d.Has(DpmState.FlagTemperature) && d.TemperatureMc >= 80000 ? Theme.Warn : (Color?)null;
@@ -275,6 +276,12 @@ namespace AmdgpuWddmControl
         }
 
         void SetStatus(string text) { _status.Text = text; }
+
+        static uint? DwmForceCpu()
+        {
+            try { return SettingsStore.ReadDword(KmdReply.DesktopRouterPath, "DwmForceCpu"); }
+            catch (Exception) { return null; }
+        }
 
         // ---- Performance -------------------------------------------------------------------------------------------
 

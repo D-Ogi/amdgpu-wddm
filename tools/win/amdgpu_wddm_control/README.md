@@ -5,7 +5,8 @@ by hand, like the vendor's control panel: a normal window, no service, no autost
 
 | Page | What it shows or changes |
 |---|---|
-| Overview | KMD version, driver package version and date, GPU name, video memory in use, test signing, whether the desktop composes on the GPU, clock, voltage, temperature, load, DPM mode, ceiling and the current limit; the installed components (the KMD service image, every `*DriverName` value of the display driver key, Vulkan driver manifests and their libraries) with file version and SHA-256 |
+| Overview | KMD version, driver package version and date, GPU name, video memory in use, test signing, whether the desktop composes on the GPU (the release's desktop router wins: `DwmForceCpu` 1 reads
+"CPU route (GPU route disabled, BD-058)"; the app has no control that changes the route), clock, voltage, temperature, load, DPM mode, ceiling and the current limit; the installed components (the KMD service image, every `*DriverName` value of the display driver key, Vulkan driver manifests and their libraries) with file version and SHA-256 |
 | Performance | DPM on or off and the ceiling (1000-2000 MHz on the 100 MHz grid, default 1500); temperature protection as read-only text |
 | Applications | D3D12 application profiles: the `Experiment` value of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` as check boxes with plain descriptions; names outside the catalog are shown and kept, not edited |
 | Diagnostics | "Create bug report": a zip on the Desktop, after the tester has seen the file list and each file's text |
@@ -36,7 +37,9 @@ with the same functions as the window and reads the value back.
 Manager status and problem code, the display driver key, every component with version and SHA-256), `settings.txt`
 (the driver's `Parameters` values and the D3D12 profiles), `system.txt` (Windows build, test signing, app version),
 `events.txt` (System events of the display stack and Application crash records that name it, last 24 hours),
-`dxdiag.txt` (`dxdiag /t`), `d3d12-caps.json` (`amdgpu_wddm_d3d12caps.exe 0` when installed next to the app) and
+`manifest-check.txt` (every component of `<InstallDir>\manifest.json` hashed and marked OK, MISMATCH, MISSING or
+UNRESOLVED), `release/start-confirm.log`, `release/installer-state.json` and the three newest `install-*.log` and
+`verify-*.json` (from `%ProgramData%\amdgpu-wddm`, the last 2 MB of each), `dxdiag.txt` (`dxdiag /t`), `d3d12-caps.json` (`amdgpu_wddm_d3d12caps.exe 0` when installed next to the app) and
 `vulkan-summary.txt` (`vulkaninfo --summary` when found). Every text passes `Redactor` first: user name and profile
 path, computer name, MAC addresses, e-mail addresses and the values of lines that name a serial number, machine id,
 product id or UUID are replaced. Versions, hashes, LUIDs and PnP hardware ids stay.

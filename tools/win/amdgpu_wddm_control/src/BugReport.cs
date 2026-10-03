@@ -46,7 +46,10 @@ namespace AmdgpuWddmControl
             progress("Reading installed files");
             var inventory = Inventory.Read(true);
             Add("installed-files.txt", "Driver files with versions and SHA-256", Inventory.Report(inventory));
+            Add("manifest-check.txt", "Installed files against the release manifest (SHA-256)", Manifest(inventory));
             Add("settings.txt", "Driver settings in the registry and D3D12 application profiles", Settings());
+            progress("Reading the release logs");
+            AddReleaseLogs();
             Add("system.txt", "Windows version, test signing, this application's version", SystemInfo());
             if (events)
             {
@@ -120,6 +123,58 @@ namespace AmdgpuWddmControl
             }
             w.AppendLine("# " + lines + " lines read");
             return w.ToString();
+        }
+
+        static string Manifest(InventoryState inventory)
+        {
+            if (inventory.ReleaseDir.Length == 0) return "The release installer did not install this driver (no HKLM\\SOFTWARE\\amdgpu-wddm\\Release InstallDir).";
+            var path = Path.Combine(inventory.ReleaseDir, "manifest.json");
+            if (!File.Exists(path)) return "No manifest: " + path;
+            try
+            {
+                return ManifestCheck.Report(ManifestCheck.Parse(File.ReadAllText(path)), inventory.ReleaseDir, inventory.KmdImage,
+                    Environment.ExpandEnvironmentVariables, File.Exists, Inventory.Sha256);
+            }
+            catch (Exception e) { return "The manifest cannot be read: " + e.Message; }
+        }
+
+        public const int LogBytesLimit = 2 << 20;
+
+        // The tail of a text file, at most LogBytesLimit bytes; null when the file is absent or unreadable.
+        static string Tail(string path)
+        {
+            try
+            {
+                using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    long skip = Math.Max(0, f.Length - LogBytesLimit);
+                    f.Seek(skip, SeekOrigin.Begin);
+                    using (var r = new StreamReader(f, Encoding.UTF8, true))
+                        return (skip > 0 ? "[... first " + skip + " bytes left out ...]\n" : "") + r.ReadToEnd();
+                }
+            }
+            catch (Exception) { return null; }
+        }
+
+        // The release's own records under %ProgramData%\amdgpu-wddm: the start-confirm task's log, the installer's
+        // state and its three newest install logs and verify results.
+        void AddReleaseLogs()
+        {
+            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm");
+            var confirm = Tail(Path.Combine(root, "start-confirm.log"));
+            Add("release/start-confirm.log", "The start confirmation task's log", confirm ?? "No start-confirm.log in " + root);
+            var installer = Path.Combine(root, "installer");
+            var state = Tail(Path.Combine(installer, "state.json"));
+            if (state != null) Add("release/installer-state.json", "The installer's state", state);
+            foreach (var pattern in new[] { new[] { installer, "install-*.log" }, new[] { Path.Combine(installer, "verify"), "verify-*.json" } })
+            {
+                if (!Directory.Exists(pattern[0])) continue;
+                foreach (var file in new DirectoryInfo(pattern[0]).GetFiles(pattern[1]).OrderByDescending(f => f.LastWriteTimeUtc).Take(3))
+                {
+                    var text = Tail(file.FullName);
+                    if (text != null) Add("release/" + file.Name, "Installer record " + file.Name, text);
+                }
+            }
         }
 
         static string Settings()

@@ -199,6 +199,17 @@ namespace AmdgpuWddmControl
             return s.Users > 0 ? "GPU (" + s.Users + " device" + (s.Users == 1 ? "" : "s") + " on the GPU path)" : "GPU path ready, not in use now";
         }
 
+        // The release's desktop router (HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter DwmForceCpu) wins over the KMD's
+        // interop decision: with DwmForceCpu 1 DWM loads the CPU UMD whatever the switches say. Read-only: the app
+        // has no control that changes the route.
+        public const string DesktopRouterPath = @"SOFTWARE\amdgpu-wddm\DesktopRouter";
+
+        public static string CompositionLine(uint? dwmForceCpu, InteropState interop, string interopError)
+        {
+            if (dwmForceCpu == 1) return "CPU route (GPU route disabled, BD-058)";
+            return interop != null ? CompositionText(interop) : interopError ?? "-";
+        }
+
         public static string StatusText(int ntstatus)
         {
             switch ((uint)ntstatus)

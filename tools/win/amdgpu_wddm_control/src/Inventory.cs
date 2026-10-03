@@ -20,7 +20,7 @@ namespace AmdgpuWddmControl
     public sealed class InventoryState
     {
         public bool AdapterFound, DevicePresent;
-        public string ReleaseVersion = "", ReleaseDir = "";
+        public string ReleaseVersion = "", ReleaseDir = "", KmdImage = "";
         public string DeviceService = "";
         public uint DeviceProblem;
         public string AdapterName = "", DriverVersion = "", DriverDate = "", Provider = "", InfPath = "";
@@ -119,7 +119,9 @@ namespace AmdgpuWddmControl
             {
                 if (key == null) { s.Notes.Add("The bc250kmd service is not installed."); return; }
                 var image = key.GetValue("ImagePath", null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-                if (!string.IsNullOrEmpty(image)) s.Components.Insert(0, new Component { Role = "Kernel-mode driver", Path = ResolveImagePath(image) });
+                if (string.IsNullOrEmpty(image)) return;
+                s.KmdImage = ResolveImagePath(image);
+                s.Components.Insert(0, new Component { Role = "Kernel-mode driver", Path = s.KmdImage });
             }
         }
 

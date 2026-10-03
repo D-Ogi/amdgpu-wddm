@@ -30,9 +30,9 @@ $sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
 $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
-$refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll' |
+$refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
-$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `

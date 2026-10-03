@@ -228,6 +228,47 @@ static class UnitTests
         Equal("", r.Apply(null), "null text");
     }
 
+    static void Manifest()
+    {
+        const string json = @"{""schema"": 1, ""release"": ""amdgpu-wddm tester"", ""version"": ""0.7.197.1-tester.0"", ""kmd_version"": ""0.7.197.1"",
+            ""components"": [
+              {""role"": ""d3d12-shell"", ""install_path"": ""<InstallDir>\\d3d12\\amdgpu_wddm_d3d12.dll"", ""version"": ""1"", ""sha256"": ""aa11""},
+              {""role"": ""desktop-umd"", ""install_path"": ""%SystemRoot%\\System32\\bc250umd.dll"", ""version"": ""2"", ""sha256"": ""BB22""},
+              {""role"": ""kmd"", ""install_path"": ""DriverStore (bc250kmd.inf)\\bc250kmd.sys"", ""version"": ""0.7.197.1"", ""sha256"": ""CC33""},
+              {""role"": ""firmware"", ""install_path"": ""C:\\BC250\\firmware\\x.bin"", ""version"": """", ""sha256"": ""DD44""},
+              {""role"": ""tool"", ""install_path"": ""somewhere\\relative.exe"", ""version"": """", ""sha256"": ""EE55""}
+            ], ""files"": []}";
+        var m = ManifestCheck.Parse(json);
+        Equal("0.7.197.1-tester.0", m.Version, "manifest version"); Equal(5, m.Components.Count, "manifest components");
+        Equal("AA11", m.Components[0].Sha256, "hash upper-cased");
+        Func<string, string> expand = p => p.Replace("%SystemRoot%", @"C:\Windows");
+        const string dir = @"C:\Program Files\amdgpu-wddm", kmd = @"C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_x\bc250kmd.sys";
+        Equal(@"C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll", ManifestCheck.Resolve(m.Components[0].InstallPath, dir + "\\", kmd, expand), "InstallDir form");
+        Equal(@"C:\Windows\System32\bc250umd.dll", ManifestCheck.Resolve(m.Components[1].InstallPath, dir, kmd, expand), "SystemRoot form");
+        Equal(kmd, ManifestCheck.Resolve(m.Components[2].InstallPath, dir, kmd, expand), "DriverStore form");
+        Equal(null, ManifestCheck.Resolve(m.Components[2].InstallPath, dir, "", expand), "DriverStore without a KMD image");
+        Equal(null, ManifestCheck.Resolve(m.Components[4].InstallPath, dir, kmd, expand), "relative path unresolved");
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { @"C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll", "aa11" }, { @"C:\Windows\System32\bc250umd.dll", "FFFF" }, { kmd, "CC33" },
+        };
+        var report = ManifestCheck.Report(m, dir, kmd, expand, files.ContainsKey, p => files[p]);
+        Check(Regex.IsMatch(report, @"(?m)^OK\s+d3d12-shell"), "matching file OK");
+        Check(Regex.IsMatch(report, @"(?m)^MISMATCH\s+desktop-umd"), "changed file MISMATCH");
+        Check(Regex.IsMatch(report, @"(?m)^OK\s+kmd"), "driver store file OK");
+        Check(Regex.IsMatch(report, @"(?m)^MISSING\s+firmware"), "absent file MISSING");
+        Check(Regex.IsMatch(report, @"(?m)^UNRESOLVED\s+tool"), "relative path UNRESOLVED");
+        Check(report.Contains("2 match, 3 differ, missing or unresolved"), "count line");
+        Throws<FormatException>(() => ManifestCheck.Parse(@"{""schema"": 2}"), "schema 2 refused");
+        Throws<FormatException>(() => ManifestCheck.Parse("[1]"), "not an object refused");
+
+        var interop = new InteropState { Flags = InteropState.FlagValid, Effective = 3, Users = 1 };
+        Equal("CPU route (GPU route disabled, BD-058)", KmdReply.CompositionLine(1, interop, null), "router forces CPU");
+        Equal("GPU (1 device on the GPU path)", KmdReply.CompositionLine(0, interop, null), "router on GPU, KMD decides");
+        Equal("GPU (1 device on the GPU path)", KmdReply.CompositionLine(null, interop, null), "no router key");
+        Equal("not loaded", KmdReply.CompositionLine(null, null, "not loaded"), "no interop reply");
+    }
+
     static int Main(string[] args)
     {
         if (args.Length != 1) { Console.WriteLine("usage: unit-tests <repository root>"); return 2; }
@@ -238,6 +279,7 @@ static class UnitTests
         Dpm();
         DpmDesignDoc(args[0]);
         Redaction();
+        Manifest();
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");
         return _failed == 0 ? 0 : 1;
     }
