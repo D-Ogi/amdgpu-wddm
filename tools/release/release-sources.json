@@ -66,7 +66,7 @@
       "source": "scratch/m15/app-route/build-router/bc250d3d_router.dll",
       "sha256": "674AD261640B1A3A79150E41F39C2B8962F3AB7747E3E725C8C2F3E42FFCAED0",
       "size": 21504,
-      "role": "desktop/application router"
+      "role": "desktop/application router (amdgpu-wddm 6bbcf4f6, driver/umd/router)"
     },
     {
       "component": "desktop-umd",
