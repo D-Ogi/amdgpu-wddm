@@ -1,6 +1,6 @@
 {
-  "schema": 1,
-  "note": "Registered lab artifacts that make up the tester release. Sources are relative to the workspace root (BC250_ROOT). build-release.ps1 refuses a source whose SHA256 differs.",
+  "schema": 2,
+  "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
   "kmd_version": "0.7.197.1",
   "kmd_abi": "0x000700C5",
   "control_app_exe": "amdgpu_wddm_control.exe",
@@ -9,7 +9,7 @@
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
-    "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0"
+    "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "files": [
     {
@@ -187,78 +187,184 @@
       "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
       "size": 2925496,
       "role": "vulkaninfo 1.4.335 (Khronos Vulkan-Tools, LunarG-signed), used by the bug report"
-    },
-    {
-      "component": "firmware",
-      "path": "payload/firmware/LICENSE.amdgpu",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/LICENSE.amdgpu",
+    }
+  ],
+  "firmware": {
+    "repository": "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git",
+    "commit": "2b8daaf611fbade74f26a5b58ec1defe6a02f5e0",
+    "pinned_list": "tools/firmware/cyan_skillfish2.json",
+    "url_templates": [
+      "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/{path}?id={commit}",
+      "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/{commit}/{path}"
+    ],
+    "install_dir": "C:\\BC250\\firmware",
+    "licence": {
+      "name": "LICENSE.amdgpu",
+      "path": "LICENSES/LICENSE.amdgpu",
       "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE",
-      "size": 2938,
-      "role": "licence of the AMD firmware files (linux-firmware 2b8daaf6 LICENSES/LICENSE.amdgpu)"
+      "size": 2938
+    }
+  },
+  "licenses": [
+    {
+      "file": "Mesa-license.rst",
+      "source": "docs/testing/licenses/Mesa-license.rst",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "docs/license.rst",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "0D1A0472ECC81830E75C20D59B0EA02841E3DB21255E0EBAD97AB682C54D6615"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_ce.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_ce.bin",
-      "sha256": "5946EFBF7E46CCFE7E9F965DA56C35B1187469D1C1A49C8A9EFF433EB3AB4723",
-      "size": 263296,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "Mesa-MIT.txt",
+      "source": "docs/testing/licenses/Mesa-MIT.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/MIT",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "323C587D0CCF10E376F8BF9A7F31FB4CA6078105194B42E0B1E0EE2BC9BDE71F"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_me.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_me.bin",
-      "sha256": "D4ED4D968DE0D7720F7C8215D42FDAE727BF99CDF43CEE6F8F864DC2584B17E2",
-      "size": 263424,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "Mesa-BSL-1.0.txt",
+      "source": "docs/testing/licenses/Mesa-BSL-1.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/BSL-1.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "9B9FEA7520A816107FCAC2598B7C0155222F16BC430E989706B22F4367F1DF7D"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_mec.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_mec.bin",
-      "sha256": "B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4",
-      "size": 268592,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "Mesa-SGI-B-2.0.txt",
+      "source": "docs/testing/licenses/Mesa-SGI-B-2.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/SGI-B-2.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "686BF035A1FD22076416FD3B90370AC67771E884BF57F55693D51F8CE7C710A7"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_mec2.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_mec2.bin",
-      "sha256": "B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4",
-      "size": 268592,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "Mesa-Apache-2.0.txt",
+      "source": "docs/testing/licenses/Mesa-Apache-2.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/Apache-2.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "7E4D3FBA250D15E9E0AFA380D4B611828FA2560CC8FDEBE95BCF2F01A487DE12"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_pfp.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_pfp.bin",
-      "sha256": "50E56DC1913571FF589425D2B059BDDFC5E8A2B4BC22D3EB78CAC75D1E0479A1",
-      "size": 263424,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "zlib-LICENSE.txt",
+      "source": "docs/testing/licenses/zlib-LICENSE.txt",
+      "repository": "madler/zlib",
+      "path": "LICENSE",
+      "ref": "v1.3.1",
+      "sha256": "845EFC77857D485D91FB3E0B884AAA929368C717AE8186B66FE1ED2495753243"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_rlc.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_rlc.bin",
-      "sha256": "20ACEFDB6128A36275F4382425A109A7C9927F6053EAB685BB51164FF1D18CFB",
-      "size": 25344,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "source": "docs/testing/licenses/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "repository": "llvm/llvm-project",
+      "path": "llvm/LICENSE.TXT",
+      "ref": "llvmorg-23.1.2",
+      "sha256": "8D85C1057D742E597985C7D4E6320B015A9139385CFF4CBAE06FFC0EBE89AFEE"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_sdma.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_sdma.bin",
-      "sha256": "15D0D3626DA7F2513F03B13BB7E02EEEECCAB276276AE27D0B6067B5F25E9E95",
-      "size": 33792,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "DXVK-zlib.txt",
+      "source": "docs/testing/licenses/DXVK-zlib.txt",
+      "repository": "D-Ogi/dxvk",
+      "path": "LICENSE",
+      "ref": "0c187731d88db839b9d4b3a6798fbd146b92eabc",
+      "sha256": "A5CB1A6DED7D2D7E92D550BA28EDD21BE2D1D4044662B399887351023E30CE64"
     },
     {
-      "component": "firmware",
-      "path": "payload/firmware/cyan_skillfish2_sdma1.bin",
-      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_sdma1.bin",
-      "sha256": "BD1C0B0F6A6A4F17EDE034F2C844B6553FC444E08915C7BB500C09FDE59D6255",
-      "size": 33792,
-      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+      "file": "OpenVR-BSD-3-Clause.txt",
+      "source": "docs/testing/licenses/OpenVR-BSD-3-Clause.txt",
+      "repository": "D-Ogi/dxvk",
+      "path": "include/openvr/LICENSE",
+      "ref": "0c187731d88db839b9d4b3a6798fbd146b92eabc",
+      "sha256": "DB64BCF32BE090CA9D1EA7E3DF5541A07F4CF5729206B44E57A1182F05554F3F"
+    },
+    {
+      "file": "dxbc-spirv-MIT.txt",
+      "source": "docs/testing/licenses/dxbc-spirv-MIT.txt",
+      "repository": "D-Ogi/dxbc-spirv",
+      "path": "LICENSE",
+      "ref": "f241996e050d4c04091dd5c03cb84fc5523611c8",
+      "sha256": "0F8A5E687BEA942A30A8E39B9915294FBE44ECA866E71307A9B7083EE0E69AD8"
+    },
+    {
+      "file": "vkd3d-proton-LGPL-2.1.txt",
+      "source": "docs/testing/licenses/vkd3d-proton-LGPL-2.1.txt",
+      "repository": "D-Ogi/vkd3d-proton",
+      "path": "LICENSE",
+      "ref": "c3710ac1a6a857deb286af2cb15ef7335cb50095",
+      "sha256": "DC626520DCD53A22F727AF3EE42C770E56C97A64FE3ADB063799D8AB032FE551"
+    },
+    {
+      "file": "vkd3d-proton-COPYING.txt",
+      "source": "docs/testing/licenses/vkd3d-proton-COPYING.txt",
+      "repository": "D-Ogi/vkd3d-proton",
+      "path": "COPYING",
+      "ref": "c3710ac1a6a857deb286af2cb15ef7335cb50095",
+      "sha256": "F51AD4BF5A3BD2B5F383FE28150B23D01E6F5D7B620B194150E7C6A620C43C1F"
+    },
+    {
+      "file": "dxil-spirv-MIT.txt",
+      "source": "docs/testing/licenses/dxil-spirv-MIT.txt",
+      "repository": "D-Ogi/dxil-spirv",
+      "path": "LICENSE.MIT",
+      "ref": "bc773cf2d287e64838fb0a7fc3aabdec323a0a19",
+      "sha256": "B3EC61378A66F09835A73F53926D9B5CF79A09C9E2FE8BDD0E39AA5403325E1E"
+    },
+    {
+      "file": "SPIRV-Headers-LICENSE.txt",
+      "source": "docs/testing/licenses/SPIRV-Headers-LICENSE.txt",
+      "repository": "KhronosGroup/SPIRV-Headers",
+      "path": "LICENSE",
+      "ref": "f88a2d766840fc825af1fc065977953ba1fa4a91",
+      "sha256": "EA43B1DE38A6F90C488800D66DEC1ED671E68CDA530266BC96951FB5B6307613"
+    },
+    {
+      "file": "Vulkan-Headers-LICENSE.md",
+      "source": "docs/testing/licenses/Vulkan-Headers-LICENSE.md",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSE.md",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "95AD366D23FADF701D355BC45FB8B82AE2D700239471D35D41286AC3B08FF903"
+    },
+    {
+      "file": "Vulkan-Headers-Apache-2.0.txt",
+      "source": "docs/testing/licenses/Vulkan-Headers-Apache-2.0.txt",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSES/Apache-2.0.txt",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30"
+    },
+    {
+      "file": "Vulkan-Headers-MIT.txt",
+      "source": "docs/testing/licenses/Vulkan-Headers-MIT.txt",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSES/MIT.txt",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "1CA3502222D967F3BE5751C55F6B7EE735B5383909C3B501495F54B216DBF227"
+    },
+    {
+      "file": "Vulkan-Tools-LICENSE.txt",
+      "source": "docs/testing/licenses/Vulkan-Tools-LICENSE.txt",
+      "repository": "KhronosGroup/Vulkan-Tools",
+      "path": "LICENSE.txt",
+      "ref": "vulkan-sdk-1.4.335.0",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30"
+    },
+    {
+      "file": "LICENSE.amdgpu",
+      "source": "docs/testing/licenses/LICENSE.amdgpu",
+      "repository": "git.kernel.org/linux-firmware",
+      "path": "LICENSES/LICENSE.amdgpu",
+      "ref": "2b8daaf611fbade74f26a5b58ec1defe6a02f5e0",
+      "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE"
+    },
+    {
+      "file": "Linux-amdgpu-MIT.txt",
+      "source": "docs/testing/licenses/Linux-amdgpu-MIT.txt",
+      "repository": "torvalds/linux",
+      "path": "per-file MIT headers, drivers/gpu/drm/amd (copies in driver/amdgpu-import, third_party/linux-amdgpu)",
+      "ref": "v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+      "sha256": "55ED31A97F6B6470B0CC1F1BC905036EEEB578255ACE9CA6F69889D7D0352233"
     }
   ]
 }

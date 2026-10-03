@@ -6,7 +6,9 @@
 #   2. certificate, driver package, user-mode drivers, registry, firmware, start-confirm task, control app; restart.
 #   3. verify: driver bound, version, start health, D3D12 device at feature level 12_1, Vulkan enumerates the GPU.
 # -DryRun runs every check and prints every change without making it. -Verify runs phase 3 only.
-# No network access and no dependency on any other computer.
+# Network: the package does not contain the AMD GPU firmware. Phase 2 downloads it from linux-firmware at the commit
+# pinned in manifest.json (kernel.org, GitLab mirror as fallback) and checks each SHA256, or takes it from a local
+# folder (-FirmwareDir), checked the same way. Nothing else uses the network.
 [CmdletBinding()]
 param(
     [switch]$DryRun,
@@ -20,7 +22,8 @@ param(
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
     [switch]$Repair,                        # install the same, already verified version again
-    [switch]$DryRunIgnoreBoard              # host test only, honoured with -DryRun: walk all phases on a PC without a BC-250
+    [string]$FirmwareDir,                   # offline: the 9 firmware files (INSTALL.md, "GPU firmware") instead of a download
+    [switch]$DryRunIgnoreBoard             # host test only, honoured with -DryRun: walk all phases on a PC without a BC-250
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -47,6 +50,11 @@ if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProces
     & $ps -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @PSBoundParameters
     exit $LASTEXITCODE
 }
+# A relative -FirmwareDir means the folder the tester started from; the elevated copy starts in System32.
+if ($FirmwareDir) {
+    $FirmwareDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FirmwareDir)
+    $PSBoundParameters['FirmwareDir'] = $FirmwareDir
+}
 if (-not $DryRun -and -not (Test-IsAdmin)) { Invoke-SelfElevation -ScriptPath $MyInvocation.MyCommand.Path -Bound $PSBoundParameters }
 if (-not $DryRun) {
     [void][IO.Directory]::CreateDirectory($script:StateDir)
@@ -58,6 +66,11 @@ Write-Info "package: $package"
 $early = Read-InstallState
 if ($early -and $early.install_root) { $InstallRoot = $early.install_root }
 Write-Info "install root: $InstallRoot"
+# The run after the test-signing restart starts from RunOnce without arguments: it keeps phase 1's -FirmwareDir.
+if (-not $FirmwareDir -and $early -and $early.phase -eq 'testsigning-pending' -and $early.firmware_source_dir) {
+    $FirmwareDir = [string]$early.firmware_source_dir
+    Write-Info "firmware folder from the first run: $FirmwareDir"
+}
 
 # ---- preflight -----------------------------------------------------------------------------------------------
 # Every check runs, in a dry run too. Severity: fail stops the install, warn needs attention, ok is fine.
@@ -121,6 +134,23 @@ function Invoke-Preflight {
     $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
     $freeGb = [math]::Round($drive.FreeSpace / 1GB, 1)
     if ($freeGb -lt 2) { Add-Check 'free space' 'fail' "$freeGb GB free on $($env:SystemDrive); 2 GB needed" } else { Add-Check 'free space' 'ok' "$freeGb GB free on $($env:SystemDrive)" }
+
+    $fw = if ($script:Manifest) { $script:Manifest.firmware } else { $null }
+    if (-not $fw) { Add-Check 'GPU firmware' 'fail' 'manifest.json has no firmware list' }
+    elseif ($FirmwareDir) {
+        $bad = @()
+        foreach ($f in @($fw.files)) {
+            $p = Join-Path $FirmwareDir $f.name
+            if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "$($f.name) missing" }
+            elseif ((Get-Sha256 $p) -ne ([string]$f.sha256).ToUpperInvariant()) { $bad += "$($f.name) has another SHA256" }
+        }
+        if ($bad.Count) { Add-Check 'GPU firmware' 'fail' "-FirmwareDir $FirmwareDir`: $($bad -join '; '). Get the files from the addresses in INSTALL.md, section 'GPU firmware'." }
+        else { Add-Check 'GPU firmware' 'ok' "$(@($fw.files).Count) files in $FirmwareDir match the pinned SHA256" }
+    } else {
+        $h = Test-FirmwareHosts -Firmware $fw
+        if ($h.ok.Count) { Add-Check 'GPU firmware' 'ok' ("download from linux-firmware $($fw.commit): $($h.ok -join ', ') reachable" + $(if ($h.bad.Count) { "; not reachable: $($h.bad -join '; ')" } else { '' })) }
+        else { Add-Check 'GPU firmware' 'fail' "no download host answers ($($h.bad -join '; ')). The installer downloads the GPU firmware: connect this computer to the internet, or download the 9 files on another computer (INSTALL.md, section 'GPU firmware') and run install.cmd -FirmwareDir <folder>." }
+    }
 
     if (Test-LabInstallPresent) {
         if ($Force) { Add-Check 'existing installation' 'warn' 'a development-lab installation (C:\BC250\m1x) is present; -Force given' }
@@ -350,6 +380,7 @@ if ($state.phase -eq 'new') {
     Set-StateValue $state 'previous_testsigning' $script:TestSigningConfigured
     Set-StateValue $state 'install_root' $InstallRoot
     Set-StateValue $state 'package_version' $script:Manifest.version
+    Set-StateValue $state 'firmware_source_dir' $(if ($FirmwareDir) { $FirmwareDir } else { $null })
     New-RestorePoint
     if ($script:TestSigningActive) {
         Write-Info 'test signing is already active in this boot: no restart needed before the install'
@@ -400,6 +431,21 @@ Write-Step 'Phase 2: install'
 if (-not $script:DryRunMode -and -not $script:TestSigningActive) { Write-Fail 'test signing is not active'; exit 5 }
 # Every step below can run again over its own result: files are compared by SHA256 and a file in use is replaced
 # by rename, registry values and the task are overwritten, pnputil accepts a package that is already there.
+# The firmware comes first: every install downloads it again (or takes it from -FirmwareDir) into a staging folder and
+# checks each SHA256 before phase 2 changes anything, so a failed download leaves the computer and the phase as they
+# were.
+$fw = $script:Manifest.firmware
+$fwStaging = Join-Path $script:StateDir 'firmware-staging'
+$fwFrom = $(if ($FirmwareDir) { "from $FirmwareDir" } else { "from linux-firmware $($fw.commit)" })
+if ($script:DryRunMode) {
+    foreach ($f in @($fw.files)) {
+        Write-Info ('firmware {0}  SHA256 {1}' -f $f.name, ([string]$f.sha256).ToUpperInvariant())
+        if ($FirmwareDir) { Write-Info "    $(Join-Path $FirmwareDir $f.name)" } else { foreach ($u in Get-FirmwareUrls $fw $f) { Write-Info "    $u" } }
+    }
+}
+$fwStaged = Invoke-Change "get the $(@($fw.files).Count) GPU firmware files $fwFrom into $fwStaging and check each SHA256 (a file with another SHA256 stops the install before any change)" {
+    Get-FirmwareStaged -Firmware $fw -Staging $fwStaging -FromDir $FirmwareDir
+}
 $script:InPhase2 = $true
 if ($state.phase -notin @('testsigning-active')) { Write-Info "continuing an earlier run (phase $($state.phase)): finished steps are skipped" }
 
@@ -426,28 +472,34 @@ Invoke-Change "copy the installer's own scripts to $InstallRoot\installer (unins
 # Facts about the computer before the install are recorded once and saved before the step that changes them.
 $stub = Join-Path $env:windir 'System32\bc250umd.dll'
 [void](Set-StateValueOnce $state 'stub_existed' (Test-Path -LiteralPath $stub))
-$bc250Dir = Split-Path -Parent $script:FirmwareDir
+$bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
-$fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareDir)
+$fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
 if (-not $script:DryRunMode) { Save-InstallState $state }
 Invoke-Change "copy payload\system32\bc250umd.dll -> $stub (the D3D9 slot of UserModeDriverName; same SHA256: kept; in use: replaced by rename)" {
     $r = Copy-FileSafe -Source (Join-Path $package 'payload\system32\bc250umd.dll') -Destination $stub
     Write-Info "$stub`: $r"
 } | Out-Null
 $fwAcl = $(if ($fwExisted) { 'its existing access rights are kept' } else { 'created writable by administrators only' })
-Invoke-Change "copy the 8 GPU firmware files (linux-firmware cyan_skillfish2_*.bin) -> $($script:FirmwareDir); $fwAcl; $bc250Dir itself is not changed" {
+Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfish2_*.bin, LICENSE.amdgpu) from $fwStaging -> $($script:FirmwareInstallDir); $fwAcl; $bc250Dir itself is not changed" {
     # An existing C:\BC250 may hold other files: its access rights stay as they are. Only the firmware folder that
     # this installer creates gets its own rights: C:\ lets every user create and change folders, and the KMD loads
     # this firmware, so only administrators may change it.
     if (-not (Test-Path -LiteralPath $bc250Dir)) { [void][IO.Directory]::CreateDirectory($bc250Dir) }
     if (-not $fwExisted) {
-        [void][IO.Directory]::CreateDirectory($script:FirmwareDir)
-        $n = Invoke-Native icacls.exe @($script:FirmwareDir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX')
-        if ($n.code -ne 0) { throw "icacls $($script:FirmwareDir) failed: $($n.text)" }
+        [void][IO.Directory]::CreateDirectory($script:FirmwareInstallDir)
+        $n = Invoke-Native icacls.exe @($script:FirmwareInstallDir, '/inheritance:r', '/grant:r', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-545:(OI)(CI)RX')
+        if ($n.code -ne 0) { throw "icacls $($script:FirmwareInstallDir) failed: $($n.text)" }
     }
-    foreach ($f in Get-ChildItem -LiteralPath (Join-Path $package 'payload\firmware') -File -Filter '*.bin') {
-        [void](Copy-FileSafe -Source $f.FullName -Destination (Join-Path $script:FirmwareDir $f.Name))
+    foreach ($p in @($fwStaged)) {
+        Write-Info ('{0}: {1}' -f (Split-Path $p -Leaf), (Copy-FileSafe -Source $p -Destination (Join-Path $script:FirmwareInstallDir (Split-Path $p -Leaf))))
     }
+    # Checked again where the KMD reads them: the staging folder lives under %ProgramData%, which is not admin-only.
+    foreach ($f in @($fw.files)) {
+        $h = Get-Sha256 (Join-Path $script:FirmwareInstallDir $f.name)
+        if ($h -ne ([string]$f.sha256).ToUpperInvariant()) { throw "firmware: $($script:FirmwareInstallDir)\$($f.name) has SHA256 $h after the copy, expected $($f.sha256)" }
+    }
+    Remove-Item -LiteralPath $fwStaging -Recurse -Force -ErrorAction SilentlyContinue
 } | Out-Null
 Save-Phase 'files-copied'
 
@@ -563,6 +615,8 @@ if ($controlExe -and $dirs -contains 'control') {
     Set-StateValue $state 'shortcut' $lnk
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
+Set-StateValue $state 'firmware_source_dir' $null
+Set-StateValue $state 'firmware_commit' $fw.commit
 Save-Phase 'installed'
 Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')
 if ($script:DryRunMode) {

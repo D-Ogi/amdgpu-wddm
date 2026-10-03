@@ -16,7 +16,9 @@ Use this package only on a BC-250. The installer stops on every other computer a
 - The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
   Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
 - 2 GB of free space on the system drive.
-- A keyboard and a monitor on the BC-250. The installer does not need a network connection or another computer.
+- A keyboard and a monitor on the BC-250.
+- An internet connection during the installation: the installer downloads the AMD GPU firmware (see "GPU firmware"
+  below). Without one, download the files on another computer and give the installer the folder.
 
 ## Before you start
 
@@ -49,8 +51,8 @@ The installer does not change BIOS or firmware settings.
    or if it must suspend BitLocker for two restarts.
 4. Let the computer restart. After you log on, the installer starts again by itself (accept the administrator
    prompt). If it does not start, run `install.cmd` again.
-5. Phase 2: the installer installs the certificate, the driver and the user-mode drivers, and sets the registry
-   values. The screen can go black for some seconds when the driver starts. Then the computer restarts again.
+5. Phase 2: the installer downloads the GPU firmware and checks it, then installs the certificate, the driver, the
+   user-mode drivers and the firmware, and sets the registry values. The screen can go black for some seconds when the driver starts. Then the computer restarts again.
 6. Phase 3: after the second logon, the installer verifies the driver and shows a pass or fail table.
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
@@ -61,6 +63,41 @@ restarts the computer. Running `install.cmd` of the version that is already inst
 use `install.cmd -Repair` to install it again.
 
 "Test Mode" is shown in the lower-right corner of the desktop while test signing is on. This is normal.
+
+## GPU firmware
+
+The driver loads eight AMD firmware files from `C:\BC250\firmware`. This package does not contain them. The
+installer downloads them, and the AMD licence text `LICENSE.amdgpu`, from the linux-firmware project at commit
+`2b8daaf611fbade74f26a5b58ec1defe6a02f5e0`, at every installation and upgrade. It checks the SHA256 of each file
+before it copies anything. If a file has a different SHA256, the installer stops and changes nothing.
+
+The installer tries the first address of each file, then the second (3 tries each):
+
+- `https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/<path>?id=2b8daaf611fbade74f26a5b58ec1defe6a02f5e0`
+- `https://gitlab.com/kernel-firmware/linux-firmware/-/raw/2b8daaf611fbade74f26a5b58ec1defe6a02f5e0/<path>`
+
+| File | `<path>` | SHA256 |
+|---|---|---|
+| `cyan_skillfish2_ce.bin` | `amdgpu/cyan_skillfish2_ce.bin` | `5946efbf7e46ccfe7e9f965da56c35b1187469d1c1a49c8a9eff433eb3ab4723` |
+| `cyan_skillfish2_me.bin` | `amdgpu/cyan_skillfish2_me.bin` | `d4ed4d968de0d7720f7c8215d42fdae727bf99cdf43cee6f8f864dc2584b17e2` |
+| `cyan_skillfish2_mec.bin` | `amdgpu/cyan_skillfish2_mec.bin` | `b1c1f843a8faaa2de537d6ba05052a3776b5a1b73f8a3c3f5ed9d568489776a4` |
+| `cyan_skillfish2_mec2.bin` | `amdgpu/cyan_skillfish2_mec2.bin` | `b1c1f843a8faaa2de537d6ba05052a3776b5a1b73f8a3c3f5ed9d568489776a4` |
+| `cyan_skillfish2_pfp.bin` | `amdgpu/cyan_skillfish2_pfp.bin` | `50e56dc1913571ff589425d2b059bddfc5e8a2b4bc22d3eb78cac75d1e0479a1` |
+| `cyan_skillfish2_rlc.bin` | `amdgpu/cyan_skillfish2_rlc.bin` | `20acefdb6128a36275f4382425a109a7c9927f6053eab685bb51164ff1d18cfb` |
+| `cyan_skillfish2_sdma.bin` | `amdgpu/cyan_skillfish2_sdma.bin` | `15d0d3626da7f2513f03b13bb7e02eeeeccab276276ae27d0b6067b5f25e9e95` |
+| `cyan_skillfish2_sdma1.bin` | `amdgpu/cyan_skillfish2_sdma1.bin` | `bd1c0b0f6a6a4f17ede034f2c844b6553fc444e08915c7bb500c09fde59d6255` |
+| `LICENSE.amdgpu` | `LICENSES/LICENSE.amdgpu` | `572872598565dc3513470de971a32bf9db301f47afeef3636345eadae33b2eee` |
+
+The same list is in `manifest.json` (section "firmware"). A dry run (`install.cmd -DryRun`) shows the addresses
+and the SHA256 values and downloads nothing.
+
+Without internet on the BC-250:
+
+1. On a computer with internet, download the nine files from the addresses above (replace `<path>`). Keep the file
+   names of the first column.
+2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
+3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
+   way and uses the folder also after the test-signing restart.
 
 ## The small blue window after logon
 
@@ -84,7 +121,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `tools`, `control`) and `C:\Windows\System32\bc250umd.dll` |
 | Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
-| GPU firmware | `C:\BC250\firmware` (8 files from linux-firmware; `LICENSE.amdgpu` in the package). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change |
+| GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` |
 
@@ -107,6 +144,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 ## If something fails
 
 - Preflight `fail`: correct the item that the table names, then run `install.cmd` again.
+- Preflight `fail` on `GPU firmware`, or the installer stops at the firmware step: the computer cannot reach the
+  download addresses, or a file has a different SHA256. Connect the computer to the internet, or use
+  `-FirmwareDir` (see "GPU firmware").
 - The installer stops with `stopped at step: ...`: the message names the step and the cause. Correct the cause if
   you can, then run `install.cmd` again from the same package folder. The installer skips the steps that are
   complete and continues at the step that failed.

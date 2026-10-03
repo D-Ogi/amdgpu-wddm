@@ -14,7 +14,7 @@ $script:KhronosKey       = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
 $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce'
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
-$script:FirmwareDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
+$script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:DryRunMode       = $false
@@ -175,6 +175,87 @@ function Test-PackageManifest {
     }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# GPU firmware. The package does not contain it: manifest.json (firmware) pins the linux-firmware commit, each file's
+# path there and its SHA256. The installer downloads the files (or takes them from -FirmwareDir) into a staging folder
+# and checks every SHA256 before anything is copied to the firmware folder.
+function Get-FirmwareUrls($Firmware, $File) {
+    foreach ($t in @($Firmware.url_templates)) { ([string]$t).Replace('{commit}', [string]$Firmware.commit).Replace('{path}', [string]$File.path) }
+}
+# git.kernel.org answers a browser-like User-Agent (Windows PowerShell's default starts with Mozilla) with an anti-bot
+# challenge page instead of the file (measured 2026-10-03); a plain program name gets the file.
+$script:DownloadUserAgent = 'amdgpu-wddm-installer'
+function Enable-Tls12 {
+    # Windows PowerShell 5.1 may still offer only TLS 1.0/1.1 by default; both download hosts need TLS 1.2.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+}
+# Preflight: does each download host answer? One HEAD request per host for the smallest file, nothing is downloaded.
+# Up to $Rounds rounds 10 s apart while no host answers: after the restart the installer runs at logon, sometimes before
+# the network is up.
+function Test-FirmwareHosts {
+    param([Parameter(Mandatory)]$Firmware, [int]$TimeoutSec = 15, [int]$Rounds = 3)
+    Enable-Tls12
+    $small = @($Firmware.files) | Sort-Object { [long]$_.size } | Select-Object -First 1
+    for ($round = 1; $round -le $Rounds; $round++) {
+        $ok = @(); $bad = @()
+        foreach ($u in Get-FirmwareUrls $Firmware $small) {
+            $name = ([Uri]$u).Host
+            try {
+                $r = Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec $TimeoutSec -UserAgent $script:DownloadUserAgent
+                if ([int]$r.StatusCode -eq 200) { $ok += $name } else { $bad += "$name HTTP $([int]$r.StatusCode)" }
+            } catch { $bad += "$name $($_.Exception.Message)" }
+        }
+        if ($ok.Count -or $round -eq $Rounds) { break }
+        Start-Sleep -Seconds 10
+    }
+    return @{ ok = $ok; bad = $bad }
+}
+# Puts every firmware file into $Staging (emptied first) and checks its SHA256 against the manifest. With $FromDir:
+# the file of the same name from that folder. Otherwise each URL in manifest order, up to $Tries tries per URL; a
+# download with another SHA256 moves on to the next URL. Throws when a file cannot be had with the pinned SHA256.
+# Writes nothing but $Staging; returns the staged paths.
+function Get-FirmwareStaged {
+    param([Parameter(Mandatory)]$Firmware, [Parameter(Mandatory)][string]$Staging, [string]$FromDir, [int]$Tries = 3, [int]$TimeoutSec = 60)
+    if (Test-Path -LiteralPath $Staging) { Remove-Item -LiteralPath $Staging -Recurse -Force }
+    [void][IO.Directory]::CreateDirectory($Staging)
+    Enable-Tls12
+    $oldProgress = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'   # the 5.1 progress display slows Invoke-WebRequest down many times over
+    try {
+        $staged = @()
+        foreach ($f in @($Firmware.files)) {
+            $dst = Join-Path $Staging $f.name
+            $want = ([string]$f.sha256).ToUpperInvariant()
+            $got = $null
+            $why = @()
+            if ($FromDir) {
+                $src = Join-Path $FromDir $f.name
+                if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "firmware: $($f.name) is not in $FromDir" }
+                [IO.File]::Copy($src, $dst, $true)
+                $h = Get-Sha256 $dst
+                if ($h -ne $want) { throw "firmware: $src has SHA256 $h, this release pins $want" }
+                $got = $src
+            } else {
+                foreach ($u in Get-FirmwareUrls $Firmware $f) {
+                    $name = ([Uri]$u).Host
+                    for ($i = 1; $i -le $Tries; $i++) {
+                        try { Invoke-WebRequest -Uri $u -OutFile $dst -UseBasicParsing -TimeoutSec $TimeoutSec -UserAgent $script:DownloadUserAgent }
+                        catch { $why += "$name try $i`: $($_.Exception.Message)"; continue }
+                        $h = Get-Sha256 $dst
+                        if ($h -eq $want) { $got = $u } else { $why += "$name`: SHA256 $h"; Remove-Item -LiteralPath $dst -Force }
+                        break
+                    }
+                    if ($got) { break }
+                }
+                if (-not $got) { throw "firmware: $($f.name) could not be downloaded with the pinned SHA256 $want ($($why -join '; '))" }
+            }
+            Write-Info ('{0,-26} SHA256 {1} ok  {2}' -f $f.name, $want, $got)
+            $staged += $dst
+        }
+        return $staged
+    } finally { $ProgressPreference = $oldProgress }
 }
 
 # ---------------------------------------------------------------------------------------------------------------

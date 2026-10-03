@@ -4,9 +4,14 @@ This is the first tester release of amdgpu-wddm, an experimental Windows driver 
 (AMD Cyan Skillfish, gfx1013). It is for people who want to test the driver on their own BC-250 and report what
 happens. It is not ready for daily use. Read `INSTALL.md` in this package before you install.
 
-Package version: `0.7.197.100-tester.7`. Its drivers, programs and installer passed the installation test on our
-BC-250 as `0.7.197.100-tester.6` (upgrade, restart, all 8 verification checks, start confirmation). This package
-adds `THIRD-PARTY.md` and the licence texts in `licenses\`, and replaces a wrong `LICENSE.amdgpu` file.
+Package version: `0.7.197.100-tester.7`. Its drivers and programs are those of `0.7.197.100-tester.6`, which passed
+the installation test on our BC-250 (upgrade, restart, all 8 verification checks, start confirmation). New in this
+package:
+
+- The package does not contain the AMD GPU firmware. The installer downloads it from the linux-firmware project
+  during the installation and checks every file (`INSTALL.md`, "GPU firmware"). A BC-250 without internet can use
+  files downloaded on another computer: `install.cmd -FirmwareDir <folder>`.
+- `THIRD-PARTY.md` lists every file of the package with its licence; the licence texts are in `licenses\`.
 
 ## What works
 
@@ -27,6 +32,7 @@ adds `THIRD-PARTY.md` and the licence texts in `licenses\`, and replaces a wrong
 - 32-bit applications do not have a driver yet.
 - Secure Boot must be off, and Windows runs in test mode ("Test Mode" shows on the desktop), because the driver is
   signed with a test certificate.
+- The installation needs internet access for the GPU firmware, or the `-FirmwareDir` folder.
 - The Microsoft Visual C++ 2015-2022 Redistributable (x64) must be installed. The installer stops and tells you if
   it is missing.
 - After each logon, a small blue window shows for about one minute. Do not close it: it confirms the driver start.

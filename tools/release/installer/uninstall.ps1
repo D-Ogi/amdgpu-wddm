@@ -82,7 +82,7 @@ foreach ($o in @(Get-ChildItem -LiteralPath (Split-Path $stub) -File -Filter 'bc
 $fwExisted = $false
 if ($state -and $state.firmware_dir_existed) { $fwExisted = $true }
 if (-not $fwExisted) {
-    Invoke-Change "remove $($script:FirmwareDir)" { Remove-PathOrSchedule $script:FirmwareDir } | Out-Null
+    Invoke-Change "remove $($script:FirmwareInstallDir)" { Remove-PathOrSchedule $script:FirmwareInstallDir } | Out-Null
     $bcExisted = $false
     if ($state -and $state.bc250_dir_existed) { $bcExisted = $true }
     if (-not $bcExisted) {
@@ -90,7 +90,7 @@ if (-not $fwExisted) {
             if ((Test-Path -LiteralPath 'C:\BC250') -and -not @(Get-ChildItem -LiteralPath 'C:\BC250' -Force).Count) { Remove-Item -LiteralPath 'C:\BC250' -Force }
         } | Out-Null
     }
-} else { Write-Info "$($script:FirmwareDir) was there before the install: kept" }
+} else { Write-Info "$($script:FirmwareInstallDir) was there before the install: kept" }
 
 Write-Step 'Certificate'
 $thumb = $null

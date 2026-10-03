@@ -8,6 +8,9 @@
 # (preflight refusal) with a 'fail' line for the BC-250 GPU; -DryRunIgnoreBoard walks phases 1 and 2; uninstall
 # -DryRun finds nothing; %ProgramData%\amdgpu-wddm, HKLM\SOFTWARE\amdgpu-wddm, the RunOnce entry, the task, the
 # service, C:\BC250, the install root, the certificate stores and the boot options are the same before and after.
+# GPU firmware: not in the package; the dry run prints both URLs and the SHA256 of each file and downloads nothing;
+# test-firmware.ps1 downloads the files for real into the scratch folder and checks the refusals; -FirmwareDir dry runs
+# with a good and a changed folder. Needs network access to git.kernel.org and gitlab.com.
 param([Parameter(Mandatory)][string]$Package, [string]$WorkBase = (Join-Path (Split-Path $Package) 'test-tmp'))  # scratch for test-filesafe.ps1
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
@@ -72,6 +75,16 @@ Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through
 
 Check ($r.text -match 'would: copy payload\\system32\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'stub copy is the safe replacement'
 Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'
+Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+download from linux-firmware [0-9a-f]{40}: git\.kernel\.org, gitlab\.com reachable') 'preflight: both firmware download hosts reachable'
+Check ($r.text -match 'would: get the 9 GPU firmware files from linux-firmware [0-9a-f]{40} into ') 'phase 2 shows the firmware download'
+foreach ($f in @($m.firmware.files)) {
+    $u1 = [regex]::Escape("https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/$($f.path)?id=$($m.firmware.commit)")
+    $u2 = [regex]::Escape("https://gitlab.com/kernel-firmware/linux-firmware/-/raw/$($m.firmware.commit)/$($f.path)")
+    Check (($r.text -match "firmware $([regex]::Escape($f.name))\s+SHA256 $($f.sha256)") -and ($r.text -match $u1) -and ($r.text -match $u2)) "dry run prints $($f.name): SHA256 and both URLs"
+}
+Check ($r.text -notmatch '\S+ SHA256 [0-9A-F]{64} ok ') 'dry run downloads nothing'
+$pos = @('Get-FirmwareStaged -Firmware', '$script:InPhase2 = $true', 'Import-Certificate') | ForEach-Object { $src0 = [IO.File]::ReadAllText((Join-Path $Package 'installer\install.ps1')); $src0.IndexOf($_) }
+Check ($pos[0] -gt 0 -and $pos[0] -lt $pos[1] -and $pos[1] -lt $pos[2]) 'the firmware is downloaded and checked before phase 2 changes anything'
 $src = [IO.File]::ReadAllText((Join-Path $Package 'installer\install.ps1'))
 Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itself'
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
@@ -150,6 +163,38 @@ Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the r
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
 Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm does not use the CLI health command (absent from the 0cbef549 CLI)'
 Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\bc250control.dll')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'payload\control\bc250control.dll')).Hash) 'tools\bc250control.dll is the control application''s DLL'
+
+'GPU firmware: not in the package, downloaded at install time (test-firmware.ps1 under 5.1, real download into a scratch folder)'
+Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\firmware'))) 'no payload\firmware in the package'
+Check (-not @(Get-ChildItem -LiteralPath $Package -Recurse -File -Filter '*.bin').Count) 'no .bin file in the package'
+Check (-not @($m.files | Where-Object { $_.path -like 'payload/firmware/*' }).Count) 'manifest files: no firmware'
+Check (@($m.firmware.files).Count -eq 9 -and [string]$m.firmware.commit -match '^[0-9a-f]{40}$') "manifest firmware: $(@($m.firmware.files).Count) files at $($m.firmware.commit)"
+Check (@($m.components | Where-Object { $_.role -eq 'firmware' -and $_.install_path -like 'C:\BC250\firmware\*' -and -not $_.package_path }).Count -eq 9) 'manifest components: 9 firmware files with install path and SHA256, no package path'
+$fwWork = Join-Path $WorkBase ('firmware-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+$r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-firmware.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Manifest', (Join-Path $Package 'manifest.json'), '-WorkRoot', $fwWork) -TimeoutSeconds 600
+"  (pid $($r.pid), exit $($r.code), no window)"
+$r.text
+Check ($r.code -eq 0) "firmware download, fallback, offline folder and wrong-hash refusal: exit $($r.code)"
+Check (([regex]::Matches($r.text, 'SHA256 [0-9A-F]{64} ok  https://git\.kernel\.org/')).Count -eq 9) 'all 9 files came from the first address (git.kernel.org), not only from the fallback'
+
+'install -DryRun -DryRunIgnoreBoard -FirmwareDir (offline): a good folder, then a folder with a changed file'
+$r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', (Join-Path $fwWork 'download'))
+Check ($r.code -eq 0) "good folder: exit $($r.code)"
+Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') 'good folder: preflight checks every SHA256'
+Check ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') 'good folder: phase 2 takes the files from the folder'
+Check ($r.text -notmatch 'https://') 'good folder: no download address used'
+if ($r.code -ne 0) { $r.text }
+$badDir = Join-Path $fwWork 'bad'
+[void][IO.Directory]::CreateDirectory($badDir)
+foreach ($f in Get-ChildItem -LiteralPath (Join-Path $fwWork 'download') -File) { Copy-Item -LiteralPath $f.FullName -Destination $badDir }
+[IO.File]::AppendAllText((Join-Path $badDir 'cyan_skillfish2_me.bin'), 'x')
+Remove-Item -LiteralPath (Join-Path $badDir 'LICENSE.amdgpu')
+$r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', $badDir)
+Check ($r.code -eq 2) "changed folder: exit $($r.code) (2 = preflight refusal)"
+Check ($r.text -match '\[fail\]\s+GPU firmware\s+-FirmwareDir .+cyan_skillfish2_me\.bin has another SHA256; LICENSE\.amdgpu missing') 'changed folder: the refusal names the changed and the missing file'
+Check ($r.text -match 'Nothing was changed') 'changed folder: nothing was changed'
+if ($r.code -ne 2) { $r.text }
+if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 
 'uninstall -DryRun'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun')

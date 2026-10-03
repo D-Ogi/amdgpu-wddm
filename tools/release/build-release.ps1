@@ -3,7 +3,8 @@
 #   pwsh -File tools\release\build-release.ps1 [-Root <BC250_ROOT>] [-Out <dir>] [-Version <v>]
 #
 # Inputs are the artifacts listed in release-sources.json (registered lab drivers, control application, tools,
-# firmware), each refused unless its SHA256 matches. The KMD package is re-signed with the release test certificate
+# licence texts), each refused unless its SHA256 matches. The AMD GPU firmware is not packaged: manifest.json carries
+# its pinned list (tools/firmware/cyan_skillfish2.json) and the installer downloads it. The KMD package is re-signed with the release test certificate
 # (new-release-cert.ps1, private key in a private directory outside the repository, never copied): the .sys gets the release
 # signature in place of the lab one (its code and its Authenticode hash do not change), Inf2Cat makes a new catalog,
 # and the catalog is signed. The package holds the public .cer only.
@@ -64,16 +65,42 @@ foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1') { Copy-Item -Liter
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
-# The release's own third-party list (components of this package, exact commits) and the licence texts it names.
+# The release's own third-party list (each bundled file and its licence file) and the licence texts, each from the
+# source that release-sources.json records (repository, path, commit) and refused unless its SHA256 matches.
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\THIRD-PARTY.md') -Destination (Join-Path $pkg 'THIRD-PARTY.md')
 $lic = Join-Path $pkg 'licenses'
 [void][IO.Directory]::CreateDirectory($lic)
-Copy-Item -Path (Join-Path $repo 'docs\testing\licenses\*') -Destination $lic
-Copy-Item -LiteralPath (Join-Path $pkg 'payload\firmware\LICENSE.amdgpu') -Destination $lic
-foreach ($m in [regex]::Matches((Get-Content -LiteralPath (Join-Path $pkg 'THIRD-PARTY.md') -Raw), '`([\w.-]+\.(?:txt|md)|LICENSE\.amdgpu)`')) {
-    $n = $m.Groups[1].Value
-    if ($n -notin 'LICENSE.md', 'NOTICE' -and -not (Test-Path -LiteralPath (Join-Path $lic $n))) { throw "THIRD-PARTY.md names licenses\$n, which is missing" }
+Copy-Item -LiteralPath (Join-Path $repo 'LICENSE.md') -Destination (Join-Path $lic 'amdgpu-wddm-LICENSE.md')
+Copy-Item -LiteralPath (Join-Path $repo 'NOTICE') -Destination (Join-Path $lic 'amdgpu-wddm-NOTICE.txt')
+foreach ($l in $sources.licenses) {
+    $src = Join-Path $repo ($l.source -replace '/', '\')
+    $h = (Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash
+    if ($h -ne $l.sha256) { throw "licence text $($l.source) is $h, release-sources.json says $($l.sha256) ($($l.repository) $($l.path) @ $($l.ref))" }
+    Copy-Item -LiteralPath $src -Destination (Join-Path $lic $l.file)
+    '  {0}  licence      {1}  ({2} {3} @ {4})' -f $h.Substring(0, 8), $l.file, $l.repository, $l.path, $l.ref
 }
+$named = @([regex]::Matches((Get-Content -LiteralPath (Join-Path $pkg 'THIRD-PARTY.md') -Raw), '`([\w.-]+\.(?:txt|md|rst)|LICENSE\.amdgpu)`') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+foreach ($n in $named) { if (-not (Test-Path -LiteralPath (Join-Path $lic $n))) { throw "THIRD-PARTY.md names licenses\$n, which is missing" } }
+foreach ($f in Get-ChildItem -LiteralPath $lic -File) { if ($named -notcontains $f.Name) { throw "licenses\$($f.Name) is not named in THIRD-PARTY.md" } }
+# Every payload file has its row in THIRD-PARTY.md.
+foreach ($f in $sources.files) {
+    $leaf = ($f.path -replace '^payload/', '') -replace '/', '\'
+    if ((Get-Content -LiteralPath (Join-Path $pkg 'THIRD-PARTY.md') -Raw) -notmatch [regex]::Escape("``$leaf``")) { throw "THIRD-PARTY.md has no row for $($f.path)" }
+}
+
+# The AMD firmware is not part of the package: manifest.json carries the pinned list (tools/firmware) and the
+# installer downloads the files at install time.
+$pin = Get-Content -LiteralPath (Join-Path $repo ($sources.firmware.pinned_list -replace '/', '\')) -Raw | ConvertFrom-Json
+if ($pin.commit -ne $sources.firmware.commit -or $sources.firmware.commit -notmatch '^[0-9a-f]{40}$') { throw "firmware commit: pinned list $($pin.commit), release-sources.json $($sources.firmware.commit)" }
+$fwLicence = (Get-FileHash -LiteralPath (Join-Path $lic $sources.firmware.licence.name)).Hash
+if ($fwLicence -ne $sources.firmware.licence.sha256) { throw "licenses\LICENSE.amdgpu is $fwLicence, release-sources.json firmware.licence says $($sources.firmware.licence.sha256)" }
+$fwFiles = @(foreach ($f in $pin.files) { [ordered]@{ name = $f.name; path = "amdgpu/$($f.name)"; sha256 = $f.sha256.ToUpperInvariant(); size = $f.size } })
+$fwFiles += [ordered]@{ name = $sources.firmware.licence.name; path = $sources.firmware.licence.path; sha256 = $sources.firmware.licence.sha256; size = $sources.firmware.licence.size }
+$firmware = [ordered]@{ commit = $sources.firmware.commit; repository = $sources.firmware.repository; url_templates = @($sources.firmware.url_templates); install_dir = $sources.firmware.install_dir; files = $fwFiles }
+$installText = Get-Content -LiteralPath (Join-Path $pkg 'INSTALL.md') -Raw
+foreach ($f in $fwFiles) { if ($installText -notmatch [regex]::Escape($f.sha256.ToLowerInvariant())) { throw "INSTALL.md (GPU firmware) does not list $($f.name) with SHA256 $($f.sha256)" } }
+if ($installText -notmatch $firmware.commit) { throw "INSTALL.md (GPU firmware) does not name linux-firmware $($firmware.commit)" }
+'  firmware: {0} files at linux-firmware {1}, downloaded by the installer' -f $fwFiles.Count, $firmware.commit
 # tester.1-6 shipped a cgit "Not found" page as LICENSE.amdgpu: no licence text may be a web page.
 foreach ($f in Get-ChildItem -LiteralPath $lic -File) {
     if ((Get-Content -LiteralPath $f.FullName -TotalCount 3) -match '(?i)<!DOCTYPE|<html') { throw "licenses\$($f.Name) is a web page, not a licence text" }
@@ -115,6 +142,9 @@ foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
 Write-Host 'gates'
 $forbidden = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
 if ($forbidden.Count) { throw "private-key material in the package: $($forbidden.FullName -join ', ')" }
+$blobs = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
+if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
+'  no private-key material, no firmware file'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-parse51.ps1'), '-Directory', $inst) -TimeoutSeconds 120
 $r.text
@@ -139,6 +169,8 @@ foreach ($f in $sources.files + @([pscustomobject]@{ component = 'tool'; path = 
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
     $components += [ordered]@{ role = $f.component; package_path = $f.path; install_path = (Get-InstallLocation $f.path); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
 }
+# Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
+foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
 $files = @()
 foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object FullName) {
     $rel = $f.FullName.Substring($pkg.Length + 1) -replace '\\', '/'
@@ -156,6 +188,8 @@ $manifest = [ordered]@{
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe
     sources = $sources.sources
+    firmware = $firmware
+    licenses = @($sources.licenses | ForEach-Object { [ordered]@{ file = "licenses/$($_.file)"; repository = $_.repository; path = $_.path; ref = $_.ref; sha256 = $_.sha256 } })
     components = $components
     files = $files
 }
