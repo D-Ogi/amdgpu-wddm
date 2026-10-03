@@ -4,7 +4,7 @@
 #
 # Inputs are the artifacts listed in release-sources.json (registered lab drivers, control application, tools,
 # firmware), each refused unless its SHA256 matches. The KMD package is re-signed with the release test certificate
-# (new-release-cert.ps1, private key in <BC250_ROOT>\secrets\release, never copied): the .sys gets the release
+# (new-release-cert.ps1, private key in a private directory outside the repository, never copied): the .sys gets the release
 # signature in place of the lab one (its code and its Authenticode hash do not change), Inf2Cat makes a new catalog,
 # and the catalog is signed. The package holds the public .cer only.
 # manifest.json lists every file of the package with its SHA256, and every installed component with its role,

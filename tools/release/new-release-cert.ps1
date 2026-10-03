@@ -1,5 +1,5 @@
 # Creates the release test-signing certificate for tester packages, once, outside the repository.
-# The private key stays in <BC250_ROOT>\secrets\release and never enters a package or a commit: build-release.ps1
+# The private key stays in a private directory outside the repository and never enters a package or a commit: build-release.ps1
 # signs with the PFX there and copies only the public .cer into the package. The release certificate is separate from
 # the lab certificate (CN=BC-250 lab test), so a tester PC never trusts the lab's signing key and vice versa.
 # Needs openssl.exe on PATH (Git for Windows or MSYS2 ship one). Refuses to overwrite an existing certificate.

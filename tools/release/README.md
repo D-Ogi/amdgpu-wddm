@@ -5,7 +5,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`.
 
 | File | Purpose |
 |---|---|
-| `new-release-cert.ps1` | Creates the release test-signing certificate once, in `<BC250_ROOT>\secrets\release` (never in the repo or the package). Separate from the lab certificate. |
+| `new-release-cert.ps1` | Creates the release test-signing certificate once, in a private directory outside the repository (never in the repo or the package). Separate from the lab certificate. |
 | `release-sources.json` | The registered lab artifacts that make up the release, with SHA256. The build refuses any other byte. |
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1. |
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd` (package root) and the PowerShell 5.1 scripts. |
