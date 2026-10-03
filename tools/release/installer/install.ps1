@@ -110,7 +110,7 @@ function Invoke-Preflight {
     else { Add-Check 'Memory integrity' 'ok' $hvci }
 
     $vc = @(Get-VcRuntimeMissing)
-    if ($vc.Count) { Add-Check 'Visual C++ runtime' 'fail' ("missing in System32: $($vc -join ', '). Install the Microsoft Visual C++ 2015-2022 Redistributable (x64), then run the installer again.") }
+    if ($vc.Count) { Add-Check 'Visual C++ runtime' 'fail' ("missing in System32: $($vc -join ', '). Install the Microsoft Visual C++ Redistributable for Visual Studio 2015-2022 (x64) from https://aka.ms/vs/17/release/vc_redist.x64.exe (on any computer with a network, then copy it here), then run the installer again.") }
     else { Add-Check 'Visual C++ runtime' 'ok' 'present' }
 
     $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
@@ -432,10 +432,11 @@ Invoke-Change "$($script:SoftwareKey)\D3D12\Applications\witcher3.exe Experiment
     New-Item -Path $k -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name Experiment -Value $w3 -PropertyType String -Force | Out-Null
 } | Out-Null
-Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallRoot, InstalledUtc" {
+Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallDir, InstallRoot, InstalledUtc" {
     $k = "$($script:SoftwareKey)\Release"
     New-Item -Path $k -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name Version -Value ([string]$script:Manifest.version) -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $k -Name InstallDir -Value $InstallRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstallRoot -Value $InstallRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstalledUtc -Value ([DateTime]::UtcNow.ToString('o')) -PropertyType String -Force | Out-Null
 } | Out-Null

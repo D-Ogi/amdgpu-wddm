@@ -14,7 +14,7 @@ Use this package only on a BC-250. The installer stops on every other computer a
 - Secure Boot set to off in the BIOS setup (see "Secure Boot" below).
 - If BitLocker is on: your BitLocker recovery key, or permission to suspend BitLocker for two restarts.
 - The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
-  Get it from Microsoft (search for "Visual C++ Redistributable latest supported downloads").
+  Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
 - 2 GB of free space on the system drive.
 - A keyboard and a monitor on the BC-250. The installer does not need a network connection or another computer.
 
@@ -89,8 +89,8 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - Windows desktop composition (DWM) runs on the GPU.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
-- Direct3D 11 applications run on the CPU by default. Only applications on the allowlist in
-  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` (value `Allow`) use the GPU. The control application can change the list.
+- Direct3D 11 applications and games run on the CPU (software rendering) by default, so they are slow. Only applications on the allowlist in
+  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` (value `Allow`, in v0 only `dxdiag.exe`) use the GPU. Use the Direct3D 12 mode of a game if it has one.
 - 32-bit applications do not have a driver yet.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 
@@ -117,19 +117,29 @@ You can also use the System Restore point "amdgpu-wddm before install" if the in
 
 ## How to report a bug
 
-1. Open "amdgpu-wddm Control" from the Start menu and select the diagnostics bundle function. It makes one zip file.
-2. Write down what you did, what you expected, and what happened. Add the name and the version of the game or
+1. Open "amdgpu-wddm Control" from the Start menu and select the bug report function.
+2. The application shows the list of files and the text of each file before it writes anything. Read them.
+3. The application writes one zip file to your desktop: `amdgpu-wddm-report-YYYYMMDD-HHMMSS.zip`. It sends
+   nothing.
+4. Write down what you did, what you expected, and what happened. Add the name and the version of the game or
    application, the settings, and the time of the problem.
-3. Send the zip file and your notes to the project's issue tracker.
+5. Send the zip file and your notes to the project's issue tracker.
 
-The diagnostics bundle contains technical data only:
+The zip file contains these files:
 
-- the driver version, the package manifest version and the installer state (`C:\ProgramData\amdgpu-wddm`);
-- the driver settings in `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` and the router policy;
-- the driver's start health, clock and temperature readings;
-- the installer logs, the verification results and `start-confirm.log`;
-- the Windows build number and the System event log entries of the display driver (crash codes, TDR events).
+| File | Contents |
+|---|---|
+| `driver-state.txt` | driver version; clock control (mode, maximum, clocks, voltage, temperature, load, throttle reason); start health; desktop composition (CPU or GPU); video memory statistics |
+| `driver-log.txt` | the driver's internal log ring |
+| `installed-files.txt` | release version and folder; Device Manager status and problem code; the GPU's driver key (INF version and date, driver name values); driver, Vulkan manifest and library files with file version and SHA-256 |
+| `settings.txt` | the driver settings (`Services\bc250kmd\Parameters`) and the Direct3D 12 application profiles |
+| `system.txt` | Windows build, test signing state, application version, UTC time |
+| `events.txt` | System log entries of the last 24 hours from the display driver, DirectX kernel, DWM, crash reporting, power and Plug and Play, and application errors that name the driver, DWM, Direct3D or Vulkan |
+| `dxdiag.txt` | `dxdiag /t` output (only if you select it; it takes about one minute) |
+| `d3d12-caps.json`, `vulkan-summary.txt` | Direct3D 12 and Vulkan capabilities (only if you select them) |
 
-It does not contain user names, file names of your documents, network names, serial numbers or MAC addresses.
-Examine the zip file before you send it. If you find personal data in it, remove that data, and tell us in the bug
-report so that we can correct the bundle.
+Before the preview, the application removes from every file: your user name, your profile path (shown as
+`%USERPROFILE%`), the computer name, MAC addresses, e-mail addresses, and every value on a line that names a serial
+number, machine ID, product ID or UUID. Versions, hashes and hardware IDs stay, because we need them.
+If you find personal data in the preview, do not send the file, and tell us in the bug report so that we can
+correct the application.

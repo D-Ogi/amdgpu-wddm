@@ -79,6 +79,11 @@ function Set-StateValue($State, [string]$Name, $Value) {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
+# SHA256 through .NET: works whatever modules the host process can load.
+function Get-Sha256([string]$Path) {
+    $s = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
+}
 # Package integrity: manifest.json lists every file of the package with its SHA256 (build-release.ps1 writes it).
 function Test-PackageManifest {
     param([Parameter(Mandatory)][string]$PackageRoot)
@@ -91,7 +96,7 @@ function Test-PackageManifest {
         $count++
         $p = Join-Path $PackageRoot ($f.path -replace '/', '\')
         if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "missing $($f.path)"; continue }
-        if ((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash -ne $f.sha256) { $bad += "changed $($f.path)" }
+        if ((Get-Sha256 $p) -ne $f.sha256) { $bad += "changed $($f.path)" }
     }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }

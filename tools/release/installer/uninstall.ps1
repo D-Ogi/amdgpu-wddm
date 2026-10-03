@@ -36,8 +36,11 @@ if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm dri
 
 Write-Step 'Scheduled task, RunOnce entry, shortcut'
 Invoke-Change "unregister the scheduled task '$($script:TaskName)'" {
-    $t = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
-    if ($t) { if ($t.State -eq 'Running') { Stop-ScheduledTask -TaskName $script:TaskName }; Unregister-ScheduledTask -TaskName $script:TaskName -Confirm:$false }
+    # Safe Mode runs no Task Scheduler service: then the task stays, and running uninstall.cmd again later removes it.
+    try {
+        $t = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
+        if ($t) { if ($t.State -eq 'Running') { Stop-ScheduledTask -TaskName $script:TaskName }; Unregister-ScheduledTask -TaskName $script:TaskName -Confirm:$false }
+    } catch { Write-Warn2 "scheduled task not removed ($($_.Exception.Message)); run uninstall.cmd again after a normal start" }
 } | Out-Null
 Invoke-Change "remove the RunOnce entry '$($script:RunOnceName)'" { Remove-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue } | Out-Null
 $lnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\amdgpu-wddm Control.lnk'
