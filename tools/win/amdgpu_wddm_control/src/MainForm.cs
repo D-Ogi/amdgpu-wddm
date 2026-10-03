@@ -114,12 +114,51 @@ namespace AmdgpuWddmControl
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         static extern int SetWindowTheme(IntPtr hwnd, string appName, string idList);
 
+        [DllImport("user32.dll")]
+        static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        const int LVM_GETHEADER = 0x101F;
+
         // Dark scroll bars on a scrolling control (the Explorer dark theme of Windows 10 1809 and later); an older
         // system keeps the light ones.
         public static T DarkScroll<T>(T c) where T : Control
         {
             c.HandleCreated += (s, e) => { try { SetWindowTheme(c.Handle, "DarkMode_Explorer", null); } catch (Exception) { } };
             return c;
+        }
+
+        // A list view in the theme colours: the column headers and the rows are drawn here (the system draws the
+        // headers light and a selected row in the system highlight), the header's empty end uses the dark items
+        // theme, and the scroll bars are dark.
+        public static ListView DarkList(ListView lv)
+        {
+            DarkScroll(lv);
+            lv.OwnerDraw = true;
+            lv.HandleCreated += (s, e) =>
+            {
+                try { SetWindowTheme(SendMessage(lv.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero), "DarkMode_ItemsView", null); } catch (Exception) { }
+            };
+            const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+            lv.DrawColumnHeader += (s, e) =>
+            {
+                using (var b = new SolidBrush(Nav)) e.Graphics.FillRectangle(b, e.Bounds);
+                using (var pen = new Pen(Line))
+                {
+                    e.Graphics.DrawLine(pen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+                    e.Graphics.DrawLine(pen, e.Bounds.Right - 1, e.Bounds.Top + S(4), e.Bounds.Right - 1, e.Bounds.Bottom - S(5));
+                }
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, lv.Font, Rectangle.Inflate(e.Bounds, -S(6), 0), Dim, flags);
+            };
+            lv.DrawItem += (s, e) => { };   // DrawSubItem draws every cell of the row
+            lv.DrawSubItem += (s, e) =>
+            {
+                using (var b = new SolidBrush(e.Item.Selected ? Line : lv.BackColor)) e.Graphics.FillRectangle(b, e.Bounds);
+                var fore = e.Item.UseItemStyleForSubItems ? e.Item.ForeColor : e.SubItem.ForeColor;
+                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, lv.Font, Rectangle.Inflate(e.Bounds, -S(6), 0), fore, flags);
+            };
+            // An owner-drawn list redraws only the first cell of a row under the mouse; redraw the whole row.
+            lv.MouseMove += (s, e) => { var item = lv.GetItemAt(e.X, e.Y); if (item != null) lv.Invalidate(item.Bounds); };
+            return lv;
         }
 
         public static Button Button(string text, EventHandler click, bool primary = false)
@@ -303,7 +342,7 @@ namespace AmdgpuWddmControl
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Margin = Theme.Pad(0, 6, 0, 6),
             };
             _components.Columns.Add("Component", Theme.S(190)); _components.Columns.Add("File", Theme.S(400)); _components.Columns.Add("Version", Theme.S(130)); _components.Columns.Add("SHA-256", Theme.S(160));
-            p.Controls.Add(Theme.DarkScroll(_components));
+            p.Controls.Add(Theme.DarkList(_components));
             p.Controls.Add(Theme.Button("Refresh", (s, e) => RefreshAll()));
         }
 
@@ -513,7 +552,7 @@ namespace AmdgpuWddmControl
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable, Font = Theme.Body,
             };
             _profiles.Columns.Add("Application", Theme.S(110)); _profiles.Columns.Add("Switches", Theme.S(145));
-            Theme.DarkScroll(_profiles);
+            Theme.DarkList(_profiles);
             _profiles.SelectedIndexChanged += (s, e) => ShowProfile();
             left.Controls.Add(_profiles);
             var lb = new FlowLayoutPanel { AutoSize = true };
@@ -1022,7 +1061,7 @@ namespace AmdgpuWddmControl
                 Dock = DockStyle.Top, Height = Theme.S(200), View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None,
             };
-            Theme.DarkScroll(list);
+            Theme.DarkList(list);
             list.Columns.Add("File", Theme.S(170)); list.Columns.Add("Size", Theme.S(90)); list.Columns.Add("Contents", Theme.S(600));
             foreach (var e in report.Entries) list.Items.Add(new ListViewItem(new[] { e.Name, (e.Data.Length / 1024.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " KB", e.Description }) { Tag = e });
             var text = Theme.DarkScroll(new TextBox
