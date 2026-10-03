@@ -55,6 +55,10 @@ def main():
     kinds_new = collections.Counter(i[0] for i in new_ids)
     print(f'new: docs/facts/data: {len(facts)} facts ({kinds_new["M"]} M, {kinds_new["S"]} S, {kinds_new["R"]} R)')
     missing, extra = sorted(old_ids - new_ids, key=gen_facts.id_key), sorted(new_ids - old_ids, key=gen_facts.id_key)
+    # Facts added after the migration carry IDs above the old range; an extra ID inside it would be invented.
+    top = {k: max(gen_facts.id_key(i)[1] for i in old_ids if i[0] == k) for k in kinds}
+    added = [i for i in extra if i[0] in top and gen_facts.id_key(i)[1] > top[i[0]]]
+    extra = [i for i in extra if i not in added]
     changed = []
     fields_checked = 0
     for r in rows:
@@ -81,6 +85,7 @@ def main():
     print(f'fields compared: {fields_checked}')
     print(f'missing IDs: {len(missing)} {missing[:20]}')
     print(f'extra IDs: {len(extra)} {extra[:20]}')
+    print(f'added after the migration: {len(added)} {added[:20]}')
     print(f'changed: {len(changed)} {changed[:20]}')
     derived = collections.Counter(f.get('date_from') for f in facts.values() if 'date_from' in f)
     print('dates derived (no date column in the old row):', dict(derived))
