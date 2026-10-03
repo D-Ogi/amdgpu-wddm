@@ -16,7 +16,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
 | `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
 | `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
-| `test-session-checks.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-060): the INF `Reboot` directive (found through `[Manufacturer]` and its models, added once after each install section header, line endings kept, present in the packaged INF), the pnputil outcomes 3010 / 0 / 259, the stale BD-059 session marker after an in-place device restart (scratch key `HKCU:\Software\amdgpu-wddm-installer-test-session`, removed at the end), and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one record per boot, session and logon, a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. |
+| `test-session-checks.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-060): the INF `Reboot` directive (found through `[Manufacturer]` and its models, added once after each install section header, line endings kept, present in the packaged INF), the pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes; no installer function for the KMD's BD-059 session marker), the install inputs that the argument-free run after a restart takes from the state (an offline fresh install and an upgrade, both resume phases, the resumed run's own arguments, another package version, cleared at completion, a tester.10 state), the `resume` action, and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon (a record with a missing or malformed field is ignored and replaced by the next recording), a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 
 ```
@@ -38,15 +38,23 @@ v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs
 No device restart and no DWM restart under a running desktop (BD-060): WinUI pointer-input loss after the desktop
 compositor (DWM) is terminated and restarted reproduces on this Windows build (22631) also with Microsoft Basic
 Display; restarting Windows recovers (sign-out is not verified).
-`build-release.ps1` adds the INF `Reboot` directive to each install section of the packaged INF, so pnputil installs
-the package without restarting a started GPU (exit 3010) and the GPU changes driver at the restart that ends phase 2;
-`install.ps1` refuses a package INF without it. The KMD's own INF stays without it, because the lab's deployment
-kits restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks
-for a restart. Install logs the session's DWM (process ID and creation time) before the driver package, after it
-and at the end of phase 2, apart from the device outcome (`driver_package_observation` in `state.json`): a
-device-loss event and a DWM process restart are separate observations. The start-confirm task records the session's
-DWM once per logon in `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (boot, session and logon time; last 16 records;
-`installer/dwm-session.ps1`, also in `payload\tools`). `verify.cmd` reports `DWM restarted in this session` as a
+`build-release.ps1` adds the INF `Reboot` directive to each install section of the packaged INF, so Windows does not
+restart a started GPU for the package (Windows 8 and later, INF Reboot directive) and the GPU changes driver at the
+restart that ends phase 2; `install.ps1` refuses a package INF without it. pnputil's exit code is read only for what
+it establishes (0 completed, 3010 restart required, 259 no device change reported); the binding check decides. When
+the GPU still names the old service after 3010, phase 2 continues after the restart (`driver-pending-restart`,
+action `resume`), and the inputs of the install (`-FirmwareDir`, `-DpmMaxMHz`, `-CuMode`, `-NoControlApp`,
+`-NoReboot`, `-Force`) come from the state, as after the test-signing restart; they are cleared when phase 2
+completes. The installer never changes the KMD's BD-059 session marker; a closed GPU desktop path is reopened with
+the control application (INSTALL.md). The KMD's own INF stays without `Reboot`, because the lab's deployment kits
+restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks for a
+restart. Install records the session's DWM (process ID and creation time) before the driver package, right after it
+(before the restart-pending branch) and at the end of phase 2, each with its boot, in `dwm_observations` in
+`state.json` (last 12); the device outcome after the package is a separate field: a device-loss event and a DWM
+process restart are separate observations. The start-confirm task records the session's DWM once per logon in
+`%ProgramData%\amdgpu-wddm\dwm-baseline.json` (boot, session and logon time; last 16 records; a record with a missing
+or malformed field does not count and the next recording replaces it; `installer/dwm-session.ps1`, also in
+`payload\tools`). `verify.cmd` reports `DWM restarted in this session` as a
 warning only when it sees another instance than the recorded one, passes when the recorded one runs, and says
 `unknown history` without a record; no time heuristic. The warning helps to attribute a failure, never replaces a bug
 report.

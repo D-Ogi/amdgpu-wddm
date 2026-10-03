@@ -127,10 +127,16 @@ $sc0 = [IO.File]::ReadAllText((Join-Path $Package 'installer\start-confirm.ps1')
 Check (($sc0 -match 'if \(-not \$Probe\) \{\s+try \{\s+\. \(Join-Path \$here ''dwm-session\.ps1''\)') -and ($sc0 -match 'Save-DwmBaseline \$epoch')) 'the start-confirm task records the DWM baseline at each logon (not in -Probe)'
 Check ((Test-Path -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps1')) -and ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps1')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'installer\dwm-session.ps1')).Hash)) 'dwm-session.ps1 ships next to the installed start-confirm task'
 Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the walk-through records the DWM before the driver package'
+$marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
+Check ($marker.Count -eq 0) "the BD-059 session marker stays under KMD ownership: no installer code names it$(if ($marker.Count) { ': ' + ($marker -join ', ') })"
+$pos = @("Invoke-Change 'pnputil /add-driver", "Add-DwmObservation 'after the driver package'", "Save-Phase 'driver-pending-restart'", "Add-DwmObservation 'end of phase 2'", "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($src -match "Set-StateValue \`$state 'dwm_observations'")) 'DWM observations before and right after the driver package (ahead of the restart-pending branch) and at the end of phase 2 go into the state'
+$pos = @('$installInputs = Get-InstallInputs $PSBoundParameters $early', 'Save-InstallInputs $state $installInputs', "if (`$state.phase -eq 'new')", "Save-Phase 'driver-pending-restart'", 'Clear-InstallInputs $state', "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
+Check ((@($pos | Where-Object { $_ -lt 0 }).Count -eq 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($pos[4] -lt $pos[5]) -and ([regex]::Matches($src, 'Clear-InstallInputs').Count -eq 1)) 'install inputs: restored first, saved before any restart for every install action, cleared only when phase 2 completes'
 'BD-060 session rules (test-session-checks.ps1 under 5.1, HKCU scratch key)'
 $rs = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-session-checks.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Inf', (Join-Path $Package 'payload\kmd\bc250kmd.inf'), '-WorkRoot', $WorkBase)
 $rs.text
-Check ($rs.code -eq 0) "INF Reboot directive, pnputil outcomes, stale session marker, DWM baseline: exit $($rs.code)"
+Check ($rs.code -eq 0) "INF Reboot directive, pnputil outcomes, install inputs across a restart, DWM baseline: exit $($rs.code)"
 
 'file replacement and re-run (test-filesafe.ps1 under 5.1, inside a scratch folder)'
 $work = Join-Path $WorkBase ('filesafe-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
@@ -240,6 +246,38 @@ Check ($r.code -eq 2) "changed folder: exit $($r.code) (2 = preflight refusal)"
 Check ($r.text -match '\[fail\]\s+GPU firmware\s+-FirmwareDir .+cyan_skillfish2_me\.bin has another SHA256; LICENSE\.amdgpu missing') 'changed folder: the refusal names the changed and the missing file'
 Check ($r.text -match 'Nothing was changed') 'changed folder: nothing was changed'
 if ($r.code -ne 2) { $r.text }
+
+'continuation after the driver package restart without arguments (RunOnce): an offline fresh install and an upgrade'
+$goodDir = Join-Path $fwWork 'download'
+$n = 0
+foreach ($c in @(
+        @{ name = 'fresh offline install'; st = [ordered]@{ previous_service = 'BasicDisplay'; testsigning_set_by_installer = $true } }
+        @{ name = 'upgrade'; st = [ordered]@{ previous_package_version = '0.7.198.100-tester.10' } })) {
+    $n++
+    $dir = Join-Path $WorkBase ('state-resume-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + "-$n")
+    [void][IO.Directory]::CreateDirectory($dir)
+    $st = [ordered]@{ schema = 1; phase = 'driver-pending-restart'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z'
+        firmware_source_dir = $goodDir; command_line_parameters = [ordered]@{ DpmMaxMHz = 1200 }; install_switches = @('NoControlApp') }
+    foreach ($k in $c.st.Keys) { $st[$k] = $c.st[$k] }
+    [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json -Depth 4))
+    $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+    Check ($r.code -eq 0) "$($c.name): exit $($r.code)"
+    Check ($r.text -match "from the first run of this install \(driver-pending-restart\): -FirmwareDir $([regex]::Escape($goodDir)) -DpmMaxMHz 1200 -NoControlApp") "$($c.name): the folder, the setting and the switch come from the state"
+    Check (($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') -and ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') -and ($r.text -notmatch 'https://')) "$($c.name): the firmware comes from the first run's folder, no download"
+    Check ($r.text -match 'DpmMaxMHz=1200 \(command line\)') "$($c.name): the first run's -DpmMaxMHz is written"
+    Check (($r.text -match 'control application: not in this package \(or -NoControlApp\); skipped') -and ($r.text -notmatch 'would: copy payload\\control')) "$($c.name): -NoControlApp still holds"
+    if ($r.code -ne 0) { $r.text }
+    Remove-Item -LiteralPath $dir -Recurse -Force
+}
+$dir = Join-Path $WorkBase ('state-upgrade-args-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
+[void][IO.Directory]::CreateDirectory($dir)
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ([ordered]@{ schema = 1; phase = 'verified'; package_version = '0.7.198.100-tester.10'; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z' } | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', $goodDir, '-CuMode', '40', '-NoControlApp') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check (($r.code -eq 0) -and ($r.text -match "options of this install, kept until it completes: -FirmwareDir $([regex]::Escape($goodDir)) -CuMode 40 -NoControlApp") -and ($r.text -notmatch 'from the first run of this install')) "upgrade with arguments: its options are kept for the continuation (exit $($r.code))"
+if ($r.code -ne 0) { $r.text }
+Remove-Item -LiteralPath $dir -Recurse -Force
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 
 'uninstall -DryRun'

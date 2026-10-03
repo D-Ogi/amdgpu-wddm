@@ -69,20 +69,6 @@ Write-Info "package: $package"
 $early = Read-InstallState
 if ($early -and $early.install_root) { $InstallRoot = $early.install_root }
 Write-Info "install root: $InstallRoot"
-# The run after the test-signing restart starts from RunOnce without arguments: it keeps phase 1's -FirmwareDir.
-if (-not $FirmwareDir -and $early -and $early.phase -eq 'testsigning-pending' -and $early.firmware_source_dir) {
-    $FirmwareDir = [string]$early.firmware_source_dir
-    Write-Info "firmware folder from the first run: $FirmwareDir"
-}
-# Driver settings given on the command line are written even over a tester's own value; the run after the
-# test-signing restart starts without arguments and takes them from phase 1's state.
-$commandLineParameters = @{}
-if ($PSBoundParameters.ContainsKey('DpmMaxMHz')) { $commandLineParameters['DpmMaxMHz'] = $DpmMaxMHz }
-if ($CuMode) { $commandLineParameters['CuMode'] = $CuMode }
-if (-not $commandLineParameters.Count -and $early -and $early.phase -eq 'testsigning-pending' -and $early.command_line_parameters) {
-    foreach ($p in $early.command_line_parameters.PSObject.Properties) { $commandLineParameters[$p.Name] = [int]$p.Value }
-    Write-Info "driver settings from the first run's command line: $(($commandLineParameters.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ' ')"
-}
 
 # ---- preflight -----------------------------------------------------------------------------------------------
 # Every check runs, in a dry run too. Severity: fail stops the install, warn needs attention, ok is fine.
@@ -194,6 +180,16 @@ if (-not $installedVersion -and -not ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_D
 $action = Get-InstallAction -State $early -PackageVersion $packageVersion -InstalledVersion $installedVersion -Repair $Repair
 if ($Verify) { $action = [ordered]@{ action = 'verify'; message = $null } }
 if ($early) { Write-Info "installed: $(if ($installedVersion) { $installedVersion } else { 'unknown version' }), phase $($early.phase); package: $packageVersion; action: $($action.action)" }
+# The run after a restart that the installer asked for starts from RunOnce without arguments: it takes the first
+# run's -FirmwareDir, driver settings and switches from the state (common.ps1, Get-InstallInputs). Driver settings
+# given on the command line are written even over a tester's own value.
+$installInputs = Get-InstallInputs $PSBoundParameters $early $packageVersion
+if (@($installInputs.restored).Count) { Write-Info "from the first run of this install ($($early.phase)): $($installInputs.restored -join ' ')" }
+$FirmwareDir = $installInputs.firmware_dir
+$commandLineParameters = $installInputs.parameters
+$NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
+$NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
+$Force = [switch](@($installInputs.switches) -contains 'Force')
 
 # Verification needs no preflight: it reads the installed copy (verify.cmd in the install root) or the package.
 if ($action.action -eq 'verify' -and -not ($DryRun -and -not $Verify)) {
@@ -431,7 +427,15 @@ switch ($action.action) {
         Set-StateValue $state 'previous_package_version' $installedVersion
         Set-StateValue $state 'package_version' $packageVersion
     }
+    'resume' { Write-Step $action.message }
 }
+# Saved with the state before any step that can end in a restart, for an install, an upgrade and a repair alike.
+Save-InstallInputs $state $installInputs
+$inputText = @()
+if ($FirmwareDir) { $inputText += "-FirmwareDir $FirmwareDir" }
+foreach ($k in @($commandLineParameters.Keys | Sort-Object)) { $inputText += "-$k $($commandLineParameters[$k])" }
+$inputText += @($installInputs.switches | ForEach-Object { "-$_" })
+if ($inputText.Count) { Write-Info "options of this install, kept until it completes: $($inputText -join ' ')" }
 
 # ---- phase 1: test signing -------------------------------------------------------------------------------------
 function New-RestorePoint {
@@ -448,8 +452,6 @@ if ($state.phase -eq 'new') {
     Set-StateValue $state 'previous_testsigning' $script:TestSigningConfigured
     Set-StateValue $state 'install_root' $InstallRoot
     Set-StateValue $state 'package_version' $script:Manifest.version
-    Set-StateValue $state 'firmware_source_dir' $(if ($FirmwareDir) { $FirmwareDir } else { $null })
-    Set-StateValue $state 'command_line_parameters' $(if ($commandLineParameters.Count) { $commandLineParameters } else { $null })
     New-RestorePoint
     if ($script:TestSigningActive) {
         Write-Info 'test signing is already active in this boot: no restart needed before the install'
@@ -595,24 +597,35 @@ if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $sta
 
 # The driver package. Its INF carries the Reboot directive (build-release.ps1): Windows installs the package but does
 # not restart a GPU that is already started (on Microsoft Basic Display or on the previous release), so the desktop
-# and DWM keep their device for the rest of this session (BD-060, common.ps1). pnputil answers 3010 and the GPU
-# changes driver at the restart that ends phase 2. A GPU that is not started is installed at once (exit 0), with the
-# INF's closed gates (display only). Nothing here stops or restarts DWM; the registry below opens the gates for the
-# next start.
+# and DWM keep their device for the rest of this session (BD-060, common.ps1), and the GPU changes driver at the next
+# restart. A GPU that is not started can be installed at once, with the INF's closed gates (display only). pnputil's
+# exit code says only that the operation completed, with or without a restart required (Get-DriverPackageOutcome):
+# the binding check below decides. Nothing here stops or restarts DWM, and nothing touches the KMD's own state (the
+# BD-059 session marker included); the registry below opens the gates for the next start.
 $infFile = Join-Path $package 'payload\kmd\bc250kmd.inf'
-# Observations around the driver package, recorded in the log and the state: the session's DWM instance (process ID
-# and creation time) and the device's outcome are kept apart; a device-loss event and a DWM process restart are two
-# different things. Read-only, in a dry run too.
+# Observations around the driver package, in the log and in the state (dwm_observations, the last 12 of every run of
+# this install): the session's DWM instances (process ID and creation time) before it, right after it and at the end
+# of phase 2, with the boot they were made in. The device's own outcome after it is a separate field: a device-loss
+# event and a DWM process restart are two different things. Read-only, in a dry run too, and never a reason to stop.
 $dwmSession = 0; $dwmBefore = @()
+$dwmBoot = $null
+try { $dwmBoot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o') } catch { }
+function Add-DwmObservation([string]$Stage, $Instances, [string]$Device = $null) {
+    $e = [ordered]@{ stage = $Stage; utc = [DateTime]::UtcNow.ToString('o'); boot_utc = $dwmBoot; session = $dwmSession
+        dwm = @(@($Instances) | ForEach-Object { [ordered]@{ pid = $_.pid; created_utc = ([datetime]$_.created_utc).ToString('o') } }) }
+    if ($Stage -ne 'before the driver package') { $e['dwm_change'] = Compare-DwmReadings $dwmBefore $Instances }
+    if ($PSBoundParameters.ContainsKey('Device')) { $e['device'] = $Device }
+    $all = @(@($state.dwm_observations) | Where-Object { $_ }) + @([pscustomobject]$e)
+    Set-StateValue $state 'dwm_observations' @($all | Select-Object -Last 12)
+}
 try { $dwmSession = Get-DesktopSessionId; if ($dwmSession) { $dwmBefore = Get-SessionDwm $dwmSession } } catch { Write-Log "   DWM reading: $($_.Exception.Message)" }
 Write-Info "DWM of session $dwmSession before the driver package: $(if (@($dwmBefore).Count) { (@($dwmBefore) | ForEach-Object { Format-DwmInstance $_ }) -join ', ' } else { 'none' })"
+if ($dwmSession) { Add-DwmObservation 'before the driver package' $dwmBefore }
 if (-not (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile)))) { throw 'payload\kmd\bc250kmd.inf has no Reboot directive: this package would restart the GPU under the running desktop' }
 $pnp = Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install (the GPU changes to it at the next restart)' {
     $n = Invoke-Native pnputil.exe @('/add-driver', $infFile, '/install')
     Write-Log $n.text
-    # 3010: installed, the device changes at the restart. 0: installed on a device that was not started. 259: the
-    # package is in the driver store and no device needed an update, which is what a re-run over an earlier run's
-    # install sees; the binding check below decides.
+    # 259 is also what a re-run over an earlier run's install sees.
     $o = Get-DriverPackageOutcome $n.code
     if (-not $o.ok) { throw "pnputil failed ($($n.code)): $($n.text)" }
     Write-Info "pnputil: $($o.text)"
@@ -620,14 +633,25 @@ $pnp = Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install (the
 }
 $instance = $null
 if ($script:Device) { $instance = $script:Device.DeviceID }
+# Right after the driver package, before any branch: the observation covers the restart-pending case too.
+if ($dwmSession) {
+    try {
+        $dwmAfter = Get-SessionDwm $dwmSession
+        $devNow = $null
+        if ($instance) { $devNow = Get-PnpDevice -InstanceId $instance -ErrorAction SilentlyContinue }
+        $devText = $(if ($pnp) { "$($pnp.text); device status $(if ($devNow) { $devNow.Status } else { 'unknown' })" } else { 'not run (dry run)' })
+        Add-DwmObservation 'after the driver package' $dwmAfter $devText
+        Write-Info "after the driver package: device: $devText; DWM: $(Compare-DwmReadings $dwmBefore $dwmAfter)"
+    } catch { Write-Log "   DWM reading: $($_.Exception.Message)" }
+}
 $classKey = $null
 if (-not $script:DryRunMode) {
     $svc = Get-DeviceServiceName -InstanceId $instance
     $script:CurrentStep = 'check that the GPU is bound to the new driver package'
     if ($svc -ne $script:ServiceName -and $pnp.deferred) {
-        # The install is complete apart from the device restart, so the device's registry should name the new service
-        # already. If it still names the old one, phase 2 finishes after the restart instead of writing into the old
-        # driver's key.
+        # A restart is required to finish the install. If the device's registry still names the old service, phase 2
+        # finishes after the restart instead of writing into the old driver's key; the inputs of this install stay in
+        # the state for that argument-free run.
         Write-Info "the GPU is still on '$svc' until the restart: phase 2 continues after the next logon"
         Save-Phase 'driver-pending-restart'
         Set-ResumeAtLogon (Join-Path $package 'install.cmd')
@@ -635,27 +659,10 @@ if (-not $script:DryRunMode) {
         exit 0
     }
     if ($svc -ne $script:ServiceName) { throw "the GPU is on '$svc' after pnputil, not on $($script:ServiceName)" }
-    if ($pnp.inPlace -and (Test-StaleInteropMarker $script:ParametersKey)) {
-        Invoke-Change 'remove Parameters\InteropSession, the GPU desktop session marker of the driver instance that the device update stopped in this boot (the next start would read it as a crash and close the GPU desktop path)' {
-            Remove-ItemProperty -LiteralPath $script:ParametersKey -Name InteropSession -ErrorAction Stop
-        } | Out-Null
-    }
     $classKey = Get-DeviceDriverKey -InstanceId $instance
     if (-not $classKey) { throw 'no software key for the GPU' }
     Set-StateValue $state 'class_key' $classKey
 } else { $classKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$($script:DisplayClassGuid)\<device's key after install>" }
-if ($dwmSession) {
-    $dwmAfter = Get-SessionDwm $dwmSession
-    $devNow = $null
-    if ($instance) { $devNow = Get-PnpDevice -InstanceId $instance -ErrorAction SilentlyContinue }
-    $obs = [ordered]@{
-        utc = [DateTime]::UtcNow.ToString('o'); session = $dwmSession
-        device = $(if ($pnp) { "$($pnp.text); status $(if ($devNow) { $devNow.Status } else { 'unknown' })" } else { 'not run (dry run)' })
-        dwm = (Compare-DwmReadings $dwmBefore $dwmAfter)
-    }
-    Write-Info "after the driver package: device: $($obs.device); DWM: $($obs.dwm)"
-    Set-StateValue $state 'driver_package_observation' ([pscustomobject]$obs)
-}
 Save-Phase 'driver-installed'
 
 # Driver settings and router policy. The defaults come from installer\registry-defaults.json, the table that
@@ -743,13 +750,15 @@ if ($controlExe -and $dirs -contains 'control') {
     Set-StateValue $state 'shortcut' $lnk
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
-Set-StateValue $state 'firmware_source_dir' $null
-Set-StateValue $state 'command_line_parameters' $null
+Clear-InstallInputs $state
 Set-StateValue $state 'parameters_before_install' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 if ($dwmSession) {
-    $dwmEnd = Get-SessionDwm $dwmSession
-    Write-Info "DWM at the end of phase 2: $(Compare-DwmReadings $dwmBefore $dwmEnd)"
+    try {
+        $dwmEnd = Get-SessionDwm $dwmSession
+        Add-DwmObservation 'end of phase 2' $dwmEnd
+        Write-Info "DWM at the end of phase 2: $(Compare-DwmReadings $dwmBefore $dwmEnd)"
+    } catch { Write-Log "   DWM reading: $($_.Exception.Message)" }
 }
 Save-Phase 'installed'
 Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')

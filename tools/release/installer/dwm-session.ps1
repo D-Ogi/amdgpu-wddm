@@ -45,8 +45,10 @@ public static class Wts {
 }
 
 function Format-DwmTime($T) { return ([datetime]$T).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z' }
-function ConvertFrom-DwmTime([string]$Text) {
-    return [DateTime]::Parse($Text, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
+function ConvertFrom-DwmTime($Value) {
+    if ($Value -is [datetime]) { return $Value.ToUniversalTime() }
+    if ($Value -isnot [string]) { throw "not a time: '$Value'" }
+    return [DateTime]::Parse($Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
 }
 # The session with the desktop: this process's own, or the console session when this runs in session 0 (a service,
 # an SSH shell). 0: none.
@@ -86,11 +88,29 @@ function Read-DwmBaseline([string]$Path = $script:DwmBaselinePath) {
     if (-not (Test-Path -LiteralPath $Path)) { return , @() }
     try { return , @((Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json).records) } catch { return , @() }
 }
+# A record counts only whole: a positive session and process ID (numbers) and four times that parse. Any other record
+# (a field missing, a string where a number belongs, a time that does not parse) is ignored: its epoch reads as
+# unknown history, and the next recording of that epoch replaces it.
+function Test-DwmBaselineRecord($Record) {
+    if (-not $Record) { return $false }
+    foreach ($n in 'session', 'dwm_pid') {
+        $p = $Record.PSObject.Properties[$n]
+        if (-not $p) { return $false }
+        $v = $p.Value
+        if (-not (($v -is [int]) -or ($v -is [long])) -or ($v -le 0) -or ($v -gt [int]::MaxValue)) { return $false }
+    }
+    foreach ($n in 'boot_utc', 'logon_utc', 'dwm_created_utc', 'recorded_utc') {
+        $p = $Record.PSObject.Properties[$n]
+        if (-not $p) { return $false }
+        try { [void](ConvertFrom-DwmTime $p.Value) } catch { return $false }
+    }
+    return $true
+}
 # The record of an epoch: the same session, the boot and the logon within 2 s.
 function Find-DwmBaseline($Records, $Epoch) {
     if (($Epoch.session -eq 0) -or ($null -eq $Epoch.logon_utc)) { return $null }
     foreach ($r in @($Records)) {
-        if (-not $r) { continue }
+        if (-not (Test-DwmBaselineRecord $r)) { continue }
         try {
             if (([int]$r.session -eq $Epoch.session) -and
                 ([math]::Abs(((ConvertFrom-DwmTime $r.boot_utc) - $Epoch.boot_utc).TotalSeconds) -le 2) -and
@@ -100,7 +120,8 @@ function Find-DwmBaseline($Records, $Epoch) {
     return $null
 }
 # The start-confirm task at each logon: the first DWM seen in an epoch is its baseline; a later call of the same epoch
-# keeps that record. Returns the epoch's record and whether this call wrote it.
+# keeps that record. A record that does not count (Test-DwmBaselineRecord) is dropped when the file is written. Returns
+# the epoch's record and whether this call wrote it.
 function Save-DwmBaseline($Epoch, $Current, [string]$Path = $script:DwmBaselinePath, [string]$By = 'start-confirm') {
     $records = Read-DwmBaseline $Path
     $have = Find-DwmBaseline $records $Epoch
@@ -112,7 +133,7 @@ function Save-DwmBaseline($Epoch, $Current, [string]$Path = $script:DwmBaselineP
         dwm_pid = $d.pid; dwm_created_utc = ([datetime]$d.created_utc).ToUniversalTime().ToString('o')
         recorded_utc = [DateTime]::UtcNow.ToString('o'); recorded_by = $By
     }
-    $all = @(@($records | Where-Object { $_ }) + @($rec))
+    $all = @(@($records | Where-Object { Test-DwmBaselineRecord $_ }) + @($rec))
     if ($all.Count -gt $script:DwmBaselineKeep) { $all = @($all | Select-Object -Last $script:DwmBaselineKeep) }
     $json = [ordered]@{ schema = 1; records = $all } | ConvertTo-Json -Depth 4
     $dir = Split-Path -Parent $Path
@@ -129,7 +150,7 @@ function Get-DwmReplacementFinding($Record, $Current, $Epoch) {
     if (($Epoch.session -eq 0) -or ($null -eq $Epoch.logon_utc)) { return [pscustomobject]@{ state = 'unknown'; detail = 'unknown: no desktop session with a logon' } }
     $now = @($Current)
     if (-not $now.Count) { return [pscustomobject]@{ state = 'unknown'; detail = "unknown: no DWM in session $($Epoch.session)" } }
-    if (-not $Record) { return [pscustomobject]@{ state = 'unknown'; detail = "unknown history: no DWM of session $($Epoch.session) was recorded since the logon at $(Format-DwmTime $Epoch.logon_utc) (the start-confirm task records it after each logon of an administrator)" } }
+    if (-not (Test-DwmBaselineRecord $Record)) { return [pscustomobject]@{ state = 'unknown'; detail = "unknown history: no DWM of session $($Epoch.session) was recorded since the logon at $(Format-DwmTime $Epoch.logon_utc) (the start-confirm task records it after each logon of an administrator)" } }
     $base = [pscustomobject]@{ pid = [int]$Record.dwm_pid; created_utc = (ConvertFrom-DwmTime $Record.dwm_created_utc) }
     $recorded = Format-DwmTime (ConvertFrom-DwmTime $Record.recorded_utc)
     $running = @($now | Where-Object { Test-SameDwm $_ $base })

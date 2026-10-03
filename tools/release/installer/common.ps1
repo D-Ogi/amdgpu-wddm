@@ -141,6 +141,7 @@ function Set-StateValue($State, [string]$Name, $Value) {
 # installed version in, the action out. Testers get new packages often, so a different version always installs.
 #   install   no state, or phase 1 not finished: the normal run
 #   upgrade   another version is installed (any phase): phase 2 again, files that did not change are kept
+#   resume    the same version waits for the restart that its driver package asked for: phase 2 continues
 #   repair    the same version in an unfinished or failed phase, or -Repair: phase 2 again
 #   verify    the same version installed and waiting for its restart (phase 'installed'): phase 3 only
 #   already   the same version verified: nothing to do (exit 0)
@@ -153,10 +154,44 @@ function Get-InstallAction {
     if ($InstalledVersion -ne $PackageVersion) {
         return [ordered]@{ action = 'upgrade'; message = "upgrading $InstalledVersion -> $PackageVersion (installed phase $phase)" }
     }
+    if ($phase -eq 'driver-pending-restart') { return [ordered]@{ action = 'resume'; message = "continuing the installation of $PackageVersion after the driver package restart" } }
     if ($Repair) { return [ordered]@{ action = 'repair'; message = "repairing $PackageVersion (-Repair, phase $phase)" } }
     if ($phase -eq 'verified') { return [ordered]@{ action = 'already'; message = "$PackageVersion is already installed and verified. Run verify.cmd to check it again, install.cmd -Repair to install it again, or uninstall.cmd to remove it." } }
     if ($phase -eq 'installed') { return [ordered]@{ action = 'verify'; message = $null } }
     return [ordered]@{ action = 'repair'; message = "repairing $PackageVersion (phase $phase)" }
+}
+
+# The inputs of an install that phase 2 needs: the firmware folder (-FirmwareDir), the driver settings given on the
+# command line (-DpmMaxMHz, -CuMode) and the switches that select what is installed and how (-NoControlApp, -NoReboot,
+# -Force). The run after a restart that the installer asked for (test signing, or a driver package that waits for the
+# restart) starts from RunOnce without arguments: it takes them from the state, if the state is of the same package
+# version. A value given on its own command line wins. Every run saves its effective inputs; phase 2 clears them when
+# it completes.
+$script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force')
+function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
+    $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
+    $in = [pscustomobject]@{ firmware_dir = $null; parameters = @{}; switches = @(); restored = @() }
+    if ($Bound.ContainsKey('FirmwareDir') -and $Bound['FirmwareDir']) { $in.firmware_dir = [string]$Bound['FirmwareDir'] }
+    elseif ($resume -and $State.firmware_source_dir) { $in.firmware_dir = [string]$State.firmware_source_dir; $in.restored += "-FirmwareDir $($in.firmware_dir)" }
+    if ($Bound.ContainsKey('DpmMaxMHz')) { $in.parameters['DpmMaxMHz'] = [int]$Bound['DpmMaxMHz'] }
+    if ($Bound.ContainsKey('CuMode') -and [int]$Bound['CuMode']) { $in.parameters['CuMode'] = [int]$Bound['CuMode'] }
+    if (-not $in.parameters.Count -and $resume -and $State.command_line_parameters) {
+        foreach ($p in $State.command_line_parameters.PSObject.Properties) { $in.parameters[$p.Name] = [int]$p.Value; $in.restored += "-$($p.Name) $([int]$p.Value)" }
+    }
+    foreach ($s in $script:InstallSwitches) {
+        if ($Bound.ContainsKey($s)) { if ([bool]$Bound[$s]) { $in.switches += $s } }
+        elseif ($resume -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
+    }
+    return $in
+}
+function Save-InstallInputs($State, $Inputs) {
+    Set-StateValue $State 'firmware_source_dir' $Inputs.firmware_dir
+    Set-StateValue $State 'command_line_parameters' $(if ($Inputs.parameters.Count) { [pscustomobject]$Inputs.parameters } else { $null })
+    Set-StateValue $State 'install_switches' $(if (@($Inputs.switches).Count) { @($Inputs.switches) } else { $null })
+}
+function Clear-InstallInputs($State) {
+    foreach ($n in 'firmware_source_dir', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
 }
 
 # A fact about the computer before the install (did this file exist?): the first run records it, a re-run over a
@@ -250,8 +285,9 @@ function Get-InfParameterNames([string]$InfPath) {
 # No device restart and no DWM restart under the running desktop (BD-060). WinUI pointer-input loss after the desktop
 # compositor (DWM) is terminated and restarted reproduces on this Windows build (22631) also with Microsoft Basic
 # Display; restarting Windows recovers (dwm-session.ps1). A GPU restarted in place under the desktop takes DWM's devices
-# away (a device-loss event, observed apart from any DWM process restart), and it can leave the BD-059 session marker
-# of the stopped driver behind (the next boot then closes the GPU desktop path as "died in a session").
+# away (a device-loss event, observed apart from any DWM process restart). The BD-059 session marker
+# (Parameters\InteropSession) belongs to the KMD, and the installer never changes it: if a start closes the GPU desktop
+# path, "Reopen the GPU desktop path" in the control application opens it again (INSTALL.md).
 
 # The INF's Reboot directive in each install section that its models name: Windows 8 and later then install the
 # package but do not restart a device that is already started, pnputil answers 3010, and the device changes driver
@@ -304,25 +340,15 @@ function Add-InfRebootDirective([string]$Text) {
     if (-not (Test-InfDefersDeviceRestart ($Text -split "`r?`n"))) { throw 'INF: Reboot directive missing after the rewrite' }
     return $Text
 }
-# What pnputil /add-driver /install did to the GPU.
+# What the exit code of pnputil /add-driver /install establishes (PnPUtil Return Values), and no more: it does not say
+# whether a device instance stopped or started. The binding check after it decides what the GPU runs.
 function Get-DriverPackageOutcome([int]$Code) {
     switch ($Code) {
-        3010 { return [pscustomobject]@{ ok = $true; deferred = $true; inPlace = $false; text = 'the driver package is installed; the GPU changes to it at the next restart (no device restart under the running desktop)' } }
-        0 { return [pscustomobject]@{ ok = $true; deferred = $false; inPlace = $true; text = 'the driver package is installed and the GPU started on it at once (it was not started before)' } }
-        259 { return [pscustomobject]@{ ok = $true; deferred = $false; inPlace = $false; text = 'the driver package is already in the driver store and no device needed an update' } }
-        default { return [pscustomobject]@{ ok = $false; deferred = $false; inPlace = $false; text = "pnputil exit $Code" } }
+        3010 { return [pscustomobject]@{ ok = $true; deferred = $true; text = 'pnputil exit 3010: completed, a system restart is required' } }
+        0 { return [pscustomobject]@{ ok = $true; deferred = $false; text = 'pnputil exit 0: completed' } }
+        259 { return [pscustomobject]@{ ok = $true; deferred = $false; text = 'pnputil exit 259: no device change reported' } }
+        default { return [pscustomobject]@{ ok = $false; deferred = $false; text = "pnputil exit $Code" } }
     }
-}
-# The BD-059 session marker of a driver instance that a device restart stopped in this boot: Parameters\InteropSession
-# together with this boot's record, the volatile Parameters\InteropBoot\Marked = 1. The KMD calls that marker stale when
-# its next start of the same boot finds it. After an in-place restart the new instance runs display-only with the
-# INF's gates, or does not start at all, so nothing clears the marker in this boot, and the next boot would read it as
-# a death in a session. A marker without this boot's record is an earlier boot's: it stays for the KMD to judge.
-function Test-StaleInteropMarker([string]$ParametersKey) {
-    $session = (Get-ItemProperty -LiteralPath $ParametersKey -Name InteropSession -ErrorAction SilentlyContinue).InteropSession
-    if ($null -eq $session) { return $false }
-    $marked = (Get-ItemProperty -LiteralPath (Join-Path $ParametersKey 'InteropBoot') -Name Marked -ErrorAction SilentlyContinue).Marked
-    return ($marked -eq 1)
 }
 
 function Format-RegistryPlan($Plan) {

@@ -1,11 +1,11 @@
 # Host test of the BD-060 rules in common.ps1 and dwm-session.ps1: the INF Reboot directive (the GPU changes driver at
-# the next restart, not under the running desktop), the pnputil outcomes, the stale BD-059 session marker after an
-# in-place device restart, and the DWM baseline: a replacement is reported only when observed against the record of
-# the same boot, session and logon, otherwise the history is unknown. Windows PowerShell 5.1, like the installer:
+# the next restart, not under the running desktop), the pnputil outcomes (only what the exit code establishes; the
+# BD-059 session marker stays the KMD's), the install inputs that the argument-free run after a restart takes from the
+# state, and the DWM baseline: a replacement is reported only when observed against a whole record of the same boot,
+# session and logon, otherwise the history is unknown. Windows PowerShell 5.1, like the installer:
 #   powershell -NoProfile -File tools\release\test-session-checks.ps1 [-Installer <package>\installer] [-Inf <packaged INF>] [-WorkRoot <dir>]
-# -Inf: the INF of a built package, which must carry the directive. The marker cases run against a scratch key,
-# HKCU:\Software\amdgpu-wddm-installer-test-session, removed at the end; the baseline cases write only files under
-# -WorkRoot. Nothing under HKLM is read or written; this computer's own session and DWM are read only.
+# -Inf: the INF of a built package, which must carry the directive. The baseline cases write only files under
+# -WorkRoot. Nothing in the registry is written; this computer's own session and DWM are read only.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf, [string]$WorkRoot = (Join-Path (Split-Path (Split-Path $Installer)) 'test-tmp'))
 $ErrorActionPreference = 'Stop'
 . (Join-Path $Installer 'common.ps1')
@@ -72,32 +72,58 @@ if ($Inf) {
     Check (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($Inf))) "the packaged INF carries Reboot in every install section ($Inf)"
 }
 
-'pnputil outcomes'
+'pnputil outcomes: only what the exit code establishes'
 $o = Get-DriverPackageOutcome 3010
-Check ($o.ok -and $o.deferred -and -not $o.inPlace) '3010: installed, the GPU changes at the restart'
+Check ($o.ok -and $o.deferred -and ($o.text -eq 'pnputil exit 3010: completed, a system restart is required')) "3010: $($o.text)"
 $o = Get-DriverPackageOutcome 0
-Check ($o.ok -and $o.inPlace -and -not $o.deferred) '0: installed on a device that was not started (in place)'
+Check ($o.ok -and -not $o.deferred -and ($o.text -eq 'pnputil exit 0: completed')) "0: $($o.text)"
 $o = Get-DriverPackageOutcome 259
-Check ($o.ok -and -not $o.inPlace -and -not $o.deferred) '259: already in the driver store, no device update'
+Check ($o.ok -and -not $o.deferred -and ($o.text -eq 'pnputil exit 259: no device change reported')) "259: $($o.text)"
 Check (-not (Get-DriverPackageOutcome 5).ok) 'any other exit code fails'
+Check (@(3010, 0, 259 | ForEach-Object { (Get-DriverPackageOutcome $_).PSObject.Properties.Name } | Where-Object { $_ -notin @('ok', 'deferred', 'text') }).Count -eq 0) 'no outcome claims what the device did (no in-place field)'
+Check (-not (Get-Command Test-StaleInteropMarker -ErrorAction SilentlyContinue)) 'the BD-059 session marker stays under KMD ownership: no installer function judges or removes it'
 
-'BD-059 session marker after an in-place device restart (HKCU scratch key)'
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test-session'
-Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue
-try {
-    Initialize-RegistryKey $key
-    Check (-not (Test-StaleInteropMarker $key)) 'no marker: nothing to remove'
-    New-ItemProperty -LiteralPath $key -Name InteropSession -Value 175 -PropertyType DWord -Force | Out-Null
-    Check (-not (Test-StaleInteropMarker $key)) 'a marker without this boot''s record (an earlier boot''s death) stays for the KMD'
-    Initialize-RegistryKey "$key\InteropBoot"
-    New-ItemProperty -LiteralPath "$key\InteropBoot" -Name Marked -Value 0 -PropertyType DWord -Force | Out-Null
-    Check (-not (Test-StaleInteropMarker $key)) 'InteropBoot Marked 0: not this boot''s marker'
-    New-ItemProperty -LiteralPath "$key\InteropBoot" -Name Marked -Value 1 -PropertyType DWord -Force | Out-Null
-    Check (Test-StaleInteropMarker $key) 'marker plus InteropBoot Marked 1: the stopped instance''s marker of this boot (stale)'
-    Remove-ItemProperty -LiteralPath $key -Name InteropSession
-    Check (-not (Test-StaleInteropMarker $key)) 'record of this boot without a marker: nothing to remove'
-} finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
-Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
+'install inputs across the argument-free continuation (RunOnce runs install.cmd without arguments)'
+# The state as the next run reads it: saved as JSON, read back.
+function Step-State($State, [string]$Phase) { Set-StateValue $State 'phase' $Phase; return ($State | ConvertTo-Json -Depth 6 | ConvertFrom-Json) }
+function Format-Inputs($In) { return "fw=$($In.firmware_dir) params=$((@($In.parameters.Keys | Sort-Object) | ForEach-Object { "$_=$($In.parameters[$_])" }) -join ',') switches=$(@($In.switches) -join ',')" }
+$none = @{}
+$v11 = '0.7.199.100-tester.11'
+foreach ($resumePhase in 'driver-pending-restart', 'testsigning-pending') {
+    # Offline fresh install: phase 1 saves the inputs, the run after the restart has no arguments.
+    $st = [pscustomobject]@{ schema = 1; phase = 'new'; package_version = $v11 }
+    $first = Get-InstallInputs @{ FirmwareDir = 'D:\fw offline'; DpmMaxMHz = 1200; CuMode = 0; NoControlApp = [switch]$true; NoReboot = [switch]$true } $st $v11
+    Save-InstallInputs $st $first
+    $next = Get-InstallInputs $none (Step-State $st $resumePhase) $v11
+    Check ((Format-Inputs $next) -eq 'fw=D:\fw offline params=DpmMaxMHz=1200 switches=NoControlApp,NoReboot') "fresh offline install resumed at ${resumePhase}: $(Format-Inputs $next)"
+    Check (@($next.restored).Count -eq 4) "fresh install at ${resumePhase}: every restored input is named ($($next.restored -join ' '))"
+}
+# Upgrade over a verified install: the upgrade's own arguments are saved and come back after the driver package restart.
+$st = [pscustomobject]@{ schema = 1; phase = 'verified'; package_version = '0.7.198.100-tester.10' }
+$up = Get-InstallInputs @{ FirmwareDir = 'E:\fw'; CuMode = 40; Force = [switch]$true } $st $v11
+Check (@($up.restored).Count -eq 0) 'upgrade from a verified install: nothing from the earlier install is taken'
+Save-InstallInputs $st $up
+Set-StateValue $st 'package_version' $v11
+$next = Get-InstallInputs $none (Step-State $st 'driver-pending-restart') $v11
+Check ((Format-Inputs $next) -eq 'fw=E:\fw params=CuMode=40 switches=Force') "upgrade resumed without arguments: $(Format-Inputs $next)"
+$st2 = Step-State $st 'driver-pending-restart'
+$next = Get-InstallInputs @{ DpmMaxMHz = 1100; NoReboot = [switch]$true; Force = [switch]$false } $st2 $v11
+Check ((Format-Inputs $next) -eq 'fw=E:\fw params=DpmMaxMHz=1100 switches=NoReboot') "a resumed run's own arguments win (settings as a set, -Force:`$false): $(Format-Inputs $next)"
+$next = Get-InstallInputs $none $st2 '0.7.199.100-tester.12'
+Check ((Format-Inputs $next) -eq 'fw= params= switches=') 'another package version run over the waiting state takes nothing from it'
+$next = Get-InstallInputs $none (Step-State $st 'install-incomplete') $v11
+Check ((Format-Inputs $next) -eq 'fw= params= switches=') 'a re-run after a failed step is not an argument-free continuation: nothing restored'
+Clear-InstallInputs $st
+$next = Get-InstallInputs $none (Step-State $st 'driver-pending-restart') $v11
+Check ((Format-Inputs $next) -eq 'fw= params= switches=') 'cleared at completion: nothing restored'
+# The state of a tester.10 phase 1 (no install_switches) still resumes its folder and settings.
+$old = [pscustomobject]@{ schema = 1; phase = 'testsigning-pending'; package_version = '0.7.198.100-tester.10'; firmware_source_dir = 'C:\amdgpu-wddm-firmware'; command_line_parameters = [pscustomobject]@{ DpmMaxMHz = 1500 } } | ConvertTo-Json | ConvertFrom-Json
+Check ((Format-Inputs (Get-InstallInputs $none $old '0.7.198.100-tester.10')) -eq 'fw=C:\amdgpu-wddm-firmware params=DpmMaxMHz=1500 switches=') 'a tester.10 state at testsigning-pending resumes its folder and settings'
+
+$ia = Get-InstallAction -State ([pscustomobject]@{ phase = 'driver-pending-restart' }) -PackageVersion $v11 -InstalledVersion $v11 -Repair $false
+Check (($ia.action -eq 'resume') -and ($ia.message -match 'continuing the installation')) "same version at driver-pending-restart: $($ia.action) (not a repair, previous_package_version kept)"
+$ia = Get-InstallAction -State ([pscustomobject]@{ phase = 'driver-pending-restart' }) -PackageVersion '0.7.199.100-tester.12' -InstalledVersion $v11 -Repair $false
+Check ($ia.action -eq 'upgrade') "another version over a waiting install: $($ia.action)"
 
 'DWM baseline: a replacement only when observed (dwm-session.ps1)'
 $work = Join-Path $WorkRoot ('session-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
@@ -136,6 +162,34 @@ try {
     [IO.File]::WriteAllText($file, '{ not json')
     Check ((Read-DwmBaseline $file).Count -eq 0) 'a damaged file reads as no record (unknown history)'
     Check ((Save-DwmBaseline $e1 @($first) $file).written -and ((Read-DwmBaseline $file).Count -eq 1)) 'a damaged file is replaced by a new one'
+    # A record of this epoch with a malformed field: ignored (unknown history, never a false replacement), and the next
+    # recording of the epoch replaces it. A whole record of another epoch in the same file stays.
+    $good = Read-DwmBaseline $file | Select-Object -First 1
+    $other = [ordered]@{ boot_utc = $e1.boot_utc.AddDays(-1).ToString('o'); session = 1; logon_utc = $e1.logon_utc.AddDays(-1).ToString('o'); dwm_pid = 777; dwm_created_utc = $e1.boot_utc.AddDays(-1).ToString('o'); recorded_utc = $e1.boot_utc.AddDays(-1).ToString('o'); recorded_by = 'start-confirm' }
+    $bad = @(
+        @{ name = 'dwm_pid missing'; drop = 'dwm_pid' }
+        @{ name = 'dwm_pid as text'; set = @{ dwm_pid = '1916' } }
+        @{ name = 'dwm_pid 0'; set = @{ dwm_pid = 0 } }
+        @{ name = 'dwm_pid null'; set = @{ dwm_pid = $null } }
+        @{ name = 'session as text'; set = @{ session = '1' } }
+        @{ name = 'dwm_created_utc missing'; drop = 'dwm_created_utc' }
+        @{ name = 'dwm_created_utc not a time'; set = @{ dwm_created_utc = 'yesterday' } }
+        @{ name = 'recorded_utc missing'; drop = 'recorded_utc' }
+        @{ name = 'recorded_utc a number'; set = @{ recorded_utc = 5 } }
+    )
+    foreach ($b in $bad) {
+        $r = [ordered]@{}
+        foreach ($p in $good.PSObject.Properties) { if ($p.Name -ne $b.drop) { $r[$p.Name] = $p.Value } }
+        if ($b.set) { foreach ($k in $b.set.Keys) { $r[$k] = $b.set[$k] } }
+        [IO.File]::WriteAllText($file, ([ordered]@{ schema = 1; records = @([pscustomobject]$other, [pscustomobject]$r) } | ConvertTo-Json -Depth 4))
+        $recs = Read-DwmBaseline $file
+        $found = Find-DwmBaseline $recs $e1
+        $f = Get-DwmReplacementFinding $found @($second) $e1
+        $f2 = Get-DwmReplacementFinding $recs[1] @($second) $e1
+        $s = Save-DwmBaseline $e1 @($second) $file
+        $after = Read-DwmBaseline $file
+        Check (($null -eq $found) -and ($f.state -eq 'unknown') -and ($f2.state -eq 'unknown') -and $s.written -and ($after.Count -eq 2) -and ([int]$after[0].dwm_pid -eq 777) -and ([int]$after[1].dwm_pid -eq 13376) -and ($null -ne (Find-DwmBaseline $after $e1))) "$($b.name): unknown history, the next recording replaces it, the other epoch's record stays"
+    }
     Check ((Compare-DwmReadings @($first) @($first)) -eq 'same DWM instance: DWM 1916 (created 2026-10-03 20:33:31Z)') 'upgrade observation: same DWM instance'
     Check ((Compare-DwmReadings @($first) @($second)) -eq 'DWM replaced: DWM 1916 (created 2026-10-03 20:33:31Z) -> DWM 13376 (created 2026-10-03 20:35:02Z)') 'upgrade observation: DWM replaced'
     Check ((Compare-DwmReadings @($first) @()) -match 'after: none$') 'upgrade observation: no DWM after'

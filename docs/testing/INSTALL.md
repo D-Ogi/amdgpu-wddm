@@ -105,7 +105,8 @@ Without internet on the BC-250:
    names of the first column.
 2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
 3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
-   way and uses the folder also after the test-signing restart.
+   way and uses the folder also after the restarts during the installation. The same goes for `-DpmMaxMHz`,
+   `-CuMode`, `-NoControlApp` and `-NoReboot`.
 
 ## The small blue window after logon
 
@@ -170,6 +171,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
+- After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
+  session`, and the desktop runs on the CPU route: open amdgpu-wddm Control, select "Reopen the GPU desktop path" on
+  its Recovery page, then restart Windows. If it closes again, make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
