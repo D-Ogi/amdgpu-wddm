@@ -14,7 +14,9 @@
 //
 // Every reading except the dry run records the active session's DWM (process id and creation time) in
 // dwm-observations.json: the user's copy under %LOCALAPPDATA%\amdgpu-wddm, the administrator's copy in the control
-// directory. A later reading that finds another DWM in the same session of the same boot is an observed restart.
+// directory. The installer's record (%ProgramData%\amdgpu-wddm\dwm-baseline.json, written by its start-confirm task
+// at each logon) is read too, never written. A later reading that finds another DWM in the same session of the same
+// boot is an observed restart.
 //
 // Exit codes: 0 done, 1 failed, 2 usage, 3 refused, 5 needs administrator (4 was "fell back to the CPU route" of the
 // DWM watchdog, removed with the DWM restart).
@@ -174,9 +176,44 @@ namespace AmdgpuWddmControl
             return list;
         }
 
-        public static string Stamp(DateTime? utc)
+        public static string Stamp(DateTime? utc) { return Recovery.Stamp(utc); }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct WtsInfo
         {
-            return utc == null ? null : utc.Value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+            public int State, SessionId, IncomingBytes, OutgoingBytes, IncomingFrames, OutgoingFrames, IncomingCompressedBytes, OutgoingCompressedBytes;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string WinStationName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 17)] public string Domain;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 21)] public string UserName;
+            public long ConnectTime, DisconnectTime, LastInputTime, LogonTime, CurrentTime;
+        }
+
+        [DllImport("wtsapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern bool WTSQuerySessionInformationW(IntPtr server, int sessionId, int infoClass, out IntPtr buffer, out int bytes);
+
+        [DllImport("wtsapi32.dll")]
+        static extern void WTSFreeMemory(IntPtr memory);
+
+        // The session's logon time (WTSSessionInfo, as the installer reads it); null when nobody is logged on.
+        static DateTime? LogonTime(int session)
+        {
+            IntPtr buffer; int bytes;
+            if (!WTSQuerySessionInformationW(IntPtr.Zero, session, 24, out buffer, out bytes)) return null;
+            try { long t = ((WtsInfo)Marshal.PtrToStructure(buffer, typeof(WtsInfo))).LogonTime; return t > 0 ? DateTime.FromFileTimeUtc(t) : (DateTime?)null; }
+            finally { WTSFreeMemory(buffer); }
+        }
+
+        // The boot time as Win32_OperatingSystem.LastBootUpTime gives it: SystemTimeOfDayInformation's BootTime (at 0)
+        // less BootTimeBias (at 32), the clock corrections since the boot (52 s on the PC that builds this).
+        static DateTime? BootTime()
+        {
+            var buffer = Marshal.AllocHGlobal(64);
+            try
+            {
+                int returned;
+                return NtQuerySystemInformation(3, buffer, 48, out returned) == 0 ? DateTime.FromFileTimeUtc(Marshal.ReadInt64(buffer, 0) - Marshal.ReadInt64(buffer, 32)) : (DateTime?)null;
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
         }
 
         // The active interactive session: this process's session, or the console session from session 0.
@@ -202,6 +239,8 @@ namespace AmdgpuWddmControl
                 if (logon != null) r.SessionStartUtc = Stamp(logon.Utc);
                 var dwm = Starts("dwm.exe").Where(x => x.Session == session).OrderBy(x => x.Utc).LastOrDefault();
                 if (dwm != null) { r.Pid = dwm.Pid; r.CreatedUtc = Stamp(dwm.Utc); }
+                r.BootUtc = Stamp(BootTime());
+                r.LogonUtc = Stamp(LogonTime(session));
             }
             catch (Exception) { }
             return r;
@@ -217,6 +256,18 @@ namespace AmdgpuWddmControl
         }
 
         static string MachineObservations { get { return StateOverride == null ? Path.Combine(ControlDirectory, "dwm-observations.json") : UserObservations; } }
+
+        // The installer's record of the DWM at each logon (start-confirm task). Read only: this app never writes it.
+        static string InstallerBaseline
+        {
+            get { return Path.Combine(StateOverride ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm"), "dwm-baseline.json"); }
+        }
+
+        static DwmObservations LoadInstallerBaseline(DwmReading now)
+        {
+            try { return File.Exists(InstallerBaseline) ? Recovery.FromBaseline(Recovery.ParseBaseline(File.ReadAllText(InstallerBaseline)), now) : null; }
+            catch (Exception) { return null; }
+        }
 
         static DwmObservations Load(string path, bool adminOwned)
         {
@@ -246,7 +297,8 @@ namespace AmdgpuWddmControl
                 s.DwmNow = ReadDwm();
                 var user = Load(UserObservations, false);
                 var machine = StateOverride == null ? Load(MachineObservations, true) : null;
-                s.DwmHistory = Recovery.Observe(new[] { user, machine }, s.DwmNow, observer ?? "dry-run", Stamp(DateTime.UtcNow));
+                var installer = LoadInstallerBaseline(s.DwmNow);
+                s.DwmHistory = Recovery.Observe(new[] { user, machine, installer }, s.DwmNow, observer ?? "dry-run", Stamp(DateTime.UtcNow));
                 if (s.DwmHistory == null || observer == null) return;
                 // At most 64 instances: a DWM that restarts in a loop is a defect, and the first and the last tell it.
                 if (s.DwmHistory.Instances.Count > 64) s.DwmHistory.Instances.RemoveRange(1, s.DwmHistory.Instances.Count - 64);

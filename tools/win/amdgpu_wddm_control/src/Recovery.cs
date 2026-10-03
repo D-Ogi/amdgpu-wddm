@@ -158,6 +158,17 @@ namespace AmdgpuWddmControl
         public string SessionStartUtc { get; set; }
         public int? Pid { get; set; }
         public string CreatedUtc { get; set; }
+        // The epoch of the installer's record: the boot time and the session's logon time (WTSSessionInfo).
+        public string BootUtc { get; set; }
+        public string LogonUtc { get; set; }
+    }
+
+    // One record of the installer's %ProgramData%\amdgpu-wddm\dwm-baseline.json (tools\release\installer\dwm-session.ps1):
+    // the DWM the start-confirm task saw at a logon, keyed by boot time, session and logon time. This app only reads it.
+    public sealed class DwmBaselineRecord
+    {
+        public string BootUtc, LogonUtc, CreatedUtc, RecordedUtc, RecordedBy;
+        public int Session, Pid;
     }
 
     // The DWM instances observers saw in one session of one boot (BD-060). Only a replacement an observer saw counts
@@ -371,12 +382,70 @@ namespace AmdgpuWddmControl
             return o;
         }
 
+        // The same process: the same id and creation times at most 1 s apart (the installer reads the creation time
+        // through WMI, at another precision).
+        public static bool SameDwm(int pidA, string createdA, int pidB, string createdB)
+        {
+            var a = Utc(createdA); var b = Utc(createdB);
+            return pidA == pidB && a != null && b != null && Math.Abs((a.Value - b.Value).TotalSeconds) <= 1;
+        }
+
         static void AddInstance(DwmObservations o, DwmInstance i)
         {
-            var known = o.Instances.FirstOrDefault(x => x.Pid == i.Pid && x.CreatedUtc == i.CreatedUtc);
+            var known = o.Instances.FirstOrDefault(x => SameDwm(x.Pid, x.CreatedUtc, i.Pid, i.CreatedUtc));
             if (known == null)
                 o.Instances.Add(new DwmInstance { Pid = i.Pid, CreatedUtc = i.CreatedUtc, FirstSeenUtc = i.FirstSeenUtc, Observer = i.Observer });
             else if (string.CompareOrdinal(i.FirstSeenUtc ?? "", known.FirstSeenUtc ?? "") < 0) { known.FirstSeenUtc = i.FirstSeenUtc; known.Observer = i.Observer; }
+        }
+
+        // The installer's records, parsed. A damaged file gives none; a damaged record is skipped.
+        public static List<DwmBaselineRecord> ParseBaseline(string json)
+        {
+            var list = new List<DwmBaselineRecord>();
+            object root;
+            try { root = new System.Web.Script.Serialization.JavaScriptSerializer().DeserializeObject(json ?? ""); }
+            catch (Exception) { return list; }
+            var d = root as IDictionary<string, object>;
+            object records;
+            if (d == null || !d.ContainsKey("schema") || Convert.ToString(d["schema"], CultureInfo.InvariantCulture) != "1" || !d.TryGetValue("records", out records)) return list;
+            var items = records is object[] ? (object[])records : records is System.Collections.ArrayList ? ((System.Collections.ArrayList)records).ToArray() : new[] { records };
+            foreach (var item in items)
+                try
+                {
+                    var r = item as IDictionary<string, object>;
+                    if (r == null) continue;
+                    Func<string, string> text = k => r.ContainsKey(k) && r[k] is string ? (string)r[k] : null;
+                    var x = new DwmBaselineRecord
+                    {
+                        BootUtc = text("boot_utc"), LogonUtc = text("logon_utc"), CreatedUtc = text("dwm_created_utc"), RecordedUtc = text("recorded_utc"),
+                        RecordedBy = text("recorded_by"), Session = Convert.ToInt32(r["session"], CultureInfo.InvariantCulture), Pid = Convert.ToInt32(r["dwm_pid"], CultureInfo.InvariantCulture),
+                    };
+                    if (Utc(x.BootUtc) == null || Utc(x.LogonUtc) == null || Utc(x.CreatedUtc) == null || Utc(x.RecordedUtc) == null || x.Pid <= 0 || x.Session <= 0) continue;
+                    list.Add(x);
+                }
+                catch (Exception) { }
+            return list;
+        }
+
+        // The installer's record of this reading's epoch (the same session, boot and logon times within 2 s, the
+        // installer's own rule) as an observation of this session; null when none matches. Another epoch is never a
+        // replacement.
+        public static DwmObservations FromBaseline(IEnumerable<DwmBaselineRecord> records, DwmReading now)
+        {
+            var boot = Utc(now != null ? now.BootUtc : null);
+            var logon = Utc(now != null ? now.LogonUtc : null);
+            if (!Complete(now) || boot == null || logon == null || records == null) return null;
+            var r = records.FirstOrDefault(x => x != null && x.Session == now.Session.Value &&
+                Math.Abs((Utc(x.BootUtc).Value - boot.Value).TotalSeconds) <= 2 && Math.Abs((Utc(x.LogonUtc).Value - logon.Value).TotalSeconds) <= 2);
+            if (r == null) return null;
+            var o = new DwmObservations { BootId = now.BootId.Value, Session = now.Session.Value, SessionStartUtc = now.SessionStartUtc };
+            o.Instances.Add(new DwmInstance { Pid = r.Pid, CreatedUtc = Stamp(Utc(r.CreatedUtc)), FirstSeenUtc = Stamp(Utc(r.RecordedUtc)), Observer = "start-confirm" });
+            return o;
+        }
+
+        public static string Stamp(DateTime? utc)
+        {
+            return utc == null ? null : utc.Value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
         }
 
         // observed: an observer saw more than one DWM in this session. unknown-history: one DWM seen so far; a
@@ -416,6 +485,7 @@ namespace AmdgpuWddmControl
                 case "report": return "a bug report";
                 case "helper": return "a Recovery action";
                 case "escape": return "the operator escape";
+                case "start-confirm": return "the installer's start-confirm task at logon";
                 default: return observer ?? "an observer";
             }
         }

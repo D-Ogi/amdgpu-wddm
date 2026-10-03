@@ -679,7 +679,11 @@ static class UnitTests
 
     static DwmReading Reading(int pid, string created)
     {
-        return new DwmReading { BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z", Pid = pid, CreatedUtc = created };
+        return new DwmReading
+        {
+            BootId = 53, Session = 1, SessionStartUtc = "2026-10-03T18:00:00.000Z", Pid = pid, CreatedUtc = created,
+            BootUtc = "2026-10-03T17:59:20.000Z", LogonUtc = "2026-10-03T18:00:30.000Z",
+        };
     }
 
     // BD-060 (codex 907): only a replacement an observer saw is a restart; a first observation is unknown history,
@@ -733,6 +737,41 @@ static class UnitTests
         var adminCopy = Recovery.Observe(null, first, "helper", "2026-10-03T18:00:20.000Z");
         var merged = Recovery.Observe(new[] { userCopy, null, adminCopy }, first, "status", "2026-10-03T18:05:00.000Z");
         Check(merged.Instances.Count == 1 && merged.Instances[0].Observer == "helper" && merged.Instances[0].FirstSeenUtc == "2026-10-03T18:00:20.000Z", "dwm: two copies merge");
+
+        // The installer's record (start-confirm at logon, dwm-baseline.json as dwm-session.ps1 writes it) is one more
+        // observer of the same epoch; this app only reads it.
+        const string baseline = @"{""schema"":1,""records"":[" +
+            @"{""boot_utc"":""2026-10-01T08:00:00.0000000Z"",""session"":1,""logon_utc"":""2026-10-01T08:01:00.0000000Z"",""dwm_pid"":700,""dwm_created_utc"":""2026-10-01T08:00:50.0000000Z"",""recorded_utc"":""2026-10-01T08:01:10.0000000Z"",""recorded_by"":""start-confirm""}," +
+            @"{""boot_utc"":""2026-10-03T17:59:21.4000000Z"",""session"":1,""logon_utc"":""2026-10-03T18:00:31.2000000Z"",""dwm_pid"":900,""dwm_created_utc"":""2026-10-03T18:00:03.4567891Z"",""recorded_utc"":""2026-10-03T18:00:35.0000000Z"",""recorded_by"":""start-confirm""}]}";
+        var records = Recovery.ParseBaseline(baseline);
+        Equal(2, records.Count, "installer record: both records parsed");
+        var fromInstaller = Recovery.FromBaseline(records, first);
+        Check(fromInstaller != null && fromInstaller.Instances.Count == 1 && fromInstaller.Instances[0].Pid == 900, "installer record: the record of this epoch (boot and logon within 2 s) is used, the older one is not");
+        var same = Closed(); same.DwmNow = first; same.DwmHistory = Recovery.Observe(new[] { fromInstaller }, first, "status", "2026-10-03T19:00:00.000Z");
+        Equal("unknown-history", Recovery.DwmVerdict(same), "installer record + the same DWM (creation 0.46 s apart, WMI precision): unknown history");
+        Check(same.DwmHistory.Instances.Count == 1 && same.DwmHistory.Instances[0].FirstSeenUtc == "2026-10-03T18:00:35.000Z" && same.DwmHistory.Instances[0].Observer == "start-confirm",
+            "installer record: first seen = the record's time, by start-confirm");
+        Check(Recovery.CompositorText(same).StartsWith("No replacement of the desktop compositor (DWM) seen since 2026-10-03 18:00:35 UTC (first seen by the installer's start-confirm task at logon, 35 s after the session began)."),
+            "installer record: unknown history text names the record");
+        var later = Reading(1234, "2026-10-03T18:40:00.000Z");
+        var replaced = Closed(); replaced.DwmNow = later; replaced.DwmHistory = Recovery.Observe(new[] { Recovery.FromBaseline(records, later) }, later, "window", "2026-10-03T18:40:02.000Z");
+        Equal("observed", Recovery.DwmVerdict(replaced), "installer record + a later, different DWM: observed");
+        Check(Recovery.CompositorStatusLine(replaced).EndsWith("instances seen 2, watched since 2026-10-03T18:00:35.000Z by start-confirm)"), "installer record: observed status line names the record");
+        var otherLogon = Reading(900, "2026-10-03T18:00:03.000Z"); otherLogon.LogonUtc = "2026-10-03T18:00:40.000Z";
+        Equal(null, Recovery.FromBaseline(records, otherLogon), "installer record of another logon: ignored, not a replacement");
+        var otherBoot = Reading(900, "2026-10-03T18:00:03.000Z"); otherBoot.BootUtc = "2026-10-03T17:59:30.000Z";
+        Equal(null, Recovery.FromBaseline(records, otherBoot), "installer record of another boot: ignored");
+        var otherSession = Reading(900, "2026-10-03T18:00:03.000Z"); otherSession.Session = 2;
+        Equal(null, Recovery.FromBaseline(records, otherSession), "installer record of another session: ignored");
+        var noLogon = Reading(900, "2026-10-03T18:00:03.000Z"); noLogon.LogonUtc = null;
+        Equal(null, Recovery.FromBaseline(records, noLogon), "no logon time read: the installer record cannot be matched");
+        Equal(0, Recovery.ParseBaseline("{not json").Count, "installer record: a damaged file gives no record");
+        Equal(0, Recovery.ParseBaseline(@"{""schema"":2,""records"":[]}").Count, "installer record: another schema is ignored");
+        Equal(1, Recovery.ParseBaseline(@"{""schema"":1,""records"":[{""session"":1},""x"",{""boot_utc"":""2026-10-03T17:59:21Z"",""session"":1,""logon_utc"":""bad"",""dwm_pid"":5,""dwm_created_utc"":""2026-10-03T18:00:03Z"",""recorded_utc"":""2026-10-03T18:00:35Z""}," +
+            @"{""boot_utc"":""2026-10-03T17:59:21Z"",""session"":1,""logon_utc"":""2026-10-03T18:00:31Z"",""dwm_pid"":5,""dwm_created_utc"":""2026-10-03T18:00:03Z"",""recorded_utc"":""2026-10-03T18:00:35Z""}]}").Count,
+            "installer record: damaged records are skipped, the good one kept");
+        Equal(1, Recovery.ParseBaseline(@"{""schema"":1,""records"":{""boot_utc"":""2026-10-03T17:59:21Z"",""session"":1,""logon_utc"":""2026-10-03T18:00:31Z"",""dwm_pid"":5,""dwm_created_utc"":""2026-10-03T18:00:03Z"",""recorded_utc"":""2026-10-03T18:00:35Z""}}").Count,
+            "installer record: a single record not in a list is read");
 
         // A new session, a new logon in a reused session id, a new boot: each starts a new baseline.
         var other = Reading(5000, "2026-10-03T20:00:05.000Z"); other.Session = 2; other.SessionStartUtc = "2026-10-03T20:00:00.000Z";
@@ -794,6 +833,9 @@ static class UnitTests
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
+        foreach (var f in files)
+            foreach (var l in File.ReadAllText(f).Split('\n').Where(x => x.Contains("InstallerBaseline") || x.Contains("dwm-baseline")))
+                Check(!System.Text.RegularExpressions.Regex.IsMatch(l, @"Write|Move|Delete|Copy|Replace|Create"), "static check: the installer's dwm-baseline.json is only read: " + l.Trim());
         var form = File.ReadAllText(Path.Combine(dir, "MainForm.cs"));
         Check(!form.Contains("restart-compositor") && !form.Contains("OperatorEscape") && !form.Contains("--accept-bd060"), "static check: the window never offers the escape");
         Check(File.ReadAllText(Path.Combine(dir, "Native.cs")).Contains("ExitWindowsEx(EwxReboot, "), "static check: the restart is ExitWindowsEx EWX_REBOOT without force");

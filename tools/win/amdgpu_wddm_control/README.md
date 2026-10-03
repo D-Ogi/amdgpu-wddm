@@ -137,7 +137,12 @@ the boot (`BootId` under `Session Manager\Memory Management\PrefetchParameters`)
 of the session's first `winlogon.exe`), and records it in `dwm-observations.json`: the user's copy in
 `%LOCALAPPDATA%\amdgpu-wddm`, the administrator's copy in `%ProgramData%\amdgpu-wddm\control` (owned by
 Administrators). Both copies are merged; a record of another boot, session or session start is dropped, so a new
-session starts a new baseline. The observers: the window (every 2 s while it is open), `--status`, the bug report,
+session starts a new baseline. The installer's record, `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (written by its
+start-confirm task at each administrator logon, format in `tools/release/installer/dwm-session.ps1`), is merged too and
+never written: its record of this epoch (the same session, boot time and logon time within 2 s) counts as an
+observation by "the installer's start-confirm task at logon" at its `recorded_utc`; a record of another epoch is not a
+replacement, and a damaged file or record is ignored. Two readings name the same DWM when the process ids match and
+the creation times are at most 1 s apart. The observers: the window (every 2 s while it is open), `--status`, the bug report,
 the elevated helper and the operator escape. The dry run reads but records nothing.
 
 | Verdict | When | Text |
