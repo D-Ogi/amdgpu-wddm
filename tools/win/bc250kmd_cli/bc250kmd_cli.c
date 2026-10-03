@@ -1529,20 +1529,41 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
 // two invariants, the hold, the floor against the start's ceiling) and logs every change with its old and new values.
 // Writes need an administrator and a running DPM start; nothing survives a device start. Like `dpm`, every request
 // goes with NoAdapterSynchronization alone: the escape is software state, and the governor thread applies it.
+//
+// "dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms>" (0.7.197.1, ABI 2) sets the thermal cap's
+// timing: at most one step down per hot step, and with a delta, one level back after the soft step held below
+// 87 C - delta. The tool asks with ABI 2 and falls back to ABI 1 (120 bytes) once a driver before 0.7.197 fails the
+// 152-byte escape with STATUS_INVALID_PARAMETER; everything but `thermal` then works as before.
 
 static const char *const g_TuneError[] = { "none", "range", "order", "lowering-invariant", "raise-invariant", "hold",
-                                           "floor" };
+                                           "floor", "thermal" };
+#define TUNE_ERRORS (sizeof(g_TuneError) / sizeof(g_TuneError[0]))
+
+static unsigned long g_TuneAbi = BC250_DPM_TUNE_ABI;   // BC250_DPM_TUNE_ABI_1 after a driver refused ABI 2
 
 // One RUN_DPM_TUNE round trip. 0 when the driver answered (whatever Status says), 1 after reporting why not.
 static int TuneQuery(BC250_ESCAPE_DPM_TUNE *t, unsigned long op, unsigned long long generation, int quiet)
 {
     NTSTATUS status;
-    t->Magic = BC250_ESCAPE_MAGIC;
-    t->Command = BC250_ESCAPE_RUN_DPM_TUNE;
-    t->AbiVersion = BC250_DPM_TUNE_ABI;
-    t->Op = op;
-    t->ExpectedGeneration = generation;
-    if (SendEscapeFlags(BC250_DEFAULT_HWID, t, sizeof(*t), 1, &status)) return 1;
+    unsigned size;
+    for (;;) {
+        if (g_TuneAbi != BC250_DPM_TUNE_ABI && op == BC250_DPM_TUNE_OP_THERMAL) {
+            if (!quiet) printf("# this driver predates 0.7.197.1 (RUN_DPM_TUNE ABI 1): no thermal timing to set\n");
+            return 1;
+        }
+        size = g_TuneAbi == BC250_DPM_TUNE_ABI ? (unsigned)sizeof(*t) : BC250_DPM_TUNE_ABI1_SIZE;
+        if (g_TuneAbi != BC250_DPM_TUNE_ABI)
+            memset((unsigned char *)t + BC250_DPM_TUNE_ABI1_SIZE, 0, sizeof(*t) - BC250_DPM_TUNE_ABI1_SIZE);
+        t->Magic = BC250_ESCAPE_MAGIC;
+        t->Command = BC250_ESCAPE_RUN_DPM_TUNE;
+        t->AbiVersion = g_TuneAbi;
+        t->Op = op;
+        t->ExpectedGeneration = generation;
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, t, size, 1, &status)) return 1;
+        if (status != (NTSTATUS)0xC000000Dl || g_TuneAbi != BC250_DPM_TUNE_ABI) break;
+        // STATUS_INVALID_PARAMETER for 152 bytes: a driver before 0.7.197.1, which takes ABI 1 alone.
+        g_TuneAbi = BC250_DPM_TUNE_ABI_1;
+    }
     if (!NT_SUCCESS(status)) {
         // A driver before 0.7.185.1 has no such command and refuses NoAdapterSynchronization for it.
         if (!quiet) {
@@ -1571,6 +1592,15 @@ static void TuneFloorText(char *text, size_t size, unsigned long mhz)
     else _snprintf_s(text, size, _TRUNCATE, "off");
 }
 
+// "below 85.5 C for 3000 ms" or "off". 87 C is BC250_DPM_HOT_MC (driver/shim/include/bc250_dpm.h), fixed since 0.7.195.
+static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs)
+{
+    if (deltaMc) {
+        long below = 87000l - (long)deltaMc;
+        _snprintf_s(text, size, _TRUNCATE, "below %ld.%ld C for %lu ms", below / 1000l, (below % 1000l) / 100l, stepMs);
+    } else _snprintf_s(text, size, _TRUNCATE, "off");
+}
+
 // "up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default)": the values in force, and where
 // they come from.
 static void TunePrintState(const BC250_ESCAPE_DPM_TUNE *t)
@@ -1580,6 +1610,11 @@ static void TunePrintState(const BC250_ESCAPE_DPM_TUNE *t)
     printf("up %lu target %lu down %lu permille, hold %lu ms (%s), floor %s (%s)", t->UpPermille, t->TargetPermille,
            t->DownPermille, t->DownHoldMs, (t->Flags & BC250_DPM_TUNE_FLAG_THRESHOLDS) ? "runtime" : "default", floor,
            (t->Flags & BC250_DPM_TUNE_FLAG_FLOOR) ? "runtime" : "default");
+    if (t->AbiVersion == BC250_DPM_TUNE_ABI) {
+        TuneSoftText(floor, sizeof(floor), t->SoftReleaseDeltaMc, t->SoftReleaseStepMs);
+        printf(", hot step %lu ms, soft release %s (%s)", t->HotStepMs, floor,
+               (t->Flags & BC250_DPM_TUNE_FLAG_THERMAL) ? "runtime" : "default");
+    }
 }
 
 static void TuneExplain(const BC250_ESCAPE_DPM_TUNE *t, unsigned long up)
@@ -1599,6 +1634,8 @@ static void TuneExplain(const BC250_ESCAPE_DPM_TUNE *t, unsigned long up)
     case 5: printf("  the hold is 100..5000 ms\n"); break;
     case 6: printf("  the floor is a clock of the table (1000..2000 in 100 MHz steps) at or below this start's ceiling, %lu MHz\n",
                    t->MaxMHz); break;
+    case 7: printf("  hot step 250..10000 ms, soft delta off or 500..4500 mC (between 82 and 87 C), soft step 2000..30000 ms\n");
+            break;
     default: break;
     }
 }
@@ -1626,7 +1663,7 @@ static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const ch
     if (TuneQuery(&t, op, before.Generation, 0)) return 1;
     if (t.Status != BC250_ESCAPE_STATUS_DONE) {
         printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s; in force: ", name, t.Status, t.NtStatus,
-               t.Error < 7 ? g_TuneError[t.Error] : "?");
+               t.Error < TUNE_ERRORS ? g_TuneError[t.Error] : "?");
         TunePrintState(&before);
         printf("\n");
         TuneExplain(&t, in->UpPermille);
@@ -1637,6 +1674,12 @@ static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const ch
     printf("%s: up %lu -> %lu, target %lu -> %lu, down %lu -> %lu permille, hold %lu -> %lu ms, floor %s -> %s "
            "(ceiling %lu MHz, serial %lu)\n", name, before.UpPermille, t.UpPermille, before.TargetPermille, t.TargetPermille,
            before.DownPermille, t.DownPermille, before.DownHoldMs, t.DownHoldMs, floorBefore, floorAfter, t.MaxMHz, t.Serial);
+    if (t.AbiVersion == BC250_DPM_TUNE_ABI) {
+        TuneSoftText(floorBefore, sizeof(floorBefore), before.SoftReleaseDeltaMc, before.SoftReleaseStepMs);
+        TuneSoftText(floorAfter, sizeof(floorAfter), t.SoftReleaseDeltaMc, t.SoftReleaseStepMs);
+        printf("%s: hot step %lu -> %lu ms, soft release %s -> %s\n", name, before.HotStepMs, t.HotStepMs, floorBefore,
+               floorAfter);
+    }
     printf("in force: ");
     TunePrintState(&t);
     printf("\n");
@@ -1664,9 +1707,25 @@ static int DpmTune(int argc, WCHAR **argv)
         printf("; defaults up %lu target %lu down %lu hold %lu ms; serial %lu, governor at %lu%s, floor ticks %llu\n",
                t.DefaultUpPermille, t.DefaultTargetPermille, t.DefaultDownPermille, t.DefaultDownHoldMs, t.Serial,
                t.Applied, (t.Flags & BC250_DPM_TUNE_FLAG_GOVERNING) ? "" : " (not governing)", t.FloorTicks);
+        if (t.AbiVersion == BC250_DPM_TUNE_ABI) {
+            char soft[32];
+            TuneSoftText(soft, sizeof(soft), t.DefaultSoftReleaseDeltaMc, t.DefaultSoftReleaseStepMs);
+            printf("thermal defaults: hot step %lu ms, soft release %s (soft step %lu ms)\n", t.DefaultHotStepMs, soft,
+                   t.DefaultSoftReleaseStepMs);
+        } else printf("# RUN_DPM_TUNE ABI 1 (a driver before 0.7.197.1): no thermal timing\n");
         return 0;
     }
     if (argc == 4 && !_wcsicmp(argv[3], L"reset")) return TuneWrite(BC250_DPM_TUNE_OP_RESET, &t, "dpm tune reset");
+    if (argc >= 4 && !_wcsicmp(argv[3], L"thermal")) {
+        if (argc != 7 || ParseNumber(argv[4], &t.HotStepMs) ||
+            (_wcsicmp(argv[5], L"off") && (ParseNumber(argv[5], &t.SoftReleaseDeltaMc) || !t.SoftReleaseDeltaMc)) ||
+            ParseNumber(argv[6], &t.SoftReleaseStepMs)) {
+            fprintf(stderr, "usage: bc250kmd_cli dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms>\n");
+            return 2;
+        }
+        if (!_wcsicmp(argv[5], L"off")) t.SoftReleaseDeltaMc = 0;
+        return TuneWrite(BC250_DPM_TUNE_OP_THERMAL, &t, "dpm tune thermal");
+    }
     if (argc == 6 || argc == 7) {
         if (ParseNumber(argv[3], &t.UpPermille) || ParseNumber(argv[4], &t.TargetPermille) ||
             ParseNumber(argv[5], &t.DownPermille) || (argc == 7 && (ParseNumber(argv[6], &t.DownHoldMs) || !t.DownHoldMs))) {
@@ -1675,7 +1734,8 @@ static int DpmTune(int argc, WCHAR **argv)
         }
         return TuneWrite(BC250_DPM_TUNE_OP_THRESHOLDS, &t, "dpm tune");
     }
-    fprintf(stderr, "usage: bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset]\n");
+    fprintf(stderr, "usage: bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | thermal <hot ms> <soft mC|off> "
+                    "<soft ms> | reset]\n");
     return 2;
 }
 

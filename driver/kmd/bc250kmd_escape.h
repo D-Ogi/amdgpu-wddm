@@ -34,8 +34,12 @@
 #define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
-#define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds and runtime floor: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C4u       // revision 196: a held UMD or Present submission waits on the gfx
+#define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
+#define BC250_KMD_VERSION 0x000700C5u       // revision 197: the DPM thermal cap's re-entry steps a hot step after the
+                                            // last cap change, not at every crossing of 87 C, and RUN_DPM_TUNE
+                                            // ABI 2 (152 bytes, ABI 1 still taken) sets the hot step and an
+                                            // optional soft release below 87 C at run time (BD-055).
+                                            // 196: a held UMD or Present submission waits on the gfx
                                             // retirement event instead of sleeping 1 ms at a time, and the
                                             // guard log reports the held time in microseconds from QPC with
                                             // cumulative counters in the wddm profile summary (wddm.c
@@ -221,15 +225,26 @@ typedef struct _BC250_ESCAPE_DPM {
 // no runtime floor; out: 0 when there is none. Every accepted change is logged in the driver log with its old and new
 // values. Serial counts the changes since the driver loaded; Applied is the serial the governor thread runs with.
 // The 160-byte RUN_DPM structure and BC250_DPM_ABI are unchanged.
-#define BC250_DPM_TUNE_ABI 1u
+// ABI 2 (0.7.197.1, BD-055) appends the thermal cap's timing: the hot step, the soft-release delta below HOT (0: off)
+// and the soft-release step, with their defaults, and the THERMAL operation that sets them (error 7, thermal, when
+// one is outside its range). The driver takes both sizes: AbiVersion 1 with the first 120 bytes (the ABI 1 layout,
+// unchanged; its THRESHOLDS keeps the stored thermal timing, its RESET resets it too) and AbiVersion 2 with all 152.
+// A size that does not match its AbiVersion is refused in the reply (NtStatus STATUS_INVALID_PARAMETER) before any
+// state is read. A driver before 0.7.197 fails the 152-byte escape itself with STATUS_INVALID_PARAMETER: a tool asks
+// with ABI 2 and repeats with ABI 1 on that answer.
+#define BC250_DPM_TUNE_ABI 2u
+#define BC250_DPM_TUNE_ABI_1 1u
+#define BC250_DPM_TUNE_ABI1_SIZE 120u        // the ABI 1 prefix of BC250_ESCAPE_DPM_TUNE
 #define BC250_DPM_TUNE_OP_READ 0u
 #define BC250_DPM_TUNE_OP_THRESHOLDS 1u      // in: UpPermille, TargetPermille, DownPermille, DownHoldMs
 #define BC250_DPM_TUNE_OP_FLOOR 2u           // in: FloorMHz
-#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds and floor back to the defaults
+#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds, floor and (ABI 2 and ABI 1 alike) thermal timing to defaults
+#define BC250_DPM_TUNE_OP_THERMAL 4u         // ABI 2 only; in: HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs
 #define BC250_DPM_TUNE_FLAG_GOVERNING 1u     // a DPM start's governor thread runs and has not given up: writes are taken
 #define BC250_DPM_TUNE_FLAG_THRESHOLDS 2u    // the thresholds were set at run time (else the defaults)
 #define BC250_DPM_TUNE_FLAG_FLOOR 4u         // a runtime floor is set (else none)
 #define BC250_DPM_TUNE_FLAG_APPLIED 8u       // the governor thread runs with the values below (Applied == Serial)
+#define BC250_DPM_TUNE_FLAG_THERMAL 16u      // ABI 2: the thermal timing was set at run time (else the defaults)
 typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -244,7 +259,11 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long long Generation;          // out: start-health generation of the start this describes
     unsigned long long ExpectedGeneration;  // in: THRESHOLDS, FLOOR, RESET
     unsigned long Reserved[2];              // zero in, zero out
-} BC250_ESCAPE_DPM_TUNE; // 120 bytes on Windows, ABI 1
+    // ABI 2 from here (BC250_DPM_TUNE_ABI1_SIZE bytes above).
+    unsigned long HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs;                  // in: THERMAL; out: in force
+    unsigned long DefaultHotStepMs, DefaultSoftReleaseDeltaMc, DefaultSoftReleaseStepMs;    // out
+    unsigned long Reserved2[2];             // zero in, zero out
+} BC250_ESCAPE_DPM_TUNE; // 152 bytes on Windows, ABI 2 (the first 120 are ABI 1)
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

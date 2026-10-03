@@ -27,6 +27,8 @@ bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0
 bc250kmd_cli dpm [count [interval ms]]            the KMD DPM governor's state, with the thresholds and floor in force (docs/design/dpm.md)
 bc250kmd_cli dpm tune <up> <target> <down> [hold_ms] | dpm tune reset
                                                   governor thresholds (permille) at run time, elevated, not persisted (0.7.185)
+bc250kmd_cli dpm tune thermal <hot_ms> <soft_mC|off> <soft_ms>
+                                                  the thermal cap's hot step and soft release below 87 C (0.7.197, ABI 2)
 bc250kmd_cli dpm floor <MHz|off>                  a runtime clock floor; thermal, critical and max-setting limits still win
 ```
 

@@ -98,10 +98,24 @@ so the next game trial compares them in the world. If both read well under 90 % 
 and the governor rightly stays low. SMU metrics are not an alternative: amdgpu reads only the metrics table on this
 part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
 
-Same sensor as temp.py (M23). At 87 C or more the cap drops at once to one level under the current clock, then one
-more level every 500 ms while it stays hot. At 90 C, or with an invalid sensor read, the cap is the floor. Below
-82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its readbacks, so a
-stale decision cannot raise either; lowering is always allowed.
+Same sensor as temp.py (M23). At 87 C or more the cap drops to one level under the current clock, then one more
+level every hot step (500 ms by default) while it stays hot. At 90 C, or with an invalid sensor read, the cap is the
+floor. Below 82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its
+readbacks, so a stale decision cannot raise either; lowering is always allowed.
+
+From 0.7.197 (BD-055) the drop on entering the hot band is at once only when the cap last moved at least a hot step
+ago. Before, every upward crossing of 87 C stepped, so a reading hovering at the limit walked the clock down at the
+crossing rate rather than the hot step. A re-entry inside the hot step now clamps the cap to the running clock (no
+raise, nothing lowered) and steps a hot step after the last change, the spacing a steady 87 C gets. The hot step is a
+runtime value (250-10000 ms), and so is an optional soft release, off by default: held below 87 C minus a delta
+(500-4500 mC, so the threshold stays strictly between 82 and 87 C) for a whole soft step (2000-30000 ms) without a
+break, the cap rises one level. Without it the cap holds anywhere in 82-87 C, so under a sustained load one excursion
+past 87 C cost levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500-1600 MHz, frozen at
+85.6-86.2 C). The thresholds themselves (87, 82, 90 C) are not tunable. `dpm_test.c` covers the rule edge by edge
+and runs a synthetic two-node plant (fast hot spot over a slow sink, scene changes, sensor noise) with the legacy
+timing, each change alone and both: the legacy rule latches one level down for the rest of the run; a 2 s hot step
+with a 1.5 C / 3 s soft release recovers between heavy scenes with no cap changes closer than 2 s and no reading
+above 87.4 C. The plant's constants are not the lab's; the lab A/B decides the defaults.
 
 The hot threshold was 85 C, with release below 80 C, up to KMD 0.7.183.1. The owner moved it to 87 C on 2026-10-01
 ("Ustaw bezp. temp na 87 C, bo to w końcu AMD": set the safe temperature to 87 C, it is an AMD part after all),
@@ -138,7 +152,8 @@ start, without a restart and without the registry:
 |---|---|
 | `bc250kmd_cli dpm tune <up> <target> <down> [hold ms]` | the four thresholds (permille, ms; the hold stays when omitted) |
 | `bc250kmd_cli dpm floor <MHz\|off>` | a runtime floor: a clock of the table up to the start's ceiling (`DpmMaxMHz`) |
-| `bc250kmd_cli dpm tune reset` | thresholds and floor back to the defaults |
+| `bc250kmd_cli dpm tune thermal <hot ms> <soft mC\|off> <soft ms>` | 0.7.197: the hot step, the soft-release delta below 87 C and its step |
+| `bc250kmd_cli dpm tune reset` | thresholds, floor and thermal timing back to the defaults |
 | `bc250kmd_cli dpm tune` | what is in force, the defaults, how many ticks the floor lifted the clock |
 
 - Not persisted: every device start begins with the defaults (and logs what it dropped). Nothing in the registry.
@@ -164,6 +179,13 @@ start, without a restart and without the registry:
   takes them at its next 25 ms tick and applies a new level through its usual SMU transaction. Writes need an
   administrator, the generation of the start the caller read and a governing DPM start. The 160-byte `RUN_DPM`
   structure is unchanged, so older CLIs and the overlay keep working.
+- ABI 2 (0.7.197, 152 bytes) appends the thermal timing in force, its defaults and the `THERMAL` operation (error 7,
+  `thermal`, for a value outside its range); `FLAG_THERMAL` (16) says it is not the default. The driver takes both
+  sizes, each only with its own `AbiVersion`, and never touches an ABI 2 field for a 120-byte caller; an ABI 1
+  `THRESHOLDS` keeps the stored thermal timing and an ABI 1 `RESET` resets it too. The CLI asks with ABI 2 and falls
+  back to ABI 1 when an older driver fails the 152-byte escape with `STATUS_INVALID_PARAMETER`. A thermal change logs
+  its own line (`dpm: tune (thermal): hot step 500->2000 ms, soft release delta 0->1500 mC step 3000->3000 ms,
+  serial 4`), and every `dpm: tune` line is followed by a `thermal:` line with the soft raises so far.
 
 ## Telemetry
 
