@@ -141,7 +141,7 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself; the Recovery page of amdgpu-wddm Control opens the path again. `DwmForceCpu` 1 keeps the
+  the CPU route by itself; "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again. `DwmForceCpu` 1 keeps the
   desktop on the CPU route; an upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
@@ -164,7 +164,7 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
   button. After two failed starts, Windows uses Microsoft Basic Display Adapter again.
 - The desktop is black after an update, but programs still start: open amdgpu-wddm Control (`Win`, then type its
-  name) and use its Recovery page to put the desktop on the CPU route. Otherwise use Safe Mode and `uninstall.cmd`
+  name) and select "Desktop on the CPU route" on its Recovery page. Otherwise use Safe Mode and `uninstall.cmd`
   (next item).
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.

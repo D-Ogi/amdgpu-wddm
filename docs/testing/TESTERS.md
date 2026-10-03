@@ -32,8 +32,8 @@ Package version: `0.7.198.100-tester.10`. New since `0.7.197.100-tester.6`:
 ## Known limits
 
 - If the driver closes the GPU desktop path, the desktop is drawn by the CPU, and desktop animations are slower. The
-  driver does this by itself, for example when the last start ended in a crash or a power loss. The Recovery page of
-  amdgpu-wddm Control opens the path again.
+  driver does this by itself, for example when the last start ended in a crash or a power loss. The button "Reopen the GPU
+  desktop path" on the Recovery page of amdgpu-wddm Control opens it again.
 - Direct3D 11 applications and games run on the CPU (software rendering), so they are slow. Use the Direct3D 12
   mode of a game if it has one.
 - 32-bit applications do not have a driver yet.
@@ -63,7 +63,7 @@ Bug reports go to GitHub Issues: https://github.com/D-Ogi/amdgpu-wddm/issues/new
 1. If the screen stays black after a restart, wait two minutes. Then restart with the power button. After two
    failed starts, Windows uses Microsoft Basic Display Adapter again.
 2. If the desktop is black after an update, but you can still start programs (for example `Win` + type
-   "amdgpu-wddm Control"), use the Recovery page of amdgpu-wddm Control to put the desktop back on the CPU route.
+   "amdgpu-wddm Control"), select "Desktop on the CPU route" on its Recovery page.
 3. To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
    Startup Settings > Restart > `4` (Safe Mode).
 4. In Safe Mode, run `uninstall.cmd` in `C:\Program Files\amdgpu-wddm`. It removes the driver and its files.
