@@ -122,8 +122,9 @@ function Save-DwmBaseline($Epoch, $Current, [string]$Path = $script:DwmBaselineP
     Move-Item -LiteralPath $tmp -Destination $Path -Force
     return [pscustomobject]@{ record = $rec; written = $true }
 }
-# observed: the recorded instance is gone and another runs (a replacement seen); same: the recorded instance runs;
-# unknown: no record for this session, no desktop session, or no DWM.
+# observed: the recorded instance is gone and another runs (a replacement seen); same: the recorded instance runs,
+# which says nothing about a replacement before the record; unknown: no record for this session, no desktop session,
+# or no DWM.
 function Get-DwmReplacementFinding($Record, $Current, $Epoch) {
     if (($Epoch.session -eq 0) -or ($null -eq $Epoch.logon_utc)) { return [pscustomobject]@{ state = 'unknown'; detail = 'unknown: no desktop session with a logon' } }
     $now = @($Current)
@@ -132,7 +133,7 @@ function Get-DwmReplacementFinding($Record, $Current, $Epoch) {
     $base = [pscustomobject]@{ pid = [int]$Record.dwm_pid; created_utc = (ConvertFrom-DwmTime $Record.dwm_created_utc) }
     $recorded = Format-DwmTime (ConvertFrom-DwmTime $Record.recorded_utc)
     $running = @($now | Where-Object { Test-SameDwm $_ $base })
-    if ($running.Count) { return [pscustomobject]@{ state = 'same'; detail = "no replacement observed: $(Format-DwmInstance $base) is the instance recorded at $recorded" } }
+    if ($running.Count) { return [pscustomobject]@{ state = 'same'; detail = "same DWM instance since the record at ${recorded}: $(Format-DwmInstance $base) (an earlier replacement is not excluded)" } }
     $others = ($now | ForEach-Object { Format-DwmInstance $_ }) -join ', '
     return [pscustomobject]@{ state = 'observed'; detail = "observed: $(Format-DwmInstance $base), recorded at $recorded, was replaced by $others. WinUI pointer-input loss after the desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic Display; restart Windows to recover. A DWM crash can still be a driver defect: report it with a bug report." }
 }

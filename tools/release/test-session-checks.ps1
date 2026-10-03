@@ -122,7 +122,7 @@ try {
     Check ($null -eq (Find-DwmBaseline $recs ([pscustomobject]@{ boot_utc = $e1.boot_utc; session = 2; logon_utc = $e1.logon_utc }))) 'another session does not match'
     $rec = Find-DwmBaseline $recs $e1
     $f = Get-DwmReplacementFinding $rec @([pscustomobject]@{ pid = 1916; created_utc = $first.created_utc.AddMilliseconds(400) }) $e1
-    Check (($f.state -eq 'same') -and ($f.detail -match '^no replacement observed: DWM 1916 \(created 2026-10-03 20:33:31Z\) is the instance recorded at ')) "the recorded instance still runs: $($f.detail)"
+    Check (($f.state -eq 'same') -and ($f.detail -match '^same DWM instance since the record at .+: DWM 1916 \(created 2026-10-03 20:33:31Z\) \(an earlier replacement is not excluded\)$') -and ($f.detail -notmatch 'no restart|first')) "the recorded instance still runs, and an earlier replacement stays possible: $($f.detail)"
     $f = Get-DwmReplacementFinding $rec @($second) $e1
     Check (($f.state -eq 'observed') -and ($f.detail -match '^observed: DWM 1916 \(created 2026-10-03 20:33:31Z\), recorded at .+, was replaced by DWM 13376 \(created 2026-10-03 20:35:02Z\)\. WinUI pointer-input loss after the desktop compositor \(DWM\) is terminated and restarted reproduces on this Windows build also with Microsoft Basic Display; restart Windows to recover\. A DWM crash can still be a driver defect: report it with a bug report\.$')) 'another instance than the recorded one: replacement observed, remedy restart, still reportable'
     $f = Get-DwmReplacementFinding $rec @([pscustomobject]@{ pid = 1916; created_utc = $first.created_utc.AddMinutes(5) }) $e1
