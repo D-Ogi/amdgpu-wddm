@@ -308,6 +308,31 @@ function Invoke-Verify {
     # A tester who set DpmMode 0 asked for fixed clocks: that start is as configured, not a failure.
     Add-Result 'DPM' ((($p.DpmMode -eq 1) -and ($p.DpmLastMode -eq 1)) -or (($null -ne $p.DpmMode) -and ($p.DpmMode -ne 1))) "DpmMode $($p.DpmMode), this start ran $(if ($p.DpmLastMode -eq 1) { 'DPM' } else { "fixed (reason $($p.DpmLastReason))" }), DpmMaxMHz $($p.DpmMaxMHz), confirmed $(if ($null -ne $p.DpmConfirmed) { 'yes' } else { 'not yet' })"
 
+    # The GPU desktop path: the KMD's interop switches are effective (blit+cdd) and the last boot did not die inside a
+    # session (BD-059); with DwmForceCpu 0 the DWM of this logon session runs the zink UMD. RequireKmdSwitches sends
+    # DWM to the CPU route by itself when the switches are off, so a closed path shows here, not as a black desktop.
+    $cli = Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'
+    $io = ''
+    if (Test-Path -LiteralPath $cli) { $io = [string](Invoke-Native $cli @('interop')).text }
+    Write-Log $io
+    $ioFirst = (($io -split "`n") | Select-Object -First 1)
+    $ioOk = ($io -match 'effective blit\+cdd') -and ($io -notmatch 'died in a session')
+    $forceCpu = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\DesktopRouter" -Name DwmForceCpu -ErrorAction SilentlyContinue).DwmForceCpu
+    $dwmNote = "DwmForceCpu $forceCpu (desktop on the CPU route as set)"
+    $dwmOk = $true
+    if ($forceCpu -eq 0) {
+        $zink = $false
+        $mySession = (Get-Process -Id $PID).SessionId
+        foreach ($d in @(Get-Process dwm -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySession })) {
+            try { if ($d.Modules | Where-Object { $_.FileName -match 'bc250d3d_zink\.dll$' }) { $zink = $true } } catch { }
+        }
+        $dwmOk = $zink
+        $dwmNote = "DwmForceCpu 0, DWM of session $mySession has bc250d3d_zink.dll loaded: $(if ($zink) { 'yes' } else { 'no (CPU route)' })"
+    }
+    $ioClosed = ''; if ($io -match 'closed by the driver: (\S+)') { $ioClosed = "; closed by the driver: $($Matches[1])" }
+    if ($io -match 'died in a session') { $ioClosed += '; last boot died in a session' }
+    Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
+
     # D3D12 through the system runtime, as an application sees it.
     $caps = Join-Path $InstallRoot 'tools\amdgpu_wddm_d3d12caps.exe'
     $vdir = Join-Path $script:StateDir 'verify'
@@ -575,10 +600,10 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
 
-# Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 1 composes the desktop on the CPU route (the
-# GPU DWM kit's kill switch): on the GPU route DWM fail-fasts with 0xC00001AD in OpenSharedTexture when a File Explorer
-# window opens (DEFECTS BD-058). The router stays registered and the interop switches stay open, so a release switches
-# the route by this one value. D3D11 applications run on the CPU UMD unless AppRouter allows them.
+# Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 0 composes the desktop on the GPU route (zink);
+# 1 is the kill switch to the CPU route (tester.1 to tester.8 shipped 1 until BD-058 was fixed). RequireKmdSwitches 1
+# keeps the GPU route gated: when the KMD's effective interop switches are off, the router takes the CPU route by
+# itself. D3D11 applications run on the CPU UMD unless AppRouter allows them.
 Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll') })
 Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll') })
 # Application profiles: the shipped ones by the same rule; a tester's own profiles are other keys and stay as they are.

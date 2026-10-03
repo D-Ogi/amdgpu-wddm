@@ -139,13 +139,14 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 ## What works and what does not
 
-- Desktop composition (DWM) uses the CPU route in this release: DWM draws the desktop with the CPU user-mode driver. The
-  GPU route comes back in a later release, after defect BD-058 is fixed (on the GPU route, DWM stops when a File
-  Explorer window opens). Do not change `DwmForceCpu` in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`.
+- Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
+  driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
+  the CPU route by itself; the Recovery page of amdgpu-wddm Control opens the path again. `DwmForceCpu` 1 keeps the
+  desktop on the CPU route; an upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
 - Direct3D 11 applications and games run on the CPU (software rendering) by default, so they are slow. Only applications on the allowlist in
-  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` (value `Allow`, in v0 only `dxdiag.exe`) use the GPU. Use the Direct3D 12 mode of a game if it has one.
+  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` (value `Allow`, by default only `dxdiag.exe`) use the GPU. Use the Direct3D 12 mode of a game if it has one.
 - 32-bit applications do not have a driver yet.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 
@@ -162,6 +163,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
   button. After two failed starts, Windows uses Microsoft Basic Display Adapter again.
+- The desktop is black after an update, but programs still start: open amdgpu-wddm Control (`Win`, then type its
+  name) and use its Recovery page to put the desktop on the CPU route. Otherwise use Safe Mode and `uninstall.cmd`
+  (next item).
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
@@ -185,9 +189,10 @@ You can also use the System Restore point "amdgpu-wddm before install" if the in
 2. The application shows the list of files and the text of each file before it writes anything. Read them.
 3. The application writes one zip file to your desktop: `amdgpu-wddm-report-YYYYMMDD-HHMMSS.zip`. It sends
    nothing.
-4. Write down what you did, what you expected, and what happened. Add the name and the version of the game or
-   application, the settings, and the time of the problem.
-5. Send the zip file and your notes to the project's issue tracker.
+4. Open a bug report on GitHub: https://github.com/D-Ogi/amdgpu-wddm/issues/new/choose, then "Bug report". Fill in
+   the package version, the game or application and its API, the settings, what you did, what you expected, what
+   happened, and the time of the problem.
+5. Attach the zip file to the issue.
 
 The zip file contains these files:
 

@@ -16,8 +16,8 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.197.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.197.100-tester.1',
+    [string]$DriverVer = '0.7.198.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.198.100-tester.10',
     [string]$KitVersion = '10.0.26100.0'
 )
 $ErrorActionPreference = 'Stop'
@@ -110,6 +110,10 @@ Write-Host 'driver version'
 # DriverVer = <date>,$DriverVer in the packaged INF, nothing else changes; the catalog below is made from this INF.
 $infPath = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
 $infText = [IO.File]::ReadAllText($infPath)
+# Only the 4th field is the release's: the first three name the KMD build (kmd_version).
+$kmdBase = (([string]$sources.kmd_version) -split '\.')[0..2] -join '.'
+if ($DriverVer -notmatch ('^' + [regex]::Escape($kmdBase) + '\.\d+$')) { throw "DriverVer $DriverVer does not belong to KMD $($sources.kmd_version)" }
+if ($Version -notlike "$DriverVer-*") { throw "release version $Version does not start with DriverVer $DriverVer" }
 $rx = [regex]'(?m)^(DriverVer\s*=\s*[\d/]+,)(\d+\.\d+\.\d+\.\d+)(\s*)$'
 if ($rx.Matches($infText).Count -ne 1) { throw 'bc250kmd.inf: expected exactly one DriverVer line' }
 $infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $DriverVer + $m.Groups[3].Value })

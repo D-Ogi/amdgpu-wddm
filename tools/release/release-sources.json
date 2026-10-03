@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.197.1",
-  "kmd_abi": "0x000700C5",
+  "kmd_version": "0.7.198.2",
+  "kmd_abi": "0x000700C6",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 0cbef549 (bd055-dpm-thermal)",
+    "kmd": "bc250-win 53bdebbe (bd059-interop-clean-restart)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
@@ -15,18 +15,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/bd055/build-kmd-0cbe/package/bc250kmd.inf",
-      "sha256": "6268C3B2ECE84E1B4C14A17698A9987E1E83F8648183E1476704DBCCA56A86CB",
+      "source": "scratch/bd059/build-kmd-53bd/package/bc250kmd.inf",
+      "sha256": "B5B4DF8671C64806857E78545E539525F650AD895F4A96030006419C04525E98",
       "size": 8023,
-      "role": "KMD 0.7.197.1 INF (commit 0cbef549), byte-identical to the lab"
+      "role": "KMD 0.7.198.2 INF (commit 53bdebbe, BD-059); the release re-stamps DriverVer"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/bd055/build-kmd-0cbe/package/bc250kmd.sys",
-      "sha256": "982DB3CFD930769D7475CAC1E89B5BC145100A982692CFCCC430F65F13796D33",
-      "size": 475024,
-      "role": "KMD 0.7.197.1 (commit 0cbef549); re-signed with the release certificate, code unchanged"
+      "source": "scratch/bd059/build-kmd-53bd/package/bc250kmd.sys",
+      "sha256": "5B88A49F65FBC241533EF8B0C3834E6DD8556E88B93767C41693EA5AB0B31EE3",
+      "size": 477072,
+      "role": "KMD 0.7.198.2 (commit 53bdebbe, BD-059 interop end at a clean restart); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
@@ -71,10 +71,10 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/m15/desktop-umd-fp16/package-001/desktop-umd-fp16-001/zink/bc250d3d_zink.dll",
-      "sha256": "18BFC61094CD33CD952EBFF7E6A74212F35D246B37197603979A673DB38C0A36",
-      "size": 15193600,
-      "role": "hosted zink D3D11 UMD for DWM on the GPU"
+      "source": "scratch/bd058/artifacts/zink/bc250d3d_zink.dll",
+      "sha256": "396A61F9B234AE6F09F72BFE2D5BF237120A82F9AC91C94A6884C7A518C40356",
+      "size": 15197696,
+      "role": "hosted zink D3D11 UMD for DWM on the GPU (BD-058 fix, mesa fork amdgpu-wddm/hosted-umd-bd058 8cb22844)"
     },
     {
       "component": "desktop-umd",
@@ -87,10 +87,10 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/m15/desktop-umd-fp16/package-001/desktop-umd-fp16-001/cpu/bc250d3d.dll",
-      "sha256": "10D9C98393DEB549BFD5AAEF2224E5EE2122018C261809C7B3FE5BDCE3836F30",
-      "size": 68602368,
-      "role": "CPU D3D11 UMD (fallback route, D3D11 applications not on the allowlist)"
+      "source": "scratch/bd058/artifacts/cpu/bc250d3d.dll",
+      "sha256": "195FB220D124558202C6FE73F80A984F5E2B78F5FD11130A9354C96F10306217",
+      "size": 68602880,
+      "role": "CPU D3D11 UMD (BD-058 256-byte shared pitch, mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c; fallback route, D3D11 applications not on the allowlist)"
     },
     {
       "component": "d3d11-umd",
@@ -143,10 +143,10 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/m15/gpu-dwm-t0/build-cli197/bc250kmd_cli.exe",
-      "sha256": "BAF3A62ADB0F55882DAA3A6944042C78AD8F40119163B015EB5702598DF126A7",
-      "size": 212992,
-      "role": "KMD control CLI built from 0cbef549 (info, stages, confirm, dpm; no start-health command)"
+      "source": "scratch/bd059/build-cli-53bd/bc250kmd_cli.exe",
+      "sha256": "844E09618234DF6690563A617E5744FC268956B1ABCCB4DA3678A08A2A246A74",
+      "size": 213504,
+      "role": "KMD control CLI built from 53bdebbe (info, stages, confirm, dpm, interop; no start-health command)"
     },
     {
       "component": "tool",

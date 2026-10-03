@@ -16,6 +16,9 @@ $legacy = $table.legacy_applied
 # A later release's table: the desktop on the GPU route and a new Deny entry.
 $next = $table.defaults | ConvertTo-Json -Depth 6 | ConvertFrom-Json
 $next.desktop_router.DwmForceCpu = 0
+# A release whose default kept the desktop on the CPU route (tester.1 to tester.8).
+$old = $table.defaults | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+$old.desktop_router.DwmForceCpu = 1
 $next.app_router.Deny = @('witcher3.exe', 'other.exe')
 
 'fresh install: every value is new'
@@ -31,7 +34,7 @@ Check (($d.decision -eq 'update') -and ($d.value -eq 0) -and $d.write) "DwmForce
 $d = Get-Decision $plan 'RequireKmdSwitches'
 Check (($d.decision -eq 'kept') -and ($d.value -eq 0) -and -not $d.write) "RequireKmdSwitches 0 (tester) kept: $($d.decision)"
 $cur = @{ DwmForceCpu = 0 }
-$plan = Get-RegistryDefaultPlan -Defaults $table.defaults.desktop_router -Previous $legacy.desktop_router -Current $cur
+$plan = Get-RegistryDefaultPlan -Defaults $old.desktop_router -Previous $legacy.desktop_router -Current $cur
 $d = Get-Decision $plan 'DwmForceCpu'
 Check (($d.decision -eq 'kept') -and -not $d.write) "DwmForceCpu 0 set by the tester under default 1: $($d.decision)"
 
@@ -62,11 +65,20 @@ $text = Format-RegistryPlan $plan
 Check ($text -match 'DpmMaxMHz=1800 \(command line\)') "plan text: $($text.Substring(0, [Math]::Min(120, $text.Length)))..."
 
 'record: Release\AppliedDefaults round trip'
-$json = $table.defaults | ConvertTo-Json -Depth 6 -Compress
+$json = $old | ConvertTo-Json -Depth 6 -Compress
 $back = $json | ConvertFrom-Json
-Check ((Test-RegistryValueSame $back.app_router.Allow $table.defaults.app_router.Allow) -and ($back.app_router.Allow -is [array])) "a one-entry list stays a list ($($json.Length) characters)"
+Check ((Test-RegistryValueSame $back.app_router.Allow $old.app_router.Allow) -and ($back.app_router.Allow -is [array])) "a one-entry list stays a list ($($json.Length) characters)"
 $plan = Get-RegistryDefaultPlan -Defaults $next.desktop_router -Previous $back.desktop_router -Current @{ DwmForceCpu = 1 }
 Check ((Get-Decision $plan 'DwmForceCpu').decision -eq 'update') 'the record drives the update like legacy_applied'
+
+'this package''s table over tester.6/.7 (no record)'
+$ship = [int]$table.defaults.desktop_router.DwmForceCpu
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.desktop_router -Previous $legacy.desktop_router -Current @{ DwmForceCpu = 1 }) 'DwmForceCpu'
+Check (($d.value -eq $ship) -and ($d.decision -eq $(if ($ship -eq 1) { 'same' } else { 'update' }))) "DwmForceCpu 1 written by tester.7 -> $ship ($($d.decision))"
+if ($ship -eq 0) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.desktop_router -Previous $old.desktop_router -Current @{ DwmForceCpu = 1 }) 'DwmForceCpu'
+    Check ($d.decision -eq 'update') "DwmForceCpu 1 recorded by an earlier release with default 1 -> 0 ($($d.decision))"
+}
 
 'write and read back (HKCU scratch key)'
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test'

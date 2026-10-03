@@ -103,6 +103,8 @@ Check ($pos[0] -gt 0 -and $pos[0] -lt $pos[1] -and $pos[1] -lt $pos[2]) 'the fir
 $src = [IO.File]::ReadAllText((Join-Path $Package 'installer\install.ps1'))
 Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itself'
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
+Check (($src -match "Add-Result 'GPU desktop path'") -and ($src -match "Invoke-Native \`$cli @\('interop'\)") -and ($src -match 'effective blit\\\+cdd') -and ($src -match 'died in a session') -and ($src -match 'bc250d3d_zink')) 'verify checks the GPU desktop path (interop effective blit+cdd, no unclean session, zink in DWM)'
+Check ([string]$m.kmd_abi -eq '0x000700C6' -or [version]($m.kmd_build) -lt [version]'0.7.198.0') "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 'file replacement and re-run (test-filesafe.ps1 under 5.1, inside a scratch folder)'
 $work = Join-Path $WorkBase ('filesafe-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
@@ -172,11 +174,11 @@ foreach ($c in @(
 $r = Invoke-Ps51 @((Join-Path $Package 'payload\tools\start-confirm.ps1'), '-Probe')
 $r.text
 Check ($r.code -eq 5) "probe on a PC without the driver: exit $($r.code) (5 = no start-health reading)"
-Check ($r.text -match 'probe: fallback view: device problem -1, driver version  \(expected 0x000700C5\), LastStage ') 'probe: fallback view runs bc250kmd_cli info/stages and expects 0x000700C5'
+Check ($r.text -match "probe: fallback view: device problem -1, driver version  \(expected $($m.kmd_abi)\), LastStage ") "probe: fallback view runs bc250kmd_cli info/stages and expects the manifest's kmd_abi $($m.kmd_abi)"
 Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
 Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
-Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm does not use the CLI health command (absent from the 0cbef549 CLI)'
+Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm does not use the CLI health command (absent from the release CLI)'
 Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\bc250control.dll')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'payload\control\bc250control.dll')).Hash) 'tools\bc250control.dll is the control application''s DLL'
 
 'GPU firmware: not in the package, downloaded at install time (test-firmware.ps1 under 5.1, real download into a scratch folder)'

@@ -26,7 +26,7 @@
       "KeepLog": 0
     },
     "desktop_router": {
-      "DwmForceCpu": 1,
+      "DwmForceCpu": 0,
       "RequireKmdSwitches": 1
     },
     "app_router": {

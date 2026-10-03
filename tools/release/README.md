@@ -23,15 +23,15 @@ pwsh -File tools\release\build-release.ps1 [-ControlApp <dir> -ControlAppExe <ex
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
-v0 ships the registered binaries as they run on the lab (KMD 0.7.197.1 re-signed, code unchanged, INF DriverVer 0.7.197.100 so that it outranks every lab build and the bound package is identifiable; desktop on the CPU route, DwmForceCpu 1, until BD-058 is fixed); a rebuild from
+v0 ships the binaries as they run on the lab (tester.10: KMD 0.7.198.2 re-signed, code unchanged, INF DriverVer 0.7.198.100 so that it outranks every lab build of 0.7.198 and the bound package is identifiable; desktop on the GPU route, DwmForceCpu 0, gated by RequireKmdSwitches); a rebuild from
 the exact commits with `/Brepro` is planned for v1. Install paths differ from the lab's: everything under
 `%ProgramFiles%\amdgpu-wddm`, except the firmware, which the KMD reads from the compiled-in `C:\BC250\firmware`.
 
 v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs`) instead of the hard-coded
 `C:\BC250\firmware`; reproducible rebuild of every component; the control application edits the D3D11 allowlist; the KMD's
 adapter string ("BC-250 GPU (bc250kmd, display-only, lab build)") names the release and the mode it runs in; the
-.sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.197.100 against the file's
-0.7.197.1); one bc250kmd_cli.c for the CLI and bc250control.dll, so the CLI has the `health` commands again; the INF
+.sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.198.100 against the file's
+0.7.198.2); one bc250kmd_cli.c for the CLI and bc250control.dll, so the CLI has the `health` commands again; the INF
 Provider string ("BC-250 lab (D-Ogi)") names the project instead of the lab.
 
 Registry defaults: `installer/registry-defaults.json` is the one table. `install.ps1` applies it and
