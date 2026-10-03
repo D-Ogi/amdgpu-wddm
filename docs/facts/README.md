@@ -6,18 +6,37 @@ one table per area (`<area>.md`), the live list [`current.md`](current.md), the 
 and the mermaid graphs in [`graphs/`](graphs/). Generated pages start with a "Generated ... Do not edit"
 comment. Statuses and what a fact needs: [`../01-evidence-rules.md`](../01-evidence-rules.md).
 
-## Adding or correcting a fact
+## How to add a fact
 
-1. `python tools/facts/gen_facts.py next-id` gives the next free `M` number. IDs are never reused or renumbered.
-2. Add the fact to the area file it belongs to, anywhere in the list (the generator sorts by ID). Moving a fact
-   to another area means moving its entry to the other file; its ID stays.
-3. A fact that corrects or overturns an older one gets an edge to it (`supersedes` or `refutes`), and the older
-   entry is fixed in place: its status and text say what holds now and why. Never append a second version.
-4. `python tools/facts/gen_facts.py --write` regenerates the pages and puts the data file into canonical form.
-   Commit the data and the pages together, with the evidence.
-5. `python tools/facts/gen_facts.py --check` is the gate (also run by `tools/quality/quick.ps1`): IDs unique and
-   well formed, statuses valid, every edge resolves, every cited `evidence/` path and every relative link exists
-   in the tree, data files canonical, generated pages up to date.
+1. Get the ID: `python tools/facts/gen_facts.py next-id` prints the next free `M` number (say `M788`).
+2. Append the fact to the end of its area file, e.g. `docs/facts/data/kmd.yaml`. Text values are double-quoted
+   and on one line; links are relative to `docs/`:
+
+   ```yaml
+     - id: M788
+       status: MEASURED
+       date: "2026-10-03"
+       claim: "What holds, in one sentence"
+       status_text: "MEASURED (n = 1 run)"
+       detail: "How it was measured, the numbers, what it does not show"
+       evidence: "[E51](../evidence/windows/2026-10-03-E51-name/RESULT.md)"
+       edges:
+         - {"type": "uses", "to": "M780"}
+   ```
+
+   `status_text`, `detail`, `evidence` and `edges` are optional; `status_text` only when it says more than `status`.
+3. Run `python tools/facts/gen_facts.py --write`. It regenerates the pages and rewrites the data file in canonical
+   form (sorted by ID). Commit the data and the pages together with the evidence.
+
+## Correcting, moving, checking
+
+- A fact that corrects or overturns an older one gets an edge to it (`supersedes` or `refutes`), and the older
+  entry is fixed in place: its status and text say what holds now and why. Never append a second version.
+- Moving a fact to another area means moving its entry to the other file; its ID stays. Links elsewhere in the
+  repository to its old page (`facts/<area>.md#m123`) then fail the gate until they are updated.
+- `python tools/facts/gen_facts.py --check` is the gate (also run by `tools/quality/quick.ps1`): IDs unique and
+  well formed, statuses valid, every edge resolves, every cited `evidence/` path and every relative link exists
+  in the tree, links to fact anchors name the right page, data files canonical, generated pages up to date.
 
 ## Format
 
