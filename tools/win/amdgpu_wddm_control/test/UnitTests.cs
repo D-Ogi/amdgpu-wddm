@@ -205,8 +205,8 @@ static class UnitTests
             "Machine name: BENCH-PC",
             "Machine Id: {01234567-89AB-CDEF-0123-456789ABCDEF}",
             "Owner tester ran it",
-            "MAC 00-1A-2B-3C-4D-5E and 00:1a:2b:3c:4d:5f",
-            "Physical Address: 001A2B3C4D60",
+            "MAC 00-00-5E-00-53-01 and 00:00:5e:00:53:02",
+            "Physical Address: 00005E005303",
             "System Serial Number: ABC123XYZ",
             "contact someone@example.org now",
             "Driver Version: 0.7.197.1 sha256 982DB3CF0011",
@@ -219,7 +219,7 @@ static class UnitTests
         Check(!o.Contains("BENCH-PC"), "computer name removed");
         Check(!o.Contains("0123-456789ABCDEF"), "machine id removed");
         Check(o.Contains("Owner <user> ran it"), "user name replaced");
-        Check(!o.Contains("4D-5E") && !o.Contains("4d:5f") && !o.Contains("001A2B3C4D60"), "MAC addresses removed");
+        Check(!o.Contains("53-01") && !o.Contains("53:02") && !o.Contains("00005E005303"), "MAC addresses removed");
         Check(!o.Contains("ABC123XYZ") && o.Contains("System Serial Number: <redacted>"), "serial removed, label kept");
         Check(!o.Contains("someone@example.org"), "e-mail removed");
         Check(o.Contains("0.7.197.1") && o.Contains("982DB3CF0011"), "versions and hashes kept");
