@@ -1,13 +1,15 @@
 # Tester release package
 
 Builds the folder and zip that external testers run on their own ASRock BC-250 (Windows 11 x64). The tester guide
-is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`.
+is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The package's own third-party list is
+`docs/testing/THIRD-PARTY.md` (one row per bundled component with its exact commit), with the licence texts in
+`docs/testing/licenses/`; when a bundled binary changes, its row changes in the same commit.
 
 | File | Purpose |
 |---|---|
 | `new-release-cert.ps1` | Creates the release test-signing certificate once, in a private directory outside the repository (never in the repo or the package). Separate from the lab certificate. |
 | `release-sources.json` | The registered lab artifacts that make up the release, with SHA256. The build refuses any other byte. |
-| `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1. |
+| `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd` (package root) and the PowerShell 5.1 scripts. |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |

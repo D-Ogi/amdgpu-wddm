@@ -4,10 +4,9 @@ This is the first tester release of amdgpu-wddm, an experimental Windows driver 
 (AMD Cyan Skillfish, gfx1013). It is for people who want to test the driver on their own BC-250 and report what
 happens. It is not ready for daily use. Read `INSTALL.md` in this package before you install.
 
-Package versions: `0.7.197.100-tester.4` is the candidate that passed the installation test on our BC-250
-(upgrade, restart, all 8 verification checks, start confirmation). `0.7.197.100-tester.5` has the same drivers and
-programs; only the verification output is better (it waits for the start confirmation and shows the driver
-provider).
+Package version: `0.7.197.100-tester.7`. Its drivers, programs and installer passed the installation test on our
+BC-250 as `0.7.197.100-tester.6` (upgrade, restart, all 8 verification checks, start confirmation). This package
+adds `THIRD-PARTY.md` and the licence texts in `licenses\`, and replaces a wrong `LICENSE.amdgpu` file.
 
 ## What works
 

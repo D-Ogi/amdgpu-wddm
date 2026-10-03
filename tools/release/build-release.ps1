@@ -63,7 +63,21 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1') { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
-foreach ($f in 'LICENSE.md', 'NOTICE', 'THIRD-PARTY.md') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
+foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
+# The release's own third-party list (components of this package, exact commits) and the licence texts it names.
+Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\THIRD-PARTY.md') -Destination (Join-Path $pkg 'THIRD-PARTY.md')
+$lic = Join-Path $pkg 'licenses'
+[void][IO.Directory]::CreateDirectory($lic)
+Copy-Item -Path (Join-Path $repo 'docs\testing\licenses\*') -Destination $lic
+Copy-Item -LiteralPath (Join-Path $pkg 'payload\firmware\LICENSE.amdgpu') -Destination $lic
+foreach ($m in [regex]::Matches((Get-Content -LiteralPath (Join-Path $pkg 'THIRD-PARTY.md') -Raw), '`([\w.-]+\.(?:txt|md)|LICENSE\.amdgpu)`')) {
+    $n = $m.Groups[1].Value
+    if ($n -notin 'LICENSE.md', 'NOTICE' -and -not (Test-Path -LiteralPath (Join-Path $lic $n))) { throw "THIRD-PARTY.md names licenses\$n, which is missing" }
+}
+# tester.1-6 shipped a cgit "Not found" page as LICENSE.amdgpu: no licence text may be a web page.
+foreach ($f in Get-ChildItem -LiteralPath $lic -File) {
+    if ((Get-Content -LiteralPath $f.FullName -TotalCount 3) -match '(?i)<!DOCTYPE|<html') { throw "licenses\$($f.Name) is a web page, not a licence text" }
+}
 
 Write-Host 'driver version'
 # DriverVer = <date>,$DriverVer in the packaged INF, nothing else changes; the catalog below is made from this INF.

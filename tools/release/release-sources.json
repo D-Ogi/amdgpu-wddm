@@ -192,9 +192,9 @@
       "component": "firmware",
       "path": "payload/firmware/LICENSE.amdgpu",
       "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/LICENSE.amdgpu",
-      "sha256": "D4CBF862B708AD20737F5C406D408EB3BD7507D01C4C4E0104921193C0106565",
-      "size": 3503,
-      "role": "licence of the AMD firmware files"
+      "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE",
+      "size": 2938,
+      "role": "licence of the AMD firmware files (linux-firmware 2b8daaf6 LICENSES/LICENSE.amdgpu)"
     },
     {
       "component": "firmware",
