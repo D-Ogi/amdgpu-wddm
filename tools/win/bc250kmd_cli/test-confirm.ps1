@@ -1,6 +1,6 @@
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\confirm144-tests",[switch]$IgnoreFlushFailure)
 $ErrorActionPreference='Stop'
-$repo=Join-Path $Root 'bc250-win';$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path;$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 $source=Get-Content "$repo\tools\win\bc250kmd_cli\bc250kmd_cli.c" -Raw
 $first=$source.IndexOf('static int Confirm(void)');$last=$source.IndexOf('// ---- log:',$first)

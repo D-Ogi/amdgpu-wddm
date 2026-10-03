@@ -19,6 +19,7 @@ typedef struct _BC250_DPM_SNAP {
     ULONG Raises, Lowers, ThermalEvents, Errors, Resyncs;
     ULONGLONG Ticks, BusyTime100ns, UptimeMs, Generation;
     ULONG TuneApplied, FloorTicks;          // 0.7.185: the tune serial the governor runs with; Gov.floor_ticks
+    ULONG SoftReleases;                     // 0.7.197: Gov.soft_releases
 } BC250_DPM_SNAP;
 
 typedef struct _BC250_DPM_STATE {

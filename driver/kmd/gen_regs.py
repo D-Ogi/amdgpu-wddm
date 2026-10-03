@@ -206,10 +206,22 @@ BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 # sweep (third_party/linux-amdgpu/PROVENANCE.md: "the display headers ... are deliberately not part of the
 # general MMIO read sweep"). gen_regs.py's own DCN table is not that sweep - it is its own generated table,
 # through the same regcalc mechanism - so it gets its header here instead of by adding DMU to SPEC.
-EXTRA_HEADERS = {"DMU": "dcn_2_0_1_offset.h", "THM": "thm_10_0_offset.h", "CLK": "clk_11_0_1_offset.h"}
+EXTRA_HEADERS = {"DMU": "dcn_2_0_1_offset.h", "THM": "thm_10_0_offset.h", "CLK": "clk_11_0_1_offset.h",
+                 # BD-056: amdgpu defines the Cyan Skillfish golden TSC registers inside gfx_v10_0.c itself (no
+                 # smuio header carries the _Cyan_Skillfish names), so regcalc reads them from the vendored file;
+                 # the SMUIO segment bases come from cyan_skillfish_ip_offset.h as for every other IP.
+                 "SMUIO": ROOT / "driver/amdgpu-import/reference/gfx_v10_0.c"}
 # M438/E30: 72 pre-amdgpu reads match the live SMN-backed k10temp sensor.
 # This is a read-only addition, not a permission for raw SMU messages.
 EXTRA_READS = [("THM", "mmTHM_TCON_CUR_TMP"), ("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
+# BD-056, wddm.c CalibrateGpuClock: the 100 MHz SMUIO counter amdgpu's gfx_v10_0_get_gpu_clock_counter() reads on
+# GC 10.1.3 (gfx_v10_0.c:7694-7706), read only. On the escape read list too, so that `bc250kmd_cli read` can show
+# it moving on the lab before anything relies on it. Unit A's Linux AMDGPU_INFO_TIMESTAMP, which amdgpu answers
+# from these two registers, returned 0x00000043_A80556B6 (evidence/linux/2026-09-21-E13-reference-2/
+# boot4-readonly-after-windows/info.txt).
+TSC_REGISTERS = [("SMUIO", "mmGOLDEN_TSC_COUNT_UPPER_Cyan_Skillfish"), ("SMUIO", "mmGOLDEN_TSC_COUNT_LOWER_Cyan_Skillfish")]
+EXTRA_READS += TSC_REGISTERS
+NAMED += TSC_REGISTERS
 # Keep the timing inputs observable through READ_REG for pre-deployment control.
 EXTRA_READS += [("DMU", name) for name in DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_V_BLANK_START_END"]]
 

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 // The interop switches' start policy (interop_policy.c) against an independent oracle over every input
-// combination, then the life of the switches across boots on a simulated Parameters key.
+// combination, then the life of the switches across boots on a simulated Parameters key, then the session
+// marker's transitions within a boot (BD-059: a clean restart ends the session at the system power transition).
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -87,9 +88,185 @@ static void Use(REGISTRY* r) { r->bootRecord = 1; r->session.present = 1; r->ses
 static void End(REGISTRY* r) { r->session.present = 0; }                                             // last user, stop
 static void Reboot(REGISTRY* r) { r->bootRecord = 0; }
 
+// ---- BD-059: the session marker's life within a boot (bc250_interop_session_step) ---------------------------------
+
+// The caller's part, as interop.c InteropEvent does it: the step's answer carried out on the simulated registry,
+// marked set only when the write or delete reached it.
+static struct bc250_interop_step Event(REGISTRY* r, struct bc250_interop_session* s, unsigned int ev, unsigned int* lastEnd)
+{
+    struct bc250_interop_step st;
+    bc250_interop_session_step(s, ev, &st);
+    if (st.unmark && !r->failWrites) { *lastEnd = st.unmark; r->session.present = 0; s->marked = 0; }
+    if (st.mark && !r->failWrites) { r->bootRecord = 1; r->session.present = 1; r->session.value = 42; s->marked = 1; }
+    return st;
+}
+
+// Every sequence of up to five events, each with the registry write succeeding or failing, against the rules
+// stated independently of the step's code.
+static unsigned int SessionSequences(void)
+{
+    static const unsigned int events[] = {BC250_INTEROP_EVENT_BEGIN, BC250_INTEROP_EVENT_END, BC250_INTEROP_EVENT_STOP,
+                                          BC250_INTEROP_EVENT_SYSTEM_DOWN, BC250_INTEROP_EVENT_ADAPTER_DOWN,
+                                          BC250_INTEROP_EVENT_UP};
+    unsigned int len, code, total, i, n = 0;
+    for (len = 1; len <= 5; len++) {
+        for (total = 1, i = 0; i < len; i++) total *= 12;
+        for (code = 0; code < total; code++) {
+            struct bc250_interop_session s;
+            unsigned int c = code, users = 0, down = 0;
+            memset(&s, 0, sizeof(s));
+            for (i = 0; i < len; i++, c /= 12) {
+                const unsigned int ev = events[c % 12 / 2];
+                const int ok = (c % 2) == 0;
+                const int wasMarked = s.marked;
+                struct bc250_interop_step st;
+                bc250_interop_session_step(&s, ev, &st);
+                // The model.
+                if (ev == BC250_INTEROP_EVENT_BEGIN) users++;
+                if (ev == BC250_INTEROP_EVENT_END && users) users--;
+                if (ev == BC250_INTEROP_EVENT_STOP) users = 0;
+                if (ev == BC250_INTEROP_EVENT_SYSTEM_DOWN || ev == BC250_INTEROP_EVENT_ADAPTER_DOWN) down = 1;
+                if (ev == BC250_INTEROP_EVENT_UP) down = 0;
+                CHECK(s.users == users && s.down == (int)down);
+                // Never both, never a mark while down or over a marker, an unmark only of a marker.
+                CHECK(!(st.mark && st.unmark));
+                CHECK(!st.mark || (!wasMarked && !down));
+                CHECK(!st.unmark || wasMarked);
+                // What must happen.
+                CHECK(st.mark == (!wasMarked && !down &&
+                                  (ev == BC250_INTEROP_EVENT_BEGIN || (ev == BC250_INTEROP_EVENT_UP && users))));
+                CHECK(st.unmark == (!wasMarked ? 0u
+                    : ev == BC250_INTEROP_EVENT_STOP ? BC250_INTEROP_SESSION_END_STOP
+                    : ev == BC250_INTEROP_EVENT_END && users == 0 ? BC250_INTEROP_SESSION_END_USERS
+                    : ev == BC250_INTEROP_EVENT_SYSTEM_DOWN ? BC250_INTEROP_SESSION_END_SYSTEM_POWER
+                    : ev == BC250_INTEROP_EVENT_ADAPTER_DOWN ? BC250_INTEROP_SESSION_END_ADAPTER_D3 : 0u));
+                if (ok && st.mark) s.marked = 1;
+                if (ok && st.unmark) s.marked = 0;
+                n++;
+            }
+        }
+    }
+    return n;
+}
+
+static void SessionLifecycles(void)
+{
+    struct bc250_interop_session s;
+    struct bc250_interop_decision got;
+    struct bc250_interop_step st;
+    unsigned int lastEnd;
+    REGISTRY r;
+
+#define BOOT() do { Reboot(&r); got = Start(&r); memset(&s, 0, sizeof(s)); lastEnd = 0; } while (0)
+#define FRESH() do { memset(&r, 0, sizeof(r)); got = Start(&r); memset(&s, 0, sizeof(s)); lastEnd = 0; } while (0)
+
+    // The BD-059 lab case before the fix: DWM presented, a clean restart, no hook ran (end none). Unclean.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    BOOT();
+    CHECK(got.effective == 0 && got.reason == BC250_INTEROP_REASON_UNCLEAN && got.persist_close);
+
+    // A clean restart: the power callback, then the adapter's D3. Open, nothing seen, ended by the callback.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    CHECK(r.session.present && s.marked);
+    st = Event(&r, &s, BC250_INTEROP_EVENT_SYSTEM_DOWN, &lastEnd);
+    CHECK(st.unmark == BC250_INTEROP_SESSION_END_SYSTEM_POWER && !r.session.present && s.users == 1);
+    st = Event(&r, &s, BC250_INTEROP_EVENT_ADAPTER_DOWN, &lastEnd);
+    CHECK(!st.unmark && !st.mark && lastEnd == BC250_INTEROP_SESSION_END_SYSTEM_POWER);
+    BOOT();
+    CHECK(got.effective == BC250_INTEROP_ALL && got.flags == 0 && got.reason == BC250_INTEROP_REASON_NONE);
+
+    // Only the adapter's D3 came (no callback): still clean, ended by the adapter.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_ADAPTER_DOWN, &lastEnd);
+    CHECK(lastEnd == BC250_INTEROP_SESSION_END_ADAPTER_D3 && !r.session.present);
+    BOOT();
+    CHECK(got.effective == BC250_INTEROP_ALL && got.flags == 0);
+
+    // The callback's delete failed, the adapter's D3 retries it: clean.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    r.failWrites = 1;
+    Event(&r, &s, BC250_INTEROP_EVENT_SYSTEM_DOWN, &lastEnd);
+    CHECK(r.session.present && s.marked);
+    r.failWrites = 0;
+    st = Event(&r, &s, BC250_INTEROP_EVENT_ADAPTER_DOWN, &lastEnd);
+    CHECK(st.unmark == BC250_INTEROP_SESSION_END_ADAPTER_D3 && !r.session.present);
+    BOOT();
+    CHECK(got.effective == BC250_INTEROP_ALL && got.flags == 0);
+
+    // A device that begins during the shutdown marks nothing: clean.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_SYSTEM_DOWN, &lastEnd);
+    st = Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    CHECK(!st.mark && !r.session.present && s.users == 2);
+    BOOT();
+    CHECK(got.effective == BC250_INTEROP_ALL && got.flags == 0);
+
+    // A hang, a 0x116 or an AC cut with DWM on the path: no power event before the death. Closed, durably.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_END, &lastEnd);
+    CHECK(r.session.present);                                   // one user left
+    BOOT();
+    CHECK(got.effective == 0 && got.reason == BC250_INTEROP_REASON_UNCLEAN && r.closed.value == 4);
+
+    // Sleep, resume (adapter D0 first, then the callback), then a death: marked again on the way back, so closed.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_SYSTEM_DOWN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_ADAPTER_DOWN, &lastEnd);
+    CHECK(!r.session.present && s.down);
+    st = Event(&r, &s, BC250_INTEROP_EVENT_UP, &lastEnd);
+    CHECK(st.mark && r.session.present && !s.down);
+    st = Event(&r, &s, BC250_INTEROP_EVENT_UP, &lastEnd);
+    CHECK(!st.mark && !st.unmark);
+    BOOT();
+    CHECK(got.effective == 0 && got.reason == BC250_INTEROP_REASON_UNCLEAN);
+
+    // Sleep with DWM gone before it, resume: nothing to mark again; a death after that is not in a session.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_END, &lastEnd);
+    CHECK(lastEnd == BC250_INTEROP_SESSION_END_USERS && !r.session.present);
+    Event(&r, &s, BC250_INTEROP_EVENT_SYSTEM_DOWN, &lastEnd);
+    st = Event(&r, &s, BC250_INTEROP_EVENT_UP, &lastEnd);
+    CHECK(!st.mark && !r.session.present);
+    BOOT();
+    CHECK(got.effective == BC250_INTEROP_ALL && got.flags == 0);
+
+    // A power loss while asleep (S3) with DWM alive: the marker went at the sleep, so it reads as clean. Recorded
+    // in docs/design/gpu-dwm-interop-switches.md: the path is not in use in S3/S4.
+    FRESH();
+    Event(&r, &s, BC250_INTEROP_EVENT_BEGIN, &lastEnd);
+    Event(&r, &s, BC250_INTEROP_EVENT_SYSTEM_DOWN, &lastEnd);
+    BOOT();
+    CHECK(got.effective == BC250_INTEROP_ALL && got.flags == 0);
+
+    // A device-level D3 (PowerActionNone) or a display-off is not a system action; the five system ones are.
+    CHECK(!bc250_interop_system_action(0) && !bc250_interop_system_action(1));
+    CHECK(bc250_interop_system_action(2) && bc250_interop_system_action(3) && bc250_interop_system_action(4) &&
+          bc250_interop_system_action(5) && bc250_interop_system_action(6));
+    CHECK(!bc250_interop_system_action(7) && !bc250_interop_system_action(8) && !bc250_interop_system_action(99));
+
+    // Null session, unknown event: nothing.
+    bc250_interop_session_step(0, BC250_INTEROP_EVENT_BEGIN, &st);
+    CHECK(!st.mark && !st.unmark);
+    memset(&s, 0, sizeof(s));
+    s.marked = 1; s.users = 3;
+    bc250_interop_session_step(&s, 99, &st);
+    CHECK(!st.mark && !st.unmark && s.users == 3 && s.marked && !s.down);
+#undef BOOT
+#undef FRESH
+}
+
 int main(void)
 {
-    unsigned int a, b, m, c, k, cases = 0;
+    unsigned int a, b, m, c, k, cases = 0, steps;
     struct bc250_interop_decision got, want;
     REGISTRY r;
 
@@ -186,6 +363,9 @@ int main(void)
     bc250_interop_decide(0, &got);
     CHECK(got.reason == BC250_INTEROP_REASON_NOT_RUN && got.effective == 0 && !got.persist_close);
 
-    printf("interop policy: %u combinations and 8 lifecycles PASS\n", cases);
+    steps = SessionSequences();
+    SessionLifecycles();
+    printf("interop policy: %u combinations and 8 lifecycles PASS; session: %u sequence steps and 9 lifecycles PASS\n",
+           cases, steps);
     return 0;
 }

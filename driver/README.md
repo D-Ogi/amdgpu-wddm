@@ -13,6 +13,7 @@ ADR 0017).
 | `icd/` | Patches for RADV's WDDM2 winsys, the Vulkan ICD (ADR 0005). The component sources now live as branches of the Mesa fork (`docs/build.md`); this directory keeps the original patch and later incremental ones |
 | `umd/dxvk/` | The system D3D10/11 user-mode driver shell `amdgpu_wddm_d3d11.dll`, with DXVK as its engine (ADR 0017 item 4) |
 | `umd/d3d12/` | The native D3D12 user-mode driver shell `amdgpu_wddm_d3d12.dll`, a diagnostic adapter so far, and `engine-ddi/`, the slot boundary to the vkd3d-proton engine (ADR 0017 item 5) |
+| `umd/router/` | `bc250d3d_router.dll`, the registered D3D10/D3D11 UMD: routes the desktop compositor to the hosted Zink UMD and applications to the DXVK shell or the CPU UMD, by registry policy |
 | `umd-stub/` | `bc250umd.dll`, the user-mode driver of M7 stage A whose every `OpenAdapter` returns `E_NOTIMPL` |
 
 The Mesa D3D10 user-mode drivers of the desktop (`bc250d3d.dll` on llvmpipe, `bc250d3d_zink.dll` on Zink) are

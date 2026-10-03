@@ -76,10 +76,14 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
     status = GuardInit(RegistryPath);
     if (!NT_SUCCESS(status)) return status;
     PagingJournalInit();
+    InteropDriverInit();    // \Callback\PowerState: a clean restart ends the GPU DWM session (BD-059)
     GuardStage(StageDriverEntry);
 
     status = WddmGateOpen() ? InitializeFullWddm(DriverObject, RegistryPath)
                             : InitializeDisplayOnly(DriverObject, RegistryPath);
-    if (!NT_SUCCESS(status)) GuardCleanup();
+    if (!NT_SUCCESS(status)) {
+        InteropDriverUnload();
+        GuardCleanup();
+    }
     return status;
 }

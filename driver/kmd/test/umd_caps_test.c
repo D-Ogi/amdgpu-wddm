@@ -48,6 +48,11 @@ int main(void)
             }
     }
 
+    // BD-056: CalibrateGpuClock's frequency is this field, read through UmdCapsGpuCounterHz (unit A, E13b4: 100 MHz).
+    CHECK(offsetof(struct bc250_umd_private, device.gpu_counter_freq) == UMD_CAPS_GPU_COUNTER_FREQ_OFFSET);
+    CHECK(baked->device.gpu_counter_freq == 100000u);
+    CHECK(UmdCapsGpuCounterHz() == (unsigned long long)baked->device.gpu_counter_freq * 1000ull);
+
     if (g_failures == 0) { printf("umd_caps_test: all cases passed\n"); return 0; }
     fprintf(stderr, "umd_caps_test: %d case(s) failed\n", g_failures);
     return 1;

@@ -1,12 +1,12 @@
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\start-health-client-tests",[switch]$IdleRead)
 $ErrorActionPreference='Stop'
-$repo=Join-Path $Root 'bc250-win';$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path;$env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 $source=Get-Content "$repo\tools\win\bc250kmd_cli\bc250kmd_cli.c" -Raw
 $first=$source.IndexOf('BC250_CONTROL_API LONG WINAPI Bc250StartHealth(')
 $last=$source.IndexOf('static int StartHealth(',$first)
 $actual=$source.Substring($first,$last-$first)
-if($IdleRead){$actual=$actual.Replace('op==BC250_START_HEALTH_CONFIRM))return status;', '1))return status;')}
+if($IdleRead){$actual=$actual.Replace('op!=BC250_START_HEALTH_CONFIRM,&status))return status;', '0,&status))return status;')}
 $template=Get-Content "$repo\tools\win\bc250kmd_cli\test\start_health_test.c" -Raw
 [IO.File]::WriteAllText("$Out\test.c",$template.Replace('// ACTUAL_START_HEALTH',$actual))
 Copy-Item "$repo\driver\kmd\bc250kmd_escape.h" "$Out\bc250kmd_escape.h" -Force
