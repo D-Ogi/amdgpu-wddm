@@ -6,7 +6,7 @@ Table: [`../hardware.md`](../hardware.md). Colours: status. Edge types: `superse
 
 ## Corrections and support
 
-16 facts, 10 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+21 facts, 13 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -14,8 +14,13 @@ flowchart LR
   M4["M4"]:::MEASURED
   M5["M5<br/>linux"]:::MEASURED
   M9["M9"]:::MEASURED
+  M11["M11"]:::MEASURED
   M12["M12<br/>linux"]:::MEASURED
+  M15["M15"]:::MEASURED
   M35["M35"]:::MEASURED
+  M39["M39"]:::MEASURED
+  M44["M44<br/>kmd"]:::MEASURED
+  M58["M58"]:::MEASURED
   M241["M241<br/>kmd"]:::CONFIRMED
   M242["M242"]:::CONFIRMED
   M333["M333"]:::CONFIRMED
@@ -31,8 +36,11 @@ flowchart LR
   M1 -.->|refutes| R1
   M4 ==>|supports| S3
   M9 -.->|refutes| R1
+  M15 ==>|supports| M11
+  M58 ==>|supersedes| M44
   M242 ==>|supersedes| M241
   M333 ==>|supersedes| M35
+  M44 ==>|supports| M39
   M456 ==>|supersedes| M455
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
@@ -41,12 +49,12 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M5,M12,M241,M456 other
+  class M5,M12,M44,M241,M456 other
 ```
 
 ## References
 
-48 facts, 43 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+46 facts, 40 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -56,8 +64,6 @@ flowchart LR
   M4["M4"]:::MEASURED
   M5["M5<br/>linux"]:::MEASURED
   M6["M6"]:::MEASURED
-  M11["M11"]:::MEASURED
-  M15["M15"]:::MEASURED
   M18["M18"]:::MEASURED
   M19["M19"]:::MEASURED
   M20["M20"]:::MEASURED
@@ -100,7 +106,6 @@ flowchart LR
   M433["M433"]:::CONFIRMED
   M2 --> M1
   M3 --> M4
-  M15 --> M11
   M18 --> M4
   M18 --> M5
   M18 --> M6
@@ -111,7 +116,6 @@ flowchart LR
   M36 --> M33
   M36 --> M34
   M39 --> M37
-  M39 --> M44
   M41 --> M24
   M41 --> M25
   M54 --> M42
@@ -119,7 +123,6 @@ flowchart LR
   M55 --> M44
   M55 --> M53
   M55 --> M54
-  M58 --> M44
   M58 --> M54
   M58 --> M55
   M92 --> M85

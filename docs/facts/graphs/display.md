@@ -6,26 +6,30 @@ Table: [`../display.md`](../display.md). Colours: status. Edge types: `supersede
 
 ## Corrections and support
 
-2 facts, 1 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+6 facts, 3 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
   M455["M455<br/>hardware"]:::MEASURED
   M456["M456"]:::MEASURED
+  M574["M574"]:::MEASURED
+  M575["M575"]:::MEASURED
+  M656["M656"]:::MEASURED
+  M657["M657<br/>tooling"]:::MEASURED
   M456 ==>|supersedes| M455
+  M575 ==>|supersedes| M574
+  M657 ==>|supersedes| M656
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M455 other
+  class M455,M657 other
 ```
 
 ## References
 
-61 facts, 44 relations, in 2 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
-
-### Part 1
+58 facts, 42 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -64,7 +68,6 @@ flowchart LR
   M567["M567"]:::MEASURED
   M569["M569<br/>d3d"]:::MEASURED
   M572["M572"]:::MEASURED
-  M574["M574"]:::MEASURED
   M575["M575"]:::MEASURED
   M576["M576"]:::MEASURED
   M585["M585"]:::MEASURED
@@ -72,8 +75,6 @@ flowchart LR
   M596["M596"]:::MEASURED
   M652["M652"]:::MEASURED
   M653["M653<br/>kmd"]:::MEASURED
-  M656["M656"]:::MEASURED
-  M657["M657<br/>tooling"]:::MEASURED
   M681["M681"]:::MEASURED
   M682["M682"]:::MEASURED
   M685["M685"]:::MEASURED
@@ -88,6 +89,8 @@ flowchart LR
   M720["M720"]:::MEASURED
   M723["M723"]:::MEASURED
   M724["M724"]:::MEASURED
+  M740["M740"]:::MEASURED
+  M743["M743"]:::MEASURED
   M92 --> M85
   M92 --> M86
   M98 --> M88
@@ -115,7 +118,6 @@ flowchart LR
   M545 --> M544
   M553 --> M546
   M572 --> M567
-  M575 --> M574
   M576 --> M575
   M596 --> M562
   M682 --> M681
@@ -128,28 +130,14 @@ flowchart LR
   M723 --> M697
   M723 --> M702
   M724 --> M723
+  M743 --> M740
   M569 --> M546
   M586 --> M585
-  M657 --> M656
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M20,M31,M84,M89,M92,M98,M106,M190,M410,M569,M586,M653,M657,M697 other
-```
-
-### Part 2
-
-```mermaid
-flowchart LR
-  M740["M740"]:::MEASURED
-  M743["M743"]:::MEASURED
-  M743 --> M740
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
-  classDef other stroke-dasharray:4 3
+  class M20,M31,M84,M89,M92,M98,M106,M190,M410,M569,M586,M653,M697 other
 ```
 

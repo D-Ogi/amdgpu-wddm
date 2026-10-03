@@ -69,6 +69,7 @@ facts:
     detail: "E12 run 002, `evidence/windows/2026-09-21-E12-run-002/`: `gfx-run-x-153100`, `gfx-run-x-153134`, `ih-state-failed-153224`, `sweep-GC-fault-153411`. The undo after the fault works and returns all memory. Open: a teardown that takes the KIQ's HQD down while the MEC still runs (dequeue request)"
     edges:
       - {"type": "uses", "to": "M39", "auto": true, "cue": "...2_PROTECTION_FAULT_STATUS = 0x8B0`, `ADDR_LO32 = 0x444`. This is what M39 really measured: there the second ring landed on the first one's addr..."}
+      - {"type": "supports", "to": "M39", "cue_in": "M39", "cue": "...s 5222 us in the second run against 349 us in the first: explained by M44 (a stale fetch walking the old ring), which also shows that this seco..."}
   - id: M45
     status: MEASURED
     date: "2026-09-21"
@@ -851,7 +852,7 @@ facts:
     status_text: "CONFIRMED (source/host only)"
     detail: "[shadow-publish-0775](../evidence/windows/2026-09-23-E27-m9-inference/shadow-publish-0775/): actual publication/helper/walk code6768 checks pass; focused ordering539/0, omit-commit mutation515 failures. DMA/private refusals preserve logical state,480+32 batches expose only accepted entries, live GPU table stays unchanged. Private/lifetime regressions and full build/sign pass. No deployment; full OS dispatch, concurrency, cache policy, copy-PTE and runtime remain open"
     edges:
-      - {"type": "uses", "to": "M191", "auto": true, "cue": "... state and uses it for paging transfer address resolution, fixing the M191 host counterexample"}
+      - {"type": "supersedes", "to": "M191", "scope": "partial", "cue": "... state and uses it for paging transfer address resolution, fixing the M191 host counterexample"}
   - id: M195
     status: CONFIRMED
     date: "2026-09-23"

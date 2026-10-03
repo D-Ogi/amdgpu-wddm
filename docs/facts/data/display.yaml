@@ -385,7 +385,7 @@ facts:
     status_text: "MEASURED (unit A)"
     evidence: "[Program binding fix](../evidence/windows/2026-09-27-E34-program-binding-fixed/RESULT.md)"
     edges:
-      - {"type": "uses", "to": "M574", "auto": true, "cue": "...ating the cached graphics program on non-NULL stage replacement fixes M574 control090: eight textured snapshots match WARP/CPU. Regressions091/0..."}
+      - {"type": "supersedes", "to": "M574", "scope": "partial", "cue": "...ating the cached graphics program on non-NULL stage replacement fixes M574 control090: eight textured snapshots match WARP/CPU. Regressions091/0..."}
   - id: M576
     status: MEASURED
     date: "2026-09-27"

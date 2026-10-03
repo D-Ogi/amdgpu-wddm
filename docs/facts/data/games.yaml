@@ -72,7 +72,7 @@ facts:
     status_text: "MEASURED (unit A)"
     evidence: "[E48](../evidence/windows/2026-09-27-E48-witcher3-dx12-cpu-copy-witness/RESULT.md)"
     edges:
-      - {"type": "uses", "to": "M607", "auto": true, "cue": "The 6x slower CPU present copy of E47 (M607) is process-specific and is not explained by the memory type the ICD ..."}
+      - {"type": "uses", "to": "M607", "cue": "The 6x slower CPU present copy of E47 (M607) is process-specific and is not explained by the memory type the ICD ..."}
   - id: M760
     status: MEASURED
     date: "2026-09-28"

@@ -90,7 +90,7 @@ facts:
     claim: "Power: the SMU offers three SCLK levels (1000/1500/2000 MHz), the unit idles at the middle one, 906 mV, about 67 W for the whole SoC; nearly all GFX clock gating is off"
     detail: "`gpu-sysfs.txt`, `debugfs-amdgpu_pm_info.txt`. Overdrive range 1000-2000 MHz, 700-1129 mV. Explains M11"
     edges:
-      - {"type": "uses", "to": "M11", "auto": true, "cue": "...pu_pm_info.txt`. Overdrive range 1000-2000 MHz, 700-1129 mV. Explains M11"}
+      - {"type": "supports", "to": "M11", "cue": "...pu_pm_info.txt`. Overdrive range 1000-2000 MHz, 700-1129 mV. Explains M11"}
   - id: M16
     status: MEASURED
     date: "2026-09-21"
@@ -218,7 +218,6 @@ facts:
     detail: "E12 run 001: run, undo, run again, undo; all seven stages rc 0 both times, all ring tests pass, no register outside the generated table. 358 writes against 355: `RLC_SPM_MC_CNTL` skipped (already holds the value), four more in the HQD branch (`CP_HQD_ACTIVE`, `CP_HQD_PQ_RPTR = 0x737`, `CP_HQD_PQ_WPTR_LO/HI`), and six first writes carry bits the first run left in the register (`CP_HQD_PQ_CONTROL` bit 15, `CP_HQD_PERSISTENT_STATE` bits 18 and 19, `SDMAn_CNTL` bit 5, `SDMAn_GFX_RB_CNTL` bit 12: all read-modify-write). Stage 6 (CP) takes 5222 us in the second run against 349 us in the first: explained by M44 (a stale fetch walking the old ring), which also shows that this second bring-up only worked because the new KIQ ring had the old one's address"
     edges:
       - {"type": "uses", "to": "M37", "auto": true, "cue": "A second GFX bring-up in the same boot works after the undo of M37, with one declared deviation from amdgpu: where `gfx_v10_0_kiq_init_r..."}
-      - {"type": "uses", "to": "M44", "auto": true, "cue": "...s 5222 us in the second run against 349 us in the first: explained by M44 (a stale fetch walking the old ring), which also shows that this seco..."}
   - id: M41
     status: MEASURED
     date: "2026-09-21"
@@ -278,9 +277,9 @@ facts:
     status_text: "MEASURED (n = 2 re-runs, one boot)"
     detail: "E15 run 001, `evidence/windows/2026-09-21-E15-run-001/`: `gfx-fini-undo-175251`, `gfx-run-second-175302`, `gfx-run-third-180147`, `ih-state-second-175308`, `comparison.txt`. Linux cannot do this on the part (M55)"
     edges:
-      - {"type": "uses", "to": "M44", "auto": true, "cue": "M44's defect is fixed by taking the KIQ from the MEC while the MEC still ..."}
       - {"type": "uses", "to": "M54", "auto": true, "cue": "...ueue request before the halt, one step more than amdgpu's own unload, M54) a second and a third GFX bring-up in one device start pass all eight..."}
       - {"type": "uses", "to": "M55", "auto": true, "cue": "...e-second-175308`, `comparison.txt`. Linux cannot do this on the part (M55)"}
+      - {"type": "supersedes", "to": "M44", "scope": "partial", "cue": "M44's defect is fixed by taking the KIQ from the MEC while the MEC still ..."}
   - id: M89
     status: MEASURED
     date: "2026-09-22"

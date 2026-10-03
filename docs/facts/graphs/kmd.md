@@ -6,10 +6,13 @@ Table: [`../kmd.md`](../kmd.md). Colours: status. Edge types: `supersedes`, `ref
 
 ## Corrections and support
 
-25 facts, 13 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+30 facts, 16 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
+  M39["M39<br/>hardware"]:::MEASURED
+  M44["M44"]:::MEASURED
+  M58["M58<br/>hardware"]:::MEASURED
   M59["M59"]:::MEASURED
   M60["M60"]:::MEASURED
   M82["M82"]:::MEASURED
@@ -21,6 +24,8 @@ flowchart LR
   M108["M108"]:::MEASURED
   M110["M110"]:::MEASURED
   M112["M112"]:::MEASURED
+  M191["M191"]:::CONFIRMED
+  M194["M194"]:::CONFIRMED
   M214["M214"]:::CONFIRMED
   M215["M215"]:::CONFIRMED
   M222["M222"]:::CONFIRMED
@@ -35,13 +40,16 @@ flowchart LR
   M303["M303"]:::MEASURED
   M306["M306"]:::MEASURED
   M313["M313"]:::MEASURED
+  M58 ==>|supersedes| M44
   M242 ==>|supersedes| M241
+  M44 ==>|supports| M39
   M60 ==>|supports| M59
   M83 ==>|supersedes| M82
   M99 -.->|refutes| M98
   M106 -.->|refutes| M103
   M110 ==>|supersedes| M108
   M112 ==>|supersedes| M110
+  M194 ==>|supersedes| M191
   M215 ==>|supersedes| M214
   M223 ==>|supersedes| M222
   M291 ==>|supersedes| M290
@@ -53,12 +61,12 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M242,M253 other
+  class M39,M58,M242,M253 other
 ```
 
 ## References
 
-119 facts, 118 relations, in 2 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+118 facts, 115 relations, in 2 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ### Part 1
 
@@ -77,7 +85,6 @@ flowchart LR
   M54["M54<br/>hardware"]:::MEASURED
   M55["M55<br/>hardware"]:::MEASURED
   M57["M57"]:::MEASURED
-  M58["M58<br/>hardware"]:::MEASURED
   M59["M59"]:::MEASURED
   M60["M60"]:::MEASURED
   M62["M62"]:::MEASURED
@@ -124,10 +131,8 @@ flowchart LR
   M137["M137"]:::MEASURED
   M138["M138"]:::CONFIRMED
   M39 --> M37
-  M39 --> M44
   M54 --> M44
   M55 --> M44
-  M58 --> M44
   M37 --> M33
   M37 --> M39
   M40 --> M38
@@ -204,7 +209,7 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M28,M33,M39,M48,M54,M55,M58,M78,M115 other
+  class M28,M33,M39,M48,M54,M55,M78,M115 other
 ```
 
 ### Part 2
@@ -287,7 +292,6 @@ flowchart LR
   M191 --> M194
   M192 --> M191
   M193 --> M191
-  M194 --> M191
   M201 --> M190
   M206 --> M190
   M207 --> M190

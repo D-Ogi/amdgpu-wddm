@@ -278,7 +278,7 @@ facts:
     status_text: "MEASURED (unit A)"
     evidence: "[Linux scratch reference](../evidence/linux/2026-09-26-E33-scratch-reference/RESULT.md)"
     edges:
-      - {"type": "uses", "to": "M508", "auto": true, "cue": "...cratch yet differs in descriptor-address prefix and ordering. Narrows M508 diagnosis; EGL versus WGL and runtime differences remain, not full pa..."}
+      - {"type": "uses", "to": "M508", "cue": "...cratch yet differs in descriptor-address prefix and ordering. Narrows M508 diagnosis; EGL versus WGL and runtime differences remain, not full pa..."}
       - {"type": "uses", "to": "M509", "auto": true, "cue": "... exit0). Logging confirms same384.75MiB scratch/768waves/ring size as M509, but different GPU VA range. NIR retains real scratch yet differs in ..."}
   - id: M511
     status: MEASURED

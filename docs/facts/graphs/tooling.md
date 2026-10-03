@@ -6,11 +6,24 @@ Table: [`../tooling.md`](../tooling.md). Colours: status. Edge types: `supersede
 
 ## Corrections and support
 
-None in this area.
+2 facts, 1 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+
+```mermaid
+flowchart LR
+  M656["M656<br/>display"]:::MEASURED
+  M657["M657"]:::MEASURED
+  M657 ==>|supersedes| M656
+  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
+  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
+  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
+  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
+  classDef other stroke-dasharray:4 3
+  class M656 other
+```
 
 ## References
 
-8 facts, 4 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+6 facts, 3 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -18,19 +31,16 @@ flowchart LR
   M377["M377<br/>kmd"]:::MEASURED
   M653["M653<br/>kmd"]:::MEASURED
   M654["M654"]:::MEASURED
-  M656["M656<br/>display"]:::MEASURED
-  M657["M657"]:::MEASURED
   M753["M753<br/>d3d"]:::MEASURED
   M754["M754"]:::MEASURED
   M377 --> M376
   M753 --> M754
   M654 --> M653
-  M657 --> M656
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M377,M653,M656,M753 other
+  class M377,M653,M753 other
 ```
 

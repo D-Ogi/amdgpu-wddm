@@ -110,7 +110,7 @@ facts:
     status_text: "MEASURED (build)"
     evidence: "[KMD163 build](../evidence/windows/2026-09-27-E34-kmd163-build/RESULT.md)"
     edges:
-      - {"type": "uses", "to": "M656", "auto": true, "cue": "Clean isolated KMD163 source2c3849a contains the M656 exact-private-span correction on exact162. SYSB602D9A0 builds with13 ..."}
+      - {"type": "supersedes", "to": "M656", "scope": "partial", "cue": "Clean isolated KMD163 source2c3849a contains the M656 exact-private-span correction on exact162. SYSB602D9A0 builds with13 ..."}
   - id: M661
     status: MEASURED
     date: "2026-09-27"

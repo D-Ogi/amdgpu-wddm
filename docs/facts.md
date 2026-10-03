@@ -48,14 +48,14 @@ flowchart LR
   games -->|1| d3d
   games -->|2| icd
   hardware -->|2| display
-  hardware -->|9| kmd
+  hardware -->|8| kmd
   hardware -->|2| linux
   icd -->|2| d3d
   icd -->|1| games
   icd -->|5| kmd
   kmd -->|1| d3d
   kmd -->|3| display
-  kmd -->|6| hardware
+  kmd -->|7| hardware
   kmd -->|2| icd
   kmd -->|2| linux
   kmd -->|1| tooling
@@ -65,4 +65,4 @@ flowchart LR
   tooling -->|1| kmd
 ```
 
-Edges: 192 uses, 5 supports, 6 refutes, 12 supersedes; 215 of them auto-derived.
+Edges: 186 uses, 7 supports, 6 refutes, 16 supersedes; 207 of them auto-derived.
