@@ -1,0 +1,203 @@
+{
+  "schema": 1,
+  "note": "Registered lab artifacts that make up the tester release. Sources are relative to the workspace root (BC250_ROOT). build-release.ps1 refuses a source whose SHA256 differs.",
+  "kmd_version": "0.7.197.1",
+  "sources": {
+    "kmd": "bc250-win 0cbef549 (bd055-dpm-thermal)",
+    "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
+    "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
+    "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
+    "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0"
+  },
+  "files": [
+    {
+      "path": "payload/kmd/bc250kmd.inf",
+      "source": "scratch/bd055/build-kmd-0cbe/package/bc250kmd.inf",
+      "sha256": "6268C3B2ECE84E1B4C14A17698A9987E1E83F8648183E1476704DBCCA56A86CB",
+      "size": 8023,
+      "role": "KMD 0.7.197.1 INF (commit 0cbef549), byte-identical to the lab"
+    },
+    {
+      "path": "payload/kmd/bc250kmd.sys",
+      "source": "scratch/bd055/build-kmd-0cbe/package/bc250kmd.sys",
+      "sha256": "982DB3CFD930769D7475CAC1E89B5BC145100A982692CFCCC430F65F13796D33",
+      "size": 475024,
+      "role": "KMD 0.7.197.1 (commit 0cbef549); re-signed with the release certificate, code unchanged"
+    },
+    {
+      "path": "payload/system32/bc250umd.dll",
+      "source": "scratch/build/bc250kmd-07100/package-umd/bc250umd.dll",
+      "sha256": "D5BD1AD82C00438900DC47A50B3EFA36D98F9A9CC7F6987D0F1545A0DE4CB661",
+      "size": 4096,
+      "role": "UMD stub, D3D9 slot of UserModeDriverName (driver/umd-stub)"
+    },
+    {
+      "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/m15/native-caps001/attempts/native-caps308/package/amdgpu_wddm_d3d12.dll",
+      "sha256": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+      "size": 921088,
+      "role": "D3D12 shell adapter119 (m15/replay-wake e9f5e701)"
+    },
+    {
+      "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/m15/dp5-freeze/engine/amdgpu_wddm_vkd3d.dll",
+      "sha256": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+      "size": 3696128,
+      "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1)"
+    },
+    {
+      "path": "payload/d3d12/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/dp5-freeze/icd/amdgpu_wddm_radv.dll",
+      "sha256": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC",
+      "size": 22361600,
+      "role": "D3D12 ICD (mesa fork amdgpu-wddm/draw-path ae98c795)"
+    },
+    {
+      "path": "payload/desktop/bc250d3d_router.dll",
+      "source": "scratch/m15/app-route/build-router/bc250d3d_router.dll",
+      "sha256": "674AD261640B1A3A79150E41F39C2B8962F3AB7747E3E725C8C2F3E42FFCAED0",
+      "size": 21504,
+      "role": "desktop/application router"
+    },
+    {
+      "path": "payload/desktop/bc250d3d_zink.dll",
+      "source": "scratch/m15/desktop-umd-fp16/package-001/desktop-umd-fp16-001/zink/bc250d3d_zink.dll",
+      "sha256": "18BFC61094CD33CD952EBFF7E6A74212F35D246B37197603979A673DB38C0A36",
+      "size": 15193600,
+      "role": "hosted zink D3D11 UMD for DWM on the GPU"
+    },
+    {
+      "path": "payload/desktop/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/gpu-dwm-t0/kit/attempts/gpu-dwm-003/amdgpu_wddm_radv.dll",
+      "sha256": "66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200",
+      "size": 21508096,
+      "role": "hosted ICD for zink"
+    },
+    {
+      "path": "payload/desktop/bc250d3d.dll",
+      "source": "scratch/m15/desktop-umd-fp16/package-001/desktop-umd-fp16-001/cpu/bc250d3d.dll",
+      "sha256": "10D9C98393DEB549BFD5AAEF2224E5EE2122018C261809C7B3FE5BDCE3836F30",
+      "size": 68602368,
+      "role": "CPU D3D11 UMD (fallback route, D3D11 applications not on the allowlist)"
+    },
+    {
+      "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_d3d11.dll",
+      "sha256": "E748418C1F7DF57309E424D5DB7D464F68DA1BF8F82820707FA56F0E58FA00BB",
+      "size": 445952,
+      "role": "GPU D3D11 shell (app-route-001)"
+    },
+    {
+      "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_d3d11.config",
+      "sha256": "A9B498ED8911B81D76693C1BC90066929364D661AE43D2B971FAAE198D4E9917",
+      "size": 132,
+      "role": "GPU D3D11 caps record"
+    },
+    {
+      "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_dxvk.dll",
+      "sha256": "8E9B31875F3A97C046F91397D7DEEBE7037E419503A13CEDEE772401BCB2780A",
+      "size": 4403200,
+      "role": "GPU D3D11 engine (DXVK fork)"
+    },
+    {
+      "path": "payload/d3d11/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_radv.dll",
+      "sha256": "D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27",
+      "size": 24285696,
+      "role": "GPU D3D11 ICD"
+    },
+    {
+      "path": "payload/vulkan/vulkan_radeon.dll",
+      "source": "scratch/icd-candidates/vulkan_radeon.CF3948D6.dll",
+      "sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+      "size": 24258560,
+      "role": "system Vulkan ICD (lab registered ICD)"
+    },
+    {
+      "path": "payload/vulkan/radeon_icd.json",
+      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "size": 131,
+      "role": "Vulkan ICD manifest"
+    },
+    {
+      "path": "payload/tools/bc250kmd_cli.exe",
+      "source": "scratch/m15/gpu-dwm-t0/build-cli197/bc250kmd_cli.exe",
+      "sha256": "BAF3A62ADB0F55882DAA3A6944042C78AD8F40119163B015EB5702598DF126A7",
+      "size": 212992,
+      "role": "KMD control CLI built from 0cbef549 (start health, confirm)"
+    },
+    {
+      "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/m15/d3d12caps/build/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "9EE94801160B6DC981936B7FB32041F24B23C72F8F11555DE295E529F90C3F53",
+      "size": 312832,
+      "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify"
+    },
+    {
+      "path": "payload/firmware/LICENSE.amdgpu",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/LICENSE.amdgpu",
+      "sha256": "D4CBF862B708AD20737F5C406D408EB3BD7507D01C4C4E0104921193C0106565",
+      "size": 3503,
+      "role": "licence of the AMD firmware files"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_ce.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_ce.bin",
+      "sha256": "5946EFBF7E46CCFE7E9F965DA56C35B1187469D1C1A49C8A9EFF433EB3AB4723",
+      "size": 263296,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_me.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_me.bin",
+      "sha256": "D4ED4D968DE0D7720F7C8215D42FDAE727BF99CDF43CEE6F8F864DC2584B17E2",
+      "size": 263424,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_mec.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_mec.bin",
+      "sha256": "B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4",
+      "size": 268592,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_mec2.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_mec2.bin",
+      "sha256": "B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4",
+      "size": 268592,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_pfp.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_pfp.bin",
+      "sha256": "50E56DC1913571FF589425D2B059BDDFC5E8A2B4BC22D3EB78CAC75D1E0479A1",
+      "size": 263424,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_rlc.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_rlc.bin",
+      "sha256": "20ACEFDB6128A36275F4382425A109A7C9927F6053EAB685BB51164FF1D18CFB",
+      "size": 25344,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_sdma.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_sdma.bin",
+      "sha256": "15D0D3626DA7F2513F03B13BB7E02EEEECCAB276276AE27D0B6067B5F25E9E95",
+      "size": 33792,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    },
+    {
+      "path": "payload/firmware/cyan_skillfish2_sdma1.bin",
+      "source": "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2_sdma1.bin",
+      "sha256": "BD1C0B0F6A6A4F17EDE034F2C844B6553FC444E08915C7BB500C09FDE59D6255",
+      "size": 33792,
+      "role": "linux-firmware 2b8daaf6, PSP-loaded GFX/SDMA firmware"
+    }
+  ]
+}
