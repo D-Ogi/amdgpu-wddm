@@ -8,10 +8,10 @@
 // --deferred-replay turns the replay policy on for every device context the run opens (open_device), as the
 // shell's deferred-replay experiment does: the recording slots' engine calls run on replay workers.
 //
-// The entry path experiment's knobs (engine-ddi.h, "Entry path") apply as in the driver: with BC250_ENTRY_PATH set
-// the graphics table gets the direct entries over its slots, and every device context is admitted (as the shell admits
-// one with its recording binding). The run has no Present, so the first arm holds throughout: BC250_ENTRY_PATH=b runs
-// every round trip through the direct entries (with --deferred-replay; without it they all go to the slots).
+// The direct entry (engine-ddi.h, "Direct entry") is installed over the graphics table's slots as in the driver, and
+// every device context is admitted (as the shell admits one with its recording binding): with --deferred-replay the
+// round trips' value-only calls go through it (without, they all go to the slots). The run has no Present, so the
+// first arm of BC250_ENTRY_PATH holds throughout (a: every call to the slots); BC250_ENTRY_STATS=1 checks the count.
 #include "harness.h"
 #include "entry.h"
 #include <dxgi1_4.h>

@@ -436,8 +436,9 @@ void APIENTRY om_set_render_targets(D3D12DDI_HCOMMANDLIST hlist, UINT count, con
 }
 
 // ---- Direct entries (engine-ddi.h, "Entry path") ----------------------------------------------------------------------
-// Each is the graphics table's entry for its slot while the experiment installs it (install_direct_list): it counts
-// and times the call (entry.h), and in an arm with the direct entry writes the slot's ring entry itself
+// Each is the graphics table's entry for its slot once installed (install_direct_list): it counts and times the call
+// when the statistics are on (entry.h), and in an arm with the direct entry (the default) writes the slot's ring entry
+// itself
 // (record_direct); otherwise, or when record_direct declines, it calls the slot as the table held it before (the
 // shell's entry, or in the harness the slot itself), which then validates, reports and records as without it.
 D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 g_direct_fallback{};  // written once by install_direct_list, before any call
@@ -618,7 +619,8 @@ void fill_list_graphics(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
 }
 
 bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
-    if (!t || table_index != 1 || !entry_direct_wanted()) return false;
+    if (!t || table_index != 1) return false;
+    entry_knobs();                              // the arm before the first call: direct unless BC250_ENTRY_PATH
     bool ok = true;
     AcquireSRWLockExclusive(&g_direct_lock);
     // The first table names the fallback; a later one (another device) must hold the same slots, or keeps its own.

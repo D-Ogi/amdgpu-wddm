@@ -309,12 +309,14 @@ struct ReplayPolicy {
 };
 HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
 
-// ---- Entry path (experiment) -------------------------------------------------------------------------------------
-// The direct recording entry and the entry statistics (entry.h), both off unless a knob sets them. The knobs are read
-// once per process from the environment, else from C:\BC250\tmp\amdgpu_wddm_radv.cfg (KEY=VALUE lines, the ICD's
-// knob file, which also reaches a game that Steam starts):
+// ---- Direct entry and the entry path experiment ------------------------------------------------------------------
+// The direct recording entry is the default wherever the shell installs it (native-tables.cpp: unless the experiment
+// direct-entry-off, recording-bind-off or deferred-replay-off, or the full trace); trial 327 measured it against the
+// shell's entry at Witcher 3 LOW in one process: main thread 0.51 ms/frame less, frames 0.50 ms shorter (+3.8 %).
+// Knobs, for measurements only, read once per process from the environment, else from
+// C:\BC250\tmp\amdgpu_wddm_radv.cfg (KEY=VALUE lines, the ICD's knob file, which also reaches a game that Steam starts):
 //   BC250_ENTRY_PATH   one letter per arm, rotated every BC250_ENTRY_PHASE_MS (default 2000) at the shell's Present;
-//                      a single letter fixes the arm. a: the shell's entry (as without the knob); b: the direct entry;
+//                      a single letter fixes the arm; without it, b. a: the shell's entry; b: the direct entry;
 //                      c: the direct entry, with spinning replay workers looking for work every BC250_ENTRY_POLL_US
 //                      (default 1) instead of after every pause; d: the shell's entry and a busy wait of
 //                      BC250_ENTRY_PAD_US (default 300) in each Present.
@@ -326,8 +328,7 @@ HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) no
 // writes the slot's own ring entry from the table entry itself, without the shell's entry thunk; anything else, and
 // every call of an arm without it, goes to the slot as filled before.
 // install_direct_list: writes the direct entries over the graphics table's (table_index 1) slots, keeping those as
-// the fallback, when a knob asks for the path or the statistics; false, with the table untouched, otherwise. A later
-// call for another device must find the same slots (else false: that table keeps them).
+// the fallback. A later call for another device must find the same slots (else false: that table keeps them).
 bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 // The direct entry records only for a context the shell admits as it admits its own fast entry (the recording
 // binding published): on after that is published, off before it is cleared.

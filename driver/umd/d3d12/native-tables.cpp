@@ -313,10 +313,14 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         List original{},wrapped{};
         HRESULT hr=compose_list_0092(&original,sizeof(original),number,present,fill);if(hr!=S_OK)return hr;
         hr=DdiEntryTables<EntryPolicy>::wrap_list(number,original,&wrapped);if(hr!=S_OK)return hr;
-        // The entry path experiment: timed entries, and the direct entries of the graphics table over the shell's
-        // own (engine-ddi.h, "Entry path"); without its knobs the table stays as wrapped.
+        // The entry statistics' timed entries (engine-ddi.h, "Direct entry"), and the direct entries of the graphics
+        // table over the shell's own. Those write ring entries only for a device with the recording binding and
+        // deferred replay, so they are not installed when either default is off, nor under the full trace (mode 1),
+        // whose hooks only the shell's entry runs; direct-entry-off takes them back alone.
         if(engine_ddi::entry_stats_on()){if(number)time_list<1>(wrapped);else time_list<0>(wrapped);}
-        if(number==1)(void)engine_ddi::install_direct_list(&wrapped,1);
+        if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
+           !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
+            (void)engine_ddi::install_direct_list(&wrapped,1);
         AcquireSRWLockExclusive(&adapter.tables_lock);
         auto& prior=adapter.list_tables[number];
         if(prior.handle && prior.handle!=runtime.handle)hr=E_UNEXPECTED;

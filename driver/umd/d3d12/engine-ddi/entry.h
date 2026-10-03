@@ -91,7 +91,7 @@ enum class EntryArm : uint32_t { Thunk, Direct, DirectPoll, ThunkPad };
 #pragma warning(push)
 #pragma warning(disable : 4324)
 struct alignas(64) EntryGlobals {
-    std::atomic<uint32_t> arm{0};               // EntryArm
+    std::atomic<uint32_t> arm{1};               // EntryArm, Direct unless BC250_ENTRY_PATH says otherwise
     std::atomic<bool> stats{false};
     std::atomic<uint64_t> poll_tsc{0};          // arm DirectPoll: TSC ticks between a spinning worker's looks
 };
@@ -100,9 +100,6 @@ inline EntryGlobals g_entry;
 
 // Reads the knobs once per process (thread-safe); every entry point that can come first calls it.
 void entry_knobs() noexcept;
-// Whether the knobs ask for the direct entries to be installed: a path, or the statistics (whose rows then time the
-// slots through them, all calls in arm a).
-bool entry_direct_wanted() noexcept;
 // The calling thread's block, made and registered on first use (null only if it could not be allocated).
 EntryThread* entry_thread_slow() noexcept;
 inline thread_local EntryThread* t_entry = nullptr;

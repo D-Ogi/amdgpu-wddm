@@ -129,9 +129,9 @@ BOOL CALLBACK load_knobs(PINIT_ONCE, PVOID, PVOID*) {
     g_knobs.pad_us = knob_number(file, "BC250_ENTRY_PAD_US", 300, 0, 100000, &from_file);
     g_knobs.poll_us = knob_number(file, "BC250_ENTRY_POLL_US", 1, 1, 1000, &from_file);
     std::free(file);
-    if (!g_knobs.arms && g_knobs.stats) {       // statistics alone: arm a throughout
-        g_knobs.path[0] = 'a';
-        g_knobs.order[0] = EntryArm::Thunk;
+    if (!g_knobs.arms && g_knobs.stats) {       // statistics alone: the default path (arm b) throughout
+        g_knobs.path[0] = 'b';
+        g_knobs.order[0] = EntryArm::Direct;
         g_knobs.arms = 1;
     }
     g_knobs.active = g_knobs.arms != 0;
@@ -345,11 +345,6 @@ void close_row(Presenter& s, uint64_t now, EntryArm arm) noexcept {
 } // namespace
 
 void entry_knobs() noexcept { InitOnceExecuteOnce(&g_once, load_knobs, nullptr, nullptr); }
-
-bool entry_direct_wanted() noexcept {
-    entry_knobs();
-    return g_knobs.active;
-}
 
 bool entry_stats_on() noexcept {
     entry_knobs();

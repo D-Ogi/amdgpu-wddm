@@ -50,12 +50,15 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //     (device-engine.cpp, lever L3).
 //   deferred-replay-off: recording calls make their engine calls in line, with no ring and no worker thread
 //     (device-engine.cpp).
+//   direct-entry-off: the graphics list table keeps the shell's entry for the value-only recording calls
+//     instead of engine-ddi's direct entry, which writes their ring entries itself (native-tables.cpp; trial 327:
+//     +3.8 % at Witcher 3 LOW). recording-bind-off or deferred-replay-off implies it.
 //   release-two-phase-off: engine-ddi waits for one snapshot per release, not two (device-engine.cpp, F1 of
 //     the trial 245 report, M15.8).
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
-// All seven off is the release and reporting behaviour of adapter106 with no ray tracing.
+// All eight off is the release and reporting behaviour of adapter106 with no ray tracing.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
