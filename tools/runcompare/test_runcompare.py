@@ -184,7 +184,7 @@ class TestClassification(unittest.TestCase):
 class TestStateFile(unittest.TestCase):
     STATE = [
         "time 2026-09-21T21:09:39  phase gate x",
-        "device    BC-250 GPU (bc250kmd, display-only, lab build)   status Error   "
+        "device    BC-250 GPU (amdgpu-wddm)   status Error   "
         "problem CM_PROB_FAILED_POST_START",
         "driver    0.7.3.1   (oem19.inf)",
         "umd       UserModeDriverName bc250umd.dll | bc250umd.dll | bc250umd.dll",
