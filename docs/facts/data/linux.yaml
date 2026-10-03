@@ -1,0 +1,158 @@
+# Facts data. Edit here; docs/facts.md and docs/facts/*.md are generated from these files
+# by tools/facts/gen_facts.py. Format and workflow: docs/facts/README.md.
+area: linux
+order: 7
+title: "Linux reference"
+description: "Measurements on unit A under Linux (amdgpu, Mesa) that serve as the reference for the Windows work."
+facts:
+  - id: M5
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "git"
+    claim: "`GB_ADDR_CONFIG` reads `0x00000044`, before and after amdgpu init, raw and through debugfs"
+    detail: "Differs from `CYAN_SKILLFISH_GB_ADDR_CONFIG_GOLDEN = 0x00100044` in bit 20. Why is open; do not use the golden value as a positive control for this register"
+    edges:
+      - {"type": "refutes", "to": "S3", "scope": "partial", "auto": true, "cue_in": "S3", "cue": "(see M4 for the CU registers: MEASURED as stated; M5: the `GB_ADDR_CONFIG` part does not hold on unit A) Stock values: `CC..."}
+  - id: M10
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "git"
+    claim: "The ASUS USB-AC58 works on the BC-250 with the stock Alpine kernel: WPA2-PSK association, DHCP, SSH"
+    detail: "`wpa_state=COMPLETED`, CCMP, 2437 MHz, first configured network; SSH session from the dev PC used to collect this evidence. Observed live, not part of the evidence directory"
+    edges:
+      - {"type": "supports", "to": "S4", "auto": true, "cue_in": "S4", "cue": "(see M10: MEASURED) The ASUS USB-AC58 Wi-Fi dongle (`0b05:19aa`) is supported ..."}
+  - id: M12
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "Under mainline amdgpu all 12 rings execute commands, including the KIQ"
+    detail: "`evidence/linux/2026-09-21-E01-recon/mqd/*.ptrs.txt`: rptr == wptr == driver wptr on every ring (gfx `0x600`, kiq `0xE00`, 8 compute `0x200`, sdma0 `0x4C0`, sdma1 `0xF0`). MQDs of the gfx and compute queues captured as hex words in the same directory: a reference for our own queue setup. Contradicts the predecessor's \"KIQ is hardwired to 0\" (R3)"
+    edges:
+      - {"type": "refutes", "to": "R3", "auto": true, "cue": "...n queue setup. Contradicts the predecessor's \"KIQ is hardwired to 0\" (R3)"}
+  - id: M42
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "text"
+    claim: "`modprobe -r amdgpu` hung unit A under Linux (console unbound, the stick's QR viewer stopped, tracefs armed; kernel 6.18.52-0-lts, amdkfd active): the machine stopped answering on the network within seconds and needed the power button. Cause unknown, the trace was in RAM and is lost"
+    status_text: "MEASURED (n = 1)"
+    detail: "E13, journal 2026-09-21. No Linux reference for amdgpu's `hw_fini` on this part exists; a second attempt would need a serial or network console for the kernel log"
+  - id: M48
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "amdgpu's init is the same to the register write after a warm restart out of Windows with `bc250kmd` 0.6.1 on the display (bring-up gates closed in that boot): all 10018 writes of E03, same order and offsets, 2 values different (both at dword `0x5DF5`); and `amdgpu_test_ib` again costs 12 fences, 12 interrupts, 12 vectors (four boots out of four)"
+    detail: "E13 boot 4, `evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/`: `compare-e03.txt`, `ib.txt`. Extends M40 and M41; our display-only driver leaves nothing behind that changes amdgpu's init"
+    edges:
+      - {"type": "uses", "to": "M40", "auto": true, "cue": ".../boot4-readonly-after-windows/`: `compare-e03.txt`, `ib.txt`. Extends M40 and M41; our display-only driver leaves nothing behind that changes a..."}
+      - {"type": "uses", "to": "M41", "auto": true, "cue": "...eadonly-after-windows/`: `compare-e03.txt`, `ib.txt`. Extends M40 and M41; our display-only driver leaves nothing behind that changes amdgpu's ..."}
+  - id: M56
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "Sleep on unit A under Linux: the firmware offers S0, S4 and S5 only, `mem_sleep` is `[s2idle]`, and the RTC has no alarm (`rtc_cmos ... no alarms`, no `wakealarm` file), so the board cannot wake itself. amdgpu enters s2idle with the warning that the BIOS is not configured for it. One resume by the board's power button after 467 s: kernel, network and amdgpu's module alive, no amdgpu message at resume, GPU function after it not tested. A second attempt did not react to the button"
+    status_text: "MEASURED (n = 1 each)"
+    detail: "E13 boots 5 and 6, `evidence/linux/2026-09-21-E13-reference-2/boots5-8-suspend-unload-reload/`. For M7: no sleep state worth supporting early; `DxgkDdiSetPowerState` stays the stub it is"
+  - id: M78
+    status: MEASURED
+    date: "2026-09-22"
+    date_from: "evidence-path"
+    claim: "Unit A hung hard (no answer for 19 minutes, no bugcheck event in the next boot, which this session did not start) inside `gfx run 8` when that was the second bring-up of one boot, after two device restarts, with `psp unload` and `gart restore` left out of the first undo. The same driver build and the same steps passed on each of three fresh boots afterwards. The observation is MEASURED (n = 1); the cause is a HYPOTHESIS (compare M55, the second `modprobe amdgpu` of a boot). Until it is measured, a bring-up run starts from a fresh boot and ends with the complete undo"
+    status_text: "MEASURED / HYPOTHESIS"
+    detail: "E19 run 002, `evidence/windows/2026-09-22-E19-run-005/`"
+    edges:
+      - {"type": "uses", "to": "M55", "auto": true, "cue": "...e observation is MEASURED (n = 1); the cause is a HYPOTHESIS (compare M55, the second `modprobe amdgpu` of a boot). Until it is measured, a bri..."}
+  - id: M351
+    status: CONFIRMED
+    date: "2026-09-24"
+    claim: "Linux6.18.0 NV recovery requests full reset; Cyan Skillfish2 PSP11.0.8 has no MODE1 callback and its wrapper returns0 when absent"
+    status_text: "CONFIRMED (local source only, not runtime)"
+    evidence: "[reset dispatch review](../evidence/windows/2026-09-24-E27-m9-recovery/reset-dispatch-review/RESULT.md): callback registration,full-reset gate and null fallback traced with hashes/excerpts. GFXsoft-reset callback existence does not establish runtime use. Exact E28kernel source/runtime dispatch not verified; no working reset or E28cause claim"
+  - id: M386
+    status: CONFIRMED
+    date: "2026-09-24"
+    claim: "6.18.52 manual debugfs recovery requests full reset; per-queue probe prepared"
+    status_text: "CONFIRMED (source/host only)"
+    evidence: "[probe preparation](../evidence/windows/2026-09-24-E27-m9-recovery/sdma-reset-probe-preparation/RESULT.md): exact debugfs work setsNEED_FULL_RESET. Added one valid libdrm-derived memory-poll job with CPUrelease/write marker; generatedAMDfields and10hostfixtures pass. No Linux execution/reset success claim; source-matched tracing and hardware control remain required"
+  - id: M518
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux full003 GLX FBConfig warning category is shared with native RadeonSI:48 Zink configurations are a subset of64 native configurations, both exit0/warn. Exact full45159 inventory partitioned into1003 retained outcomes and44156 remaining cases; full006 resumes after fixing literal# and outer-profile selection. Warn remains in results; full coverage and parity not established."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Reviewed GLX stop](../evidence/linux/2026-09-26-E33-piglit-reviewed-resume/RESULT.md)"
+  - id: M519
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux GLX make-current fails with Zink in window2 and with native RadeonSI in windows0/1/2; detailed outcomes differ, no pass or root-cause claim. Full003+006 retain1005 disjoint outcomes (862pass/141skip/1warn/1fail),44154 remain. Exact segment merge rejects overlap; full007 continues unchanged graphics artifacts."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX context stop](../evidence/linux/2026-09-26-E33-glx-context-stop/RESULT.md)"
+  - id: M520
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux full007 multi-window GLX test times out45s after5passes. Post-timeout swapbuffers control aborts in kopper_acquire despite no observed kernel GPU timeout. Restarting only Xorg restores the same control pixel-pass/exit0; no GPU/OS reset. Native RadeonSI multi-window control fails black pixels/exit1, different from Zink timeout. Full profile remains stopped for wait diagnosis."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX timeout recovery](../evidence/linux/2026-09-26-E33-glx-multiwindow-timeout/RESULT.md)"
+  - id: M521
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Exact six-case Linux GLX runner replay repeats5passes/1timeout. GDB localizes main-thread readback wait through Zink queue worker to x11_swapchain_destroy joining an event worker blocked in xcb_wait_for_special_event on the same chain. Direct controls instead fail pixels; no fix/waiver or GPU-hang claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX destruction wait](../evidence/linux/2026-09-26-E33-glx-destroy-wait/RESULT.md)"
+  - id: M522
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Separate Linux RADV86DAD711 bounds XCB event waits to10ms. After Xorg-only recovery, exact six-case replay ends5pass/1pixel-fail in1.297s for last case, without timeout; swapbuffers controls pixel-pass before/after. Diagnostic viewport50x50 is correct and forcing it does not fix black probes. Polling candidate is not a performance baseline; original failures retained."
+    status_text: "MEASURED (unit A)"
+    evidence: "[X11 wait diagnostic](../evidence/linux/2026-09-26-E33-x11-teardown-poll/RESULT.md)"
+  - id: M523
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux multi-window immediate readbacks have correct8colors; later context-switch probes are black and glFinish does not fix them. Mesa native-drawable retention option makes unchanged make-current pass. Multi-window then errors in GLX cleanup; diagnostic XDestroyWindow-only correction with retention passes on original RADVFEC7C475/Zink and RadeonSI. Post-control aborts134; Xorg-only recovery restores swapbuffers pass. Original suite failures retained; no full-suite completion claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX drawable retention](../evidence/linux/2026-09-26-E33-glx-drawable-retention/RESULT.md)"
+  - id: M524
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux isolated retention controls pass before/after cleanup-corrected diagnostics on Zink and RadeonSI. Unchanged multi-window reports GLXBadWindow but following presentation passes; prior assertion not independently reproduced. Full45159-case reference restarted from beginning with explicit native-drawable retention, original binaries/oracles, separate from default-config outcomes; live checkpoint561cases."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX reference configuration](../evidence/linux/2026-09-26-E33-glx-reference-retention/RESULT.md)"
+  - id: M525
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Retention reference full010/011 records1011cases:868pass/141skip/1warn/1fail. FBConfig48 warnings match prior baseline; make-current passes, multi-window fails only GLXBadWindow cleanup. Post-control pixel-pass. Exact44148 remainder launched as full012 with same configuration and original tests; earlier failures retained, no timeout waiver or full-suite claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Retained reference continuation](../evidence/linux/2026-09-26-E33-glx-retained-continuation/RESULT.md)"
+  - id: M526
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux glx-tfp fails on Zink but passes RadeonSI. Debugger shows modern DRI3 path yet imported INVALID modifier. Existing RadeonSI Xorg export_modifier option changes observed modifier to explicit LINEAR; unchanged Zink test and serial presentation control pass on original client binaries. Full45159-case reference restarted with explicit server/client settings; prior failures retained separately."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Pixmap modifier export](../evidence/linux/2026-09-26-E33-glx-pixmap-modifier/RESULT.md)"
+  - id: M527
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Explicit-modifier Linux reference full013/014 retains1011cases:868pass/141skip/1warn/1known GLX cleanup fail. Warning lines and failure signature match reviewed controls; post-control pixel-passes. Exact44148 remainder starts full015 with unchanged binaries/configuration/oracles and stop gates."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Modifier reference continuation](../evidence/linux/2026-09-26-E33-modifier-reference-continuation/RESULT.md)"
+  - id: M528
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Explicit-modifier Linux full015 passes57/skips8 then fails OML swapbuffersmsc-divisor-zero: SBC208 is unchanged0xd0 sentinel, not measured208 swaps. Same test passes RadeonSI; Zink post-control passes. Original1077 outcomes retained and exact44082 remainder launched full016. GLX waitForSBC source gap is explanatory, not implemented/verified correctness."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX OML SBC](../evidence/linux/2026-09-26-E33-glx-oml-sbc/RESULT.md)"
+  - id: M529
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Linux OML swapbuffersmsc-return fails with0 vs1-3, passes RadeonSI; Kopper normal return0 explains result in source. Post-control aborts134, preventing continuation. Same-configuration Xorg-only restart restores pixel-pass;1078 outcomes retained and exact44081 remainder starts full017. No uninterrupted-stability or full-acceptance claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[GLX OML return](../evidence/linux/2026-09-26-E33-glx-oml-return/RESULT.md)"
+  - id: S4
+    status: HYPOTHESIS
+    date: "2026-09-21"
+    claim: "(see M10: MEASURED) The ASUS USB-AC58 Wi-Fi dongle (`0b05:19aa`) is supported by the in-kernel `rtw88_8822bu` driver; module and firmware are present in the Alpine 3.24.2 modloop used by the diagnostic USB"
+    source: "kernel `rtw8822bu.c` id table; modloop listing"
+  - id: R2
+    status: REFUTED
+    date: "2026-09-21"
+    claim: "\"Linux can write these registers only thanks to debugfs privilege / an early boot window\""
+    status_text: "REFUTED (by source)"
+    why: "debugfs uses the driver's normal accessors; the unlock patch runs at ordinary module init; a runtime tool exists"

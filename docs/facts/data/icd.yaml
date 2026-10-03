@@ -1,0 +1,415 @@
+# Facts data. Edit here; docs/facts.md and docs/facts/*.md are generated from these files
+# by tools/facts/gen_facts.py. Format and workflow: docs/facts/README.md.
+area: icd
+order: 4
+title: "ICD, Vulkan, OpenGL and compute"
+description: "The Vulkan ICD (RADV on WDDM), Vulkan CTS, OpenGL and OpenCL layers on it (Zink, piglit, clvk), and compute workloads such as llama.cpp."
+facts:
+  - id: M50
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "Mesa's RADV drives unit A under Linux as `AMD BC-250 (RADV GFX1013)`, Vulkan 1.4 (Mesa 26.1.6, drm 3.64.0), and computes correctly: eight compute tests with exactly defined results (constant fill, integer hash, saxpy, naive and tiled sgemm, a two-layer perceptron, a reduction) give GPU hashes equal to the CPU's in every run, a deliberately wrong shader is caught, `sgemm` and `sgemm_tiled` agree bit for bit. As Mesa sees the part: name `GFX1013`, IP GFX 10.1 with one queue and SDMA 5.0 with two and no COMPUTE IP at all, 2 SE, 16 RB, 24 CU, 16 TCC blocks, `GB_ADDR_CONFIG 0x00100044` (amdgpu's golden constant, not the register's `0x00000044` of M46), `pa_sc_tile_steering_override 0x122000`, PCIe gen 4 x16, firmware feature 32. Mesa drops the compute queues for GFX1013 (`ac_gpu_info.c`), so every submission goes to the gfx ring"
+    status_text: "MEASURED (n = 1 session, 3+ process runs)"
+    detail: "E14, `evidence/linux/2026-09-21-E14-vulkan-compute-reference/`: `compute/`, `radv-info.txt`, `vulkaninfo.txt`. The hashes and the SPIR-V in `compute/spv/` are what M8 has to reproduce on the same unit"
+    edges:
+      - {"type": "uses", "to": "M46", "auto": true, "cue": "...100044` (amdgpu's golden constant, not the register's `0x00000044` of M46), `pa_sc_tile_steering_override 0x122000`, PCIe gen 4 x16, firmware f..."}
+  - id: M51
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "llama.cpp (build 9564) on its Vulkan backend runs on unit A under Linux and is deterministic: greedy text from stories15M Q4_0 and TinyLlama 1.1B Q4_0 is identical in 4 of 4 GPU runs each (sha256 `9a75289c5ee188d7`, `8a5491652c871b51`); the GPU's text equals the CPU's for the two small models and parts from it at about token 40 for the 1.1B model. TinyLlama 1.1B Q4_0 at 1500 MHz: 1657 t/s prompt (pp512) and 220 t/s generation (tg128) on the GPU against 111 and 57 on the CPU's six threads. One 16-token run of the smallest model: 283 submissions, all on `gfx_0.0.0`, 285 end-of-pipe vectors, 173 SDMA vectors from the kernel's page table updates"
+    status_text: "MEASURED (n = 1 session)"
+    detail: "E14, `evidence/linux/2026-09-21-E14-vulkan-compute-reference/`: `llama/`. A workload-level reference for M8 and a first number for what the part is worth as an inference device"
+  - id: M150
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Windows llama.cpp9564 CPU control on unitA reproduces E14 stories260K and stories15M greedy text exactly after CRLF-to-LF conversion, using matching model hashes and explicit native redirection/stdinNUL. Raw file hashes differ due to line endings. GPU inference remains untested."
+    detail: "[CPU harness](../evidence/windows/2026-09-23-E27-m9-inference/cpu-control/README.md)"
+  - id: M160
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "E27 run009 does not validate the candidate ICD: its unconditional progress trace is absent, and task RunLevelHighest ignores ICD environment overrides according to Khronos. M8passes but inference fails with1hardwaretimeout. Candidate filehash matches deployment; loaded library identity was not directly captured. Repeat with Limited task and mandatory trace witness."
+    detail: "[invalid candidate observation and limits](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-009/README.md)"
+  - id: M162
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "E27 run012 gives four matching Linux GPU outputs for stories15M and two for TinyLlama, then Windows requests preemption twice and resets the adapter during TinyLlama3. Hardware7683/7683 with0timeouts/refused;1109later jobs not run. Full series rejected; TinyLlama four-run criterion remains open."
+    detail: "[larger model results and reset](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-012/README.md)"
+  - id: M165
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "E27 run015 repeat full-mode entry in the same boot as014 completes GFX stages1-5; local stream stops at stage6 CP initialization and SSH becomes unavailable. Recovery has a new boot and unexpected-shutdown events; no application execution witnessed. Quiet ICD was not tested."
+    detail: "[re-entry interruption and recovery](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-015/README.md)"
+  - id: M252
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "The stories15M attempt on0798 stalled on an accepted GFX job, unlike the prior SDMA busy refusal"
+    evidence: "[inference0798-recovery](../evidence/windows/2026-09-23-E27-m9-inference/inference0798-recovery/): OSfence167,IB5152bytes,GFXseq6496;500ms later hardware slot6495. Fence168 subsequently refused; SDMA continues6497/6498 before TDR. Inference not completed; exact shader/mapping cause unproven. M253 identifies the elevated harness selecting the older registry ICD and passes with the intended quiet ICD"
+    edges:
+      - {"type": "uses", "to": "M253", "auto": true, "cue": "...re TDR. Inference not completed; exact shader/mapping cause unproven. M253 identifies the elevated harness selecting the older registry ICD and ..."}
+  - id: M253
+    status: CONFIRMED
+    date: "2026-09-23"
+    claim: "Corrected Limited-user harness with matching quiet ICD passes automatic full-WDDM startup, Vulkan and both Linux-reference model texts on0798"
+    status_text: "CONFIRMED (application outputs); hardware counters MEASURED"
+    evidence: "[limited0798](../evidence/windows/2026-09-23-E27-m9-inference/limited0798/): loader comparison proves elevated registry selection versus Limited environment selection; quiet DLL hash matches M166. Vulkan8tests0mismatches; one stories15M96token and one TinyLlama64token process each match immutable E14 Linux output with CRLF normalization only. GFX2354/2354,SDMA24161/24161,0timeouts/refusals,noTDR,tempmax73.1C. Four-process repeat/pressure/performance remain open"
+    edges:
+      - {"type": "uses", "to": "M166", "auto": true, "cue": "...election versus Limited environment selection; quiet DLL hash matches M166. Vulkan8tests0mismatches; one stories15M96token and one TinyLlama64to..."}
+      - {"type": "supersedes", "to": "M251", "scope": "partial", "auto": true, "cue_in": "M251", "cue": "...utput at SubmitCommandC01E0200 then lostSSH; inference not confirmed. M253 corrects the intended ICD attribution: elevated harness used registry..."}
+  - id: M254
+    status: CONFIRMED
+    date: "2026-09-23"
+    claim: "Four fresh inference processes per model pass in the same automatic full-WDDM0798 session"
+    status_text: "CONFIRMED (reference outputs); hardware counters MEASURED (unit A)"
+    evidence: "[repeat0798](../evidence/windows/2026-09-23-E27-m9-inference/repeat0798/): eight exits0, full offload, actual quiet ICD loader witnesses, host validation against immutable E14 texts with CRLF normalization only. GFX11674/11674 and SDMA120766/120766 cumulative,0timeouts/refusals,noTDR;1000MHz/VID116,70.6-71.6C. No reboot/reinitialization. Does not prove pressure/eviction, equivalent performance or remaining lifecycle contracts"
+  - id: M264
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Reused host-coherent Vulkan buffers expose changed inputs and two-shader results correctly across32positive rounds"
+    status_text: "MEASURED (unit A), repeated with stale-input control"
+    evidence: "[shader-coherency0798](../evidence/windows/2026-09-23-E27-m9-inference/shader-coherency0798/):16+16rounds,1Mwords/round,all bytes match CPU; stale control retains previous GPU hash and exits1 at round1. GFX30541/30541,SDMA673837/673837,0faults/noTDR,1000MHz,max71.5C. Unchanged0798; no eviction or CPU table cache-type proof"
+  - id: M265
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Explicit Vulkan types2/3/5 pass96positive shader rounds and3stale controls; actual cached CPU mapping remains unproven"
+    status_text: "MEASURED (unit A)"
+    evidence: "[shader-memory-types0798](../evidence/windows/2026-09-23-E27-m9-inference/shader-memory-types0798/):all buffers log selected type/heap/flags; exits0/1/0 pertype. GFX30643/30643,SDMA697338/697338,0faults/noTDR. Source BC2A gem_flags not preserved by UmdBlob view; UMD allocation Cached stays0, so type5 HOST_CACHED is not proof of write-back mapping"
+  - id: M268
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Actual Mesa BC2A v2 producer and KMD parser agree on cache intent"
+    status_text: "MEASURED (host only)"
+    evidence: "[cache-producer-roundtrip](../evidence/windows/2026-09-23-E27-m9-inference/cache-producer-roundtrip/):4096heap/flag/alignment cases pass using extracted constructor and RADV definitions; independent AMD UAPI expectations. Omitting producer flag writes produces5120failures/exit1. No additional runtime acceptance"
+  - id: M272
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Legacy and cache-intent-v2 ICDs each pass96shader rounds and3stale controls on07100; v2 interval includes23058coherent system-leaf encodings"
+    status_text: "MEASURED (unit A)"
+    evidence: "[cache-intent-runtime07100](../evidence/windows/2026-09-23-E27-m9-inference/cache-intent-runtime07100/): exact loader witnesses,18expected exits, independent full-byte/hash validation. FinalGFX204/204,paging16284/16284,zero faults/noTDR/snoop mismatches,1000MHz,max72.2C. Encoding attempts include repeats/backgroundOS; not actual CPU PAT/cache-alias or eviction proof"
+  - id: M273
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Cache-intent-v2 ICD on07100 reproduces Linux stories15M/TinyLlama text with full GPU offload"
+    status_text: "MEASURED (unit A)"
+    evidence: "[inference07100-v2](../evidence/windows/2026-09-23-E27-m9-inference/inference07100-v2/): Vulkan8operations zero mismatches;96/64token text matches,7/7and23/23layers,exact loader witnesses,3native exits0. GFX2558/2558,paging47606/47606,zero faults/noTDR; no restart. Does not close eviction/reentry/alias requirements"
+  - id: M283
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Shader input remains correct after three explicit4MiB residency1->2->1 cycles on07100"
+    status_text: "MEASURED (unit A)"
+    evidence: "[shader-eviction07100](../evidence/windows/2026-09-23-E27-m9-inference/shader-eviction07100/): isolated diagnostic v2 ICD, memory type3,16rounds/two integer-hash dispatches each match all1048576words; baseline passes, stale-input control fails at round1 after its own cycle. FinalGFX12957/12957,paging216936/216936,zero faults/noTDR,no restart. Shared-memory residency is not physical-relocation proof; local alias changes not deployed"
+  - id: M321
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Current07102 TinyLlama baseline remains below Linux"
+    status_text: "MEASURED (unit A)"
+    evidence: "[bench07102-v2](../evidence/windows/2026-09-23-E27-m9-inference/bench07102-v2/): b9564 Vulkan ngl99/t6/pp512/tg128/r3, exactv2ICD witnesses, nativeexits0. TinyLlama1082.322790/115.061026 tokens/s, comparedLinux1119.59/154.92@1000MHz with M274 configuration caveats. No causal performance-change claim. Finalgfx16960/16960,paging425844/425844,noTDR,timeouts/refusals0,sameboot"
+    edges:
+      - {"type": "uses", "to": "M274", "auto": true, "cue": "....322790/115.061026 tokens/s, comparedLinux1119.59/154.92@1000MHz with M274 configuration caveats. No causal performance-change claim. Finalgfx16..."}
+  - id: M330
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Same-binary07104 warm transition after shader workload lacks completion"
+    status_text: "MEASURED (unit A), unresolved"
+    evidence: "[warm07104](../evidence/windows/2026-09-24-E27-m9-recovery/warm07104/RESULT-1.md): one guarded/preflightedPnPdisable/enable afterM329, enable02:14:59 reports success then status stalls; local/24SSHsearch1listener/0pinnedlabmatches. Originalsession55183live, no rerun/reboot, monitor question pending. Exact startup/stop stage unknown until persistent logs recovered"
+  - id: M378
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "119 shader results remain correct through witnessed eviction/restoration"
+    status_text: "MEASURED (unit A)"
+    evidence: "[shader119](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07119-shader/RESULT.md):16positive+16eviction rounds match CPU and each other,3departures/restores; stale-input control detects previous data. GFX546/546,paging40813/40813,noerrors/TDR,32reserved/0heap. Same initializedboot08:30:00 retained. Cache-attribute/PFN/alias contracts remain unproved"
+  - id: M379
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "119 deterministic stories15M/TinyLlama outputs match immutable Linux GPU reference"
+    status_text: "MEASURED (unit A)"
+    evidence: "[inference119](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07119-inference/RESULT.md):M8eight hashes matchCPU, nativeexit0,7/7 and23/23offload, normalized text equalE14. GFX2900/2900,paging73573/73573,noerrors/TDR,76reserved/0heap. One process/model; samefullsession retained. Performance/lifecycle/cache acceptance still open"
+  - id: M412
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Mesa main f9a2d34a (26.3.0-devel) with LLVM23.1.2 runs the D3D desktop after porting Gallium fixes.8 translator/1236 JIT checks and live shared/green pixel plus64KiB GPU controls pass. No OS/AC reset or TDR; DWM4448 observed13:58:18-14:01:27.104 sampled two-draw frames median4.591ms, not a matched benchmark. Vulkan ICD remains on the separate WDDM2 fork; CPU drawing and broader acceptance remain."
+    evidence: "[source, deployment and limitations](../evidence/windows/2026-09-24-E26-desktop-resume/mesa-main/RESULT.md)"
+  - id: M414
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Current Mesa26.3.0-devel f333dd6d RADV/WDDM2 port runs8CPU-matching shader controls and stories15M/TinyLlama with full offload and E14-reference outputs. Native exits0, no TDR/reset. Initial Terminal launch failure and compiler sparse-policy assertion resolved for this path by headless launch and correct capability gating. Sparse mapping/conformance remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[migration, controls and limits](../evidence/windows/2026-09-24-E27-m9-recovery/radv-main/RESULT.md)"
+  - id: M418
+    status: CONFIRMED
+    date: "2026-09-24"
+    claim: "Source review: WDDM winsys has virtual bind/unbind but lacks current AMD NULL-PRT mirrored-VA/control-bit policy. Accepted RADV port gates sparse; KMD leaves ZeroInPteSupported0 and rejects valid Zero PTEs. Local MS defines Zero semantics, contradicting the old code comment; comment corrected, runtime unchanged. No sparse execution or UMA speedup claim."
+    status_text: "CONFIRMED (source only)"
+    evidence: "[exact source excerpts and planning scope](../evidence/windows/2026-09-24-E27-m9-recovery/sparse-uma-review/RESULT.md)"
+  - id: M449
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Cached Vulkan inventory overlay deployed on unchanged KMD136/DWM2040. Single vulkaninfo capture timed out after 40 s: loader observed old system ICD, not requested newer compute ICD. Partial declarations displayed, incomplete format counts unknown; provider never launches Vulkan. Actual overlay visible on desktop."
+    status_text: "MEASURED (unit A; partial inventory, not capability validation)"
+    evidence: "[Overlay inventory](../evidence/windows/2026-09-24-E27-m9-recovery/vulkan-overlay-inventory/RESULT.md)"
+  - id: M454
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Display-fixed 143 passes 64 MiB GPU readback cycles, eight CPU-matching shader cases and both E14 model outputs with full offload through the intended newer ICD. Paging6015/6015, no timeout/refusal/TDR; Windows and DWM retained. System coherent PTE attempts observed, local coherent requests absent. No matched-performance, cold-start or full M9 claim."
+    evidence: "[143 compute controls](../evidence/windows/2026-09-25-E27-m9-recovery/compute143-regression-utf8/RESULT.md)"
+  - id: M465
+    status: CONFIRMED
+    date: "2026-09-25"
+    claim: "Paging DMA-boundary preemption stops dispatch after the actual in-flight buffer, releases only unexecuted borrowed queue metadata before truthful notification, and accepts scheduler replay with original fence IDs. Actual-source1074/0, old-dispatch mutation fails, existing queue547/0 and reports pass; WDK build passes. Undeployed, real VidSch acceptance pending."
+    status_text: "CONFIRMED (source/host only)"
+    evidence: "[paging preemption](../evidence/windows/2026-09-25-E27-m9-recovery/paging-preemption-boundary/ROOT-VALIDATION.md)"
+  - id: M475
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "CPU WSI ICD3A03A172 on unchanged147 passes19 selected Win32 CTS cases with per-process ICD witnesses,120 VVL frames and exact321x239 RGBA/BGRA screen oracles (76719pixels each, zero differences). GPU rendering and CPU presentation; no certification or completeM10 claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[WSI candidate controls](../evidence/windows/2026-09-25-E31-wsi-candidate/RESULT.md)"
+  - id: M476
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "M10 first-picture criteria met on ICD9C40083C/KMD147:19selected WSI CTS cases,120successful VVL lifecycle presents, exact RGBA/BGRA screen pixels and600cube presents with screenshots. Cadence50.865/s versus ETW hardware refresh59.94997Hz; CPU presentation, no full conformance/60FPS/soak claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[M10 acceptance and limits](../evidence/windows/2026-09-25-E31-m10-acceptance/RESULT.md)"
+  - id: M479
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "System x64 Vulkan discovery without ICD overrides succeeds for normal and elevated tokens; eight CPU-reference compute hashes pass in each, normal-user cube completes600frames. Development CTS basic compute:76Pass/5NotSupported/0Fail with actual loader/ICD witnesses; release CTS and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[system ICD and CTS controls](../evidence/windows/2026-09-25-E33-system-icd/RESULT.md)"
+  - id: M480
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Release CTS vulkan-cts-1.4.6.2 basic compute control:75Pass/5NotSupported/0Fail across80cases with exact per-case loader/ICD witnesses, stable GPU generation and unchanged inputs. Same five named unsupported cases as M479; full release must-pass and own-unit Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[release CTS control](../evidence/windows/2026-09-25-E33-release-cts-basic/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M479", "auto": true, "cue": "...generation and unchanged inputs. Same five named unsupported cases as M479; full release must-pass and own-unit Linux parity remain open."}
+  - id: M481
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Mesa05e6c962 candidate80FB0816 builds with sparse VA reservation adapter/geometry/fence/lifetime corrections. Four actual-function host controls pass; lab vulkaninfo,8reference compute hashes and600cube frames pass with the candidate explicitly selected. Sparse stays disabled; its hardware behavior and full M12 acceptance remain open."
+    status_text: "MEASURED (unit A; host control)"
+    evidence: "[sparse reservation groundwork](../evidence/windows/2026-09-25-E33-sparse-reservation/RESULT.md)"
+  - id: M482
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Mesa05e6c962 candidate255534CA adds batched sparse mapping order across application waits, earlier rendering and completion signals. Source-extracted two-queue host model passes; ordinary lab vulkaninfo,8CPU-reference compute hashes and600cube frames pass. Sparse remains gated and its actual GPU behavior untested."
+    status_text: "MEASURED (unit A; host model)"
+    evidence: "[mapping ordering groundwork](../evidence/windows/2026-09-25-E33-sparse-order/RESULT.md)"
+  - id: M483
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Candidate255534CA release CTS matches M480 (75Pass/5NotSupported); native sparse API ordering and four bound physical/alias/rebind content controls pass. Separate initial-hole CP read on KMD147 hangs after two physical controls and causes VIDEO_TDR_FAILURE0x116. No hole-content pass; Zero/PRT and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[native sparse controls](../evidence/windows/2026-09-25-E33-native-sparse/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M480", "auto": true, "cue": "Candidate255534CA release CTS matches M480 (75Pass/5NotSupported); native sparse API ordering and four bound phy..."}
+  - id: M486
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Visible gallery renders Mandelbrot, Julia and Burning Ship via Vulkan compute on candidate17ADD01F/KMD149. All786432pixels match independent CPU arithmetic bit-for-bit; module witness confirms the candidate ICD. Viewer displays captured GPU/CPU/difference images with no continuous GPU workload. This is correctness evidence, not certification or a benchmark."
+    status_text: "MEASURED (unit A)"
+    evidence: "[shader gallery](../evidence/windows/2026-09-25-E33-shader-gallery/RESULT.md)"
+  - id: M487
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Mesa05 candidate0F9FEAE8 separates4KiB sparse resource/map lengths from64KiB OS reservations, fixing11x137 vkCreateImage failure. Release CTS gives20image Pass/1NotSupported (single-tile rebind prerequisite) and21buffer regression Pass, same KMD149/boot with no new fault events. Full format/Linux coverage and queued PTE relocation remain open."
+    status_text: "MEASURED (unit A; host controls)"
+    evidence: "[sparse image controls](../evidence/windows/2026-09-25-E33-sparse-images/RESULT.md)"
+  - id: M491
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Full sparse CTS exposed a dedicated-queue assertion after143Pass/36device-group skips. Mesa now gives WDDM sparse queues an independent graphics context and native queued submission, keeping Linux threading separate. The formerly failing case and queue group give17Pass/1queue-capability skip on candidate4D027149, unchanged KMD151/boot and no new selected faults. Full sparse rerun and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[sparse queue fix](../evidence/windows/2026-09-25-E33-sparse-queue-context/RESULT.md)"
+  - id: M492
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "clvk content control passes4096 words/64 reductions on KMD151 and Mesa4D027149. Forced GPU profiling causes a user-mode AV; removing the override avoids it. CPU fallback shares batch intervals, so a one-command-batch control verifies event order with zero content mismatches. Calibrated GPU timing, normal-batch profiling correctness, OpenCL CTS and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[OpenCL controls](../evidence/windows/2026-09-25-E33-opencl-content/RESULT.md)"
+  - id: M495
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Asteroids Vulkan completes660 frames at1080x720 on KMD151/ICD16CDEA79 after fixing retained-duration-query capacity, initial window dimensions and the PowerShell parser. All660 CPU/GPU rows validate; final image visibly renders the scene. Same GPU generation before/after and baseline ICD restored. Linux image/performance parity and full API/CTS acceptance remain pending; prior TDR causality is not fully established."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Asteroids660](../evidence/windows/2026-09-25-E33-asteroids-660/RESULT.md)"
+  - id: M501
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Zink WGL bootstrap selected a0x0 Vulkan swapchain for Waffle hidden zero-client window. Offscreen attachments for zero-client state plus resize invalidation allow unmodified wflinfo to create OpenGL4.6 Core/GLSL4.60 on BC-250 RADV, exit0, final libgalliumDFC11A14 and ICD8B5EC055 witnessed. No version overrides; baseline restored. Full piglit and Linux parity pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Zink context](../evidence/windows/2026-09-26-E33-zink-context/RESULT.md)"
+  - id: M502
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Zink same-window zero/nonzero regression completes10resize/swap stages, exact RGB readback at all7nonzero stages, exit0. Upstream piglit fast_color_clear@fcc-blit-between-clears returns pass on unchanged libgalliumDFC11A14/ICD8B5EC055, modules witnessed. Baseline restored, no reset. One piglit control only; full45037-case quick and Linux parity pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Zink readback](../evidence/windows/2026-09-26-E33-zink-readback/RESULT.md)"
+  - id: M503
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Full piglit quick package staged on unit A:57626 files hash-verified, portable Python and all test data. Official dry-run exits0 and final result exactly matches45037 unique expected cases, all notrun. Failure-stop adapter has4host controls, not deployed yet. Full GPU quick and Linux comparison remain pending; no conformance claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Full piglit staging](../evidence/windows/2026-09-26-E33-piglit-full-stage/RESULT.md)"
+  - id: M504
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Guarded interactive piglit control passes; full quick stops after437/45037 cases:300 pass,136 skip,1 fail in fcc-front-buffer-distraction (kopper_acquire timeout-growth assertion, before pixel results). No next case starts; baseline ICD restored, no reset. Runner PATH lacks wflinfo, so skips need reassessment. Full coverage and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[First piglit failure](../evidence/windows/2026-09-26-E33-piglit-first-failure/RESULT.md)"
+  - id: M506
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Full piglit quick003 stops1114cases (957 pass/156 skip/1 warn): raytrace process exits0xc0000005. Lab CDB shows pixel pass then NULL compute-program deletion at context teardown. Guard deletion until async specialization has a CS; final ZinkD18E2372 passes two ordinary raytrace runs with exit0. No reset; isolated registry restored. Full quick004 and Linux parity remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[PBO teardown](../evidence/windows/2026-09-26-E33-zink-pbo-teardown/RESULT.md)"
+  - id: M507
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Full piglit quick004 passes the repaired raytrace case, then stops at glsl-predication-on-large-array:991 pass/156 skip/1 incomplete. KMD graphics fence983351 exceeds500ms, recovery fails, Windows bugchecks0x116 and reboots. Baseline ICD restored after terminal-task verification; new generation559679783/epoch5 healthy. Slow shader versus nontermination remains unresolved; no later GPU test."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Large-array TDR](../evidence/windows/2026-09-26-E33-piglit-large-array-tdr/RESULT.md)"
+  - id: M510
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Same-unit Linux RADV/Zink at the Windows upstream Mesa revision passes the bounded2048-element scratch shader and unchanged upstream large-array test (pixel oracle, exit0). Logging confirms same384.75MiB scratch/768waves/ring size as M509, but different GPU VA range. NIR retains real scratch yet differs in descriptor-address prefix and ordering. Narrows M508 diagnosis; EGL versus WGL and runtime differences remain, not full parity or a root-cause proof."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Linux scratch reference](../evidence/linux/2026-09-26-E33-scratch-reference/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M508", "auto": true, "cue": "...cratch yet differs in descriptor-address prefix and ordering. Narrows M508 diagnosis; EGL versus WGL and runtime differences remain, not full pa..."}
+      - {"type": "uses", "to": "M509", "auto": true, "cue": "... exit0). Logging confirms same384.75MiB scratch/768waves/ring size as M509, but different GPU VA range. NIR retains real scratch yet differs in ..."}
+  - id: M511
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "GFX10 ACO control zero-extending scratch upper bits fails the previously passing Linux bounded shader: witnessed changed prolog, gfx ring timeout16->17, worker stuck in D state. Refutes unconditional zero extension as a portable fix. Original source/installed ICD restored; normal return reboot requested after log preservation. Address-dependent Windows hypothesis and recovery outcome remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Scratch upper-bit negative control](../evidence/linux/2026-09-26-E33-scratch-upper-bits/RESULT.md)"
+  - id: M512
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "GFX10 ACO scratch-address correction sign-extends bit47 after wave-offset addition. Windows candidate986B691F passes both the exact bounded2048 shader and unchanged upstream large-array pixel oracle, exit0, same healthy GPU generation/epoch. Emitted ACO witnesses the extra instruction; baseline registration restored. Previously forcedFFFF upper bits mismatched captured low Windows VA. Full piglit and exact corrected Linux build remain unverified."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Scratch canonical correction](../evidence/windows/2026-09-26-E33-scratch-canonical/RESULT.md)"
+  - id: M513
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Full piglit005 passes the repaired scratch case then stops1225cases at glFlush error validation (1060pass/164skip/1fail). WGL replacement-specific dispatch correction makes unchanged BeginEnd coverage and primitive-restart DISABLE_VBO pass/exit0 on Zink1DAF0B60; GPU session stable and baseline restored. Native ICD loader branch unchanged but not runtime-tested; full rerun pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[WGL Flush validation](../evidence/windows/2026-09-26-E33-wgl-flush/RESULT.md)"
+  - id: M515
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Full piglit007 on unit A reaches1418 terminal cases (1193pass/224skip/1fail). All five repaired cases pass; line-smooth-stipple exits1 at pixel(9,5), expected31/95/31 versus observed0/128/0. GPU session stable, baseline ICD restored. Matching upstream Zink/RADV CI lists the case, but same-unit Linux parity remains unverified; no waiver or filtering."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Line smoothing mismatch](../evidence/windows/2026-09-26-E33-line-smooth-stipple/RESULT.md)"
+  - id: M516
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Unit A Linux same-Mesa/piglit line-smooth-stipple control reproduces Windows M515 exactly: pixel(9,5), expected31/95/31 versus0/128/0, exit1. Canonical scratch shader positive control passes/exit0 on RADVFEC7C475/Gallium1FA58014,1000MHz/read818mV. Shared offscreen failure only: surfaceless EGL versus Windows WGL FBO; Linux windowed paths and full profile comparison remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Same-unit stipple parity](../evidence/linux/2026-09-26-E33-line-stipple-parity/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M515", "auto": true, "cue": "...Linux same-Mesa/piglit line-smooth-stipple control reproduces Windows M515 exactly: pixel(9,5), expected31/95/31 versus0/128/0, exit1. Canonical..."}
+  - id: M517
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Unit A Linux windowed Zink/RADV reference established with separate same-Mesa RadeonSI/ACO Xorg libraries. GLX reports Zink/RADV OpenGL4.6; unchanged swapbuffers-behavior -auto passes pixels/exit0. Full Linux quick003 started on installed piglit after two preserved packaging failures. Linux45159 versus Windows45037 case inventories recorded; full comparison remains pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Linux window reference](../evidence/linux/2026-09-26-E33-window-reference/RESULT.md)"
+  - id: M536
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Per-screen Vulkan instances pass the native two-device4096-pixel/lifetime control. Enumeration-only hosted RADV creates/destroys two paging queues via their matching D3D runtime callbacks, all HRESULT0; cache keyed by runtime identity, no borrowed-device DestroyDevice. Pixel control still uses standalone RADV; hosted logical-device creation intentionally unavailable. Baselines restored, DWM1856 unchanged; G0 not passed."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted paging bootstrap](../evidence/windows/2026-09-26-E34-hosted-bootstrap/RESULT.md)"
+  - id: M537
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "KMD152/RADV seven-slot pipeline passes host controls and unit A16-buffer content control:67108864 words,zero mismatches. Prior API fences pending15 times; hardware overlap/speedup not proven. PnP caused TDR116 before any GFX submit, fresh boot stable. Cross-process acceptance remains open; baseline ICD restored."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Bounded pipeline](../evidence/windows/2026-09-26-E35-gfx-submit-pipeline/RESULT.md)"
+  - id: M538
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Compiler gates cover180 KMD/RADV/UMD C commands;4096 producer/parser ABI cases pass. Scoped MSVC analysis catches and verifies repairs for null surface comparison and SAL annotations. Dependency-cache controls pass. E14 smoke007 passes8cases and witnesses exact loaded ICDD5AD7D07; changed-binary/failed-receipt controls reject. No full-stack analysis or certification claim."
+    status_text: "MEASURED (host and unit A)"
+    evidence: "[Fast quality gates](../evidence/windows/2026-09-26-E35-quality-gates/RESULT.md)"
+  - id: M570
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "With RADV_EXPERIMENTAL=sparse in the process environment, vkd3d-proton 472989aa over the promoted WDDM RADV ICD 93B1D1FD reports D3D12 feature level 12_1 and TiledResourcesTier 4 for the BC-250 (all other options identical to the default run, which stays at 11_1 / tier 0). The feature level therefore depends only on the port's sparse gate (radv_physical_device.c has_sparse or the experimental flag), not on the pending sparse CTS completion; correctness of sparse under load is not shown here. No swap, no rendering."
+    status_text: "MEASURED (unit A)"
+    evidence: "[FL with sparse flag](../evidence/windows/2026-09-27-E39-fl-sparse-flag/RESULT.md)"
+  - id: M583
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "The 44 CTS cases dEQP-VK.api.external.semaphore.opaque_win32.* and .opaque_win32_kmt.* (cts-release-tools deqp-vk AE7BEFDD, one process per case, loader debug log kept) give the same result on the registered ICD 93B1D1FD and on the fence-share candidate 6661C2D2: 4 Pass (the info_binary and info_timeline queries), 40 NotSupported (\"Semaphore doesn't support exporting in external type\"), 0 Fail, 0 Crash, 0 timeout; every process loaded wsi-final/vulkan_radeon.dll. Cause of the NotSupported, read from the info logs and the runtime source: the exportable and importable bits are advertised only for timeline semaphores with OPAQUE_WIN32 or D3D12_FENCE (vk_wddm2_monitored_fence_type exports NT handles), binary semaphores use the vk_sync_binary wrapper, which has no import or export, and OPAQUE_WIN32_KMT is never advertised by vk_semaphore.c. The 40 functional cases are binary-semaphore tests, so the CTS exercises the fence-share change only through the info query; its runtime witness stays M581 (vkd3d-proton D3D12_FENCE export). Run 001 of the same list was void: this deqp-vk build rejects --deqp-watchdog-total-time-limit and --deqp-watchdog-interval-time-limit (exit -1 on every case)."
+    status_text: "MEASURED (unit A)"
+    evidence: "[E44](../evidence/windows/2026-09-27-E44-cts-external-semaphore-win32/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M581", "auto": true, "cue": "...e-share change only through the info query; its runtime witness stays M581 (vkd3d-proton D3D12_FENCE export). Run 001 of the same list was void:..."}
+  - id: M665
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Registered Vulkan ICD on unit A promoted from 93B1D1FD to CF3948D6 (fork amdgpu-wddm/radv-wddm2-gdi-immediate 2732f9c8: exportable monitored fences, optional per-present timing log, IMMEDIATE present mode on the GDI path), the file measured as a swap-in candidate in E43, E46, E47 and E48. E38 procedure: M569 keep copy 93B1D1FD accepted as rollback after a hash check, candidate copied in place, keep copy CF3948D6 written, registry and manifest 234175BD unchanged, E14 smoke PASS (8 tests, 0 mismatches, live module witness CF3948D6). Positive control on the changed path: vkcube 900 frames 1920x1181 on the registered file, FIFO by default (mode 2), all presents VK_SUCCESS, copy median 1.06 ms (cpucopy-003: 1.07), DwmFlush median 39.5 ms, health 15, DWM 3152, Tctl 66.6 to 67.1, same boot, KMD 164 and UMD 8279AC7F untouched, gates 0."
+    status_text: "MEASURED (unit A)"
+    evidence: "[ICD promotion CF3948D6](../evidence/windows/2026-09-27-E49-icd-promotion-cf3948d6/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M569", "auto": true, "cue": "...sured as a swap-in candidate in E43, E46, E47 and E48. E38 procedure: M569 keep copy 93B1D1FD accepted as rollback after a hash check, candidate..."}
+  - id: M726
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Direct-loaded packaged RADV C0CE with engine253A/testEE9C passes5.697s, exit0, exact in-process ICD hash witness; maximumFL11_1 and measured caps produce a108-byte bound configuration. CPU170 unchanged,health15,same boot/DWM,no TDR. System DDI/hosted path and M14 completion remain untested."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Exact-pair capability control002](../evidence/windows/2026-09-28-E34-m14-caps002/RESULT.md)"
+  - id: M737
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Runtime010 completes native CPU/GPU draws/fill/shaders with exit0 and no API/query failures, but all three image checksums differ; strict gate rejects draws. Cause/extent unmeasured without pixels. Baseline restored41.566s."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Runtime010](../evidence/windows/2026-09-28-E34-m14-runtime010/RESULT.md)"
+  - id: M750
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Caps004 ICDCE63 adds physical-BO counters but the unchanged Trim gate still reads0 and fails twice; engine exit1, Job empty, CPU171 postflight passes24.680s. Static follow-up identifies the Windows physical-device heap-info function as a zero-only stub, bypassing winsys queries. No new pair admitted."
+    status_text: "MEASURED (unit A; source inspection distinguished)"
+    evidence: "[Caps004](../evidence/windows/2026-09-28-E34-m14-caps004/RESULT.md)"
+  - id: M755
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Renamed engine11B0/test3E39 and ICDC388 pass caps006 with0 failures: Trim80->588->588->17MiB, OOM/recovery pass. Exact in-process ICD witness; FL11_1 config18ECA577 admitted. Engine10.508s, closed Job and unchanged CPU171 postflight29.069s."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Renamed pair admission](../evidence/windows/2026-09-28-E34-m14-caps006/RESULT.md)"
+  - id: M759
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "RT-fixed ICD9496 passes standalone D3D12 engine002 copy/readback and DXIL compute, each0/16384 differences; exact ICD witness. Job closed, CPU171 unchanged25.207s,67C. Non-RT regression only; RT traversal remains unmeasured."
+    status_text: "MEASURED (unit A)"
+    evidence: "[RT candidate regression](../evidence/windows/2026-09-28-E34-m15-engine002/RESULT.md)"
+  - id: M761
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Exact RT-fixed ICD9496 completes CTS direct TraceRays8x8x1 pipeline case Pass; live candidate witness, default RT configuration. Case3.311s, closed Job and unchanged CPU17120.344s,66.9C. Broader RT/native D3D12/game acceptance remains open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[RT pipeline control](../evidence/windows/2026-09-28-E34-m15-rt-pipeline001/RESULT.md)"
+  - id: M762
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Exact9496 triangle query passes with emulate_rt. Fresh default/emulated compiler-output runs both Pass; final ACO print_program contains2/0 image_bvh64_intersect_ray operations. Output explicitly falls back without LLVM: not binary disassembly. Jobs closed/CPU171 unchanged, each<=27.243s and67C."
+    status_text: "MEASURED (unit A)"
+    evidence: "[RT path comparison](../evidence/windows/2026-09-28-E34-m15-rt-emulation/RESULT.md)"
+  - id: M773
+    status: MEASURED
+    date: "2026-10-01"
+    date_from: "evidence-path"
+    claim: "The whole Vulkan CTS sparse-resources list (vulkan-cts-1.4.6.2, vk-default `sparse-resources.txt`, 19078 cases) on unit A through the ICD alone, one `deqp-vk` process per bounded batch: 10778 Pass, 8299 NotSupported, 0 Fail, 0 Crash, 1 Timeout (ICD 85077E29; KMD 0.7.185.1 to 0.7.192.1 across the batches). Every NotSupported carries a capability reason: 4715 device-group cases need a second physical device, the rest are image formats or sample counts without sparse support, partial binding of too-small images, unsupported storage formats and unexposed sparseResidency2/4Samples. The Timeout (`image_sparse_binding.multiple_bind_sparse_info.3d.rgba32ui.512_256_6`) was on KMD 0.7.191.1, where that batch never finished (40 of 105 cases in 173.5 s, the per-allocation cost growing with objects VidMm keeps until process exit); on 0.7.192.1 (object index) the whole batch passes on the registered ICD 2A13235D, 105 of 105 in 74.5 s"
+    evidence: "E45, `evidence/windows/2026-10-01-E45-cts-sparse-sweep/`"
+  - id: M776
+    status: MEASURED
+    date: "2026-10-01"
+    date_from: "evidence-path"
+    claim: "GPU memory bandwidth on unit A through Vulkan compute (`tools/win/vkmembw`, 256 MiB buffers, GPU timestamps, copy and read checked against CPU oracles; kernel driver 0.7.193.1, registered Vulkan ICD): copy 386-389 GB/s, read 373-386 GB/s, write 370-375 GB/s (GB = 10^9 bytes, copy counted as read plus write), the same with the shader clock at 1000 MHz (no warmup, 60 governor samples at 1000) and at 2000 MHz (after a 2 s copy warmup), and the same from the DEVICE_LOCAL type and the HOST_VISIBLE + HOST_COHERENT type of heap 0; a negative control one element short fails both checks; the same binary reads about 900 GB/s on an RTX 4090 (1008 nominal). DRAM is not in a low state under this driver, and its bandwidth does not follow the shader clock"
+    status_text: "MEASURED (unit A)"
+    evidence: "[E48](../evidence/windows/2026-10-01-E48-gpu-memory-bandwidth/README.md)"

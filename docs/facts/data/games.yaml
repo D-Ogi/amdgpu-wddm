@@ -1,0 +1,95 @@
+# Facts data. Edit here; docs/facts.md and docs/facts/*.md are generated from these files
+# by tools/facts/gen_facts.py. Format and workflow: docs/facts/README.md.
+area: games
+order: 6
+title: "Games and performance"
+description: "Games, benchmarks and measured performance: frame rates, frame times, presets, profiling, and comparisons with Linux."
+facts:
+  - id: M164
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "E27 run014 instrumented TinyLlama benchmark at requested1000MHz820mV yields pp5121079.71t/s,tg12898.24t/s (3repetitions), versus LinuxM52at1000MHz899mV1119.59/154.92. Hardware10389/10389,0timeouts/refused/notrun,noTDR. Generation gap36.59% remains to be explained; verbose submission diagnostics are still enabled."
+    detail: "[benchmark and limits](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-014/README.md)"
+  - id: M255
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Full-WDDM0798 benchmark completes at1000MHz; TinyLlama remains slower than Linux"
+    status_text: "MEASURED (unit A)"
+    evidence: "[bench0798](../evidence/windows/2026-09-23-E27-m9-inference/bench0798/): b9564,pp512/tg128,r3,t6,ngl99,quiet ICD loader witness. TinyLlama1092.70/113.88t/s vs E14 Linux1119.59/154.92 (2.40%/26.49% lower). stories15M37162.42/474.49t/s, generation stddev110.83. GFX22039/22039,SDMA150022/150022 cumulative,0timeouts/refusals,noTDR,tempmax72.2C. Different OS/backend stacks; all Linux defaults not independently verified"
+  - id: M274
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Cache-intent-v2 benchmark remains below Linux1000MHz TinyLlama reference"
+    status_text: "MEASURED (unit A)"
+    evidence: "[bench07100-v2](../evidence/windows/2026-09-23-E27-m9-inference/bench07100-v2/): b9564,pp512/tg128,r3,t6,ngl99,1000MHz:1099.25/116.79tokens/s versusLinux1119.59/154.92;stories15M48516.72/533.42 with high generation spread. FinalGFX12923/12923,paging72525/72525,zero faults/noTDR. Single-session comparison, backend/default caveats; not causal cache speedup proof"
+  - id: M380
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "119 inference benchmark preserves 105 performance within observed dispersion"
+    status_text: "MEASURED (unit A)"
+    evidence: "[benchmark119](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07119-benchmark/RESULT.md): same executable/model/ICD hashes and benchmark fields; TinyLlama1101.77/118.75 tokens/s, stories15M48335.30/518.46. Three samples; no demonstrated speedup. GFX13265/13265,paging103353/103353,noerrors/TDR,101reserved/0heap. Same initialized session retained; matched Linux comparison and full M9 remain open"
+  - id: M413
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "With KMD127 and the M412 desktop active, old cache-intent-v2 Vulkan ICD delivers TinyLlama1072.32/110.33 and stories15M26521.39/403.67 tokens/s (pp512/tg128,r3). Native exits0, no TDR; task observer terminated early and was reconciled from completed native artifacts without rerun. Different desktop/KMD configuration from M380 prevents causal speed attribution."
+    status_text: "MEASURED (unit A)"
+    evidence: "[baseline and wrapper anomaly](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07127-desktop-benchmark/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M380", "auto": true, "cue": "...ive artifacts without rerun. Different desktop/KMD configuration from M380 prevents causal speed attribution."}
+      - {"type": "uses", "to": "M412", "auto": true, "cue": "With KMD127 and the M412 desktop active, old cache-intent-v2 Vulkan ICD delivers TinyLlama1072..."}
+  - id: M415
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Paired new/old ICD benchmarks with KMD127, M412 desktop, same headless worker and pp512/tg128,r3,t6,ngl99 yield TinyLlama1115.94/114.56 versus1078.17/111.38 tokens/s, stories15M31766.21/471.30 versus30004.56/441.11. All native exits0; finalGFX33471/33471,SDMA88076/88076,noTDR. One ordered pair, not a general speedup or Windows-over-Linux proof."
+    status_text: "MEASURED (unit A)"
+    evidence: "[paired raw JSON and configuration](../evidence/windows/2026-09-24-E27-m9-recovery/radv-main/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M412", "auto": true, "cue": "Paired new/old ICD benchmarks with KMD127, M412 desktop, same headless worker and pp512/tg128,r3,t6,ngl99 yield TinyL..."}
+  - id: M573
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "The Witcher 3 4.0 DX12 build through vkd3d-proton 472989aa and DXVK 3.1.1 dxgi.dll on the registered ICD 93B1D1FD (RADV_EXPERIMENTAL=sparse) loads the latest save and renders the in-game 3D scene at Kaer Morhen correctly with HUD, after the animated 3D menu scene; keyboard input through the recorded input task works, absolute mouse_event clicks do not. 139 s steered run, responsive throughout, working set 3.8 GB, Tctl peak 77.8 during loading; vkd3d log identical in kind to M571 (DXR state objects, four failed shared-fence KMT exports), no device loss, KMD healthy. No frame timing, defaults settings, game directory, settings and saves restored."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Witcher 3 DX12 scene](../evidence/windows/2026-09-27-E41-witcher3-dx12-gameplay/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M571", "auto": true, "cue": "...3.8 GB, Tctl peak 77.8 during loading; vkd3d log identical in kind to M571 (DXR state objects, four failed shared-fence KMT exports), no device ..."}
+  - id: M580
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Per-present timing of the Witcher 3 DX12 build on the port (candidate ICD 6661C2D2 = baseline plus the WSI present log, vkd3d-proton 472989aa, 1920x1200, GDI present path): 9280 presents over 266 s; menu about 55-60 presents/s (interval median 16.7 ms), loaded Kaer Morhen scene locked at 29.7 presents/s (median 33.4 ms, p5 32.3, p95 34.5); the present call itself takes a median 15.8 ms of the frame on the presenting thread: CPU copy of the image into the DIB 3.2 ms, BitBlt 1.3 ms, DwmFlush 11.3 ms (p95 24.5). All presents VK_SUCCESS. E14 smoke PASS on the candidate, registered ICD restored to 93B1D1FD after the run. What locks the scene at two refresh periods (game vsync, FIFO present mode or DwmFlush after a miss) is not established."
+    status_text: "MEASURED (unit A)"
+    evidence: "[E43](../evidence/windows/2026-09-27-E43-witcher3-dx12-present-log/RESULT.md)"
+  - id: M607
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Witcher 3 DX12 present modes on the GDI present path, three steered runs of the E43 save within 21 min on the same boot (diagnostic KMD 153, CPU DWM 4596). Candidate ICD CF3948D6 (E43 tree plus IMMEDIATE on the GDI path, no DwmFlush wait in that mode) honours VKD3D_SWAPCHAIN_PRESENT_MODE end to end: FIFO run 006 header mode 2, DwmFlush 20.0 ms mean; IMMEDIATE run 007 header mode 0, DwmFlush 0, present call 25.5 ms against 41.4. The box is slower than in E43: run 008, an exact repeat of E43 run 005 with E43's ICD 6661C2D2, gives copy 19.5 ms (E43 3.3), DwmFlush 19.8 (12.1), scene interval 55.6 ms (32.7); 4.5 GB physical available with the game closed, commit 5.2/40.7 GB, pools 353/300 MB, CPU 45-50 % (CPU DWM 3.5 cores), no paging. The 6x slower memcpy of the host-visible swapchain image is not explained by memory or CPU load; KMD 153 in-session transition or the DWM instance are the changed variables (HYPOTHESIS: uncached/write-combined CPU mapping). With DwmFlush removed the scene stays at about 54 ms per frame, so on this box the game's own frame time limits the rate. All presents VK_SUCCESS, smoke PASS on both ICDs, registered ICD restored to 93B1D1FD after each run."
+    status_text: "MEASURED (unit A)"
+    evidence: "[E47](../evidence/windows/2026-09-27-E47-witcher3-dx12-present-mode/RESULT.md)"
+  - id: M610
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "The 6x slower CPU present copy of E47 (M607) is process-specific and is not explained by the memory type the ICD requests and receives, by memory pressure, by page faults or by scheduling; the effective CPU mapping attribute and the physical placement of the game's buffer remain open. Same boot, same KMD 153, CPU DWM 4596, within one hour: vkcube on the CPU present path copies a 1920x1181 image in 1.07 ms (8.5 GB/s) on the host-cached candidate 50E99A84, on E43's 6661C2D2 and on the witness 63AF86CB, and a 640x480 image in 0.14 ms (E46 level); the steered Witcher 3 DX12 scene copies 1920x1200 in 18.3 ms median (run 009, 3201 presents) and 17.2 ms median (run 010, 2688 presents) with a floor of 16.9-17.9 ms and no value near vkcube's. The witness ICD shows the blit buffer in RADV memory type 5, properties 0xe (HOST_VISIBLE, COHERENT, CACHED) in both processes, and QueryThreadCycleTime around the copy gives 54.3 million cycles per game frame against 3.45 million in vkcube for the same byte count, CPU share 1.00 in both (0.17 versus 2.6 bytes per cycle). The game's page faults are 0-22/s in the scene (side sampler). 50E99A84's HOST_CACHED request was a no-op because the port sets wsi->sw and upstream already selects a cached type; with sw the WSI waits for the image fence before the present, so copy time is memcpy time. Open: the physical placement (segment) and Lock2 cache attribute of the game's 9.2 MB blit buffer, not visible from the ICD (HYPOTHESIS: uncached BAR or non-aperture placement in the game process; 0.5 GB/s is the shape of an uncached read stream). Registered ICD 93B1D1FD restored after every stage, smoke PASS, no KMD change."
+    status_text: "MEASURED (unit A)"
+    evidence: "[E48](../evidence/windows/2026-09-27-E48-witcher3-dx12-cpu-copy-witness/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M607", "auto": true, "cue": "The 6x slower CPU present copy of E47 (M607) is process-specific and is not explained by the memory type the ICD ..."}
+  - id: M760
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Exact RT-fixed ICD9496 ray-query triangle flow passes1/1 with default traversal; matching nort negative returns64 values4 versus expected1 and Fail. Live candidate witness, hardware-support flag1; Job closure/CPU171 unchanged21.162s and20.363s,67C. No RT-pipeline/game or ISA witness yet."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Ray-query controls](../evidence/windows/2026-09-28-E34-m15-rt-query001/RESULT.md)"
+  - id: M772
+    status: MEASURED
+    date: "2026-10-01"
+    date_from: "evidence-path"
+    claim: "The Witcher 3 preset HIGH, 1920x1080 fullscreen output with the game's FSR 2 upscaling in its Auto quality mode (AAMode 5, FSR2Quality 0: the game's DX12 default, which the session tooling did not set; every settings backup since 2026-09-29 shows it), DRS off, same engine, ICD and route: on the GPU-composed desktop 35.5 and 35.4 frames/s in the 40 s window (217, 218; median 26.7 and 27.9 ms) against 21.1 frames/s (median 48.1 ms) on the CPU-composed desktop (214); DPM raised to 2000 MHz on the GPU route and never on the CPU route; DxgKrnl DMA busy 79.2 % and 73.3 % against 36.2 % of the window; 0 VM faults and 0 kernel software blits; Task Manager's counters attribute the 3D engine (61.7 % average in 217's world) to the game and show DWM at 8.6 % of one logical CPU. GPU DWM promoted to the lab default at 2026-10-01T01:50Z"
+    status_text: "MEASURED (unit A)"
+    evidence: "[GPU DWM ladder](../evidence/windows/2026-10-01-E34-gpu-dwm-ladder/RESULT.md)"
+  - id: M777
+    status: MEASURED
+    date: "2026-10-01"
+    date_from: "evidence-path"
+    claim: "The Witcher 3 (build 25646871, 5.0.0.1044392) started through the Steam client on the registered D3D12 triplet (shell 0CE9D4F8 = adapter109, engine 15E3E24E, ICD 2A13235D), kernel driver 0.7.193.1 with DPM up to 2000 MHz, desktop composed on the GPU: `steam.exe -applaunch 292030 --launcher-skip` started REDprelauncher after 2 s and witcher3.exe after 4 s, our three modules loaded at 41 s; with no switch set by the trial, the shell took the experiment list from the application profile `HKLM\\SOFTWARE\\amdgpu-wddm\\D3D12\\Applications\\witcher3.exe` and the game rendered with RT at native 1920x1080 (high with RT): 40 s window 9.1 frames/s, median 109.24 ms, p99 197.55 ms, the 3D engine 98.3 % busy at 2000 MHz, every shot correct, no bugcheck, fence timeout or TDR (trial 255; trial 250 with a direct start: 9.3 frames/s). Without `--launcher-skip` the prelauncher installs or runs REDlauncher instead of the game, and with an update pending `-applaunch` runs the update first (trial 254)"
+    status_text: "MEASURED (unit A)"
+    evidence: "[E49](../evidence/windows/2026-10-01-E49-witcher3-steam-start/RESULT.md)"
