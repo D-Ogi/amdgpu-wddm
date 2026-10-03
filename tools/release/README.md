@@ -18,7 +18,7 @@ pwsh -File tools\release\build-release.ps1 [-ControlApp <dir> -ControlAppExe <ex
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
-v0 ships the registered binaries as they run on the lab (KMD 0.7.197.1 re-signed, code unchanged); a rebuild from
+v0 ships the registered binaries as they run on the lab (KMD 0.7.197.1 re-signed, code unchanged, INF DriverVer 0.7.197.100 so that it outranks every lab build and the bound package is identifiable; desktop on the CPU route, DwmForceCpu 1, until BD-058 is fixed); a rebuild from
 the exact commits with `/Brepro` is planned for v1. Install paths differ from the lab's: everything under
 `%ProgramFiles%\amdgpu-wddm`, except the firmware, which the KMD reads from the compiled-in `C:\BC250\firmware`.
 

@@ -33,16 +33,7 @@ if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProces
     & $ps -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @PSBoundParameters
     exit $LASTEXITCODE
 }
-if (-not $DryRun -and -not (Test-IsAdmin)) {
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $MyInvocation.MyCommand.Path + '"'))
-    foreach ($k in $PSBoundParameters.Keys) {
-        $v = $PSBoundParameters[$k]
-        if ($v -is [switch]) { if ($v) { $argList += "-$k" } } else { $argList += "-$k"; $argList += ('"' + [string]$v + '"') }
-    }
-    Write-Host 'Administrator rights are needed: Windows will ask for them now.'
-    Start-Process -FilePath powershell.exe -ArgumentList $argList -Verb RunAs | Out-Null
-    exit 0
-}
+if (-not $DryRun -and -not (Test-IsAdmin)) { Invoke-SelfElevation -ScriptPath $MyInvocation.MyCommand.Path -Bound $PSBoundParameters }
 if (-not $DryRun) {
     [void][IO.Directory]::CreateDirectory($script:StateDir)
     $script:LogPath = Join-Path $script:StateDir ('install-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.log')
@@ -197,7 +188,10 @@ function Invoke-Verify {
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue
     $want = $null
     if ($script:Manifest) { $want = $script:Manifest.kmd_version }
-    Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion), package $want"
+    # The release's DriverVer (x.y.z.100) differs from every lab build, so the bound version names the package.
+    $inf = $null
+    if ($drv) { $inf = $drv.InfName }
+    Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $($drv.DriverProviderName)), package $want"
     $cli = Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'
     if (Test-Path -LiteralPath $cli) {
         $h = (Invoke-Native $cli @('health', 'read')).text.Trim()
@@ -410,12 +404,15 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
 
-# Router policy (HKLM\SOFTWARE\amdgpu-wddm): DWM on the GPU, D3D11 applications on the CPU UMD unless allowed.
-Invoke-Change "$($script:SoftwareKey)\DesktopRouter: CpuUmdPath, DwmForceCpu 0, RequireKmdSwitches 1" {
+# Router policy (HKLM\SOFTWARE\amdgpu-wddm). tester.0 composes the desktop on the CPU route (DwmForceCpu 1, the GPU
+# DWM kit's kill switch): on the GPU route DWM fail-fasts with 0xC00001AD in OpenSharedTexture when a File Explorer
+# window opens (DEFECTS BD-058). The router stays registered and the interop switches stay open, so a later release
+# switches the route by this one value. D3D11 applications run on the CPU UMD unless allowed.
+Invoke-Change "$($script:SoftwareKey)\DesktopRouter: CpuUmdPath, DwmForceCpu 1 (desktop on the CPU route, BD-058), RequireKmdSwitches 1" {
     $k = "$($script:SoftwareKey)\DesktopRouter"
     New-Item -Path $k -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name CpuUmdPath -Value (Join-Path $InstallRoot 'desktop\bc250d3d.dll') -PropertyType String -Force | Out-Null
-    New-ItemProperty -LiteralPath $k -Name DwmForceCpu -Value 0 -PropertyType DWord -Force | Out-Null
+    New-ItemProperty -LiteralPath $k -Name DwmForceCpu -Value 1 -PropertyType DWord -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name RequireKmdSwitches -Value 1 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Invoke-Change "$($script:SoftwareKey)\AppRouter: Mode allowlist, GpuUmdPath d3d11, Allow dxdiag.exe, Deny witcher3.exe" {

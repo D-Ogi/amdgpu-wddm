@@ -47,6 +47,33 @@ function Invoke-Native {
     return @{ text = $text; code = $LASTEXITCODE }
 }
 
+# Restarts the calling script elevated (UAC prompt) and ends this process with exit code 10. Started from a .cmd
+# launcher (AMDGPU_WDDM_LAUNCHER = its full path), the launcher itself is elevated, so the elevated run keeps the
+# launcher's console and its final pause: one result window. The launcher skips its own pause on exit code 10, so
+# the unelevated window closes at once. Never called in a dry run.
+function Invoke-SelfElevation {
+    param([Parameter(Mandatory)][string]$ScriptPath, [Parameter(Mandatory)]$Bound)
+    if ($script:DryRunMode) { throw 'internal error: elevation requested in a dry run' }
+    $args2 = @()
+    # The launcher adds its own fixed arguments again (verify.cmd: -Verify); pass only the others.
+    $fixed = @(([string]$env:AMDGPU_WDDM_LAUNCHER_FIXED) -split ',' | Where-Object { $_ })
+    foreach ($k in $Bound.Keys) {
+        if ($env:AMDGPU_WDDM_LAUNCHER -and $fixed -contains $k) { continue }
+        $v = $Bound[$k]
+        if ($v -is [System.Management.Automation.SwitchParameter]) { if ($v) { $args2 += "-$k" } }
+        else { $args2 += "-$k"; $args2 += ('"' + [string]$v + '"') }
+    }
+    Write-Host 'Administrator rights are needed: Windows will ask for them now.'
+    $launcher = $env:AMDGPU_WDDM_LAUNCHER
+    if ($launcher -and (Test-Path -LiteralPath $launcher)) {
+        if ($args2.Count) { Start-Process -FilePath $launcher -ArgumentList $args2 -Verb RunAs | Out-Null }
+        else { Start-Process -FilePath $launcher -Verb RunAs | Out-Null }
+    } else {
+        Start-Process -FilePath powershell.exe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', ('"' + $ScriptPath + '"')) + $args2) -Verb RunAs | Out-Null
+    }
+    exit 10
+}
+
 function Test-IsAdmin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     return (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)

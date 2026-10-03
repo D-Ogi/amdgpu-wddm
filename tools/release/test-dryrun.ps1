@@ -41,6 +41,10 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $Package 'installer') -File
     $b = [IO.File]::ReadAllBytes($f.FullName)
     Check (-not ($b | Where-Object { $_ -gt 127 } | Select-Object -First 1)) "$($f.Name) is ASCII"
 }
+$m = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
+$inf = [IO.File]::ReadAllText((Join-Path $Package 'payload\kmd\bc250kmd.inf'))
+Check ($inf -match ('(?m)^DriverVer\s*=\s*[\d/]+,' + [regex]::Escape([string]$m.kmd_version) + '\s*$')) "INF DriverVer = manifest kmd_version $($m.kmd_version)"
+Check ([string]$m.version -like "$($m.kmd_version)-*") "release version $($m.version) carries the driver version"
 $before = Get-Footprint
 
 'install -DryRun'
@@ -62,6 +66,7 @@ Check ($r.text -match 'would: set \d+ DWORD values in .*DpmMode=1 DpmMaxMHz=1500
 Check ($r.text -match "would: scheduled task 'amdgpu-wddm start confirm'") 'phase 2 shows the start-confirm task'
 Check ($r.text -match 'would: copy payload\\control') 'phase 2 installs the control application'
 Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
+Check ($r.text -match 'DesktopRouter: CpuUmdPath, DwmForceCpu 1') 'desktop on the CPU route (BD-058)'
 Check ($r.text -match 'Dry run complete') 'walk-through completes'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through: no change, no elevation'
 

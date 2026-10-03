@@ -14,13 +14,7 @@ if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProces
     & (Join-Path $env:windir 'sysnative\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @PSBoundParameters
     exit $LASTEXITCODE
 }
-if (-not $DryRun -and -not (Test-IsAdmin)) {
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $MyInvocation.MyCommand.Path + '"'))
-    foreach ($k in $PSBoundParameters.Keys) { if ($PSBoundParameters[$k]) { $argList += "-$k" } }
-    Write-Host 'Administrator rights are needed: Windows will ask for them now.'
-    Start-Process -FilePath powershell.exe -ArgumentList $argList -Verb RunAs | Out-Null
-    exit 0
-}
+if (-not $DryRun -and -not (Test-IsAdmin)) { Invoke-SelfElevation -ScriptPath $MyInvocation.MyCommand.Path -Bound $PSBoundParameters }
 if (-not $DryRun) { $script:LogPath = Join-Path $env:TEMP ('amdgpu-wddm-uninstall-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.log') }
 
 Write-Host "amdgpu-wddm uninstaller$(if ($DryRun) { ' - DRY RUN, nothing will be changed' })" -ForegroundColor White

@@ -15,7 +15,8 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$Version = '0.7.197.1-tester.0',
+    [string]$DriverVer = '0.7.197.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.197.100-tester.0',
     [string]$KitVersion = '10.0.26100.0'
 )
 $ErrorActionPreference = 'Stop'
@@ -62,6 +63,17 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1') { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 foreach ($f in 'LICENSE.md', 'NOTICE', 'THIRD-PARTY.md') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
+
+Write-Host 'driver version'
+# DriverVer = <date>,$DriverVer in the packaged INF, nothing else changes; the catalog below is made from this INF.
+$infPath = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
+$infText = [IO.File]::ReadAllText($infPath)
+$rx = [regex]'(?m)^(DriverVer\s*=\s*[\d/]+,)(\d+\.\d+\.\d+\.\d+)(\s*)$'
+if ($rx.Matches($infText).Count -ne 1) { throw 'bc250kmd.inf: expected exactly one DriverVer line' }
+$infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $DriverVer + $m.Groups[3].Value })
+[IO.File]::WriteAllText($infPath, $infText)
+if ($infText -notmatch ('(?m)^DriverVer\s*=\s*[\d/]+,' + [regex]::Escape($DriverVer) + '\s*$')) { throw 'DriverVer rewrite failed' }
+'  DriverVer {0}' -f $DriverVer
 
 Write-Host 'sign'
 $kmd = Join-Path $pkg 'payload\kmd'
@@ -122,7 +134,8 @@ $manifest = [ordered]@{
     name = $name
     release = $Version
     version = $Version
-    kmd_version = $sources.kmd_version
+    kmd_version = $DriverVer
+    kmd_build = $sources.kmd_version
     built_utc = [DateTime]::UtcNow.ToString('o')
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe

@@ -159,9 +159,9 @@
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
       "source": "scratch/release/control-app/build/app/amdgpu_wddm_control.exe",
-      "sha256": "06CD159A86DAD20B2CF06B2872461E9FA5BC1100A6B846A24561C9F31F1D942A",
-      "size": 82432,
-      "role": "control application (release/control-app-v0 d374c994)"
+      "sha256": "9CF1323BB04E53733B1E4EBE8A6ADCA3C0FF879B90E4E8E7F89F464D70CB8F5C",
+      "size": 88064,
+      "role": "control application (release/control-app-v0 53901f87)"
     },
     {
       "component": "control",
@@ -169,7 +169,7 @@
       "source": "scratch/release/control-app/build/app/bc250control.dll",
       "sha256": "B0ADE758F6EED612579FF4B45D4C6F9B9D405020D23839B4F7B981EDA6504B13",
       "size": 145920,
-      "role": "control DLL for the control application (d374c994, static CRT)"
+      "role": "control DLL for the control application (53901f87, static CRT)"
     },
     {
       "component": "tool",
