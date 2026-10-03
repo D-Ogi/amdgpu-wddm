@@ -44,7 +44,7 @@
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 160);
 C_ASSERT(BC250_DPM_THROTTLE_COUNT == 8);
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 120);
-C_ASSERT(BC250_DPM_TUNE_COUNT == 7);
+C_ASSERT(BC250_DPM_TUNE_COUNT == 8);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 
@@ -902,8 +902,12 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, BOOLEAN A
                  (!s->Created || s->Decision.mode != BC250_DPM_MODE_DPM || s->GaveUp)) status = STATUS_INVALID_DEVICE_STATE;
         else {
             // Each operation changes its own part and keeps the rest as stored.
-            if (op == BC250_DPM_TUNE_OP_THRESHOLDS) request.floor_level = old.floor_level;
-            else if (op == BC250_DPM_TUNE_OP_FLOOR) {
+            if (op == BC250_DPM_TUNE_OP_THRESHOLDS) {
+                request.floor_level = old.floor_level;
+                request.hot_step_ms = old.hot_step_ms;          // the thermal timing (shim 0.7.197) as stored
+                request.soft_delta_mc = old.soft_delta_mc;
+                request.soft_step_ms = old.soft_step_ms;
+            } else if (op == BC250_DPM_TUNE_OP_FLOOR) {
                 request = old;
                 if (floorLevel < 0) error = BC250_DPM_TUNE_FLOOR;       // not a clock of the table
                 else request.floor_level = (unsigned int)floorLevel;

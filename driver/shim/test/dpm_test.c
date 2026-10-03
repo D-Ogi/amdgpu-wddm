@@ -299,6 +299,11 @@ static void test_no_oscillation(void)
 typedef char dpm_hot_is_87c[(BC250_DPM_HOT_MC == 87000 && BC250_CLOCK_HOT_MC == 87000) ? 1 : -1];
 typedef char dpm_release_is_82c[(BC250_DPM_RELEASE_MC == 82000 && BC250_DPM_HOT_MC - BC250_DPM_RELEASE_MC == 5000) ? 1 : -1];
 typedef char dpm_critical_is_90c[(BC250_DPM_CRITICAL_MC == 90000) ? 1 : -1];
+/* The soft threshold (HOT - delta) lies strictly between RELEASE and HOT for every admitted delta. */
+typedef char dpm_soft_threshold_inside[(BC250_DPM_TUNE_MIN_SOFT_DELTA_MC > 0u &&
+					BC250_DPM_HOT_MC - (int)BC250_DPM_TUNE_MAX_SOFT_DELTA_MC > BC250_DPM_RELEASE_MC) ? 1 : -1];
+/* A soft raise is never faster than the hot step that undoes it. */
+typedef char dpm_soft_slower_than_hot[(BC250_DPM_TUNE_MIN_SOFT_STEP_MS >= BC250_DPM_TUNE_MIN_HOT_STEP_MS) ? 1 : -1];
 
 static void test_thermal(void)
 {
@@ -332,7 +337,9 @@ static void test_thermal(void)
 	CHECK(level == 10 && g.thermal_cap == 10);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
 
-	/* A new episode after a cool spell clamps at once again, at exactly the limit. */
+	/* A new episode after a cool spell clamps at once again, at exactly the limit: the spell has held the cap for
+	 * a hot step since its last raise (0.7.197: a re-entry inside the hot step does not step, test_reentry). */
+	for (i = 0; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 75, 25) == 10);
 	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.thermal_events == 2);
 
 	/* 90 C: the floor at once, whatever the load; recovery goes through release, step by step. 89.999 C is
@@ -426,6 +433,7 @@ static struct bc250_dpm_tune tune(unsigned int up, unsigned int target, unsigned
 				  unsigned int floor_level)
 {
 	struct bc250_dpm_tune t;
+	bc250_dpm_tune_default(&t);	/* the thermal timing at its defaults */
 	t.up_permille = up;
 	t.target_permille = target;
 	t.down_permille = down;
@@ -474,6 +482,7 @@ static void test_tune_check(void)
 	bc250_dpm_tune_default(&d);
 	CHECK(d.up_permille == 900u && d.target_permille == 800u && d.down_permille == 650u && d.down_hold_ms == 200u &&
 	      d.floor_level == 0u);
+	CHECK(d.hot_step_ms == 500u && d.soft_delta_mc == 0u && d.soft_step_ms == 3000u);
 	CHECK(bc250_dpm_tune_check(&d, BC250_DPM_TOP_LEVEL) == BC250_DPM_TUNE_OK);
 	CHECK(bc250_dpm_tune_check(&d, 0) == BC250_DPM_TUNE_OK);        /* a fixed-lab ceiling: no runtime floor is fine */
 	CHECK(ref_lowering(&d) == 1 && ref_raise(&d) == 1);
@@ -512,6 +521,26 @@ static void test_tune_check(void)
 	CHECK(bc250_dpm_tune_check(&t, 0) == BC250_DPM_TUNE_FLOOR);
 	t = tune(900, 800, 650, 200, 11); CHECK(bc250_dpm_tune_check(&t, 99) == BC250_DPM_TUNE_FLOOR);
 	t = tune(900, 800, 650, 200, 6); CHECK(bc250_dpm_tune_check(&t, 6) == BC250_DPM_TUNE_OK);
+	/* The thermal timing (0.7.197): each field at both edges and one past each, the soft delta's 0 (off) admitted. */
+	t = d; t.hot_step_ms = 249; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.hot_step_ms = 250; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.hot_step_ms = 10000; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.hot_step_ms = 10001; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.hot_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 1; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 499; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 500; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 4500; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 4501; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 0x80000000u; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_step_ms = 1999; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_step_ms = 2000; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_step_ms = 30000; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_step_ms = 30001; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	/* The soft step is checked while the release is off, so that turning it on later is the delta alone. */
+	t = d; t.soft_delta_mc = 0; t.soft_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	/* The soft threshold stays strictly inside RELEASE..HOT at both edges of the delta (compile time below). */
 
 	/* set_tune: a refused tune leaves the governor's as it was, an admitted one replaces it. */
 	bc250_dpm_init(&g, 6);
@@ -699,6 +728,219 @@ static void test_floor(void)
 	CHECK(level < 3);
 }
 
+/* ---- the thermal timing (0.7.197, BD-055) ------------------------------------------------------- */
+
+/* A governor at the top under full load with a thermal tune; the tune must be admitted. */
+static void init_thermal(struct bc250_dpm_governor *g, unsigned int hot_step, unsigned int soft_delta, unsigned int soft_step)
+{
+	struct bc250_dpm_tune t;
+	bc250_dpm_init(g, BC250_DPM_TOP_LEVEL);
+	bc250_dpm_tune_default(&t);
+	t.hot_step_ms = hot_step;
+	t.soft_delta_mc = soft_delta;
+	t.soft_step_ms = soft_step;
+	CHECK(bc250_dpm_set_tune(g, &t) == BC250_DPM_TUNE_OK);
+	g->level = BC250_DPM_TOP_LEVEL;
+}
+
+/* A temperature hovering at the limit: in and out of the hot band every other tick. Before 0.7.197 each entry stepped
+ * at once (20 steps in a second here); now steps are at least a hot step apart, as under a steady 87 C. */
+static void test_reentry(void)
+{
+	static const unsigned int steps[] = { 250, 500, 2000 };
+	struct bc250_dpm_governor g;
+	unsigned int s, i, level = 0, last_change = 0, changes, min_gap;
+
+	for (s = 0; s < sizeof(steps) / sizeof(steps[0]); s++) {
+		init_thermal(&g, steps[s], 0, BC250_DPM_SOFT_STEP_MS);
+		changes = 0; min_gap = ~0u; last_change = 0;
+		for (i = 1; i <= 8000u / 25u; i++) {
+			unsigned int before = g.thermal_cap;
+			level = run_mc(&g, 1000, (i & 1u) ? 87000 : 86900, 25);
+			if (g.thermal_cap != before) {
+				CHECK(g.thermal_cap + 1u == before);
+				if (changes && i * 25u - last_change < min_gap) min_gap = i * 25u - last_change;
+				last_change = i * 25u;
+				changes++;
+			}
+		}
+		/* The first entry (t = 0) steps at once, no change since the start; then one per hot step until the last
+		 * tick (t = 7975 ms), bounded by the floor ten levels down. */
+		CHECK(changes == (7975u / steps[s] + 1u < 10u ? 7975u / steps[s] + 1u : 10u));
+		CHECK(min_gap >= steps[s]);
+		CHECK(level == g.thermal_cap && g.thermal_events == 8000u / 25u / 2u);
+	}
+
+	/* A steady 87 C: the same spacing, from the entry. */
+	init_thermal(&g, 2000, 0, BC250_DPM_SOFT_STEP_MS);
+	CHECK(run(&g, 1000, 87, 25) == 9);
+	for (i = 1; i < 2000u / 25u; i++) CHECK(run(&g, 1000, 87, 25) == 9);
+	CHECK(run(&g, 1000, 87, 25) == 8);
+
+	/* A re-entry after a short cool spell inside the hot step: the cap is clamped to the running clock (nothing
+	 * lowered, no raise), and the step follows a hot step after the last change, not after the entry. */
+	init_thermal(&g, 2000, 0, BC250_DPM_SOFT_STEP_MS);
+	CHECK(run(&g, 1000, 87, 25) == 9);                              /* t = 0: step */
+	for (i = 0; i < 1000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);   /* out for 1 s */
+	CHECK(run(&g, 1000, 87, 25) == 9 && g.thermal_cap == 9 && g.thermal_events == 2);
+	for (i = 1; i < 1000u / 25u - 1u; i++) CHECK(run(&g, 1000, 87, 25) == 9);
+	CHECK(run(&g, 1000, 87, 25) == 8);                              /* 2 s after the first step */
+
+	/* The clamp to the running clock: a load below the cap is not raised past the clock it ran at on entry. */
+	init_thermal(&g, 2000, 0, BC250_DPM_SOFT_STEP_MS);
+	g.level = 6; g.cap_ms = 100;                                    /* a raise 100 ms ago */
+	CHECK(run(&g, 1000, 87, 25) == 6 && g.thermal_cap == 6);       /* full load asks more; the clamp holds 6 */
+}
+
+static void test_soft_release(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, level;
+
+	/* Off by default: anywhere in 82..86.999 the cap holds, as before. */
+	init_thermal(&g, 500, 0, 3000);
+	CHECK(run(&g, 1000, 87, 25) == 9);
+	for (i = 0; i < 60000u / 25u; i++) CHECK(run_mc(&g, 1000, 82500, 25) == 9);
+	CHECK(g.soft_releases == 0);
+
+	/* Delta 1.5 C (85.5 C), step 3 s: held below for a whole step without a break, one level. */
+	init_thermal(&g, 500, 1500, 3000);
+	CHECK(run(&g, 1000, 87, 25) == 9);
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run_mc(&g, 1000, 85499, 25) == 9);
+	CHECK(run_mc(&g, 1000, 85499, 25) == 10 && g.soft_releases == 1 && g.thermal_cap == 10);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
+	/* At the threshold itself: no raise. */
+	init_thermal(&g, 500, 1500, 3000);
+	CHECK(run(&g, 1000, 87, 25) == 9);
+	for (i = 0; i < 30000u / 25u; i++) CHECK(run_mc(&g, 1000, 85500, 25) == 9);
+	CHECK(g.soft_releases == 0 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	/* A break restarts the hold: one tick at 85.6 C just before the step. */
+	init_thermal(&g, 500, 1500, 3000);
+	CHECK(run(&g, 1000, 87, 25) == 9);
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);
+	CHECK(run_mc(&g, 1000, 85600, 25) == 9);
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);
+	CHECK(run(&g, 1000, 85, 25) == 10 && g.soft_releases == 1);
+	/* A hot tick restarts it too, and it steps (cap_ms is past the hot step). */
+	init_thermal(&g, 500, 1500, 3000);
+	g.thermal_cap = 8; g.level = 8;
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 8);
+	CHECK(run(&g, 1000, 87, 25) == 7 && g.soft_releases == 0);
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 7);
+	CHECK(run(&g, 1000, 85, 25) == 8 && g.soft_releases == 1);
+	/* The soft path climbs one level per step, all the way up; below 82 C the fast path (1 s) takes over. */
+	init_thermal(&g, 500, 1500, 3000);
+	g.thermal_cap = 4; g.level = 4;
+	for (i = 0; i < 6u * 3000u / 25u; i++) level = run(&g, 1000, 84, 25);
+	CHECK(level == 10 && g.soft_releases == 6);
+	g.thermal_cap = 4; g.level = 4; g.soft_ms = 0;
+	for (i = 0; i < 6u * 1000u / 25u; i++) level = run(&g, 1000, 81, 25);
+	CHECK(level == 10 && g.soft_releases == 6);
+	/* The widest delta (82.5 C) and the narrowest (86.5 C). */
+	init_thermal(&g, 500, 4500, 2000);
+	g.thermal_cap = 8; g.level = 8;
+	for (i = 0; i < 2000u / 25u; i++) level = run_mc(&g, 1000, 82499, 25);
+	CHECK(level == 9);
+	init_thermal(&g, 500, 500, 2000);
+	g.thermal_cap = 8; g.level = 8;
+	for (i = 0; i < 2000u / 25u; i++) level = run_mc(&g, 1000, 86499, 25);
+	CHECK(level == 9);
+	/* Critical goes to the floor; the soft release brings it back, a level per step, never past the setting. */
+	bc250_dpm_init(&g, 6);
+	{
+		struct bc250_dpm_tune t;
+		bc250_dpm_tune_default(&t); t.soft_delta_mc = 1500;
+		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	}
+	CHECK(run(&g, 1000, 90, 25) == 0);
+	for (i = 0; i < 20u * 3000u / 25u; i++) level = run(&g, 1000, 85, 25);
+	CHECK(level == 6 && g.thermal_cap == 6 && g.soft_releases == 6);
+	/* A missing sensor resets the hold as critical does. */
+	init_thermal(&g, 500, 1500, 3000);
+	g.thermal_cap = 8; g.level = 8;
+	for (i = 1; i < 3000u / 25u; i++) run(&g, 1000, 85, 25);
+	{
+		struct bc250_dpm_input in = tick(1000, 60, 25);
+		in.temperature_valid = 0;
+		level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+	}
+	CHECK(level == 0 && g.soft_ms == 0 && g.soft_releases == 0);
+}
+
+/* A synthetic plant: the hot spot is a fast node (3 s, 20 C of the full-power rise) over a heat sink (60 s, 29.5 C)
+ * at 40 C, the power is f x V^2 of the level times a scene factor, and the sensor carries +-0.4 C of noise. Its
+ * constants are not the lab's: they put 2000 MHz above the limit (89.5 C) and 1900 MHz under it (85.5 C) at the base
+ * scene, with a heavier scene (+12 % power, 20 s of every 60 s) that needs 1800 MHz (86.8 C), so that a scene change
+ * pushes the hot spot past 87 C and leaves it in the 82..87 band afterwards (the shape of sessions 318, 320 and 321).
+ * Returns the mean clock over minutes 2-10, the peak reading and the change counts. */
+struct plant_result { unsigned int mean_mhz, peak_mc, changes, soft_releases, thermal_events, cap_changes, min_cap_gap_ms; };
+
+static struct plant_result plant_run(unsigned int hot_step, unsigned int soft_delta, unsigned int soft_step)
+{
+	struct bc250_dpm_governor g;
+	struct plant_result r;
+	double sink = 40.0, die = 40.0;
+	unsigned long long mhz_sum = 0;
+	unsigned int i, n = 0, seed = 12345u, last, cap_change_ms = 0;
+	const unsigned int ticks = 600000u / 25u;
+
+	memset(&r, 0, sizeof(r));
+	init_thermal(&g, hot_step, soft_delta, soft_step);
+	last = g.level;
+	r.min_cap_gap_ms = ~0u;
+	for (i = 0; i < ticks; i++) {
+		unsigned int cap_before = g.thermal_cap;
+		double v = bc250_dpm_level_mv(g.level) / 1000.0;
+		double p = bc250_dpm_level_mhz(g.level) / 2000.0 * v * v * ((i * 25u) % 60000u < 20000u ? 1.12 : 1.0);
+		int sensor;
+		seed = seed * 1103515245u + 12345u;
+		sink += (40.0 + 29.5 * p - sink) * 0.025 / 60.0;
+		die += (sink + 20.0 * p - die) * 0.025 / 3.0;
+		sensor = (int)(die * 1000.0) + (int)((seed >> 16) % 801u) - 400;
+		run_mc(&g, 1000, sensor, 25);
+		if (g.level != last) { r.changes++; last = g.level; }
+		if (g.thermal_cap != cap_before) {
+			if (r.cap_changes && i * 25u - cap_change_ms < r.min_cap_gap_ms) r.min_cap_gap_ms = i * 25u - cap_change_ms;
+			cap_change_ms = i * 25u;
+			r.cap_changes++;
+		}
+		if (sensor > (int)r.peak_mc) r.peak_mc = (unsigned int)sensor;
+		if (i >= 120000u / 25u) { mhz_sum += bc250_dpm_level_mhz(g.level); n++; }
+	}
+	r.mean_mhz = (unsigned int)(mhz_sum / n);
+	r.soft_releases = g.soft_releases;
+	r.thermal_events = g.thermal_events;
+	return r;
+}
+
+static void plant_print(const char *name, const struct plant_result *r)
+{
+	printf("plant %-26s mean %u MHz, peak %u mC, %u level changes, %u cap changes (min gap %u ms), %u hot entries, "
+	       "%u soft raises\n", name, r->mean_mhz, r->peak_mc, r->changes, r->cap_changes,
+	       r->cap_changes > 1u ? r->min_cap_gap_ms : 0u, r->thermal_events, r->soft_releases);
+}
+
+static void test_plant(void)
+{
+	struct plant_result legacy = plant_run(500, 0, 3000), slow = plant_run(2000, 0, 3000),
+			    soft = plant_run(500, 1500, 3000), both = plant_run(2000, 1500, 3000);
+	plant_print("hot 500, soft off:", &legacy);
+	plant_print("hot 2000, soft off:", &slow);
+	plant_print("hot 500, soft 1.5 C/3 s:", &soft);
+	plant_print("hot 2000, soft 1.5 C/3 s:", &both);
+	/* The legacy rule latches: no soft raise, so the clock the first scene change left stays. */
+	CHECK(legacy.soft_releases == 0 && legacy.mean_mhz <= 1820u);
+	/* The proposed rule recovers between heavy scenes, without critical, within a degree of the limit, and with
+	 * cap changes at least two seconds apart (the direction's "at most one cap change per 2 s"). */
+	CHECK(both.soft_releases > 0 && both.mean_mhz >= legacy.mean_mhz + 50u);
+	CHECK(both.peak_mc < 88000u && legacy.peak_mc < 88000u);
+	CHECK(both.min_cap_gap_ms >= 2000u);
+	CHECK(both.changes <= 30u * 10u);
+	/* The 2 s hot step is what spaces them: with the soft release on a 500 ms hot step the cap churns more. */
+	CHECK(soft.min_cap_gap_ms < 2000u && both.cap_changes < soft.cap_changes);
+	CHECK(slow.min_cap_gap_ms >= 2000u);
+}
+
 /* The busy source: GRBM samples when there are enough, the submit accounting otherwise. */
 static void test_busy_source(void)
 {
@@ -740,6 +982,9 @@ int main(void)
 	test_tune_check();
 	test_tune_no_oscillation();
 	test_floor();
+	test_reentry();
+	test_soft_release();
+	test_plant();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }
