@@ -157,6 +157,8 @@ typedef struct _BC250_WDDM_KIND {
 } BC250_WDDM_KIND;
 
 #include "gdi_private.h"
+#define BC250_ADMISSION_COUNT(p) ((void)InterlockedIncrement(p))
+#include "gdi_admission.h"
 #include "surface_resource_private.h"
 #include "present_range.h"
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
@@ -423,6 +425,7 @@ typedef struct _BC250_WDDM {
 
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
     volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
+    BC250_STDALLOC_COUNTERS StdAlloc;          // BD-060: standard allocation requests/answers, LB7A create/open
     BOOLEAN BlitGate;
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
@@ -1846,6 +1849,48 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
 //
 // Read without the lock: every counter here is interlocked or write-once, the numbers are evidence rather than
 // control flow, and a summary that took the lock could not be asked for from a DPC-level path later.
+// BD-060: standard allocations by kind, GDI surfaces by type, CreateAllocation calls by outcome (gdi_admission.h).
+// Rows with nothing in them are left out; the head, call and mask lines are always there, so a missing row means
+// zero. Worst case 148 of the 160 bytes of a line.
+static void WddmStdAllocSummary(_In_ BC250_WDDM* Wddm)
+{
+    static const char* const kinds[BC250_STDALLOC_KINDS] = {
+        "other", "primary", "shadow", "staging", "gdi", "vgpu", "fence" };
+    const BC250_STDALLOC_COUNTERS* c = &Wddm->StdAlloc;
+    BC250_GDI_MASKS m;
+    ULONG i;
+
+    GuardLog("wddm summary: ---- standard allocations; refused flags/type/geom/buf/input ----");
+    for (i = 0; i < BC250_STDALLOC_KINDS; i++)
+        if (c->Requests[i][0] || c->Requests[i][1])
+            GuardLog("wddm summary: stdalloc %s size/fill %ld/%ld ok %ld refused %ld/%ld/%ld/%ld/%ld", kinds[i],
+                     c->Requests[i][0], c->Requests[i][1], c->Answers[i][BC250_STDALLOC_OK],
+                     c->Answers[i][BC250_STDALLOC_FLAGS], c->Answers[i][BC250_STDALLOC_TYPE],
+                     c->Answers[i][BC250_STDALLOC_GEOMETRY], c->Answers[i][BC250_STDALLOC_BUFFER],
+                     c->Answers[i][BC250_STDALLOC_INPUT]);
+    for (i = 0; i < BC250_GDI_SLOTS; i++) {
+        if (c->GdiRequests[i][0] || c->GdiRequests[i][1])
+            GuardLog("wddm summary: gdi type %lu size/fill %ld/%ld ok %ld refused %ld/%ld/%ld/%ld/%ld", i,
+                     c->GdiRequests[i][0], c->GdiRequests[i][1], c->GdiAnswers[i][BC250_STDALLOC_OK],
+                     c->GdiAnswers[i][BC250_STDALLOC_FLAGS], c->GdiAnswers[i][BC250_STDALLOC_TYPE],
+                     c->GdiAnswers[i][BC250_STDALLOC_GEOMETRY], c->GdiAnswers[i][BC250_STDALLOC_BUFFER],
+                     c->GdiAnswers[i][BC250_STDALLOC_INPUT]);
+        if (c->GdiCreated[i][0] || c->GdiCreated[i][1] || c->GdiCreated[i][2] || c->GdiOpened[i][0] || c->GdiOpened[i][1])
+            GuardLog("wddm summary: lb7a type %lu create ok/refused/rolled-back %ld/%ld/%ld open ok/refused %ld/%ld", i,
+                     c->GdiCreated[i][BC250_CREATE_CREATED], c->GdiCreated[i][BC250_CREATE_REFUSED],
+                     c->GdiCreated[i][BC250_CREATE_ROLLED_BACK], c->GdiOpened[i][0], c->GdiOpened[i][1]);
+    }
+    GuardLog("wddm summary: CreateAllocation calls ok %ld resource-data %ld invalid %ld no-memory %ld",
+             c->CreateCalls[BC250_CREATE_OK], c->CreateCalls[BC250_CREATE_RESOURCE_DATA],
+             c->CreateCalls[BC250_CREATE_INVALID], c->CreateCalls[BC250_CREATE_NO_MEMORY]);
+    // One line a deploy-kit gate can assert on after DWM started: refused standard GDI types == 0x000. A zero
+    // create mask says nothing about calls that failed before any allocation: read the calls line beside it.
+    Bc250GdiMasks(c, &m);
+    GuardLog("wddm summary: gdi type masks requested 0x%03lX refused 0x%03lX create-refused 0x%03lX "
+             "rolled-back 0x%03lX open-refused 0x%03lX", m.Requested, m.Refused, m.CreateRefused,
+             m.CreateRolledBack, m.OpenRefused);
+}
+
 static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
 {
     ULONG i;
@@ -1904,6 +1949,7 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                      indexed, alive, misses);
     }
     GuardLog("wddm summary: allocations opened/closed: %ld/%ld calls", Wddm->Calls[WddmDdiOpenAllocation], Wddm->Calls[WddmDdiCloseAllocation]);
+    WddmStdAllocSummary(Wddm);
     GuardLog("wddm summary: submissions %ld physical + %ld virtual, %ld preemptions, last completed fence %ld",
              Wddm->Calls[WddmDdiSubmitCommand], Wddm->Calls[WddmDdiSubmitCommandVirtual],
              Wddm->Calls[WddmDdiPreemptCommand], Wddm->LastCompletedFence);
@@ -3220,6 +3266,10 @@ C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
 C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
 C_ASSERT(D3DKMDT_GDISURFACE_LOOKUPTABLE==4);
 C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE_CPUVISIBLE_CROSSADAPTER==8);
+C_ASSERT(D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE==BC250_STDALLOC_PRIMARY);
+C_ASSERT(D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE==BC250_STDALLOC_SHADOW);
+C_ASSERT(D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE==BC250_STDALLOC_STAGING);
+C_ASSERT(D3DKMDT_STANDARDALLOCATION_GDISURFACE==BC250_STDALLOC_GDI);
 // The shared format table and surface_format.h are plain integers; these tie them to the WDK's D3DDDIFORMAT.
 C_ASSERT(AMDGPU_WDDM_D3DDDI_A8R8G8B8==D3DDDIFMT_A8R8G8B8);
 C_ASSERT(AMDGPU_WDDM_D3DDDI_X8R8G8B8==D3DDDIFMT_X8R8G8B8);
@@ -3234,111 +3284,101 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
                                                          _Inout_ DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA* pData)
 {
     BC250_WDDM* wddm = WddmOf(hAdapter);
-    BC250_WDDM_ALLOCATION_PRIVATE private;
+    BC250_STDALLOC_REQUEST request;
+    BC250_STDALLOC_ANSWER answer;
     BC250_GDI_PRIVATE gdi;
-    BC250_GDI_ALLOCATION_POLICY gdiPolicy;
-    UINT privateBytes=sizeof(private);
+    int status;
 
-    RtlZeroMemory(&private, sizeof(private));
-    private.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
-    private.Version = 1;
+    RtlZeroMemory(&request, sizeof(request));
+    request.Kind = (ULONG)pData->StandardAllocationType;
+    request.Fill = pData->pAllocationPrivateDriverData != NULL;
+    request.Bytes = request.Fill ? pData->AllocationPrivateDriverDataSize : 0;
+    switch (pData->StandardAllocationType)
+    {
+    case D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE:
+        if ((request.Described = pData->pCreateSharedPrimarySurfaceData != NULL) != 0) {
+            request.Width = pData->pCreateSharedPrimarySurfaceData->Width;
+            request.Height = pData->pCreateSharedPrimarySurfaceData->Height;
+            request.Format = (ULONG)pData->pCreateSharedPrimarySurfaceData->Format;
+        }
+        break;
+    case D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE:
+        if ((request.Described = pData->pCreateShadowSurfaceData != NULL) != 0) {
+            request.Width = pData->pCreateShadowSurfaceData->Width;
+            request.Height = pData->pCreateShadowSurfaceData->Height;
+            request.Format = (ULONG)pData->pCreateShadowSurfaceData->Format;
+        }
+        break;
+    case D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE:
+        if ((request.Described = pData->pCreateStagingSurfaceData != NULL) != 0) {
+            request.Width = pData->pCreateStagingSurfaceData->Width;
+            request.Height = pData->pCreateStagingSurfaceData->Height;
+        }
+        break;
+    case D3DKMDT_STANDARDALLOCATION_GDISURFACE:
+        if ((request.Described = pData->pCreateGdiSurfaceData != NULL) != 0) {
+            request.Width = pData->pCreateGdiSurfaceData->Width;
+            request.Height = pData->pCreateGdiSurfaceData->Height;
+            request.Format = (ULONG)pData->pCreateGdiSurfaceData->Format;
+            request.GdiType = (ULONG)pData->pCreateGdiSurfaceData->Type;
+            request.GdiFlags = pData->pCreateGdiSurfaceData->Flags.Value;
+        }
+        break;
+    default:
+        break;
+    }
+    // BD-060: counted on entry, before anything can refuse (Codex 900: Calls[] below advances on success only).
+    if (wddm != NULL) Bc250StdAllocEnter(&wddm->StdAlloc, &request);
 
     // Retain the CDD/DWM allocation contract independently of the shared first-DDI
     // log budget: primary/shadow requests can exhaust it before a GDI request.
     // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
     // Separate the size query from the private-data fill, at most20 lines per start.
-    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE && pData->pCreateGdiSurfaceData != NULL)
+    if (wddm != NULL && request.Kind == BC250_STDALLOC_GDI && request.Described)
     {
-        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
-        ULONG slot = type <= 8 ? type : 9;
-        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
-        LONG bit = (LONG)(1u << (slot * 2 + fill));
+        ULONG slot = Bc250GdiSlot(request.GdiType);
+        LONG bit = (LONG)(1u << (slot * 2 + (ULONG)request.Fill));
         if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
             GuardLog("wddm: GDI request type %u flags 0x%08X phase %s %ux%u format %u",
-                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
-                     pData->pCreateGdiSurfaceData->Width, pData->pCreateGdiSurfaceData->Height,
-                     (ULONG)pData->pCreateGdiSurfaceData->Format);
+                     request.GdiType, request.GdiFlags, request.Fill ? "fill" : "size",
+                     request.Width, request.Height, request.Format);
     }
 
-    switch (pData->StandardAllocationType)
-    {
-    case D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE:
-        if (pData->pCreateSharedPrimarySurfaceData == NULL) return STATUS_INVALID_PARAMETER;
-        private.Width = pData->pCreateSharedPrimarySurfaceData->Width;
-        private.Height = pData->pCreateSharedPrimarySurfaceData->Height;
-        private.Format = (ULONG)pData->pCreateSharedPrimarySurfaceData->Format;
-        break;
-    case D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE:
-        if (pData->pCreateShadowSurfaceData == NULL) return STATUS_INVALID_PARAMETER;
-        private.Width = pData->pCreateShadowSurfaceData->Width;
-        private.Height = pData->pCreateShadowSurfaceData->Height;
-        private.Format = (ULONG)pData->pCreateShadowSurfaceData->Format;
-        break;
-    case D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE:
-        if (pData->pCreateStagingSurfaceData == NULL) return STATUS_INVALID_PARAMETER;
-        private.Width = pData->pCreateStagingSurfaceData->Width;
-        private.Height = pData->pCreateStagingSurfaceData->Height;
-        private.Format = (ULONG)D3DDDIFMT_A8R8G8B8;
-        break;
-    case D3DKMDT_STANDARDALLOCATION_GDISURFACE:
-        if (pData->pCreateGdiSurfaceData == NULL) return STATUS_INVALID_PARAMETER;
-        if (pData->pCreateGdiSurfaceData->Flags.Value ||
-            !pData->pCreateGdiSurfaceData->Type ||
-            !WddmGdiAllocationPolicy((ULONG)pData->pCreateGdiSurfaceData->Type,0,0,&gdiPolicy))
-            return STATUS_INVALID_PARAMETER;
-        privateBytes=sizeof(gdi);
-        private.Width = pData->pCreateGdiSurfaceData->Width;
-        private.Height = pData->pCreateGdiSurfaceData->Height;
-        private.Format = (ULONG)pData->pCreateGdiSurfaceData->Format;
-        break;
-    default:
-        return STATUS_INVALID_PARAMETER;
-    }
-    // Standard GDI textures are opened by the DWM UMD. Its LB7A OpenResource
-    // contract needs pitch alignment and a four-row-padded allocation, just like
-    // the UMD-created shared textures. Logical Width/Height remain unchanged.
-    // Staging uses its format size and the advertised four-byte row alignment.
-    {
-        if (pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE) {
-            if (!WddmGdiLayout(private.Width,private.Height,(ULONG)pData->pCreateGdiSurfaceData->Type,
-                    WddmSurfaceFormatBpp(private.Format,BC250_SURFACE_GDI),&private.Pitch,&private.Size))
-                return STATUS_INVALID_PARAMETER;
-        } else {
-            if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
-            private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
-                DcnPrimaryPitch(private.Width):private.Width*4;
-            if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
-        }
-    }
+    status = Bc250StdAllocDecide(&request, &answer);
+    if (wddm != NULL) Bc250StdAllocLeave(&wddm->StdAlloc, &request, status);
+    if (status != BC250_STDALLOC_OK) return STATUS_INVALID_PARAMETER;
+
     // These are output fields, not just copies in our private LB7A blob.
-    // E26 ETW rejected shadow/staging creation when the public pitch was zero.
-    if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE)
-        pData->pCreateShadowSurfaceData->Pitch = private.Pitch;
-    else if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE)
-        pData->pCreateStagingSurfaceData->Pitch = private.Pitch;
-    else if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
-        pData->pCreateGdiSurfaceData->Pitch = private.Pitch;
+    // E26 ETW rejected shadow/staging creation when the public pitch was zero. The size query leaves the union
+    // as it came (d3dkmddi.md:32953); the fill, which precedes CreateAllocation, publishes the pitch.
+    if (answer.PublishPitch) {
+        if (request.Kind == BC250_STDALLOC_SHADOW)
+            pData->pCreateShadowSurfaceData->Pitch = answer.Surface.Pitch;
+        else if (request.Kind == BC250_STDALLOC_STAGING)
+            pData->pCreateStagingSurfaceData->Pitch = answer.Surface.Pitch;
+        else if (request.Kind == BC250_STDALLOC_GDI)
+            pData->pCreateGdiSurfaceData->Pitch = answer.Surface.Pitch;
+    }
 
     // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
-    if (pData->pAllocationPrivateDriverData != NULL)
+    if (request.Fill)
     {
-        if (pData->AllocationPrivateDriverDataSize < privateBytes) return STATUS_INVALID_PARAMETER;
-        if (privateBytes==sizeof(gdi)) {
-            RtlZeroMemory(&gdi,sizeof(gdi));
-            gdi.Surface=private;
-            gdi.Magic=BC250_GDI_PRIVATE_MAGIC;
-            gdi.Type=(ULONG)pData->pCreateGdiSurfaceData->Type;
-            gdi.Flags=pData->pCreateGdiSurfaceData->Flags.Value;
-            RtlCopyMemory(pData->pAllocationPrivateDriverData,&gdi,sizeof(gdi));
-        } else RtlCopyMemory(pData->pAllocationPrivateDriverData,&private,sizeof(private));
+        if (answer.PrivateBytes == sizeof(gdi)) {
+            RtlZeroMemory(&gdi, sizeof(gdi));
+            gdi.Surface = answer.Surface;
+            gdi.Magic = BC250_GDI_PRIVATE_MAGIC;
+            gdi.Type = request.GdiType;
+            gdi.Flags = request.GdiFlags;
+            RtlCopyMemory(pData->pAllocationPrivateDriverData, &gdi, sizeof(gdi));
+        } else RtlCopyMemory(pData->pAllocationPrivateDriverData, &answer.Surface, sizeof(answer.Surface));
     }
-    pData->AllocationPrivateDriverDataSize = privateBytes;
+    pData->AllocationPrivateDriverDataSize = answer.PrivateBytes;
     pData->pResourcePrivateDriverData = NULL;
     pData->ResourcePrivateDriverDataSize = 0;
 
     if (WddmFirstCalls(wddm, WddmDdiGetStandardAllocationDriverData))
         GuardLog("wddm: GetStandardAllocationDriverData type %u %ux%u format %u -> %llu bytes",
-                 (ULONG)pData->StandardAllocationType, private.Width, private.Height, private.Format, private.Size);
+                 request.Kind, answer.Surface.Width, answer.Surface.Height, answer.Surface.Format, answer.Surface.Size);
     return STATUS_SUCCESS;
 }
 
@@ -3375,149 +3415,182 @@ static NTSTATUS WddmSurfaceResourcePolicy(const void* Data, UINT Bytes,
     return valid ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
 }
 
-static DXGKDDI_CREATEALLOCATION Bc250WddmCreateAllocation;
-static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_CREATEALLOCATION* pCreateAllocation)
+// CreateAllocation's per-allocation work, as the operations of Bc250CreateRun (gdi_admission.h), which owns the loop,
+// the resource object and the rollback, so that the rollback paths are host-tested with injected failures and every
+// call is counted by its final outcome (Codex 904).
+typedef struct _BC250_CREATE_CALL {
+    BC250_DEVICE* Device;
+    BC250_WDDM* Wddm;
+    DXGKARG_CREATEALLOCATION* Args;
+    BOOLEAN SharedCpu, CachedCpu;
+} BC250_CREATE_CALL;
+
+static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Slot)
 {
-    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
-    BC250_WDDM* wddm = WddmOf(hAdapter);
-    UINT i;
-    BOOLEAN sharedCpu = FALSE, cachedCpu = FALSE;
-    NTSTATUS resourceStatus=WddmSurfaceResourcePolicy(pCreateAllocation->pPrivateDriverData,
-        pCreateAllocation->PrivateDriverDataSize,&sharedCpu,&cachedCpu);
-    if (!NT_SUCCESS(resourceStatus)) return resourceStatus;
+    BC250_CREATE_CALL* call = (BC250_CREATE_CALL*)Context;
+    DXGKARG_CREATEALLOCATION* pCreateAllocation = call->Args;
+    BC250_DEVICE* device = call->Device;
+    BC250_WDDM* wddm = call->Wddm;
+    UINT i = (UINT)Index;
+    DXGK_ALLOCATIONINFO* info = &pCreateAllocation->pAllocationInfo[i];
+    const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
+    BC250_WDDM_OBJECT* object;
+    ULONG gdiType=0;
+    BC250_GDI_ALLOCATION_POLICY policy;
+    int admission;
 
-    for (i = 0; i < pCreateAllocation->NumAllocations; i++)
+    if (info->PrivateDriverDataSize == sizeof(BC250_WDDM_ALLOCATION_PRIVATE) && private != NULL &&
+        private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && private->Width == 64 && private->Height == 32)
+        GuardLog("wddm: E26 shared control allocation reached KMD flags %x allocation flags %x bytes %llu format %u",
+                 pCreateAllocation->Flags.Value, info->FlagsWddm2.Value, private->Size, private->Format);
+
+    // M8: "BC2A" is a UMD allocation, beside the GDI "LB7A" below. The two magics differ on purpose.
+    // requested_va is stored on the object and not programmed here: the winsys maps it afterwards.
+    if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
     {
-        DXGK_ALLOCATIONINFO* info = &pCreateAllocation->pAllocationInfo[i];
-        const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
-        BC250_WDDM_OBJECT* object;
-        ULONG gdiType=0;
-        BC250_GDI_ALLOCATION_POLICY policy;
+        struct umd_alloc_view view;
+        int st = UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view);
+        UINT segment;
+        UINT align;
 
-        if (info->PrivateDriverDataSize == sizeof(BC250_WDDM_ALLOCATION_PRIVATE) && private != NULL &&
-            private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && private->Width == 64 && private->Height == 32)
-            GuardLog("wddm: E26 shared control allocation reached KMD flags %x allocation flags %x bytes %llu format %u",
-                     pCreateAllocation->Flags.Value, info->FlagsWddm2.Value, private->Size, private->Format);
-
-        // M8: "BC2A" is a UMD allocation, beside the GDI "LB7A" below. The two magics differ on purpose.
-        // requested_va is stored on the object and not programmed here: the winsys maps it afterwards.
-        if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
+        if (st != UMD_BLOB_OK || !g_ApertureOffered)
         {
-            struct umd_alloc_view view;
-            int st = UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view);
-            UINT segment;
-            UINT align;
-
-            if (st != UMD_BLOB_OK || !g_ApertureOffered)
-            {
-                if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocRefused) <= BC250_WDDM_LOG_CALLS)
-                    GuardLog("wddm: umd alloc refused, %s, private %u, segment %s",
-                             st != UMD_BLOB_OK ? UmdBlobStatusText(st) : "no segment",
-                             info->PrivateDriverDataSize, g_ApertureOffered ? "yes" : "no");
-                while (i-- > 0) WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
-                return STATUS_INVALID_PARAMETER;
-            }
-            object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
-            if (object == NULL)
-            {
-                while (i-- > 0) WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
-                return STATUS_INSUFFICIENT_RESOURCES;
-            }
-            object->UmdAlloc = TRUE;
-            object->UmdBytes = view.bytes;
-            object->UmdHeap = view.heap;
-            object->UmdRequestedVa = view.requested_va;
-            // KMD193: kept for the DESTROY journal record. 245's four freed objects carried UmdAlloc, UmdHeap
-            // and UmdBytes and still could not say which process had asked for them or with what intent.
-            object->UmdBlobVersion = view.version;
-            object->UmdGemFlags = view.gem_flags;
-            object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
-            segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
-            align = 4096;
-            if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
-                align = (UINT)view.alignment;
-            info->hAllocation = object;
-            info->Size = (SIZE_T)ROUND_TO_PAGES((SIZE_T)view.bytes);
-            info->Alignment = align;
-            info->HintedBank.Value = 0;
-            info->MaximumRenamingListLength = 0;
-            info->pAllocationUsageHint = NULL;
-            info->PitchAlignedSize = 0;
-            info->PreferredSegment.Value = 0;
-            info->PreferredSegment.SegmentId0 = segment;
-            info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
-            info->SupportedWriteSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
-            info->EvictionSegmentSet = 0;
-            info->PhysicalAdapterIndex = 0;
-            WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
-            // RADV's CPU_GTT_USWC requests write-combined storage; without it,
-            // CPU-accessible GTT requires cached backing store. VidMm supplies
-            // CacheCoherent PTEs, which the encoder maps to AMDGPU_PTE_SNOOPED.
-            info->FlagsWddm2.Cached = (UINT)UmdBlobAllocCpuCached(&view);
-            info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
-            if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
-                GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u", view.bytes, view.heap, align,
-                         view.requested_va,view.gem_flags,info->FlagsWddm2.Cached);
-            continue;
+            if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocRefused) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: umd alloc refused, %s, private %u, segment %s",
+                         st != UMD_BLOB_OK ? UmdBlobStatusText(st) : "no segment",
+                         info->PrivateDriverDataSize, g_ApertureOffered ? "yes" : "no");
+            return BC250_CREATE_STEP_REFUSED;
         }
-
-        // Stage A can only size an allocation it described itself. An unknown blob is an honest failure: nothing
-        // in the never-fail list reaches this DDI, and guessing a size would put VidMm and us out of step.
-        if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
-            private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
-            !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
-            !WddmSurfaceAdmitted(private,gdiType) ||
-            !WddmGdiAllocationPolicy(gdiType,sharedCpu,cachedCpu,&policy) ||
-            (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
-        {
-            if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
-                GuardLog("wddm: CreateAllocation %u of %u refused, private data %u bytes", i,
-                         pCreateAllocation->NumAllocations, info->PrivateDriverDataSize);
-            while (i-- > 0) WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
-            return STATUS_INVALID_PARAMETER;
-        }
-
         object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
-        if (object == NULL)
-        {
-            while (i-- > 0) WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
-        object->Allocation = *private;
-        object->GdiType=gdiType;
-        // WDK26100: standard texture/staging/lookup surfaces are GPU-only;
-        // CPU staging uses coherent aperture. Legacy type0 keeps its policy.
+        if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
+        object->UmdAlloc = TRUE;
+        object->UmdBytes = view.bytes;
+        object->UmdHeap = view.heap;
+        object->UmdRequestedVa = view.requested_va;
+        // KMD193: kept for the DESTROY journal record. 245's four freed objects carried UmdAlloc, UmdHeap
+        // and UmdBytes and still could not say which process had asked for them or with what intent.
+        object->UmdBlobVersion = view.version;
+        object->UmdGemFlags = view.gem_flags;
+        object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
+        segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
+        align = 4096;
+        if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
+            align = (UINT)view.alignment;
         info->hAllocation = object;
-        info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
-        // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
-        // reference drivers do (Alignment 64 is theirs too).
-        info->Alignment = 64;
+        info->Size = (SIZE_T)ROUND_TO_PAGES((SIZE_T)view.bytes);
+        info->Alignment = align;
         info->HintedBank.Value = 0;
         info->MaximumRenamingListLength = 0;
         info->pAllocationUsageHint = NULL;
-        info->PitchAlignedSize = 0;                     // the aperture segment is not a pitch-aligned one
+        info->PitchAlignedSize = 0;
         info->PreferredSegment.Value = 0;
-        info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
-        info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
-        info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
-        info->EvictionSegmentSet = 0;                   // no explicit eviction segment; VidMm owns backing-store eviction
+        info->PreferredSegment.SegmentId0 = segment;
+        info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
+        info->SupportedWriteSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
+        info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
-        info->FlagsWddm2.CpuVisible = policy.CpuVisible;
-        info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
-        info->FlagsWddm2.Cached = policy.Cached;
+        // RADV's CPU_GTT_USWC requests write-combined storage; without it,
+        // CPU-accessible GTT requires cached backing store. VidMm supplies
+        // CacheCoherent PTEs, which the encoder maps to AMDGPU_PTE_SNOOPED.
+        info->FlagsWddm2.Cached = (UINT)UmdBlobAllocCpuCached(&view);
         info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
+        if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u", view.bytes, view.heap, align,
+                     view.requested_va,view.gem_flags,info->FlagsWddm2.Cached);
+        return BC250_CREATE_STEP_ADMITTED;
     }
-    if (pCreateAllocation->Flags.Resource && pCreateAllocation->hResource == NULL)
+
+    // Stage A can only size an allocation it described itself. An unknown blob is an honest failure: nothing
+    // in the never-fail list reaches this DDI, and guessing a size would put VidMm and us out of step.
+    admission = Bc250Lb7aAdmit(info->pPrivateDriverData, info->PrivateDriverDataSize, call->SharedCpu, call->CachedCpu,
+                               g_ApertureOffered, &gdiType, &policy);
+    *Slot = admission == BC250_LB7A_UNREAD ? BC250_GDI_SLOTS - 1 : Bc250GdiSlot(gdiType);
+    if (admission != BC250_LB7A_ADMITTED)
     {
-        pCreateAllocation->hResource = WddmNewObject(device, BC250_WDDM_MAGIC_RESOURCE);
-        if (pCreateAllocation->hResource == NULL)
-        {
-            for (i = 0; i < pCreateAllocation->NumAllocations; i++)
-                WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
+        if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
+            GuardLog("wddm: CreateAllocation %u of %u refused, private data %u bytes", i,
+                     pCreateAllocation->NumAllocations, info->PrivateDriverDataSize);
+        return BC250_CREATE_STEP_REFUSED;
     }
+
+    object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
+    if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
+    object->Allocation = *private;
+    object->GdiType=gdiType;
+    // WDK26100: standard texture/staging/lookup surfaces are GPU-only;
+    // CPU staging uses coherent aperture. Legacy type0 keeps its policy.
+    info->hAllocation = object;
+    info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
+    // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
+    // reference drivers do (Alignment 64 is theirs too).
+    info->Alignment = 64;
+    info->HintedBank.Value = 0;
+    info->MaximumRenamingListLength = 0;
+    info->pAllocationUsageHint = NULL;
+    info->PitchAlignedSize = 0;                     // the aperture segment is not a pitch-aligned one
+    info->PreferredSegment.Value = 0;
+    info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
+    info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
+    info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
+    info->EvictionSegmentSet = 0;                   // no explicit eviction segment; VidMm owns backing-store eviction
+    info->PhysicalAdapterIndex = 0;
+    WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
+    info->FlagsWddm2.CpuVisible = policy.CpuVisible;
+    info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
+    info->FlagsWddm2.Cached = policy.Cached;
+    info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
+    return BC250_CREATE_STEP_ADMITTED;
+}
+
+static unsigned long WddmCreateSlot(void* Context, unsigned long Index)
+{
+    const BC250_WDDM_OBJECT* object =
+        (const BC250_WDDM_OBJECT*)((BC250_CREATE_CALL*)Context)->Args->pAllocationInfo[Index].hAllocation;
+    return object->UmdAlloc ? BC250_CREATE_NOT_LB7A : Bc250GdiSlot(object->GdiType);
+}
+
+static void WddmCreateFree(void* Context, unsigned long Index)
+{
+    WddmFreeObject((BC250_WDDM_OBJECT*)((BC250_CREATE_CALL*)Context)->Args->pAllocationInfo[Index].hAllocation);
+}
+
+static int WddmCreateResource(void* Context)
+{
+    BC250_CREATE_CALL* call = (BC250_CREATE_CALL*)Context;
+    if (call->Args->Flags.Resource && call->Args->hResource == NULL)
+    {
+        call->Args->hResource = WddmNewObject(call->Device, BC250_WDDM_MAGIC_RESOURCE);
+        return call->Args->hResource != NULL;
+    }
+    return 1;
+}
+
+static const BC250_CREATE_OPS g_WddmCreateOps = { WddmCreateAdmit, WddmCreateSlot, WddmCreateFree, WddmCreateResource };
+
+static DXGKDDI_CREATEALLOCATION Bc250WddmCreateAllocation;
+static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_CREATEALLOCATION* pCreateAllocation)
+{
+    BC250_CREATE_CALL call;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    BOOLEAN sharedCpu = FALSE, cachedCpu = FALSE;
+    NTSTATUS resourceStatus=WddmSurfaceResourcePolicy(pCreateAllocation->pPrivateDriverData,
+        pCreateAllocation->PrivateDriverDataSize,&sharedCpu,&cachedCpu);
+    int outcome;
+
+    if (!NT_SUCCESS(resourceStatus)) {
+        if (wddm != NULL) BC250_ADMISSION_COUNT(&wddm->StdAlloc.CreateCalls[BC250_CREATE_RESOURCE_DATA]);
+        return resourceStatus;
+    }
+    call.Device = (BC250_DEVICE*)hAdapter;
+    call.Wddm = wddm;
+    call.Args = pCreateAllocation;
+    call.SharedCpu = sharedCpu;
+    call.CachedCpu = cachedCpu;
+    outcome = Bc250CreateRun(wddm != NULL ? &wddm->StdAlloc : NULL, &g_WddmCreateOps, &call,
+                             pCreateAllocation->NumAllocations);
+    if (outcome == BC250_CREATE_NO_MEMORY) return STATUS_INSUFFICIENT_RESOURCES;
+    if (outcome != BC250_CREATE_OK) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
         GuardLog("wddm: CreateAllocation %u allocations, flags %x resource %s", pCreateAllocation->NumAllocations,
                  pCreateAllocation->Flags.Value, pCreateAllocation->hResource != NULL ? "yes" : "no");
@@ -3579,9 +3652,11 @@ static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
 static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DXGKARG_OPENALLOCATION* pOpenAllocation)
 {
     BC250_WDDM_OBJECT* parent = WddmObject(hDevice, BC250_WDDM_MAGIC_DEVICE);
+    BC250_WDDM* wddm;
     UINT i;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
+    wddm = (BC250_WDDM*)parent->Device->Wddm;
     // Opened handles are carried back in Present entries. Historical GetHandleData
     // returned NULL for both CDD LB7A and user BC2A opens; this is not a proven
     // CDD-specific restriction. Acquire/Release now establishes backing identity;
@@ -3612,16 +3687,23 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
                 }
             }
         }
-        else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
-            private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
-            WddmSurfaceAdmitted(private,gdiType) &&
-            WddmGdiAllocationPolicy(gdiType,0,0,&policy))
+        else
         {
-            opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
-            if (opened != NULL) {
-                opened->Allocation = *private;
-                opened->GdiType=gdiType;
+            int admission = Bc250Lb7aAdmit(info->pPrivateDriverData, info->PrivateDriverDataSize, 0, 0, 1,
+                                           &gdiType, &policy);
+            if (admission == BC250_LB7A_ADMITTED)
+            {
+                opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
+                if (opened != NULL) {
+                    opened->Allocation = *private;
+                    opened->GdiType=gdiType;
+                }
             }
+            // BD-060: a refused LB7A open leaves a NULL handle and still returns success; count it here.
+            if (wddm != NULL)
+                BC250_ADMISSION_COUNT(&wddm->StdAlloc.GdiOpened[admission != BC250_LB7A_UNREAD ?
+                                                                Bc250GdiSlot(gdiType) : BC250_GDI_SLOTS - 1]
+                                                               [opened != NULL ? 0 : 1]);
         }
         if (opened != NULL) {
             opened->OwnerDevice = hDevice;
