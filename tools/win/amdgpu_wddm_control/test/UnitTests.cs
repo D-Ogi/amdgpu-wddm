@@ -644,6 +644,21 @@ static partial class UnitTests
         Equal("backup-20261003T101112013Z.json", Recovery.BackupFileName(new DateTime(2026, 10, 3, 10, 11, 12, 13, DateTimeKind.Utc)), "backup file name");
         Check(Recovery.TaskResultText(0).Contains("confirmed") && Recovery.TaskResultText(0x41303).Contains("not run"), "task result texts");
 
+        // The start-confirm task's last run: the newest run of any source (lab, 678e770c: COM "never, 0x41303" from an
+        // elevated session-0 shell while Get-ScheduledTaskInfo reported 21:34:34, result 0).
+        var comNever = new TaskRun { LastRun = new DateTime(1999, 11, 30), Result = 0x41303, Source = "com" };
+        var wmiRan = new TaskRun { LastRun = new DateTime(2026, 10, 3, 21, 34, 34), Result = 0, Source = "wmi" };
+        var newest = Recovery.NewestTaskRun(new[] { comNever, wmiRan });
+        Check(newest.Source == "wmi" && newest.Result == 0 && Recovery.TaskLastRunText(newest) == "2026-10-03 21:34", "task: a source that saw the run wins over one that says never");
+        var ranState = Closed(); ranState.TaskResult = newest.Result; ranState.TaskLastRun = Recovery.TaskLastRunText(newest);
+        var tl = line(Recovery.Describe(ranState), "Start confirmation task");
+        Check(tl.Text.StartsWith("Last run 2026-10-03 21:34: ") && !tl.Text.Contains("never") && tl.Severity == "ok", "task: the lab case reads as run, not never");
+        Equal("com", Recovery.NewestTaskRun(new[] { new TaskRun { LastRun = new DateTime(2026, 10, 3, 22, 0, 0), Result = 1, Source = "com" }, wmiRan }).Source, "task: the newer run wins");
+        Check(Recovery.NewestTaskRun(new[] { comNever, null, new TaskRun { LastRun = null, Result = null, Source = "wmi" } }).Source == "com" && Recovery.TaskLastRunText(comNever) == "never",
+            "task: no source with a run: never");
+        Equal(null, Recovery.NewestTaskRun(new TaskRun[] { null, null }), "task: no source: nothing");
+        Equal(null, Recovery.NewestTaskRun(null), "task: no readings");
+
         // JSON: the snapshot (--snapshot) and the backup round-trip.
         var json = new JavaScriptSerializer();
         var back = json.Deserialize<RecoverySnapshot>(json.Serialize(Closed()));

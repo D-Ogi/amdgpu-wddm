@@ -264,6 +264,14 @@ namespace AmdgpuWddmControl
     // Lists one process's modules into the buffer and reports the bytes the full list needs (EnumProcessModulesEx).
     public delegate bool EnumModules(IntPtr[] buffer, out int neededBytes);
 
+    // One source's reading of the start-confirm task's last run: local time (before 2000 = never) and result.
+    public sealed class TaskRun
+    {
+        public DateTime? LastRun;
+        public long? Result;
+        public string Source;
+    }
+
     public static class Recovery
     {
         public const string ParametersPath = DpmSettings.RegistryPath;
@@ -420,6 +428,20 @@ namespace AmdgpuWddmControl
         }
 
         // LastTaskResult of the release's "amdgpu-wddm start confirm" task (start-confirm-core.ps1 exit codes).
+        // The newest run that any source reports. On the lab (678e770c, --status elevated from an SSH shell in session 0)
+        // the Task Scheduler COM object said "never, 0x41303" for the task (a group principal, Administrators) that had
+        // run, while Get-ScheduledTaskInfo (the WMI provider) reported the run; a source without a run must not hide one.
+        public static TaskRun NewestTaskRun(IEnumerable<TaskRun> readings)
+        {
+            var list = (readings ?? Enumerable.Empty<TaskRun>()).Where(r => r != null).ToList();
+            return list.Where(r => r.LastRun != null && r.LastRun.Value.Year >= 2000).OrderBy(r => r.LastRun.Value).LastOrDefault() ?? list.FirstOrDefault();
+        }
+
+        public static string TaskLastRunText(TaskRun r)
+        {
+            return r == null || r.LastRun == null ? null : r.LastRun.Value.Year < 2000 ? "never" : r.LastRun.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        }
+
         public static string TaskResultText(long? result)
         {
             if (result == null) return "unknown";

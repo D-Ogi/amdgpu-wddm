@@ -412,7 +412,20 @@ namespace AmdgpuWddmControl
 
 
         // The scheduled task through the Task Scheduler's scripting objects, late bound (no interop assembly).
+        // Two sources, the newest run wins (Recovery.NewestTaskRun): the COM object and the WMI provider that
+        // Get-ScheduledTaskInfo uses.
         static void ReadTask(RecoverySnapshot s)
+        {
+            var com = ReadTaskCom();
+            var wmi = ReadTaskWmi();
+            s.TaskFound = com != null || wmi != null;
+            var best = Recovery.NewestTaskRun(new[] { com, wmi });
+            if (best == null) return;
+            s.TaskResult = best.Result;
+            s.TaskLastRun = Recovery.TaskLastRunText(best);
+        }
+
+        static TaskRun ReadTaskCom()
         {
             object service = null;
             try
@@ -422,13 +435,38 @@ namespace AmdgpuWddmControl
                 Call(service, "Connect");
                 var folder = Call(service, "GetFolder", @"\");
                 var task = Call(folder, "GetTask", TaskName);
-                s.TaskFound = true;
-                s.TaskResult = Convert.ToInt64(Get(task, "LastTaskResult"));
-                var last = (DateTime)Get(task, "LastRunTime");
-                s.TaskLastRun = last.Year < 2000 ? "never" : last.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                return new TaskRun { Result = Convert.ToInt64(Get(task, "LastTaskResult")), LastRun = (DateTime)Get(task, "LastRunTime"), Source = "com" };
             }
-            catch (Exception) { s.TaskFound = false; }
+            catch (Exception) { return null; }
             finally { if (service != null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(service); }
+        }
+
+        // PS_ScheduledTask.GetInfoByName (root\Microsoft\Windows\TaskScheduler), as Get-ScheduledTaskInfo calls it.
+        static TaskRun ReadTaskWmi()
+        {
+            try
+            {
+                using (var c = new System.Management.ManagementClass(@"root\Microsoft\Windows\TaskScheduler", "PS_ScheduledTask", null))
+                using (var input = c.GetMethodParameters("GetInfoByName"))
+                {
+                    input["TaskName"] = TaskName;
+                    input["TaskPath"] = @"\";
+                    using (var output = c.InvokeMethod("GetInfoByName", input, null))
+                    {
+                        var info = output == null ? null : output["CmdletOutput"] as System.Management.ManagementBaseObject;
+                        if (info == null) return null;
+                        var last = info["LastRunTime"] as string;
+                        var result = info["LastTaskResult"];
+                        return new TaskRun
+                        {
+                            LastRun = string.IsNullOrEmpty(last) ? (DateTime?)null : System.Management.ManagementDateTimeConverter.ToDateTime(last),
+                            Result = result == null ? (long?)null : (int)Convert.ToUInt32(result, CultureInfo.InvariantCulture),    // signed, as the COM object gives it
+                            Source = "wmi",
+                        };
+                    }
+                }
+            }
+            catch (Exception) { return null; }
         }
 
         static object Call(object o, string method, params object[] args)
