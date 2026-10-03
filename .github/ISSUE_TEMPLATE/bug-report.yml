@@ -14,8 +14,8 @@ body:
     id: version
     attributes:
       label: Tester version
-      description: The package version, for example 0.7.198.100-tester.10 (amdgpu-wddm Control shows it, and so does TESTERS.md).
-      placeholder: 0.7.198.100-tester.10
+      description: The package version, for example 0.7.199.100-tester.11 (amdgpu-wddm Control shows it, and so does TESTERS.md).
+      placeholder: 0.7.199.100-tester.11
     validations:
       required: true
   - type: input

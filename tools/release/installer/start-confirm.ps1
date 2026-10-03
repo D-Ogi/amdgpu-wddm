@@ -27,7 +27,7 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # parent of tools\).
 if (-not $ExpectedVersion) {
     try { $ExpectedVersion = [string](Get-Content -LiteralPath (Join-Path (Split-Path $here) 'manifest.json') -Raw | ConvertFrom-Json).kmd_abi } catch { }
-    if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700C6' }
+    if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700C7' }
 }
 . (Join-Path $here 'start-confirm-core.ps1')
 $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -49,6 +49,18 @@ function Write-StartConfirmLog([string]$Text) {
     $line = [string]::Format($inv, '{0} +{1,6:F1}s {2}', [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', $inv), $clock.Elapsed.TotalSeconds, $Text)
     if ($Probe) { $line; return }
     try { [IO.File]::AppendAllText($log, $line + "`r`n") } catch { }
+}
+# BD-060: the DWM instance of this logon's session, recorded once per logon as the baseline that verify and the control
+# application compare against (dwm-session.ps1). Never fails the task; -Probe writes nothing.
+if (-not $Probe) {
+    try {
+        . (Join-Path $here 'dwm-session.ps1')
+        $epoch = Get-DwmEpoch
+        $saved = Save-DwmBaseline $epoch (Get-SessionDwm $epoch.session)
+        if ($saved.written) { Write-StartConfirmLog "DWM baseline: session $($epoch.session), DWM $($saved.record.dwm_pid) created $($saved.record.dwm_created_utc), recorded" }
+        elseif ($saved.record) { Write-StartConfirmLog "DWM baseline: session $($epoch.session) already recorded at $($saved.record.recorded_utc) (DWM $($saved.record.dwm_pid))" }
+        else { Write-StartConfirmLog "DWM baseline: not recorded (session $($epoch.session), logon $($epoch.logon_utc), $(@(Get-SessionDwm $epoch.session).Count) DWM)" }
+    } catch { Write-StartConfirmLog "DWM baseline: $($_.Exception.Message)" }
 }
 function Read-Parameter([string]$Name) {
     $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($parametersKey)

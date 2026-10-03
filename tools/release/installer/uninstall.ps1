@@ -125,9 +125,10 @@ if ($off) {
 # The control application's backups and action log (%ProgramData%\amdgpu-wddm\control) belong to the tester: kept.
 $dataRoot = Split-Path $script:StateDir
 $controlData = Join-Path $dataRoot 'control'
-Invoke-Change "remove the installer state $($script:StateDir) and $dataRoot\start-confirm.log" {
+Invoke-Change "remove the installer state $($script:StateDir), $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
     Remove-PathOrSchedule $script:StateDir
     Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm.log') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
 } | Out-Null
 if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the control application's setting backups and action log; delete it by hand if you do not need them)" }

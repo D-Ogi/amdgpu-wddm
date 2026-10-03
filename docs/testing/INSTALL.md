@@ -170,9 +170,12 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
-- `verify.cmd` shows `[warn] DWM restarted in this session`, or Windows 11 apps (the command bar of File Explorer,
-  Task Manager) ignore mouse clicks after the screen went black for a moment: the desktop compositor (DWM) was
-  restarted. Restart the computer. This is Windows behaviour, not a driver failure.
+- Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
+  black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
+  desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
+  Display; restart Windows to recover. If the compositor crashed, make a bug report: a crash can still be a driver
+  defect. `verify.cmd` reports only a replacement it saw: the start-confirm task records the compositor at each
+  logon, and without that record the line says `unknown history`.
 
 ## Uninstall
 

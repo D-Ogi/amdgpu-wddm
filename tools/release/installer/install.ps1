@@ -30,6 +30,7 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
+. (Join-Path $here 'dwm-session.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -246,11 +247,17 @@ function Invoke-Verify {
         if ($Ok) { Write-Host ('   [pass] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Green } else { Write-Host ('   [FAIL] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Red }
         Write-Log ('   verify {0}: {1} {2}' -f $Name, $Ok, $Detail)
     }
-    # A warning names a state that needs the tester's action but is not a driver failure: it does not fail verify.
+    # A warning names a state that needs the tester's action: it does not fail verify, and it does not replace a bug
+    # report. An info line says what verify could not establish.
     function Add-Warning([string]$Name, [string]$Detail) {
         [void]$results.Add([pscustomobject]@{ check = $Name; pass = $true; warning = $true; detail = $Detail })
         Write-Host ('   [warn] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Yellow
         Write-Log ('   verify {0}: warning {1}' -f $Name, $Detail)
+    }
+    function Add-Info([string]$Name, [string]$Detail) {
+        [void]$results.Add([pscustomobject]@{ check = $Name; pass = $true; info = $true; detail = $Detail })
+        Write-Host ('   [info] {0,-20} {1}' -f $Name, $Detail)
+        Write-Log ('   verify {0}: info {1}' -f $Name, $Detail)
     }
     if (-not $script:DryRunMode) {
         # Files replaced while in use: the restart deletes their old copies; this catches any it could not.
@@ -344,18 +351,17 @@ function Invoke-Verify {
     if ($io -match 'died in a session') { $ioClosed += '; last boot died in a session' }
     Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
 
-    # BD-060: a DWM restarted inside this logon session (killed or crashed; the installer never restarts it) leaves
-    # some Windows 11 apps without mouse clicks until the next restart. A warning with its remedy: it is a state of the
-    # session, not of the driver.
-    $mySession = (Get-Process -Id $PID).SessionId
-    $logon = $null
-    try { $logon = Get-SessionLogonUtc $mySession } catch { Write-Log "   session logon time: $($_.Exception.Message)" }
-    $starts = Get-SessionDwmStartUtc $mySession
-    $dwmRestart = Get-DwmRestartFinding -SessionId $mySession -LogonUtc $logon -DwmStartUtc $starts
-    switch ($dwmRestart.state) {
-        'restarted' { Add-Warning 'DWM restarted in this session' $dwmRestart.detail }
-        'first' { Add-Result 'DWM restarted in this session' $true $dwmRestart.detail }
-        default { Write-Host "   [skip] DWM restarted in this session  $($dwmRestart.detail)" -ForegroundColor Yellow; Write-Log "   verify DWM restarted in this session: $($dwmRestart.detail)" }
+    # BD-060: a replacement of the session's DWM that was observed against the start-confirm task's record of this
+    # logon (dwm-session.ps1). A warning with its remedy that helps to attribute a failure; unknown history is reported
+    # as unknown, neither as a restart nor as healthy.
+    try {
+        $epoch = Get-DwmEpoch
+        $dwmFinding = Get-DwmReplacementFinding (Find-DwmBaseline (Read-DwmBaseline) $epoch) (Get-SessionDwm $epoch.session) $epoch
+    } catch { $dwmFinding = [pscustomobject]@{ state = 'unknown'; detail = "unknown: $($_.Exception.Message)" } }
+    switch ($dwmFinding.state) {
+        'observed' { Add-Warning 'DWM restarted in this session' $dwmFinding.detail }
+        'same' { Add-Result 'DWM restarted in this session' $true $dwmFinding.detail }
+        default { Add-Info 'DWM restarted in this session' $dwmFinding.detail }
     }
 
     # D3D12 through the system runtime, as an application sees it.
@@ -594,6 +600,12 @@ if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $sta
 # INF's closed gates (display only). Nothing here stops or restarts DWM; the registry below opens the gates for the
 # next start.
 $infFile = Join-Path $package 'payload\kmd\bc250kmd.inf'
+# Observations around the driver package, recorded in the log and the state: the session's DWM instance (process ID
+# and creation time) and the device's outcome are kept apart; a device-loss event and a DWM process restart are two
+# different things. Read-only, in a dry run too.
+$dwmSession = 0; $dwmBefore = @()
+try { $dwmSession = Get-DesktopSessionId; if ($dwmSession) { $dwmBefore = Get-SessionDwm $dwmSession } } catch { Write-Log "   DWM reading: $($_.Exception.Message)" }
+Write-Info "DWM of session $dwmSession before the driver package: $(if (@($dwmBefore).Count) { (@($dwmBefore) | ForEach-Object { Format-DwmInstance $_ }) -join ', ' } else { 'none' })"
 if (-not (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile)))) { throw 'payload\kmd\bc250kmd.inf has no Reboot directive: this package would restart the GPU under the running desktop' }
 $pnp = Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install (the GPU changes to it at the next restart)' {
     $n = Invoke-Native pnputil.exe @('/add-driver', $infFile, '/install')
@@ -632,6 +644,18 @@ if (-not $script:DryRunMode) {
     if (-not $classKey) { throw 'no software key for the GPU' }
     Set-StateValue $state 'class_key' $classKey
 } else { $classKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$($script:DisplayClassGuid)\<device's key after install>" }
+if ($dwmSession) {
+    $dwmAfter = Get-SessionDwm $dwmSession
+    $devNow = $null
+    if ($instance) { $devNow = Get-PnpDevice -InstanceId $instance -ErrorAction SilentlyContinue }
+    $obs = [ordered]@{
+        utc = [DateTime]::UtcNow.ToString('o'); session = $dwmSession
+        device = $(if ($pnp) { "$($pnp.text); status $(if ($devNow) { $devNow.Status } else { 'unknown' })" } else { 'not run (dry run)' })
+        dwm = (Compare-DwmReadings $dwmBefore $dwmAfter)
+    }
+    Write-Info "after the driver package: device: $($obs.device); DWM: $($obs.dwm)"
+    Set-StateValue $state 'driver_package_observation' ([pscustomobject]$obs)
+}
 Save-Phase 'driver-installed'
 
 # Driver settings and router policy. The defaults come from installer\registry-defaults.json, the table that
@@ -723,6 +747,10 @@ Set-StateValue $state 'firmware_source_dir' $null
 Set-StateValue $state 'command_line_parameters' $null
 Set-StateValue $state 'parameters_before_install' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
+if ($dwmSession) {
+    $dwmEnd = Get-SessionDwm $dwmSession
+    Write-Info "DWM at the end of phase 2: $(Compare-DwmReadings $dwmBefore $dwmEnd)"
+}
 Save-Phase 'installed'
 Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')
 if ($script:DryRunMode) {

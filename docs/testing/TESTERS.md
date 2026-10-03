@@ -1,15 +1,18 @@
-# amdgpu-wddm 0.7.198.100: release note for testers
+# amdgpu-wddm 0.7.199.100: release note for testers
 
 This is a tester release of amdgpu-wddm, an experimental Windows driver for the GPU of the ASRock BC-250
 (AMD Cyan Skillfish, gfx1013). It is for people who want to test the driver on their own BC-250 and report what
 happens. It is not ready for daily use. Read `INSTALL.md` in this package before you install.
 
-Package version: `0.7.198.100-tester.10`. New since `0.7.197.100-tester.6`:
+Package version: `0.7.199.100-tester.11`. New since `0.7.197.100-tester.6`:
 
 - The GPU draws the desktop. Defect BD-058 is fixed: the desktop no longer stops when a File Explorer window opens.
-- Kernel-mode driver 0.7.198.2: a normal restart keeps the GPU desktop path open (defect BD-059).
+- Kernel-mode driver 0.7.199.1: a normal restart keeps the GPU desktop path open (defect BD-059), and Windows shows
+  the adapter as "BC-250 GPU (amdgpu-wddm)".
+- The installer and the control application do not restart the desktop compositor (DWM). A driver update and a
+  change of the desktop route take effect at the next restart of Windows (defect BD-060).
 - An upgrade keeps the settings you changed (`INSTALL.md`, "Install").
-- The verification has two more checks, "full WDDM gate" and "GPU desktop path".
+- The verification has three more checks, "full WDDM gate", "GPU desktop path" and "DWM restarted in this session".
 - The control application has a Recovery page.
 - The package does not contain the AMD GPU firmware. The installer downloads it from the linux-firmware project
   during the installation and checks every file (`INSTALL.md`, "GPU firmware"). A BC-250 without internet can use
@@ -44,10 +47,11 @@ Package version: `0.7.198.100-tester.10`. New since `0.7.197.100-tester.6`:
   it is missing.
 - After each logon, a small blue window shows for about one minute. Do not close it: it confirms the driver start.
   Without the confirmation, the driver falls back to Microsoft Basic Display Adapter after two restarts.
-- If the desktop compositor (DWM) restarts, the screen goes black for a moment and comes back. After that, some
-  Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks until you restart the
-  computer; the keyboard still works. This is Windows behaviour, also with Microsoft Basic Display Adapter. The
-  installer does not restart the compositor, and `verify.cmd` shows a warning when it was restarted.
+- WinUI pointer-input loss after the desktop compositor (DWM) is terminated and restarted reproduces on this Windows
+  build also with Microsoft Basic Display; restart Windows to recover. You see it as mouse clicks that some Windows 11
+  apps (the command bar of File Explorer, Task Manager) ignore, often after the screen went black for a moment.
+  `verify.cmd` shows a warning when it saw the compositor replaced. If the compositor crashed, report it: a crash can
+  still be a driver defect.
 
 ## How to report a bug
 

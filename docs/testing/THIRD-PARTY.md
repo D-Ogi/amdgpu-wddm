@@ -11,7 +11,7 @@ and NOTICE in the package root).
 
 | File (`payload\`) | Source |
 |---|---|
-| `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `53bdebbe478a206cc787328b9edb624f9cf6ae8d`; the .sys also contains the Linux amdgpu code in the next table |
+| `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `0aec4c58839d2e712a1fff3d9937215a5277ed02`; the .sys also contains the Linux amdgpu code in the next table |
 | `system32\bc250umd.dll` | amdgpu-wddm `driver/umd-stub` |
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `e9f5e701ac0412e1cf39e217075d1f8ed313d120` |
 | `desktop\bc250d3d_router.dll` | amdgpu-wddm `6bbcf4f6bcba577e5d9d170246128496c7eb087d` (`driver/umd/router`) |

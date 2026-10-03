@@ -109,7 +109,7 @@ Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 'the driver package resets the gates between the judgement and the write (pnputil runs the INF AddReg)'
 $inf = Join-Path (Split-Path $Installer) 'payload\kmd\bc250kmd.inf'
 if (Test-Path -LiteralPath $inf) { $infNames = Get-InfParameterNames $inf; $infSource = 'the package INF' }
-else { $infNames = @('UnconfirmedStarts', 'EnableMmio', 'EnableMmioWrite', 'EnableVram', 'EnableVramWrite', 'EnableGart', 'EnablePsp', 'EnableGfx', 'EnableIh', 'EnableDcnWrite', 'EnableVidPnFlip', 'EnableFullWddm', 'EnableGpuVa', 'EnableGpuSubmit', 'EnablePagingNode', 'EnablePresentBlit', 'EnableHangBugcheck', 'KeepLog'); $infSource = 'the 0.7.198.2 INF list (no package INF next to this installer)' }
+else { $infNames = @('UnconfirmedStarts', 'EnableMmio', 'EnableMmioWrite', 'EnableVram', 'EnableVramWrite', 'EnableGart', 'EnablePsp', 'EnableGfx', 'EnableIh', 'EnableDcnWrite', 'EnableVidPnFlip', 'EnableFullWddm', 'EnableGpuVa', 'EnableGpuSubmit', 'EnablePagingNode', 'EnablePresentBlit', 'EnableHangBugcheck', 'KeepLog'); $infSource = 'the 0.7.199.1 INF list, the same names as 0.7.198.2 (no package INF next to this installer)' }
 Check ((@($infNames) -contains 'EnableFullWddm') -and (@($infNames) -contains 'EnableMmioWrite')) "$(@($infNames).Count) INF Parameters names from $infSource"
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test'
 function Invoke-InfReset([string]$K) { foreach ($n in $infNames) { New-ItemProperty -LiteralPath $K -Name $n -Value 0 -PropertyType DWord -Force | Out-Null } }

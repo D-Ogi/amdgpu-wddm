@@ -16,8 +16,8 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.198.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.198.100-tester.10',
+    [string]$DriverVer = '0.7.199.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.199.100-tester.11',
     [string]$KitVersion = '10.0.26100.0'
 )
 $ErrorActionPreference = 'Stop'
@@ -61,7 +61,7 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
     if ($f.Extension -eq '.cmd') { Copy-Item -LiteralPath $f.FullName -Destination $pkg } else { Copy-Item -LiteralPath $f.FullName -Destination $inst }
 }
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
-foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1') { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
+foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1', 'dwm-session.ps1') { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
@@ -181,7 +181,7 @@ function Get-InstallLocation([string]$PackagePath) {
     return $null
 }
 $components = @()
-foreach ($f in $sources.files + @([pscustomobject]@{ component = 'tool'; path = 'payload/tools/start-confirm.ps1' }, [pscustomobject]@{ component = 'tool'; path = 'payload/tools/start-confirm-core.ps1' }, [pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' })) {
+foreach ($f in $sources.files + @([pscustomobject]@{ component = 'tool'; path = 'payload/tools/start-confirm.ps1' }, [pscustomobject]@{ component = 'tool'; path = 'payload/tools/start-confirm-core.ps1' }, [pscustomobject]@{ component = 'tool'; path = 'payload/tools/dwm-session.ps1' }, [pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' })) {
     $p = Join-Path $pkg ($f.path -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
     $components += [ordered]@{ role = $f.component; package_path = $f.path; install_path = (Get-InstallLocation $f.path); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }

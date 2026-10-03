@@ -1,19 +1,22 @@
-# Host test of the BD-060 rules in common.ps1: the INF Reboot directive (the GPU changes driver at the next restart,
-# not under the running desktop), the pnputil outcomes, the stale BD-059 session marker after an in-place device
-# restart, and verify's "DWM restarted in this session". Windows PowerShell 5.1, like the installer:
-#   powershell -NoProfile -File tools\release\test-session-checks.ps1 [-Installer <package>\installer] [-Inf <packaged INF>]
+# Host test of the BD-060 rules in common.ps1 and dwm-session.ps1: the INF Reboot directive (the GPU changes driver at
+# the next restart, not under the running desktop), the pnputil outcomes, the stale BD-059 session marker after an
+# in-place device restart, and the DWM baseline: a replacement is reported only when observed against the record of
+# the same boot, session and logon, otherwise the history is unknown. Windows PowerShell 5.1, like the installer:
+#   powershell -NoProfile -File tools\release\test-session-checks.ps1 [-Installer <package>\installer] [-Inf <packaged INF>] [-WorkRoot <dir>]
 # -Inf: the INF of a built package, which must carry the directive. The marker cases run against a scratch key,
-# HKCU:\Software\amdgpu-wddm-installer-test-session, removed at the end. Nothing under HKLM is read or written; the
-# logon time and the DWM start of this computer's own session are read only.
-param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf)
+# HKCU:\Software\amdgpu-wddm-installer-test-session, removed at the end; the baseline cases write only files under
+# -WorkRoot. Nothing under HKLM is read or written; this computer's own session and DWM are read only.
+param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf, [string]$WorkRoot = (Join-Path (Split-Path (Split-Path $Installer)) 'test-tmp'))
 $ErrorActionPreference = 'Stop'
 . (Join-Path $Installer 'common.ps1')
+. (Join-Path $Installer 'dwm-session.ps1')
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
 function Split-Lines([string]$Text) { return , ($Text -split "`r?`n") }
 
 # The shape of driver\kmd\bc250kmd.inf: [Manufacturer] -> Models.NTamd64 -> Bc250_Install, commented-out lines that
-# the lab build switches on, and a service section that is not an install section.
+# the lab build switches on, and a service section that is not an install section. Its values do not track the KMD:
+# the INF of a built package is checked through -Inf.
 $lab = @'
 [Version]
 Signature   = "$Windows NT$"
@@ -96,28 +99,57 @@ try {
 } finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
 Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 
-'DWM restarted in this session'
-$logon = [datetime]::SpecifyKind([datetime]'2026-10-03T20:33:40', 'Utc')
-$f = Get-DwmRestartFinding -SessionId 1 -LogonUtc $logon -DwmStartUtc @($logon.AddSeconds(-9))
-Check (($f.state -eq 'first') -and ($f.detail -match '^no: the DWM of session 1 started at 2026-10-03 20:33:31Z, before the logon at 2026-10-03 20:33:40Z$')) "first DWM of the session: $($f.detail)"
-$f = Get-DwmRestartFinding -SessionId 1 -LogonUtc $logon -DwmStartUtc @($logon.AddMinutes(3))
-Check (($f.state -eq 'restarted') -and ($f.detail -match '^yes: .+ started at 2026-10-03 20:36:40Z, after the logon at 2026-10-03 20:33:40Z\. .+ignore mouse clicks until the next restart\. This is Windows behaviour, not a driver failure\. Restart the computer\.$')) 'a DWM started after the logon: restarted, with the remedy'
-$f = Get-DwmRestartFinding -SessionId 1 -LogonUtc $logon -DwmStartUtc @($logon.AddSeconds(-9), $logon.AddMinutes(3))
-Check ($f.state -eq 'restarted') 'two DWMs, the later one after the logon: restarted'
-Check ((Get-DwmRestartFinding -SessionId 0 -LogonUtc $logon -DwmStartUtc @($logon)).state -eq 'none') 'session 0 (a service or SSH shell): not judged'
-Check ((Get-DwmRestartFinding -SessionId 1 -LogonUtc $null -DwmStartUtc @($logon)).state -eq 'none') 'nobody logged on: not judged'
-Check ((Get-DwmRestartFinding -SessionId 1 -LogonUtc $logon -DwmStartUtc @()).state -eq 'none') 'no DWM in the session: not judged'
+'DWM baseline: a replacement only when observed (dwm-session.ps1)'
+$work = Join-Path $WorkRoot ('session-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+[void][IO.Directory]::CreateDirectory($work)
+try {
+    $file = Join-Path $work 'dwm-baseline.json'
+    $u = { param([string]$t) [datetime]::SpecifyKind([datetime]$t, 'Utc') }
+    $e1 = [pscustomobject]@{ boot_utc = (& $u '2026-10-03T20:33:05'); session = 1; logon_utc = (& $u '2026-10-03T20:33:40') }
+    $first = [pscustomobject]@{ pid = 1916; created_utc = (& $u '2026-10-03T20:33:31.1234567') }
+    $second = [pscustomobject]@{ pid = 13376; created_utc = (& $u '2026-10-03T20:35:02.5') }
+    Check ((Get-DwmReplacementFinding $null @($first) $e1).state -eq 'unknown') 'no record: unknown history, neither restarted nor healthy'
+    $s1 = Save-DwmBaseline $e1 @($first) $file
+    Check ($s1.written -and $s1.record.dwm_pid -eq 1916) 'the first DWM of an epoch is recorded'
+    $s2 = Save-DwmBaseline $e1 @($second) $file
+    Check ((-not $s2.written) -and ($s2.record.dwm_pid -eq 1916)) 'a later call of the same epoch keeps the first record'
+    $recs = Read-DwmBaseline $file
+    Check ($recs.Count -eq 1) 'one record per epoch'
+    $near = [pscustomobject]@{ boot_utc = $e1.boot_utc.AddSeconds(1); session = 1; logon_utc = $e1.logon_utc }
+    Check ($null -ne (Find-DwmBaseline $recs $near)) 'the same boot read 1 s apart matches'
+    Check ($null -eq (Find-DwmBaseline $recs ([pscustomobject]@{ boot_utc = $e1.boot_utc; session = 1; logon_utc = $e1.logon_utc.AddMinutes(10) }))) 'a new sign-in (another logon time) does not match: the baseline resets'
+    Check ($null -eq (Find-DwmBaseline $recs ([pscustomobject]@{ boot_utc = $e1.boot_utc.AddHours(1); session = 1; logon_utc = $e1.logon_utc }))) 'another boot does not match'
+    Check ($null -eq (Find-DwmBaseline $recs ([pscustomobject]@{ boot_utc = $e1.boot_utc; session = 2; logon_utc = $e1.logon_utc }))) 'another session does not match'
+    $rec = Find-DwmBaseline $recs $e1
+    $f = Get-DwmReplacementFinding $rec @([pscustomobject]@{ pid = 1916; created_utc = $first.created_utc.AddMilliseconds(400) }) $e1
+    Check (($f.state -eq 'same') -and ($f.detail -match '^no replacement observed: DWM 1916 \(created 2026-10-03 20:33:31Z\) is the instance recorded at ')) "the recorded instance still runs: $($f.detail)"
+    $f = Get-DwmReplacementFinding $rec @($second) $e1
+    Check (($f.state -eq 'observed') -and ($f.detail -match '^observed: DWM 1916 \(created 2026-10-03 20:33:31Z\), recorded at .+, was replaced by DWM 13376 \(created 2026-10-03 20:35:02Z\)\. WinUI pointer-input loss after the desktop compositor \(DWM\) is terminated and restarted reproduces on this Windows build also with Microsoft Basic Display; restart Windows to recover\. A DWM crash can still be a driver defect: report it with a bug report\.$')) 'another instance than the recorded one: replacement observed, remedy restart, still reportable'
+    $f = Get-DwmReplacementFinding $rec @([pscustomobject]@{ pid = 1916; created_utc = $first.created_utc.AddMinutes(5) }) $e1
+    Check ($f.state -eq 'observed') 'the same process ID with another creation time is another instance'
+    Check ((Get-DwmReplacementFinding $rec @() $e1).state -eq 'unknown') 'no DWM in the session: unknown'
+    Check ((Get-DwmReplacementFinding $rec @($first) ([pscustomobject]@{ boot_utc = $e1.boot_utc; session = 0; logon_utc = $null })).state -eq 'unknown') 'no desktop session: unknown'
+    Check (-not (Save-DwmBaseline ([pscustomobject]@{ boot_utc = $e1.boot_utc; session = 1; logon_utc = $null }) @($first) (Join-Path $work 'none.json')).written) 'nobody logged on: nothing recorded'
+    Check (-not (Save-DwmBaseline ([pscustomobject]@{ boot_utc = $e1.boot_utc.AddDays(1); session = 1; logon_utc = $e1.logon_utc.AddDays(1) }) @($first, $second) $file).written) 'two DWMs in the session at once: no baseline recorded'
+    for ($i = 1; $i -le 20; $i++) { [void](Save-DwmBaseline ([pscustomobject]@{ boot_utc = $e1.boot_utc.AddDays($i); session = 1; logon_utc = $e1.logon_utc.AddDays($i) }) @($first) $file) }
+    Check ((Read-DwmBaseline $file).Count -eq 16) 'the file keeps the last 16 records'
+    [IO.File]::WriteAllText($file, '{ not json')
+    Check ((Read-DwmBaseline $file).Count -eq 0) 'a damaged file reads as no record (unknown history)'
+    Check ((Save-DwmBaseline $e1 @($first) $file).written -and ((Read-DwmBaseline $file).Count -eq 1)) 'a damaged file is replaced by a new one'
+    Check ((Compare-DwmReadings @($first) @($first)) -eq 'same DWM instance: DWM 1916 (created 2026-10-03 20:33:31Z)') 'upgrade observation: same DWM instance'
+    Check ((Compare-DwmReadings @($first) @($second)) -eq 'DWM replaced: DWM 1916 (created 2026-10-03 20:33:31Z) -> DWM 13376 (created 2026-10-03 20:35:02Z)') 'upgrade observation: DWM replaced'
+    Check ((Compare-DwmReadings @($first) @()) -match 'after: none$') 'upgrade observation: no DWM after'
+} finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+Check (-not (Test-Path -LiteralPath $work)) 'scratch folder removed'
 
-# This computer's own session, read only: the WTS logon time must come back for a session with a user, and be in
-# the past. The finding is printed, not judged (the development PC's DWM may have been restarted).
-$sid = (Get-Process -Id $PID).SessionId
-$t = Get-SessionLogonUtc $sid
-if ($sid -eq 0) { "  (session 0: logon time $t; skipped)" }
+# This computer's own session, read only: the epoch and the DWM instance must be readable without elevation. With no
+# baseline the finding is unknown history, whatever the DWM's age.
+$ep = Get-DwmEpoch
+if ($ep.session -eq 0) { "  (no desktop session: skipped)" }
 else {
-    Check (($null -ne $t) -and ($t -lt [DateTime]::UtcNow) -and ($t.Kind -eq 'Utc')) "WTS logon time of session $sid read: $($t.ToString('u'))"
-    $starts = Get-SessionDwmStartUtc $sid
-    Check ($starts.Count -ge 1) "DWM start time of session $sid read without elevation: $(@($starts | ForEach-Object { $_.ToString('u') }) -join ', ')"
-    "  (this computer: $((Get-DwmRestartFinding -SessionId $sid -LogonUtc $t -DwmStartUtc $starts).detail))"
+    $mine = Get-SessionDwm $ep.session
+    Check (($null -ne $ep.logon_utc) -and ($ep.logon_utc -lt [DateTime]::UtcNow) -and ($ep.boot_utc -lt [DateTime]::UtcNow) -and ($mine.Count -ge 1)) "this computer: session $($ep.session), logon $(Format-DwmTime $ep.logon_utc), boot $(Format-DwmTime $ep.boot_utc), $(@($mine | ForEach-Object { Format-DwmInstance $_ }) -join ', ')"
+    Check ((Get-DwmReplacementFinding $null $mine $ep).state -eq 'unknown') 'this computer without a record: unknown history (no false restart)'
 }
 
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }

@@ -247,11 +247,11 @@ function Get-InfParameterNames([string]$InfPath) {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
-# No device restart and no DWM restart under the running desktop (BD-060). After a DWM restart inside a logon session
-# (DWM killed or crashed, winlogon starts a new one), Windows 11 build 22631 delivers no mouse input to WinUI 3 content
-# (the command bar of File Explorer, Task Manager) until the next sign-in or restart, with any display driver. A GPU
-# restarted in place under the desktop takes DWM's devices away, and it can leave the BD-059 session marker of the
-# stopped driver behind (the next boot then closes the GPU desktop path as "died in a session").
+# No device restart and no DWM restart under the running desktop (BD-060). WinUI pointer-input loss after the desktop
+# compositor (DWM) is terminated and restarted reproduces on this Windows build (22631) also with Microsoft Basic
+# Display; restarting Windows recovers (dwm-session.ps1). A GPU restarted in place under the desktop takes DWM's devices
+# away (a device-loss event, observed apart from any DWM process restart), and it can leave the BD-059 session marker
+# of the stopped driver behind (the next boot then closes the GPU desktop path as "died in a session").
 
 # The INF's Reboot directive in each install section that its models name: Windows 8 and later then install the
 # package but do not restart a device that is already started, pnputil answers 3010, and the device changes driver
@@ -325,57 +325,6 @@ function Test-StaleInteropMarker([string]$ParametersKey) {
     return ($marked -eq 1)
 }
 
-# The first DWM of a session starts with the session, before the logon; a DWM that started after the logon replaced
-# one that was killed or crashed. Times in UTC; $LogonUtc $null: nobody is logged on to the session.
-function Get-DwmRestartFinding {
-    param([int]$SessionId, $LogonUtc, [datetime[]]$DwmStartUtc = @())
-    $f = { param([datetime]$t) $t.ToString('yyyy-MM-dd HH:mm:ss') + 'Z' }
-    if ($SessionId -eq 0) { return [pscustomobject]@{ state = 'none'; detail = 'session 0 has no desktop: run verify.cmd in the desktop session' } }
-    if ($null -eq $LogonUtc) { return [pscustomobject]@{ state = 'none'; detail = "no logon time for session $SessionId" } }
-    if (-not @($DwmStartUtc).Count) { return [pscustomobject]@{ state = 'none'; detail = "no DWM in session $SessionId" } }
-    $last = @($DwmStartUtc | Sort-Object)[-1]
-    if ($last -gt $LogonUtc) {
-        return [pscustomobject]@{ state = 'restarted'; detail = "yes: the desktop compositor (DWM) of session $SessionId started at $(& $f $last), after the logon at $(& $f $LogonUtc). Some Windows 11 apps (the command bar of File Explorer, Task Manager) then ignore mouse clicks until the next restart. This is Windows behaviour, not a driver failure. Restart the computer." }
-    }
-    return [pscustomobject]@{ state = 'first'; detail = "no: the DWM of session $SessionId started at $(& $f $last), before the logon at $(& $f $LogonUtc)" }
-}
-# The start times of the DWM processes of a session, UTC (Win32_Process, readable without elevation).
-function Get-SessionDwmStartUtc([int]$SessionId) {
-    return , @(Get-CimInstance Win32_Process -Filter "Name='dwm.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $SessionId -and $_.CreationDate } | ForEach-Object { $_.CreationDate.ToUniversalTime() })
-}
-# The logon time of a session (WTSQuerySessionInformation, WTSSessionInfo), UTC; $null when nobody is logged on.
-function Get-SessionLogonUtc([int]$SessionId) {
-    if (-not ('AmdgpuWddmInstaller.Wts' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-namespace AmdgpuWddmInstaller {
-public static class Wts {
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    struct WTSINFOW {
-        public int State, SessionId, IncomingBytes, OutgoingBytes, IncomingFrames, OutgoingFrames, IncomingCompressedBytes, OutgoingCompressedBytes;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string WinStationName;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 17)] public string Domain;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 21)] public string UserName;
-        public long ConnectTime, DisconnectTime, LastInputTime, LogonTime, CurrentTime;
-    }
-    [DllImport("wtsapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern bool WTSQuerySessionInformationW(IntPtr server, int sessionId, int infoClass, out IntPtr buffer, out int bytes);
-    [DllImport("wtsapi32.dll")]
-    static extern void WTSFreeMemory(IntPtr memory);
-    public static long LogonTime(int sessionId) {
-        IntPtr buffer; int bytes;
-        if (!WTSQuerySessionInformationW(IntPtr.Zero, sessionId, 24, out buffer, out bytes)) return -1;
-        try { return ((WTSINFOW)Marshal.PtrToStructure(buffer, typeof(WTSINFOW))).LogonTime; } finally { WTSFreeMemory(buffer); }
-    }
-}
-}
-'@
-    }
-    $t = [AmdgpuWddmInstaller.Wts]::LogonTime($SessionId)
-    if ($t -le 0) { return $null }
-    return [DateTime]::FromFileTimeUtc($t)
-}
 function Format-RegistryPlan($Plan) {
     $parts = @()
     foreach ($e in @($Plan)) {

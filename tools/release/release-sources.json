@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.198.2",
-  "kmd_abi": "0x000700C6",
+  "kmd_version": "0.7.199.1",
+  "kmd_abi": "0x000700C7",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 53bdebbe (bd059-interop-clean-restart)",
+    "kmd": "bc250-win 0aec4c58 (kmd-t11)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
@@ -15,18 +15,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/bd059/build-kmd-53bd/package/bc250kmd.inf",
-      "sha256": "B5B4DF8671C64806857E78545E539525F650AD895F4A96030006419C04525E98",
-      "size": 8023,
-      "role": "KMD 0.7.198.2 INF (commit 53bdebbe, BD-059); the release re-stamps DriverVer"
+      "source": "scratch/bd060/build-kmd-t11/package/bc250kmd.inf",
+      "sha256": "FAA74E55C23D6BAF5B579BCCE6679FED3BE7D34842B82F297A0EA3DD5AC5837F",
+      "size": 8013,
+      "role": "KMD 0.7.199.1 INF (commit 0aec4c58, kmd-t11: INF strings name the project); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/bd059/build-kmd-53bd/package/bc250kmd.sys",
-      "sha256": "5B88A49F65FBC241533EF8B0C3834E6DD8556E88B93767C41693EA5AB0B31EE3",
-      "size": 477072,
-      "role": "KMD 0.7.198.2 (commit 53bdebbe, BD-059 interop end at a clean restart); re-signed with the release certificate, code unchanged"
+      "source": "scratch/bd060/build-kmd-t11/package/bc250kmd.sys",
+      "sha256": "4862482EF5D8A4B08D0475D330B53A4D7454D841E4C78EAFECC6553E682C9F89",
+      "size": 480144,
+      "role": "KMD 0.7.199.1 (commit 0aec4c58, kmd-t11: BD-060 allocation counters, INF strings); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
