@@ -16,7 +16,7 @@ param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
     [string]$DriverVer = '0.7.197.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.197.100-tester.0',
+    [string]$Version = '0.7.197.100-tester.1',
     [string]$KitVersion = '10.0.26100.0'
 )
 $ErrorActionPreference = 'Stop'
