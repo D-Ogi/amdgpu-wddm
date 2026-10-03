@@ -115,6 +115,13 @@ class FactsGate(unittest.TestCase):
         self.write(GOOD.replace('claim: "Corrects M2"', 'claim: Corrects M2'))
         self.assertFails('FAIL data')
 
+    def test_link_to_moved_fact(self):
+        readme = self.root / 'README.md'
+        readme.write_text('[M1](docs/facts/hw.md#m1)\n', encoding='utf-8')
+        self.assertEqual(self.run_gen('--check'), 0)
+        readme.write_text('[M1](docs/facts/games.md#m1)\n', encoding='utf-8')
+        self.assertFails('the fact is in hw.md')
+
     def test_next_id(self):
         self.assertEqual(self.run_gen('next-id'), 0)
         self.assertEqual(self.output.getvalue().strip(), 'M4')

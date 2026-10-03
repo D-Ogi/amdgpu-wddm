@@ -275,6 +275,30 @@ def validate(root, areas):
     return errors
 
 
+FACT_ANCHOR_RE = re.compile(r'(?<![\w-])facts/([a-z0-9_-]+)\.md#([msr]\d+)\b')
+ANCHOR_SKIP = ('evidence', 'third_party', '.git')
+
+
+def anchor_links(root, areas):
+    """Links elsewhere in the repo to docs/facts/<area>.md#<id> must name the fact's current area.
+
+    Moving a fact to another area changes its page; this catches the links left behind."""
+    area_of = {f['id'].lower(): a['area'] for a in areas for f in a['facts']}
+    errors = []
+    root = Path(root)
+    for path in sorted(root.rglob('*.md')):
+        rel = path.relative_to(root).as_posix()
+        if rel.split('/')[0] in ANCHOR_SKIP or rel.startswith('docs/facts'):
+            continue
+        for m in FACT_ANCHOR_RE.finditer(path.read_text(encoding='utf-8', errors='replace')):
+            area, fid = m.group(1), m.group(2)
+            if area_of.get(fid) != area:
+                where = area_of.get(fid)
+                errors.append(f'{rel}: link to facts/{area}.md#{fid}: '
+                              + (f'the fact is in {where}.md' if where else 'no such fact'))
+    return errors
+
+
 def leading_status(text):
     m = re.match(r'^\W*(' + '|'.join(STATUSES) + r')\b', text)
     return m.group(1) if m else None
@@ -562,7 +586,7 @@ def main(argv=None):
     except DataError as e:
         print(f'FAIL data: {e}')
         return 1
-    errors = validate(root, areas)
+    errors = validate(root, areas) + anchor_links(root, areas)
     if args.command:
         facts = {f['id']: f for a in areas for f in a['facts']}
         if args.command[0] == 'next-id':
