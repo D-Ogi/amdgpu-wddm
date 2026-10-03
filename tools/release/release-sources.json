@@ -143,10 +143,10 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/release/control-app/build/app-d8347cf0/bc250kmd_cli.exe",
+      "source": "scratch/release/control-app/build/app-a888b2bd/bc250kmd_cli.exe",
       "sha256": "EE9C508119AEFDA461D25E99C9527476DDF6628C8B7E8E2A57257B4026894B14",
       "size": 219648,
-      "role": "KMD control CLI from the control-app build (release/control-app-t11-cli d8347cf0): the same bc250kmd_cli.c as bc250control.dll, every form in cli-commands.json (test-cli-commands.ps1)"
+      "role": "KMD control CLI from the control-app build (release/control-app-t11 a888b2bd; the same bytes as d8347cf0): the same bc250kmd_cli.c as bc250control.dll, every form in cli-commands.json (test-cli-commands.ps1)"
     },
     {
       "component": "tool",
@@ -159,23 +159,23 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/release/control-app/build/app-d8347cf0/amdgpu_wddm_control.exe",
-      "sha256": "9DB85A200640D99489D75DFFADD614EAF0D2F71B7B85F1C7F4FADD117626B825",
-      "size": 168448,
-      "role": "control application 0.3.1.0 (release/control-app-t11-cli d8347cf0 on release/control-app-v0 cfdc922e)"
+      "source": "scratch/release/control-app/build/app-a888b2bd/amdgpu_wddm_control.exe",
+      "sha256": "D77546435C99FDEB3822E744CE44CCE3303C0C0A31D825930D136492F144CDD3",
+      "size": 189440,
+      "role": "control application 0.4.2.1 (release/control-app-t11 a888b2bd)"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/release/control-app/build/app-d8347cf0/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-a888b2bd/bc250control.dll",
       "sha256": "7B16284CD01B9162FB71DFCB3BE501681FD23C2AB2A0F3634B0D224618E9CD0A",
       "size": 147968,
-      "role": "control DLL for the control application (d8347cf0, static CRT; the same bytes as tester.10's)"
+      "role": "control DLL for the control application (a888b2bd build, static CRT; the same bytes as d8347cf0 and tester.10's)"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/release/control-app/build/app-d8347cf0/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-a888b2bd/bc250control.dll",
       "sha256": "7B16284CD01B9162FB71DFCB3BE501681FD23C2AB2A0F3634B0D224618E9CD0A",
       "size": 147968,
       "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
