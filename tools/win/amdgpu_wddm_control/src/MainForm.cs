@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -17,6 +18,51 @@ namespace AmdgpuWddmControl
     // Colours, fonts and one scale factor. The process is per-monitor DPI aware (app.manifest) and the form does no
     // automatic scaling, so every pixel size goes through S() and the fonts are sized in pixels with the same factor:
     // at 120 or 144 DPI text and boxes grow together, and an AutoSize label never runs into its neighbour.
+    // The clock ceiling as "-  1500 MHz  +", drawn in the theme colours (a ComboBox draws its closed box white on
+    // the dark theme): one 100 MHz step per click, held inside the 1000-2000 MHz grid.
+    sealed class CeilingPicker : FlowLayoutPanel
+    {
+        readonly Label _value;
+        int _index = -1;
+
+        // A click on - or +, also at either end of the grid: the user chose a ceiling.
+        public event EventHandler Stepped;
+
+        public CeilingPicker()
+        {
+            AutoSize = true; WrapContents = false; Margin = Theme.Pad(0); BackColor = Color.Transparent;
+            Controls.Add(Step("-", -1, "Lower clock ceiling"));
+            _value = new Label
+            {
+                AutoSize = false, Size = Theme.Sz(96, 30), TextAlign = ContentAlignment.MiddleCenter, Font = Theme.Body,
+                ForeColor = Theme.Text, BackColor = Theme.Nav, Margin = Theme.Pad(0, 6, 0, 6), AccessibleName = "Clock ceiling",
+            };
+            Controls.Add(_value);
+            Controls.Add(Step("+", 1, "Higher clock ceiling"));
+            Index = Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
+        }
+
+        Button Step(string text, int delta, string name)
+        {
+            var b = new Button
+            {
+                Text = text, Size = Theme.Sz(32, 30), FlatStyle = FlatStyle.Flat, Font = Theme.Bold, ForeColor = Theme.Text,
+                BackColor = Theme.Card, Margin = Theme.Pad(0, 6, 0, 6), Cursor = Cursors.Hand, AccessibleName = name,
+            };
+            b.FlatAppearance.BorderColor = Theme.Line;
+            b.Click += (s, e) => { Index += delta; if (Stepped != null) Stepped(this, EventArgs.Empty); };
+            return b;
+        }
+
+        public int Index
+        {
+            get { return _index; }
+            set { _index = Math.Max(0, Math.Min(DpmSettings.CeilingChoices.Length - 1, value)); _value.Text = Value + " MHz"; }
+        }
+
+        public uint Value { get { return DpmSettings.CeilingChoices[_index]; } }
+    }
+
     static class Theme
     {
         public static readonly Color Back = Color.FromArgb(24, 24, 27), Nav = Color.FromArgb(16, 16, 18), Card = Color.FromArgb(36, 36, 40),
@@ -64,6 +110,17 @@ namespace AmdgpuWddmControl
         }
 
         public static Label Narrow(Label l, int width) { l.MaximumSize = Sz(width, 0); return l; }
+
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        static extern int SetWindowTheme(IntPtr hwnd, string appName, string idList);
+
+        // Dark scroll bars on a scrolling control (the Explorer dark theme of Windows 10 1809 and later); an older
+        // system keeps the light ones.
+        public static T DarkScroll<T>(T c) where T : Control
+        {
+            c.HandleCreated += (s, e) => { try { SetWindowTheme(c.Handle, "DarkMode_Explorer", null); } catch (Exception) { } };
+            return c;
+        }
 
         public static Button Button(string text, EventHandler click, bool primary = false)
         {
@@ -126,7 +183,7 @@ namespace AmdgpuWddmControl
     public sealed class MainForm : Form
     {
         readonly bool _smoke;
-        readonly Panel _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back, Padding = Theme.Pad(24, 18, 24, 18), AutoScroll = true };
+        readonly Panel _content = Theme.DarkScroll(new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back, Padding = Theme.Pad(24, 18, 24, 18), AutoScroll = true });
         readonly Dictionary<string, Panel> _pages = new Dictionary<string, Panel>();
         readonly Dictionary<string, Button> _nav = new Dictionary<string, Button>();
         readonly Label _status = Theme.Label("", null, Theme.Dim);
@@ -136,7 +193,7 @@ namespace AmdgpuWddmControl
         Card _driver, _gpu, _perfNow;
         ListView _components;
         CheckBox _dpmOn, _ceilingOn;
-        ComboBox _ceiling;
+        CeilingPicker _ceiling;
         Label _perfStored, _perfResult, _perfDirty;
         Button _perfApply, _perfRevert;
         uint? _storedMode, _storedMax;
@@ -158,7 +215,7 @@ namespace AmdgpuWddmControl
         FlowLayoutPanel _states;
         Label _undoText, _recoveryResult;
         TextBox _recoveryLog;
-        ComboBox _recoveryCeiling;
+        CeilingPicker _recoveryCeiling;
         CheckBox _recoveryCeilingOn;
         readonly List<Button> _actionButtons = new List<Button>();
         List<StateLine> _stateLines = new List<StateLine>();
@@ -246,7 +303,7 @@ namespace AmdgpuWddmControl
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Margin = Theme.Pad(0, 6, 0, 6),
             };
             _components.Columns.Add("Component", Theme.S(190)); _components.Columns.Add("File", Theme.S(400)); _components.Columns.Add("Version", Theme.S(130)); _components.Columns.Add("SHA-256", Theme.S(160));
-            p.Controls.Add(_components);
+            p.Controls.Add(Theme.DarkScroll(_components));
             p.Controls.Add(Theme.Button("Refresh", (s, e) => RefreshAll()));
         }
 
@@ -366,7 +423,7 @@ namespace AmdgpuWddmControl
             var ceilingRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
             _ceilingOn = Theme.Check("Clock ceiling (DpmMaxMHz):", Theme.Bold);
             ceilingRow.Controls.Add(_ceilingOn);
-            _ceiling = CeilingBox();
+            _ceiling = new CeilingPicker();
             ceilingRow.Controls.Add(_ceiling);
             settings.Add(ceilingRow);
             settings.Add(Theme.Hint("Driver default when unchecked: " + DpmSettings.DefaultMaxMHz + " MHz. Used with the automatic clock only."));
@@ -384,7 +441,7 @@ namespace AmdgpuWddmControl
             p.Controls.Add(settings);
             _dpmOn.CheckedChanged += (s, e) => UpdatePerfDirty();
             _ceilingOn.CheckedChanged += (s, e) => UpdatePerfDirty();
-            _ceiling.SelectedIndexChanged += (s, e) => { if (!_loadingPerf) _ceilingOn.Checked = true; UpdatePerfDirty(); };
+            _ceiling.Stepped += (s, e) => { _ceilingOn.Checked = true; UpdatePerfDirty(); };
 
             var thermal = new Card("Temperature protection (always on, not adjustable)");
             thermal.Add(Theme.Label("At 87 C the driver reduces the clock step by step. Below 82 C it lets the clock rise again."));
@@ -393,14 +450,6 @@ namespace AmdgpuWddmControl
             thermal.Add(Theme.Label("The board firmware controls the fan (BIOS \"Fan Setting\"), not this driver.", null, Theme.Dim));
             thermal.Add(Theme.Label("Safety: if Windows stops while the clock is high, or a start with automatic clock does not finish, the next start uses the fixed clock and sets the mode back to fixed. Select automatic again after you find the cause.", null, Theme.Dim));
             p.Controls.Add(thermal);
-        }
-
-        static ComboBox CeilingBox()
-        {
-            var c = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = Theme.S(130), BackColor = Theme.Card, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat, Font = Theme.Body };
-            foreach (var mhz in DpmSettings.CeilingChoices) c.Items.Add(mhz + " MHz");
-            c.SelectedIndex = Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
-            return c;
         }
 
         void RefreshStoredDpm()
@@ -418,7 +467,7 @@ namespace AmdgpuWddmControl
             _dpmOn.Checked = _storedMode == 1;
             _ceilingOn.Checked = _storedMax != null;
             int index = _storedMax != null ? Array.IndexOf(DpmSettings.CeilingChoices, _storedMax.Value) : -1;
-            _ceiling.SelectedIndex = index >= 0 ? index : Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
+            _ceiling.Index = index >= 0 ? index : Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
             _loadingPerf = false;
             if (!_driverInstalled) _perfStored.Text = "The bc250kmd driver is not installed: there are no settings to change.";
             else _perfStored.Text = "Stored now: " + DpmSettings.Describe(_storedMode, _storedMax) +
@@ -427,11 +476,9 @@ namespace AmdgpuWddmControl
             UpdatePerfDirty();
         }
 
-        uint SelectedCeiling(ComboBox c) { return DpmSettings.CeilingChoices[Math.Max(0, c.SelectedIndex)]; }
-
         List<RegWrite> PerfWrites()
         {
-            return DpmSettings.PlanWrites(_storedMode, _storedMax, _dpmOn.Checked, _ceilingOn.Checked ? SelectedCeiling(_ceiling) : (uint?)null);
+            return DpmSettings.PlanWrites(_storedMode, _storedMax, _dpmOn.Checked, _ceilingOn.Checked ? _ceiling.Value : (uint?)null);
         }
 
         void UpdatePerfDirty()
@@ -448,7 +495,7 @@ namespace AmdgpuWddmControl
 
         void ApplyDpm()
         {
-            DoAction("set-clocks", _dpmOn.Checked ? 1u : (uint?)null, _ceilingOn.Checked ? SelectedCeiling(_ceiling) : (uint?)null, _perfResult);
+            DoAction("set-clocks", _dpmOn.Checked ? 1u : (uint?)null, _ceilingOn.Checked ? _ceiling.Value : (uint?)null, _perfResult);
         }
 
         // ---- Applications ------------------------------------------------------------------------------------------
@@ -466,6 +513,7 @@ namespace AmdgpuWddmControl
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable, Font = Theme.Body,
             };
             _profiles.Columns.Add("Application", Theme.S(110)); _profiles.Columns.Add("Switches", Theme.S(145));
+            Theme.DarkScroll(_profiles);
             _profiles.SelectedIndexChanged += (s, e) => ShowProfile();
             left.Controls.Add(_profiles);
             var lb = new FlowLayoutPanel { AutoSize = true };
@@ -675,9 +723,9 @@ namespace AmdgpuWddmControl
             _recoveryCeilingOn = Theme.Check("Also set the clock ceiling:");
             _recoveryCeilingOn.Margin = Theme.Pad(0, 10, 6, 0);
             dpm.Controls.Add(_recoveryCeilingOn);
-            _recoveryCeiling = CeilingBox();
-            _recoveryCeiling.Margin = Theme.Pad(0, 8, 0, 0);
-            _recoveryCeiling.SelectedIndexChanged += (s, e) => _recoveryCeilingOn.Checked = true;
+            _recoveryCeiling = new CeilingPicker();
+            _recoveryCeiling.Margin = Theme.Pad(0, 2, 0, 0);
+            _recoveryCeiling.Stepped += (s, e) => _recoveryCeilingOn.Checked = true;
             dpm.Controls.Add(_recoveryCeiling);
             actions.Add(dpm);
             actions.Add(Theme.Hint("Unchecked: the stored ceiling stays as it is (driver default " + DpmSettings.DefaultMaxMHz + " MHz when none is stored).", 0));
@@ -690,17 +738,17 @@ namespace AmdgpuWddmControl
             actions.Add(Theme.Label("Not offered here: the temperature limits, firmware, BIOS settings and test signing.", null, Theme.Dim));
             _recoveryResult = Theme.Label("", null, Theme.Dim);
             actions.Add(_recoveryResult);
-            _recoveryLog = new TextBox
+            _recoveryLog = Theme.DarkScroll(new TextBox
             {
-                Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Width = Theme.S(880), Height = Theme.S(120),
-                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.MonoSmall, BorderStyle = BorderStyle.None,
-            };
+                Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.None, WordWrap = true, Width = Theme.S(880), Height = Theme.S(120),
+                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.MonoSmall, BorderStyle = BorderStyle.None, Visible = false,
+            });
             actions.Add(_recoveryLog);
             p.Controls.Add(actions);
             p.Controls.Add(Theme.Button("Refresh", (s, e) => RefreshRecovery()));
         }
 
-        uint? RecoveryCeiling() { return _recoveryCeilingOn.Checked ? SelectedCeiling(_recoveryCeiling) : (uint?)null; }
+        uint? RecoveryCeiling() { return _recoveryCeilingOn.Checked ? _recoveryCeiling.Value : (uint?)null; }
 
         void RefreshRecovery()
         {
@@ -779,10 +827,21 @@ namespace AmdgpuWddmControl
                 result.Text = code == Program.NotElevated ? "Administrator permission was not given. Nothing was changed." :
                     last != null ? last.Substring(last.IndexOf(" result: ", StringComparison.Ordinal) + 9) : "Finished with exit code " + code + ".";
                 result.ForeColor = code == RecoveryRunner.Done ? Theme.Good : Theme.Warn;
-                _recoveryLog.Text = string.Join("\r\n", lines);
+                ShowLog(string.Join("\r\n", lines));
                 RefreshAll();
                 if (code == RecoveryRunner.Done && plan.OfferRestart) OfferRestart("The change takes effect at the next restart of Windows. Restart now?");
             }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        // The log of the last action: hidden while empty, wrapped, and a scroll bar only when the text is taller than
+        // the box.
+        void ShowLog(string text)
+        {
+            _recoveryLog.Text = text;
+            _recoveryLog.Visible = text.Length > 0;
+            var room = new Size(_recoveryLog.Width - SystemInformation.VerticalScrollBarWidth - Theme.S(4), int.MaxValue);
+            int need = TextRenderer.MeasureText(text, _recoveryLog.Font, room, TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
+            _recoveryLog.ScrollBars = need > _recoveryLog.Height ? ScrollBars.Vertical : ScrollBars.None;
         }
 
         void OfferRestart(string question)
@@ -857,23 +916,50 @@ namespace AmdgpuWddmControl
                 ShowPage(page);
                 if (page == "Applications")
                     foreach (ListViewItem i in _profiles.Items) i.Selected = i.Text == "demo.exe";
+                if (page == "Recovery") ShowLog("(render) The log of the last action appears here, wrapped to the width of the box; a scroll bar appears only when the text is taller than the box.");
                 ClientSize = Theme.Sz(1180, 720);
                 PerformLayout();
-                int tall = _pages[page].PreferredSize.Height + Theme.S(80);
-                if (tall > ClientSize.Height) ClientSize = new Size(ClientSize.Width, tall);
-                PerformLayout();
                 CreateHandles(this);
-                using (var bmp = new Bitmap(Width, Height))
+                Snap(Path.Combine(dir, page + ".png"));
+                // The last control of the page must lie inside the content panel's scroll range, and a page taller
+                // than the panel needs its scroll bar. A form that is never shown does not scroll, so the check reads
+                // the range, and <page>-full.png draws the whole page.
+                var last = LastShown(_pages[page]);
+                int bottom = _content.PointToClient(last.Parent.PointToScreen(last.Location)).Y + last.Height;
+                int extent = _content.DisplayRectangle.Bottom + _content.Padding.Bottom;
+                if (bottom > extent || bottom > _content.ClientSize.Height && !_content.VerticalScroll.Visible)
+                    w.AppendLine(page + ": the last control " + Describe(last) + " ends at " + bottom + ", outside the scroll range " + extent +
+                        " (panel " + _content.ClientSize.Height + ", scroll bar " + (_content.VerticalScroll.Visible ? "shown" : "hidden") + ")");
+                var full = _pages[page];
+                using (var bmp = new Bitmap(full.Width, full.Height))
                 {
-                    DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
-                    bmp.Save(Path.Combine(dir, page + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+                    full.DrawToBitmap(bmp, new Rectangle(0, 0, full.Width, full.Height));
+                    bmp.Save(Path.Combine(dir, page + "-full.png"), System.Drawing.Imaging.ImageFormat.Png);
                 }
                 foreach (var o in Overlaps(_pages[page])) w.AppendLine(page + ": " + o);
                 int room = Theme.S(1180) - Theme.S(200) - _content.Padding.Horizontal;
                 if (_pages[page].PreferredSize.Width > room) w.AppendLine(page + ": " + _pages[page].PreferredSize.Width + " px wide, the window has " + room);
             }
             _edits.Remove("demo.exe");
+            ShowLog("");
             return w.ToString();
+        }
+
+        void Snap(string path)
+        {
+            using (var bmp = new Bitmap(Width, Height))
+            {
+                DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
+                bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            }
+        }
+
+        // The lowest control on the page that has no shown children of its own.
+        static Control LastShown(Control c)
+        {
+            var kids = c.Controls.Cast<Control>().Where(HasVisibleFlag).ToList();
+            if (kids.Count == 0) return c;
+            return LastShown(kids.OrderBy(k => k.Bottom).Last());
         }
 
         // Control.Visible reads false for every control of a form that was never shown, so the check uses the
@@ -936,13 +1022,14 @@ namespace AmdgpuWddmControl
                 Dock = DockStyle.Top, Height = Theme.S(200), View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None,
             };
+            Theme.DarkScroll(list);
             list.Columns.Add("File", Theme.S(170)); list.Columns.Add("Size", Theme.S(90)); list.Columns.Add("Contents", Theme.S(600));
             foreach (var e in report.Entries) list.Items.Add(new ListViewItem(new[] { e.Name, (e.Data.Length / 1024.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " KB", e.Description }) { Tag = e });
-            var text = new TextBox
+            var text = Theme.DarkScroll(new TextBox
             {
                 Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
                 BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.Mono, BorderStyle = BorderStyle.None,
-            };
+            });
             list.SelectedIndexChanged += (s, e) =>
             {
                 if (list.SelectedItems.Count == 0) return;

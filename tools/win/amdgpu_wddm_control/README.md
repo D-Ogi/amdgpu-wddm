@@ -122,8 +122,8 @@ errors, `--smoke` (the pages built and refreshed once without a window, which on
 for this PC's user and computer name) and the Recovery dry runs (every action planned from `test/snapshot-bd059.json`,
 the state BD-059 leaves behind, against its expected writes or refusal; a snapshot without `--dry-run` refused; one
 dry run of this PC) and `--smoke-render <dir> <scale>` at 1, 1.25 and 1.5 (every page drawn to a PNG without a
-window, with an unsaved demo profile on Applications; the build fails when two sibling controls overlap or a page is
-wider than the window).
+window, with an unsaved demo profile on Applications, and the whole page as `<page>-full.png`; the build fails when
+two sibling controls overlap, a page is wider than the window or its last control lies outside the scroll range).
 
 The output folder holds `amdgpu_wddm_control.exe` and `bc250control.dll`; the release installer puts both, and
 `amdgpu_wddm_d3d12caps.exe`, in one directory.
