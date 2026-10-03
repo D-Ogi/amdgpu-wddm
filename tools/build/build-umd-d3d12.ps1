@@ -21,6 +21,8 @@ if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
 if($LASTEXITCODE){throw 'Native engine-ddi build or host gates failed'}
 $engineLib=Join-Path $engineBuild 'engine-ddi.lib'
 if(!(Test-Path -LiteralPath $engineLib)){throw 'Native engine-ddi library missing'}
+# The recent-launch record that the adapter's CreateDevice notes (gate G-RG).
+& "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall
 $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
