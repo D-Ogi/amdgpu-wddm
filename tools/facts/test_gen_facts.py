@@ -84,6 +84,16 @@ class FactsGate(unittest.TestCase):
         changed = [p.relative_to(self.root).as_posix() for p in pages if p.read_text(encoding='utf-8') != before[p]]
         self.assertEqual(changed, ['docs/facts/current.md', 'docs/facts/hw.md'])
 
+    def test_status_change_touches_only_its_page(self):
+        pages = sorted((self.root / 'docs').rglob('*.md'))
+        before = {p: p.read_text(encoding='utf-8') for p in pages}
+        # M1 has an incoming edge, so it is drawn in the graphs; its new status must not reach them.
+        self.write(GOOD.replace('    status: MEASURED\n    date: "2026-09-21"',
+                                '    status: CONFIRMED\n    date: "2026-09-21"'))
+        self.assertEqual(self.run_gen('--write'), 0)
+        changed = [p.relative_to(self.root).as_posix() for p in pages if p.read_text(encoding='utf-8') != before[p]]
+        self.assertEqual(changed, ['docs/facts/hw.md'])
+
     def test_duplicate_id(self):
         self.write(GOOD.replace('id: M3', 'id: M1'))
         self.assertFails('duplicate id')

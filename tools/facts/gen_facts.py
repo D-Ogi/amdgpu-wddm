@@ -8,9 +8,10 @@ The data files are the only place where facts are written. Everything else is ge
     docs/facts/current.md       live facts only (not REFUTED, not wholly superseded)
     docs/facts/graphs/<area>.md mermaid graphs of the area's relations
 
-A fact's status is written on its area page (and coloured in the graphs), and no page carries
-counts, so adding a fact changes its data file, its area page and current.md, plus the pages
-of the facts it has edges to.
+A fact's status is written on its area page only, and no page carries counts, so adding a fact
+changes its data file, its area page and current.md, plus the pages of the facts it has edges
+to; changing a status changes the data file and the area page (and current.md when the fact
+becomes REFUTED and leaves the live list).
 
 Usage:
     gen_facts.py --write        regenerate the views
@@ -403,23 +404,15 @@ def render_current(g):
 # Mermaid: GitHub renders these, but large graphs become unreadable, so each graph is capped.
 GRAPH_NODE_CAP = 60
 EDGE_ARROW = {'uses': '-->', 'supports': '==>|supports|', 'refutes': '-.->|refutes|', 'supersedes': '==>|supersedes|'}
-CLASSDEFS = [
-    '  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000',
-    '  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000',
-    '  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000',
-    '  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000',
-    '  classDef other stroke-dasharray:4 3',
-]
-
-
 def mermaid(g, area, nodes, edges):
+    # Nodes are plain: a status lives on the area page only, so changing it leaves the graphs alone.
     lines = ['```mermaid', 'flowchart LR']
     for fid in sorted(nodes, key=id_key):
         label = fid if g.area_of[fid] == area else f'{fid}<br/>{g.area_of[fid]}'
-        lines.append(f'  {fid}["{label}"]:::{g.facts[fid]["status"]}')
+        lines.append(f'  {fid}["{label}"]')
     for src, e in edges:
         lines.append(f'  {src} {EDGE_ARROW[e["type"]]} {e["to"]}')
-    lines += CLASSDEFS
+    lines.append('  classDef other stroke-dasharray:4 3')
     others = [fid for fid in nodes if g.area_of[fid] != area]
     if others:
         lines.append('  class ' + ','.join(sorted(others, key=id_key)) + ' other')
@@ -477,7 +470,7 @@ def capped_graphs(g, area, types, title):
 def render_graphs(g, a):
     key = a['area']
     lines = [GENERATED, '', f'# Fact graphs: {a["title"]}', '',
-             f'Table: [`../{key}.md`](../{key}.md). Colours: status. Edge types: `supersedes`, `refutes` and '
+             f'Table, with each fact\'s status: [`../{key}.md`](../{key}.md). Edge types: `supersedes`, `refutes` and '
              '`supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. '
              'Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn '
              f'in parts of at most {GRAPH_NODE_CAP} (a larger single cluster keeps its own part).', '']

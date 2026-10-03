@@ -2,7 +2,7 @@
 
 # Fact graphs: Games and performance
 
-Table: [`../games.md`](../games.md). Colours: status. Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
+Table, with each fact's status: [`../games.md`](../games.md). Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
 
 ## Corrections and support
 
@@ -12,26 +12,22 @@ None in this area.
 
 ```mermaid
 flowchart LR
-  M274["M274"]:::MEASURED
-  M321["M321"]:::MEASURED
-  M380["M380"]:::MEASURED
-  M412["M412<br/>display"]:::MEASURED
-  M413["M413"]:::MEASURED
-  M415["M415"]:::MEASURED
-  M571["M571"]:::MEASURED
-  M573["M573"]:::MEASURED
-  M607["M607"]:::MEASURED
-  M610["M610"]:::MEASURED
+  M274["M274"]
+  M321["M321"]
+  M380["M380"]
+  M412["M412<br/>display"]
+  M413["M413"]
+  M415["M415"]
+  M571["M571"]
+  M573["M573"]
+  M607["M607"]
+  M610["M610"]
   M321 --> M274
   M413 --> M380
   M413 --> M412
   M415 --> M412
   M573 --> M571
   M610 --> M607
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M412 other
 ```

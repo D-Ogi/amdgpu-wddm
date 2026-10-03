@@ -2,19 +2,15 @@
 
 # Fact graphs: Direct3D through the system runtime
 
-Table: [`../d3d.md`](../d3d.md). Colours: status. Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
+Table, with each fact's status: [`../d3d.md`](../d3d.md). Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
 
 ## Corrections and support
 
 ```mermaid
 flowchart LR
-  M574["M574"]:::MEASURED
-  M575["M575"]:::MEASURED
+  M574["M574"]
+  M575["M575"]
   M575 ==>|supersedes| M574
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
 ```
 
@@ -22,27 +18,27 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M496["M496"]:::MEASURED
-  M544["M544"]:::MEASURED
-  M545["M545"]:::MEASURED
-  M546["M546"]:::MEASURED
-  M553["M553<br/>tooling"]:::MEASURED
-  M563["M563"]:::MEASURED
-  M565["M565"]:::MEASURED
-  M567["M567"]:::MEASURED
-  M569["M569<br/>icd"]:::MEASURED
-  M572["M572"]:::MEASURED
-  M575["M575"]:::MEASURED
-  M576["M576<br/>display"]:::MEASURED
-  M585["M585<br/>display"]:::MEASURED
-  M586["M586"]:::MEASURED
-  M697["M697"]:::MEASURED
-  M723["M723<br/>display"]:::MEASURED
-  M753["M753"]:::MEASURED
-  M754["M754"]:::MEASURED
-  M780["M780"]:::MEASURED
-  M782["M782"]:::MEASURED
-  M784["M784"]:::MEASURED
+  M496["M496"]
+  M544["M544"]
+  M545["M545"]
+  M546["M546"]
+  M553["M553<br/>tooling"]
+  M563["M563"]
+  M565["M565"]
+  M567["M567"]
+  M569["M569<br/>icd"]
+  M572["M572"]
+  M575["M575"]
+  M576["M576<br/>display"]
+  M585["M585<br/>display"]
+  M586["M586"]
+  M697["M697"]
+  M723["M723<br/>display"]
+  M753["M753"]
+  M754["M754"]
+  M780["M780"]
+  M782["M782"]
+  M784["M784"]
   M576 --> M575
   M723 --> M697
   M569 --> M496
@@ -55,10 +51,6 @@ flowchart LR
   M782 --> M780
   M784 --> M780
   M553 --> M546
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M553,M569,M576,M585,M723 other
 ```

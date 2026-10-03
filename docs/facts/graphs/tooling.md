@@ -2,22 +2,18 @@
 
 # Fact graphs: Tooling, build and lab
 
-Table: [`../tooling.md`](../tooling.md). Colours: status. Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
+Table, with each fact's status: [`../tooling.md`](../tooling.md). Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
 
 ## Corrections and support
 
 ```mermaid
 flowchart LR
-  M455["M455<br/>kmd"]:::MEASURED
-  M456["M456"]:::MEASURED
-  M656["M656<br/>display"]:::MEASURED
-  M657["M657"]:::MEASURED
+  M455["M455<br/>kmd"]
+  M456["M456"]
+  M656["M656<br/>display"]
+  M657["M657"]
   M456 ==>|supersedes| M455
   M657 ==>|supersedes| M656
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M455,M656 other
 ```
@@ -26,19 +22,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M546["M546<br/>d3d"]:::MEASURED
-  M553["M553"]:::MEASURED
-  M653["M653<br/>display"]:::MEASURED
-  M654["M654"]:::MEASURED
-  M740["M740"]:::MEASURED
-  M743["M743"]:::MEASURED
+  M546["M546<br/>d3d"]
+  M553["M553"]
+  M653["M653<br/>display"]
+  M654["M654"]
+  M740["M740"]
+  M743["M743"]
   M553 --> M546
   M654 --> M653
   M743 --> M740
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M546,M653 other
 ```

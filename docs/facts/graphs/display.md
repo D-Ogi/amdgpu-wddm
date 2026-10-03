@@ -2,28 +2,24 @@
 
 # Fact graphs: Display, DWM and Present
 
-Table: [`../display.md`](../display.md). Colours: status. Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
+Table, with each fact's status: [`../display.md`](../display.md). Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
 
 ## Corrections and support
 
 ```mermaid
 flowchart LR
-  M82["M82"]:::MEASURED
-  M83["M83"]:::MEASURED
-  M98["M98"]:::MEASURED
-  M99["M99"]:::MEASURED
-  M103["M103"]:::REFUTED
-  M106["M106"]:::MEASURED
-  M656["M656"]:::MEASURED
-  M657["M657<br/>tooling"]:::MEASURED
+  M82["M82"]
+  M83["M83"]
+  M98["M98"]
+  M99["M99"]
+  M103["M103"]
+  M106["M106"]
+  M656["M656"]
+  M657["M657<br/>tooling"]
   M83 ==>|supersedes| M82
   M99 -.->|refutes| M98
   M106 -.->|refutes| M103
   M657 ==>|supersedes| M656
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M657 other
 ```
@@ -34,66 +30,66 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M20["M20<br/>hardware"]:::MEASURED
-  M31["M31<br/>hardware"]:::MEASURED
-  M67["M67<br/>kmd"]:::MEASURED
-  M68["M68"]:::MEASURED
-  M73["M73<br/>kmd"]:::MEASURED
-  M77["M77<br/>kmd"]:::MEASURED
-  M79["M79<br/>hardware"]:::MEASURED
-  M83["M83"]:::MEASURED
-  M84["M84"]:::MEASURED
-  M85["M85"]:::MEASURED
-  M86["M86"]:::MEASURED
-  M87["M87"]:::MEASURED
-  M88["M88"]:::MEASURED
-  M89["M89"]:::MEASURED
-  M92["M92"]:::MEASURED
-  M93["M93"]:::MEASURED
-  M94["M94"]:::MEASURED
-  M97["M97"]:::MEASURED
-  M98["M98"]:::MEASURED
-  M99["M99"]:::MEASURED
-  M103["M103"]:::REFUTED
-  M106["M106"]:::MEASURED
-  M109["M109"]:::MEASURED
-  M115["M115"]:::MEASURED
-  M116["M116"]:::MEASURED
-  M117["M117"]:::MEASURED
-  M118["M118"]:::MEASURED
-  M120["M120"]:::MEASURED
-  M190["M190<br/>kmd"]:::CONFIRMED
-  M202["M202"]:::CONFIRMED
-  M407["M407"]:::MEASURED
-  M408["M408"]:::MEASURED
-  M410["M410"]:::MEASURED
-  M411["M411"]:::MEASURED
-  M412["M412"]:::MEASURED
-  M413["M413<br/>games"]:::MEASURED
-  M415["M415<br/>games"]:::MEASURED
-  M430["M430"]:::CONFIRMED
-  M431["M431"]:::CONFIRMED
-  M562["M562"]:::MEASURED
-  M575["M575<br/>d3d"]:::MEASURED
-  M576["M576"]:::MEASURED
-  M585["M585"]:::MEASURED
-  M586["M586<br/>d3d"]:::MEASURED
-  M596["M596"]:::MEASURED
-  M652["M652"]:::MEASURED
-  M653["M653"]:::MEASURED
-  M654["M654<br/>tooling"]:::MEASURED
-  M681["M681"]:::MEASURED
-  M682["M682"]:::MEASURED
-  M685["M685"]:::MEASURED
-  M695["M695"]:::MEASURED
-  M697["M697<br/>d3d"]:::MEASURED
-  M701["M701"]:::MEASURED
-  M702["M702"]:::MEASURED
-  M708["M708"]:::MEASURED
-  M709["M709"]:::MEASURED
-  M710["M710"]:::MEASURED
-  M723["M723"]:::MEASURED
-  M724["M724"]:::MEASURED
+  M20["M20<br/>hardware"]
+  M31["M31<br/>hardware"]
+  M67["M67<br/>kmd"]
+  M68["M68"]
+  M73["M73<br/>kmd"]
+  M77["M77<br/>kmd"]
+  M79["M79<br/>hardware"]
+  M83["M83"]
+  M84["M84"]
+  M85["M85"]
+  M86["M86"]
+  M87["M87"]
+  M88["M88"]
+  M89["M89"]
+  M92["M92"]
+  M93["M93"]
+  M94["M94"]
+  M97["M97"]
+  M98["M98"]
+  M99["M99"]
+  M103["M103"]
+  M106["M106"]
+  M109["M109"]
+  M115["M115"]
+  M116["M116"]
+  M117["M117"]
+  M118["M118"]
+  M120["M120"]
+  M190["M190<br/>kmd"]
+  M202["M202"]
+  M407["M407"]
+  M408["M408"]
+  M410["M410"]
+  M411["M411"]
+  M412["M412"]
+  M413["M413<br/>games"]
+  M415["M415<br/>games"]
+  M430["M430"]
+  M431["M431"]
+  M562["M562"]
+  M575["M575<br/>d3d"]
+  M576["M576"]
+  M585["M585"]
+  M586["M586<br/>d3d"]
+  M596["M596"]
+  M652["M652"]
+  M653["M653"]
+  M654["M654<br/>tooling"]
+  M681["M681"]
+  M682["M682"]
+  M685["M685"]
+  M695["M695"]
+  M697["M697<br/>d3d"]
+  M701["M701"]
+  M702["M702"]
+  M708["M708"]
+  M709["M709"]
+  M710["M710"]
+  M723["M723"]
+  M724["M724"]
   M68 --> M67
   M84 --> M73
   M84 --> M83
@@ -141,10 +137,6 @@ flowchart LR
   M413 --> M412
   M415 --> M412
   M654 --> M653
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M20,M31,M67,M73,M77,M79,M190,M413,M415,M575,M586,M654,M697 other
 ```
@@ -153,13 +145,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M719["M719"]:::MEASURED
-  M720["M720"]:::MEASURED
+  M719["M719"]
+  M720["M720"]
   M720 --> M719
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
 ```
 

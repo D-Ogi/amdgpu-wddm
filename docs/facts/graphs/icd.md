@@ -2,22 +2,18 @@
 
 # Fact graphs: ICD, Vulkan, OpenGL and compute
 
-Table: [`../icd.md`](../icd.md). Colours: status. Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
+Table, with each fact's status: [`../icd.md`](../icd.md). Edge types: `supersedes`, `refutes` and `supports` are drawn thick or dashed and labelled, `uses` (one fact cites another) is a plain arrow. Facts without any relation are not drawn; dashed boxes belong to other areas. Connected facts are drawn in parts of at most 60 (a larger single cluster keeps its own part).
 
 ## Corrections and support
 
 ```mermaid
 flowchart LR
-  M251["M251<br/>kmd"]:::MEASURED
-  M253["M253"]:::CONFIRMED
-  M509["M509"]:::MEASURED
-  M510["M510<br/>linux"]:::MEASURED
+  M251["M251<br/>kmd"]
+  M253["M253"]
+  M509["M509"]
+  M510["M510<br/>linux"]
   M253 ==>|supersedes| M251
   M510 ==>|supports| M509
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M251,M510 other
 ```
@@ -26,25 +22,25 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M50["M50<br/>linux"]:::MEASURED
-  M139["M139"]:::CONFIRMED
-  M166["M166"]:::MEASURED
-  M252["M252"]:::MEASURED
-  M253["M253"]:::CONFIRMED
-  M479["M479"]:::MEASURED
-  M480["M480"]:::MEASURED
-  M483["M483"]:::MEASURED
-  M496["M496<br/>d3d"]:::MEASURED
-  M508["M508"]:::MEASURED
-  M509["M509"]:::MEASURED
-  M510["M510<br/>linux"]:::MEASURED
-  M515["M515"]:::MEASURED
-  M516["M516<br/>linux"]:::MEASURED
-  M546["M546<br/>d3d"]:::MEASURED
-  M569["M569"]:::MEASURED
-  M581["M581"]:::MEASURED
-  M583["M583"]:::MEASURED
-  M665["M665"]:::MEASURED
+  M50["M50<br/>linux"]
+  M139["M139"]
+  M166["M166"]
+  M252["M252"]
+  M253["M253"]
+  M479["M479"]
+  M480["M480"]
+  M483["M483"]
+  M496["M496<br/>d3d"]
+  M508["M508"]
+  M509["M509"]
+  M510["M510<br/>linux"]
+  M515["M515"]
+  M516["M516<br/>linux"]
+  M546["M546<br/>d3d"]
+  M569["M569"]
+  M581["M581"]
+  M583["M583"]
+  M665["M665"]
   M139 --> M50
   M252 --> M253
   M253 --> M166
@@ -57,10 +53,6 @@ flowchart LR
   M665 --> M569
   M510 --> M508
   M516 --> M515
-  classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
-  classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
-  classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
-  classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
   class M50,M496,M510,M516,M546 other
 ```
