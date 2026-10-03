@@ -94,7 +94,7 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 ## What works and what does not
 
-- Desktop composition (DWM) uses the CPU route in tester.0: DWM draws the desktop with the CPU user-mode driver. The
+- Desktop composition (DWM) uses the CPU route in this release: DWM draws the desktop with the CPU user-mode driver. The
   GPU route comes back in a later release, after defect BD-058 is fixed (on the GPU route, DWM stops when a File
   Explorer window opens). Do not change `DwmForceCpu` in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.

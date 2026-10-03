@@ -222,10 +222,36 @@ function Invoke-Verify {
     # The release's DriverVer (x.y.z.100) differs from every lab build, so the bound version names the package.
     $inf = $null
     if ($drv) { $inf = $drv.InfName }
-    Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $($drv.DriverProviderName)), package $want"
+    # Win32_PnPSignedDriver leaves DriverProviderName empty for this package; the device property has the INF's Provider.
+    $provider = $null
+    try { $provider = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverProvider -ErrorAction Stop).Data } catch { }
+    if (-not $provider -and $drv) { $provider = $drv.DriverProviderName }
+    Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $provider), package $want"
     # One read-only reading of the start-confirm task's inputs, in a child process (start-confirm.ps1 -Probe): the
     # driver version and LastStage through bc250kmd_cli, the KMD start health through bc250control.dll, the DPM
     # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
+    # Verify starts at the same logon as the start-confirm task, which needs about a minute: wait for this boot's run
+    # of the task to end (at most 120 s), so that the confirmation and DPM lines below are final.
+    $taskNote = 'start-confirm task: not registered'
+    $task = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
+    if ($task) {
+        $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+        $waited = [Diagnostics.Stopwatch]::StartNew()
+        $announced = $false
+        while ($true) {
+            $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue
+            $running = (Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue).State -eq 'Running'
+            $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
+            if (($ranThisBoot -and -not $running) -or $script:DryRunMode) { break }
+            if ($waited.Elapsed.TotalSeconds -ge 120) { break }
+            if (-not $announced) { Write-Info 'waiting for the start-confirm task of this logon to finish (at most 120 s)...'; $announced = $true }
+            Start-Sleep -Seconds 2
+        }
+        $code = $ti.LastTaskResult
+        $meaning = switch ($code) { 0 { 'confirmed through the KMD start health' } 6 { 'fallback: boot-loop guard reset only, DPM not confirmed' } 1 { 'bound reached unconfirmed' } 5 { 'no start-health reading' } 267009 { 'still running' } default { 'see C:\ProgramData\amdgpu-wddm\start-confirm.log' } }
+        $taskNote = "start-confirm task: last run $($ti.LastRunTime), result $code ($meaning), waited $([int]$waited.Elapsed.TotalSeconds) s"
+    }
+    Write-Info $taskNote
     $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
     $probe = ''
     if (Test-Path -LiteralPath $sc) { $probe = (Invoke-Native powershell.exe @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $sc, '-Probe')).text }

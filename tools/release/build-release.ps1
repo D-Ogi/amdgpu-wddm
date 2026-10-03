@@ -62,6 +62,7 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
 foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1') { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
+Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
 foreach ($f in 'LICENSE.md', 'NOTICE', 'THIRD-PARTY.md') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
 
 Write-Host 'driver version'
