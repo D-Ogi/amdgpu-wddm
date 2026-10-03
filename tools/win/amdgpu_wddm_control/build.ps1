@@ -10,7 +10,8 @@
 # KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
 # confirmation rule), the DLL and app compiles with warnings as errors, a smoke run of the exe with --smoke (no
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
-# Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC.
+# Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
+# and --smoke-render at 96, 120 and 144 DPI (every page drawn to a PNG, no window; no two controls may overlap).
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 
 param(
@@ -117,9 +118,10 @@ if (-not $NoSmoke) {
         'enable-dpm'      = @(0, "set $params DpmMode = 1 (DWord)", "set $params DpmMaxMHz = 1700 (DWord)")
         'reset-defaults'  = @(0, 'set HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter DwmForceCpu = 1 (DWord)')
         'undo'            = @(3, 'refused: There is no action to undo')
+        'set-clocks'      = @(0, "delete $params DpmMaxMHz")
     }
     foreach ($e in $expect.GetEnumerator()) {
-        $extra = if ($e.Key -eq 'enable-dpm') { @('--ceiling', '1700') } else { @() }
+        $extra = @(switch ($e.Key) { 'enable-dpm' { '--ceiling', '1700' } 'set-clocks' { '--mode', 'unset', '--ceiling', 'unset' } })
         $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $snapshot)) $e.Key
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
@@ -131,7 +133,20 @@ if (-not $NoSmoke) {
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'
     if (($r.Code -ne 0 -and $r.Code -ne 3) -or -not $r.Text.Contains('dry run: nothing was written')) { throw "dry run on this PC failed (exit $($r.Code)): $($r.Text)" }
+    $u = Invoke-DryRun @('--action', 'set-clocks', '--ceiling', '1500', '--dry-run', '--snapshot', $snapshot) 'set-clocks-without-mode'
+    if ($u.Code -ne 2) { throw "set-clocks without --mode must be refused as usage (exit $($u.Code))" }
     Write-Host "  dry runs: $($expect.Count) actions planned from the BD-059 snapshot as expected; this PC: $((($r.Text -split "`r?`n") | Where-Object { $_ -match '^\s+(refused|change):' } | Select-Object -First 1).Trim())"
+}
+
+if (-not $NoSmoke) {
+    foreach ($scale in '1', '1.25', '1.5') {
+        $dir = Join-Path $obj "render-$scale"
+        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-render', "`"$dir`"", $scale -PassThru -WindowStyle Hidden
+        if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "render at $scale did not exit within 60 s" }
+        $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
+        if ($p.ExitCode -ne 0) { throw "render at scale $scale (exit $($p.ExitCode)): $layout" }
+    }
+    Write-Host "  render: 5 pages at 96, 120 and 144 DPI, no overlapping controls ($obj\render-*)"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

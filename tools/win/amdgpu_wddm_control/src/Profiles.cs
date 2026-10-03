@@ -15,10 +15,18 @@ namespace AmdgpuWddmControl
         public ProfileSwitch(string token, string title, string description) { Token = token; Title = title; Description = description; }
     }
 
+    public enum ProfileWriteKind { None, Set, Delete }
+
+    public sealed class ProfileWrite
+    {
+        public string Image, Value;
+        public ProfileWriteKind Kind;
+    }
+
     public sealed class ProfileValue
     {
         public readonly List<string> Known = new List<string>();     // catalog switches, in catalog order
-        public readonly List<string> Unknown = new List<string>();   // other names: shown, kept, never edited
+        public readonly List<string> Unknown = new List<string>();   // other names: shown as their own check boxes
     }
 
     public static class Profiles
@@ -94,6 +102,21 @@ namespace AmdgpuWddmControl
             if (!IsValidValue(value)) throw new ArgumentException("the switch list is outside the driver's syntax or longer than " + MaxLength + " characters");
             return value;
         }
+
+        // The settings rule (owner, 2026-10-03): the stored value is exactly the checked names, nothing is written for
+        // an unchecked switch, and no checked name at all removes the application's key, so no empty value is left.
+        // stored: the stored value, null when the key does not exist; chosen: every checked name, catalog or not.
+        public static ProfileWrite PlanWrite(string image, string stored, IEnumerable<string> chosen)
+        {
+            var names = (chosen ?? Enumerable.Empty<string>()).Distinct().ToList();
+            if (names.Count == 0)
+                return new ProfileWrite { Image = image, Kind = stored == null ? ProfileWriteKind.None : ProfileWriteKind.Delete };
+            var value = Compose(names.Where(n => Find(n) != null), names.Where(n => Find(n) == null));
+            // The same set in another order (the installer writes its own order) is not a change.
+            var before = Parse(stored);
+            bool same = stored != null && IsValidValue(stored) && new HashSet<string>(before.Known.Concat(before.Unknown)).SetEquals(names);
+            return new ProfileWrite { Image = image, Value = value, Kind = same ? ProfileWriteKind.None : ProfileWriteKind.Set };
+        }
     }
 
     // DPM settings under HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters (docs/design/dpm.md, "Settings and
@@ -114,6 +137,19 @@ namespace AmdgpuWddmControl
             string m = mode == null ? "Fixed (default)" : mode == 1 ? "Automatic" : mode == 0 ? "Fixed" : "Invalid (" + mode + ")";
             string c = maxMHz == null ? DefaultMaxMHz + " MHz (default)" : maxMHz + " MHz";
             return m + ", ceiling " + c;
+        }
+
+        // The writes of the Performance page under the settings rule: DpmMode 1 only while "automatic" is checked
+        // (unchecking removes it; a 0 the driver stored after a fallback means the same as no value and stays),
+        // DpmMaxMHz only while a ceiling is checked (unchecking removes it).
+        public static List<RegWrite> PlanWrites(uint? storedMode, uint? storedMax, bool automatic, uint? ceiling)
+        {
+            var writes = new List<RegWrite>();
+            if (automatic) { if (storedMode != 1) writes.Add(RegWrite.Dword(RegistryPath, "DpmMode", 1)); }
+            else if (storedMode == 1) writes.Add(RegWrite.Remove(RegistryPath, "DpmMode"));
+            if (ceiling != null) { if (storedMax != ceiling) writes.Add(RegWrite.Dword(RegistryPath, "DpmMaxMHz", ceiling.Value)); }
+            else if (storedMax != null) writes.Add(RegWrite.Remove(RegistryPath, "DpmMaxMHz"));
+            return writes;
         }
     }
 }

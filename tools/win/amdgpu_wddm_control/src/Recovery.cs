@@ -369,7 +369,17 @@ namespace AmdgpuWddmControl
             if (!s.RouterInstalled)
                 add("Desktop composition", "The release's desktop router is not installed." + seen, "info", null, null);
             else if ((s.DwmForceCpu ?? 0) != 0)
-                add("Desktop composition", "CPU route (GPU route disabled, BD-058). This is the release default." + seen, "ok", null, null);
+            {
+                // The release's own choice comes from manifest.json, never from this app.
+                long def;
+                bool releaseCpu = s.DefaultRouter != null && s.DefaultRouter.TryGetValue("DwmForceCpu", out def) && def != 0;
+                bool releaseGpu = s.DefaultRouter != null && s.DefaultRouter.TryGetValue("DwmForceCpu", out def) && def == 0;
+                if (releaseCpu)
+                    add("Desktop composition", "CPU route (GPU route disabled, BD-058). This is the release default." + seen, "ok", null, null);
+                else
+                    add("Desktop composition", "CPU route (DwmForceCpu 1)." + (releaseGpu ? " The release default is the GPU route." : "") + seen, "info",
+                        releaseGpu && openNow ? "desktop-gpu" : null, releaseGpu && openNow ? "Desktop on the GPU route" : null);
+            }
             else if (!openNow)
                 add("Desktop composition", "GPU route selected, but the GPU desktop path is closed, so DWM stays on the CPU route." + seen, "warn",
                     requested && closed == null ? "restart" : "reopen-gpu-path", requested && closed == null ? "Restart Windows" : "Reopen the GPU desktop path");
@@ -471,17 +481,22 @@ namespace AmdgpuWddmControl
 
                 case "enable-dpm":
                 case "set-clocks":
-                    uint m = action == "enable-dpm" ? 1u : mode ?? 99;
-                    uint c = ceiling ?? DpmSettings.DefaultMaxMHz;
-                    p.Title = m == 1 ? "Automatic clocks" : "Fixed clock";
-                    if (!DpmSettings.IsValidMode(m)) return Refuse(p, "Clock mode " + m + " is not 0 (fixed) or 1 (automatic).");
-                    if (!DpmSettings.IsValidCeiling(c)) return Refuse(p, "The ceiling " + c + " MHz is not one of 1000, 1100 ... 2000 MHz.");
-                    p.Change = m == 1 ? "Automatic clocks (DpmMode 1) with a ceiling of " + c + " MHz (DpmMaxMHz)." : "Fixed clock of 1000 MHz (DpmMode 0); the stored ceiling becomes " + c + " MHz.";
+                    // set-clocks: the Performance page's two boxes, mode 1 or null (unchecked: removed), ceiling a
+                    // grid value or null (unchecked: removed). enable-dpm: DpmMode 1, and the ceiling only when chosen.
+                    bool automatic = action == "enable-dpm" || mode == 1;
+                    p.Title = automatic ? "Automatic clocks" : "Clock settings";
+                    if (action == "set-clocks" && mode != null && mode != 1)
+                        return Refuse(p, "Only DpmMode 1 is written; leave automatic clocks unchecked for the fixed clock (driver default).");
+                    if (ceiling != null && !DpmSettings.IsValidCeiling(ceiling.Value)) return Refuse(p, "The ceiling " + ceiling + " MHz is not one of 1000, 1100 ... 2000 MHz.");
+                    var stored = s.P("DpmMaxMHz");
+                    var clock = DpmSettings.PlanWrites(s.P("DpmMode"), stored, automatic, action == "enable-dpm" ? ceiling ?? stored : ceiling);
+                    if (action == "enable-dpm" && ceiling == null) clock.RemoveAll(w => w.Name == "DpmMaxMHz");
+                    p.Writes.AddRange(clock);
+                    if (p.Writes.Count == 0) return Refuse(p, "These clock settings are stored already.");
+                    p.Change = string.Join(" ", p.Writes.Select(w => w.Name == "DpmMode" ? (w.Delete ? "Removes DpmMode: the fixed clock of 1000 MHz (driver default)." : "Automatic clocks (DpmMode 1).")
+                        : w.Delete ? "Removes the clock ceiling: " + DpmSettings.DefaultMaxMHz + " MHz (driver default)." : "Clock ceiling " + w.Number + " MHz (DpmMaxMHz)."));
                     p.Effect = "at the next restart of Windows";
-                    p.Writes.Add(RegWrite.Dword(ParametersPath, "DpmMode", m));
-                    p.Writes.Add(RegWrite.Dword(ParametersPath, "DpmMaxMHz", c));
-                    if (p.Writes.All(w => Same(s, w))) return Refuse(p, "These clock settings are stored already.");
-                    if (m == 1 && c > DpmSettings.DefaultMaxMHz) p.Notes.Add("A ceiling above " + DpmSettings.DefaultMaxMHz + " MHz makes the GPU hotter and uses more power. Make sure the case has good air flow.");
+                    if (ceiling > DpmSettings.DefaultMaxMHz && automatic) p.Notes.Add("A ceiling above " + DpmSettings.DefaultMaxMHz + " MHz makes the GPU hotter and uses more power. Make sure the case has good air flow.");
                     p.OfferRestart = true;
                     break;
 
@@ -503,8 +518,8 @@ namespace AmdgpuWddmControl
                     p.Writes.Add(RegWrite.Dword(RouterPath, "DwmForceCpu", (uint)cpu));
                     if (s.DefaultParameters["EnableGpuPresentBlit"] == 1 && s.DefaultParameters["EnableCddDwmInterop"] == 1 && s.P("InteropClosedReason") != null)
                         p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
-                    foreach (var kv in s.DefaultParameters.Where(kv => !DefaultParameterNames.Contains(kv.Key)))
-                        p.Notes.Add("Not reset by this app: " + kv.Key + " (reinstall the release for the other driver settings).");
+                    int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k));
+                    if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
                     if (p.Writes.All(w => Same(s, w))) return Refuse(p, "All these settings have their release defaults already.");
                     p.Change = "Sets " + string.Join(", ", p.Writes.Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) + ".";
                     p.OfferRestart = true;

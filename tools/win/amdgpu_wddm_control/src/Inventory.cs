@@ -261,7 +261,7 @@ namespace AmdgpuWddmControl
         public static void WriteProfile(string image, string value)
         {
             if (!Profiles.IsValidImage(image)) throw new ArgumentException("Not an application file name: " + image);
-            if (!Profiles.IsValidValue(value)) throw new ArgumentException("The switch list is outside the driver's syntax.");
+            if (!Profiles.IsValidValue(value) || value.Length == 0) throw new ArgumentException("The switch list is empty or outside the driver's syntax.");
             using (var key = Registry.LocalMachine.CreateSubKey(Profiles.RegistryPath + "\\" + image))
                 key.SetValue(Profiles.ValueName, value, RegistryValueKind.String);
             using (var key = Registry.LocalMachine.OpenSubKey(Profiles.RegistryPath + "\\" + image))

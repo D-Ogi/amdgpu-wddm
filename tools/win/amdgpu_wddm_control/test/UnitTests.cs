@@ -288,7 +288,7 @@ static class UnitTests
         Throws<FormatException>(() => ManifestCheck.Parse("[1]"), "not an object refused");
 
         var interop = new InteropState { Flags = InteropState.FlagValid, Effective = 3, Users = 1 };
-        Equal("CPU route (GPU route disabled, BD-058)", KmdReply.CompositionLine(1, interop, null), "router forces CPU");
+        Equal("CPU route (GPU route disabled: DwmForceCpu 1)", KmdReply.CompositionLine(1, interop, null), "router forces CPU");
         Equal("GPU (1 device on the GPU path)", KmdReply.CompositionLine(0, interop, null), "router on GPU, KMD decides");
         Equal("GPU (1 device on the GPU path)", KmdReply.CompositionLine(null, interop, null), "no router key");
         Equal("not loaded", KmdReply.CompositionLine(null, null, "not loaded"), "no interop reply");
@@ -453,19 +453,25 @@ static class UnitTests
         p = Recovery.Plan("enable-dpm", Closed(), null, 1800);
         Check(!p.Refused && Writes(p, "DpmMode=1", "DpmMaxMHz=1800") && p.OfferRestart && p.Undoable, "enable-dpm writes mode 1 and the ceiling");
         Check(p.Notes.Any(n => n.Contains("hotter")), "a ceiling above 1500 warns");
-        Check(Writes(Recovery.Plan("enable-dpm", Closed()), "DpmMode=1", "DpmMaxMHz=1500"), "enable-dpm default ceiling 1500");
+        Check(Writes(Recovery.Plan("enable-dpm", Closed()), "DpmMode=1"), "enable-dpm without a chosen ceiling keeps the stored one");
+        var noCeiling = Closed(); noCeiling.Parameters.Remove("DpmMaxMHz");
+        Check(Writes(Recovery.Plan("enable-dpm", noCeiling), "DpmMode=1"), "enable-dpm writes no implicit ceiling");
         foreach (uint bad in new uint[] { 900, 1550, 2100, 0 })
             Check(Recovery.Plan("enable-dpm", Closed(), null, bad).Refused, "ceiling " + bad + " refused");
         var dpmOn = Closed(); dpmOn.Parameters["DpmMode"] = 1;
         Check(Recovery.Plan("enable-dpm", dpmOn, null, 1500).Refusal.Contains("stored already"), "enable-dpm refused when stored");
         Check(Recovery.Plan("set-clocks", Closed(), 2, 1500).Refused, "clock mode 2 refused");
-        Check(Recovery.Plan("set-clocks", Closed(), null, 1500).Refused, "set-clocks without a mode refused");
-        Check(Writes(Recovery.Plan("set-clocks", dpmOn, 0, 1500), "DpmMode=0", "DpmMaxMHz=1500"), "set-clocks to fixed");
+        Check(Recovery.Plan("set-clocks", Closed(), 0, 1500).Refusal.Contains("Only DpmMode 1"), "an explicit DpmMode 0 is not written");
+        Check(Writes(Recovery.Plan("set-clocks", dpmOn, null, null), "DpmMode-", "DpmMaxMHz-"), "set-clocks with both unchecked removes both");
+        Check(Writes(Recovery.Plan("set-clocks", dpmOn, null, 1500), "DpmMode-"), "set-clocks: unchecking automatic removes DpmMode");
+        Check(Recovery.Plan("set-clocks", dpmOn, 1, 1500).Refusal.Contains("stored already"), "set-clocks refused when nothing changes");
+        Check(Recovery.Plan("set-clocks", Closed(), null, 1500).Refused, "the driver's own DpmMode 0 is not a change to write");
+        Check(Writes(Recovery.Plan("set-clocks", noCeiling, 1, null), "DpmMode=1"), "set-clocks: automatic without a ceiling writes no ceiling");
 
         // 5. Reset.
         p = Recovery.Plan("reset-defaults", Closed());
         Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "DpmMode=1", "DpmMaxMHz=1500", "DwmForceCpu=1", "InteropClosedReason-"), "reset writes the manifest defaults");
-        Check(p.Notes.Any(n => n.Contains("EnableMmio")), "reset names the defaults it leaves to the installer");
+        Check(p.Notes.Count(n => n.Contains("left to the installer")) == 1, "reset names the defaults it leaves to the installer, once");
         Check(p.OfferRestart && p.Undoable, "reset: next restart, undoable");
         var noDefaults = Closed(); noDefaults.DefaultParameters = null; noDefaults.DefaultsError = "manifest.json has no \"defaults\"";
         Check(Recovery.Plan("reset-defaults", noDefaults).Refusal.Contains("no list of default settings"), "reset refused without manifest defaults");
@@ -521,6 +527,11 @@ static class UnitTests
         Check(line(lines, "GPU desktop path").Text.Contains("BD-059"), "closed path names BD-059");
         Check(line(lines, "Desktop composition").Text.StartsWith("CPU route (GPU route disabled, BD-058)") && line(lines, "Desktop composition").Action == null, "CPU route: release default, no action");
         Check(line(lines, "Clock control").Action == "enable-dpm", "clock fallback recommends enable-dpm");
+        var gpuDefault = Open(); gpuDefault.DefaultRouter["DwmForceCpu"] = 0;
+        var gl = line(Recovery.Describe(gpuDefault), "Desktop composition");
+        Check(gl.Text.StartsWith("CPU route (DwmForceCpu 1). The release default is the GPU route.") && gl.Action == "desktop-gpu", "release default GPU (manifest): the CPU route recommends the GPU route");
+        gpuDefault = Closed(); gpuDefault.DefaultRouter["DwmForceCpu"] = 0;
+        Check(line(Recovery.Describe(gpuDefault), "Desktop composition").Action == null, "release default GPU but switches closed: no GPU recommendation");
         Check(line(lines, "Driver start").Action == "confirm-start" && line(lines, "Driver start").Text.Contains("1 of 2"), "healthy unconfirmed start recommends the confirmation");
         Check(line(lines, "Start confirmation task").Severity == "warn" && line(lines, "Start confirmation task").Text.Contains("gave up"), "task result 1 explained");
         lines = Recovery.Describe(pending);
@@ -575,6 +586,40 @@ static class UnitTests
         Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": [1]}"), "manifest defaults as a list refused");
     }
 
+    // The settings rule (owner, 2026-10-03): unchecked = not written, unchecking removes, the exact set is written.
+    static string Show(IEnumerable<RegWrite> writes) { return string.Join(" ", writes.Select(w => w.Name + (w.Delete ? "-" : "=" + w.Number))); }
+
+    static void SettingsRule()
+    {
+        var none = new string[0];
+        Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", null, none).Kind, "profile: nothing checked, no key: nothing written");
+        Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", null, null).Kind, "profile: no names at all: nothing written");
+        var w = Profiles.PlanWrite("a.exe", "raytracing-tier", none);
+        Equal(ProfileWriteKind.Delete, w.Kind, "profile: checked, saved, then unchecked: the key is removed");
+        Equal(ProfileWriteKind.Delete, Profiles.PlanWrite("a.exe", "", none).Kind, "profile: an empty stored value is removed, not kept");
+        w = Profiles.PlanWrite("a.exe", "raytracing-tier,x-future", new[] { "raytracing-tier" });
+        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier", "profile: unchecking one name removes exactly that name");
+        w = Profiles.PlanWrite("a.exe", null, new[] { "deferred-replay", "x-future", "raytracing-tier" });
+        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier,deferred-replay,x-future", "profile: the exact checked set is written, catalog order first");
+        Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", "raytracing-tier,deferred-replay", new[] { "deferred-replay", "raytracing-tier" }).Kind, "profile: same set: nothing written");
+        const string witcher = "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay";
+        var parsed = Profiles.Parse(witcher);
+        Equal(6, parsed.Known.Count, "installer profile: every name shows as checked");
+        Equal(ProfileWriteKind.None, Profiles.PlanWrite("witcher3.exe", witcher, parsed.Known.Concat(parsed.Unknown)).Kind, "installer profile in its own order: not a change");
+        w = Profiles.PlanWrite("witcher3.exe", witcher, parsed.Known.Where(n => n != "deferred-replay"));
+        Check(w.Kind == ProfileWriteKind.Set && !w.Value.Contains("deferred-replay") && w.Value.Split(',').Length == 5, "installer profile: one unchecked name is removed");
+        Throws<ArgumentException>(() => Profiles.PlanWrite("a.exe", "BAD VALUE", new[] { "BAD VALUE" }), "profile: a checked value outside the syntax is not written");
+        Equal(ProfileWriteKind.Delete, Profiles.PlanWrite("a.exe", "BAD VALUE", none).Kind, "profile: an unchecked bad value is removed");
+
+        Equal("", Show(DpmSettings.PlanWrites(null, null, false, null)), "clocks: nothing checked, nothing stored: nothing written");
+        Equal("DpmMode=1", Show(DpmSettings.PlanWrites(null, null, true, null)), "clocks: automatic checked writes DpmMode 1 only");
+        Equal("", Show(DpmSettings.PlanWrites(null, null, false, null)), "clocks: checked, then unchecked before Apply: nothing written");
+        Equal("DpmMode- DpmMaxMHz-", Show(DpmSettings.PlanWrites(1, 1500, false, null)), "clocks: unchecking after a save removes both values");
+        Equal("", Show(DpmSettings.PlanWrites(0, null, false, null)), "clocks: the driver's fallback 0 stays when unchecked");
+        Equal("DpmMaxMHz=1800", Show(DpmSettings.PlanWrites(1, null, true, 1800)), "clocks: the exact ceiling is written");
+        Equal("", Show(DpmSettings.PlanWrites(null, 1700, false, 1700)), "clocks: a stored ceiling shown checked is not rewritten");
+    }
+
     static int Main(string[] args)
     {
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
@@ -586,6 +631,7 @@ static class UnitTests
         DpmDesignDoc(args[0]);
         Redaction();
         Manifest();
+        SettingsRule();
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");

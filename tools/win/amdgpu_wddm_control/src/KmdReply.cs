@@ -214,7 +214,7 @@ namespace AmdgpuWddmControl
 
         public static string CompositionLine(uint? dwmForceCpu, InteropState interop, string interopError)
         {
-            if (dwmForceCpu == 1) return "CPU route (GPU route disabled, BD-058)";
+            if (dwmForceCpu == 1) return "CPU route (GPU route disabled: DwmForceCpu 1)";
             return interop != null ? CompositionText(interop) : interopError ?? "-";
         }
 

@@ -31,8 +31,23 @@ request the release's logon task sends: administrator only, `HardwareAccess`, on
 or unconfirmed start; the page shows the last start's reason.
 
 The window runs as the invoking user. A change starts an elevated copy of the program (one UAC prompt) with one verb,
-`--action <name>`, `--write-profile <exe> <list>` or `--remove-profile <exe>`, which checks its arguments with the same
-functions as the window and reads the value back.
+`--action <name>` or `--apply-profiles <exe> <list> ...` (an empty list removes the application's key), which checks
+its arguments with the same functions as the window and reads the value back.
+
+## Settings rule
+
+Every settings page follows one rule (owner, 2026-10-03). A box is checked only when its value is written; nothing is
+written for an unchecked box; unchecking removes the value (all switches of an application unchecked removes its key),
+so no empty value and no implicit default is left behind. A driver's built-in default is described in text ("driver
+default when unchecked: ..."), never shown as a checked box. Values the installer wrote (the `witcher3.exe` profile)
+show as checked because they are written. Changes stay on the page, marked "Unsaved changes", until Apply; Revert
+reads the stored values again. `Profiles.PlanWrite` and `DpmSettings.PlanWrites` hold the rule and the unit tests
+check it (unchecked: nothing written; checked, saved, unchecked: removed; the exact set written, in any stored order).
+A `DpmMode` 0 the driver stores after a fallback means the same as no value and is left alone.
+
+The window scales every pixel size and font by one factor (system DPI / 96). Check boxes are never disabled: a
+disabled check box draws its text etched in system colours, which on the dark theme gave the faded, doubled switch
+titles seen at 120/144 DPI on the lab; the Applications page hides the switches until an application is selected.
 
 ## Recovery
 
@@ -52,8 +67,8 @@ confirmation task.
 | `desktop-gpu` | `DwmForceCpu` 0, DWM restart, 60 s watchdog | at once | the driver is not running; the effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`); the GPU desktop files are missing; DWM is on the GPU route already |
 | `desktop-cpu` | `DwmForceCpu` 1, DWM restart | at once | DWM is on the CPU route already |
 | `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD); not undoable | at once | the driver is not running; confirmed already; not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s; the helper retries the reading for 10 s) |
-| `enable-dpm --ceiling N` | `DpmMode` 1, `DpmMaxMHz` N | next restart (offered) | N is not 1000-2000 on the 100 MHz grid; stored already |
-| `set-clocks --mode M --ceiling N` | `DpmMode` M, `DpmMaxMHz` N (the Performance page) | next restart (offered) | as above, or M is not 0 or 1 |
+| `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid; stored already |
+| `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
 | `reset-defaults` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason` | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; all at their defaults already |
 | `undo` | the values the newest undoable backup found | as the action it undoes | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
 
@@ -106,7 +121,9 @@ errors, `--smoke` (the pages built and refreshed once without a window, which on
 "Driver not found"), `--smoke-report` (a report without dxdiag, capability tools and events, checked for its files and
 for this PC's user and computer name) and the Recovery dry runs (every action planned from `test/snapshot-bd059.json`,
 the state BD-059 leaves behind, against its expected writes or refusal; a snapshot without `--dry-run` refused; one
-dry run of this PC).
+dry run of this PC) and `--smoke-render <dir> <scale>` at 1, 1.25 and 1.5 (every page drawn to a PNG without a
+window, with an unsaved demo profile on Applications; the build fails when two sibling controls overlap or a page is
+wider than the window).
 
 The output folder holds `amdgpu_wddm_control.exe` and `bc250control.dll`; the release installer puts both, and
 `amdgpu_wddm_d3d12caps.exe`, in one directory.

@@ -14,29 +14,74 @@ using System.Windows.Forms;
 
 namespace AmdgpuWddmControl
 {
+    // Colours, fonts and one scale factor. The process is per-monitor DPI aware (app.manifest) and the form does no
+    // automatic scaling, so every pixel size goes through S() and the fonts are sized in pixels with the same factor:
+    // at 120 or 144 DPI text and boxes grow together, and an AutoSize label never runs into its neighbour.
     static class Theme
     {
         public static readonly Color Back = Color.FromArgb(24, 24, 27), Nav = Color.FromArgb(16, 16, 18), Card = Color.FromArgb(36, 36, 40),
             Text = Color.FromArgb(232, 232, 236), Dim = Color.FromArgb(160, 160, 170), Accent = Color.FromArgb(237, 28, 36),
             Good = Color.FromArgb(90, 200, 120), Warn = Color.FromArgb(240, 180, 60), Line = Color.FromArgb(60, 60, 66);
-        public static readonly Font Body = new Font("Segoe UI", 9.5f), Bold = new Font("Segoe UI Semibold", 9.5f),
-            Title = new Font("Segoe UI Semibold", 15f), CardTitle = new Font("Segoe UI Semibold", 11f), Brand = new Font("Segoe UI Semibold", 13f);
+        public static float Scale { get; private set; }
+        public static Font Body, Bold, Title, CardTitle, Brand, Mono, MonoSmall;
+
+        static Theme()
+        {
+            float dpi = 96;
+            try { using (var g = Graphics.FromHwnd(IntPtr.Zero)) dpi = g.DpiX; } catch (Exception) { }
+            Init(dpi / 96f);
+        }
+
+        // scale: 1.0 at 96 DPI. --smoke-render passes 1.25 or 1.5 to draw the pages as a 120 or 144 DPI screen shows them.
+        public static void Init(float scale)
+        {
+            Scale = scale <= 0 ? 1 : scale;
+            Body = Px("Segoe UI", 9.5f); Bold = Px("Segoe UI Semibold", 9.5f); Title = Px("Segoe UI Semibold", 15f);
+            CardTitle = Px("Segoe UI Semibold", 11f); Brand = Px("Segoe UI Semibold", 13f); Mono = Px("Consolas", 9f); MonoSmall = Px("Consolas", 8.5f);
+        }
+
+        static Font Px(string name, float points) { return new Font(name, points * 96f / 72f * Scale, GraphicsUnit.Pixel); }
+
+        public static int S(int px) { return (int)Math.Round(px * Scale); }
+        public static Size Sz(int w, int h) { return new Size(S(w), S(h)); }
+        public static Padding Pad(int all) { return new Padding(S(all)); }
+        public static Padding Pad(int left, int top, int right, int bottom) { return new Padding(S(left), S(top), S(right), S(bottom)); }
+
+        // A check box that stays readable: never disabled (a disabled check box draws its text etched in the system
+        // colours, which on this dark background is the faded, doubled title the lab showed); a page hides what does not
+        // apply instead.
+        public static CheckBox Check(string text, Font font = null)
+        {
+            return new CheckBox { Text = text, AutoSize = true, ForeColor = Text, BackColor = Color.Transparent, Font = font ?? Body, Margin = Pad(0, 6, 0, 0), UseVisualStyleBackColor = false };
+        }
+
+        public static Label Hint(string text, int indent = 20, int width = 820)
+        {
+            var l = Label(text, null, Dim);
+            l.Margin = Pad(indent, 0, 0, 4);
+            l.MaximumSize = Sz(width - indent, 0);
+            return l;
+        }
+
+        public static Label Narrow(Label l, int width) { l.MaximumSize = Sz(width, 0); return l; }
 
         public static Button Button(string text, EventHandler click, bool primary = false)
         {
             var b = new Button
             {
                 Text = text, AutoSize = true, FlatStyle = FlatStyle.Flat, ForeColor = Text, Font = Bold,
-                BackColor = primary ? Accent : Card, Padding = new Padding(10, 4, 10, 4), Margin = new Padding(0, 6, 10, 6), Cursor = Cursors.Hand,
+                BackColor = primary ? Accent : Card, Padding = Theme.Pad(10, 4, 10, 4), Margin = Theme.Pad(0, 6, 10, 6), Cursor = Cursors.Hand,
             };
             b.FlatAppearance.BorderColor = primary ? Accent : Line;
+            // A disabled primary button must not keep the accent colour: it would look ready to click.
+            if (primary) b.EnabledChanged += (s, e) => { b.BackColor = b.Enabled ? Accent : Card; b.FlatAppearance.BorderColor = b.Enabled ? Accent : Line; };
             b.Click += click;
             return b;
         }
 
         public static Label Label(string text, Font font = null, Color? color = null)
         {
-            return new Label { Text = text, AutoSize = true, Font = font ?? Body, ForeColor = color ?? Text, Margin = new Padding(0, 3, 12, 3), MaximumSize = new Size(860, 0) };
+            return new Label { Text = text, AutoSize = true, Font = font ?? Body, ForeColor = color ?? Text, Margin = Theme.Pad(0, 3, 12, 3), MaximumSize = Theme.Sz(860, 0) };
         }
     }
 
@@ -48,12 +93,12 @@ namespace AmdgpuWddmControl
 
         public Card(string title)
         {
-            BackColor = Theme.Card; AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Padding = new Padding(14, 10, 14, 12);
-            Margin = new Padding(0, 0, 14, 14);
+            BackColor = Theme.Card; AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Padding = Theme.Pad(14, 10, 14, 12);
+            Margin = Theme.Pad(0, 0, 14, 14);
             var stack = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
             stack.Controls.Add(Theme.Label(title, Theme.CardTitle));
-            _rows = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-            _rows.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+            _rows = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Margin = Theme.Pad(0, 6, 0, 0) };
+            _rows.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.S(190)));
             _rows.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             stack.Controls.Add(_rows);
             Controls.Add(stack);
@@ -81,7 +126,7 @@ namespace AmdgpuWddmControl
     public sealed class MainForm : Form
     {
         readonly bool _smoke;
-        readonly Panel _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back, Padding = new Padding(24, 18, 24, 18), AutoScroll = true };
+        readonly Panel _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back, Padding = Theme.Pad(24, 18, 24, 18), AutoScroll = true };
         readonly Dictionary<string, Panel> _pages = new Dictionary<string, Panel>();
         readonly Dictionary<string, Button> _nav = new Dictionary<string, Button>();
         readonly Label _status = Theme.Label("", null, Theme.Dim);
@@ -90,21 +135,31 @@ namespace AmdgpuWddmControl
 
         Card _driver, _gpu, _perfNow;
         ListView _components;
-        RadioButton _dpmOn, _dpmOff;
+        CheckBox _dpmOn, _ceilingOn;
         ComboBox _ceiling;
-        Label _perfStored, _perfResult;
+        Label _perfStored, _perfResult, _perfDirty;
+        Button _perfApply, _perfRevert;
+        uint? _storedMode, _storedMax;
+        bool _driverInstalled, _loadingPerf;
         ListView _profiles;
-        FlowLayoutPanel _switches;
-        Label _unknown, _profileResult, _reportStatus;
+        FlowLayoutPanel _switches, _otherSwitches;
+        Label _noSelection, _profileResult, _profilesDirty, _reportStatus;
+        Button _profilesApply, _profilesRevert;
         readonly Dictionary<string, CheckBox> _switchBoxes = new Dictionary<string, CheckBox>();
-        List<string> _unknownTokens = new List<string>();
+        readonly List<CheckBox> _otherBoxes = new List<CheckBox>();
+        // Applications: the stored profiles and the unsaved edits (image -> every checked name), written only by Apply.
+        SortedDictionary<string, string> _storedProfiles = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, List<string>> _edits = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        string _shownImage;
+        bool _loadingProfile;
         CheckBox _withDxdiag, _withCaps;
-        Button _reportButton, _perfApply;
+        Button _reportButton;
         InventoryState _inventory;
         FlowLayoutPanel _states;
         Label _undoText, _recoveryResult;
         TextBox _recoveryLog;
         ComboBox _recoveryCeiling;
+        CheckBox _recoveryCeilingOn;
         readonly List<Button> _actionButtons = new List<Button>();
         List<StateLine> _stateLines = new List<StateLine>();
 
@@ -115,20 +170,20 @@ namespace AmdgpuWddmControl
             _smoke = smoke;
             Text = Program.ProductName;
             BackColor = Theme.Back; ForeColor = Theme.Text; Font = Theme.Body;
-            ClientSize = new Size(1080, 720); MinimumSize = new Size(820, 560); StartPosition = FormStartPosition.CenterScreen;
+            ClientSize = Theme.Sz(1180, 720); MinimumSize = Theme.Sz(820, 560); StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location); } catch (Exception) { }
 
-            var nav = new FlowLayoutPanel { Dock = DockStyle.Left, Width = 200, BackColor = Theme.Nav, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(0, 16, 0, 0) };
-            var brand = Theme.Label("amdgpu-wddm", Theme.Brand); brand.Margin = new Padding(18, 0, 0, 0);
-            var sub = Theme.Label("ASRock BC-250", null, Theme.Dim); sub.Margin = new Padding(18, 0, 0, 18);
-            var bar = new Panel { Width = 200, Height = 3, BackColor = Theme.Accent, Margin = new Padding(0, 0, 0, 14) };
+            var nav = new FlowLayoutPanel { Dock = DockStyle.Left, Width = Theme.S(200), BackColor = Theme.Nav, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = Theme.Pad(0, 16, 0, 0) };
+            var brand = Theme.Label("amdgpu-wddm", Theme.Brand); brand.Margin = Theme.Pad(18, 0, 0, 0);
+            var sub = Theme.Label("ASRock BC-250", null, Theme.Dim); sub.Margin = Theme.Pad(18, 0, 0, 18);
+            var bar = new Panel { Width = Theme.S(200), Height = Theme.S(3), BackColor = Theme.Accent, Margin = Theme.Pad(0, 0, 0, 14) };
             nav.Controls.Add(brand); nav.Controls.Add(sub); nav.Controls.Add(bar);
             foreach (var name in new[] { "Overview", "Performance", "Applications", "Recovery", "Diagnostics" })
             {
                 var b = new Button
                 {
-                    Text = "   " + name, Width = 200, Height = 42, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                    ForeColor = Theme.Text, BackColor = Theme.Nav, Font = Theme.Bold, Margin = new Padding(0), Cursor = Cursors.Hand,
+                    Text = "   " + name, Width = Theme.S(200), Height = Theme.S(42), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    ForeColor = Theme.Text, BackColor = Theme.Nav, Font = Theme.Bold, Margin = Theme.Pad(0), Cursor = Cursors.Hand,
                 };
                 b.FlatAppearance.BorderSize = 0;
                 string page = name;
@@ -136,7 +191,7 @@ namespace AmdgpuWddmControl
                 nav.Controls.Add(b);
                 _nav[name] = b;
             }
-            var footer = new Panel { Dock = DockStyle.Bottom, Height = 28, BackColor = Theme.Nav, Padding = new Padding(12, 5, 12, 0) };
+            var footer = new Panel { Dock = DockStyle.Bottom, Height = Theme.S(28), BackColor = Theme.Nav, Padding = Theme.Pad(12, 5, 12, 0) };
             footer.Controls.Add(_status);
 
             BuildOverview(); BuildPerformance(); BuildApplications(); BuildRecovery(); BuildDiagnostics();
@@ -166,7 +221,7 @@ namespace AmdgpuWddmControl
         {
             var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Theme.Back };
             p.Controls.Add(Theme.Label(title, Theme.Title));
-            var i = Theme.Label(intro, null, Theme.Dim); i.Margin = new Padding(0, 2, 0, 14);
+            var i = Theme.Label(intro, null, Theme.Dim); i.Margin = Theme.Pad(0, 2, 0, 14);
             p.Controls.Add(i);
             _pages[name] = p;
             return p;
@@ -177,7 +232,7 @@ namespace AmdgpuWddmControl
         void BuildOverview()
         {
             var p = Page("Overview", "Overview", "The driver and the GPU now. Values update every 2 seconds.");
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(1000, 0) };
+            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = Theme.Sz(930, 0) };
             _driver = new Card("Driver");
             foreach (var k in new[] { "Status", "Release", "GPU", "Kernel driver", "Start check", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition", "Recovery" }) _driver.Row(k);
             _gpu = new Card("GPU now");
@@ -187,10 +242,10 @@ namespace AmdgpuWddmControl
             p.Controls.Add(Theme.Label("Installed components", Theme.CardTitle));
             _components = new ListView
             {
-                View = View.Details, FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable, Width = 960, Height = 210,
-                BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Margin = new Padding(0, 6, 0, 6),
+                View = View.Details, FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable, Width = Theme.S(900), Height = Theme.S(210),
+                BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Margin = Theme.Pad(0, 6, 0, 6),
             };
-            _components.Columns.Add("Component", 200); _components.Columns.Add("File", 430); _components.Columns.Add("Version", 140); _components.Columns.Add("SHA-256", 170);
+            _components.Columns.Add("Component", Theme.S(190)); _components.Columns.Add("File", Theme.S(400)); _components.Columns.Add("Version", Theme.S(130)); _components.Columns.Add("SHA-256", Theme.S(160));
             p.Controls.Add(_components);
             p.Controls.Add(Theme.Button("Refresh", (s, e) => RefreshAll()));
         }
@@ -293,6 +348,9 @@ namespace AmdgpuWddmControl
         }
 
         // ---- Performance -------------------------------------------------------------------------------------------
+        // Every settings page follows one rule (owner, 2026-10-03): a box is checked only when its value is written,
+        // nothing is written for an unchecked box, unchecking removes the value, and nothing is written before Apply.
+        // A driver default is described in text ("driver default: ..."), never shown as a checked box.
 
         void BuildPerformance()
         {
@@ -302,26 +360,31 @@ namespace AmdgpuWddmControl
             p.Controls.Add(_perfNow);
 
             var settings = new Card("Settings for the next start");
-            _dpmOn = new RadioButton { Text = "Automatic clock (recommended): the driver changes the clock with the GPU load", AutoSize = true, ForeColor = Theme.Text, Margin = new Padding(0, 4, 0, 2) };
-            _dpmOff = new RadioButton { Text = "Fixed clock: 1000 MHz at all times (lowest heat, lowest performance)", AutoSize = true, ForeColor = Theme.Text, Margin = new Padding(0, 2, 0, 8) };
-            settings.Add(_dpmOn); settings.Add(_dpmOff);
-            var ceilingRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0) };
-            ceilingRow.Controls.Add(Theme.Label("Clock ceiling (automatic mode):"));
-            _ceiling = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120, BackColor = Theme.Card, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat };
-            foreach (var mhz in DpmSettings.CeilingChoices) _ceiling.Items.Add(mhz + " MHz" + (mhz == DpmSettings.DefaultMaxMHz ? " (default)" : ""));
+            _dpmOn = Theme.Check("Automatic clock: the driver changes the clock with the GPU load (DpmMode 1)", Theme.Bold);
+            settings.Add(_dpmOn);
+            settings.Add(Theme.Hint("Driver default when unchecked: fixed clock, 1000 MHz at all times (lowest heat, lowest performance)."));
+            var ceilingRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
+            _ceilingOn = Theme.Check("Clock ceiling (DpmMaxMHz):", Theme.Bold);
+            ceilingRow.Controls.Add(_ceilingOn);
+            _ceiling = CeilingBox();
             ceilingRow.Controls.Add(_ceiling);
             settings.Add(ceilingRow);
-            _dpmOn.CheckedChanged += (s, e) => _ceiling.Enabled = _dpmOn.Checked;
+            settings.Add(Theme.Hint("Driver default when unchecked: " + DpmSettings.DefaultMaxMHz + " MHz. Used with the automatic clock only."));
             _perfStored = Theme.Label("", null, Theme.Dim);
             settings.Add(_perfStored);
-            var buttons = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+            _perfDirty = Theme.Label("", null, Theme.Dim);
+            settings.Add(_perfDirty);
+            var buttons = new FlowLayoutPanel { AutoSize = true, Margin = Theme.Pad(0, 6, 0, 0) };
             _perfApply = Theme.Button("Apply", (s, e) => ApplyDpm(), true);
-            buttons.Controls.Add(_perfApply);
-            buttons.Controls.Add(Theme.Button("Reset to defaults", (s, e) => { _dpmOn.Checked = true; _ceiling.SelectedIndex = Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz); }));
+            _perfRevert = Theme.Button("Revert", (s, e) => RefreshStoredDpm());
+            buttons.Controls.Add(_perfApply); buttons.Controls.Add(_perfRevert);
             settings.Add(buttons);
             _perfResult = Theme.Label("", null, Theme.Dim);
             settings.Add(_perfResult);
             p.Controls.Add(settings);
+            _dpmOn.CheckedChanged += (s, e) => UpdatePerfDirty();
+            _ceilingOn.CheckedChanged += (s, e) => UpdatePerfDirty();
+            _ceiling.SelectedIndexChanged += (s, e) => { if (!_loadingPerf) _ceilingOn.Checked = true; UpdatePerfDirty(); };
 
             var thermal = new Card("Temperature protection (always on, not adjustable)");
             thermal.Add(Theme.Label("At 87 C the driver reduces the clock step by step. Below 82 C it lets the clock rise again."));
@@ -332,33 +395,60 @@ namespace AmdgpuWddmControl
             p.Controls.Add(thermal);
         }
 
+        static ComboBox CeilingBox()
+        {
+            var c = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = Theme.S(130), BackColor = Theme.Card, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat, Font = Theme.Body };
+            foreach (var mhz in DpmSettings.CeilingChoices) c.Items.Add(mhz + " MHz");
+            c.SelectedIndex = Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
+            return c;
+        }
+
         void RefreshStoredDpm()
         {
-            uint? mode = null, max = null, lastReason = null;
+            uint? lastReason = null;
             try
             {
-                mode = SettingsStore.ReadDword(DpmSettings.RegistryPath, "DpmMode");
-                max = SettingsStore.ReadDword(DpmSettings.RegistryPath, "DpmMaxMHz");
+                _storedMode = SettingsStore.ReadDword(DpmSettings.RegistryPath, "DpmMode");
+                _storedMax = SettingsStore.ReadDword(DpmSettings.RegistryPath, "DpmMaxMHz");
                 lastReason = SettingsStore.ReadDword(DpmSettings.RegistryPath, "DpmLastReason");
             }
             catch (Exception e) { _perfStored.Text = "Cannot read the settings: " + e.Message; return; }
-            bool installed;
-            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(DpmSettings.RegistryPath)) installed = key != null;
-            _dpmOn.Checked = mode == 1; _dpmOff.Checked = mode != 1;
-            int index = Array.IndexOf(DpmSettings.CeilingChoices, max ?? DpmSettings.DefaultMaxMHz);
+            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(DpmSettings.RegistryPath)) _driverInstalled = key != null;
+            _loadingPerf = true;
+            _dpmOn.Checked = _storedMode == 1;
+            _ceilingOn.Checked = _storedMax != null;
+            int index = _storedMax != null ? Array.IndexOf(DpmSettings.CeilingChoices, _storedMax.Value) : -1;
             _ceiling.SelectedIndex = index >= 0 ? index : Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
-            _ceiling.Enabled = _dpmOn.Checked;
-            _perfApply.Enabled = installed;
-            if (!installed) { _perfStored.Text = "The bc250kmd driver is not installed: there are no settings to change."; return; }
-            _perfStored.Text = "Stored now: " + DpmSettings.Describe(mode, max) +
+            _loadingPerf = false;
+            if (!_driverInstalled) _perfStored.Text = "The bc250kmd driver is not installed: there are no settings to change.";
+            else _perfStored.Text = "Stored now: " + DpmSettings.Describe(_storedMode, _storedMax) +
+                (_storedMax != null && index < 0 ? " (not on the 100 MHz grid: the driver uses the fixed clock)" : "") +
                 (lastReason.HasValue ? ". Last start: " + KmdReply.ReasonText(lastReason.Value) + "." : ".");
+            UpdatePerfDirty();
         }
+
+        uint SelectedCeiling(ComboBox c) { return DpmSettings.CeilingChoices[Math.Max(0, c.SelectedIndex)]; }
+
+        List<RegWrite> PerfWrites()
+        {
+            return DpmSettings.PlanWrites(_storedMode, _storedMax, _dpmOn.Checked, _ceilingOn.Checked ? SelectedCeiling(_ceiling) : (uint?)null);
+        }
+
+        void UpdatePerfDirty()
+        {
+            if (_loadingPerf) return;
+            var writes = PerfWrites();
+            _perfDirty.Text = writes.Count == 0 ? "No unsaved changes." : "Unsaved changes (Apply writes them): " + string.Join("; ", writes.Select(DescribeWrite));
+            _perfDirty.ForeColor = writes.Count == 0 ? Theme.Dim : Theme.Warn;
+            _perfApply.Enabled = _driverInstalled && writes.Count > 0;
+            _perfRevert.Enabled = writes.Count > 0;
+        }
+
+        static string DescribeWrite(RegWrite w) { return w.Delete ? "remove " + w.Name : w.Name + " = " + w.Number; }
 
         void ApplyDpm()
         {
-            uint mode = _dpmOn.Checked ? 1u : 0u;
-            uint max = DpmSettings.CeilingChoices[Math.Max(0, _ceiling.SelectedIndex)];
-            DoAction("set-clocks", mode, max, _perfResult);
+            DoAction("set-clocks", _dpmOn.Checked ? 1u : (uint?)null, _ceilingOn.Checked ? SelectedCeiling(_ceiling) : (uint?)null, _perfResult);
         }
 
         // ---- Applications ------------------------------------------------------------------------------------------
@@ -368,74 +458,146 @@ namespace AmdgpuWddmControl
             var p = Page("Applications", "Applications", "D3D12 settings for one game or program, found by its file name (for example witcher3.exe). The driver reads them when the program starts.");
             var warn = Theme.Label("Change these settings only when the release notes or the developers tell you to. Wrong settings can make a game fail to start.", null, Theme.Warn);
             p.Controls.Add(warn);
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 8, 0, 0) };
+            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Theme.Pad(0, 8, 0, 0) };
             var left = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false };
             _profiles = new ListView
             {
-                View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false, Width = 330, Height = 380,
-                BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable,
+                View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false, Width = Theme.S(260), Height = Theme.S(380),
+                BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable, Font = Theme.Body,
             };
-            _profiles.Columns.Add("Application", 150); _profiles.Columns.Add("Switches", 175);
+            _profiles.Columns.Add("Application", Theme.S(110)); _profiles.Columns.Add("Switches", Theme.S(145));
             _profiles.SelectedIndexChanged += (s, e) => ShowProfile();
             left.Controls.Add(_profiles);
             var lb = new FlowLayoutPanel { AutoSize = true };
             lb.Controls.Add(Theme.Button("Add application...", (s, e) => AddProfile()));
-            lb.Controls.Add(Theme.Button("Remove", (s, e) => RemoveProfile()));
+            lb.Controls.Add(Theme.Button("Uncheck all", (s, e) => ClearProfile()));
             left.Controls.Add(lb);
             row.Controls.Add(left);
 
             var right = new Card("Switches");
-            _switches = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            _noSelection = Theme.Label("Select an application, or add one.", null, Theme.Dim);
+            right.Add(_noSelection);
+            right.Add(Theme.Narrow(Theme.Label("Unchecked switches are not written; the driver's built-in behaviour applies. Unchecking every switch removes the application's settings.", null, Theme.Dim), 500));
+            _switches = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
             foreach (var sw in Profiles.Catalog)
             {
-                var box = new CheckBox { Text = sw.Title + "  (" + sw.Token + ")", AutoSize = true, ForeColor = Theme.Text, Font = Theme.Bold, Margin = new Padding(0, 6, 0, 0) };
-                var desc = Theme.Label(sw.Description, null, Theme.Dim); desc.MaximumSize = new Size(560, 0); desc.Margin = new Padding(18, 0, 0, 2);
-                _switches.Controls.Add(box); _switches.Controls.Add(desc);
+                var box = Theme.Check(sw.Title + "  (" + sw.Token + ")", Theme.Bold);
+                box.CheckedChanged += (s, e) => ProfileBoxChanged();
+                _switches.Controls.Add(box);
+                _switches.Controls.Add(Theme.Hint(sw.Description, 20, 500));
                 _switchBoxes[sw.Token] = box;
             }
+            _otherSwitches = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
+            _switches.Controls.Add(_otherSwitches);
             right.Add(_switches);
-            _unknown = Theme.Label("", null, Theme.Dim); _unknown.MaximumSize = new Size(560, 0);
-            right.Add(_unknown);
-            right.Add(Theme.Button("Save", (s, e) => SaveProfile(), true));
-            _profileResult = Theme.Label("", null, Theme.Dim);
+            _profilesDirty = Theme.Narrow(Theme.Label("", null, Theme.Dim), 500);
+            right.Add(_profilesDirty);
+            var buttons = new FlowLayoutPanel { AutoSize = true, Margin = Theme.Pad(0, 6, 0, 0) };
+            _profilesApply = Theme.Button("Apply", (s, e) => ApplyProfiles(), true);
+            _profilesRevert = Theme.Button("Revert", (s, e) => { _edits.Clear(); RefreshProfiles(); });
+            buttons.Controls.Add(_profilesApply); buttons.Controls.Add(_profilesRevert);
+            right.Add(buttons);
+            _profileResult = Theme.Narrow(Theme.Label("", null, Theme.Dim), 500);
             right.Add(_profileResult);
             row.Controls.Add(right);
             p.Controls.Add(row);
-            SetSwitchesEnabled(false);
         }
 
-        void SetSwitchesEnabled(bool on) { foreach (var b in _switchBoxes.Values) b.Enabled = on; }
+        // Every name checked for an image now: the unsaved edit, else the stored value.
+        List<string> CheckedNames(string image)
+        {
+            List<string> edit;
+            if (_edits.TryGetValue(image, out edit)) return edit;
+            string stored;
+            var v = Profiles.Parse(_storedProfiles.TryGetValue(image, out stored) ? stored : "");
+            return v.Known.Concat(v.Unknown).ToList();
+        }
+
+        string StoredOrNull(string image) { string v; return _storedProfiles.TryGetValue(image, out v) ? v : null; }
 
         void RefreshProfiles()
         {
             if (_profiles == null) return;
-            string selected = _profiles.SelectedItems.Count > 0 ? _profiles.SelectedItems[0].Text : null;
-            _profiles.Items.Clear();
-            try
-            {
-                foreach (var kv in SettingsStore.ReadProfiles())
-                {
-                    var item = _profiles.Items.Add(new ListViewItem(new[] { kv.Key, kv.Value.Length == 0 ? "(none)" : kv.Value }));
-                    if (kv.Key.Equals(selected, StringComparison.OrdinalIgnoreCase)) item.Selected = true;
-                }
-            }
+            try { _storedProfiles = SettingsStore.ReadProfiles(); }
             catch (Exception e) { _profileResult.Text = "Cannot read the profiles: " + e.Message; }
-            if (_profiles.SelectedItems.Count == 0) ShowProfile();
+            foreach (var image in _edits.Keys.ToList())
+                if (StoredOrNull(image) != null && Profiles.PlanWrite(image, StoredOrNull(image), _edits[image]).Kind == ProfileWriteKind.None) _edits.Remove(image);
+            string selected = _shownImage;
+            _loadingProfile = true;
+            _profiles.Items.Clear();
+            foreach (var image in _storedProfiles.Keys.Union(_edits.Keys, StringComparer.OrdinalIgnoreCase).OrderBy(i => i, StringComparer.OrdinalIgnoreCase))
+            {
+                var names = CheckedNames(image);
+                string shown = names.Count == 0 ? (StoredOrNull(image) != null ? "(removed on Apply)" : "(nothing checked)") : string.Join(",", names);
+                var item = _profiles.Items.Add(new ListViewItem(new[] { image, (_edits.ContainsKey(image) ? "* " : "") + shown }));
+                if (image.Equals(selected, StringComparison.OrdinalIgnoreCase)) item.Selected = true;
+            }
+            _loadingProfile = false;
+            ShowProfile();
         }
 
         string SelectedImage { get { return _profiles.SelectedItems.Count > 0 ? _profiles.SelectedItems[0].Text : null; } }
 
         void ShowProfile()
         {
-            var image = SelectedImage;
-            string value = "";
-            if (image != null) { string v; if (SettingsStore.ReadProfiles().TryGetValue(image, out v)) value = v; }
-            var parsed = Profiles.Parse(value);
-            foreach (var kv in _switchBoxes) kv.Value.Checked = parsed.Known.Contains(kv.Key);
-            _unknownTokens = parsed.Unknown;
-            _unknown.Text = parsed.Unknown.Count == 0 ? "" : "Other values (kept as they are, not editable here): " + string.Join(", ", parsed.Unknown);
-            SetSwitchesEnabled(image != null);
-            _profileResult.Text = image == null ? "Select an application, or add one." : "";
+            if (_loadingProfile) return;
+            _shownImage = SelectedImage;
+            _noSelection.Visible = _shownImage == null;
+            _switches.Visible = _shownImage != null;
+            _loadingProfile = true;
+            var names = _shownImage == null ? new List<string>() : CheckedNames(_shownImage);
+            foreach (var kv in _switchBoxes) kv.Value.Checked = names.Contains(kv.Key);
+            // Names outside the catalog (a newer driver's, or a developer's): a check box each, so they can be unchecked too.
+            _otherSwitches.Controls.Clear();
+            _otherBoxes.Clear();
+            var stored = Profiles.Parse(_shownImage == null ? "" : StoredOrNull(_shownImage) ?? "");
+            foreach (var other in stored.Unknown.Union(names.Where(n => Profiles.Find(n) == null)))
+            {
+                var box = Theme.Check("Other value: " + other, Theme.Bold);
+                box.Tag = other;
+                box.Checked = names.Contains(other);
+                box.CheckedChanged += (s, e) => ProfileBoxChanged();
+                _otherSwitches.Controls.Add(box);
+                _otherSwitches.Controls.Add(Theme.Hint("Not in this app's list. The driver ignores names it does not know.", 20, 500));
+                _otherBoxes.Add(box);
+            }
+            _loadingProfile = false;
+            UpdateProfilesDirty();
+        }
+
+        void ProfileBoxChanged()
+        {
+            if (_loadingProfile || _shownImage == null) return;
+            var names = Profiles.Catalog.Where(c => _switchBoxes[c.Token].Checked).Select(c => c.Token)
+                .Concat(_otherBoxes.Where(b => b.Checked).Select(b => (string)b.Tag)).ToList();
+            if (Profiles.PlanWrite(_shownImage, StoredOrNull(_shownImage), names).Kind == ProfileWriteKind.None && StoredOrNull(_shownImage) != null) _edits.Remove(_shownImage);
+            else _edits[_shownImage] = names;
+            foreach (ListViewItem item in _profiles.Items)
+                if (item.Text.Equals(_shownImage, StringComparison.OrdinalIgnoreCase))
+                    item.SubItems[1].Text = (_edits.ContainsKey(_shownImage) ? "* " : "") + (names.Count == 0 ? (StoredOrNull(_shownImage) != null ? "(removed on Apply)" : "(nothing checked)") : string.Join(",", names));
+            UpdateProfilesDirty();
+        }
+
+        List<ProfileWrite> ProfileWrites(out string error)
+        {
+            error = null;
+            var writes = new List<ProfileWrite>();
+            foreach (var kv in _edits)
+                try { var w = Profiles.PlanWrite(kv.Key, StoredOrNull(kv.Key), kv.Value); if (w.Kind != ProfileWriteKind.None) writes.Add(w); }
+                catch (ArgumentException e) { error = kv.Key + ": " + e.Message; }
+            return writes;
+        }
+
+        void UpdateProfilesDirty()
+        {
+            string error;
+            var writes = ProfileWrites(out error);
+            _profilesDirty.Text = error != null ? "Cannot save: " + error :
+                writes.Count == 0 ? "No unsaved changes." :
+                "Unsaved changes (Apply writes them): " + string.Join("; ", writes.Select(w => w.Kind == ProfileWriteKind.Delete ? "remove " + w.Image : w.Image + " = " + w.Value));
+            _profilesDirty.ForeColor = writes.Count == 0 && error == null ? Theme.Dim : Theme.Warn;
+            _profilesApply.Enabled = writes.Count > 0 && error == null;
+            _profilesRevert.Enabled = _edits.Count > 0;
         }
 
         void AddProfile()
@@ -445,33 +607,34 @@ namespace AmdgpuWddmControl
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 var image = Path.GetFileName(dialog.FileName);
                 if (!Profiles.IsValidImage(image)) { _profileResult.Text = "This file name cannot be used: " + image; return; }
-                var error = Program.RunElevated("--write-profile", image, "");
-                _profileResult.Text = error ?? "Added " + image + ". Select switches and click Save.";
+                if (!_edits.ContainsKey(image) && StoredOrNull(image) == null) _edits[image] = new List<string>();
+                _shownImage = image;
                 RefreshProfiles();
                 foreach (ListViewItem item in _profiles.Items) item.Selected = item.Text.Equals(image, StringComparison.OrdinalIgnoreCase);
+                _profileResult.Text = "Check the switches for " + image + ", then Apply. Nothing is saved before Apply.";
             }
         }
 
-        void RemoveProfile()
+        void ClearProfile()
         {
-            var image = SelectedImage;
-            if (image == null) return;
-            if (MessageBox.Show(this, "Remove all settings for " + image + "?", Program.ProductName, MessageBoxButtons.OKCancel) != DialogResult.OK) return;
-            var error = Program.RunElevated("--remove-profile", image);
-            _profileResult.Text = error ?? "Removed " + image + ".";
-            RefreshProfiles();
+            if (_shownImage == null) return;
+            _loadingProfile = true;
+            foreach (var b in _switchBoxes.Values.Concat(_otherBoxes)) b.Checked = false;
+            _loadingProfile = false;
+            ProfileBoxChanged();
         }
 
-        void SaveProfile()
+        void ApplyProfiles()
         {
-            var image = SelectedImage;
-            if (image == null) return;
-            string value;
-            try { value = Profiles.Compose(_switchBoxes.Where(kv => kv.Value.Checked).Select(kv => kv.Key), _unknownTokens); }
-            catch (ArgumentException e) { _profileResult.Text = e.Message; _profileResult.ForeColor = Theme.Warn; return; }
-            var error = Program.RunElevated("--write-profile", image, value);
-            _profileResult.Text = error ?? "Saved. Start " + image + " again to use the new settings.";
-            _profileResult.ForeColor = error == null ? Theme.Good : Theme.Warn;
+            string error;
+            var writes = ProfileWrites(out error);
+            if (error != null || writes.Count == 0) return;
+            var verb = new List<string> { "--apply-profiles" };
+            foreach (var w in writes) { verb.Add(w.Image); verb.Add(w.Kind == ProfileWriteKind.Delete ? "" : w.Value); }
+            var failure = Program.RunElevated(verb.ToArray());
+            _profileResult.Text = failure ?? "Saved. Start the application again to use the new settings.";
+            _profileResult.ForeColor = failure == null ? Theme.Good : Theme.Warn;
+            if (failure == null) _edits.Clear();
             RefreshProfiles();
         }
 
@@ -481,14 +644,14 @@ namespace AmdgpuWddmControl
         {
             var p = Page("Recovery", "Recovery", "The driver's start and recovery states, and safe ways to change them. Each action asks for administrator permission and saves the old values first.");
             var states = new Card("States");
-            _states = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            _states = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
             states.Add(_states);
             p.Controls.Add(states);
 
             var actions = new Card("Actions");
             Func<string, string, FlowLayoutPanel> row = (label, action) =>
             {
-                var r = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+                var r = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
                 var b = Theme.Button(label, (s, e) => DoAction(action));
                 _actionButtons.Add(b);
                 r.Controls.Add(b);
@@ -505,16 +668,19 @@ namespace AmdgpuWddmControl
             actions.Add(Theme.Label("Driver start:", null, Theme.Dim));
             actions.Add(row("Confirm this start", "confirm-start"));
             actions.Add(Theme.Label("Clock control after a fallback to the fixed clock (takes effect at the next restart):", null, Theme.Dim));
-            var dpm = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            var dpm = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Theme.Pad(0) };
             var enable = Theme.Button("Re-enable automatic clocks", (s, e) => DoAction("enable-dpm", null, RecoveryCeiling()));
             _actionButtons.Add(enable);
             dpm.Controls.Add(enable);
-            dpm.Controls.Add(Theme.Label("Ceiling:"));
-            _recoveryCeiling = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120, BackColor = Theme.Card, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat };
-            foreach (var mhz in DpmSettings.CeilingChoices) _recoveryCeiling.Items.Add(mhz + " MHz" + (mhz == DpmSettings.DefaultMaxMHz ? " (default)" : ""));
-            _recoveryCeiling.SelectedIndex = Array.IndexOf(DpmSettings.CeilingChoices, DpmSettings.DefaultMaxMHz);
+            _recoveryCeilingOn = Theme.Check("Also set the clock ceiling:");
+            _recoveryCeilingOn.Margin = Theme.Pad(0, 10, 6, 0);
+            dpm.Controls.Add(_recoveryCeilingOn);
+            _recoveryCeiling = CeilingBox();
+            _recoveryCeiling.Margin = Theme.Pad(0, 8, 0, 0);
+            _recoveryCeiling.SelectedIndexChanged += (s, e) => _recoveryCeilingOn.Checked = true;
             dpm.Controls.Add(_recoveryCeiling);
             actions.Add(dpm);
+            actions.Add(Theme.Hint("Unchecked: the stored ceiling stays as it is (driver default " + DpmSettings.DefaultMaxMHz + " MHz when none is stored).", 0));
             actions.Add(Theme.Label("All of the above (takes effect at the next restart):", null, Theme.Dim));
             actions.Add(row("Reset driver settings to the release defaults", "reset-defaults"));
             var undo = row("Undo last action", "undo");
@@ -526,15 +692,15 @@ namespace AmdgpuWddmControl
             actions.Add(_recoveryResult);
             _recoveryLog = new TextBox
             {
-                Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Width = 900, Height = 120,
-                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = new Font("Consolas", 8.5f), BorderStyle = BorderStyle.None,
+                Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Width = Theme.S(880), Height = Theme.S(120),
+                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.MonoSmall, BorderStyle = BorderStyle.None,
             };
             actions.Add(_recoveryLog);
             p.Controls.Add(actions);
             p.Controls.Add(Theme.Button("Refresh", (s, e) => RefreshRecovery()));
         }
 
-        uint RecoveryCeiling() { return DpmSettings.CeilingChoices[Math.Max(0, _recoveryCeiling.SelectedIndex)]; }
+        uint? RecoveryCeiling() { return _recoveryCeilingOn.Checked ? SelectedCeiling(_recoveryCeiling) : (uint?)null; }
 
         void RefreshRecovery()
         {
@@ -546,10 +712,10 @@ namespace AmdgpuWddmControl
             _states.Controls.Clear();
             foreach (var line in _stateLines)
             {
-                var block = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
+                var block = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = Theme.Pad(0, 0, 0, 10) };
                 block.Controls.Add(Theme.Label(line.Topic, Theme.Bold));
                 var text = Theme.Label(line.Text, null, line.Severity == "warn" ? Theme.Warn : line.Severity == "ok" ? Theme.Good : Theme.Text);
-                text.MaximumSize = new Size(880, 0);
+                text.MaximumSize = Theme.Sz(880, 0);
                 block.Controls.Add(text);
                 if (line.Action != null)
                 {
@@ -557,7 +723,7 @@ namespace AmdgpuWddmControl
                     block.Controls.Add(Theme.Button("Recommended: " + line.ActionLabel, (s, e) =>
                     {
                         if (action == "restart") OfferRestart("Restart Windows now?");
-                        else DoAction(action, null, action == "enable-dpm" ? RecoveryCeiling() : (uint?)null);
+                        else DoAction(action, null, action == "enable-dpm" ? RecoveryCeiling() : null);
                     }));
                 }
                 _states.Controls.Add(block);
@@ -578,6 +744,7 @@ namespace AmdgpuWddmControl
             try { snapshot = RecoveryProbe.Read(); }
             catch (Exception e) { result.Text = "Cannot read the driver's state: " + e.Message; result.ForeColor = Theme.Warn; return; }
             var plan = Recovery.Plan(action, snapshot, mode, ceiling, RecoveryProbe.Backups());
+            if (plan.Refused && result == _perfResult) { result.Text = plan.Refusal; result.ForeColor = Theme.Warn; return; }
             if (plan.Refused)
             {
                 result.Text = plan.Refusal; result.ForeColor = Theme.Warn;
@@ -596,8 +763,9 @@ namespace AmdgpuWddmControl
 
             string runId = Guid.NewGuid().ToString("N").Substring(0, 12);
             var verb = new List<string> { "--action", action, "--run-id", runId };
-            if (mode != null) { verb.Add("--mode"); verb.Add(mode.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
-            if (ceiling != null) { verb.Add("--ceiling"); verb.Add(ceiling.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+            // set-clocks names both values: a number, or "unset" for an unchecked box (the value is removed).
+            if (mode != null || action == "set-clocks") { verb.Add("--mode"); verb.Add(mode == null ? "unset" : mode.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+            if (ceiling != null || action == "set-clocks") { verb.Add("--ceiling"); verb.Add(ceiling == null ? "unset" : ceiling.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
             foreach (var b in _actionButtons) b.Enabled = false;
             _perfApply.Enabled = false;
             result.Text = plan.RestartDwm ? "Restarting the desktop" + (plan.WatchDwm ? " and watching it for 60 seconds" : "") + "..." : "Working...";
@@ -676,6 +844,62 @@ namespace AmdgpuWddmControl
 
         // ---- smoke ---------------------------------------------------------------------------------------------------
 
+        // --smoke-render: every page drawn to a PNG without showing the window, each tall enough for all its content, and
+        // the layout checked for sibling controls that overlap. Applications shows an unsaved demo profile; nothing is
+        // written.
+        public string RenderPages(string dir)
+        {
+            var w = new StringBuilder();
+            _edits["demo.exe"] = new List<string> { "raytracing-tier", "deferred-replay", "x-future-switch" };
+            _shownImage = "demo.exe";
+            foreach (var page in _pages.Keys.ToList())
+            {
+                ShowPage(page);
+                if (page == "Applications")
+                    foreach (ListViewItem i in _profiles.Items) i.Selected = i.Text == "demo.exe";
+                ClientSize = Theme.Sz(1180, 720);
+                PerformLayout();
+                int tall = _pages[page].PreferredSize.Height + Theme.S(80);
+                if (tall > ClientSize.Height) ClientSize = new Size(ClientSize.Width, tall);
+                PerformLayout();
+                CreateHandles(this);
+                using (var bmp = new Bitmap(Width, Height))
+                {
+                    DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
+                    bmp.Save(Path.Combine(dir, page + ".png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+                foreach (var o in Overlaps(_pages[page])) w.AppendLine(page + ": " + o);
+                int room = Theme.S(1180) - Theme.S(200) - _content.Padding.Horizontal;
+                if (_pages[page].PreferredSize.Width > room) w.AppendLine(page + ": " + _pages[page].PreferredSize.Width + " px wide, the window has " + room);
+            }
+            _edits.Remove("demo.exe");
+            return w.ToString();
+        }
+
+        // Control.Visible reads false for every control of a form that was never shown, so the check uses the
+        // control's own visible flag (STATE_VISIBLE).
+        static readonly System.Reflection.MethodInfo GetState = typeof(Control).GetMethod("GetState", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        static bool HasVisibleFlag(Control c) { return (bool)GetState.Invoke(c, new object[] { 2 }); }
+
+        // A form that is never shown creates no child windows by itself, and DrawToBitmap draws only windows.
+        static void CreateHandles(Control c)
+        {
+            if (!c.IsHandleCreated) { var h = c.Handle; }
+            foreach (Control k in c.Controls) CreateHandles(k);
+        }
+
+        static IEnumerable<string> Overlaps(Control parent)
+        {
+            var kids = parent.Controls.Cast<Control>().Where(HasVisibleFlag).ToList();
+            for (int i = 0; i < kids.Count; i++)
+                for (int j = i + 1; j < kids.Count; j++)
+                    if (kids[i].Bounds.IntersectsWith(kids[j].Bounds))
+                        yield return Describe(kids[i]) + " " + kids[i].Bounds + " overlaps " + Describe(kids[j]) + " " + kids[j].Bounds;
+            foreach (var k in kids) foreach (var o in Overlaps(k)) yield return o;
+        }
+
+        static string Describe(Control c) { return c.GetType().Name + (string.IsNullOrEmpty(c.Text) ? "" : " \"" + (c.Text.Length > 40 ? c.Text.Substring(0, 40) : c.Text) + "\""); }
+
         public string Describe()
         {
             var w = new StringBuilder();
@@ -683,9 +907,11 @@ namespace AmdgpuWddmControl
             foreach (var card in new[] { _driver, _gpu, _perfNow })
                 foreach (var kv in card.Values) w.AppendLine(kv.Key + ": " + kv.Value.Text);
             w.AppendLine("stored dpm: " + _perfStored.Text);
+            w.AppendLine("performance boxes: automatic " + _dpmOn.Checked + ", ceiling " + _ceilingOn.Checked + "; " + _perfDirty.Text);
             w.AppendLine("components: " + _components.Items.Count);
             foreach (ListViewItem i in _components.Items) w.AppendLine("  " + string.Join(" | ", i.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text)));
-            w.AppendLine("profiles: " + _profiles.Items.Count);
+            w.AppendLine("profiles: " + _profiles.Items.Count + "; " + _profilesDirty.Text);
+            foreach (ListViewItem i in _profiles.Items) w.AppendLine("  " + i.Text + " | " + i.SubItems[1].Text);
             w.AppendLine("recovery: " + _stateLines.Count + " states");
             foreach (var l in _stateLines) w.AppendLine("  [" + l.Severity + "] " + l.Topic + ": " + l.Text + (l.Action != null ? " -> " + l.Action : ""));
             w.AppendLine("undo: " + _undoText.Text);
@@ -702,20 +928,20 @@ namespace AmdgpuWddmControl
         public ReportPreview(BugReport report, string path)
         {
             Text = "Bug report - files"; BackColor = Theme.Back; ForeColor = Theme.Text; Font = Theme.Body;
-            ClientSize = new Size(900, 600); StartPosition = FormStartPosition.CenterParent; MinimizeBox = false;
-            var top = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(12, 8, 12, 0) };
+            ClientSize = Theme.Sz(900, 600); StartPosition = FormStartPosition.CenterParent; MinimizeBox = false;
+            var top = new Panel { Dock = DockStyle.Top, Height = Theme.S(54), Padding = Theme.Pad(12, 8, 12, 0) };
             top.Controls.Add(Theme.Label("These files will be saved in:\n" + path));
             var list = new ListView
             {
-                Dock = DockStyle.Top, Height = 200, View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
+                Dock = DockStyle.Top, Height = Theme.S(200), View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
                 BackColor = Theme.Card, ForeColor = Theme.Text, BorderStyle = BorderStyle.None,
             };
-            list.Columns.Add("File", 170); list.Columns.Add("Size", 90); list.Columns.Add("Contents", 600);
+            list.Columns.Add("File", Theme.S(170)); list.Columns.Add("Size", Theme.S(90)); list.Columns.Add("Contents", Theme.S(600));
             foreach (var e in report.Entries) list.Items.Add(new ListViewItem(new[] { e.Name, (e.Data.Length / 1024.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " KB", e.Description }) { Tag = e });
             var text = new TextBox
             {
                 Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
-                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = new Font("Consolas", 9f), BorderStyle = BorderStyle.None,
+                BackColor = Theme.Nav, ForeColor = Theme.Text, Font = Theme.Mono, BorderStyle = BorderStyle.None,
             };
             list.SelectedIndexChanged += (s, e) =>
             {
@@ -724,7 +950,7 @@ namespace AmdgpuWddmControl
                 var content = Encoding.UTF8.GetString(entry.Data);
                 text.Text = content.Length > 200000 ? content.Substring(0, 200000) + "\r\n[... shortened in this view only ...]" : content.Replace("\r\n", "\n").Replace("\n", "\r\n");
             };
-            var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 48, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8) };
+            var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Theme.S(48), FlowDirection = FlowDirection.RightToLeft, Padding = Theme.Pad(8) };
             var save = Theme.Button("Save to Desktop", (s, e) => { DialogResult = DialogResult.OK; Close(); }, true);
             var cancel = Theme.Button("Cancel", (s, e) => { DialogResult = DialogResult.Cancel; Close(); });
             bottom.Controls.Add(save); bottom.Controls.Add(cancel);

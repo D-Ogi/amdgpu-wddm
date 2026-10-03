@@ -4,11 +4,14 @@
 //   amdgpu_wddm_control.exe --smoke <file>           no window: build the pages once, write what they show, exit
 //   amdgpu_wddm_control.exe --smoke-report <zip>    no window: a bug report without dxdiag, the capability tools and
 //                                                    the event logs, written to <zip> (the build's check of that path)
-//   amdgpu_wddm_control.exe --action <name> [--mode 0|1] [--ceiling MHz] --dry-run [--snapshot <json>] [--out <file>]
+//   amdgpu_wddm_control.exe --smoke-render <dir> <scale>
+//                                                    no window: every page drawn to <dir>\<page>.png as a screen at
+//                                                    <scale> x 96 DPI shows it, and layout.txt lists overlapping controls
+//   amdgpu_wddm_control.exe --action <name> [--ceiling MHz] --dry-run [--snapshot <json>] [--out <file>]
 //                                                    no window: the Recovery states and the plan of one action, nothing
 //                                                    written (RecoveryActions.cs)
 //   amdgpu_wddm_control.exe --version
-//   (internal, elevated copy) --action <name> ... | --write-profile <image> <list> | --remove-profile <image>
+//   (internal, elevated copy) --action <name> ... | --apply-profiles <image> <list or empty to remove> ...
 //
 // Runs as the invoking user. A change starts an elevated copy of this program with one verb (one UAC prompt per
 // change), which plans or validates again with the same functions as the window and exits with 0 on success.
@@ -39,11 +42,12 @@ namespace AmdgpuWddmControl
         static int Main(string[] args)
         {
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
-            if (args.Length > 0 && (args[0] == "--action" || args[0] == "--write-profile" || args[0] == "--remove-profile")) return Dispatch(args);
+            if (args.Length > 0 && (args[0] == "--action" || args[0] == "--apply-profiles")) return Dispatch(args);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length == 2 && args[0] == "--smoke") return Smoke(args[1]);
             if (args.Length == 2 && args[0] == "--smoke-report") return SmokeReport(args[1]);
+            if (args.Length == 3 && args[0] == "--smoke-render") return SmokeRender(args[1], args[2]);
             if (args.Length != 0) { MessageBox.Show("Unknown arguments.", ProductName); return 2; }
             Application.Run(new MainForm());
             return 0;
@@ -70,6 +74,30 @@ namespace AmdgpuWddmControl
             }
         }
 
+        static int SmokeRender(string dir, string scale)
+        {
+            var layout = Path.Combine(dir, "layout.txt");
+            try
+            {
+                Directory.CreateDirectory(dir);
+                Theme.Init(float.Parse(scale, System.Globalization.CultureInfo.InvariantCulture));
+                string overlaps;
+                using (var form = new MainForm(smoke: true))
+                {
+                    form.CreateControlTree();
+                    form.RefreshAll();
+                    overlaps = form.RenderPages(dir);
+                }
+                File.WriteAllText(layout, overlaps.Length == 0 ? "no overlapping controls\r\n" : overlaps);
+                return overlaps.Length == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(layout, "render failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
         static int SmokeReport(string path)
         {
             try
@@ -89,13 +117,16 @@ namespace AmdgpuWddmControl
         static int Dispatch(string[] args)
         {
             if (args[0] == "--action") return RecoveryRunner.Run(args);
+            // --apply-profiles <image> <value> ...: every pair checked before the first write; an empty value removes
+            // the application's key (no empty value is ever stored).
+            if (args.Length < 3 || args.Length % 2 != 1) return 2;
+            for (int i = 1; i < args.Length; i += 2)
+                if (!Profiles.IsValidImage(args[i]) || args[i + 1].Length > 0 && !Profiles.IsValidValue(args[i + 1])) return 2;
             try
             {
-                if (args[0] == "--write-profile" && args.Length == 3)
-                    SettingsStore.WriteProfile(args[1], args[2]);
-                else if (args[0] == "--remove-profile" && args.Length == 2)
-                    SettingsStore.RemoveProfile(args[1]);
-                else return 2;
+                for (int i = 1; i < args.Length; i += 2)
+                    if (args[i + 1].Length == 0) SettingsStore.RemoveProfile(args[i]);
+                    else SettingsStore.WriteProfile(args[i], args[i + 1]);
                 return 0;
             }
             catch (Exception) { return 1; }

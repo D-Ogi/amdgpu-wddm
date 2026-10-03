@@ -192,7 +192,7 @@ namespace AmdgpuWddmControl
         {
             public string Action, SnapshotFile, OutFile, RunId;
             public uint? Mode, Ceiling;
-            public bool DryRun;
+            public bool DryRun, ModeGiven, CeilingGiven;
         }
 
         static Options Parse(string[] args)
@@ -208,10 +208,15 @@ namespace AmdgpuWddmControl
                 else if (a == "--snapshot") o.SnapshotFile = args[++i];
                 else if (a == "--out") o.OutFile = args[++i];
                 else if (a == "--run-id" && System.Text.RegularExpressions.Regex.IsMatch(args[i + 1], "^[a-z0-9]{1,32}$")) o.RunId = args[++i];
-                else if (a == "--mode" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Mode = n; i++; }
-                else if (a == "--ceiling" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Ceiling = n; i++; }
+                else if (a == "--mode" && args[i + 1] == "unset") { o.ModeGiven = true; i++; }
+                else if (a == "--mode" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Mode = n; o.ModeGiven = true; i++; }
+                else if (a == "--ceiling" && args[i + 1] == "unset") { o.CeilingGiven = true; i++; }
+                else if (a == "--ceiling" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Ceiling = n; o.CeilingGiven = true; i++; }
                 else return null;
             }
+            // set-clocks says what happens to both values ("unset" removes one); no other action takes a mode.
+            if (o.Action == "set-clocks" && (!o.ModeGiven || !o.CeilingGiven)) return null;
+            if (o.Action != "set-clocks" && o.ModeGiven) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
             if (o.RunId == null) o.RunId = Guid.NewGuid().ToString("N").Substring(0, 12);
             return o;
@@ -220,7 +225,12 @@ namespace AmdgpuWddmControl
         public static int Run(string[] args)
         {
             var o = Parse(args);
-            if (o == null) { Console.Error.WriteLine("usage: --action <" + string.Join("|", Recovery.Actions) + "> [--mode 0|1] [--ceiling MHz] [--dry-run [--snapshot file]] [--out file]"); return Usage; }
+            if (o == null)
+            {
+                Console.Error.WriteLine("usage: --action <" + string.Join("|", Recovery.Actions) + "> [--ceiling MHz] [--dry-run [--snapshot file]] [--out file]");
+                Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
+                return Usage;
+            }
             return o.DryRun ? DryRun(o) : Execute(o);
         }
 
