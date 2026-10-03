@@ -311,7 +311,7 @@ static class UnitTests
                 { "InteropLastReason", 4 }, { "UnconfirmedStarts", 1 }, { "LastStage", 61 }, { "DpmMode", 0 }, { "DpmMaxMHz", 1500 },
                 { "DpmLastMode", 0 }, { "DpmLastReason", 4 },
             },
-            Interop = new InteropState { Flags = InteropState.FlagValid | InteropState.FlagClosedByDriver | InteropState.FlagUnclean, Requested = 3, Effective = 0, Reason = 4, ClosedReason = 4 },
+            Interop = new InteropState { Version = 0x000700C5, Flags = InteropState.FlagValid | InteropState.FlagClosedByDriver | InteropState.FlagUnclean, Requested = 3, Effective = 0, Reason = 4, ClosedReason = 4 },
             Health = Eligible(),
             Dpm = new DpmState { Mode = 0, Reason = 4 },
             DwmRoute = "cpu", TaskFound = true, TaskResult = 1, TaskLastRun = "2026-10-03 10:00",
@@ -402,7 +402,13 @@ static class UnitTests
         var p = Recovery.Plan("reopen-gpu-path", Closed());
         Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "InteropClosedReason-"), "reopen writes both switches and deletes the close mark");
         Check(p.OfferRestart && p.Undoable && !p.RestartDwm && p.Effect.Contains("next restart"), "reopen: next restart, undoable, no DWM restart");
-        Check(p.Notes.Any(n => n.Contains("BD-059")), "reopen names BD-059");
+        Check(p.Notes.Any(n => n.Contains("Known issue BD-059:")), "reopen names BD-059 on KMD 0.7.197");
+        var c6 = Closed(); c6.Interop.Version = 0x000700C6;
+        var p6 = Recovery.Plan("reopen-gpu-path", c6);
+        Check(!p6.Notes.Any(n => n.Contains("BD-059")) && p6.Notes.Any(n => n.Contains("bug report")), "reopen on KMD 0.7.198 (BD-059 fixed): no BD-059 note, a bug report if it closes again");
+        Check(Writes(p6, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "InteropClosedReason-"), "reopen on KMD 0.7.198 writes the same");
+        var unknown = Closed(); unknown.Interop = null; unknown.Health = null; unknown.Dpm = null;
+        Check(Recovery.Plan("reopen-gpu-path", unknown).Notes.Any(n => n.Contains("drivers before 0.7.198")), "reopen without a driver reply: BD-059 for older drivers only");
         Check(Recovery.Plan("reopen-gpu-path", Open()).Refusal.Contains("open already"), "reopen refused when open");
         var pending = Closed(); pending.Parameters["EnableGpuPresentBlit"] = 1; pending.Parameters["EnableCddDwmInterop"] = 1; pending.Parameters.Remove("InteropClosedReason");
         Check(Recovery.Plan("reopen-gpu-path", pending).Refusal.Contains("restart Windows"), "reopen refused when reopened, restart pending");
@@ -524,7 +530,18 @@ static class UnitTests
         var lines = Recovery.Describe(Closed());
         Func<List<StateLine>, string, StateLine> line = (ls, topic) => ls.First(l => l.Topic == topic);
         Check(line(lines, "GPU desktop path").Action == "reopen-gpu-path" && line(lines, "GPU desktop path").Severity == "warn", "closed path: warn, recommends the reopen");
-        Check(line(lines, "GPU desktop path").Text.Contains("BD-059"), "closed path names BD-059");
+        Check(line(lines, "GPU desktop path").Text.Contains("A normal restart can cause this (BD-059)"), "closed path on KMD 0.7.197 names BD-059");
+        var fixedState = Closed(); fixedState.Interop.Version = 0x000700C6;
+        var fl = line(Recovery.Describe(fixedState), "GPU desktop path");
+        Check(fl.Text.StartsWith("Closed by the driver: the last session ended without a clean shutdown (power loss, crash or reset; reason 4).") && !fl.Text.Contains("BD-059") && fl.Action == "reopen-gpu-path",
+            "closed path on KMD 0.7.198: an unclean end, no BD-059, reopen recommended");
+        fixedState.Interop.Version = 0x000700C7;
+        Check(!line(Recovery.Describe(fixedState), "GPU desktop path").Text.Contains("BD-059"), "closed path on a later KMD: no BD-059");
+        var healthOnly = Closed(); healthOnly.Interop = null; healthOnly.Health.Version = 0x000700C6;
+        Equal(true, Recovery.Bd059Fixed(healthOnly), "the KMD version also comes from the start health reply");
+        var noReply = Closed(); noReply.Interop = null; noReply.Health = null; noReply.Dpm = null;
+        Equal(null, Recovery.Bd059Fixed(noReply), "no driver reply: version unknown");
+        Check(line(Recovery.Describe(noReply), "GPU desktop path").Text.Contains("before 0.7.198"), "closed path, version unknown: both causes named");
         Check(line(lines, "Desktop composition").Text.StartsWith("CPU route (GPU route disabled, BD-058)") && line(lines, "Desktop composition").Action == null, "CPU route: release default, no action");
         Check(line(lines, "Clock control").Action == "enable-dpm", "clock fallback recommends enable-dpm");
         var gpuDefault = Open(); gpuDefault.DefaultRouter["DwmForceCpu"] = 0;

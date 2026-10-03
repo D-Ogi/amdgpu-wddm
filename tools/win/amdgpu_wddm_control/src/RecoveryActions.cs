@@ -231,7 +231,17 @@ namespace AmdgpuWddmControl
                 Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
                 return Usage;
             }
-            return o.DryRun ? DryRun(o) : Execute(o);
+            if (o.DryRun) return DryRun(o);
+            // The real run writes its lines (and the exit code) to --out too, as the dry run does.
+            _runText = new StringBuilder();
+            int code = Execute(o);
+            if (o.OutFile != null)
+            {
+                _runText.AppendLine("exit " + code);
+                try { File.WriteAllText(o.OutFile, _runText.ToString()); }
+                catch (Exception e) { Console.Error.WriteLine("cannot write " + o.OutFile + ": " + e.Message); }
+            }
+            return code;
         }
 
         static int DryRun(Options o)
@@ -267,12 +277,21 @@ namespace AmdgpuWddmControl
         // ---- the elevated run --------------------------------------------------------------------------------------
 
         static string _runId;
+        static StringBuilder _runText = new StringBuilder();
 
         static void Log(string text)
         {
             var line = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture) + " " + _runId + " " + text;
             try { File.AppendAllText(RecoveryProbe.ActionsLog, line + Environment.NewLine); } catch (Exception) { }
             Console.Out.WriteLine(line);
+            _runText.AppendLine(line);
+        }
+
+        // An error before the actions log can be written: standard error and --out.
+        static void Fail(string text)
+        {
+            Console.Error.WriteLine(text);
+            _runText.AppendLine(text);
         }
 
         // %ProgramData%\amdgpu-wddm\control: administrators and SYSTEM write, users read. Undo applies these files as
@@ -291,10 +310,10 @@ namespace AmdgpuWddmControl
 
         static int Execute(Options o)
         {
-            if (!Program.IsElevated()) { Console.Error.WriteLine("--action needs administrator (or --dry-run)"); return NeedsAdministrator; }
+            if (!Program.IsElevated()) { Fail("--action needs administrator (or --dry-run)"); return NeedsAdministrator; }
             _runId = o.RunId;
             try { PrepareDirectory(); }
-            catch (Exception e) { Console.Error.WriteLine("cannot prepare " + RecoveryProbe.ControlDirectory + ": " + e.Message); return Failed; }
+            catch (Exception e) { Fail("cannot prepare " + RecoveryProbe.ControlDirectory + ": " + e.Message); return Failed; }
             Log("start " + o.Action + (o.Mode != null ? " mode " + o.Mode : "") + (o.Ceiling != null ? " ceiling " + o.Ceiling : "") + ", " + Program.ProductName + " " + Program.VersionText);
             try
             {

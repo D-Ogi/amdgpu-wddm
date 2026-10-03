@@ -166,6 +166,19 @@ namespace AmdgpuWddmControl
         // ---- the decision rules ----------------------------------------------------------------------------------
 
         // Test-StartConfirmEligible of start-confirm-core.ps1, field for field.
+        // KMD 0.7.198 (BC250_KMD_VERSION 0x000700C6) fixed BD-059: a normal restart keeps the GPU desktop path open,
+        // so a close mark from it means the last session really ended unclean. null: no driver reply gives the version.
+        public const uint Bd059FixedVersion = 0x000700C6;
+
+        public static bool? Bd059Fixed(RecoverySnapshot s)
+        {
+            uint v = s.Interop != null && s.Interop.Version != 0 ? s.Interop.Version
+                : s.Health != null && s.Health.Version != 0 ? s.Health.Version
+                : s.Dpm != null ? s.Dpm.Version : 0;
+            if (v == 0) return null;
+            return v >= Bd059FixedVersion;
+        }
+
         public static bool ConfirmEligible(StartHealthState h)
         {
             return h != null && (h.Flags & ConfirmRequiredFlags) == ConfirmRequiredFlags && h.Completed > 0 &&
@@ -356,8 +369,13 @@ namespace AmdgpuWddmControl
             else if (requested && closed == null)
                 add("GPU desktop path", "Reopened in the settings; the driver opens it at the next restart of Windows." + session, "info", "restart", "Restart Windows");
             else if (closed != null)
-                add("GPU desktop path", "Closed by the driver: it took the last shutdown as unclean (reason " + closed + "). A normal restart can cause this (BD-059)." + session,
+            {
+                var fixedNow = Bd059Fixed(s);
+                add("GPU desktop path", (fixedNow == true ? "Closed by the driver: the last session ended without a clean shutdown (power loss, crash or reset; reason " + closed + ")."
+                    : fixedNow == false ? "Closed by the driver: it took the last shutdown as unclean (reason " + closed + "). A normal restart can cause this (BD-059)."
+                    : "Closed by the driver: the last session ended without a clean shutdown (reason " + closed + "): power loss, crash or reset, or with a driver before 0.7.198 also a normal restart (BD-059).") + session,
                     "warn", "reopen-gpu-path", "Reopen the GPU desktop path");
+            }
             else
             {
                 uint reason = s.Interop != null ? s.Interop.Reason : (s.P("InteropLastReason") ?? 1);
@@ -443,7 +461,12 @@ namespace AmdgpuWddmControl
                     p.Writes.Add(RegWrite.Dword(ParametersPath, "EnableCddDwmInterop", 1));
                     if (s.P("InteropClosedReason") != null) p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
                     p.OfferRestart = true;
-                    p.Notes.Add("Known issue BD-059: a restart while the desktop runs on the GPU route can close the path again. The desktop stays on the route set under Desktop composition.");
+                    var bd059 = Bd059Fixed(s);
+                    if (bd059 == true)
+                        p.Notes.Add("If a normal restart closes the path again, create a bug report on the Diagnostics page.");
+                    else
+                        p.Notes.Add((bd059 == false ? "Known issue BD-059" : "Known issue BD-059 of drivers before 0.7.198") +
+                            ": a restart while the desktop runs on the GPU route can close the path again. The desktop stays on the route set under Desktop composition.");
                     break;
 
                 case "desktop-gpu":

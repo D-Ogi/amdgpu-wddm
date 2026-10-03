@@ -89,7 +89,13 @@ amdgpu_wddm_control.exe --action reopen-gpu-path --dry-run --out plan.txt    # s
 amdgpu_wddm_control.exe --action desktop-gpu --dry-run --snapshot snapshot.json --out plan.txt
 ```
 
-The exe is a window program: from PowerShell use `--out`, or `Start-Process -Wait`.
+The exe is a window program: from PowerShell use `--out`, or `Start-Process -Wait`. A real run (no `--dry-run`) writes
+its log lines and `exit N` to `--out` as well.
+
+A close mark (`InteropClosedReason` 4) means different things by driver version. From KMD 0.7.198
+(`BC250_KMD_VERSION` 0x000700C6) BD-059 is fixed and a normal restart keeps the path open, so the page says the last
+session ended without a clean shutdown (power loss, crash or reset); on 0.7.197 and earlier it names BD-059. The
+version comes from the driver's interop, start health or DPM reply; without one, both causes are named.
 
 ## Bug report
 
@@ -120,8 +126,9 @@ against `bc250kmd_escape.h`, `bc250kmd.h`, `interop_policy.h`, `interop.c` and `
 errors, `--smoke` (the pages built and refreshed once without a window, which on a PC without a BC-250 must say
 "Driver not found"), `--smoke-report` (a report without dxdiag, capability tools and events, checked for its files and
 for this PC's user and computer name) and the Recovery dry runs (every action planned from `test/snapshot-bd059.json`,
-the state BD-059 leaves behind, against its expected writes or refusal; a snapshot without `--dry-run` refused; one
-dry run of this PC) and `--smoke-render <dir> <scale>` at 1, 1.25 and 1.5 (every page drawn to a PNG without a
+the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or refusal; a snapshot without `--dry-run`
+refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
+write `--out`) and `--smoke-render <dir> <scale>` at 1, 1.25 and 1.5 (every page drawn to a PNG without a
 window, with an unsaved demo profile on Applications, and the whole page as `<page>-full.png`; the build fails when
 two sibling controls overlap, a page is wider than the window or its last control lies outside the scroll range).
 
