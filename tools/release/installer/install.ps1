@@ -305,6 +305,9 @@ function Invoke-Verify {
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
     Add-Result 'boot-loop guard' (($null -eq $uc) -or ([int]$uc -lt 2)) "UnconfirmedStarts $uc (the start-confirm task resets it after each logon)"
     $p = Get-ItemProperty -LiteralPath $script:ParametersKey -ErrorAction SilentlyContinue
+    # The full WDDM gate: 0 (the INF's value) starts the KMD display-only, with no GPU work at all.
+    $closed = @($p.PSObject.Properties | Where-Object { $_.Name -like 'Enable*' -and $_.Value -is [int] -and $_.Value -eq 0 } | ForEach-Object { $_.Name })
+    Add-Result 'full WDDM gate' (($p.EnableFullWddm -eq 1) -or ($p.EnableFullWddm -eq 2)) "EnableFullWddm $($p.EnableFullWddm) (2 = open at every start)$(if ($closed.Count) { '; gates at 0: ' + ($closed -join ', ') })"
     # A tester who set DpmMode 0 asked for fixed clocks: that start is as configured, not a failure.
     Add-Result 'DPM' ((($p.DpmMode -eq 1) -and ($p.DpmLastMode -eq 1)) -or (($null -ne $p.DpmMode) -and ($p.DpmMode -ne 1))) "DpmMode $($p.DpmMode), this start ran $(if ($p.DpmLastMode -eq 1) { 'DPM' } else { "fixed (reason $($p.DpmLastReason))" }), DpmMaxMHz $($p.DpmMaxMHz), confirmed $(if ($null -ne $p.DpmConfirmed) { 'yes' } else { 'not yet' })"
 
@@ -543,6 +546,23 @@ Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfis
 } | Out-Null
 Save-Phase 'files-copied'
 
+# The driver settings as they are before the driver package: pnputil runs the INF's AddReg, which writes 0 into every
+# gate and counter it names. The upgrade rule below judges these values, never the INF's zeros. Kept in the state, so a
+# re-run after a failure past pnputil still judges the values from before the first pnputil of this install.
+$infParameterNames = Get-InfParameterNames (Join-Path $package 'payload\kmd\bc250kmd.inf')
+$judgedNames = @(@($infParameterNames) + @((ConvertTo-PairList (Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json).defaults.parameters) | ForEach-Object { $_.Name })) | Select-Object -Unique
+$parametersBefore = @{}
+if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $state.parameters_before_install)) {
+    foreach ($p in $state.parameters_before_install.PSObject.Properties) { $parametersBefore[$p.Name] = $p.Value }
+    Write-Info "driver settings from before the first driver package install of this run: $($parametersBefore.Count) values"
+} else {
+    $all = Read-RegistryValues $script:ParametersKey
+    foreach ($n in $judgedNames) { if ($all.ContainsKey($n)) { $parametersBefore[$n] = $all[$n] } }
+    Set-StateValue $state 'parameters_before_install' ([pscustomobject]$parametersBefore)
+    Save-InstallState $state
+    Write-Info "driver settings before the driver package: $($parametersBefore.Count) of $(@($judgedNames).Count) values present"
+}
+
 # The driver package. The device starts once right away with the INF's closed gates (display only); the registry
 # below opens them for the next start.
 Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install' {
@@ -578,14 +598,17 @@ $record = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name 
 if ($record) { try { $applied = $record | ConvertFrom-Json } catch { Write-Warn2 "Release\AppliedDefaults does not parse: $($_.Exception.Message)" } }
 if (-not $applied) { $applied = $regDefaults.legacy_applied; $appliedSource = 'the defaults of tester.1 to tester.7 (no record)' }
 Write-Info "previous installer defaults: $appliedSource"
-function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null) {
-    $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current (Read-RegistryValues $Key) -Explicit $Explicit -Owned $Owned
+function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @()) {
+    $now = Read-RegistryValues $Key
+    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned }
+    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore }
     Invoke-Change ("${Key}: " + (Format-RegistryPlan $plan)) { Write-RegistryPlan $Key $plan } | Out-Null
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
 # DpmMaxMHz, thermal limits are the driver's own. KeepLog 0: no log files on the tester's disk. UnconfirmedStarts 0 is
-# the INF's own reset; the display-only start above already counted one.
-Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 })
+# the INF's own reset; the display-only start above already counted one. Judged on the values from before pnputil;
+# the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before pnputil back.
+Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $infParameterNames
 
 # Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.
 $umd = @('bc250umd.dll', (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
@@ -649,6 +672,7 @@ if ($controlExe -and $dirs -contains 'control') {
 
 Set-StateValue $state 'firmware_source_dir' $null
 Set-StateValue $state 'command_line_parameters' $null
+Set-StateValue $state 'parameters_before_install' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 Save-Phase 'installed'
 Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')

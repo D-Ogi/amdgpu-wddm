@@ -163,6 +163,9 @@ function Set-StateValueOnce($State, [string]$Name, $Value) {
 #   kept      any other value: the tester's (or the control application's) setting, left alone
 #   command   given on the install.cmd command line (-DpmMaxMHz, -CuMode): written
 #   installer installer-owned (paths, counters): always written
+#   restored  a value the driver package's INF writes that is not in the table: the value from before the install
+# The driver package (pnputil) writes 0 into every gate and counter of its AddReg: the decisions are taken on the values
+# from before it (install.ps1 keeps them in the state), the writes then restore what it reset.
 function ConvertTo-PairList($Map) {
     if ($null -eq $Map) { return @() }
     if ($Map -is [Collections.IDictionary]) { return @($Map.GetEnumerator() | ForEach-Object { [pscustomobject]@{ Name = [string]$_.Key; Value = $_.Value } }) }
@@ -178,7 +181,7 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 # Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
 # the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).
 function Get-RegistryDefaultPlan {
-    param($Defaults, $Previous, [hashtable]$Current = @{}, [hashtable]$Explicit = @{}, $Owned = $null)
+    param($Defaults, $Previous, [hashtable]$Current = @{}, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$After = $null, [string[]]$Restore = @())
     $prev = @{}
     foreach ($p in ConvertTo-PairList $Previous) { $prev[$p.Name] = $p.Value }
     $plan = New-Object System.Collections.ArrayList
@@ -200,10 +203,34 @@ function Get-RegistryDefaultPlan {
         [void]$plan.Add([pscustomobject]@{ name = [string]$e.Key; value = $e.Value; default = $null; current = $(if ($has) { $Current[$e.Key] } else { $null }); present = $has; decision = 'command'; write = $true })
     }
     foreach ($o in ConvertTo-PairList $Owned) {
+        $seen[$o.Name] = $true
         $has = $Current.ContainsKey($o.Name)
         [void]$plan.Add([pscustomobject]@{ name = $o.Name; value = $o.Value; default = $o.Value; current = $(if ($has) { $Current[$o.Name] } else { $null }); present = $has; decision = 'installer'; write = $true })
     }
+    # Values outside the table that a reset between the judgement and the write may change (the INF's other AddReg
+    # values): the value from before the reset is written back; a name that was absent keeps what the reset wrote.
+    foreach ($n in @($Restore)) {
+        if ($seen.ContainsKey($n) -or -not $Current.ContainsKey($n)) { continue }
+        $seen[$n] = $true
+        [void]$plan.Add([pscustomobject]@{ name = $n; value = $Current[$n]; default = $null; current = $Current[$n]; present = $true; decision = 'restored'; write = $false })
+    }
+    # $Current was read before a reset (the driver package's AddReg writes 0 into every gate): the decisions above come
+    # from it, the writes from what the key holds now ($After). A value the reset changed is written back.
+    if ($null -ne $After) {
+        foreach ($e in $plan) {
+            $now = $null; if ($After.ContainsKey($e.name)) { $now = $After[$e.name] }
+            $differs = (-not $After.ContainsKey($e.name)) -or -not (Test-RegistryValueSame $now $e.value)
+            $e | Add-Member -NotePropertyName rewrite -NotePropertyValue ((-not $e.write) -and $differs)
+            if ($differs) { $e.write = $true }
+        }
+    }
     return , $plan.ToArray()
+}
+# The value names the driver package writes under HKR\Parameters (the INF's AddReg lines), i.e. what pnputil resets.
+function Get-InfParameterNames([string]$InfPath) {
+    $names = @()
+    foreach ($l in [IO.File]::ReadAllLines($InfPath)) { if ($l -match '^\s*HKR\s*,\s*Parameters\s*,\s*([A-Za-z0-9_]+)\s*,') { $names += $Matches[1] } }
+    return , $names
 }
 function Format-RegistryPlan($Plan) {
     $parts = @()
@@ -215,7 +242,9 @@ function Format-RegistryPlan($Plan) {
             'kept'      { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT (changed by the tester; default $(Format-RegistryValue $e.default))" }
             'command'   { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (command line)" }
             'installer' { $parts += "$($e.name)=$(Format-RegistryValue $e.value)" }
+            'restored'  { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (as before the install)" }
         }
+        if ($e.rewrite) { $parts[$parts.Count - 1] += ' [written again over the driver package reset]' }
     }
     return ($parts -join '; ')
 }

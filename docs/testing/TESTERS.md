@@ -9,7 +9,7 @@ Package version: `0.7.198.100-tester.10`. New since `0.7.197.100-tester.6`:
 - The GPU draws the desktop. Defect BD-058 is fixed: the desktop no longer stops when a File Explorer window opens.
 - Kernel-mode driver 0.7.198.2: a normal restart keeps the GPU desktop path open (defect BD-059).
 - An upgrade keeps the settings you changed (`INSTALL.md`, "Install").
-- The verification has a ninth check, "GPU desktop path".
+- The verification has two more checks, "full WDDM gate" and "GPU desktop path".
 - The control application has a Recovery page.
 - The package does not contain the AMD GPU firmware. The installer downloads it from the linux-firmware project
   during the installation and checks every file (`INSTALL.md`, "GPU firmware"). A BC-250 without internet can use

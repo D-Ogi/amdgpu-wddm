@@ -106,6 +106,50 @@ try {
 } finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
 Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 
+'the driver package resets the gates between the judgement and the write (pnputil runs the INF AddReg)'
+$inf = Join-Path (Split-Path $Installer) 'payload\kmd\bc250kmd.inf'
+if (Test-Path -LiteralPath $inf) { $infNames = Get-InfParameterNames $inf; $infSource = 'the package INF' }
+else { $infNames = @('UnconfirmedStarts', 'EnableMmio', 'EnableMmioWrite', 'EnableVram', 'EnableVramWrite', 'EnableGart', 'EnablePsp', 'EnableGfx', 'EnableIh', 'EnableDcnWrite', 'EnableVidPnFlip', 'EnableFullWddm', 'EnableGpuVa', 'EnableGpuSubmit', 'EnablePagingNode', 'EnablePresentBlit', 'EnableHangBugcheck', 'KeepLog'); $infSource = 'the 0.7.198.2 INF list (no package INF next to this installer)' }
+Check ((@($infNames) -contains 'EnableFullWddm') -and (@($infNames) -contains 'EnableMmioWrite')) "$(@($infNames).Count) INF Parameters names from $infSource"
+$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+function Invoke-InfReset([string]$K) { foreach ($n in $infNames) { New-ItemProperty -LiteralPath $K -Name $n -Value 0 -PropertyType DWord -Force | Out-Null } }
+function Get-Snapshot([string]$K) { $all = Read-RegistryValues $K; $h = @{}; foreach ($n in @($infNames) + @(ConvertTo-PairList $table.defaults.parameters | ForEach-Object { $_.Name })) { if ($all.ContainsKey($n)) { $h[$n] = $all[$n] } }; return $h }
+if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
+try {
+    # Upgrade over tester.6: its defaults, a tester's DpmMaxMHz and interop switch, the INF-only values set by hand,
+    # and a value of the KMD's own that nobody judges.
+    $k = "$key\Upgrade"
+    Write-RegistryPlan $k (Get-RegistryDefaultPlan -Defaults $legacy.parameters -Previous $null -Current @{})
+    foreach ($e in @{ DpmMaxMHz = 1200; EnableCddDwmInterop = 0; EnableMmioWrite = 1; EnableHangBugcheck = 1; DpmLastMode = 1 }.GetEnumerator()) { New-ItemProperty -LiteralPath $k -Name $e.Key -Value $e.Value -PropertyType DWord -Force | Out-Null }
+    $before = Get-Snapshot $k
+    Invoke-InfReset $k
+    $after = Read-RegistryValues $k
+    $wrong = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $after
+    Check ((Get-Decision $wrong 'EnableFullWddm').decision -eq 'kept') 'judged after the reset, EnableFullWddm 0 would be KEPT (the tester.10 candidate defect)'
+    $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $before -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After $after -Restore $infNames
+    Write-RegistryPlan $k $plan
+    $v = Read-RegistryValues $k
+    Check ($v.EnableFullWddm -eq 2) "EnableFullWddm $($v.EnableFullWddm) after the write (judged before the reset: $((Get-Decision $plan 'EnableFullWddm').decision), rewritten)"
+    $gates = @(ConvertTo-PairList $table.defaults.parameters | Where-Object { $_.Name -like 'Enable*' -and $_.Name -ne 'EnableCddDwmInterop' } | Where-Object { -not (Test-RegistryValueSame $v[$_.Name] $_.Value) } | ForEach-Object { $_.Name })
+    Check ($gates.Count -eq 0) "every table gate back at its default$(if ($gates.Count) { ': not ' + ($gates -join ', ') })"
+    Check (($v.DpmMaxMHz -eq 1200) -and ($v.EnableCddDwmInterop -eq 0)) "tester values kept over the reset: DpmMaxMHz $($v.DpmMaxMHz), EnableCddDwmInterop $($v.EnableCddDwmInterop)"
+    Check (($v.EnableMmioWrite -eq 1) -and ($v.EnableHangBugcheck -eq 1)) "INF-only values as before the install: EnableMmioWrite $($v.EnableMmioWrite), EnableHangBugcheck $($v.EnableHangBugcheck)"
+    Check (($v.UnconfirmedStarts -eq 0) -and ($v.DpmLastMode -eq 1)) 'UnconfirmedStarts 0 (installer), DpmLastMode untouched'
+    Check ((Format-RegistryPlan $plan) -match 'EnableFullWddm=2 \(unchanged\) \[written again over the driver package reset\]') 'the plan text says the value is written again'
+    $again = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $before -After (Read-RegistryValues $k) -Restore $infNames
+    Check (@($again | Where-Object { $_.write }).Count -eq 0) 'a re-run with the same snapshot writes nothing more'
+    # Fresh install: nothing before; the INF's values for names outside the table stay.
+    $k = "$key\Fresh"
+    Initialize-RegistryKey $k
+    $before = Get-Snapshot $k
+    Invoke-InfReset $k
+    $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $before -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $infNames
+    Write-RegistryPlan $k $plan
+    $v = Read-RegistryValues $k
+    Check (($v.EnableFullWddm -eq 2) -and ($v.EnableMmio -eq 1) -and ($v.DpmMaxMHz -eq 1500) -and ($v.EnableMmioWrite -eq 0)) "fresh install: EnableFullWddm $($v.EnableFullWddm), EnableMmio $($v.EnableMmio), DpmMaxMHz $($v.DpmMaxMHz), EnableMmioWrite $($v.EnableMmioWrite) (INF)"
+} finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
+Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
+
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }
 'registry defaults: all checks passed'
 exit 0

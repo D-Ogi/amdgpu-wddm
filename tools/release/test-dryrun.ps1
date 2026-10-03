@@ -104,6 +104,10 @@ $src = [IO.File]::ReadAllText((Join-Path $Package 'installer\install.ps1'))
 Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itself'
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
 Check (($src -match "Add-Result 'GPU desktop path'") -and ($src -match "Invoke-Native \`$cli @\('interop'\)") -and ($src -match 'effective blit\\\+cdd') -and ($src -match 'died in a session') -and ($src -match 'bc250d3d_zink')) 'verify checks the GPU desktop path (interop effective blit+cdd, no unclean session, zink in DWM)'
+$pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'pnputil /add-driver", "Invoke-RegistryDefaults `$script:ParametersKey") | ForEach-Object { $src.IndexOf($_) }
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$infParameterNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
+Check ($r.text -match 'driver settings before the driver package: \d+ of \d+ values present') 'the walk-through takes the snapshot before pnputil'
+Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
 Check ([string]$m.kmd_abi -eq '0x000700C6' -or [version]($m.kmd_build) -lt [version]'0.7.198.0') "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 'file replacement and re-run (test-filesafe.ps1 under 5.1, inside a scratch folder)'
