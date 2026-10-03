@@ -159,23 +159,23 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/release/control-app/build/app/amdgpu_wddm_control.exe",
-      "sha256": "35D15208954483157D70CA6DE3B8C4C8E85B518BAED17015E12B0B8BAC2C6F1E",
-      "size": 90624,
-      "role": "control application (release/control-app-v0 57c92953)"
+      "source": "scratch/release/control-app/build/app-47a420cf/amdgpu_wddm_control.exe",
+      "sha256": "D79C5BC80FC57CF3B8653961037DE5A5C25451A786C8DCA3EBF0A24AD71CE7B8",
+      "size": 147968,
+      "role": "control application 0.2.0.0 with the Recovery page (release/control-app-v0 47a420cf, published squashed as 630466cc)"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/release/control-app/build/app/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-47a420cf/bc250control.dll",
       "sha256": "B0ADE758F6EED612579FF4B45D4C6F9B9D405020D23839B4F7B981EDA6504B13",
       "size": 145920,
-      "role": "control DLL for the control application (57c92953, static CRT)"
+      "role": "control DLL for the control application (630466cc, static CRT)"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/release/control-app/build/app/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-47a420cf/bc250control.dll",
       "sha256": "B0ADE758F6EED612579FF4B45D4C6F9B9D405020D23839B4F7B981EDA6504B13",
       "size": 145920,
       "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
