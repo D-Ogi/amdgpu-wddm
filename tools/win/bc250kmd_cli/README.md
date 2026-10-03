@@ -152,7 +152,16 @@ Two more `bc250control.dll` exports feed the monitor's GPU telemetry line (`tool
   `KMTQAITYPE_GETSEGMENTSIZE` dedicated size. Limits saturate: an aperture may report a commit limit of 2^64-1
   (measured on the development PC's RTX 4090, 2026-09-30).
 
-Both open the adapter per call and close it again. The interface path is looked up once and cached; an absent
+Two more feed the control application (`tools/win/amdgpu_wddm_control/README.md`), on the same cached path and with
+the same `NoAdapterSynchronization`-only flags:
+
+- `Bc250Interop(BC250_ESCAPE_INTEROP*, 104)`: the GPU DWM interop decision of this start (`BC250_ESCAPE_RUN_INTEROP`
+  op READ), open to every caller.
+- `Bc250LogRead(from, BC250_ESCAPE_LOG*, 10812)`: one page of the log ring (`BC250_ESCAPE_GET_LOG`), answered without
+  the adapter lock from 0.7.184.1. No `HardwareAccess` fallback and no `LOG_SUMMARY`: an older driver's refusal is
+  returned as it is.
+
+All of them open the adapter per call and close it again. The interface path is looked up once and cached; an absent
 adapter is looked for again at most every 2 s, since the SetupAPI walk costs ~0.8 ms of CPU against ~6-9 us
 for a cached call (development PC, `vram`). `test-telemetry.ps1`, run by `build.ps1`, tests both exports with
 the D3DKMT calls replaced.
