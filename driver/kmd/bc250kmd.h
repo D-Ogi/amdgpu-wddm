@@ -369,6 +369,10 @@ void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN
 BOOLEAN InteropUserBegin(BC250_DEVICE* Device);
 void InteropUserEnd(BC250_DEVICE* Device);
 void InteropStop(BC250_DEVICE* Device);
+void InteropRemove(BC250_DEVICE* Device);
+void InteropAdapterPower(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action);
+void InteropDriverInit(void);
+void InteropDriverUnload(void);
 void InteropLogSummary(BC250_DEVICE* Device);
 void InteropRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_INTEROP* Data, ULONG EscapeFlags);
 NTSTATUS GuardConfirmStartDurable(void);

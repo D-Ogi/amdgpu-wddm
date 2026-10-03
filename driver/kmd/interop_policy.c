@@ -70,3 +70,45 @@ void bc250_interop_decide(const struct bc250_interop_inputs* in, struct bc250_in
         out->closed_reason = 0;
     }
 }
+
+void bc250_interop_session_step(struct bc250_interop_session* s, unsigned int event, struct bc250_interop_step* out)
+{
+    out->mark = 0;
+    out->unmark = BC250_INTEROP_SESSION_END_NONE;
+    if (s == 0) return;
+    switch (event) {
+    case BC250_INTEROP_EVENT_BEGIN:
+        s->users++;
+        out->mark = !s->marked && !s->down;     // also retries a mark that failed for an earlier device
+        break;
+    case BC250_INTEROP_EVENT_END:
+        if (s->users) s->users--;
+        if (s->users == 0 && s->marked) out->unmark = BC250_INTEROP_SESSION_END_USERS;
+        break;
+    case BC250_INTEROP_EVENT_STOP:
+        s->users = 0;
+        if (s->marked) out->unmark = BC250_INTEROP_SESSION_END_STOP;
+        break;
+    case BC250_INTEROP_EVENT_SYSTEM_DOWN:
+    case BC250_INTEROP_EVENT_ADAPTER_DOWN:
+        // The users stay counted: after a sleep they present again without a new BEGIN.
+        s->down = 1;
+        if (s->marked)
+            out->unmark = event == BC250_INTEROP_EVENT_SYSTEM_DOWN ? BC250_INTEROP_SESSION_END_SYSTEM_POWER
+                                                                  : BC250_INTEROP_SESSION_END_ADAPTER_D3;
+        break;
+    case BC250_INTEROP_EVENT_UP:
+        s->down = 0;
+        out->mark = !s->marked && s->users != 0;
+        break;
+    default:
+        break;
+    }
+}
+
+int bc250_interop_system_action(unsigned int action)
+{
+    // POWER_ACTION (wdm.h): 2 sleep, 3 hibernate, 4 shutdown, 5 shutdown-reset, 6 shutdown-off. Not 0 (none: a
+    // device-level transition) or 7/8 (warm eject, display off): the system keeps running through those.
+    return action >= 2u && action <= 6u;
+}

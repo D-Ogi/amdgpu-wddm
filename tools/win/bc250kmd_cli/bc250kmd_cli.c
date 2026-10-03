@@ -2189,7 +2189,7 @@ static int Dpm(int argc, WCHAR **argv)
 
 static const char *const g_InteropReason[] = { "none", "not-requested", "invalid-setting", "unused", "unclean",
                                                "registry", "unused", "not-run" };
-static const char *const g_InteropEnd[] = { "none", "device-stop", "last-user-gone" };
+static const char *const g_InteropEnd[] = { "none", "device-stop", "last-user-gone", "system-power", "adapter-d3" };
 
 static const char *InteropBits(unsigned long bits)
 {
@@ -2232,10 +2232,14 @@ static int Interop(void)
            (d.Flags & BC250_INTEROP_FLAG_STALE) ? "  stale marker of this boot cleared" : "",
            (d.Flags & BC250_INTEROP_FLAG_PERSISTED) ? "  close written" : "",
            (d.Flags & BC250_INTEROP_FLAG_PERSIST_FAILED) ? "  close NOT written (retried next start)" : "");
+    // 0.7.198 on: the power callback that ends a session at a clean restart (BD-059); older drivers set neither bit.
+    if (d.Version >= 0x000700C6u)
+        printf("power callback %s%s\n", (d.Flags & BC250_INTEROP_FLAG_POWER_CALLBACK) ? "registered" : "NOT registered",
+               (d.Flags & BC250_INTEROP_FLAG_DOWN) ? ", system power transition under way (no mark)" : "");
     printf("session %s, users %lu, marks %lu, unmarks %lu, mark failures %lu, last end %s, previous end %s, "
            "boot %lu, marker found %lu\n",
            (d.Flags & BC250_INTEROP_FLAG_SESSION) ? "marked" : "not marked", d.Users, d.Marks, d.Unmarks, d.MarkFailures,
-           d.LastEnd < 3 ? g_InteropEnd[d.LastEnd] : "?", d.PreviousEnd < 3 ? g_InteropEnd[d.PreviousEnd] : "?",
+           d.LastEnd < 5 ? g_InteropEnd[d.LastEnd] : "?", d.PreviousEnd < 5 ? g_InteropEnd[d.PreviousEnd] : "?",
            d.BootId, d.SessionBootId);
     return 0;
 }
