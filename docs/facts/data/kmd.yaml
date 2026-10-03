@@ -3,7 +3,7 @@
 area: kmd
 order: 2
 title: "Kernel driver and WDDM"
-description: "The kernel-mode driver under Windows: WDDM start, dxgkrnl and VidMm contracts, paging, GART and page tables, submission, fences, residency, TDR and bugchecks, packages and deployment."
+description: "Our kernel-mode driver and the WDDM kernel contracts: start and stop, dxgkrnl and VidMm DDIs, paging, GART and page tables, submission, fences, residency, interrupts as the driver handles them, TDR and bugchecks, installation."
 facts:
   - id: M26
     status: MEASURED

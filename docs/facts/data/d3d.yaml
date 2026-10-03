@@ -3,7 +3,7 @@
 area: d3d
 order: 5
 title: "Direct3D through the system runtime"
-description: "Direct3D 9 to 12 and DXGI: the native user-mode driver behind the system runtime, the DXVK and vkd3d-proton engines, feature levels, DXR and conformance clients."
+description: "Direct3D 9-12 and DXGI: the system runtime and its DDI, our D3D10/11 and D3D12 user-mode drivers (shells, hosted Zink, DXVK and vkd3d-proton engines), their test clients, feature levels, DXR."
 facts:
   - id: M140
     status: MEASURED

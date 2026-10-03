@@ -3,7 +3,7 @@
 area: tooling
 order: 8
 title: "Tooling, build and lab"
-description: "Build, signing and quality gates, host tools and models, the lab itself (remote access, monitoring, recovery, power), and project process."
+description: "Build, signing, audits and quality gates, host-only harnesses, lab infrastructure (monitor overlay, remote access, deployment and rollback helpers, power)."
 facts:
   - id: M27
     status: MEASURED

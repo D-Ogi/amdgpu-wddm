@@ -3,7 +3,7 @@
 area: display
 order: 3
 title: "Display, DWM and Present"
-description: "Scanout and the display engine, VidPN and flips, the desktop compositor (DWM), Present paths and the Vulkan WSI."
+description: "What ends on the screen: display engine and scanout, VidPN, flips and vsync, the kernel Present and Blt paths, DWM and desktop composition trials, the Vulkan WSI."
 facts:
   - id: M68
     status: MEASURED

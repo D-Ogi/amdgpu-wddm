@@ -2,9 +2,13 @@
 
 Facts live in [`data/`](data/), one YAML file per area. Everything else about facts is generated from those
 files by [`tools/facts/gen_facts.py`](../../tools/facts/gen_facts.py): the index [`../facts.md`](../facts.md),
-one table per area (`<area>.md`), the live list [`current.md`](current.md), the ID list [`ids.md`](ids.md)
-and the mermaid graphs in [`graphs/`](graphs/). Generated pages start with a "Generated ... Do not edit"
-comment. Statuses and what a fact needs: [`../01-evidence-rules.md`](../01-evidence-rules.md).
+one table per area (`<area>.md`), the live list [`current.md`](current.md) and the mermaid graphs in
+[`graphs/`](graphs/). Each generated page opens with a "GENERATED ... do not edit by hand" banner. Statuses and
+what a fact needs: [`../01-evidence-rules.md`](../01-evidence-rules.md).
+
+A fact's status lives on its area page only, and no page counts facts, so adding a fact changes its data file,
+its area page and `current.md`, plus the pages of the facts it has edges to. Only the data file is edited by
+hand.
 
 ## Areas
 
@@ -20,25 +24,17 @@ observed it: a register value read under Linux is `hardware`, what amdgpu or Mes
   the D3D runtime or the DXVK/vkd3d-proton engines it is `d3d`.
 - `icd` / `kmd`: the user-mode half of a winsys or allocation contract is `icd`, the kernel half `kmd`.
 
-| Area | What belongs there |
-|---|---|
-| `games` | Games, game-like demos and benchmarks: frame rates, frame times, presets, throughput, comparisons with Linux |
-| `tooling` | Build, signing, audits and quality gates, host-only harnesses, lab infrastructure (monitor overlay, remote access, deployment and rollback helpers, power) |
-| `linux` | What amdgpu, Mesa and X11 do under Linux on unit A: the reference the Windows work is compared with |
-| `display` | What ends on the screen: display engine and scanout, VidPN, flips and vsync, the kernel Present and Blt paths, DWM and desktop composition trials, the Vulkan WSI |
-| `d3d` | Direct3D 9-12 and DXGI: the system runtime and its DDI, our D3D10/11 and D3D12 user-mode drivers (shells, hosted Zink, DXVK and vkd3d-proton engines), their test clients, feature levels, DXR |
-| `icd` | The Vulkan driver in user mode (RADV with the WDDM winsys, Mesa changes, CTS) and what runs only on it: OpenGL through Zink, OpenCL, compute workloads such as llama.cpp |
-| `kmd` | Our kernel-mode driver and the WDDM kernel contracts: start and stop, dxgkrnl and VidMm DDIs, paging, GART and page tables, submission, fences, residency, interrupts as the driver handles them, TDR and bugchecks, installation |
-| `hardware` | Register-level behaviour of the GPU and the platform, whatever driver touched it: IP blocks and their bring-up (PSP, RLC, SMU, MEC/KIQ, SDMA, IH), clocks, voltage, temperature, memory map, firmware and BIOS |
+The one-line definition of each area is the `description` in its data file; [`../facts.md`](../facts.md) lists
+them.
 
 ## How to add a fact
 
-1. Get the ID: `python tools/facts/gen_facts.py next-id` prints the next free `M` number (say `M788`).
+1. Get the ID: `python tools/facts/gen_facts.py next-id` prints the next free `M` number (say `M790`).
 2. Append the fact to the end of its area file, e.g. `docs/facts/data/kmd.yaml`. Text values are double-quoted
    and on one line; links are relative to `docs/`:
 
    ```yaml
-     - id: M788
+     - id: M790
        status: MEASURED
        date: "2026-10-03"
        claim: "What holds, in one sentence"
@@ -51,7 +47,8 @@ observed it: a register value read under Linux is `hardware`, what amdgpu or Mes
 
    `status_text`, `detail`, `evidence` and `edges` are optional; `status_text` only when it says more than `status`.
 3. Run `python tools/facts/gen_facts.py --write`. It regenerates the pages and rewrites the data file in canonical
-   form (sorted by ID). Commit the data and the pages together with the evidence.
+   form (sorted by ID). Commit the data and the pages together with the evidence; `--check` (in
+   `tools/quality/quick.ps1` and the `facts` CI workflow) fails if the pages were not regenerated.
 
 ## Correcting, moving, checking
 

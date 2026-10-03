@@ -3,7 +3,7 @@
 area: hardware
 order: 1
 title: "Hardware, registers and firmware"
-description: "Register-level behaviour of the GPU and the platform: MMIO, IP blocks, SMU, PSP, interrupts, memory controller, clocks, power and temperature, firmware and BIOS."
+description: "Register-level behaviour of the GPU and the platform, whatever driver touched it: IP blocks and their bring-up (PSP, RLC, SMU, MEC/KIQ, SDMA, IH), clocks, voltage, temperature, memory map, firmware and BIOS."
 facts:
   - id: M1
     status: CONFIRMED

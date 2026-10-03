@@ -3,7 +3,7 @@
 area: linux
 order: 7
 title: "Linux reference"
-description: "Measurements on unit A under Linux (amdgpu, Mesa) that serve as the reference for the Windows work."
+description: "What amdgpu, Mesa and X11 do under Linux on unit A: the reference the Windows work is compared with."
 facts:
   - id: M5
     status: MEASURED

@@ -3,7 +3,7 @@
 area: icd
 order: 4
 title: "ICD, Vulkan, OpenGL and compute"
-description: "The Vulkan ICD (RADV on WDDM), Vulkan CTS, OpenGL and OpenCL layers on it (Zink, piglit, clvk), and compute workloads such as llama.cpp."
+description: "The Vulkan driver in user mode (RADV with the WDDM winsys, Mesa changes, CTS) and what runs only on it: OpenGL through Zink, OpenCL, compute workloads such as llama.cpp."
 facts:
   - id: M139
     status: CONFIRMED

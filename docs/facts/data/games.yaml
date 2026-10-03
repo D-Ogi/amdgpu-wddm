@@ -3,7 +3,7 @@
 area: games
 order: 6
 title: "Games and performance"
-description: "Games, benchmarks and measured performance: frame rates, frame times, presets, profiling, and comparisons with Linux."
+description: "Games, game-like demos and benchmarks: frame rates, frame times, presets, throughput, comparisons with Linux."
 facts:
   - id: M164
     status: MEASURED
