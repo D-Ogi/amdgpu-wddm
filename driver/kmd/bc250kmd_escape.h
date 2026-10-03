@@ -35,7 +35,14 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C6u       // revision 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
+#define BC250_KMD_VERSION 0x000700C7u       // revision 199 (INF 0.7.199.1, on 198): the standard-allocation
+                                            // size query leaves the public Pitch alone, the fill publishes it
+                                            // (d3dkmddi.md:32953); the wddm summary counts standard
+                                            // allocation requests and answers by kind and GDI type, LB7A
+                                            // create (created/refused/rolled back) and open outcomes, and
+                                            // CreateAllocation calls by final outcome (BD-060, gdi_admission.h).
+                                            // No escape struct changed.
+                                            // 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
                                             // ends the GPU DWM interop session, so a clean restart no
                                             // longer reads as a dead boot (BD-059): \Callback\PowerState
                                             // and the adapter's D3 for a system action unmark, S0 marks
