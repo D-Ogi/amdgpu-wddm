@@ -236,10 +236,12 @@ static class UnitTests
               {""role"": ""desktop-umd"", ""install_path"": ""%SystemRoot%\\System32\\bc250umd.dll"", ""version"": ""2"", ""sha256"": ""BB22""},
               {""role"": ""kmd"", ""install_path"": ""DriverStore (bc250kmd.inf)\\bc250kmd.sys"", ""version"": ""0.7.197.1"", ""sha256"": ""CC33""},
               {""role"": ""firmware"", ""install_path"": ""C:\\BC250\\firmware\\x.bin"", ""version"": """", ""sha256"": ""DD44""},
-              {""role"": ""tool"", ""install_path"": ""somewhere\\relative.exe"", ""version"": """", ""sha256"": ""EE55""}
-            ], ""files"": []}";
+              {""role"": ""tool"", ""install_path"": ""somewhere\\relative.exe"", ""version"": """", ""sha256"": ""EE55""},
+              {""role"": ""certificate"", ""install_path"": ""LocalMachine Root and TrustedPublisher"", ""version"": """", ""sha256"": ""C0FF""}
+            ], ""files"": [], ""release_certificate"": ""ab12""}";
         var m = ManifestCheck.Parse(json);
-        Equal("0.7.197.1-tester.0", m.Version, "manifest version"); Equal(5, m.Components.Count, "manifest components");
+        Equal("0.7.197.1-tester.0", m.Version, "manifest version"); Equal(6, m.Components.Count, "manifest components");
+        Equal("ab12", m.ReleaseCertificate, "release certificate");
         Equal("AA11", m.Components[0].Sha256, "hash upper-cased");
         Func<string, string> expand = p => p.Replace("%SystemRoot%", @"C:\Windows");
         const string dir = @"C:\Program Files\amdgpu-wddm", kmd = @"C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_x\bc250kmd.sys";
@@ -252,13 +254,28 @@ static class UnitTests
         {
             { @"C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll", "aa11" }, { @"C:\Windows\System32\bc250umd.dll", "FFFF" }, { kmd, "CC33" },
         };
-        var report = ManifestCheck.Report(m, dir, kmd, expand, files.ContainsKey, p => files[p]);
+        Check(ManifestCheck.CertificateStores("LocalMachine Root and TrustedPublisher").SequenceEqual(new[] { "Root", "TrustedPublisher" }), "certificate stores parsed");
+        Equal(null, ManifestCheck.CertificateStores(@"C:\x.cer"), "a path is no store form");
+        Equal(null, ManifestCheck.CertificateStores(@"LocalMachine ..\Root"), "a store name with separators refused");
+        var other = new KeyValuePair<string, string>("FFFF", "EEEE");
+        var bySha = new KeyValuePair<string, string>("1234", "c0ff");
+        var byThumb = new KeyValuePair<string, string>("AB12", "9999");
+        Func<Dictionary<string, KeyValuePair<string, string>[]>, Func<string, IEnumerable<KeyValuePair<string, string>>>> stores =
+            d => s => d.ContainsKey(s) ? d[s] : new KeyValuePair<string, string>[0];
+        var both = stores(new Dictionary<string, KeyValuePair<string, string>[]> { { "Root", new[] { other, bySha } }, { "TrustedPublisher", new[] { byThumb } } });
+        var report = ManifestCheck.Report(m, dir, kmd, expand, files.ContainsKey, p => files[p], both);
         Check(Regex.IsMatch(report, @"(?m)^OK\s+d3d12-shell"), "matching file OK");
         Check(Regex.IsMatch(report, @"(?m)^MISMATCH\s+desktop-umd"), "changed file MISMATCH");
         Check(Regex.IsMatch(report, @"(?m)^OK\s+kmd"), "driver store file OK");
         Check(Regex.IsMatch(report, @"(?m)^MISSING\s+firmware"), "absent file MISSING");
         Check(Regex.IsMatch(report, @"(?m)^UNRESOLVED\s+tool"), "relative path UNRESOLVED");
-        Check(report.Contains("2 match, 3 differ, missing or unresolved"), "count line");
+        Check(Regex.IsMatch(report, @"(?m)^OK\s+certificate .*in every store"), "certificate in both stores OK (by SHA-256 or thumbprint)");
+        Check(report.Contains("3 match, 3 differ, missing or unresolved"), "count line");
+        var rootOnly = stores(new Dictionary<string, KeyValuePair<string, string>[]> { { "Root", new[] { bySha } } });
+        report = ManifestCheck.Report(m, dir, kmd, expand, files.ContainsKey, p => files[p], rootOnly);
+        Check(Regex.IsMatch(report, @"(?m)^MISSING\s+certificate .*not in TrustedPublisher\r?$"),"certificate absent from one store MISSING");
+        report = ManifestCheck.Report(m, dir, kmd, expand, files.ContainsKey, p => files[p], s => { throw new UnauthorizedAccessException(); });
+        Check(report.Contains("not in Root (unreadable), TrustedPublisher (unreadable)"), "unreadable stores named");
         Throws<FormatException>(() => ManifestCheck.Parse(@"{""schema"": 2}"), "schema 2 refused");
         Throws<FormatException>(() => ManifestCheck.Parse("[1]"), "not an object refused");
 

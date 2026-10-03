@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Web.Script.Serialization;
 
@@ -18,7 +19,7 @@ namespace AmdgpuWddmControl
 
     public sealed class ManifestInfo
     {
-        public string Release = "", Version = "", KmdVersion = "";
+        public string Release = "", Version = "", KmdVersion = "", ReleaseCertificate = "";
         public readonly List<ManifestComponent> Components = new List<ManifestComponent>();
     }
 
@@ -35,7 +36,7 @@ namespace AmdgpuWddmControl
             var root = new JavaScriptSerializer { MaxJsonLength = 64 << 20 }.DeserializeObject(json) as IDictionary<string, object>;
             if (root == null) throw new FormatException("the manifest is not a JSON object");
             if (Field(root, "schema") != "" && Field(root, "schema") != "1") throw new FormatException("manifest schema " + Field(root, "schema") + ", 1 expected");
-            var m = new ManifestInfo { Release = Field(root, "release"), Version = Field(root, "version"), KmdVersion = Field(root, "kmd_version") };
+            var m = new ManifestInfo { Release = Field(root, "release"), Version = Field(root, "version"), KmdVersion = Field(root, "kmd_version"), ReleaseCertificate = Field(root, "release_certificate") };
             object list;
             if (root.TryGetValue("components", out list) && list is IEnumerable)
                 foreach (var item in (IEnumerable)list)
@@ -69,15 +70,52 @@ namespace AmdgpuWddmControl
             return Path.IsPathRooted(expanded) ? expanded : null;
         }
 
-        // One line per component: OK, MISMATCH, MISSING or UNRESOLVED, then a count line.
+        // A certificate the installer imports instead of copying: install_path "LocalMachine <store> and <store>"
+        // (for example "LocalMachine Root and TrustedPublisher"). The store names, or null for any other form.
+        public static string[] CertificateStores(string installPath)
+        {
+            if (string.IsNullOrEmpty(installPath) || !installPath.StartsWith("LocalMachine ", StringComparison.OrdinalIgnoreCase)) return null;
+            var names = installPath.Substring("LocalMachine ".Length).Split(new[] { " and ", ",", " " }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim()).Where(s => s.Length > 0 && s != "and").ToArray();
+            return names.Length > 0 && names.All(n => n.All(char.IsLetterOrDigit)) ? names : null;
+        }
+
+        // Whether a store holds the certificate: its SHA-256 over the DER bytes equals the component's sha256, or its
+        // thumbprint equals the manifest's release_certificate.
+        static bool Holds(IEnumerable<KeyValuePair<string, string>> certs, string sha256, string thumbprint)
+        {
+            foreach (var c in certs)
+                if ((sha256.Length > 0 && string.Equals(c.Value, sha256, StringComparison.OrdinalIgnoreCase)) ||
+                    (thumbprint.Length > 0 && string.Equals(c.Key, thumbprint, StringComparison.OrdinalIgnoreCase))) return true;
+            return false;
+        }
+
+        // One line per component: OK, MISMATCH, MISSING or UNRESOLVED, then a count line. storeCerts lists a
+        // LocalMachine store's certificates as (thumbprint, SHA-256 of the DER bytes).
         public static string Report(ManifestInfo m, string installDir, string kmdImage, Func<string, string> expand,
-            Func<string, bool> exists, Func<string, string> sha256)
+            Func<string, bool> exists, Func<string, string> sha256, Func<string, IEnumerable<KeyValuePair<string, string>>> storeCerts)
         {
             var w = new StringBuilder();
             w.AppendLine("release " + m.Release + " version " + m.Version + " kmd " + m.KmdVersion + ", " + m.Components.Count + " components");
             int ok = 0, bad = 0;
+            string thumbprint = (m.ReleaseCertificate ?? "").Replace(" ", "").Replace(":", "");
             foreach (var c in m.Components)
             {
+                var stores = c.Role == "certificate" ? CertificateStores(c.InstallPath) : null;
+                if (stores != null)
+                {
+                    var absent = new List<string>();
+                    foreach (var store in stores)
+                    {
+                        try { if (!Holds(storeCerts(store), c.Sha256, thumbprint)) absent.Add(store); }
+                        catch (Exception) { absent.Add(store + " (unreadable)"); }
+                    }
+                    string certState = absent.Count == 0 ? "OK" : "MISSING";
+                    if (absent.Count == 0) ok++; else bad++;
+                    w.AppendLine(string.Format("{0,-10} {1,-14} {2} | expected {3} | {4}", certState, c.Role, c.InstallPath, c.Sha256,
+                        absent.Count == 0 ? "in every store" : "not in " + string.Join(", ", absent)));
+                    continue;
+                }
                 string path = Resolve(c.InstallPath, installDir, kmdImage, expand), state, actual = "";
                 if (path == null) state = "UNRESOLVED";
                 else if (!exists(path)) state = "MISSING";

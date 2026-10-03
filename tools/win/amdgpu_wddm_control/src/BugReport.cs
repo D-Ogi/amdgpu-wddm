@@ -133,9 +133,25 @@ namespace AmdgpuWddmControl
             try
             {
                 return ManifestCheck.Report(ManifestCheck.Parse(File.ReadAllText(path)), inventory.ReleaseDir, inventory.KmdImage,
-                    Environment.ExpandEnvironmentVariables, File.Exists, Inventory.Sha256);
+                    Environment.ExpandEnvironmentVariables, File.Exists, Inventory.Sha256, StoreCertificates);
             }
             catch (Exception e) { return "The manifest cannot be read: " + e.Message; }
+        }
+
+        // (thumbprint, SHA-256 of the DER bytes) of every certificate in a LocalMachine store, opened read-only.
+        static IEnumerable<KeyValuePair<string, string>> StoreCertificates(string name)
+        {
+            var list = new List<KeyValuePair<string, string>>();
+            var store = new System.Security.Cryptography.X509Certificates.X509Store(name, System.Security.Cryptography.X509Certificates.StoreLocation.LocalMachine);
+            try
+            {
+                store.Open(System.Security.Cryptography.X509Certificates.OpenFlags.ReadOnly | System.Security.Cryptography.X509Certificates.OpenFlags.OpenExistingOnly);
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                    foreach (var c in store.Certificates)
+                        list.Add(new KeyValuePair<string, string>(c.Thumbprint, BitConverter.ToString(sha.ComputeHash(c.RawData)).Replace("-", "")));
+            }
+            finally { store.Close(); }
+            return list;
         }
 
         public const int LogBytesLimit = 2 << 20;
