@@ -208,6 +208,18 @@ namespace AmdgpuWddmControl
         public string RunId { get; set; }
     }
 
+    // What one write of dwm-observations.json does: the merged history of this session, the file to write (only valid
+    // epochs and instances, this one last) and whether to write it.
+    public sealed class CommitPlan
+    {
+        public DwmObservations Merged;
+        public DwmObservationsFile File;
+        public bool Write;
+    }
+
+    // Lists one process's modules into the buffer and reports the bytes the full list needs (EnumProcessModulesEx).
+    public delegate bool EnumModules(IntPtr[] buffer, out int neededBytes);
+
     public static class Recovery
     {
         public const string ParametersPath = DpmSettings.RegistryPath;
@@ -414,6 +426,70 @@ namespace AmdgpuWddmControl
             AddInstance(o, new DwmInstance { Pid = now.Pid.Value, CreatedUtc = now.CreatedUtc, FirstSeenUtc = nowUtc, Observer = observer });
             o.Instances = o.Instances.OrderBy(i => i.CreatedUtc, StringComparer.Ordinal).ToList();
             return o;
+        }
+
+        // A stored epoch with only its valid instances; null when its identity is damaged or no instance is valid.
+        public static DwmObservations Sanitize(DwmObservations r)
+        {
+            if (r == null || r.Session <= 0 || Utc(r.SessionStartUtc) == null || r.Instances == null) return null;
+            var valid = r.Instances.Where(Valid).ToList();
+            if (valid.Count == 0) return null;
+            var o = new DwmObservations { BootId = r.BootId, Session = r.Session, SessionStartUtc = r.SessionStartUtc };
+            o.Instances.AddRange(valid.Select(i => new DwmInstance { Pid = i.Pid, CreatedUtc = i.CreatedUtc, FirstSeenUtc = i.FirstSeenUtc, Observer = i.Observer }));
+            return o;
+        }
+
+        static bool SameEpoch(DwmObservations a, DwmObservations b)
+        {
+            return a.BootId == b.BootId && a.Session == b.Session && a.SessionStartUtc == b.SessionStartUtc;
+        }
+
+        // One write of dwm-observations.json, from what the file holds now (as read, damaged entries included). Every
+        // epoch and instance is sanitized before anything is ordered or kept, so a damaged entry is dropped instead of
+        // stopping every later write (reviewer 914); a file that held one is rewritten. Other epochs: the 7 newest.
+        public static CommitPlan PlanCommit(IEnumerable<DwmObservations> stored, DwmObservations history, DwmReading now, string observer, string nowUtc)
+        {
+            var raw = (stored ?? Enumerable.Empty<DwmObservations>()).ToList();
+            var clean = raw.Select(Sanitize).Where(r => r != null).ToList();
+            bool damaged = clean.Count != raw.Count || raw.Any(r => r.Instances.Count != r.Instances.Count(Valid));     // raw.Count == clean.Count: none is null
+            var merged = Observe(clean.Concat(new[] { history }), now, observer, nowUtc);
+            if (merged == null) return null;
+            // At most 64 instances: a DWM that restarts in a loop is a defect, and the first and the last tell it.
+            if (merged.Instances.Count > 64) merged.Instances.RemoveRange(1, merged.Instances.Count - 64);
+            var plan = new CommitPlan { Merged = merged, File = new DwmObservationsFile() };
+            plan.File.Records.AddRange(clean.Where(r => !SameEpoch(r, merged)).OrderBy(r => r.Instances.Max(i => i.FirstSeenUtc), StringComparer.Ordinal)
+                .Reverse().Take(7).Reverse());
+            plan.File.Records.Add(merged);
+            var mine = clean.FirstOrDefault(r => SameEpoch(r, merged));
+            var json = new System.Web.Script.Serialization.JavaScriptSerializer();
+            plan.Write = damaged || mine == null || json.Serialize(mine) != json.Serialize(merged);
+            return plan;
+        }
+
+        // The complete module list of a process, or null: the buffer grows to the size the system reports (at most 4
+        // tries, at most 16384 modules), and an enumeration that fails or a name that cannot be read makes the list
+        // incomplete. A partial list never decides a route (reviewer 914).
+        public static List<string> CompleteModuleList(EnumModules enumerate, Func<IntPtr, string> name, int pointerSize)
+        {
+            int count = 1024;
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                var buffer = new IntPtr[count];
+                int needed;
+                if (!enumerate(buffer, out needed) || needed <= 0 || needed % pointerSize != 0) return null;
+                int n = needed / pointerSize;
+                if (n > 16384) return null;
+                if (n > buffer.Length) { count = n + 64; continue; }      // more modules than the buffer: again, with the reported size
+                var list = new List<string>(n);
+                for (int i = 0; i < n; i++)
+                {
+                    var file = name(buffer[i]);
+                    if (string.IsNullOrEmpty(file)) return null;
+                    list.Add(file);
+                }
+                return list;
+            }
+            return null;
         }
 
         // The same process: the same id and creation times at most 1 s apart (the installer reads the creation time

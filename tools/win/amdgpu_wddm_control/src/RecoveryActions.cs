@@ -101,7 +101,8 @@ namespace AmdgpuWddmControl
             {
                 if (h == null) { s.DwmRouteDetail = why; return; }
                 var modules = DwmHandle.Modules(h);
-                if (modules == null || !DwmHandle.Matches(h, s.DwmNow)) { s.DwmRouteDetail = "DWM process " + s.DwmNow.Pid + " changed while its files were read"; return; }
+                if (modules == null) { s.DwmRouteDetail = "the files of DWM process " + s.DwmNow.Pid + " could not be listed completely"; return; }
+                if (!DwmHandle.Matches(h, s.DwmNow)) { s.DwmRouteDetail = "DWM process " + s.DwmNow.Pid + " changed while its files were read"; return; }
                 s.DwmRoute = Recovery.RouteFromModules(modules);
                 s.DwmRouteDetail = string.Join(", ", modules.Select(Path.GetFileName).Where(f => f.StartsWith("bc250", StringComparison.OrdinalIgnoreCase) ||
                     f.StartsWith("amdgpu_wddm", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -295,7 +296,7 @@ namespace AmdgpuWddmControl
                 if (!File.Exists(path)) return new List<DwmObservations>();
                 if (adminOwned && !Trusted(path)) return new List<DwmObservations>();
                 var f = new JavaScriptSerializer().Deserialize<DwmObservationsFile>(File.ReadAllText(path));
-                return f != null && f.Schema == 2 && f.Records != null ? f.Records.Where(r => r != null && r.Instances != null).ToList() : new List<DwmObservations>();
+                return f != null && f.Schema == 2 && f.Records != null ? f.Records.Where(r => r != null && r.Instances != null).ToList() : new List<DwmObservations>();     // Recovery.PlanCommit sanitizes
             }
             catch (Exception) { return new List<DwmObservations>(); }
         }
@@ -322,22 +323,13 @@ namespace AmdgpuWddmControl
                     if (!held) return null;
                     try
                     {
-                        var records = Load(path, admin);
-                        var merged = Recovery.Observe(records.Concat(new[] { history }), now, observer, nowUtc);
-                        if (merged == null) return null;
-                        // At most 64 instances: a DWM that restarts in a loop is a defect, and the first and the last tell it.
-                        if (merged.Instances.Count > 64) merged.Instances.RemoveRange(1, merged.Instances.Count - 64);
-                        var mine = records.FirstOrDefault(r => r.BootId == merged.BootId && r.Session == merged.Session && r.SessionStartUtc == merged.SessionStartUtc);
-                        var json = new JavaScriptSerializer();
-                        if (mine != null && json.Serialize(mine) == json.Serialize(merged)) return merged;
-                        var file = new DwmObservationsFile();
-                        file.Records.AddRange(records.Where(r => r != mine).OrderBy(r => r.Instances.Select(i => i.FirstSeenUtc).DefaultIfEmpty("").Max(), StringComparer.Ordinal)
-                            .Reverse().Take(7).Reverse());
-                        file.Records.Add(merged);
+                        var plan = Recovery.PlanCommit(Load(path, admin), history, now, observer, nowUtc);
+                        if (plan == null) return null;
+                        if (!plan.Write) return plan.Merged;
                         if (admin) RecoveryRunner.PrepareDirectory();
                         Directory.CreateDirectory(Path.GetDirectoryName(path));
                         temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                        File.WriteAllText(temp, json.Serialize(file));
+                        File.WriteAllText(temp, new JavaScriptSerializer().Serialize(plan.File));
                         if (admin)
                         {
                             var owner = new FileSecurity();
@@ -347,7 +339,7 @@ namespace AmdgpuWddmControl
                         if (File.Exists(path)) File.Replace(temp, path, null, true);
                         else File.Move(temp, path);
                         temp = null;
-                        return merged;
+                        return plan.Merged;
                     }
                     finally { m.ReleaseMutex(); }
                 }
@@ -514,18 +506,17 @@ namespace AmdgpuWddmControl
         }
 
         // The module files of the process; null when they cannot be listed.
+        // The complete module list (Recovery.CompleteModuleList), or null. A name that fills the buffer may be cut, so it
+        // counts as unreadable.
         public static List<string> Modules(SafeProcessHandle h)
         {
-            var modules = new IntPtr[1024];
-            int needed;
-            if (!EnumProcessModulesEx(h, modules, modules.Length * IntPtr.Size, out needed, 3)) return null;
-            var list = new List<string>();
-            for (int i = 0; i < Math.Min(needed / IntPtr.Size, modules.Length); i++)
-            {
-                var name = new StringBuilder(1024);
-                if (GetModuleFileNameEx(h, modules[i], name, name.Capacity) > 0) list.Add(name.ToString());
-            }
-            return list;
+            return Recovery.CompleteModuleList((IntPtr[] buffer, out int needed) => EnumProcessModulesEx(h, buffer, buffer.Length * IntPtr.Size, out needed, 3),
+                module =>
+                {
+                    var name = new StringBuilder(32768);
+                    int length = GetModuleFileNameEx(h, module, name, name.Capacity);
+                    return length > 0 && length < name.Capacity - 1 ? name.ToString() : null;
+                }, IntPtr.Size);
         }
     }
 

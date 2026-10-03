@@ -218,6 +218,16 @@ namespace BuildGate { public static class Wts {
             throw "concurrent observers left a bad record ($(@($file.Records).Count) records, $($leftover.Count) temporary files): $(Get-Content $observations -Raw)"
         }
         Write-Host "  observers: 8 concurrent --status, one valid record, no temporary files"
+        # A damaged old epoch (a null instance) is dropped and this session's observation is still saved (reviewer 914).
+        $damaged = '{"Schema":2,"Records":[{"BootId":1,"Session":1,"SessionStartUtc":"2026-01-01T00:00:00.000Z","Instances":[null]},' +
+            '{"BootId":2,"Session":0,"SessionStartUtc":"bad","Instances":[{"Pid":0,"CreatedUtc":"bad","FirstSeenUtc":null,"Observer":"x"}]}]}'
+        [IO.File]::WriteAllText($observations, $damaged, (New-Object Text.UTF8Encoding $false))
+        $st = Invoke-DryRun @('--status') 'status-damaged-history'
+        $file = Get-Content $observations -Raw | ConvertFrom-Json
+        if ($st.Code -ne 0 -or @($file.Records).Count -ne 1 -or $file.Records[0].BootId -le 2 -or @($file.Records[0].Instances).Count -ne 1 -or $null -eq $file.Records[0].Instances[0]) {
+            throw "--status did not replace a damaged history with this session's record (exit $($st.Code)): $(Get-Content $observations -Raw)"
+        }
+        Write-Host "  damaged history: dropped, this session's observation saved"
     }
     # A real run writes --out too. Only where it cannot change anything: without administrator it stops at once.
     $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)

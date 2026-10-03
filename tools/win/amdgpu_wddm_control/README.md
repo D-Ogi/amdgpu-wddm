@@ -80,7 +80,9 @@ route, the state says so ("the DWM that started after the change loaded it"); wh
 state is a warning that asks for a bug report. Without such a record the timing is unknown and neither is said. The
 active route comes from the modules of the one DWM the state names (process id, session and creation time checked
 through the same process handle before and after the module list; a change during the read gives "unknown"), never
-from another session's DWM. Reading it needs administrator; without it the state says that the active route cannot
+from another session's DWM. The module list counts only when it is complete: the buffer grows to the size the system
+reports (at most 4 tries, at most 16384 modules), and a failed enumeration or a module name that cannot be read
+gives "unknown", because a list without the Zink library would read as the CPU route. Reading it needs administrator; without it the state says that the active route cannot
 be read, and never calls a route active.
 
 | Action (`--action`) | Writes | Takes effect | Refused when |
@@ -149,7 +151,9 @@ epoch, the newest 8): the user's copy in `%LOCALAPPDATA%\amdgpu-wddm`, the admin
 write and the file keeps its history. Both copies are merged; only the record of this boot, session and session start
 counts, so a new session starts a new baseline. Every entry is validated before it counts: a process id above 0, a
 session above 0, creation, first-seen and session-start times that parse; a damaged entry is dropped and a live reading
-with a damaged field records nothing, so neither can make a replacement. The installer's record, `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (written by its
+with a damaged field records nothing, so neither can make a replacement. Every stored epoch and instance is checked
+before the epochs are ordered and kept, so a damaged one is dropped (and the file rewritten without it) instead of
+stopping later writes. The installer's record, `%ProgramData%\amdgpu-wddm\dwm-baseline.json` (written by its
 start-confirm task at each administrator logon, format in `tools/release/installer/dwm-session.ps1`), is merged too and
 never written: its record of this epoch (the same session, boot time and logon time within 2 s) counts as an
 observation by "the installer's start-confirm task at logon" at its `recorded_utc`; a record of another epoch is not a

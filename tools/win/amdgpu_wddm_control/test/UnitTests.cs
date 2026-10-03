@@ -786,6 +786,63 @@ static class UnitTests
         var routeBack = fileJson.Deserialize<RouteRecord>(fileJson.Serialize(new RouteRecord { Schema = 1, Utc = "2026-10-03T18:10:00.000Z", Value = null, Action = "undo" }));
         Check(routeBack.Value == null && routeBack.Action == "undo", "route record JSON round-trip, removed value");
 
+        // Persistence (reviewer 914): a damaged retained epoch is dropped, the current observation is saved, and the
+        // next observation is saved too.
+        var oldEpoch = new DwmObservations { BootId = 52, Session = 1, SessionStartUtc = "2026-10-02T08:00:00.000Z" };
+        oldEpoch.Instances.Add(null);
+        var oldGarbage = new DwmObservations { BootId = 51, Session = 1, SessionStartUtc = "2026-10-01T08:00:00.000Z" };
+        oldGarbage.Instances.Add(new DwmInstance { Pid = 0, CreatedUtc = "bad", FirstSeenUtc = null });
+        var oldGood = new DwmObservations { BootId = 50, Session = 1, SessionStartUtc = "2026-09-30T08:00:00.000Z" };
+        oldGood.Instances.Add(new DwmInstance { Pid = 700, CreatedUtc = "2026-09-30T08:00:03.000Z", FirstSeenUtc = "2026-09-30T08:01:00.000Z", Observer = "window" });
+        var badIdentity = new DwmObservations { BootId = 49, Session = 0, SessionStartUtc = "x" };
+        badIdentity.Instances.Add(new DwmInstance { Pid = 600, CreatedUtc = "2026-09-29T08:00:03.000Z", FirstSeenUtc = "2026-09-29T08:01:00.000Z", Observer = "window" });
+        var stored0 = new List<DwmObservations> { oldEpoch, oldGarbage, oldGood, badIdentity };
+        var h1 = Recovery.Observe(stored0, first, "status", "2026-10-03T18:00:40.000Z");
+        var plan1 = Recovery.PlanCommit(stored0, h1, first, "status", "2026-10-03T18:00:40.000Z");
+        Check(plan1 != null && plan1.Write && plan1.File.Records.Count == 2 && plan1.File.Records[0].BootId == 50 && plan1.File.Records[1].BootId == 53 &&
+            plan1.File.Records.All(e => e.Instances.All(Recovery.Valid)), "commit: damaged old epochs dropped, the valid old epoch kept, the current one saved");
+        var stored1 = new JavaScriptSerializer().Deserialize<DwmObservationsFile>(new JavaScriptSerializer().Serialize(plan1.File)).Records;
+        var plan1b = Recovery.PlanCommit(stored1, Recovery.Observe(stored1, first, "window", "2026-10-03T18:05:00.000Z"), first, "window", "2026-10-03T18:05:00.000Z");
+        Check(plan1b != null && !plan1b.Write, "commit: the same observation again writes nothing");
+        var plan2 = Recovery.PlanCommit(stored1, Recovery.Observe(stored1, second, "window", "2026-10-03T18:30:02.000Z"), second, "window", "2026-10-03T18:30:02.000Z");
+        Check(plan2 != null && plan2.Write && plan2.Merged.Instances.Count == 2 && plan2.File.Records.Last().Instances.Count == 2, "commit: the next observation (a replacement) is saved too");
+        var cleanRewrite = Recovery.PlanCommit(new List<DwmObservations> { plan1.File.Records[1], oldEpoch }, h1, first, "status", "2026-10-03T18:06:00.000Z");
+        Check(cleanRewrite.Write && cleanRewrite.File.Records.Count == 1, "commit: a file that holds a damaged entry is rewritten without it");
+        var noList = Recovery.PlanCommit(new List<DwmObservations> { null, new DwmObservations { BootId = 52, Session = 1, SessionStartUtc = "2026-10-02T08:00:00.000Z", Instances = null } }, h1, first, "status", "2026-10-03T18:06:00.000Z");
+        Check(noList.Write && noList.File.Records.Count == 1, "commit: a null epoch or one without instances is dropped");
+        var many = Enumerable.Range(0, 12).Select(n =>
+        {
+            var e = new DwmObservations { BootId = 10 + n, Session = 1, SessionStartUtc = "2026-09-0" + (n % 9 + 1) + "T08:00:00.000Z" };
+            e.Instances.Add(new DwmInstance { Pid = 100 + n, CreatedUtc = "2026-09-01T08:00:03.000Z", FirstSeenUtc = "2026-09-01T08:" + (10 + n) + ":00.000Z", Observer = "window" });
+            return e;
+        }).ToList();
+        var capped = Recovery.PlanCommit(many, h1, first, "status", "2026-10-03T18:00:40.000Z");
+        Check(capped.File.Records.Count == 8 && capped.File.Records[0].BootId == 15 && capped.File.Records[6].BootId == 21, "commit: the 7 newest other epochs are kept, oldest first");
+
+        // The module list (reviewer 914): complete or null, never partial.
+        Func<string[], EnumModules> lists = files => (IntPtr[] b, out int needed) =>
+        {
+            needed = files.Length * IntPtr.Size;
+            for (int i = 0; i < Math.Min(files.Length, b.Length); i++) b[i] = new IntPtr(i + 1);
+            return true;
+        };
+        var cpuZink = new[] { @"C:\Windows\System32\dwmcore.dll", @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll", @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d.dll", @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_zink.dll" };
+        Func<string[], Func<IntPtr, string>> names = files => m => files[(int)m.ToInt64() - 1];
+        var complete = Recovery.CompleteModuleList(lists(cpuZink), names(cpuZink), IntPtr.Size);
+        Check(complete != null && complete.Count == 4 && Recovery.RouteFromModules(complete) == "gpu", "modules: the complete list (positive control) gives the GPU route");
+        Equal("cpu", Recovery.RouteFromModules(cpuZink.Take(3)), "modules: the list without the Zink entry would read CPU, which is why a partial list must not count");
+        Equal(null, Recovery.CompleteModuleList(lists(cpuZink), m => (int)m.ToInt64() == 4 ? null : cpuZink[(int)m.ToInt64() - 1], IntPtr.Size), "modules: a failed name read gives no list (route unknown)");
+        Equal(null, Recovery.CompleteModuleList((IntPtr[] b, out int needed) => { needed = 0; return false; }, names(cpuZink), IntPtr.Size), "modules: a failed enumeration gives no list");
+        Equal(null, Recovery.CompleteModuleList((IntPtr[] b, out int needed) => { needed = 3; return true; }, names(cpuZink), IntPtr.Size), "modules: a size that is not whole entries gives no list");
+        var big = Enumerable.Range(0, 1500).Select(i => @"C:\Windows\System32\m" + i + ".dll").Concat(cpuZink).ToArray();
+        int calls = 0;
+        var grown = Recovery.CompleteModuleList((IntPtr[] b, out int needed) => { calls++; return lists(big)(b, out needed); }, names(big), IntPtr.Size);
+        Check(grown != null && grown.Count == 1504 && calls == 2 && Recovery.RouteFromModules(grown) == "gpu", "modules: more than 1024 modules: one retry with the reported size, the complete list");
+        int growing = 1024;
+        Equal(null, Recovery.CompleteModuleList((IntPtr[] b, out int needed) => { growing += 2000; needed = growing * IntPtr.Size; return true; }, m => "x.dll", IntPtr.Size),
+            "modules: a list that keeps growing gives no list after 4 tries");
+        Equal(null, Recovery.CompleteModuleList((IntPtr[] b, out int needed) => { needed = 20000 * IntPtr.Size; return true; }, m => "x.dll", IntPtr.Size), "modules: an absurd size gives no list");
+
         // The installer's record (start-confirm at logon, dwm-baseline.json as dwm-session.ps1 writes it) is one more
         // observer of the same epoch; this app only reads it.
         const string baseline = @"{""schema"":1,""records"":[" +
@@ -913,7 +970,7 @@ static class UnitTests
                     "static check: StopCompositor is reached only from a RestartCompositor plan");
                 int c0 = text.IndexOf("static DwmObservations Commit(", StringComparison.Ordinal), c1 = text.IndexOf("public static void ReadCompositor(", StringComparison.Ordinal);
                 var commit = c0 > 0 && c1 > c0 ? text.Substring(c0, c1 - c0) : "";
-                Check(commit.Contains("new Mutex(false, LockName(path))") && commit.Contains("WaitOne(2000)") && commit.Contains("var records = Load(path, admin);") &&
+                Check(commit.Contains("new Mutex(false, LockName(path))") && commit.Contains("WaitOne(2000)") && commit.Contains("Recovery.PlanCommit(Load(path, admin), history, now, observer, nowUtc)") &&
                     commit.Contains("File.Replace(temp, path, null, true)") && !commit.Contains(".partial"), "static check: observations are re-read, merged and replaced under one lock");
             }
             kills += k;
