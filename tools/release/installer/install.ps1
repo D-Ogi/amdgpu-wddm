@@ -17,7 +17,7 @@ param(
     [switch]$NoReboot,                      # never restart; tell the tester to do it
     [switch]$AcceptTestSigning,             # unattended: answer YES to the test-signing question
     [ValidateSet('', 'HaveKey', 'Suspend')][string]$BitLocker = '',
-    [ValidateRange(1000, 2000)][int]$DpmMaxMHz = 1500,
+    [ValidateRange(1000, 2000)][int]$DpmMaxMHz,  # absent = the default (registry-defaults.json) or the tester's own value
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
@@ -70,6 +70,15 @@ Write-Info "install root: $InstallRoot"
 if (-not $FirmwareDir -and $early -and $early.phase -eq 'testsigning-pending' -and $early.firmware_source_dir) {
     $FirmwareDir = [string]$early.firmware_source_dir
     Write-Info "firmware folder from the first run: $FirmwareDir"
+}
+# Driver settings given on the command line are written even over a tester's own value; the run after the
+# test-signing restart starts without arguments and takes them from phase 1's state.
+$commandLineParameters = @{}
+if ($PSBoundParameters.ContainsKey('DpmMaxMHz')) { $commandLineParameters['DpmMaxMHz'] = $DpmMaxMHz }
+if ($CuMode) { $commandLineParameters['CuMode'] = $CuMode }
+if (-not $commandLineParameters.Count -and $early -and $early.phase -eq 'testsigning-pending' -and $early.command_line_parameters) {
+    foreach ($p in $early.command_line_parameters.PSObject.Properties) { $commandLineParameters[$p.Name] = [int]$p.Value }
+    Write-Info "driver settings from the first run's command line: $(($commandLineParameters.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ' ')"
 }
 
 # ---- preflight -----------------------------------------------------------------------------------------------
@@ -296,7 +305,8 @@ function Invoke-Verify {
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
     Add-Result 'boot-loop guard' (($null -eq $uc) -or ([int]$uc -lt 2)) "UnconfirmedStarts $uc (the start-confirm task resets it after each logon)"
     $p = Get-ItemProperty -LiteralPath $script:ParametersKey -ErrorAction SilentlyContinue
-    Add-Result 'DPM' (($p.DpmMode -eq 1) -and ($p.DpmLastMode -eq 1)) "DpmMode $($p.DpmMode), this start ran $(if ($p.DpmLastMode -eq 1) { 'DPM' } else { "fixed (reason $($p.DpmLastReason))" }), DpmMaxMHz $($p.DpmMaxMHz), confirmed $(if ($null -ne $p.DpmConfirmed) { 'yes' } else { 'not yet' })"
+    # A tester who set DpmMode 0 asked for fixed clocks: that start is as configured, not a failure.
+    Add-Result 'DPM' ((($p.DpmMode -eq 1) -and ($p.DpmLastMode -eq 1)) -or (($null -ne $p.DpmMode) -and ($p.DpmMode -ne 1))) "DpmMode $($p.DpmMode), this start ran $(if ($p.DpmLastMode -eq 1) { 'DPM' } else { "fixed (reason $($p.DpmLastReason))" }), DpmMaxMHz $($p.DpmMaxMHz), confirmed $(if ($null -ne $p.DpmConfirmed) { 'yes' } else { 'not yet' })"
 
     # D3D12 through the system runtime, as an application sees it.
     $caps = Join-Path $InstallRoot 'tools\amdgpu_wddm_d3d12caps.exe'
@@ -381,6 +391,7 @@ if ($state.phase -eq 'new') {
     Set-StateValue $state 'install_root' $InstallRoot
     Set-StateValue $state 'package_version' $script:Manifest.version
     Set-StateValue $state 'firmware_source_dir' $(if ($FirmwareDir) { $FirmwareDir } else { $null })
+    Set-StateValue $state 'command_line_parameters' $(if ($commandLineParameters.Count) { $commandLineParameters } else { $null })
     New-RestorePoint
     if ($script:TestSigningActive) {
         Write-Info 'test signing is already active in this boot: no restart needed before the install'
@@ -530,22 +541,26 @@ if (-not $script:DryRunMode) {
 } else { $classKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$($script:DisplayClassGuid)\<device's key after install>" }
 Save-Phase 'driver-installed'
 
-# Driver parameters: the registered lab configuration's gates, with the tester defaults for clocks.
-$params = [ordered]@{
-    EnableMmio = 1; EnableVram = 1; EnableVramWrite = 1; EnableGart = 1; EnablePsp = 1; EnableGfx = 1; EnableIh = 1
-    EnableDcnWrite = 1; EnableVidPnFlip = 1; EnableGpuVa = 1; EnableGpuSubmit = 1; EnablePagingNode = 1; EnablePresentBlit = 1
-    EnableFullWddm = 2                     # 2 = open at every start (1 opens one start only)
-    EnableNativeSmu = 1; EnableNativePteCopy = 1; EnableHandleIdentityProbe = 1
-    EnableGpuPresentBlit = 1; EnableCddDwmInterop = 1   # desktop composition on the GPU
-    DpmMode = 1; DpmMaxMHz = $DpmMaxMHz    # load-driven clocks; thermal limits are the driver's own
-    KeepLog = 0                            # no log files on the tester's disk
-    UnconfirmedStarts = 0                  # the INF's own reset; the display-only start above already counted one
+# Driver settings and router policy. The defaults come from installer\registry-defaults.json, the table that
+# manifest.json ("defaults") carries for the control application's reset. An upgrade keeps every value the tester
+# changed and writes a new default only over a value the previous installer wrote (common.ps1, Get-RegistryDefaultPlan).
+# Installer-owned, always written: the paths into the install root, the graphics registration, UnconfirmedStarts and
+# the Release record.
+$regDefaults = Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json
+$applied = $null
+$appliedSource = 'Release\AppliedDefaults'
+$record = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name AppliedDefaults -ErrorAction SilentlyContinue).AppliedDefaults
+if ($record) { try { $applied = $record | ConvertFrom-Json } catch { Write-Warn2 "Release\AppliedDefaults does not parse: $($_.Exception.Message)" } }
+if (-not $applied) { $applied = $regDefaults.legacy_applied; $appliedSource = 'the defaults of tester.1 to tester.7 (no record)' }
+Write-Info "previous installer defaults: $appliedSource"
+function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null) {
+    $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current (Read-RegistryValues $Key) -Explicit $Explicit -Owned $Owned
+    Invoke-Change ("${Key}: " + (Format-RegistryPlan $plan)) { Write-RegistryPlan $Key $plan } | Out-Null
 }
-if ($CuMode) { $params['CuMode'] = $CuMode }
-Invoke-Change ("set $($params.Count) DWORD values in $($script:ParametersKey): " + (($params.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ' ')) {
-    Initialize-RegistryKey $script:ParametersKey
-    foreach ($e in $params.GetEnumerator()) { New-ItemProperty -LiteralPath $script:ParametersKey -Name $e.Key -Value ([int]$e.Value) -PropertyType DWord -Force | Out-Null }
-} | Out-Null
+# Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
+# DpmMaxMHz, thermal limits are the driver's own. KeepLog 0: no log files on the tester's disk. UnconfirmedStarts 0 is
+# the INF's own reset; the display-only start above already counted one.
+Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 })
 
 # Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.
 $umd = @('bc250umd.dll', (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
@@ -560,38 +575,26 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
 
-# Router policy (HKLM\SOFTWARE\amdgpu-wddm). tester.0 composes the desktop on the CPU route (DwmForceCpu 1, the GPU
-# DWM kit's kill switch): on the GPU route DWM fail-fasts with 0xC00001AD in OpenSharedTexture when a File Explorer
-# window opens (DEFECTS BD-058). The router stays registered and the interop switches stay open, so a later release
-# switches the route by this one value. D3D11 applications run on the CPU UMD unless allowed.
-Invoke-Change "$($script:SoftwareKey)\DesktopRouter: CpuUmdPath, DwmForceCpu 1 (desktop on the CPU route, BD-058), RequireKmdSwitches 1" {
-    $k = "$($script:SoftwareKey)\DesktopRouter"
-    Initialize-RegistryKey $k
-    New-ItemProperty -LiteralPath $k -Name CpuUmdPath -Value (Join-Path $InstallRoot 'desktop\bc250d3d.dll') -PropertyType String -Force | Out-Null
-    New-ItemProperty -LiteralPath $k -Name DwmForceCpu -Value 1 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -LiteralPath $k -Name RequireKmdSwitches -Value 1 -PropertyType DWord -Force | Out-Null
-} | Out-Null
-Invoke-Change "$($script:SoftwareKey)\AppRouter: Mode allowlist, GpuUmdPath d3d11, Allow dxdiag.exe, Deny witcher3.exe" {
-    $k = "$($script:SoftwareKey)\AppRouter"
-    Initialize-RegistryKey $k
-    New-ItemProperty -LiteralPath $k -Name Mode -Value 'allowlist' -PropertyType String -Force | Out-Null
-    New-ItemProperty -LiteralPath $k -Name GpuUmdPath -Value (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll') -PropertyType String -Force | Out-Null
-    New-ItemProperty -LiteralPath $k -Name Allow -Value ([string[]]@('dxdiag.exe')) -PropertyType MultiString -Force | Out-Null
-    New-ItemProperty -LiteralPath $k -Name Deny -Value ([string[]]@('witcher3.exe')) -PropertyType MultiString -Force | Out-Null
-} | Out-Null
-$w3 = 'present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay'
-Invoke-Change "$($script:SoftwareKey)\D3D12\Applications\witcher3.exe Experiment = $w3" {
-    $k = "$($script:SoftwareKey)\D3D12\Applications\witcher3.exe"
-    Initialize-RegistryKey $k
-    New-ItemProperty -LiteralPath $k -Name Experiment -Value $w3 -PropertyType String -Force | Out-Null
-} | Out-Null
-Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallDir, InstallRoot, InstalledUtc" {
+# Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 1 composes the desktop on the CPU route (the
+# GPU DWM kit's kill switch): on the GPU route DWM fail-fasts with 0xC00001AD in OpenSharedTexture when a File Explorer
+# window opens (DEFECTS BD-058). The router stays registered and the interop switches stay open, so a release switches
+# the route by this one value. D3D11 applications run on the CPU UMD unless AppRouter allows them.
+Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll') })
+Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll') })
+# Application profiles: the shipped ones by the same rule; a tester's own profiles are other keys and stay as they are.
+foreach ($app in ConvertTo-PairList $regDefaults.defaults.d3d12_applications) {
+    $prevApp = $null
+    if ($applied.d3d12_applications -and $applied.d3d12_applications.PSObject.Properties[$app.Name]) { $prevApp = $applied.d3d12_applications.($app.Name) }
+    Invoke-RegistryDefaults "$($script:SoftwareKey)\D3D12\Applications\$($app.Name)" $app.Value $prevApp
+}
+Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallDir, InstallRoot, InstalledUtc, AppliedDefaults (this package's defaults)" {
     $k = "$($script:SoftwareKey)\Release"
     Initialize-RegistryKey $k
     New-ItemProperty -LiteralPath $k -Name Version -Value ([string]$script:Manifest.version) -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstallDir -Value $InstallRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstallRoot -Value $InstallRoot -PropertyType String -Force | Out-Null
     New-ItemProperty -LiteralPath $k -Name InstalledUtc -Value ([DateTime]::UtcNow.ToString('o')) -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $k -Name AppliedDefaults -Value ($regDefaults.defaults | ConvertTo-Json -Depth 6 -Compress) -PropertyType String -Force | Out-Null
 } | Out-Null
 
 # The start-confirm task: after every logon it confirms the boot's driver start, so the boot-loop guard does not
@@ -620,6 +623,7 @@ if ($controlExe -and $dirs -contains 'control') {
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
 Set-StateValue $state 'firmware_source_dir' $null
+Set-StateValue $state 'command_line_parameters' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 Save-Phase 'installed'
 Set-ResumeAtLogon (Join-Path $InstallRoot 'verify.cmd')

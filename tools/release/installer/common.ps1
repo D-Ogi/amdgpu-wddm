@@ -154,6 +154,93 @@ function Set-StateValueOnce($State, [string]$Name, $Value) {
 }
 
 # ---------------------------------------------------------------------------------------------------------------
+# Registry defaults. installer\registry-defaults.json holds the one table of defaults; build-release.ps1 copies it into
+# manifest.json ("defaults"), where the control application's reset reads it. An upgrade keeps what the tester changed:
+#   set       the value is absent: write the default
+#   same      the value equals the default: nothing to do
+#   update    the value equals what the previous installer wrote (Release\AppliedDefaults, or legacy_applied for
+#             tester.1 to tester.7, which kept no record): the tester did not change it, write the new default
+#   kept      any other value: the tester's (or the control application's) setting, left alone
+#   command   given on the install.cmd command line (-DpmMaxMHz, -CuMode): written
+#   installer installer-owned (paths, counters): always written
+function ConvertTo-PairList($Map) {
+    if ($null -eq $Map) { return @() }
+    if ($Map -is [Collections.IDictionary]) { return @($Map.GetEnumerator() | ForEach-Object { [pscustomobject]@{ Name = [string]$_.Key; Value = $_.Value } }) }
+    return @($Map.PSObject.Properties | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Value = $_.Value } })
+}
+function Test-RegistryValueSame($A, $B) {
+    if (($null -eq $A) -or ($null -eq $B)) { return (($null -eq $A) -and ($null -eq $B)) }
+    if (($A -is [array]) -or ($B -is [array])) { return ((@($A | ForEach-Object { [string]$_ }) -join "`n") -ieq (@($B | ForEach-Object { [string]$_ }) -join "`n")) }
+    if (($A -is [string]) -or ($B -is [string])) { return ([string]$A -ieq [string]$B) }
+    return ([int64]$A -eq [int64]$B)
+}
+function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | ForEach-Object { [string]$_ }) -join ', ') + ']' }; return [string]$V }
+# Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
+# the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).
+function Get-RegistryDefaultPlan {
+    param($Defaults, $Previous, [hashtable]$Current = @{}, [hashtable]$Explicit = @{}, $Owned = $null)
+    $prev = @{}
+    foreach ($p in ConvertTo-PairList $Previous) { $prev[$p.Name] = $p.Value }
+    $plan = New-Object System.Collections.ArrayList
+    $seen = @{}
+    foreach ($d in ConvertTo-PairList $Defaults) {
+        $seen[$d.Name] = $true
+        $has = $Current.ContainsKey($d.Name)
+        $cur = $null; if ($has) { $cur = $Current[$d.Name] }
+        if ($Explicit.ContainsKey($d.Name)) { $decision = 'command'; $value = $Explicit[$d.Name] }
+        elseif (-not $has) { $decision = 'set'; $value = $d.Value }
+        elseif (Test-RegistryValueSame $cur $d.Value) { $decision = 'same'; $value = $d.Value }
+        elseif ($prev.ContainsKey($d.Name) -and (Test-RegistryValueSame $cur $prev[$d.Name])) { $decision = 'update'; $value = $d.Value }
+        else { $decision = 'kept'; $value = $cur }
+        [void]$plan.Add([pscustomobject]@{ name = $d.Name; value = $value; default = $d.Value; current = $cur; present = $has; decision = $decision; write = ($decision -in @('command', 'set', 'update')) })
+    }
+    foreach ($e in $Explicit.GetEnumerator()) {
+        if ($seen.ContainsKey($e.Key)) { continue }
+        $has = $Current.ContainsKey($e.Key)
+        [void]$plan.Add([pscustomobject]@{ name = [string]$e.Key; value = $e.Value; default = $null; current = $(if ($has) { $Current[$e.Key] } else { $null }); present = $has; decision = 'command'; write = $true })
+    }
+    foreach ($o in ConvertTo-PairList $Owned) {
+        $has = $Current.ContainsKey($o.Name)
+        [void]$plan.Add([pscustomobject]@{ name = $o.Name; value = $o.Value; default = $o.Value; current = $(if ($has) { $Current[$o.Name] } else { $null }); present = $has; decision = 'installer'; write = $true })
+    }
+    return , $plan.ToArray()
+}
+function Format-RegistryPlan($Plan) {
+    $parts = @()
+    foreach ($e in @($Plan)) {
+        switch ($e.decision) {
+            'same'      { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (unchanged)" }
+            'set'       { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (new)" }
+            'update'    { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (new default; not changed by the tester)" }
+            'kept'      { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT (changed by the tester; default $(Format-RegistryValue $e.default))" }
+            'command'   { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (command line)" }
+            'installer' { $parts += "$($e.name)=$(Format-RegistryValue $e.value)" }
+        }
+    }
+    return ($parts -join '; ')
+}
+# The named values of a key (name -> value), empty when the key does not exist. REG_EXPAND_SZ stays unexpanded.
+function Read-RegistryValues([string]$Key) {
+    $h = @{}
+    $k = Get-Item -LiteralPath $Key -ErrorAction SilentlyContinue
+    if (-not $k) { return $h }
+    foreach ($n in $k.GetValueNames()) { if ($n) { $h[$n] = $k.GetValue($n, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } }
+    return $h
+}
+# Writes the plan's entries marked write. The type follows the value: a list is REG_MULTI_SZ, text REG_SZ, a number
+# REG_DWORD.
+function Write-RegistryPlan([string]$Key, $Plan) {
+    Initialize-RegistryKey $Key
+    foreach ($e in @($Plan)) {
+        if (-not $e.write) { continue }
+        $v = $e.value
+        if ($v -is [array]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([string[]]@($v | ForEach-Object { [string]$_ })) -PropertyType MultiString -Force | Out-Null }
+        elseif ($v -is [string]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value $v -PropertyType String -Force | Out-Null }
+        else { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([int]$v) -PropertyType DWord -Force | Out-Null }
+    }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
 # SHA256 through .NET: works whatever modules the host process can load.
 function Get-Sha256([string]$Path) {
     $s = [IO.File]::OpenRead($Path)

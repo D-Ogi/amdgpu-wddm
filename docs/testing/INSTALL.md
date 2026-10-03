@@ -62,6 +62,13 @@ first. The installer shows `upgrading <old> -> <new>`, keeps the files that did 
 restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
 use `install.cmd -Repair` to install it again.
 
+An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz`), `DwmForceCpu`, the D3D11
+allowlist and the application profiles. The installer writes a new default only over a value that the previous
+installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
+(your value) or `->` (new default). A value given on the command line (`-DpmMaxMHz`) is always written. The
+installer always writes its own values: the file paths, the graphics registration and the start counter
+`UnconfirmedStarts`. The Control application can set the defaults again.
+
 "Test Mode" is shown in the lower-right corner of the desktop while test signing is on. This is normal.
 
 ## GPU firmware
@@ -124,11 +131,11 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
-| Installer state and logs | `C:\ProgramData\amdgpu-wddm` |
+| Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
 Default driver settings: automatic clock control (DPM) on, maximum 1500 MHz. The thermal limits of the driver do not
 change. The driver writes no debug log files. To change the maximum clock at install time, use
-`install.cmd -DpmMaxMHz <1000-2000>`.
+`install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
 ## What works and what does not
 
@@ -163,7 +170,8 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 1. Run `uninstall.cmd` as administrator (in the package folder or in `C:\Program Files\amdgpu-wddm`).
 2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the task and the certificate.
-   The GPU goes back to Microsoft Basic Display Adapter.
+   The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
+   (the Control application's setting backups and action log). Delete it yourself if you do not need it.
 3. If the installer turned on test signing, the uninstaller asks if it must turn it off. Use
    `uninstall.cmd -DisableTestSigning` or `-KeepTestSigning` to answer in advance.
 4. Restart the computer. If BitLocker is on, have the recovery key ready: changing the boot options again can cause

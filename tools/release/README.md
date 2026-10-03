@@ -14,6 +14,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
 | `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
+| `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 
 ```
@@ -31,8 +32,15 @@ v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs
 adapter string ("BC-250 GPU (bc250kmd, display-only, lab build)") names the release and the mode it runs in; the
 .sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.197.100 against the file's
 0.7.197.1); one bc250kmd_cli.c for the CLI and bc250control.dll, so the CLI has the `health` commands again; the INF
-Provider string ("BC-250 lab (D-Ogi)") names the project instead of the lab; an upgrade keeps the tester's own
-settings (DpmMaxMHz, the D3D11 allowlist) instead of writing the defaults again.
+Provider string ("BC-250 lab (D-Ogi)") names the project instead of the lab.
+
+Registry defaults: `installer/registry-defaults.json` is the one table. `install.ps1` applies it and
+`build-release.ps1` copies its `defaults` object into `manifest.json`, where the control application's reset reads
+it. An upgrade writes a default only where the value is absent or still equal to what the previous installer wrote
+(`Release\AppliedDefaults`; `legacy_applied` for tester.1 to tester.7, which kept no record), so a tester's own
+settings stay. Installer-owned and always written: the paths into the install root (`CpuUmdPath`, `GpuUmdPath`), the
+graphics registration (`UserModeDriverName`, `VulkanDriverName`, the Khronos entry), `UnconfirmedStarts` and the
+`Release` key. When a default changes, edit `defaults` only; `legacy_applied` stays as tester.7 wrote it.
 
 install.ps1 exit codes: 0 done (or already installed and verified), 2 preflight refused, 3 verification failed,
 4 not confirmed, 5 test signing not active, 6 a step failed (run again), 7 verify before the pending restart,

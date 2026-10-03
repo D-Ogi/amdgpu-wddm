@@ -119,7 +119,15 @@ if ($off) {
     if ($state -and $state.bitlocker -eq 'Suspend') { Write-Info 'BitLocker: changing the boot options again; if BitLocker is on, have the recovery key ready or suspend it first.' }
 } else { Write-Info 'test signing left as it is' }
 
-Invoke-Change "remove the installer state $(Split-Path $script:StateDir)" { Remove-PathOrSchedule (Split-Path $script:StateDir) } | Out-Null
+# The control application's backups and action log (%ProgramData%\amdgpu-wddm\control) belong to the tester: kept.
+$dataRoot = Split-Path $script:StateDir
+$controlData = Join-Path $dataRoot 'control'
+Invoke-Change "remove the installer state $($script:StateDir) and $dataRoot\start-confirm.log" {
+    Remove-PathOrSchedule $script:StateDir
+    Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm.log') -Force -ErrorAction SilentlyContinue
+    if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
+} | Out-Null
+if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the control application's setting backups and action log; delete it by hand if you do not need them)" }
 if ($DryRun) { Write-Host ''; Write-Host 'Dry run complete: nothing was changed.' -ForegroundColor Green; exit 0 }
 Write-Host ''
 Write-Host "Uninstall complete. Restart the computer to finish. Log: $($script:LogPath)" -ForegroundColor Green

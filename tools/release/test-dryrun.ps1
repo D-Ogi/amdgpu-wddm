@@ -65,14 +65,28 @@ $r.text
 Check ($r.code -eq 0) "walk-through exit $($r.code)"
 Check ($r.text -match 'would: bcdedit /set \{current\} testsigning on') 'phase 1 shows the test-signing change'
 Check ($r.text -match 'would: pnputil /add-driver') 'phase 2 shows the driver install'
-Check ($r.text -match 'would: set \d+ DWORD values in .*DpmMode=1 DpmMaxMHz=1500') 'phase 2 shows DPM on, 1500 MHz'
+Check ($r.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: .*DpmMode=1 \(new\); DpmMaxMHz=1500 \(new\)') 'phase 2 shows DPM on, 1500 MHz'
+Check ($r.text -match 'Parameters: .*UnconfirmedStarts=0') 'UnconfirmedStarts reset (installer-owned)'
+Check ($r.text -match 'previous installer defaults: the defaults of tester\.1 to tester\.7 \(no record\)') 'no AppliedDefaults record on this computer: legacy table'
+Check ($r.text -match 'would: .*\\Release: .*AppliedDefaults') 'Release\AppliedDefaults recorded'
 Check ($r.text -match "would: scheduled task 'amdgpu-wddm start confirm'") 'phase 2 shows the start-confirm task'
 Check ($r.text -match 'would: copy payload\\control') 'phase 2 installs the control application'
 Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\licenses') 'phase 2 installs the licence texts'
 Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
-Check ($r.text -match 'DesktopRouter: CpuUmdPath, DwmForceCpu 1') 'desktop on the CPU route (BD-058)'
+$dwm = [int]$m.defaults.desktop_router.DwmForceCpu
+Check ($r.text -match "DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); CpuUmdPath=") "desktop route DwmForceCpu $dwm from the defaults table"
+Check ($r.text -match 'AppRouter: Mode=allowlist \(new\); Allow=\[dxdiag\.exe\] \(new\)') 'D3D11 allowlist from the defaults table'
+$tbl = Get-Content -LiteralPath (Join-Path $Package 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
+Check (($m.defaults | ConvertTo-Json -Depth 6 -Compress) -eq ($tbl.defaults | ConvertTo-Json -Depth 6 -Compress)) 'manifest.json defaults = installer\registry-defaults.json defaults (one table)'
+Check (@('EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz' | Where-Object { $null -eq $m.defaults.parameters.$_ }).Count -eq 0 -and $null -ne $m.defaults.desktop_router.DwmForceCpu) 'manifest defaults carry the five values the control application resets'
+
 Check ($r.text -match 'Dry run complete') 'walk-through completes'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through: no change, no elevation'
+
+'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'
+$rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-Installer', (Join-Path $Package 'installer'))
+$rr.text
+Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-owned: exit $($rr.code)"
 
 Check ($r.text -match 'would: copy payload\\system32\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'stub copy is the safe replacement'
 Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'

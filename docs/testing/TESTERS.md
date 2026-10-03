@@ -17,7 +17,7 @@ package:
 ## What works
 
 - The driver installs on the BC-250 and replaces Microsoft Basic Display Adapter. The installer also upgrades an
-  installed release: run `install.cmd` of the newer package.
+  installed release: run `install.cmd` of the newer package. The upgrade keeps the settings you changed.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU.
 - Automatic clock control (DPM) is on: the GPU clock follows the load, up to 1500 MHz. The thermal limits of the

@@ -176,6 +176,14 @@ foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object Full
     $rel = $f.FullName.Substring($pkg.Length + 1) -replace '\\', '/'
     $files += [ordered]@{ path = $rel; sha256 = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash; size = $f.Length }
 }
+# The registry defaults: one table (installer\registry-defaults.json) that install.ps1 applies and the control
+# application's reset reads from here.
+$regDefaults = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
+foreach ($g in 'parameters', 'desktop_router', 'app_router', 'd3d12_applications') { if (-not $regDefaults.defaults.$g) { throw "registry-defaults.json: defaults.$g missing" } }
+foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz') { if ($null -eq $regDefaults.defaults.parameters.$n) { throw "registry-defaults.json: parameters.$n missing" } }
+if ($null -eq $regDefaults.defaults.desktop_router.DwmForceCpu) { throw 'registry-defaults.json: desktop_router.DwmForceCpu missing' }
+if (-not $regDefaults.legacy_applied) { throw 'registry-defaults.json: legacy_applied missing' }
+'  registry defaults: {0} parameters, DwmForceCpu {1}' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu
 $manifest = [ordered]@{
     schema = 1
     name = $name
@@ -189,11 +197,12 @@ $manifest = [ordered]@{
     control_app_exe = $sources.control_app_exe
     sources = $sources.sources
     firmware = $firmware
+    defaults = $regDefaults.defaults
     licenses = @($sources.licenses | ForEach-Object { [ordered]@{ file = "licenses/$($_.file)"; repository = $_.repository; path = $_.path; ref = $_.ref; sha256 = $_.sha256 } })
     components = $components
     files = $files
 }
-[IO.File]::WriteAllText((Join-Path $pkg 'manifest.json'), ($manifest | ConvertTo-Json -Depth 5))
+[IO.File]::WriteAllText((Join-Path $pkg 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8))
 Compress-Archive -Path $pkg -DestinationPath $zip
 '{0} files, package {1}' -f $files.Count, $pkg
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash
