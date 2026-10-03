@@ -93,6 +93,16 @@ clause); without it a `supersedes` removes the other fact from [`current.md`](cu
 never in it. `"auto": true` marks an edge derived from wording when the old table was migrated; `cue` keeps that
 wording, and `cue_in` names the fact whose text it is in when that is the other end of the edge.
 
+## Unsupported prior-art claims
+
+Claims such as "registers are SOS-locked" or "NBIO is locked at EFI boot" are neither confirmed nor refuted as
+hardware behaviour: they were measured at wrong offsets and are simply unsupported. Under Linux nothing is locked
+before the driver loads ([M2](hardware.md#m2), [M3](hardware.md#m3)); the same reads under Windows are experiment
+E02. Prior art, claim by claim: [`../prior-art-vs-hardware.md`](../prior-art-vs-hardware.md).
+
+This note stood under the refuted-claims table of the old `facts.md`. It is kept here, not as a fact, because
+"unsupported" is none of the four statuses: an `R` fact would call the claims refuted, which the note avoids.
+
 ## Migration (2026-10-03)
 
 The table-based `docs/facts.md` of `43f186b3` (780 `M`, 4 `S`, 3 `R` rows) was converted by
