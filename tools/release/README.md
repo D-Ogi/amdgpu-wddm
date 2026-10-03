@@ -12,6 +12,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd` (package root) and the PowerShell 5.1 scripts. |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
+| `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call), and it and both copies of `bc250control.dll` come from one control-app build folder. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
 | `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
 | `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
@@ -31,7 +32,7 @@ v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs
 `C:\BC250\firmware`; reproducible rebuild of every component; the control application edits the D3D11 allowlist; the KMD's
 adapter string ("BC-250 GPU (bc250kmd, display-only, lab build)") names the release and the mode it runs in; the
 .sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.198.100 against the file's
-0.7.198.2); one bc250kmd_cli.c for the CLI and bc250control.dll, so the CLI has the `health` commands again; the INF
+0.7.198.2); the INF
 Provider string ("BC-250 lab (D-Ogi)") names the project instead of the lab.
 
 Registry defaults: `installer/registry-defaults.json` is the one table. `install.ps1` applies it and

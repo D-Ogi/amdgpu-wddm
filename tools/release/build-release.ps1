@@ -153,6 +153,11 @@ $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-parse51.ps1'), '-Directory', $inst) -TimeoutSeconds 120
 $r.text
 if ($r.code -ne 0) { throw 'a script does not parse under Windows PowerShell 5.1' }
+# The CLI answers every form the installer and the lab kits call (cli-commands.json), and it and both copies of
+# bc250control.dll come from one build.
+$r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $pkg 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json')) -TimeoutSeconds 60
+$r.text
+if ($r.code -ne 0) { throw 'bc250kmd_cli.exe lacks a form of cli-commands.json, or the CLI and the control DLL come from different builds' }
 
 Write-Host 'manifest'
 # Where each payload directory lands on the tester PC (install.ps1 does the copying).

@@ -184,7 +184,10 @@ Check ($r.text -match "probe: fallback view: device problem -1, driver version  
 Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
 Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
-Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm does not use the CLI health command (absent from the release CLI)'
+Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm reads the start health through bc250control.dll, not the CLI'
+$r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $Package 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json'))
+$r.text
+Check ($r.code -eq 0) "packaged bc250kmd_cli.exe answers every form of cli-commands.json, one build with the control DLL: exit $($r.code)"
 Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\bc250control.dll')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'payload\control\bc250control.dll')).Hash) 'tools\bc250control.dll is the control application''s DLL'
 
 'GPU firmware: not in the package, downloaded at install time (test-firmware.ps1 under 5.1, real download into a scratch folder)'
