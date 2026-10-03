@@ -205,15 +205,24 @@ function Invoke-Verify {
     $inf = $null
     if ($drv) { $inf = $drv.InfName }
     Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $($drv.DriverProviderName)), package $want"
-    $cli = Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'
-    if (Test-Path -LiteralPath $cli) {
-        $h = (Invoke-Native $cli @('health', 'read')).text.Trim()
-        $flags = $null
-        if ($h -match 'flags=([0-9]+)') { $flags = [int]$Matches[1] }
-        Add-Result 'start health' (($null -ne $flags) -and (($flags -band 1) -eq 1)) $h
-    } else { Add-Result 'start health' $false "missing $cli" }
+    # One read-only reading of the start-confirm task's inputs, in a child process (start-confirm.ps1 -Probe): the
+    # driver version and LastStage through bc250kmd_cli, the KMD start health through bc250control.dll, the DPM
+    # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
+    $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
+    $probe = ''
+    if (Test-Path -LiteralPath $sc) { $probe = (Invoke-Native powershell.exe @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $sc, '-Probe')).text }
+    Write-Log $probe
+    $view = $null; if ($probe -match 'fallback view: (.+)') { $view = $Matches[1].Trim() }
+    $want = [string]$script:Manifest.kmd_abi
+    $driverOk = ($null -ne $view) -and ($view -match 'device problem 0,') -and ($view -match 'LastStage 50$') -and ($view -match "driver version $want ")
+    Add-Result 'driver start' $driverOk $(if ($view) { $view } else { "no reading from $sc" })
+    $health = $null; if ($probe -match 'start health (.+)') { $health = $Matches[1].Trim() }
+    $hflags = $null; if ($health -match 'flags (\d+)') { $hflags = [int]$Matches[1] }
+    Add-Result 'start health' (($null -ne $hflags) -and (($hflags -band 7) -eq 7)) $(if ($health) { "$health (15 = confirmed; 7 = full, ready, visible)" } else { 'no reading' })
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
     Add-Result 'boot-loop guard' (($null -eq $uc) -or ([int]$uc -lt 2)) "UnconfirmedStarts $uc (the start-confirm task resets it after each logon)"
+    $p = Get-ItemProperty -LiteralPath $script:ParametersKey -ErrorAction SilentlyContinue
+    Add-Result 'DPM' (($p.DpmMode -eq 1) -and ($p.DpmLastMode -eq 1)) "DpmMode $($p.DpmMode), this start ran $(if ($p.DpmLastMode -eq 1) { 'DPM' } else { "fixed (reason $($p.DpmLastReason))" }), DpmMaxMHz $($p.DpmMaxMHz), confirmed $(if ($null -ne $p.DpmConfirmed) { 'yes' } else { 'not yet' })"
 
     # D3D12 through the system runtime, as an application sees it.
     $caps = Join-Path $InstallRoot 'tools\amdgpu_wddm_d3d12caps.exe'

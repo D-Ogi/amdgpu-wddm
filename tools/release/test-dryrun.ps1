@@ -89,6 +89,17 @@ Check ($r.text -match 'run install\.cmd again from the same package folder') 'th
 Check ($r.text -notmatch 'not reached') 'nothing after the failed step ran'
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 
+'start-confirm.ps1 -Probe (read-only; compiles the bc250control.dll interop and calls Bc250StartHealth READ)'
+$r = Invoke-Ps51 @((Join-Path $Package 'payload\tools\start-confirm.ps1'), '-Probe')
+$r.text
+Check ($r.code -eq 5) "probe on a PC without the driver: exit $($r.code) (5 = no start-health reading)"
+Check ($r.text -match 'probe: fallback view: device problem -1, driver version  \(expected 0x000700C5\), LastStage ') 'probe: fallback view runs bc250kmd_cli info/stages and expects 0x000700C5'
+Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
+Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
+$sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
+Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm does not use the CLI health command (absent from the 0cbef549 CLI)'
+Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\bc250control.dll')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'payload\control\bc250control.dll')).Hash) 'tools\bc250control.dll is the control application''s DLL'
+
 'uninstall -DryRun'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun')
 $r.text

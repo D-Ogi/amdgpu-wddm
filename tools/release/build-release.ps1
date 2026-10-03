@@ -136,6 +136,7 @@ $manifest = [ordered]@{
     version = $Version
     kmd_version = $DriverVer
     kmd_build = $sources.kmd_version
+    kmd_abi = $sources.kmd_abi             # BC250_KMD_VERSION, what bc250kmd_cli info reports (start-confirm, verify)
     built_utc = [DateTime]::UtcNow.ToString('o')
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe

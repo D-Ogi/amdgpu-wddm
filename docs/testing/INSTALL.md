@@ -62,8 +62,11 @@ You can run the verification again at any time with `verify.cmd` in `C:\Program 
 After each logon, a small blue window with a clock is shown in the top-left corner for up to two minutes. It is
 the "amdgpu-wddm start confirm" scheduled task. The driver counts each start that is not confirmed. After two
 unconfirmed starts, Windows uses Microsoft Basic Display Adapter again, to prevent a start loop. The task keeps the
-desktop drawing for some seconds and then confirms the start. Do not close the window. If you log on with an
-account that is not an administrator, the task does not run, and the driver falls back after two restarts.
+desktop drawing for at least one minute and then confirms the start. The same confirmation keeps the automatic
+clock control (DPM) on: if a start is not confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays
+off until you set it again in the control application. Do not close the window. If you log on with an account that
+is not an administrator, the task does not run, and the driver falls back after two restarts. The task writes its
+results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 
 ## What the installer changes
 

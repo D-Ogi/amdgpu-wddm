@@ -2,6 +2,7 @@
   "schema": 1,
   "note": "Registered lab artifacts that make up the tester release. Sources are relative to the workspace root (BC250_ROOT). build-release.ps1 refuses a source whose SHA256 differs.",
   "kmd_version": "0.7.197.1",
+  "kmd_abi": "0x000700C5",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
     "kmd": "bc250-win 0cbef549 (bd055-dpm-thermal)",
@@ -145,7 +146,7 @@
       "source": "scratch/m15/gpu-dwm-t0/build-cli197/bc250kmd_cli.exe",
       "sha256": "BAF3A62ADB0F55882DAA3A6944042C78AD8F40119163B015EB5702598DF126A7",
       "size": 212992,
-      "role": "KMD control CLI built from 0cbef549 (start health, confirm)"
+      "role": "KMD control CLI built from 0cbef549 (info, stages, confirm, dpm; no start-health command)"
     },
     {
       "component": "tool",
@@ -170,6 +171,14 @@
       "sha256": "B0ADE758F6EED612579FF4B45D4C6F9B9D405020D23839B4F7B981EDA6504B13",
       "size": 145920,
       "role": "control DLL for the control application (1ea37ed8, static CRT)"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/bc250control.dll",
+      "source": "scratch/release/control-app/build/app/bc250control.dll",
+      "sha256": "B0ADE758F6EED612579FF4B45D4C6F9B9D405020D23839B4F7B981EDA6504B13",
+      "size": 145920,
+      "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
     },
     {
       "component": "tool",
