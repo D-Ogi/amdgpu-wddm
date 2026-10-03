@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 using AmdgpuWddmControl;
 
-static class UnitTests
+static partial class UnitTests
 {
     static int _failed, _passed;
 
@@ -1002,7 +1002,12 @@ static class UnitTests
     {
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
+        Strings.Directory = Path.Combine(args[0], @"tools\win\amdgpu_wddm_control\strings");
+        StringTables();
         Replies(header);
+        CuLayout(header);
+        CuReasons(args[0]);
+        CuFixtures();
         ShellTokens(args[0]);
         ProfileEditing();
         Dpm();
@@ -1012,6 +1017,7 @@ static class UnitTests
         SettingsRule();
         NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
+        PlanAdditions(args[0]);
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");
         return _failed == 0 ? 0 : 1;

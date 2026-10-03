@@ -37,6 +37,16 @@ namespace AmdgpuWddmControl
         public const uint Full = 1, Ready = 2, Visible = 4, Confirmed = 8;
     }
 
+    // BC250_ESCAPE_CU_MODE (driver/kmd/cumode.c, docs/design/cu-mode.md): the CU mode of the start this describes.
+    // Applied=40 is a mode, not proof of 40 active cores: the count is ActiveCus.
+    public sealed class CuModeState
+    {
+        public uint Version, Flags, Requested, Applied, Reason, ActiveCus, DisableMask, PciId;
+        public ulong Generation;
+        public const uint FlagValid = 1, FlagPending = 2, FlagConfirmed = 4;
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+    }
+
     public sealed class VideoMemoryState
     {
         public uint Segments;
@@ -58,7 +68,8 @@ namespace AmdgpuWddmControl
     public static class KmdReply
     {
         public const uint Magic = 0x30353242;   // "B250"
-        public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264;
+        public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
+        public const uint CmdCuMode = 22;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
         public const uint CmdStartHealth = 21, CmdDpm = 23, CmdInterop = 25, CmdGetLog = 12;
@@ -107,6 +118,17 @@ namespace AmdgpuWddmControl
             {
                 Version = U(b, 3), Flags = U(b, 7), Generation = Q(b, 32), Epoch = Q(b, 40), Completed = Q(b, 48),
                 LastCompletionAgeMs = Q(b, 56), ReadyAgeMs = Q(b, 64),
+            };
+        }
+
+        public static CuModeState ParseCuMode(byte[] b)
+        {
+            Head(b, CuModeBytes, CmdCuMode);
+            if (U(b, 5) != 1) throw new FormatException("CU mode ABI " + U(b, 5) + ", 1 expected");
+            return new CuModeState
+            {
+                Version = U(b, 3), Flags = U(b, 7), Requested = U(b, 8), Applied = U(b, 9), Reason = U(b, 10),
+                ActiveCus = U(b, 11), DisableMask = U(b, 12), PciId = U(b, 13), Generation = Q(b, 160),
             };
         }
 

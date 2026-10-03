@@ -1,0 +1,39 @@
+# Polish strings of amdgpu-wddm Control. Machine translation (mt) until a named reviewer reads them. Format: src/Strings.cs.
+
+# ---- graphics cores ----
+cu.choice.all|mt|c8029dd4|Twój wybór: Wszystkie (40).
+cu.choice.standard|mt|fa436287|Twój wybór: Standard (24).
+cu.choice.invalid|mt|9ed29361|Twój wybór jest nieprawidłowy; wybierz Standard (24) lub Wszystkie (40).
+cu.choice.unreadable|mt|ee127a9b|Nie można odczytać Twojego wyboru.
+cu.choice.after-restart|mt|07660ab1|Zacznie działać po następnym ponownym uruchomieniu Windows.
+cu.run.standard|mt|a1be65f1|Teraz działa: {0} rdzeni.
+cu.run.waiting|mt|c00ce647|Teraz działa: {0} rdzeni, jeszcze niepotwierdzone. Jeśli nowe ustawienie 40 rdzeni nie zostanie potwierdzone, następny start wróci do 24 rdzeni.
+cu.run.confirm-failed|mt|d0b0b5c5|Potwierdzenie 40 rdzeni nie powiodło się. Jeśli pozostanie niepotwierdzone, następny start wróci do 24 rdzeni.
+cu.run.confirmed|mt|231f98dc|Wszystkie 40 rdzeni, potwierdzone.
+cu.run.confirmed-fewer|mt|fe3b6fd7|Teraz działa: {0} rdzeni (potwierdzone).
+cu.run.not-saved|mt|656b0e77|Teraz działa: {0} rdzeni. Nie udało się zapisać potwierdzenia.
+cu.run.not-saved.next40|mt|d07300f4|Następny start znowu spróbuje 40 rdzeni i znowu poprosi o potwierdzenie.
+cu.run.not-saved.next24|mt|0d9cc034|Następny start użyje 24 rdzeni, tak jak wybrałeś.
+cu.run.fallback|mt|c1cc5938|Ostatni start z 40 rdzeniami nie został potwierdzony, więc ten start używa 24 rdzeni.
+cu.run.refused|mt|9517c611|Nie udało się użyć 40 rdzeni przy tym starcie.
+cu.run.unknown|mt|39943c8f|Nie można odczytać liczby rdzeni graficznych.
+cu.next.standard|mt|7c94a6f5|Następny start: 24 rdzenie.
+cu.next.fallback|mt|d366069f|Następny start: 24 rdzenie, bo ustawienie 40 rdzeni nie zostało potwierdzone.
+cu.next.ask40|mt|5af1df5d|Następny start: 40 rdzeni, do potwierdzenia po starcie.
+cu.next.ask40-limited|mt|cb27c040|Następny start: ustawienie 40 rdzeni z wcześniejszym diagnostycznym ograniczeniem rdzeni (mniej rdzeni), do potwierdzenia po starcie.
+cu.next.confirmed40|mt|59baaddb|Następny start: 40 rdzeni (potwierdzone wcześniej).
+cu.next.confirmed40-limited|mt|487324b9|Następny start: ustawienie 40 rdzeni z wcześniejszym diagnostycznym ograniczeniem rdzeni (mniej rdzeni), potwierdzone wcześniej.
+cu.next.unknown|mt|8bb23e4f|Następny start: nie można przewidzieć.
+cu.refuse.target|mt|84439e4b|Wybierz Standard (24) lub Wszystkie (40).
+cu.refuse.unreadable|mt|d945441d|Nie można odczytać zapisanego ustawienia.
+cu.refuse.already40|mt|4f5796de|Wszystkie (40) są już wybrane.
+cu.refuse.already24|mt|91c3ed3d|Standard (24) jest już wybrany.
+cu.preview.write40|mt|46267060|Wybiera wszystkie 40 rdzeni graficznych.
+cu.preview.remove-mode|mt|3920ecbe|Wybiera standardowe 24 rdzenie graficzne.
+cu.preview.remove-confirmed|mt|d10b327e|Usuwa wcześniejsze potwierdzenie 40 rdzeni, aby nowe ustawienie zostało potwierdzone przy własnym starcie.
+cu.preview.remove-disable|mt|9e25fab8|Usuwa wcześniejsze diagnostyczne ograniczenie rdzeni.
+cu.result.nothing|mt|54ca5460|Nic nie zostało zmienione.
+cu.result.saved|mt|fca046cc|Zapisano.
+cu.result.failed|mt|ec48fa5b|Nie udało się dokończyć zmiany.
+cu.result.cleanup-incomplete|mt|40b9b472|Porządkowanie jest niepełne. Następny start użyje standardowych 24 rdzeni; pozostałe wcześniejsze diagnostyczne ograniczenie rdzeni ich nie zmniejsza.
+cu.effect|mt|60ee9b9b|Więcej rdzeni zużywa więcej energii i wytwarza więcej ciepła: około 30 W więcej przy 1500 MHz na naszym egzemplarzu testowym. To wartość orientacyjna, nie obietnica dla Twojego komputera.

@@ -1,0 +1,41 @@
+# English source strings of amdgpu-wddm Control. Format and rules: src/Strings.cs. Translations carry the first 8 hex
+# digits of SHA-256 over the English text they were made from; changing a text here makes them stale (the build fails
+# until each language gets a new translation).
+
+# ---- graphics cores (CU mode, plan v7 section 7) ----
+cu.choice.all|src|-|Your choice: All (40).
+cu.choice.standard|src|-|Your choice: Standard (24).
+cu.choice.invalid|src|-|Your choice is not valid; choose Standard (24) or All (40).
+cu.choice.unreadable|src|-|Your choice cannot be read.
+cu.choice.after-restart|src|-|It applies after the next Windows restart.
+cu.run.standard|src|-|Running now: {0} cores.
+cu.run.waiting|src|-|Running now: {0} cores, not confirmed yet. If the new 40-core setting is not confirmed, the next start returns to 24 cores.
+cu.run.confirm-failed|src|-|Confirming 40 cores did not work. If it stays unconfirmed, the next start returns to 24 cores.
+cu.run.confirmed|src|-|All 40 cores, confirmed.
+cu.run.confirmed-fewer|src|-|Running now: {0} cores (confirmed).
+cu.run.not-saved|src|-|Running now: {0} cores. The confirmation could not be saved.
+cu.run.not-saved.next40|src|-|The next start will try 40 cores again and ask for confirmation again.
+cu.run.not-saved.next24|src|-|The next start uses 24 cores, as you chose.
+cu.run.fallback|src|-|The last 40-core start was not confirmed, so this start uses 24 cores.
+cu.run.refused|src|-|40 cores could not be used on this start.
+cu.run.unknown|src|-|The number of graphics cores cannot be read.
+cu.next.standard|src|-|Next start: 24 cores.
+cu.next.fallback|src|-|Next start: 24 cores, because the 40-core setting was not confirmed.
+cu.next.ask40|src|-|Next start: 40 cores, to be confirmed after the start.
+cu.next.ask40-limited|src|-|Next start: the 40-core setting with an earlier diagnostic core limit (fewer cores), to be confirmed after the start.
+cu.next.confirmed40|src|-|Next start: 40 cores (confirmed earlier).
+cu.next.confirmed40-limited|src|-|Next start: the 40-core setting with an earlier diagnostic core limit (fewer cores), confirmed earlier.
+cu.next.unknown|src|-|Next start: cannot be predicted.
+cu.refuse.target|src|-|Choose Standard (24) or All (40).
+cu.refuse.unreadable|src|-|The stored setting cannot be read.
+cu.refuse.already40|src|-|All (40) is selected already.
+cu.refuse.already24|src|-|Standard (24) is selected already.
+cu.preview.write40|src|-|Selects all 40 graphics cores.
+cu.preview.remove-mode|src|-|Selects the standard 24 graphics cores.
+cu.preview.remove-confirmed|src|-|Removes the earlier confirmation of 40 cores, so the new setting is confirmed on its own start.
+cu.preview.remove-disable|src|-|Removes an earlier diagnostic core limit.
+cu.result.nothing|src|-|Nothing was changed.
+cu.result.saved|src|-|Saved.
+cu.result.failed|src|-|The change could not be completed.
+cu.result.cleanup-incomplete|src|-|The cleanup is incomplete. The next start uses the standard 24 cores; an earlier diagnostic core limit that remains does not reduce them.
+cu.effect|src|-|More cores use more power and make more heat: about 30 W more at 1500 MHz on our test unit. This is a reference, not a promise for your PC.

@@ -609,6 +609,34 @@ BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
     return 0;
 }
 
+// The CU mode snapshot (READ, any caller) and the boot-guard confirmation of a pending 40 CU start (CONFIRM, an
+// administrator with the Generation of a READ of this start). Both are adapter-owned software state answered with
+// NoAdapterSynchronization alone (bc250kmd_escape.h), like the DPM read: no BAR access, no scheduler idle.
+BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration, BC250_ESCAPE_CU_MODE *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char CuModeAbiSizeCheck[(sizeof(BC250_ESCAPE_CU_MODE) == 184) ? 1 : -1];
+    (void)sizeof(CuModeAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || (op != BC250_CU_MODE_OP_READ && op != BC250_CU_MODE_OP_CONFIRM))
+        return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_CU_MODE;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_CU_MODE_ABI;
+    data->Op = op;
+    data->ExpectedGeneration = op == BC250_CU_MODE_OP_CONFIRM ? expectedGeneration : 0;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_CU_MODE ||
+        data->AbiVersion != BC250_CU_MODE_ABI || data->Op != op)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
 // Any adapter by hardware id prefix (NULL or empty: the BC-250), so the same code has a positive control on a
 // GPU whose numbers Task Manager also shows.
 BC250_CONTROL_API LONG WINAPI Bc250VideoMemory(const WCHAR *hardwareId, BC250_VIDEO_MEMORY *data, ULONG bytes)

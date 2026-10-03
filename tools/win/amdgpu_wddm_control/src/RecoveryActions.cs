@@ -53,14 +53,21 @@ namespace AmdgpuWddmControl
         // without recording (the dry run).
         public static RecoverySnapshot Read(string observer = null)
         {
-            var s = new RecoverySnapshot();
-            using (var k = Registry.LocalMachine.OpenSubKey(Recovery.ParametersPath))
+            var s = new RecoverySnapshot { CuBadValues = new List<string>() };
+            try
             {
-                s.DriverInstalled = k != null;
-                if (k != null)
-                    foreach (var name in k.GetValueNames())
-                        if (k.GetValueKind(name) == RegistryValueKind.DWord) s.Parameters[name] = (uint)(int)k.GetValue(name);
+                using (var k = Registry.LocalMachine.OpenSubKey(Recovery.ParametersPath))
+                {
+                    s.DriverInstalled = k != null;
+                    if (k != null)
+                        foreach (var name in k.GetValueNames())
+                            if (k.GetValueKind(name) == RegistryValueKind.DWord) s.Parameters[name] = (uint)(int)k.GetValue(name);
+                            else if (CuMode.ValueNames.Contains(name)) s.CuBadValues.Add(name);
+                }
             }
+            catch (Exception) { s.CuBadValues.Add("(the driver's settings key cannot be read)"); }
+            try { s.GameProfiles = new Dictionary<string, string>(SettingsStore.ReadProfiles(), StringComparer.OrdinalIgnoreCase); }
+            catch (Exception) { s.GameProfiles = null; }
             using (var k = Registry.LocalMachine.OpenSubKey(Recovery.RouterPath))
             {
                 s.RouterInstalled = k != null;
@@ -74,6 +81,7 @@ namespace AmdgpuWddmControl
             var health = Kmd.StartHealth();
             var dpm = Kmd.Dpm();
             s.Interop = interop.Value; s.Health = health.Value; s.Dpm = dpm.Value;
+            s.Cu = Kmd.CuMode().Value;
             if (s.Interop == null && s.Health == null && s.Dpm == null) s.DriverError = dpm.Error ?? interop.Error ?? "no answer";
 
             string installDir = "";
@@ -134,7 +142,7 @@ namespace AmdgpuWddmControl
             try
             {
                 var m = ManifestCheck.Parse(File.ReadAllText(Path.Combine(installDir, "manifest.json")));
-                s.DefaultParameters = m.DefaultParameters; s.DefaultRouter = m.DefaultRouter;
+                s.DefaultParameters = m.DefaultParameters; s.DefaultRouter = m.DefaultRouter; s.DefaultApplications = m.DefaultApplications;
                 if (m.DefaultParameters == null || m.DefaultRouter == null) s.DefaultsError = "manifest.json has no \"defaults\"";
             }
             catch (Exception e) { s.DefaultsError = "manifest.json: " + e.Message; }
@@ -529,6 +537,7 @@ namespace AmdgpuWddmControl
             public string Action, SnapshotFile, OutFile, RunId;
             public uint? Mode, Ceiling;
             public bool DryRun, ModeGiven, CeilingGiven, AcceptBd060;
+            public readonly Recovery.PlanArgs More = new Recovery.PlanArgs();
         }
 
         static Options Parse(string[] args)
@@ -549,11 +558,20 @@ namespace AmdgpuWddmControl
                 else if (a == "--mode" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Mode = n; o.ModeGiven = true; i++; }
                 else if (a == "--ceiling" && args[i + 1] == "unset") { o.CeilingGiven = true; i++; }
                 else if (a == "--ceiling" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Ceiling = n; o.CeilingGiven = true; i++; }
+                else if (a == "--cu" && (args[i + 1] == "24" || args[i + 1] == "40")) o.More.Cu = uint.Parse(args[++i], CultureInfo.InvariantCulture);
+                else if (a == "--games" && (args[i + 1] == "keep" || args[i + 1] == "reset")) o.More.Games = args[++i];
+                else if (a == "--image" && Profiles.IsValidImage(args[i + 1])) o.More.Image = args[++i];
+                else if (a == "--value" && (args[i + 1].Length == 0 || Profiles.IsValidValue(args[i + 1]))) o.More.Value = args[++i];
                 else return null;
             }
             // set-clocks says what happens to both values ("unset" removes one); no other action takes a mode.
             if (o.Action == "set-clocks" && (!o.ModeGiven || !o.CeilingGiven)) return null;
             if (o.Action != "set-clocks" && o.ModeGiven) return null;
+            // Each of the newer options belongs to its actions only.
+            if ((o.More.Cu != null) != (o.Action == "cu-mode")) return null;
+            if (o.More.Games != null && o.Action != "reset-defaults") return null;
+            if ((o.More.Image != null) != o.Action.StartsWith("game-", StringComparison.Ordinal)) return null;
+            if ((o.More.Value != null) != (o.Action == "game-profile")) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
             if (o.RunId == null) o.RunId = Guid.NewGuid().ToString("N").Substring(0, 12);
             return o;
@@ -566,6 +584,8 @@ namespace AmdgpuWddmControl
             {
                 Console.Error.WriteLine("usage: --action <" + string.Join("|", Recovery.Actions) + "> [--ceiling MHz] [--dry-run [--snapshot file]] [--out file]");
                 Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
+                Console.Error.WriteLine("       --action cu-mode --cu 24|40 ...   --action reset-defaults [--games keep|reset] ...");
+                Console.Error.WriteLine("       --action game-profile --image <name.exe> --value <switches or \"\"> ...   --action game-undo|game-redo --image <name.exe> ...");
                 Console.Error.WriteLine("       --action " + Recovery.OperatorEscape + " --accept-bd060   (operator escape for a desktop that does not respond; see README)");
                 return Usage;
             }
@@ -596,7 +616,7 @@ namespace AmdgpuWddmControl
             w.AppendLine(Program.ProductName + " " + Program.VersionText + " dry run, " + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss'Z'", CultureInfo.InvariantCulture) +
                 ", snapshot " + (o.SnapshotFile ?? "of this PC"));
             w.Append(RecoveryProbe.StatusText(s));
-            var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, backups, o.AcceptBd060);
+            var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, backups, o.AcceptBd060, o.More);
             w.AppendLine("plan:");
             foreach (var line in plan.Text().TrimEnd().Split('\n')) w.AppendLine("  " + line.TrimEnd('\r'));
             w.AppendLine("dry run: nothing was written");
@@ -650,13 +670,16 @@ namespace AmdgpuWddmControl
             _runId = o.RunId; _action = o.Action;
             try { PrepareDirectory(); }
             catch (Exception e) { Fail("cannot prepare " + RecoveryProbe.ControlDirectory + ": " + e.Message); return Failed; }
-            Log("start " + o.Action + (o.Mode != null ? " mode " + o.Mode : "") + (o.Ceiling != null ? " ceiling " + o.Ceiling : "") + ", " + Program.ProductName + " " + Program.VersionText);
+            Log("start " + o.Action + (o.Mode != null ? " mode " + o.Mode : "") + (o.Ceiling != null ? " ceiling " + o.Ceiling : "") +
+                (o.More.Cu != null ? " cu " + o.More.Cu : "") + (o.More.Games != null ? " games " + o.More.Games : "") + (o.More.Image != null ? " image " + o.More.Image : "") +
+                (o.More.Value != null ? " value \"" + o.More.Value + "\"" : "") + ", " + Program.ProductName + " " + Program.VersionText);
             try
             {
                 var s = RecoveryProbe.Read(o.Action == Recovery.OperatorEscape ? "escape" : "helper");
-                var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups(), o.AcceptBd060);
+                var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups(), o.AcceptBd060, o.More);
                 if (plan.Refused) { Log("result: refused: " + plan.Refusal); return Refused; }
                 if (plan.RestartCompositor) return StopCompositor(s);
+                if (plan.CuConfirm) return ConfirmCu();
                 var backup = Backup(o, plan, s);
                 Log("backup " + backup.File);
 
@@ -666,6 +689,8 @@ namespace AmdgpuWddmControl
                     if (why != null) { Log("result: failed: " + why); return Failed; }
                 }
                 if (!Apply(plan.Writes, backup)) { Log("result: failed: a write did not read back; the old values were restored"); return Failed; }
+                if (!ApplyGames(plan.GameWrites, backup)) { Log("result: failed: a game setting did not read back; the old game settings were restored"); return Failed; }
+                if (plan.Cu != null && !RunCu(plan.Cu)) return Failed;
                 // A change that applies at the next restart is written, not done: the active route stays until then.
                 Log(plan.OfferRestart ? "result: written, pending until the next restart of Windows: " + plan.Change
                     : "result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
@@ -748,28 +773,18 @@ namespace AmdgpuWddmControl
             var b = new BackupRecord
             {
                 Action = o.Action, Utc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), RunId = o.RunId,
-                Args = new[] { o.Mode != null ? "mode=" + o.Mode : null, o.Ceiling != null ? "ceiling=" + o.Ceiling : null }.Where(a => a != null).ToArray(),
+                Args = new[] { o.Mode != null ? "mode=" + o.Mode : null, o.Ceiling != null ? "ceiling=" + o.Ceiling : null, o.More.Cu != null ? "cu=" + o.More.Cu : null,
+                    o.More.Games != null ? "games=" + o.More.Games : null, o.More.Image != null ? "image=" + o.More.Image : null }.Where(a => a != null).ToArray(),
                 Undoable = plan.Undoable, Undoes = plan.UndoOf,
             };
             var names = plan.Writes.Select(w => new[] { w.Path, w.Name }).ToList();
             if (plan.ConfirmStart)
                 foreach (var n in new[] { "UnconfirmedStarts", "DpmPending" }) names.Add(new[] { Recovery.ParametersPath, n });   // a record only
-            foreach (var pn in names)
-                using (var k = Registry.LocalMachine.OpenSubKey(pn[0]))
-                {
-                    var v = new BackupValue { Path = pn[0], Name = pn[1] };
-                    object data = k == null ? null : k.GetValue(pn[1], null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-                    if (data != null)
-                    {
-                        v.Existed = true;
-                        var kind = k.GetValueKind(pn[1]);
-                        if (kind == RegistryValueKind.DWord) { v.Kind = "DWord"; v.Number = (uint)(int)data; }
-                        else if (kind == RegistryValueKind.QWord) { v.Kind = "QWord"; v.Number = (long)data; }
-                        else if (kind == RegistryValueKind.String) { v.Kind = "String"; v.Text = (string)data; }
-                        else throw new InvalidOperationException(pn[1] + " has registry type " + kind + ", which this app does not restore; nothing was changed");
-                    }
-                    b.Values.Add(v);
-                }
+            names.AddRange(plan.GameWrites.Keys.Select(image => new[] { Recovery.GamePath(image), Profiles.ValueName }));
+            foreach (var pn in names) b.Values.Add(Saved(pn[0], pn[1], false));
+            // The CU setter's values: for diagnosis only (S6), never restored.
+            if (plan.Cu != null)
+                foreach (var n in CuMode.ValueNames) b.Diagnosis.Add(Saved(Recovery.ParametersPath, n, true));
             var file = Recovery.BackupFileName(DateTime.UtcNow);
             var path = Path.Combine(RecoveryProbe.ControlDirectory, file);
             File.WriteAllText(path + ".partial", new JavaScriptSerializer().Serialize(b));
@@ -779,6 +794,145 @@ namespace AmdgpuWddmControl
             File.Move(path + ".partial", path);
             b.File = file;
             return b;
+        }
+
+        // One value as found before an action. diagnosis: an unexpected type is recorded, not refused.
+        static BackupValue Saved(string path, string name, bool diagnosis)
+        {
+            using (var k = Registry.LocalMachine.OpenSubKey(path))
+            {
+                var v = new BackupValue { Path = path, Name = name };
+                object data = k == null ? null : k.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                if (data == null) return v;
+                v.Existed = true;
+                var kind = k.GetValueKind(name);
+                if (kind == RegistryValueKind.DWord) { v.Kind = "DWord"; v.Number = (uint)(int)data; }
+                else if (kind == RegistryValueKind.QWord) { v.Kind = "QWord"; v.Number = (long)data; }
+                else if (kind == RegistryValueKind.String) { v.Kind = "String"; v.Text = (string)data; }
+                else if (diagnosis) { v.Kind = kind.ToString(); }
+                else throw new InvalidOperationException(name + " has registry type " + kind + ", which this app does not restore; nothing was changed");
+                return v;
+            }
+        }
+
+        // Per-game switches (WU-015, WU-020a): the value set or the game's key removed, read back; a failure restores
+        // the games' old values from the backup (they are the app's own values).
+        static bool ApplyGames(SortedDictionary<string, string> games, BackupRecord backup)
+        {
+            if (games.Count == 0) return true;
+            try
+            {
+                foreach (var g in games)
+                {
+                    if (!Recovery.GameAllowed(g.Key, g.Value)) throw new InvalidOperationException(g.Key + " is not a game this app may change");
+                    if (g.Value.Length == 0) SettingsStore.RemoveProfile(g.Key); else SettingsStore.WriteProfile(g.Key, g.Value);
+                    Log("wrote: game " + g.Key + " = \"" + g.Value + "\"" + (g.Value.Length == 0 ? " (key removed)" : ""));
+                }
+                bool ok = true;
+                var now = SettingsStore.ReadProfiles();
+                foreach (var g in games)
+                {
+                    string v;
+                    bool back = g.Value.Length == 0 ? !now.ContainsKey(g.Key) : now.TryGetValue(g.Key, out v) && v == g.Value;
+                    Log((back ? "read back OK: game " : "read back MISMATCH: game ") + g.Key);
+                    ok &= back;
+                }
+                if (ok) return true;
+            }
+            catch (Exception e) { Log("game write failed: " + e.Message); }
+            foreach (var v in backup.Values.Where(x => Recovery.GameImage(x.Path) != null))
+                try
+                {
+                    var image = Recovery.GameImage(v.Path);
+                    if (v.Existed && !string.IsNullOrEmpty(v.Text)) SettingsStore.WriteProfile(image, v.Text); else SettingsStore.RemoveProfile(image);
+                    Log("restored: game " + image);
+                }
+                catch (Exception e) { Log("restore failed: game " + v.Path + ": " + e.Message); }
+            return false;
+        }
+
+        // The CU setter (plan v7 section 7, S1-S6) on the live key: stops at the first failed step, never restores,
+        // reports the read-back state.
+        static bool RunCu(CuSetterPlan plan)
+        {
+            Log("CU setter: target " + plan.Target + ", before: " + plan.Before);
+            CuSetterResult r;
+            try
+            {
+                using (var reg = new LiveCuRegistry()) r = CuMode.Execute(plan, reg);
+            }
+            catch (Exception e)
+            {
+                Log("result: failed: the driver's settings key cannot be opened for the graphics-core change (" + e.Message + "). Nothing was changed.");
+                return false;
+            }
+            foreach (var l in r.Log) Log("CU " + l);
+            var text = CuMode.ResultText(plan, r);
+            if (r.Completed) { Log("CU result: " + text); return true; }
+            Log("CU read back: " + (r.ReadBack != null ? r.ReadBack.ToString() : "unknown") + (r.FlushFailed ? " (the flush failed: not durable)" : ""));
+            Log("result: failed: " + text + " Error: " + r.Error);
+            return false;
+        }
+
+        // [Confirm now] (Waiting only): CU CONFIRM with the Generation of a fresh READ, then READ again. One request,
+        // never retried here: the user may press the button again.
+        static int ConfirmCu()
+        {
+            var read = Kmd.CuMode();
+            var health = Kmd.StartHealth();
+            if (read.Value == null) { Log("result: failed: no graphics-core reading: " + read.Error); return Failed; }
+            ulong? generation = health.Value != null ? (ulong?)health.Value.Generation : null;
+            if (CuMode.Classify(read.Value, generation) != CuClass.Waiting) { Log("result: refused: no 40-core start is waiting for confirmation"); return Refused; }
+            var c = Kmd.CuConfirm(read.Value.Generation);
+            Log("CU CONFIRM generation " + read.Value.Generation + ": " + (c.Value != null ? "accepted" : "refused (" + c.Error + ")"));
+            var after = Kmd.CuMode();
+            var health2 = Kmd.StartHealth();
+            var cls = CuMode.Classify(after.Value, health2.Value != null ? (ulong?)health2.Value.Generation : null);
+            if (after.Value != null) Log("CU read back: flags " + after.Value.Flags + ", applied " + after.Value.Applied + ", active " + after.Value.ActiveCus + ", class " + cls);
+            switch (cls)
+            {
+                case CuClass.Confirmed:
+                case CuClass.ConfirmedFewer: Log("result: done: the 40-core start is confirmed"); return Done;
+                case CuClass.Waiting: Log("result: failed: still pending (deleting Pending failed); the user may confirm again"); return Failed;
+                case CuClass.NotSaved: Log("result: failed: the confirmation could not be saved (Pending deleted, Confirmed not stored)"); return Failed;
+                default: Log("result: failed: the graphics-core state cannot be read after the confirmation"); return Failed;
+            }
+        }
+
+        // The CU setter's registry: the driver's Parameters key, and only the operations the setter may make.
+        sealed class LiveCuRegistry : ICuRegistry, IDisposable
+        {
+            readonly RegistryKey _key;
+
+            public LiveCuRegistry()
+            {
+                _key = Registry.LocalMachine.OpenSubKey(CuMode.ParametersPath, true);
+                if (_key == null) throw new InvalidOperationException(@"HKLM\" + CuMode.ParametersPath + " does not exist");
+            }
+
+            public uint? Read(string name)
+            {
+                var v = _key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                if (v == null) return null;
+                if (_key.GetValueKind(name) != RegistryValueKind.DWord) throw new InvalidOperationException(name + " is not a REG_DWORD");
+                return (uint)(int)v;
+            }
+
+            public void Delete(string name)
+            {
+                if (name != "CuMode" && name != "CuDisableWgp" && name != "CuModeConfirmed") throw new InvalidOperationException(name + " is not a value the setter removes");
+                _key.DeleteValue(name, false);
+            }
+
+            public void SetDword(string name, uint value)
+            {
+                if (name != "CuMode" || value != CuMode.Full) throw new InvalidOperationException("the setter writes only CuMode = 40");
+                _key.SetValue(name, unchecked((int)value), RegistryValueKind.DWord);
+            }
+
+            public void Flush() { _key.Flush(); }
+
+            public void Dispose() { _key.Dispose(); }
         }
 
         static void Write(RegWrite w)

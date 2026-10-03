@@ -71,6 +71,12 @@ namespace AmdgpuWddmControl
         static extern int Bc250VideoMemory(string hardwareId, [Out] byte[] data, uint bytes);
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250LogRead(uint from, [Out] byte[] data, uint bytes);
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250CuMode(uint op, ulong expectedGeneration, [Out] byte[] data, uint bytes);
+
+        // AMDGPU_WDDM_CONTROL_NO_DLL=1: every driver read answers as if bc250control.dll were missing (the build's
+        // check of the recovery view and of the pages without the DLL).
+        static bool DllBlocked { get { return Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_NO_DLL") == "1"; } }
 
         static KmdResult<T> Call<T>(int size, Func<byte[], int> request, Func<byte[], T> parse) where T : class
         {
@@ -78,6 +84,7 @@ namespace AmdgpuWddmControl
             var buffer = new byte[size];
             try
             {
+                if (DllBlocked) throw new DllNotFoundException();
                 result.Status = request(buffer);
                 if (result.Status < 0) { result.Error = KmdReply.StatusText(result.Status); return result; }
                 result.Value = parse(buffer);
@@ -108,6 +115,19 @@ namespace AmdgpuWddmControl
         public static KmdResult<StartHealthState> ConfirmStart(ulong generation, ulong epoch)
         {
             return Call(KmdReply.StartHealthBytes, b => Bc250StartHealth(1, generation, epoch, b, (uint)b.Length), KmdReply.ParseStartHealth);
+        }
+
+        // The CU mode snapshot of this start (READ, any caller).
+        public static KmdResult<CuModeState> CuMode()
+        {
+            return Call(KmdReply.CuModeBytes, b => Bc250CuMode(0, 0, b, (uint)b.Length), KmdReply.ParseCuMode);
+        }
+
+        // BC250_CU_MODE_OP_CONFIRM with the Generation of a fresh READ of this start: administrator only. The KMD
+        // deletes CuModePending first, then stores CuModeConfirmed; either step can fail, so the caller reads again.
+        public static KmdResult<CuModeState> CuConfirm(ulong generation)
+        {
+            return Call(KmdReply.CuModeBytes, b => Bc250CuMode(1, generation, b, (uint)b.Length), KmdReply.ParseCuMode);
         }
 
         public static KmdResult<VideoMemoryState> VideoMemory()

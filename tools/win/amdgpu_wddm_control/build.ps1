@@ -37,11 +37,11 @@ New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
-$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'test\UnitTests.cs')
+    "/out:$obj\unit-tests.exe" @pure (Get-ChildItem "$here\test\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unitArgs = @($repo) + @(if ($StartConfirmCore) { (Resolve-Path $StartConfirmCore).Path })
 & "$obj\unit-tests.exe" @unitArgs | ForEach-Object { Write-Host "  $_" }
@@ -74,9 +74,10 @@ $usage = & "$Out\bc250kmd_cli.exe" 2>&1 | ForEach-Object { [string]$_ }
 if ($LASTEXITCODE -ne 2 -or -not ($usage -match '^usage: bc250kmd_cli ')) { throw "bc250kmd_cli.exe without arguments: exit $LASTEXITCODE, no usage" }
 Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
 
-# 3. The application.
+# 3. The application, with the string tables embedded.
+$resources = @(Get-ChildItem "$here\strings\strings.*.txt" | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" (Get-ChildItem "$here\src\*.cs").FullName
+    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources (Get-ChildItem "$here\src\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 
 # 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
@@ -137,10 +138,18 @@ if (-not $NoSmoke) {
         'undo'            = @(3, 'refused: There is no action to undo')
         'set-clocks'      = @(0, "delete $params DpmMaxMHz")
         'restart-compositor' = @(3, 'refused: restart-compositor is an operator escape', '--accept-bd060')
+        # The CU setter (G-PLAN, plan v7 section 7): the dry run lists the helper's steps, in the helper's order.
+        'cu-mode:40'      = @(0, "S1 set $params CuMode = 40 (DWord)", 'S4 flush the key', 'undo: no', 'never restored')
+        'cu-mode:24'      = @(3, 'refused: Standard (24) is selected already')
+        'cu-confirm'      = @(3, 'refused: No 40-core start is waiting for confirmation')
+        'reset-defaults:keep' = @(0, 'note: Per-game settings are kept.')
+        'game-undo'       = @(3, 'refused: There is no change of witcher3.exe to undo')
     }
     foreach ($e in $expect.GetEnumerator()) {
-        $extra = @(switch ($e.Key) { 'enable-dpm' { '--ceiling', '1700' } 'set-clocks' { '--mode', 'unset', '--ceiling', 'unset' } })
-        $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $snapshot)) $e.Key
+        $action = $e.Key.Split(':')[0]
+        $extra = @(switch ($e.Key) { 'enable-dpm' { '--ceiling', '1700' } 'set-clocks' { '--mode', 'unset', '--ceiling', 'unset' }
+            'cu-mode:40' { '--cu', '40' } 'cu-mode:24' { '--cu', '24' } 'reset-defaults:keep' { '--games', 'keep' } 'game-undo' { '--image', 'witcher3.exe' } })
+        $r = Invoke-DryRun (@('--action', $action) + $extra + @('--dry-run', '--snapshot', $snapshot)) ($e.Key -replace ':', '-')
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
             if (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
@@ -153,6 +162,10 @@ if (-not $NoSmoke) {
     if (($r.Code -ne 0 -and $r.Code -ne 3) -or -not $r.Text.Contains('dry run: nothing was written')) { throw "dry run on this PC failed (exit $($r.Code)): $($r.Text)" }
     $u = Invoke-DryRun @('--action', 'set-clocks', '--ceiling', '1500', '--dry-run', '--snapshot', $snapshot) 'set-clocks-without-mode'
     if ($u.Code -ne 2) { throw "set-clocks without --mode must be refused as usage (exit $($u.Code))" }
+    foreach ($bad in @(@('cu-mode'), @('cu-mode', '--cu', '32'), @('reopen-gpu-path', '--cu', '40'), @('game-profile', '--image', 'C:\x.exe', '--value', ''))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
     foreach ($a in 'desktop-gpu', 'desktop-cpu', 'undo') {
         $u = Invoke-DryRun @('--action', $a, '--dry-run', '--snapshot', $snapshot) "no-dwm-$a"
         if ($u.Text -match 'restart DWM|DWM restart|watchdog') { throw "dry run $a still names a DWM restart: $($u.Text)" }

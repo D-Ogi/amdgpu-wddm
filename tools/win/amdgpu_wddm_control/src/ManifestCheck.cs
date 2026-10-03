@@ -19,11 +19,14 @@ namespace AmdgpuWddmControl
 
     public sealed class ManifestInfo
     {
-        public string Release = "", Version = "", KmdVersion = "", ReleaseCertificate = "";
+        public string Release = "", Version = "", KmdVersion = "", KmdBuild = "", KmdAbi = "", ReleaseCertificate = "";
         public readonly List<ManifestComponent> Components = new List<ManifestComponent>();
         // "defaults": {"parameters": {name: DWORD}, "desktop_router": {name: DWORD}}, the values install.ps1 writes
         // for a fresh install. null when the manifest has none (releases before the control app's reset).
         public Dictionary<string, long> DefaultParameters, DefaultRouter;
+        // "defaults"."d3d12_applications": {image: {"Experiment": "..."}}, the per-game switches the installer
+        // recommends (origin label "recommended by the installer"). null when the manifest has none.
+        public Dictionary<string, string> DefaultApplications;
     }
 
     public static class ManifestCheck
@@ -39,7 +42,8 @@ namespace AmdgpuWddmControl
             var root = new JavaScriptSerializer { MaxJsonLength = 64 << 20 }.DeserializeObject(json) as IDictionary<string, object>;
             if (root == null) throw new FormatException("the manifest is not a JSON object");
             if (Field(root, "schema") != "" && Field(root, "schema") != "1") throw new FormatException("manifest schema " + Field(root, "schema") + ", 1 expected");
-            var m = new ManifestInfo { Release = Field(root, "release"), Version = Field(root, "version"), KmdVersion = Field(root, "kmd_version"), ReleaseCertificate = Field(root, "release_certificate") };
+            var m = new ManifestInfo { Release = Field(root, "release"), Version = Field(root, "version"), KmdVersion = Field(root, "kmd_version"),
+                KmdBuild = Field(root, "kmd_build"), KmdAbi = Field(root, "kmd_abi"), ReleaseCertificate = Field(root, "release_certificate") };
             object list;
             if (root.TryGetValue("components", out list) && list is IEnumerable)
                 foreach (var item in (IEnumerable)list)
@@ -59,8 +63,27 @@ namespace AmdgpuWddmControl
                 if (d == null) throw new FormatException("manifest defaults is not an object");
                 m.DefaultParameters = Dwords(d, "parameters");
                 m.DefaultRouter = Dwords(d, "desktop_router");
+                m.DefaultApplications = Applications(d);
             }
             return m;
+        }
+
+        static Dictionary<string, string> Applications(IDictionary<string, object> d)
+        {
+            object o;
+            if (!d.TryGetValue("d3d12_applications", out o) || o == null) return null;
+            var table = o as IDictionary<string, object>;
+            if (table == null) throw new FormatException("manifest defaults.d3d12_applications is not an object");
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in table)
+            {
+                var app = kv.Value as IDictionary<string, object>;
+                object value;
+                if (!Profiles.IsValidImage(kv.Key) || app == null || !app.TryGetValue(Profiles.ValueName, out value) || !(value is string) || !Profiles.IsValidValue((string)value))
+                    throw new FormatException("manifest defaults.d3d12_applications." + kv.Key + " is not an application with a valid Experiment");
+                result[kv.Key] = (string)value;
+            }
+            return result;
         }
 
         static Dictionary<string, long> Dwords(IDictionary<string, object> d, string name)

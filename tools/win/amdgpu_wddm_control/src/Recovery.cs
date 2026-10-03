@@ -52,8 +52,22 @@ namespace AmdgpuWddmControl
         // its time and the value written (null: removed). A backup alone is an attempt, not a write.
         public string RouteWrittenUtc { get; set; }
         public long? RouteWrittenValue { get; set; }
+        // The CU snapshot of this start (null: READ failed) and the CU values that exist with another type than
+        // REG_DWORD (Parameters lists DWORDs only), so that such a value is unreadable, never absent.
+        public CuModeState Cu { get; set; }
+        public List<string> CuBadValues { get; set; }
+        // Per-game switches: image -> Experiment as stored ("" for a key without the value), and the release's
+        // recommended ones (manifest.json defaults.d3d12_applications; null: none).
+        public Dictionary<string, string> GameProfiles { get; set; }
+        public Dictionary<string, string> DefaultApplications { get; set; }
 
         public RecoverySnapshot() { Parameters = new Dictionary<string, long>(); DwmRoute = "unknown"; }
+
+        public CuStored StoredCu()
+        {
+            if (CuBadValues != null && CuBadValues.Count > 0) return new CuStored { Unreadable = true };
+            return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending") };
+        }
 
         public uint? P(string name)
         {
@@ -91,6 +105,13 @@ namespace AmdgpuWddmControl
         public readonly List<string> Notes = new List<string>();
         public bool ConfirmStart, OfferRestart, RestartCompositor, Undoable = true;
         public string UndoOf;                  // undo: the backup file it restores
+        // The CU setter's steps (section 7 S1-S6), run after Writes, never restored; CuConfirm: the CU CONFIRM escape.
+        public CuSetterPlan Cu;
+        public bool CuConfirm;
+        // Per-game switches: image -> new Experiment value, "" = remove the game's key. Backed up and undoable per game.
+        public readonly SortedDictionary<string, string> GameWrites = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // What the dialog shows (in the window's language): one line per change, then the notes.
+        public readonly List<string> Preview = new List<string>();
 
         public bool Refused { get { return Refusal != null; } }
 
@@ -102,6 +123,15 @@ namespace AmdgpuWddmControl
             w.AppendLine("change: " + Change);
             w.AppendLine("takes effect: " + Effect);
             foreach (var x in Writes) w.AppendLine("  " + x);
+            foreach (var g in GameWrites)
+                w.AppendLine("  " + (g.Value.Length == 0 ? "delete HKLM\\" + Profiles.RegistryPath + "\\" + g.Key
+                    : "set HKLM\\" + Profiles.RegistryPath + "\\" + g.Key + " " + Profiles.ValueName + " = \"" + g.Value + "\" (String)"));
+            if (Cu != null)
+            {
+                w.AppendLine("  CU setter, target " + Cu.Target + ", stored before: " + Cu.Before + "; backup for diagnosis only, never restored");
+                foreach (var s in Cu.Steps) w.AppendLine("  " + s);
+            }
+            if (CuConfirm) w.AppendLine("  confirm the 40-core start (CU CONFIRM with the Generation of a fresh READ), then READ again");
             if (ConfirmStart) w.AppendLine("  confirm this driver start (start-health CONFIRM with this start's generation and epoch)");
             if (RestartCompositor) w.AppendLine("  stop DWM in the active session; Windows starts a new one (operator escape)");
             foreach (var n in Notes) w.AppendLine("note: " + n);
@@ -138,9 +168,11 @@ namespace AmdgpuWddmControl
         public bool RestartsDwm { get; set; }    // written by 0.3 and earlier, which restarted DWM; not used now
         public string Undoes { get; set; }      // the backup file an undo restored
         public List<BackupValue> Values { get; set; }
+        // Values saved for diagnosis only (the CU setter's, section 7 S6): never restored, never offered by undo.
+        public List<BackupValue> Diagnosis { get; set; }
         public string File { get; set; }        // set when read, not stored
 
-        public BackupRecord() { Schema = 1; Values = new List<BackupValue>(); }
+        public BackupRecord() { Schema = 1; Values = new List<BackupValue>(); Diagnosis = new List<BackupValue>(); }
     }
 
     // One DWM process: its id and creation time (a reused id has another creation time), and who saw it first.
@@ -242,7 +274,8 @@ namespace AmdgpuWddmControl
         // Not offered in the window, refused without --accept-bd060: for a desktop that does not respond.
         public const string OperatorEscape = "restart-compositor";
 
-        public static readonly string[] Actions = { "reopen-gpu-path", "desktop-gpu", "desktop-cpu", "confirm-start", "enable-dpm", "set-clocks", "reset-defaults", "undo" };
+        public static readonly string[] Actions = { "reopen-gpu-path", "desktop-gpu", "desktop-cpu", "confirm-start", "enable-dpm", "set-clocks", "reset-defaults", "undo",
+            "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo" };
 
         public static bool Allowed(string path, string name)
         {
@@ -250,6 +283,22 @@ namespace AmdgpuWddmControl
             if (string.Equals(path, RouterPath, StringComparison.OrdinalIgnoreCase)) return RouterNames.Contains(name);
             return false;
         }
+
+        // The CU setter's set only (G-PLAN): CuMode written as 40 or removed, CuDisableWgp and CuModeConfirmed removed.
+        public static bool CuAllowed(RegWrite w)
+        {
+            if (!string.Equals(w.Path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return false;
+            if (w.Name == "CuMode") return w.Delete || (w.Kind == "DWord" && w.Number == CuMode.Full);
+            return (w.Name == "CuDisableWgp" || w.Name == "CuModeConfirmed") && w.Delete;
+        }
+
+        // A game's Experiment value (WU-015, WU-020a): HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image> only.
+        public static bool GameAllowed(string image, string value)
+        {
+            return Profiles.IsValidImage(image) && (value.Length == 0 || Profiles.IsValidValue(value));
+        }
+
+        public static string GamePath(string image) { return Profiles.RegistryPath + "\\" + image; }
 
         // ---- the decision rules ----------------------------------------------------------------------------------
 
@@ -794,6 +843,16 @@ namespace AmdgpuWddmControl
                 add("Clock control", (s.Dpm != null ? KmdReply.ModeText(s.Dpm.Mode) + ": " + KmdReply.ReasonText(runReason) + ". " :
                     lastMode != null ? "Last start: " + KmdReply.ModeText(lastMode.Value) + ". " : "") + stored, "info", null, null);
 
+            // Graphics cores (CU mode, plan v7 section 7): the running start, the stored choice and the next start apart.
+            var cuView = CuMode.View(s.Cu, s.Health != null ? (ulong?)s.Health.Generation : null, s.StoredCu());
+            bool cuWarn = cuView.Class == CuClass.Fallback || cuView.Class == CuClass.NotSaved || cuView.Class == CuClass.Waiting ||
+                (cuView.Class == CuClass.Unknown && cuView.ChoiceMode == CuMode.Full);
+            add("Graphics cores", cuView.Running + " " + cuView.Choice + " " + cuView.NextStart +
+                (s.Cu != null ? " (snapshot: applied " + s.Cu.Applied + ", flags " + s.Cu.Flags + ", reason " + CuMode.ReasonName(s.Cu.Reason) + ", active " + s.Cu.ActiveCus +
+                    ", mask 0x" + s.Cu.DisableMask.ToString("X", CultureInfo.InvariantCulture) + ", generation " + s.Cu.Generation + ")" : ""),
+                cuWarn ? "warn" : cuView.Class == CuClass.Standard || cuView.Class == CuClass.Confirmed ? "ok" : "info",
+                cuView.OfferConfirm ? "cu-confirm" : null, cuView.OfferConfirm ? "Confirm now" : null);
+
             // The installer's start-confirm task.
             if (!s.TaskFound)
                 add("Start confirmation task", "The release's logon task is not installed. Run the release installer again.", "warn", null, null);
@@ -815,9 +874,12 @@ namespace AmdgpuWddmControl
             return w.Delete ? now == null : now != null && now.Value == w.Number;
         }
 
-        // The plan of one action. ceiling: enable-dpm and set-clocks; mode: set-clocks; backups: undo.
-        public static ActionPlan Plan(string action, RecoverySnapshot s, uint? mode = null, uint? ceiling = null, IEnumerable<BackupRecord> backups = null, bool operatorAccepted = false)
+        // The plan of one action. ceiling: enable-dpm and set-clocks; mode: set-clocks; backups: undo, game-undo,
+        // game-redo; more: cu-mode (Cu), reset-defaults (Games), game-* (Image, Value).
+        public static ActionPlan Plan(string action, RecoverySnapshot s, uint? mode = null, uint? ceiling = null, IEnumerable<BackupRecord> backups = null, bool operatorAccepted = false,
+            PlanArgs more = null)
         {
+            more = more ?? new PlanArgs();
             var p = new ActionPlan { Action = action };
             if (action == OperatorEscape)
             {
@@ -931,8 +993,29 @@ namespace AmdgpuWddmControl
                         p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
                     int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k));
                     if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
-                    if (p.Writes.All(w => Same(s, w))) return Refuse(p, "All these settings have their release defaults already.");
-                    p.Change = "Sets " + string.Join(", ", p.Writes.Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) + ".";
+                    // The CU part goes through the same setter as "Standard (24)" (WU-042, WU-055).
+                    var cu = CuMode.Plan(s.StoredCu(), CuMode.Stock);
+                    if (!cu.Refused) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
+                    else if (s.StoredCu().Unreadable) p.Notes.Add("The graphics-core setting cannot be read and is left as it is.");
+                    // Per-game switches: kept unless the user asked to reset them too (WU-055).
+                    if (more.Games == "reset")
+                    {
+                        if (s.DefaultApplications == null) return Refuse(p, "The installed release has no list of recommended game settings. Keep the game settings or run the release installer again.");
+                        foreach (var g in (s.GameProfiles ?? new Dictionary<string, string>()))
+                        {
+                            string def;
+                            bool recommended = s.DefaultApplications.TryGetValue(g.Key, out def);
+                            if (recommended && !SameSet(g.Value, def)) p.GameWrites[g.Key] = def;
+                            else if (!recommended) p.GameWrites[g.Key] = "";
+                        }
+                        foreach (var d in s.DefaultApplications)
+                            if (s.GameProfiles == null || !s.GameProfiles.ContainsKey(d.Key)) p.GameWrites[d.Key] = d.Value;
+                    }
+                    else p.Notes.Add("Per-game settings are kept.");
+                    if (p.Writes.All(w => Same(s, w)) && p.Cu == null && p.GameWrites.Count == 0) return Refuse(p, "All these settings have their release defaults already.");
+                    p.Change = "Sets " + string.Join(", ", p.Writes.Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
+                        (p.Cu != null ? "; graphics cores: Standard (24)" : "") + (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") + ".";
+                    if (p.Cu != null) p.Notes.Add("The graphics-core part cannot be undone: its old values are kept for diagnosis only.");
                     p.OfferRestart = true;
                     break;
 
@@ -944,6 +1027,8 @@ namespace AmdgpuWddmControl
                     p.UndoOf = target.File;
                     foreach (var v in target.Values)
                     {
+                        string image = GameImage(v.Path);
+                        if (image != null && v.Name == Profiles.ValueName) { p.GameWrites[image] = v.Existed ? v.Text ?? "" : ""; continue; }
                         if (!Allowed(v.Path, v.Name)) return Refuse(p, "The backup names " + v.Name + ", which this app does not change.");
                         p.Writes.Add(v.Existed ? new RegWrite { Path = v.Path, Name = v.Name, Kind = v.Kind, Number = v.Number, Text = v.Text } : RegWrite.Remove(v.Path, v.Name));
                     }
@@ -952,21 +1037,138 @@ namespace AmdgpuWddmControl
                     if (router != null && (router.Delete || router.Number == 0) && !SwitchesOpenNow(s))
                         return Refuse(p, "Undo would put the desktop on the GPU route, but the GPU desktop path is closed for this start.");
                     if (router != null) p.Notes.Add(Bd060Note);
+                    if (target.Diagnosis != null && target.Diagnosis.Count > 0) p.Notes.Add("The graphics-core part of that action is not undone (S6).");
                     p.Effect = "at the next restart of Windows";
                     p.OfferRestart = true;
                     break;
+
+                case "cu-mode":
+                    p.Title = "Graphics cores";
+                    p.Effect = "at the next restart of Windows";
+                    p.Undoable = false;
+                    if (more.Cu == null) return Refuse(p, "No graphics-core choice given (--cu 24 or 40).");
+                    p.Cu = CuMode.Plan(s.StoredCu(), more.Cu.Value);
+                    if (p.Cu.Refused) { var why = p.Cu.Refusal; p.Cu = null; return Refuse(p, why); }
+                    p.Preview.AddRange(p.Cu.Preview);
+                    p.Change = string.Join(" ", p.Cu.Preview);
+                    if (more.Cu == CuMode.Full) { p.Preview.Add(CuMode.EffectText()); p.Notes.Add("Effect: more power and heat, reference about +30 W at 1500 MHz on the lab unit, not a promise."); }
+                    if (p.Cu.Before.Disable != null) p.Notes.Add("CuDisableWgp was 0x" + p.Cu.Before.Disable.Value.ToString("X", CultureInfo.InvariantCulture) + " (an earlier diagnostic core limit) and is removed.");
+                    p.Notes.Add("The old values are saved for diagnosis only; they are never restored and undo does not offer them (S6).");
+                    p.OfferRestart = true;
+                    break;
+
+                case "cu-confirm":
+                    p.Title = "Confirm 40 graphics cores";
+                    p.Change = "Tells the driver that this 40-core start is healthy, so the next start keeps 40 cores.";
+                    p.Effect = "at once";
+                    p.Undoable = false;
+                    if (!s.DriverRunning) return Refuse(p, "The driver is not running: there is no start to confirm.");
+                    if (CuMode.Classify(s.Cu, s.Health != null ? (ulong?)s.Health.Generation : null) != CuClass.Waiting)
+                        return Refuse(p, "No 40-core start is waiting for confirmation.");
+                    p.CuConfirm = true;
+                    break;
+
+                case "game-profile":
+                {
+                    p.Title = "Game settings";
+                    p.Undoable = true;
+                    if (more.Image == null || !GameAllowed(more.Image, more.Value ?? "")) return Refuse(p, "Not a game file name or not a valid list of switches.");
+                    string current = null;
+                    if (s.GameProfiles != null) s.GameProfiles.TryGetValue(more.Image, out current);
+                    var names = (more.Value ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                    ProfileWrite pw;
+                    try { pw = Profiles.PlanWrite(more.Image, string.IsNullOrEmpty(current) ? null : current, names); }
+                    catch (ArgumentException e) { return Refuse(p, e.Message); }
+                    if (pw.Kind == ProfileWriteKind.None) return Refuse(p, "These settings of " + more.Image + " are stored already.");
+                    p.GameWrites[more.Image] = pw.Kind == ProfileWriteKind.Set ? pw.Value : "";
+                    p.Effect = "the next time " + more.Image + " starts";
+                    p.Change = pw.Kind == ProfileWriteKind.Set ? "Sets the switches of " + more.Image + " to " + pw.Value + "." : "Removes the settings of " + more.Image + ".";
+                    p.Notes.Add("These settings are shared by every game named " + more.Image + " on this PC.");
+                    break;
+                }
+
+                case "game-undo":
+                case "game-redo":
+                {
+                    bool redo = action == "game-redo";
+                    p.Title = redo ? "Redo the game change" : "Undo the game change";
+                    p.Undoable = true;
+                    if (more.Image == null || !Profiles.IsValidImage(more.Image)) return Refuse(p, "Not a game file name.");
+                    var t = redo ? GameRedoTarget(backups ?? new BackupRecord[0], more.Image) : GameUndoTarget(backups ?? new BackupRecord[0], more.Image);
+                    if (t == null) return Refuse(p, redo ? "There is no undone change of " + more.Image + " to redo." : "There is no change of " + more.Image + " to undo.");
+                    p.UndoOf = t.File;
+                    var v = t.Values.FirstOrDefault(x => GameImage(x.Path) != null && string.Equals(GameImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase) && x.Name == Profiles.ValueName);
+                    if (v == null) return Refuse(p, "The saved change does not name " + more.Image + ".");
+                    p.GameWrites[more.Image] = v.Existed ? v.Text ?? "" : "";
+                    p.Effect = "the next time " + more.Image + " starts";
+                    p.Change = (redo ? "Restores the settings of " + more.Image + " from before the undo of " : "Restores the settings of " + more.Image + " from before the change of ") + t.Utc + ".";
+                    break;
+                }
             }
             foreach (var w in p.Writes)
                 if (!Allowed(w.Path, w.Name)) return Refuse(p, "internal: " + w.Name + " is not on the list of values this app may write");
+            foreach (var g in p.GameWrites)
+                if (!GameAllowed(g.Key, g.Value)) return Refuse(p, "internal: " + g.Key + " is not a game this app may change");
+            if (p.Cu != null && !p.Cu.Steps.All(CuMode.Allowed)) return Refuse(p, "internal: a graphics-core step is not allowed");
             return p;
         }
 
-        // The newest backup an undo has not restored yet, among the undoable ones.
+        public sealed class PlanArgs
+        {
+            public uint? Cu;
+            public string Games, Image, Value;
+        }
+
+        static bool SameSet(string a, string b)
+        {
+            Func<string, HashSet<string>> set = x => new HashSet<string>((x ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries), StringComparer.Ordinal);
+            return set(a).SetEquals(set(b));
+        }
+
+        // The image of a per-game backup value's path, or null for any other path.
+        public static string GameImage(string path)
+        {
+            var prefix = Profiles.RegistryPath + "\\";
+            if (path == null || !path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+            var image = path.Substring(prefix.Length);
+            return Profiles.IsValidImage(image) ? image : null;
+        }
+
+        static bool IsGameRecord(BackupRecord b) { return b.Action == "game-profile" || b.Action == "game-undo" || b.Action == "game-redo"; }
+
+        static List<BackupRecord> GameRecords(IEnumerable<BackupRecord> backups, string image)
+        {
+            return backups.Where(b => IsGameRecord(b) && b.File != null && b.Args != null && b.Args.Any(a => string.Equals(a, "image=" + image, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(b => b.Utc, StringComparer.Ordinal).ThenByDescending(b => b.File, StringComparer.Ordinal).ToList();
+        }
+
+        // Undo: the newest change (or redo) of this game not undone yet.
+        public static BackupRecord GameUndoTarget(IEnumerable<BackupRecord> backups, string image)
+        {
+            var list = GameRecords(backups, image);
+            var undone = new HashSet<string>(list.Where(b => b.Undoes != null).Select(b => b.Undoes), StringComparer.OrdinalIgnoreCase);
+            return list.FirstOrDefault(b => (b.Action == "game-profile" || b.Action == "game-redo") && !undone.Contains(b.File));
+        }
+
+        // Redo: the newest undo of this game not redone yet, when no change came after it (a new change clears the redo).
+        public static BackupRecord GameRedoTarget(IEnumerable<BackupRecord> backups, string image)
+        {
+            var list = GameRecords(backups, image);
+            var undone = new HashSet<string>(list.Where(b => b.Undoes != null).Select(b => b.Undoes), StringComparer.OrdinalIgnoreCase);
+            foreach (var b in list)
+            {
+                if (b.Action == "game-profile") return null;
+                if (b.Action == "game-undo" && !undone.Contains(b.File)) return b;
+            }
+            return null;
+        }
+
+        // The newest backup an undo has not restored yet, among the undoable ones. Per-game changes have their own undo.
         public static BackupRecord UndoTarget(IEnumerable<BackupRecord> backups)
         {
             var list = backups.ToList();
             var undone = new HashSet<string>(list.Where(b => b.Undoes != null).Select(b => b.Undoes), StringComparer.OrdinalIgnoreCase);
-            return list.Where(b => b.Undoable && b.File != null && !undone.Contains(b.File))
+            return list.Where(b => b.Undoable && b.File != null && !undone.Contains(b.File) && !IsGameRecord(b))
                 .OrderByDescending(b => b.Utc, StringComparer.Ordinal).ThenByDescending(b => b.File, StringComparer.Ordinal).FirstOrDefault();
         }
 
