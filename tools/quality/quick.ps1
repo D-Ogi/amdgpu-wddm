@@ -16,6 +16,7 @@ function Check([string]$name,[scriptblock]$action) {
     Write-Host "$name PASS $([Math]::Round($watch.Elapsed.TotalSeconds,2))s"
 }
 try {
+ Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  Check 'kmd-commands' { & pwsh -NoProfile -File "$repo\driver\kmd\build.ps1" -Kits "$Workspace\toolchain\nuget" -Out "$Out\kmd" -ExportCommandsOnly }
  Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
