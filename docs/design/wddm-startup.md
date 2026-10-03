@@ -3,7 +3,7 @@
 Current acceptance: [M9 acceptance status](../research/m9-acceptance-status.md), reviewed through M462. Historical results below do not prove current candidate acceptance.
 
 Status: implementation plan, 2026-09-23. Source review:
-[facts M232](../facts.md) and
+[facts M232](../facts/kmd.md#m232) and
 [immutable source snapshots](../../evidence/windows/2026-09-23-E27-m9-inference/startup-contract-review/).
 This covers a remaining M9 DMA contract requirement, not a new milestone.
 
