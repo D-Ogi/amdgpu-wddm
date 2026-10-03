@@ -1,0 +1,370 @@
+{
+  "schema": 2,
+  "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
+  "kmd_version": "0.7.198.2",
+  "kmd_abi": "0x000700C6",
+  "control_app_exe": "amdgpu_wddm_control.exe",
+  "sources": {
+    "kmd": "bc250-win 53bdebbe (bd059-interop-clean-restart)",
+    "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
+    "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
+    "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
+    "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
+  },
+  "files": [
+    {
+      "component": "kmd",
+      "path": "payload/kmd/bc250kmd.inf",
+      "source": "scratch/bd059/build-kmd-53bd/package/bc250kmd.inf",
+      "sha256": "B5B4DF8671C64806857E78545E539525F650AD895F4A96030006419C04525E98",
+      "size": 8023,
+      "role": "KMD 0.7.198.2 INF (commit 53bdebbe, BD-059); the release re-stamps DriverVer"
+    },
+    {
+      "component": "kmd",
+      "path": "payload/kmd/bc250kmd.sys",
+      "source": "scratch/bd059/build-kmd-53bd/package/bc250kmd.sys",
+      "sha256": "5B88A49F65FBC241533EF8B0C3834E6DD8556E88B93767C41693EA5AB0B31EE3",
+      "size": 477072,
+      "role": "KMD 0.7.198.2 (commit 53bdebbe, BD-059 interop end at a clean restart); re-signed with the release certificate, code unchanged"
+    },
+    {
+      "component": "d3d9-stub",
+      "path": "payload/system32/bc250umd.dll",
+      "source": "scratch/build/bc250kmd-07100/package-umd/bc250umd.dll",
+      "sha256": "D5BD1AD82C00438900DC47A50B3EFA36D98F9A9CC7F6987D0F1545A0DE4CB661",
+      "size": 4096,
+      "role": "UMD stub, D3D9 slot of UserModeDriverName (driver/umd-stub)"
+    },
+    {
+      "component": "d3d12-shell",
+      "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/m15/native-caps001/attempts/native-caps308/package/amdgpu_wddm_d3d12.dll",
+      "sha256": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+      "size": 921088,
+      "role": "D3D12 shell adapter119 (m15/replay-wake e9f5e701)"
+    },
+    {
+      "component": "d3d12-engine",
+      "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/m15/dp5-freeze/engine/amdgpu_wddm_vkd3d.dll",
+      "sha256": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+      "size": 3696128,
+      "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1)"
+    },
+    {
+      "component": "d3d12-icd",
+      "path": "payload/d3d12/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/dp5-freeze/icd/amdgpu_wddm_radv.dll",
+      "sha256": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC",
+      "size": 22361600,
+      "role": "D3D12 ICD (mesa fork amdgpu-wddm/draw-path ae98c795)"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/bc250d3d_router.dll",
+      "source": "scratch/m15/app-route/build-router/bc250d3d_router.dll",
+      "sha256": "674AD261640B1A3A79150E41F39C2B8962F3AB7747E3E725C8C2F3E42FFCAED0",
+      "size": 21504,
+      "role": "desktop/application router (amdgpu-wddm 6bbcf4f6, driver/umd/router)"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/bc250d3d_zink.dll",
+      "source": "scratch/bd058/artifacts/zink/bc250d3d_zink.dll",
+      "sha256": "396A61F9B234AE6F09F72BFE2D5BF237120A82F9AC91C94A6884C7A518C40356",
+      "size": 15197696,
+      "role": "hosted zink D3D11 UMD for DWM on the GPU (BD-058 fix, mesa fork amdgpu-wddm/hosted-umd-bd058 8cb22844)"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/gpu-dwm-t0/kit/attempts/gpu-dwm-003/amdgpu_wddm_radv.dll",
+      "sha256": "66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200",
+      "size": 21508096,
+      "role": "hosted ICD for zink"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/bc250d3d.dll",
+      "source": "scratch/bd058/artifacts/cpu/bc250d3d.dll",
+      "sha256": "195FB220D124558202C6FE73F80A984F5E2B78F5FD11130A9354C96F10306217",
+      "size": 68602880,
+      "role": "CPU D3D11 UMD (BD-058 256-byte shared pitch, mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c; fallback route, D3D11 applications not on the allowlist)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_d3d11.dll",
+      "sha256": "E748418C1F7DF57309E424D5DB7D464F68DA1BF8F82820707FA56F0E58FA00BB",
+      "size": 445952,
+      "role": "GPU D3D11 shell (app-route-001)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_d3d11.config",
+      "sha256": "A9B498ED8911B81D76693C1BC90066929364D661AE43D2B971FAAE198D4E9917",
+      "size": 132,
+      "role": "GPU D3D11 caps record"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_dxvk.dll",
+      "sha256": "8E9B31875F3A97C046F91397D7DEEBE7037E419503A13CEDEE772401BCB2780A",
+      "size": 4403200,
+      "role": "GPU D3D11 engine (DXVK fork)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_radv.dll",
+      "sha256": "D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27",
+      "size": 24285696,
+      "role": "GPU D3D11 ICD"
+    },
+    {
+      "component": "vulkan-icd",
+      "path": "payload/vulkan/vulkan_radeon.dll",
+      "source": "scratch/icd-candidates/vulkan_radeon.CF3948D6.dll",
+      "sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+      "size": 24258560,
+      "role": "system Vulkan ICD (lab registered ICD)"
+    },
+    {
+      "component": "vulkan-icd",
+      "path": "payload/vulkan/radeon_icd.json",
+      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "size": 131,
+      "role": "Vulkan ICD manifest"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/bc250kmd_cli.exe",
+      "source": "scratch/bd059/build-cli-53bd/bc250kmd_cli.exe",
+      "sha256": "844E09618234DF6690563A617E5744FC268956B1ABCCB4DA3678A08A2A246A74",
+      "size": 213504,
+      "role": "KMD control CLI built from 53bdebbe (info, stages, confirm, dpm, interop; no start-health command)"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/m15/d3d12caps/build/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "9EE94801160B6DC981936B7FB32041F24B23C72F8F11555DE295E529F90C3F53",
+      "size": 312832,
+      "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify"
+    },
+    {
+      "component": "control",
+      "path": "payload/control/amdgpu_wddm_control.exe",
+      "source": "scratch/release/control-app/build/app-d73530f6/amdgpu_wddm_control.exe",
+      "sha256": "F85ACF23D9F022C623F1B91D52A280A5F8998E3CE92592B75B91F2A5833BDA90",
+      "size": 161280,
+      "role": "control application 0.3.0.0 with the Recovery page (release/control-app-v0 d73530f6, published squashed as 867a1358)"
+    },
+    {
+      "component": "control",
+      "path": "payload/control/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-d73530f6/bc250control.dll",
+      "sha256": "7B16284CD01B9162FB71DFCB3BE501681FD23C2AB2A0F3634B0D224618E9CD0A",
+      "size": 147968,
+      "role": "control DLL for the control application (867a1358, static CRT)"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-d73530f6/bc250control.dll",
+      "sha256": "7B16284CD01B9162FB71DFCB3BE501681FD23C2AB2A0F3634B0D224618E9CD0A",
+      "size": 147968,
+      "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/vulkaninfo.exe",
+      "source": "scratch/m8/vulkaninfo.exe",
+      "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
+      "size": 2925496,
+      "role": "vulkaninfo 1.4.335 (Khronos Vulkan-Tools, LunarG-signed), used by the bug report"
+    }
+  ],
+  "firmware": {
+    "repository": "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git",
+    "commit": "2b8daaf611fbade74f26a5b58ec1defe6a02f5e0",
+    "pinned_list": "tools/firmware/cyan_skillfish2.json",
+    "url_templates": [
+      "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/{path}?id={commit}",
+      "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/{commit}/{path}"
+    ],
+    "install_dir": "C:\\BC250\\firmware",
+    "licence": {
+      "name": "LICENSE.amdgpu",
+      "path": "LICENSES/LICENSE.amdgpu",
+      "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE",
+      "size": 2938
+    }
+  },
+  "licenses": [
+    {
+      "file": "Mesa-license.rst",
+      "source": "docs/testing/licenses/Mesa-license.rst",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "docs/license.rst",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "0D1A0472ECC81830E75C20D59B0EA02841E3DB21255E0EBAD97AB682C54D6615"
+    },
+    {
+      "file": "Mesa-MIT.txt",
+      "source": "docs/testing/licenses/Mesa-MIT.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/MIT",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "323C587D0CCF10E376F8BF9A7F31FB4CA6078105194B42E0B1E0EE2BC9BDE71F"
+    },
+    {
+      "file": "Mesa-BSL-1.0.txt",
+      "source": "docs/testing/licenses/Mesa-BSL-1.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/BSL-1.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "9B9FEA7520A816107FCAC2598B7C0155222F16BC430E989706B22F4367F1DF7D"
+    },
+    {
+      "file": "Mesa-SGI-B-2.0.txt",
+      "source": "docs/testing/licenses/Mesa-SGI-B-2.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/SGI-B-2.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "686BF035A1FD22076416FD3B90370AC67771E884BF57F55693D51F8CE7C710A7"
+    },
+    {
+      "file": "Mesa-Apache-2.0.txt",
+      "source": "docs/testing/licenses/Mesa-Apache-2.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/Apache-2.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "7E4D3FBA250D15E9E0AFA380D4B611828FA2560CC8FDEBE95BCF2F01A487DE12"
+    },
+    {
+      "file": "zlib-LICENSE.txt",
+      "source": "docs/testing/licenses/zlib-LICENSE.txt",
+      "repository": "madler/zlib",
+      "path": "LICENSE",
+      "ref": "v1.3.1",
+      "sha256": "845EFC77857D485D91FB3E0B884AAA929368C717AE8186B66FE1ED2495753243"
+    },
+    {
+      "file": "LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "source": "docs/testing/licenses/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "repository": "llvm/llvm-project",
+      "path": "llvm/LICENSE.TXT",
+      "ref": "llvmorg-23.1.2",
+      "sha256": "8D85C1057D742E597985C7D4E6320B015A9139385CFF4CBAE06FFC0EBE89AFEE"
+    },
+    {
+      "file": "DXVK-zlib.txt",
+      "source": "docs/testing/licenses/DXVK-zlib.txt",
+      "repository": "D-Ogi/dxvk",
+      "path": "LICENSE",
+      "ref": "0c187731d88db839b9d4b3a6798fbd146b92eabc",
+      "sha256": "A5CB1A6DED7D2D7E92D550BA28EDD21BE2D1D4044662B399887351023E30CE64"
+    },
+    {
+      "file": "OpenVR-BSD-3-Clause.txt",
+      "source": "docs/testing/licenses/OpenVR-BSD-3-Clause.txt",
+      "repository": "D-Ogi/dxvk",
+      "path": "include/openvr/LICENSE",
+      "ref": "0c187731d88db839b9d4b3a6798fbd146b92eabc",
+      "sha256": "DB64BCF32BE090CA9D1EA7E3DF5541A07F4CF5729206B44E57A1182F05554F3F"
+    },
+    {
+      "file": "dxbc-spirv-MIT.txt",
+      "source": "docs/testing/licenses/dxbc-spirv-MIT.txt",
+      "repository": "D-Ogi/dxbc-spirv",
+      "path": "LICENSE",
+      "ref": "f241996e050d4c04091dd5c03cb84fc5523611c8",
+      "sha256": "0F8A5E687BEA942A30A8E39B9915294FBE44ECA866E71307A9B7083EE0E69AD8"
+    },
+    {
+      "file": "vkd3d-proton-LGPL-2.1.txt",
+      "source": "docs/testing/licenses/vkd3d-proton-LGPL-2.1.txt",
+      "repository": "D-Ogi/vkd3d-proton",
+      "path": "LICENSE",
+      "ref": "c3710ac1a6a857deb286af2cb15ef7335cb50095",
+      "sha256": "DC626520DCD53A22F727AF3EE42C770E56C97A64FE3ADB063799D8AB032FE551"
+    },
+    {
+      "file": "vkd3d-proton-COPYING.txt",
+      "source": "docs/testing/licenses/vkd3d-proton-COPYING.txt",
+      "repository": "D-Ogi/vkd3d-proton",
+      "path": "COPYING",
+      "ref": "c3710ac1a6a857deb286af2cb15ef7335cb50095",
+      "sha256": "F51AD4BF5A3BD2B5F383FE28150B23D01E6F5D7B620B194150E7C6A620C43C1F"
+    },
+    {
+      "file": "dxil-spirv-MIT.txt",
+      "source": "docs/testing/licenses/dxil-spirv-MIT.txt",
+      "repository": "D-Ogi/dxil-spirv",
+      "path": "LICENSE.MIT",
+      "ref": "bc773cf2d287e64838fb0a7fc3aabdec323a0a19",
+      "sha256": "B3EC61378A66F09835A73F53926D9B5CF79A09C9E2FE8BDD0E39AA5403325E1E"
+    },
+    {
+      "file": "SPIRV-Headers-LICENSE.txt",
+      "source": "docs/testing/licenses/SPIRV-Headers-LICENSE.txt",
+      "repository": "KhronosGroup/SPIRV-Headers",
+      "path": "LICENSE",
+      "ref": "f88a2d766840fc825af1fc065977953ba1fa4a91",
+      "sha256": "EA43B1DE38A6F90C488800D66DEC1ED671E68CDA530266BC96951FB5B6307613"
+    },
+    {
+      "file": "Vulkan-Headers-LICENSE.md",
+      "source": "docs/testing/licenses/Vulkan-Headers-LICENSE.md",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSE.md",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "95AD366D23FADF701D355BC45FB8B82AE2D700239471D35D41286AC3B08FF903"
+    },
+    {
+      "file": "Vulkan-Headers-Apache-2.0.txt",
+      "source": "docs/testing/licenses/Vulkan-Headers-Apache-2.0.txt",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSES/Apache-2.0.txt",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30"
+    },
+    {
+      "file": "Vulkan-Headers-MIT.txt",
+      "source": "docs/testing/licenses/Vulkan-Headers-MIT.txt",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSES/MIT.txt",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "1CA3502222D967F3BE5751C55F6B7EE735B5383909C3B501495F54B216DBF227"
+    },
+    {
+      "file": "Vulkan-Tools-LICENSE.txt",
+      "source": "docs/testing/licenses/Vulkan-Tools-LICENSE.txt",
+      "repository": "KhronosGroup/Vulkan-Tools",
+      "path": "LICENSE.txt",
+      "ref": "vulkan-sdk-1.4.335.0",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30"
+    },
+    {
+      "file": "LICENSE.amdgpu",
+      "source": "docs/testing/licenses/LICENSE.amdgpu",
+      "repository": "git.kernel.org/linux-firmware",
+      "path": "LICENSES/LICENSE.amdgpu",
+      "ref": "2b8daaf611fbade74f26a5b58ec1defe6a02f5e0",
+      "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE"
+    },
+    {
+      "file": "Linux-amdgpu-MIT.txt",
+      "source": "docs/testing/licenses/Linux-amdgpu-MIT.txt",
+      "repository": "torvalds/linux",
+      "path": "per-file MIT headers, drivers/gpu/drm/amd (copies in driver/amdgpu-import, third_party/linux-amdgpu)",
+      "ref": "v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+      "sha256": "55ED31A97F6B6470B0CC1F1BC905036EEEB578255ACE9CA6F69889D7D0352233"
+    }
+  ]
+}
