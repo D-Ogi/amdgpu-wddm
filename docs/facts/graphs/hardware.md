@@ -19,13 +19,13 @@ flowchart LR
   M15["M15"]:::MEASURED
   M35["M35"]:::MEASURED
   M39["M39"]:::MEASURED
-  M44["M44<br/>kmd"]:::MEASURED
+  M44["M44"]:::MEASURED
   M58["M58"]:::MEASURED
+  M59["M59"]:::MEASURED
+  M60["M60"]:::MEASURED
   M241["M241<br/>kmd"]:::CONFIRMED
   M242["M242"]:::CONFIRMED
-  M333["M333"]:::CONFIRMED
-  M455["M455"]:::MEASURED
-  M456["M456<br/>tooling"]:::MEASURED
+  M333["M333<br/>linux"]:::CONFIRMED
   S1["S1"]:::HYPOTHESIS
   S2["S2"]:::HYPOTHESIS
   S3["S3"]:::HYPOTHESIS
@@ -37,24 +37,24 @@ flowchart LR
   M4 ==>|supports| S3
   M9 -.->|refutes| R1
   M15 ==>|supports| M11
-  M58 ==>|supersedes| M44
-  M242 ==>|supersedes| M241
-  M333 ==>|supersedes| M35
   M44 ==>|supports| M39
+  M58 ==>|supersedes| M44
+  M60 ==>|supports| M59
+  M242 ==>|supersedes| M241
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
-  M456 ==>|supersedes| M455
+  M333 ==>|supersedes| M35
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M5,M12,M44,M241,M456 other
+  class M5,M12,M241,M333 other
 ```
 
 ## References
 
-47 facts, 41 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+42 facts, 32 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -67,40 +67,35 @@ flowchart LR
   M18["M18"]:::MEASURED
   M19["M19"]:::MEASURED
   M20["M20"]:::MEASURED
-  M24["M24"]:::MEASURED
+  M24["M24<br/>linux"]:::MEASURED
   M25["M25"]:::MEASURED
-  M28["M28"]:::MEASURED
   M30["M30"]:::MEASURED
   M31["M31"]:::MEASURED
   M33["M33"]:::MEASURED
-  M34["M34<br/>kmd"]:::MEASURED
+  M34["M34"]:::MEASURED
   M35["M35"]:::MEASURED
   M36["M36"]:::MEASURED
   M37["M37<br/>kmd"]:::MEASURED
   M39["M39"]:::MEASURED
-  M41["M41"]:::MEASURED
-  M42["M42<br/>linux"]:::MEASURED
-  M44["M44<br/>kmd"]:::MEASURED
-  M48["M48<br/>linux"]:::MEASURED
-  M53["M53"]:::MEASURED
-  M54["M54"]:::MEASURED
-  M55["M55"]:::MEASURED
+  M40["M40<br/>linux"]:::MEASURED
+  M41["M41<br/>linux"]:::MEASURED
+  M43["M43"]:::MEASURED
+  M44["M44"]:::MEASURED
+  M53["M53<br/>linux"]:::MEASURED
+  M54["M54<br/>linux"]:::MEASURED
+  M55["M55<br/>linux"]:::MEASURED
+  M57["M57"]:::MEASURED
   M58["M58"]:::MEASURED
-  M59["M59<br/>kmd"]:::MEASURED
-  M78["M78<br/>linux"]:::MEASURED
+  M59["M59"]:::MEASURED
+  M60["M60"]:::MEASURED
+  M79["M79"]:::MEASURED
   M81["M81<br/>kmd"]:::MEASURED
   M85["M85<br/>display"]:::MEASURED
-  M86["M86<br/>display"]:::MEASURED
-  M89["M89"]:::MEASURED
-  M92["M92"]:::MEASURED
-  M93["M93<br/>display"]:::MEASURED
-  M94["M94<br/>display"]:::MEASURED
-  M95["M95<br/>kmd"]:::MEASURED
+  M95["M95"]:::MEASURED
+  M106["M106<br/>display"]:::MEASURED
   M117["M117<br/>display"]:::MEASURED
   M118["M118<br/>display"]:::MEASURED
-  M190["M190<br/>kmd"]:::CONFIRMED
-  M200["M200"]:::CONFIRMED
-  M333["M333"]:::CONFIRMED
+  M333["M333<br/>linux"]:::CONFIRMED
   M348["M348<br/>kmd"]:::MEASURED
   M349["M349"]:::MEASURED
   M429["M429"]:::CONFIRMED
@@ -110,47 +105,38 @@ flowchart LR
   M18 --> M4
   M18 --> M5
   M18 --> M6
-  M24 --> M25
   M25 --> M18
   M25 --> M19
   M35 --> M333
   M36 --> M33
   M36 --> M34
   M39 --> M37
-  M41 --> M24
-  M41 --> M25
-  M54 --> M42
-  M54 --> M44
-  M55 --> M44
-  M55 --> M53
-  M55 --> M54
+  M43 --> M40
+  M44 --> M39
   M58 --> M54
   M58 --> M55
-  M92 --> M85
-  M92 --> M86
-  M200 --> M190
+  M59 --> M55
+  M95 --> M53
   M349 --> M348
   M433 --> M429
   M37 --> M33
   M37 --> M39
-  M44 --> M39
-  M59 --> M55
-  M81 --> M28
   M81 --> M30
-  M95 --> M53
+  M81 --> M57
+  M81 --> M60
   M85 --> M31
-  M93 --> M92
-  M94 --> M89
+  M106 --> M79
   M117 --> M20
   M118 --> M31
-  M118 --> M92
-  M48 --> M41
-  M78 --> M55
+  M24 --> M25
+  M41 --> M25
+  M54 --> M44
+  M55 --> M44
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M5,M34,M37,M42,M44,M48,M59,M78,M81,M85,M86,M93,M94,M95,M117,M118,M190,M348 other
+  class M5,M24,M37,M40,M41,M53,M54,M55,M81,M85,M106,M117,M118,M333,M348 other
 ```
 

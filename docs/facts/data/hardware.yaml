@@ -91,12 +91,6 @@ facts:
     date_from: "evidence-path"
     claim: "A read of `MMHUB.MMEA0_ADDRDEC0_BASE_ADDR_CS0` (BAR5 `0x68594`) hangs the machine"
     detail: "`evidence/linux/2026-09-21-E03-init-trace/sweep-before-run1-GC-complete-then-hang.log` (last, unfinished line); two earlier hangs the same day without a surviving log are consistent with it. Rule: never read BAR5 addresses that are not named registers on an allow-list"
-  - id: M17
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "git"
-    claim: "Reference state and init sequence of a working driver"
-    detail: "Same directory: 5797 named registers before any driver, 5021 after amdgpu init, 1096 differ (936 GC, 116 MMHUB); ordered trace of amdgpu's init with 10018 register writes and 136117 reads; ring buffers and MQDs. The trace holds no host write to `SPI_PG_ENABLE_STATIC_WGP_MASK` or `CC_GC_SHADER_ARRAY_CONFIG`, although the former changes `0xFFFF -> 0x7` during init"
   - id: M18
     status: MEASURED
     date: "2026-09-21"
@@ -138,15 +132,6 @@ facts:
     date_from: "git"
     claim: "SoC temperature under Windows is readable through the SMN index/data pair of the root complex"
     detail: "`THM_TCON_CUR_TMP` (SMN `0x59800`) via `00:00.0` config `0x60/0x64`, the path of Linux' k10temp. 73 C idle, 82 C during first-boot servicing at 1500 MHz, falling after the underclock. Plausibility only: no independent sensor at the same moment"
-  - id: M24
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "git"
-    claim: "amdgpu's init on unit A, ordered: no host write to any microcode port (firmware goes in through 11 PSP ring commands in 35 ms), about 900 non-display writes in the order GART, IH, PSP, SMU tables, golden registers, RLC, un-halt CP/MEC, KIQ by MMIO, SDMA, interrupts; two thirds of all writes are display-core AUX traffic. Corrected the same day: the 99 844 polls of `MMVM_INVALIDATE_ENG17_SEM` at the first MMHUB TLB flush (0.21 s, dmesg timeout) are **an artifact of our own pre-driver sweep**, not amdgpu's normal init on this unit, see M25"
-    status_text: "MEASURED (order and values), meaning of the steps from source"
-    detail: "`docs/init-sequence.md`, `docs/init-sequence-unitA.generated.md` (from the E03 trace via `tools/trace/summarize_init.py`)"
-    edges:
-      - {"type": "uses", "to": "M25", "auto": true, "cue": "...ur own pre-driver sweep**, not amdgpu's normal init on this unit, see M25"}
   - id: M25
     status: MEASURED
     date: "2026-09-21"
@@ -156,18 +141,6 @@ facts:
     edges:
       - {"type": "uses", "to": "M18", "auto": true, "cue": "...these registers leave the sweep allow-lists; `GRBM_READ_ERROR = 0` in M18 was read before the offending register in sweep order and says nothin..."}
       - {"type": "uses", "to": "M19", "auto": true, "cue": "... register in sweep order and says nothing about the sweep as a whole; M19's Windows-vs-Linux differences have to be re-read with this in mind"}
-  - id: M27
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "text"
-    claim: "Lab facts for the Windows side: KDNET works over the on-board RTL8168 (`busparams 4.0.0`, the OS then uses the debugger's virtual adapter); safe mode with networking has network and SSH over that wired path but not over the USB Wi-Fi dongle (vendor driver not loaded there); with a debugger attached the ACPI interpreter reports AML errors `0x3a` once and `0x78` several times at every boot (firmware tables, not investigated); one warm restart ended in a black screen before the kernel started and needed the reset button, four others went through"
-    detail: "journal 2026-09-21; debugger log kept outside the repo"
-  - id: M28
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "evidence-path"
-    claim: "Our own miniport `bc250kmd` (display-only, no MMIO) owns `1002:13FE` on unit A: install without reboot, 1920x1200 on the firmware's framebuffer, breadcrumbs reach stage 61 in order, no GC register outside the noise set changes, survives disable/enable and a restart (start budget 1 -> 2 -> confirmed to 0 by `bc250mon`), rollback to Basic Display and re-install both work. Milestone M3 reached"
-    detail: "Experiment E06, `evidence/windows/2026-09-21-E06-run-001/`"
   - id: M30
     status: MEASURED
     date: "2026-09-21"
@@ -193,6 +166,12 @@ facts:
     date_from: "evidence-path"
     claim: "GART and VM context 0 come up under Windows with AMD's own code: `gfxhub_v2_0.c` and `mmhub_v2_0.c`, imported unmodified from mainline v6.18 and run inside `bc250kmd` against our shim, issue the same 285 register writes in the same order as amdgpu did on this unit (values equal except four registers that carry the addresses of our scratch and dummy pages); both engine-17 TLB invalidations are acknowledged, the MMHUB semaphore protocol works, no protection fault status bit is set, the registers read back through an independent driver as written (two self-clearing, as under Linux), the hardware's own responses (`SDMA0/1_UTCL1_INV0`, request/acknowledge) equal Linux's state after init, and the firmware's scan-out keeps running. Page table: top 2 MB of VRAM, MC `0xF5FFE00000`, where amdgpu puts it. The firmware state can be written back (282 registers); six status registers keep the record of the invalidation. On the kernel that produced the E03 trace (6.18.52) `gmc.noretry` is true for GC 10.1.3, on mainline v6.18 it would be false; the driver uses the measured value"
     detail: "Experiment E09, `evidence/windows/2026-09-21-E09-run-001/`; host replay test `driver/shim/test`"
+  - id: M34
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "The PSP takes the GPU firmware under Windows, through AMD's own `psp_v11_0_8.c` (imported unmodified) and amdgpu's command sequence run inside `bc250kmd`: ring create, `SETUP_TMR` (4 MB at MC `0xF5FF800000`) and ten `LOAD_IP_FW` (SDMA0, SDMA1, CE, PFP, ME, MEC1, MEC1 jump table, MEC2, MEC2 jump table, RLC), every fence returned with status 0, the 15 register writes equal to amdgpu's on this unit in offset, order and value, command times equal to amdgpu's spacing (0.13 ms jump tables, 1.9 ms SDMA, 5.9 ms CP). Images staged in VRAM, not behind the GART. The response carries a TMR address for the CP images only (CE `+0x42000`, PFP `+0x83000`, ME `+0xC4000`, MEC1 and MEC2 `+0`); for SDMA, jump tables and RLC it is 0. `DESTROY_TMR` and ring stop are accepted (`C2PMSG_64 = 0x80030000` afterwards) and a second ring, TMR and load are accepted in the same boot"
+    detail: "Experiment E10, `evidence/windows/2026-09-21-E10-run-001/`; host replay test `driver/shim/test/replay_psp.c`"
   - id: M35
     status: MEASURED
     date: "2026-09-21"
@@ -218,15 +197,31 @@ facts:
     detail: "E12 run 001: run, undo, run again, undo; all seven stages rc 0 both times, all ring tests pass, no register outside the generated table. 358 writes against 355: `RLC_SPM_MC_CNTL` skipped (already holds the value), four more in the HQD branch (`CP_HQD_ACTIVE`, `CP_HQD_PQ_RPTR = 0x737`, `CP_HQD_PQ_WPTR_LO/HI`), and six first writes carry bits the first run left in the register (`CP_HQD_PQ_CONTROL` bit 15, `CP_HQD_PERSISTENT_STATE` bits 18 and 19, `SDMAn_CNTL` bit 5, `SDMAn_GFX_RB_CNTL` bit 12: all read-modify-write). Stage 6 (CP) takes 5222 us in the second run against 349 us in the first: explained by M44 (a stale fetch walking the old ring), which also shows that this second bring-up only worked because the new KIQ ring had the old one's address"
     edges:
       - {"type": "uses", "to": "M37", "auto": true, "cue": "A second GFX bring-up in the same boot works after the undo of M37, with one declared deviation from amdgpu: where `gfx_v10_0_kiq_init_r..."}
-  - id: M41
+  - id: M43
     status: MEASURED
     date: "2026-09-21"
     date_from: "evidence-path"
-    claim: "amdgpu's init on unit A is reproducible to the register write: a clean trace (stick in mode `readonly`: a short list of named reads, no write, no sweep, then `modprobe amdgpu` with tracefs armed) holds all 10018 register writes of the E03 trace in the same order at the same offsets. 7 of them differ in value: three carry the dummy page's address (`GCVM_` and `MMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32`, `INTERRUPT_CNTL2`), four are writes to one register at dword `0x5DF5` that none of our steps touches. The clean trace has 478 more writes, all 2.2 s after the last common one (the console's mode set, outside E03's window), and 37861 reads against E03's 136117. \"Timeout waiting for sem acquire in VM flush\" (M24) appears in none of three boots without our sweep: M25's attribution of it to the sweep stands"
-    detail: "E13, `evidence/linux/2026-09-21-E13-reference-2/compare-e03.txt`, `boot3-readonly/amdgpu-events-load.txt`. The generated register tables of `driver/kmd` and the host replay tests, all built on E03, rest on a trace that a clean machine reproduces"
+    claim: "The GPU interrupts the CPU under Windows, through a display-only miniport: amdgpu's `navi10_ih_irq_init()` transcribed (`driver/shim/bc250_ih.c`) and run inside `bc250kmd` programs the IH ring with the same 15 register writes as amdgpu on this unit except three address registers; with the ring on and no source enabled nothing arrives. After amdgpu's 35 interrupt-source writes (equal in offset, order and value) a fence with the interrupt bit on the gfx ring gives exactly one interrupt routine call, one DPC (`DxgkCbQueueDpc` works for a display-only miniport) and one IH vector, `client 20, source 181, ring id 0, src_data[0] = 0x80000000`: the vector Linux gets on the same machine (M40). Compute queues answer with their ring ids (pipe 0 queue 0: 4, pipe 1 queue 1: 21, pipe 3 queue 0: 7), the KIQ with `source 178, ring id 9`. The same fence without the interrupt bit delivers its value and no interrupt. A hundred fences in one call: 100 values, 100 vectors, 1082 us, none lost, no overflow (102 interrupts for 104 vectors: MSI messages coalesce, the DPC takes what is there)"
+    detail: "E12 run 002, `evidence/windows/2026-09-21-E12-run-002/`, `comparison.txt`. Device restart with ring, sources and engines running: no bugcheck, nothing arrives afterwards. Once, the first `ih init` after such a stop was followed by one message that carried no vector (not taken as ours, not repeated)"
     edges:
-      - {"type": "uses", "to": "M24", "auto": true, "cue": "... against E03's 136117. \"Timeout waiting for sem acquire in VM flush\" (M24) appears in none of three boots without our sweep: M25's attribution ..."}
-      - {"type": "uses", "to": "M25", "auto": true, "cue": "... in VM flush\" (M24) appears in none of three boots without our sweep: M25's attribution of it to the sweep stands"}
+      - {"type": "uses", "to": "M40", "auto": true, "cue": "...src_data[0] = 0x80000000`: the vector Linux gets on the same machine (M40). Compute queues answer with their ring ids (pipe 0 queue 0: 4, pipe ..."}
+  - id: M44
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "The MEC keeps a queue's fetch state across a halt, outside the `CP_HQD_*` registers: a second bring-up in one device start, with every buffer at a new GART address (the IH ring held its pages, so the allocator handed out others), fails at the KIQ ring test, and the GPU reports a VMID 0 read fault at page `0x444000`, which is the FIRST run's KIQ ring (base `0x442000`) plus `0x2000` bytes, about where that ring's read pointer stood. No register write of either run names that address. The fault arrives through our own IH ring (`client 27` UTCL2, `source 0`, `src_data 0x444, 0x50`) and the witness reads `GCVM_L2_PROTECTION_FAULT_STATUS = 0x8B0`, `ADDR_LO32 = 0x444`. This is what M39 really measured: there the second ring landed on the first one's address, the stale fetch walked valid NOPs (hence `CP_HQD_PQ_RPTR = 0x737` and 5 ms), and writing `CP_HQD_ACTIVE = 0` under halt (the declared deviation) does not take the queue down. `mqd->cp_hqd_pq_rptr = 0`, added after M39, treated the symptom; its prediction (stage 6 back to about 350 us) was never reached because the run fails first"
+    status_text: "MEASURED (the fault and its address); INFERRED (that the fetch state is the MEC's internal copy)"
+    detail: "E12 run 002, `evidence/windows/2026-09-21-E12-run-002/`: `gfx-run-x-153100`, `gfx-run-x-153134`, `ih-state-failed-153224`, `sweep-GC-fault-153411`. The undo after the fault works and returns all memory. Open: a teardown that takes the KIQ's HQD down while the MEC still runs (dequeue request)"
+    edges:
+      - {"type": "uses", "to": "M39", "auto": true, "cue": "...2_PROTECTION_FAULT_STATUS = 0x8B0`, `ADDR_LO32 = 0x444`. This is what M39 really measured: there the second ring landed on the first one's addr..."}
+      - {"type": "supports", "to": "M39", "cue_in": "M39", "cue": "...s 5222 us in the second run against 349 us in the first: explained by M44 (a stale fetch walking the old ring), which also shows that this seco..."}
+  - id: M45
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "git"
+    claim: "During the undo, unmapping the eight compute queues through the KIQ raises eight `source 181` vectors with `src_data[0] = 1` (a fence's end-of-pipe carries 0, the gfx ring's `0x80000000`); their ring ids were 20, 21, 22, 7, 20, 21, 22, 7, not the eight queues' own ids: the queue field seems to name the queue last active on the pipe"
+    status_text: "MEASURED (n = 1)"
+    detail: "E12 run 002, `ih-state-afterfini-153128`. amdgpu's handler would take these for fence interrupts of the rings with those ids; harmless there, and for us a reason not to count vectors as fences"
   - id: M47
     status: MEASURED
     date: "2026-09-21"
@@ -241,34 +236,13 @@ facts:
     claim: "Unit A's GPU throughput follows its shader clock almost linearly, and amdgpu offers one way to set that clock: `power_dpm_force_performance_level low` and `high` are refused (EINVAL), `pp_od_clk_voltage` works (`vc 0 <MHz> <mV>`, `c`; `r`, `c` to undo) and always forces a voltage with the clock. At 1000 MHz and 899 mV against the default 1500 MHz and 906 mV: TinyLlama 1.1B Q4_0 1120 against 1657 t/s prompt and 155 against 219 t/s generation, naive `sgemm` 562 against 392 us, the perceptron 819 against 566 us, identical hashes; package power (PPT) 49 W idle and 78 W peak against 58 W and 95 W, edge temperature 76 C against 80 C peak, 68 to 70 C idle"
     status_text: "MEASURED (n = 1)"
     detail: "E14, `evidence/linux/2026-09-21-E14-vulkan-compute-reference/dpm/`. Windows runs this unit at 1000 MHz: that column is the reference for times under Windows. 2000 MHz was not tried (it needs a forced voltage above the default)"
-  - id: M53
+  - id: M57
     status: MEASURED
     date: "2026-09-21"
     date_from: "evidence-path"
-    claim: "amdgpu's GPU recovery does not reset this part and hangs the machine: `amdgpu_gpu_recover` on unit A (kernel 6.18.52-0-lts) logs `MODE1 reset`, `GPU psp mode1 reset`, `GPU reset succeeded, trying to resume`, but the streamed register trace holds no reset command to any PSP mailbox register, because `psp_v11_0_8_funcs` has no `.mode1_reset` and `psp_mode1_reset()` then answers 0 (`amdgpu_psp.h:488-489`, `psp_v11_0_8.c:175-180`). The resume therefore ran on hardware that was never reset: the PSP accepted a second ring creation and all eleven load frames in the same boot, the SMU resumed, and the machine hung hard 173 ms after the first register access, the last complete write being `RLC_CNTL = 1` (RLC started again over a running system)"
-    status_text: "MEASURED (n = 1)"
-    detail: "E13 boot 4, `evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/reset/`. For us: Linux offers no working reset to transcribe for this part; a second PSP load in one boot is accepted by the PSP, and what must not follow it without a real reset is a second RLC start. Our driver's refusal of a second GFX bring-up after a PSP reload stands"
-  - id: M54
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "evidence-path"
-    claim: "amdgpu's unload on unit A, traced (`modprobe -r amdgpu` with the console unbound, rc 0, machine alive): outside the display block it turns the CP interrupt enables off, runs the KIQ ring test that ends the queue unmap, stops SDMA (`SDMA0/1_CNTL`, ring and IB off, `F32_CNTL = 1`), halts the CP (`CP_ME_CNTL = 0x15000000`, `CP_MEC_CNTL = 0x50000000`), destroys the PSP's ring (`C2PMSG_64 = 0x00030000`), switches the IH ring, the VM contexts of both hubs and the doorbell aperture off. It writes no `CP_HQD_DEQUEUE_REQUEST`, no other HQD register and no `RLC_CNTL`: the KIQ's queue is never taken from the MEC and the RLC keeps running"
-    status_text: "MEASURED (n = 2, boots 7 and 8; M42's hang did not repeat)"
-    detail: "E13, `evidence/linux/2026-09-21-E13-reference-2/boots5-8-suspend-unload-reload/`. The reference M42 said did not exist. Our undo does one thing more than amdgpu's, the KIQ dequeue with the MEC still running (0.6.2, M44)"
-    edges:
-      - {"type": "uses", "to": "M42", "auto": true, "cue": "MEASURED (n = 2, boots 7 and 8; M42's hang did not repeat)"}
-      - {"type": "uses", "to": "M44", "auto": true, "cue": "...ore than amdgpu's, the KIQ dequeue with the MEC still running (0.6.2, M44)"}
-  - id: M55
-    status: MEASURED
-    date: "2026-09-21"
-    date_from: "evidence-path"
-    claim: "A second `modprobe amdgpu` in the same boot, after that clean unload, hangs unit A. The streamed kernel log of boot 8 shows the second init passing the memory manager, the PSP's TMR reservation, `SMU is initialized successfully!` and the display core, a WARN in `amdgpu_dm_hpd_init`, and then silence; gfx and SDMA init come next in amdgpu's block order. No register trace (with the module unloaded `:mod:amdgpu` arms no event)"
-    status_text: "MEASURED (n = 3: boot 7 unstreamed, boots 8 and 9 with the kernel log)"
-    detail: "E13, `evidence/linux/2026-09-21-E13-reference-2/boots5-8-suspend-unload-reload/`. Linux cannot do on this part what M44 is about under Windows: bring the engines up a second time without a reset. Cause not measured. Two candidates: the RLC started again after a second PSP load without a reset (the closer analogue: M53's re-init died right after `RLC_CNTL = 1`, and the unload leaves the RLC running, M54), and an MEC that resumes a KIQ fetch nobody dequeued (M44). Boot 9 repeated the hang a third time at the same place in the kernel log, the USB wireless adapter's register writes timing out seconds later: the whole machine goes, not the GPU alone"
-    edges:
-      - {"type": "uses", "to": "M44", "auto": true, "cue": "...2/boots5-8-suspend-unload-reload/`. Linux cannot do on this part what M44 is about under Windows: bring the engines up a second time without a ..."}
-      - {"type": "uses", "to": "M53", "auto": true, "cue": "...d again after a second PSP load without a reset (the closer analogue: M53's re-init died right after `RLC_CNTL = 1`, and the unload leaves the ..."}
-      - {"type": "uses", "to": "M54", "auto": true, "cue": "...ed right after `RLC_CNTL = 1`, and the unload leaves the RLC running, M54), and an MEC that resumes a KIQ fetch nobody dequeued (M44). Boot 9 r..."}
+    claim: "A compute dispatch runs under Windows on a kernel-owned MEC queue, which is M6's exit criterion: libdrm's gfx10 memset shader (`shader_test_util.c`, transcribed in `driver/shim/bc250_dispatch.c`), 64 threads per workgroup, fills a GTT buffer seeded with `0xCAFEDEAD` with `0x22222222`. 1 workgroup and 16 workgroups on compute ring 0 and 16 workgroups on ring 5 (after a second bring-up): the check reads every dword as asked and the seed untouched behind the last workgroup, 26 to 28 us from doorbell to fence, one end-of-pipe vector per dispatch (client 20, source 181, ring id 4 or 21). Unit A at 67 to 71 C"
+    status_text: "MEASURED (n = 3 dispatches, one session)"
+    detail: "E15 run 001, `evidence/windows/2026-09-21-E15-run-001/`: `fence-c0-x-175221`, `fence-c0-x-175227`, `fence-c5-x-175330`, `ih-state-dispatch-175232`. bc250kmd 0.6.2.0 (commit cdcd608). The shader engine, the VMID 0 address translation for a shader and the fence path all work without amdgpu; what M8 adds is a user mode that builds such submissions itself"
   - id: M58
     status: MEASURED
     date: "2026-09-21"
@@ -280,51 +254,46 @@ facts:
       - {"type": "uses", "to": "M54", "auto": true, "cue": "...ueue request before the halt, one step more than amdgpu's own unload, M54) a second and a third GFX bring-up in one device start pass all eight..."}
       - {"type": "uses", "to": "M55", "auto": true, "cue": "...e-second-175308`, `comparison.txt`. Linux cannot do this on the part (M55)"}
       - {"type": "supersedes", "to": "M44", "scope": "partial", "cue": "M44's defect is fixed by taking the KIQ from the MEC while the MEC still ..."}
-  - id: M89
+  - id: M59
     status: MEASURED
-    date: "2026-09-22"
-    claim: "`DCSURF_SURFACE_INUSE` read 0 in all 80 samples of flip3 while `PRIMARY_SURFACE_ADDRESS` alternated - it did not follow the address in our BAR5 reads (wishlist L23's control answered negatively; unexplained, possibly the register latches only in a SURFACE_INUSE no-latch read mode)"
-    status_text: "MEASURED (n = 80 samples)"
-    detail: "`evidence/linux/2026-09-22-E21-linux-reference-4/flip/flip3-dmu-sampled.txt`"
-  - id: M90
-    status: MEASURED
-    date: "2026-09-22"
-    claim: "SMU traffic (wishlist L10, ADR 0010 point 6): a kprobe `p:smumsg smu_cmn_send_smc_msg_with_param msg=%si:u32 param=%dx:u32` saw ONLY `msg=20 param=6` = `SMU_MSG_TransferTableSmu2Dram`, table 6 (the metrics table amdgpu reads for `pp_dpm_sclk`, `gpu_metrics`, hwmon), 61 times in the load run = one per sysfs read of the sampler. Under a 20 s RADV load (vkcube, 11498 CS ioctls, 11498 scheduled jobs on `gfx_0.0.0`, 63 `sdma0` and 26 `sdma1` jobs, 43 VM flushes, +23142 interrupts on irq 54) amdgpu sent no other SMU message: sclk stayed at 1500 MHz (`pp_dpm_sclk` levels 0: 1000, 1: 1500 *, 2: 2000 MHz; mclk/fclk 450 MHz, socclk 1254 MHz, `power_dpm_force_performance_level` auto), voltage 906 mV, hwmon `power1_input` 58-62 W, temperature 70-71 C both idle and under load. So on this part the Linux driver does no DPM at all under load; the clock is whatever the SMU boots with (1500 MHz), and the Windows underclock (1000 MHz, 820 mV via `bc250rd`) is a deliberate departure from stock behaviour, not a recovery of it. vkcube needed SIGKILL at the end (futex wait on exit); the GPU stayed healthy"
-    status_text: "MEASURED (n = 1 run, 20 s)"
-    detail: "`evidence/linux/2026-09-22-E21-linux-reference-4/load/vk1-samples.txt`, `load/vk1-trace.txt`, `load/vk1-dpm-before.txt`, `load/vk1-dpm-after.txt`, `load/vk1-irq-before.txt`, `load/vk1-irq-after.txt`"
-  - id: M92
-    status: MEASURED
-    date: "2026-09-22"
-    claim: "Under Windows the DMU registers read through BAR5 at the offsets `gen_regs.py` derives from `dcn_2_0_1_offset.h` (ip DMU, regcalc) give exactly the firmware state E21 measured under Linux before amdgpu (M85, M86): `HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS` 0x70000000 / `_HIGH` 0x2 (all four HUBPREQs), pitch 0x77F, `HUBP0_DCHUBP_CNTL` 0x000F1002, HUBP1-3 0x000F101A/102A/103A, `OTG0_OTG_CONTROL` 0x80011311, `OTG1_OTG_CONTROL` 0x80000310, `OTG0_OTG_H_TOTAL` 0x81F, `OTG0_OTG_V_TOTAL` 0x4D2, `OTG0_OTG_GLOBAL_SYNC_STATUS` 0x00104104 (no interrupt enabled), `HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT` 0x00050000; `OTG0_OTG_STATUS_FRAME_COUNT` advanced 0x18310 to 0x1834C (60 frames) between two reads about a second apart, so OTG0 scans out at 60 Hz under our display-only driver. The display-only miniport (dxgkrnl's POST path) leaves the firmware's display programming untouched"
-    status_text: "MEASURED (n = 1 run, 2 reads)"
-    detail: "`evidence/windows/2026-09-22-E22-dcn-read-run-001/run-001-console.txt`"
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "An SDMA engine keeps its ring pointers across a halt, and they cannot be written back to zero: after the first bring-up's submissions `SDMA0_GFX_RB_RPTR = RB_WPTR = RB_RPTR_FETCH = 0x100` (4 submissions of 16 dwords) and SDMA1's `0xC0` (3); the undo halts the engines (`F32_CNTL = 1`) and the values stay; the next bring-up writes `RB_RPTR`, `RB_WPTR` and their high halves to 0 and `RB_WPTR = 0` again under `MINOR_PTR_UPDATE = 1`, exactly as `sdma_v5_0_gfx_resume_instance()` does, and a witness sweep taken before any submission still reads `0x100` and `0xC0`, while `RB_BASE` took the new address. A ring test that then rings the doorbell with `0x40` executes nothing and times out (slot keeps the seed, pointers unchanged): the write pointer is 64 bits wide and only ever counts up, so a doorbell below it is ignored. In the first bring-up both engines work: ring test in 3 us, three fences each, vectors client 8 and client 9, source 224, as under Linux; the ring test itself raises no vector"
+    status_text: "MEASURED (n = 2 re-runs, both engines)"
+    detail: "E15 run 001, `evidence/windows/2026-09-21-E15-run-001/`: `fence-s0-x-175159`, `fence-s0-x-175356`, `fence-s1-x-180230`, `sweep-GC-sdma2-175832`, `sweep-GC-afterfini2-180110`, `sweep-GC-third0-180153`, `sweep-GC-third1-180236`. amdgpu never meets this: it cannot start the part twice (M55). Consequence for the driver: a re-init adopts the engine's write pointer instead of assuming 0 (upstream's `restore` arm with the hardware's value). The miniport's owed-slot guard refused the submissions after the timeout (`STATUS_DEVICE_BUSY`), as designed"
     edges:
-      - {"type": "uses", "to": "M85", "auto": true, "cue": "...ve exactly the firmware state E21 measured under Linux before amdgpu (M85, M86): `HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS` 0x70000000 / `_HIGH`..."}
-      - {"type": "uses", "to": "M86", "auto": true, "cue": "...actly the firmware state E21 measured under Linux before amdgpu (M85, M86): `HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS` 0x70000000 / `_HIGH` 0x2 ..."}
-  - id: M141
+      - {"type": "uses", "to": "M55", "auto": true, "cue": "...rd1-180236`. amdgpu never meets this: it cannot start the part twice (M55). Consequence for the driver: a re-init adopts the engine's write poi..."}
+  - id: M60
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "evidence-path"
+    claim: "Adopting the engine's write pointer makes SDMA work across re-inits: with 0.7.0 (the bring-up reads `RB_WPTR` back after upstream's writes of 0 and, if the engine kept it, continues from it: `ring->wptr`, the `RB_WPTR` write under `MINOR_PTR_UPDATE` and the write-back slot) three bring-ups in one device start each pass both SDMA ring tests inside stage 7, two more ring tests, five fences and a 16-workgroup dispatch. The witness shows the pointers counting on across the undo and across three different ring bases: SDMA0 `0x40, 0x140 / 0x180, 0x280 / 0x2C0, 0x3C0`, SDMA1 `0x40, 0x100 / 0x140, 0x200 / 0x240, 0x300` (before and after each run's submissions). Every undo returned 0, so both engines halted drained. New and unexplained: one extra SDMA0 vector per re-init, `client 8 source 244` (`SDMA_DOORBELL_INVALID`) with data `0x280` before the second run's fences and `client 8 source 0` with data `0x500` before the third's; none from SDMA1, none in the first bring-up, nothing failed after them"
+    status_text: "MEASURED (n = 2 re-inits, one boot)"
+    detail: "E15 run 002, `evidence/windows/2026-09-21-E15-run-002/` (README.txt has the table). bc250kmd 0.7.0.0 (commit 32df400). Confirms M59's inference that the pointer only counts up. Open: which step raises the two vectors"
+    edges:
+      - {"type": "supports", "to": "M59", "auto": true, "cue": "...EADME.txt has the table). bc250kmd 0.7.0.0 (commit 32df400). Confirms M59's inference that the pointer only counts up. Open: which step raises ..."}
+  - id: M76
     status: MEASURED
     date: "2026-09-22"
-    claim: "Mesa softpipe's source index path asserts that an indirect register is ADDR, while the D3D10 frontend emits TEMP-relative operands. Explorer displayed that assertion during E26. Using the existing generic register-file fetch for both source and dimension indices passes the TEMP/ADDR and inactive-lane regression test. This is a software interpreter fix; it does not establish DWM correctness."
-    detail: "[assertion](../evidence/windows/2026-09-22-E26-d3d-desktop/assertion.png), [regression result](../evidence/windows/2026-09-22-E26-d3d-desktop/tgsi-index-test-verified.txt), [source and patch](../experiments/E26-wddm-desktop/)"
-  - id: M152
+    date_from: "evidence-path"
+    claim: "The gfx ring executes a `PACKET3_INDIRECT_BUFFER` at VMID 0: the driver's ring test, built as a 3-dword IB in a GTT page and submitted as one IB packet plus one fence (what `amdgpu_ib_schedule()` emits with `job = NULL`; no CONTEXT_CONTROL, no COND_EXEC, no SWITCH_BUFFER), changes the scratch register, and its fence arrives with one end-of-pipe interrupt. The plain fence on the same ring in the same device start is the positive control"
+    status_text: "MEASURED (n = 3 device starts)"
+    detail: "E19 runs 003, 004, 005, `evidence/windows/2026-09-22-E19-run-005/`"
+  - id: M79
     status: MEASURED
-    date: "2026-09-23"
-    claim: "First E27 tiny-GPU attempt leaves only gate/temperature files; E19 records device disable/enable and partial state collection, with no persisted explicit engine-init or llama output. User observed an unresponsive black screen and reset unitA. Recovery confirms boot01:57:26 and closes all runtime gates in display-only at02:11:07. Failure cause remains unknown; this run does not test inference."
-    detail: "[recovered records](../evidence/windows/2026-09-23-E27-m9-inference/recovery-001/README.md)"
-  - id: M200
-    status: CONFIRMED
-    date: "2026-09-23"
-    claim: "POST WC mapping and diagnostic BAR0 NC mapping can request conflicting cache attributes for the same physical page"
-    status_text: "CONFIRMED (conditional source path only)"
-    detail: "[cache-map-inventory](../evidence/windows/2026-09-23-E27-m9-inference/cache-map-inventory/):when POST equals BAR0 and DisplayMapFramebuffer WC succeeds, Vram Access read at offset0 requests NC while POST remains mapped. Successful POST cache choice is not retained. No live PAT/alias measurement or corruption attribution; BAR0 versus carve-out at different physical addresses is explicitly distinguished. M190 OS-owned alias policy remains open"
+    date: "2026-09-22"
+    date_from: "evidence-path"
+    claim: "The gfx ring's end-of-pipe vector on unit A is client 20 (`SOC15_IH_CLIENTID_GRBM_CP`), source 181, `ring_id` 0, vmid 0, data[0] `0x80000000` - the same for a plain fence, for an IB at VMID 0 and for the WDDM submission whose IB ran at VMID 1 (the fence packet sits in the ring, not in the IB). `ring_id` 0 is what amdgpu decodes as me 0 pipe 0 queue 0. The compute rings' vectors in the same files carry `ring_id` 20 to 23 and data[0] `0x00000001`. The third vector of run 005 is the WDDM submission's, so that interrupt was an end-of-pipe and not a VM fault"
+    status_text: "MEASURED (n = 3 vectors in one device start; the same values in runs 003 and 004)"
+    detail: "E19 run 005, `evidence/windows/2026-09-22-E19-run-005/` (`ih-x-011714.txt`, `ih-x-011733.txt`, `ih-x-011753.txt`)"
+  - id: M95
+    status: MEASURED
+    date: "2026-09-22"
+    claim: "SDMA0 executes the `SDMA_OP_CONST_FILL` and `SDMA_OP_COPY`/`COPY_LINEAR` packets transcribed from amdgpu's sdma_v5_0 (`driver/shim/bc250_sdma_copy.c`) under Windows, from the bring-up rings of M53-M60: fill(source, 0xA5) -> copy(source -> destination) -> fence on 4096 and on 65536 bytes between two VRAM regions (MC 0xF5FE00B000 and 0xF5FE01B000) gave a destination of 0xA5 in every byte (the source had been seeded with counting bytes and the destination with 0xEE by CPU, so a skipped fill or a skipped copy would have shown), fences 1 and 2 read back, 11-12 us from the CPU seed to the read-back, after the SDMA0 ring-test fence (4 us) as the control; gfx fini, psp unload and gart restore afterwards left the display-only driver presenting"
+    status_text: "MEASURED (n = 2 copies, 1 run, fresh boot)"
+    detail: "`evidence/windows/2026-09-22-E23-sdma-copy-run-001/run-001-console.txt`"
     edges:
-      - {"type": "uses", "to": "M190", "auto": true, "cue": "...arve-out at different physical addresses is explicitly distinguished. M190 OS-owned alias policy remains open"}
-  - id: M235
-    status: CONFIRMED
-    date: "2026-09-23"
-    claim: "Firmware can be prepared before hardware activation and the same owned bytes borrowed by PSP loading without re-opening files"
-    status_text: "CONFIRMED (source/host only)"
-    evidence: "[firmware-preflight](../evidence/windows/2026-09-23-E27-m9-inference/firmware-preflight/):32 ownership/failure controls and141 initializer regressions pass; mutation fails30; full WDK dev build passes. Actual ownership/file-selection code, modeled I/O/parser/hardware. Coordinator integration and hardware startup remain open. Not deployed"
+      - {"type": "uses", "to": "M53", "auto": true, "cue": "...er/shim/bc250_sdma_copy.c`) under Windows, from the bring-up rings of M53-M60: fill(source, 0xA5) -> copy(source -> destination) -> fence on 40..."}
   - id: M242
     status: CONFIRMED
     date: "2026-09-23"
@@ -339,30 +308,12 @@ facts:
     claim: "New clock-check CLI distinguishes matching and mismatching expectations against the live SMU without clock-setting messages"
     status_text: "MEASURED (unit A, positive/negative/recheck)"
     evidence: "[clock-live-control](../evidence/windows/2026-09-23-E27-m9-inference/clock-live-control/):1000MHz/VID116 read three times; expected1000/820 exits0, expected1001/820 exits1, recheck exits0. Preflight67C, STOP clear. Separate CLI copy only; no KMD/task replacement or reboot. Does not establish cold-start ordering"
-  - id: M270
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Local traced startup persists progress between eight shared CP steps outside hardware locks"
-    status_text: "MEASURED (host/build only)"
-    evidence: "[cp-startup-checkpoints](../evidence/windows/2026-09-23-E27-m9-inference/cp-startup-checkpoints/): Linux replay354+35writes exact; four negative controls fail;19extracted coordinator scenarios pass; WDK DEV build passes. No duplicate MMIO path, escape ABI unchanged, no deployment. Runtime CP failure location and checkpoint durability remain unverified"
-  - id: M301
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Captured graph resumes reuse the current byte-band plan"
-    status_text: "MEASURED (host operation counts only)"
-    evidence: "[cached-band-plan](../evidence/windows/2026-09-23-E27-m9-inference/cached-band-plan/): cache MoveCount/PlannedBand; plan only on band change. Routing30923PASS; forced old per-buffer planning fails14count assertions with byte oracles intact. WDK PASS, not deployed; no wall-clock/GPU performance claim"
   - id: M316
     status: CONFIRMED
     date: "2026-09-23"
     claim: "CP1 checkpoints preserve the replayed AMD write sequence"
     status_text: "CONFIRMED (host replay only)"
     evidence: "[kiq-checkpoints](../evidence/windows/2026-09-23-E27-m9-inference/kiq-checkpoints/): optional KIQ callbacks plus PASSIVE critical-region mutex acquisition for traced CP1. Default and traced replay exit0, exact354+35writes/24known address exceptions, four controls discriminate; traced cold runs10checkpoints/zero ordering errors. WDK build passes. No deployment; Windows checkpoint persistence, lock/I/O interaction and actual hang remain unverified"
-  - id: M317
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Candidate07102 full startup completes, durable CP1 checkpoints recovered"
-    status_text: "MEASURED (unit A)"
-    evidence: "[candidate07102-start](../evidence/windows/2026-09-23-E27-m9-inference/candidate07102-start/RESULT.md):0.7.102.1/oem76 exactSYS3B80D2EA..., sameboot, CP1..8success, both enginesready, initial paging597/597/noTDR. Persisted snapshot hash verified/KeepStatus0. Cold KIQ branch; no warm-reentry or earlier-hang-cause proof. Initial script encoding error documented; independent version/hash/runtime evidence verified. Physical table cache query returns0xC0000141, cache policy unproved"
   - id: M327
     status: CONFIRMED
     date: "2026-09-24"
@@ -375,20 +326,6 @@ facts:
     claim: "Current halt witness excludes RLC progress; existing Linux reload reference is incomplete"
     status_text: "CONFIRMED (source/evidence review only)"
     evidence: "[review](../evidence/windows/2026-09-24-E27-m9-recovery/retirement-reference-review/REVIEW.md): shim RLCstop clears enable without post-write progress witness; EnginesHalted checks CP/MEC/SDMA only; PspStop uses GfxStopQuiet. E13boot8 reload has kernel messages, no register trace. No proven RLC-running state or causal failure claim"
-  - id: M333
-    status: CONFIRMED
-    date: "2026-09-24"
-    claim: "Generic Linux RLC retirement passes through SMU cleanup, with no Cyan Skillfish notify/features callback"
-    status_text: "CONFIRMED (source review only)"
-    evidence: "[review](../evidence/windows/2026-09-24-E27-m9-recovery/rlc-smu-retirement-review/REVIEW.md): conditional smu_disable_dpms calls RLC stop; Cyan Skillfish omits notify_rlc_state/system_features_control and wrappers return0. Existing unload trace lacks RLC write; runtime/source correspondence remains open. Corrects unsupported M35 causal clause; no new hardware fix or test"
-    edges:
-      - {"type": "supersedes", "to": "M35", "scope": "partial", "auto": true, "cue": "...ite; runtime/source correspondence remains open. Corrects unsupported M35 causal clause; no new hardware fix or test"}
-  - id: M334
-    status: MEASURED
-    date: "2026-09-24"
-    claim: "Linux reload fails despite witnessed SMU-layer RLC stop and working deferred tracing"
-    status_text: "MEASURED (unit A)"
-    evidence: "[E28 result](../evidence/linux/2026-09-24-E28-wddm-reentry/RESULT.md): network-only boot/pinned SSH, first load0, unload0 with RLC_CNTL1->0 through SMUcleanup; reader splice stall diagnosed/released independently. Rearmed second load records24164register events, ends after RLC enable1, no completion/SSH; one AC recovery. Deferred filters work before module insertion; no successful reentry or precise fault-instruction claim"
   - id: M340
     status: CONFIRMED
     date: "2026-09-24"
@@ -445,6 +382,18 @@ facts:
     claim: "111 explicit readback trial observes RLC reset register0->4->0 but immediate RLCbusy remains set"
     status_text: "MEASURED (unit A, one changed-sequence trial)"
     evidence: "[candidate07111](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07111/RESULT.md): allhalt preconditions;helper-62,unwind beforePSP,SSH survives. PnPrecovery111stage61/43presents,gates0,count0,same05:20:01boot,noAC/reboot. No reset completion,locked-register or post-reset workload acceptance claim"
+  - id: M354
+    status: CONFIRMED
+    date: "2026-09-24"
+    claim: "Retirement shim retains GC10.1 dummy request read beforeACK; LinuxGFX10 powergating switch has no10.1.3/10.1.4 case"
+    status_text: "CONFIRMED (source only)"
+    evidence: "[TLB retirement review](../evidence/windows/2026-09-24-E27-m9-recovery/tlb-retirement-review/RESULT.md): compare request/dummyread/ACK,semaphore and sequence-fault checks. Whole-flush RLC witness does not identify substep. No newGFXOFFcommand orTLBskip justified; exactruntime/cache/retirement acceptance unresolved"
+  - id: M356
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "112 first-control passes; RLCbusy appears in first snapshot after retirement invalidation request, despite successfulACK"
+    status_text: "MEASURED (unit A)"
+    evidence: "[candidate07112](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07112/RESULT.md):PTEunbind leavesSTATUS2 8;REQ00F80001 thenSTATUS2 01000008 beforedummyread;ACK1,rc0,fault0.3cycles/4readbacks,GFX4/4,paging947/947,noTDR. OnebaselineAC,newboot06:06:14;finaldisplay-onlystage61/82presents,gates0,count0,no warm retry"
   - id: M357
     status: MEASURED
     date: "2026-09-24"
@@ -475,24 +424,48 @@ facts:
     claim: "Candidate115 integrates pending GFX visibility across startup and earlybind flushes, committed after RLC before CP"
     status_text: "MEASURED (source/host/build)"
     evidence: "[bootstrap integration](../evidence/windows/2026-09-24-E27-m9-recovery/gfx-bootstrap-integration/RESULT.md):85actual-source checks,omitcommit6failures,328startup/3632stop/38GTT/25package pass. Boundbacking/admission retainedwhilepending. Notdeployed;hardwareviability/cache/warmacceptance unproven"
+  - id: M365
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "115 deferred GFXinvalidation passes first control; warm RLCbusy appears across PSPinitialization before hostGFXflush"
+    status_text: "MEASURED (unit A)"
+    evidence: "[candidate07115](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07115/RESULT.md):first3cycles/4reads,GFX4/4,paging1098/1098,noTDR;stop25mappings clear. WarmbeforePSP0/8,11commandsrc0/status0,afterPSP0/01000008,lastentryRLCstage5. OnefailureAC;final115stage61/36presents,boot07:07:39,gates0,count0. No exactcommand/instructioncause proof"
   - id: M366
     status: MEASURED
     date: "2026-09-24"
     claim: "Candidate116 observes RLC before/after PSPringcreate and after each command; local AMD resume reloads firmware with autoload off for11.0.8"
     status_text: "MEASURED (source/build/model)"
     evidence: "[PSP command observation](../evidence/windows/2026-09-24-E27-m9-recovery/psp-command-observation/RESULT.md):unchanged11commands/protocol,KMDsafe-read snapshots;WDK/25package/PSPpositive+negativecontrols pass. Notdeployed;RLChealth andworkingwarmreload notproven byPSPfence/status orupstreamsource"
+  - id: M367
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "116 warm RLCbusy first appears after PSPcommand2 SDMA0; firstcontrol staysclear throughcommands1-10"
+    status_text: "MEASURED (unit A)"
+    evidence: "[candidate07116](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07116/RESULT.md):warmring/TMR0/8,SDMA0post0/01000008,all11success;RLCstage5commit1/01004008,lastCP1scheduler-read. ColdRLCload hastransientbusy yetcontentPASS3cycles/4reads,paging1093/1093. OnefailureAC;final116stage61/39presents,boot07:18:37,gates0,count0. Intervalnotexactinternalcauseproof"
   - id: M370
     status: MEASURED
     date: "2026-09-24"
     claim: "117 integrates RLC-scoped SDMA quiescence before ownerGTTretirement,unfreezing whilehalted/cacheoff"
     status_text: "MEASURED (host/build)"
     evidence: "[integration](../evidence/windows/2026-09-24-E27-m9-recovery/sdma-quiescence-integration/RESULT.md):4scope+6instance models,354+35oracle,3634stop/328startup/38GTT/85bootstrap/25package pass. FinalSYS1CD6BA41... in07117-final;notdeployed. EntryACKrequired,pairedexitrequestnot hardwarecompletionproof;warmviability unresolved"
+  - id: M371
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "117 SDMA quiescence succeeds, but warm startup repeats SDMA0-post RLC busy and CP1 stall"
+    status_text: "MEASURED (unit A)"
+    evidence: "[candidate07117](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07117/RESULT.md): first content control 3 cycles/4 reads, GFX4/4 and paging734/734; stop quiescence0/fault0, 25 GTT mappings retired with RLC1/8. Warm all11 PSP commands succeed, first busy after SDMA0, last CP1 scheduler-read. One recovery AC; final117 stage61/gates0/count0, boot07:47:33. Quiescence alone did not enable warm startup; exact cause unproven"
   - id: M373
     status: MEASURED
     date: "2026-09-24"
     claim: "Candidate118 composes SDMA reset between two RLC scopes and reestablishes post-reset quiescence"
     status_text: "MEASURED (host/build)"
     evidence: "[reset integration](../evidence/windows/2026-09-24-E27-m9-recovery/sdma-engine-reset-integration/RESULT.md): four disturbed-state/scope models plus existing replay;3634 stop/328 startup/38 GTT/85 bootstrap/25 package checks pass. Original readbacks logged, no extra MMIO. SYS4E7CBC58...; hardware pending, reset effectiveness unproven"
+  - id: M374
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "118 SDMA reset assertion/release and post-reset quiescence succeed; warm startup still fails"
+    status_text: "MEASURED (unit A)"
+    evidence: "[candidate07118](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07118/RESULT.md): first3-cycle/4-read control passes; reset masks for both engines read back asserted/released0, post-quiescence0/fault0,25 GTT mappings retired with RLCclear. Warm firstbusy after PSP SDMA0,11 commands success, last entering RLC stage5 (no warm CP1 witness). One AC recovery; final118 stage61/gates0/count0, boot08:06:02. Internal reset effectiveness unproven"
   - id: M390
     status: CONFIRMED
     date: "2026-09-24"
@@ -591,12 +564,6 @@ facts:
     claim: "VramStart requires GC framebuffer capacity to match NBIO MEMSIZE before publishing VRAM; GART setup validates actual shim size/base. Segment layout refuses unresolved or zero-size POST reservations. Actual-source8/12/16GiB models pass72checks, two mutations fail15/6; full WDK build passes. No12GiB hardware or new deployment."
     status_text: "CONFIRMED (source/host only)"
     evidence: "[geometry controls and limits](../evidence/windows/2026-09-24-E27-m9-recovery/vram-geometry-consistency/RESULT.md)"
-  - id: M436
-    status: CONFIRMED
-    date: "2026-09-24"
-    claim: "Primary allocation pitch and extent, private VidPn pitch programming, firmware-pitch restore and dynamic scanout mapping/fill/row copy implemented. 35374 MMIO,109 publication,6892 geometry host checks pass for widths1366/1440/1680/1920/2560; three mutations fail3/8/3. Full WDK build passes, never installed. Inherited mode only; no physical modeset, lifetime or handover proof."
-    status_text: "CONFIRMED (source/host only)"
-    evidence: "[pitch and geometry controls](../evidence/windows/2026-09-24-E27-m9-recovery/scanout-pitch-geometry/RESULT.md)"
   - id: M437
     status: CONFIRMED
     date: "2026-09-24"
@@ -609,12 +576,6 @@ facts:
     claim: "Pre-amdgpu Linux BAR5 THM_TCON_CUR_TMP matches k10temp before/after in72 samples,19 distinct temperatures70.375..73.750C; NBIO8192MiB positive read control passes. Own AmdSetup2229-byte payload read/hash-verified privately, UMA fields allAuto. Full SPI extraction remains open; no firmware change or Windows-native thermal proof."
     status_text: "CONFIRMED (unit A Linux thermal comparison); MEASURED (own UEFI variable)"
     evidence: "[thermal and AmdSetup evidence](../evidence/linux/2026-09-24-E30-startup-thermal-bios/RESULT.md)"
-  - id: M439
-    status: MEASURED
-    date: "2026-09-24"
-    claim: "Candidate0.7.135.1 passes one PnP transition, D3D shared/pixel/60-present,64MiB three-cycle/four-GPU-readback,8shader and two E14 model controls. OS/DWM retained; GFX2610/2610, SDMA6011/6011,991 DCN flips,0 ACK timeouts/refusals, no TDR. Named BAR thermal read agrees with SMN brackets24/24, raw three-way22/24; remaining two differ by one0.125C step. Native SMU owner remains inactive; no alternate physical-width,12GiB, cold-start or full M9 acceptance."
-    status_text: "MEASURED (unit A deployment/content); CONFIRMED (thermal comparison in measured states)"
-    evidence: "[candidate135 controls and limits](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07135-pitch-thermal/RESULT.md)"
   - id: M440
     status: CONFIRMED
     date: "2026-09-24"
@@ -645,36 +606,12 @@ facts:
     claim: "Alleged GOP/PSP overlap rejected: static formula describes 32 KiB, not 128 KiB, outside the current PSP pages; existing own-unit VBIOS/VFCT have zero reservation fields. PTE attempt counters added without cache changes; routing908035/0, corrected baseline907964/0, focused71/0, mutation19 failures. POST mapping selector2072/0; independent OS/VidMm cache attributes remain unproved. No new lab capture or deployment."
     status_text: "CONFIRMED (scoped source/host and offline artifact analysis)"
     evidence: "[memory review and limitations](../evidence/windows/2026-09-24-E27-m9-recovery/delegated-memory-review/RESULT.md)"
-  - id: M448
-    status: CONFIRMED
-    date: "2026-09-24"
-    claim: "Current DMA ownership and Microsoft graphics contracts reviewed: shared process VA, identity isolation and nonidentity remapping are distinct. A Dxgkrnl memory-object/ADL migration and exclusive-access quiescence are required; no IOMMU support implemented, no current-mode hardware witness. Proposed staged design records unresolved OS backing-identity contracts."
-    status_text: "CONFIRMED (source/contract review only; design proposed)"
-    evidence: "[IOMMU review](../evidence/windows/2026-09-24-E27-m9-recovery/iommu-architecture-review/RESULT.md)"
-  - id: M455
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Full 144 requires durable start-budget read/write/flush before hardware. After one OS restart, policy2 starts full WDDM automatically with a successful counter flush before POST/MMIO; native1000MHz/VID116 precedes GPU initialization. Postboot64MiB, eight shaders and both E14 model outputs pass; GFX2610/2610,paging6037/6037,noTDR. Budget0 received an unchecked managed flush after controls (checked-persistence correction: M456); owner subsequently confirms correct physical image and cursor. No AC-cold, resume, automatic confirmation or fullM9 acceptance."
-    evidence: "[durable OS start](../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144/RESULT.md), [owner feedback](../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144-owner-feedback/REPORT.md)"
   - id: M459
     status: CONFIRMED
     date: "2026-09-25"
     claim: "SMU firmware metadata is atomically retained across owner stop/failed restart, with cached queries independent of mailbox locking and hardware readiness. Actual-source concurrent host suite30814/0; clear-on-stop mutation yields3 failures. Full WDK build passes; undeployed. Retained-owner hardware resume remains unimplemented."
     status_text: "CONFIRMED (source/host scope only)"
     evidence: "[retained SMU metadata](../evidence/windows/2026-09-25-E27-m9-recovery/retained-smu-metadata/RESULT.md)"
-  - id: M718
-    status: MEASURED
-    date: "2026-09-28"
-    claim: "DWM048 on169 stops43.265s on QueryInterruptTime kernel32 import failure before VSync snapshot; CPU restore/tasks cleanup pass, same boot/health15. Correct API-set clock advances in read-only control. No GPU interval acceptance or G0 closure."
-    status_text: "MEASURED (unit A)"
-    evidence: "[DWM048 clock admission](../evidence/windows/2026-09-28-E34-dwm048-clock-admission/RESULT.md)"
-  - id: M775
-    status: MEASURED
-    date: "2026-10-01"
-    date_from: "evidence-path"
-    claim: "The Witcher 3 at native 1920x1080 fullscreen (FXAA, no upscaler, frame generation and dynamic resolution off) on one build, kernel driver 0.7.193.1 with DPM up to 2000 MHz, D3D12 shell 6D22D305 (adapter107), engine 15E3E24E and ICD 2A13235D, desktop composed on the GPU, 7-minute interactive sessions: 40 s window low 45.3, high 31.3 and high with RT 9.3 frames/s (trials 246, 249, 250; medians 21.55, 31.10 and 107.02 ms); the 3D engine 65.4 %, 96.0 % and 97.8 % busy in those windows, at 2000 MHz for high and high with RT; every shot correct; no bugcheck, fence timeout or TDR, and the GCVM protection fault status, which that driver never clears, read 0 after trial 250; high with RT equals trial 223's 9.1 frames/s at an 1800 MHz thermal cap, so that frame does not follow the shader clock"
-    status_text: "MEASURED (unit A)"
-    evidence: "[E47](../evidence/windows/2026-10-01-E47-witcher3-preset-matrix/RESULT.md)"
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

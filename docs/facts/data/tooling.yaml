@@ -5,30 +5,24 @@ order: 8
 title: "Tooling, build and lab"
 description: "Build, signing and quality gates, host tools and models, the lab itself (remote access, monitoring, recovery, power), and project process."
 facts:
-  - id: M167
-    status: CONFIRMED
-    date: "2026-09-23"
-    claim: "Local DMA contract audit finds paging DmaSize treated as total rather than remaining bytes and never decremented. Extracted0757 accounting fails3of4 host cases;0758 passes4of4 and six existing preemption scenarios; driver builds/signs. Source audit also records unimplemented system/fragmented paging, missing multipass, and false-success completion/error paths.0758 is not deployed or GPU-validated."
-    status_text: "CONFIRMED (local source/host test only)"
-    detail: "[audit evidence](../evidence/windows/2026-09-23-E27-m9-inference/dma-contract-audit-0758/README.md), [contract review](research/m9-dma-contract-audit.md)"
-  - id: M249
-    status: CONFIRMED
-    date: "2026-09-23"
-    claim: "KeepLog tracing in candidate0797 records between incremental GFX startup stages at PASSIVE_LEVEL"
-    status_text: "CONFIRMED (source/host); live result pending"
-    evidence: "[gfx-stage-trace](../evidence/windows/2026-09-23-E27-m9-inference/gfx-stage-trace/):144 initializer checks pass including8ordered calls/16snapshot requests; WDK build and display-only install pass,oem71.inf. Trial PnP enable returned13:00 then SSH was lost. Persisted stage records not yet recovered; GPU startup success not established"
+  - id: M27
+    status: MEASURED
+    date: "2026-09-21"
+    date_from: "text"
+    claim: "Lab facts for the Windows side: KDNET works over the on-board RTL8168 (`busparams 4.0.0`, the OS then uses the debugger's virtual adapter); safe mode with networking has network and SSH over that wired path but not over the USB Wi-Fi dongle (vendor driver not loaded there); with a debugger attached the ACPI interpreter reports AML errors `0x3a` once and `0x78` several times at every boot (firmware tables, not investigated); one warm restart ended in a black screen before the kernel started and needed the reset button, four others went through"
+    detail: "journal 2026-09-21; debugger log kept outside the repo"
   - id: M326
     status: MEASURED
     date: "2026-09-24"
     claim: "Lab rediscovered by pinned SSH identity;07103 last persisted checkpoint is CP1 scheduler"
     status_text: "MEASURED (unit A)"
     evidence: "[recovery](../evidence/windows/2026-09-24-E27-m9-recovery/RESULT.md): local subnet discovery2listeners/1pinnedmatch, configuration updated, readonly acquisitionexit0. Currentdifferentboot01:46:31/deviceOK/fullgate0/stage61. Last07103snapshot afterlocks at scheduler; no completion witness, exact fault instruction unknown"
-  - id: M376
+  - id: M449
     status: MEASURED
     date: "2026-09-24"
-    claim: "119 passes64KiB/1GiB GPU content, then loses SSH after workload completion without warm restart"
-    status_text: "MEASURED (unit A)"
-    evidence: "[candidate07119](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07119/RESULT.md):4full1GiB readbacks/3cycles, GFX4100/4100,paging170416/170416,noerrors/TDR at final observation,30reserved/0heap. Post-completion pinnedTCP/subnet0; no new dump or1001/4101 in limited query. OneAC recovery, final119 stage61/gates0/count0,boot08:30:00. Causeunproven; concurrent clients NOTstarted"
+    claim: "Cached Vulkan inventory overlay deployed on unchanged KMD136/DWM2040. Single vulkaninfo capture timed out after 40 s: loader observed old system ICD, not requested newer compute ICD. Partial declarations displayed, incomplete format counts unknown; provider never launches Vulkan. Actual overlay visible on desktop."
+    status_text: "MEASURED (unit A; partial inventory, not capability validation)"
+    evidence: "[Overlay inventory](../evidence/windows/2026-09-24-E27-m9-recovery/vulkan-overlay-inventory/RESULT.md)"
   - id: M456
     status: MEASURED
     date: "2026-09-25"
@@ -41,12 +35,38 @@ facts:
     date: "2026-09-25"
     claim: "Monitor optional LOG_SUMMARY pause validated on146: last summary sequence stays8177 across12s while cached health completed rises800->815 and UI marks counters stale. Only monitor replaced; no Windows/DWM/driver restart. Does not prove a post-S4 stutter fix."
     evidence: "[diagnostic isolation](../evidence/windows/2026-09-25-E27-m9-recovery/monitor-summary-pause/LIVE.md)"
+  - id: M538
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Compiler gates cover180 KMD/RADV/UMD C commands;4096 producer/parser ABI cases pass. Scoped MSVC analysis catches and verifies repairs for null surface comparison and SAL annotations. Dependency-cache controls pass. E14 smoke007 passes8cases and witnesses exact loaded ICDD5AD7D07; changed-binary/failed-receipt controls reject. No full-stack analysis or certification claim."
+    status_text: "MEASURED (host and unit A)"
+    evidence: "[Fast quality gates](../evidence/windows/2026-09-26-E35-quality-gates/RESULT.md)"
+  - id: M553
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Clean development-PC builds of the consolidated Mesa fork branches (RADV 940ab0eb, UMD 71f2e28c on 05e6c962; ICD FAD08ECB, UMD 848BCBF5, zero warnings) pass the E14 smoke (8 tests, 0 mismatches, live module witness) and the M546 flip regression (120 Presents, 0/76800, three 46800-pixel ROIs) with the recorded control and router. Baselines 9C40083C/8279AC7F restored and hash checked; no promotion, no DWM probe."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Fork branch controls](../evidence/windows/2026-09-27-E36-fork-branch-controls/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M546", "auto": true, "cue": "...ss the E14 smoke (8 tests, 0 mismatches, live module witness) and the M546 flip regression (120 Presents, 0/76800, three 46800-pixel ROIs) with ..."}
+  - id: M597
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Clean Mesa source snapshot a0ad8af5 records36 hosted UMD input changes. Fresh615-step build succeeds; all12949 tracked files unchanged and tree clean. Candidate053 UMD5C74BF98 is bound to source/build hashes, with old49AFB21F preserved. Control118 prepared but not run; exact-artifact runtime validation and G0 remain open. No lab change."
+    status_text: "MEASURED (development build)"
+    evidence: "[Clean UMD build](../evidence/windows/2026-09-27-E34-clean-umd-build/RESULT.md)"
   - id: M602
     status: MEASURED
     date: "2026-09-27"
     claim: "Isolated KMD153.1 diagnostic candidate0C0DA4E1 builds/signs from cleanc3499f1.158 runtime inputs compared with archived152; only bounded GDI logging and internal version differ after normalization. Eight quality gates and source/artifact manifest pass. No deployment/runtime claim;152 retained on lab and G0 open."
     status_text: "MEASURED (development build)"
     evidence: "[KMD153 diagnostic build](../evidence/windows/2026-09-27-E34-kmd153-gdi-build/RESULT.md)"
+  - id: M615
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Isolated KMD154 source d7846ec starts from exact153/c3499f1b;303-file baseline audit limits existing driver changes to WDDM and version/INF. PowerShell7 build passes11 gates, link/stack/catalog/signing and source identity; both packages contain SYS2D36B7C7. Earlier PowerShell5 UMD packaging failure retained. Local only; gate off, no deployment or G0 acceptance."
+    status_text: "MEASURED (host build)"
+    evidence: "[Isolated154 candidate](../evidence/windows/2026-09-27-E34-kmd154-build/RESULT.md)"
   - id: M621
     status: MEASURED
     date: "2026-09-27"
@@ -89,12 +109,6 @@ facts:
     claim: "Isolated KMD160/a1f3bf9 builds SYS8E676C81 with clean source identity,303-file baseline audit and13 passing gates. Adds default-off start-latched interop setting. Full build/catalog/signing succeed; host trust verification reports untrusted root for both159/160. Local only, no runtime or G0 claim."
     status_text: "MEASURED (host build)"
     evidence: "[KMD160 build](../evidence/windows/2026-09-27-E34-kmd160-build/RESULT.md)"
-  - id: M646
-    status: MEASURED
-    date: "2026-09-27"
-    claim: "Retained Blt observations add interrupt/QPC timestamps; successful interop replies retain atomic chronological first/last times.13 host gates and wddm.c compile pass. Initial161 build lacks this extension and was never staged/deployed; new build required. G0 open."
-    status_text: "MEASURED (host validation)"
-    evidence: "[Observation timing](../evidence/windows/2026-09-27-E34-present-observation-time/RESULT.md)"
   - id: M647
     status: MEASURED
     date: "2026-09-27"
@@ -141,21 +155,59 @@ facts:
     claim: "Actual CRT secure writer refuses a shared reader; shared router helper passes live content and second-writer controls. DWM031 router/control/tests compile with/W4/WX,20 prepared hashes verified,host PS parse passes. Rollback bound to exact163; no target staging/runtime or G0 acceptance."
     status_text: "MEASURED (host validation)"
     evidence: "[Shared startup log](../evidence/windows/2026-09-27-E34-shared-startup-log/RESULT.md)"
+  - id: M670
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Actual detached Windows-subsystem control starts with stderr descriptor-2:031 dup2 helper fails,032 shared freopen helper succeeds and readable marker passes. Secure/shared CRT controls also pass; /W4/WX builds and host PS5 parse pass.032 adds CreateDevice FILETIME/QPC brackets; prepared only, runtime/G0 unverified."
+    status_text: "MEASURED (host validation)"
+    evidence: "[Detached startup log](../evidence/windows/2026-09-27-E34-detached-startup-log/RESULT.md)"
+  - id: M671
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Startup ambiguity now preserves PID/start receipts before rejection; restart boundary excludes old processes. Five wrapper and seven core controls pass.032 target21-file/PS5 checks pass. Separate Kernel-Process ETW control joins PID5332 start/stop,sequence9351,exit0;CPU11616 unchanged. No032 desktop trial/G0 acceptance."
+    status_text: "MEASURED (host controls and unit A staging)"
+    evidence: "[Startup observation](../evidence/windows/2026-09-27-E34-startup-process-observation/RESULT.md)"
   - id: M683
     status: MEASURED
     date: "2026-09-27"
     claim: "Mesa map-audit candidate grows beyond128 buckets and serializes totals/snapshots. Actual-helper host control passes4097 keys,allocation-failure preservation,duplicate accounting and relocation;complete UMD build passes. No lab deployment,resource-lifetime proof or CPU-copy acceptance."
     status_text: "MEASURED (host build/control)"
     evidence: "[Map audit build](../evidence/windows/2026-09-27-E34-map-audit-build/RESULT.md)"
+  - id: M700
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "File-only /MD stderr control: default UCRT mode exposes all1000 records immediately and preserves199780 bytes after TerminateProcess; explicit full buffering fails. Lab total time2.734s legacy versus0.0312s default, with identical bytes and unchanged CPU DWM. Not a DWM/G0 or frame-time measurement."
+    status_text: "MEASURED (unit A; host control agrees)"
+    evidence: "[Shared log control](../evidence/windows/2026-09-28-E34-shared-log-control/RESULT.md)"
+  - id: M715
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Read-only exact166 CPU control projects registry acceptance values into plain data; two stable DWM/health samples and both JSON reports complete1.535s inside20s job, exit0/empty. Reports1913/1089 bytes,health15 unchanged generation/epoch. Corrected report path validated; prior stall cause not stack-proven, full transition/G0 separate."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Readiness JSON control](../evidence/windows/2026-09-28-E34-readiness-json/RESULT.md)"
   - id: M740
     status: MEASURED
     date: "2026-09-28"
     claim: "Console001 SYSTEM helper launches no-GPU fixtures in active console session1; success/error/orphan/timeout cases all close their Job trees. Independent process checks pass, overall18.261s, CPU171 unchanged, task Missing. Establishes launcher control, not native window Present."
     status_text: "MEASURED (unit A)"
     evidence: "[Console launcher](../evidence/windows/2026-09-28-E34-m14-console001/RESULT.md)"
-  - id: M754
+  - id: M741
     status: MEASURED
     date: "2026-09-28"
-    claim: "Native errors002 passes CPU/GPU controls: CreateBuffer OOM/null then recovery; write-only Map fallback with sticky0x887A0005, subsequent staging READ returns0x887A0005/null; Update sticky removal. Exact DC65/C388, CPU171 restored/postflight/tree closure51.183s, task Missing."
+    claim: "Window001 stops before D3D11 startup: user-session Cpu phase receives Win32 error5 opening privileged Bc250Rd for telemetry. GPU not launched; independent CPU171 restore/postflight/tree closure pass25.772s, task Missing. Controller/user-client split prepared, untested."
     status_text: "MEASURED (unit A)"
-    evidence: "[Read-side error control](../evidence/windows/2026-09-28-E34-m14-errors002/RESULT.md)"
+    evidence: "[Window001 admission](../evidence/windows/2026-09-28-E34-m14-window001/RESULT.md)"
+  - id: M742
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Window002 SYSTEM telemetry passes, but nested active-console helper returns launch_error5/exit125 before D3D startup. GPU not launched. CPU171 restore/postflight/tree closure pass25.923s, task Missing. Exact failed launch API unmeasured; staged diagnostics prepared."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Window002 launch refusal](../evidence/windows/2026-09-28-E34-m14-window002/RESULT.md)"
+  - id: M743
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "No-GPU console002 isolates nested launch error5 at CreateProcessAsUser after token/session admission; outer tree closes, baseline postflight passes14.346s, task Missing. Standalone M740 remains positive; separate controller/client Job design prepared with host-tested cancellation. No native Present result."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Nested console diagnostic](../evidence/windows/2026-09-28-E34-m14-console002/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M740", "auto": true, "cue": "...e closes, baseline postflight passes14.346s, task Missing. Standalone M740 remains positive; separate controller/client Job design prepared with..."}

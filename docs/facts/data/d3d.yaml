@@ -5,112 +5,57 @@ order: 5
 title: "Direct3D through the system runtime"
 description: "Direct3D 9 to 12 and DXGI: the native user-mode driver behind the system runtime, the DXVK and vkd3d-proton engines, feature levels, DXR and conformance clients."
 facts:
-  - id: M156
+  - id: M140
+    status: MEASURED
+    date: "2026-09-22"
+    claim: "Registering Mesa D3D10 UMD/softpipe on BC-250 allows D3D11CreateDevice(HARDWARE) to return S_OK at feature level 10_0; the shaders execute on the CPU. A 640x480 green clear has zero staging-readback mismatches, and the pre-GDI frame is green, while scanout captured during the test is black. Therefore a successful device or Present return is insufficient to claim a working desktop. Direct WARP registration had failed hardware-device creation while standalone WARP succeeded."
+    detail: "[Mesa device](../evidence/windows/2026-09-22-E26-d3d-desktop/mesa-d3d.txt), [pixel control](../evidence/windows/2026-09-22-E26-d3d-desktop/render-probe.txt), [green frame](../evidence/windows/2026-09-22-E26-d3d-desktop/frame-4876-30.png), [scanout](../evidence/windows/2026-09-22-E26-d3d-desktop/mesa-color-active.png), [WARP](../evidence/windows/2026-09-22-E26-d3d-desktop/warp-d3d.txt)"
+  - id: M141
+    status: MEASURED
+    date: "2026-09-22"
+    claim: "Mesa softpipe's source index path asserts that an indirect register is ADDR, while the D3D10 frontend emits TEMP-relative operands. Explorer displayed that assertion during E26. Using the existing generic register-file fetch for both source and dimension indices passes the TEMP/ADDR and inactive-lane regression test. This is a software interpreter fix; it does not establish DWM correctness."
+    detail: "[assertion](../evidence/windows/2026-09-22-E26-d3d-desktop/assertion.png), [regression result](../evidence/windows/2026-09-22-E26-d3d-desktop/tgsi-index-test-verified.txt), [source and patch](../experiments/E26-wddm-desktop/)"
+  - id: M146
     status: MEASURED
     date: "2026-09-23"
-    claim: "E27 run005 stop summary records67 UMD hardware submissions,66 completions,1 timeout and1439 UMD commands not run. Later node callback samples and flag contrasts occurred after the ring failed and cannot isolate RMS_NORM or flag behavior. CPU control is correct. Display-only restored. Earlier interpretation of the first observed RMS_NORM divergence was superseded by the stop log."
-    detail: "[node samples, limits and stop log](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-005/README.md)"
-  - id: M157
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Fresh-boot E27 run006 observes320-element first RMS_NORM input byte-equal to CPU and output max absolute error 2.38418579e-07. Final KMD summary has57 hardware submitted/completed,0 timeouts,0 UMD not run. The per-node log helper lacks admin rights, aborts early and reuses node000; this is an incomplete probe, not a full graph result. Display-only restored."
-    detail: "[first-node comparison and harness limitation](../evidence/windows/2026-09-23-E27-m9-inference/ops-gpu-006/README.md)"
-  - id: M198
-    status: CONFIRMED
-    date: "2026-09-23"
-    claim: "CopyPageTableEntries range lists publish logical copies only after capacity acceptance and resume by range index"
-    status_text: "CONFIRMED (source/host only)"
-    detail: "[copy-publish-0777](../evidence/windows/2026-09-23-E27-m9-inference/copy-publish-0777/):8654 host checks pass, omitted update/copy publication produces588 failures.40 dependent ranges span3 buffers; accepted private records parse with exact contiguous offsets. Full0777 WDK build/sign passes. DDI dispatch wired/compiled, not exercised by host harness; no deployment or hardware/OS concurrency acceptance. Restricted DDI failure contract remains unresolved"
-  - id: M297
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Retained virtual graph plans survive changed or unavailable VA translation"
-    status_text: "MEASURED (host capture/planning only)"
-    evidence: "[retained-graph-capture](../evidence/windows/2026-09-23-E27-m9-inference/retained-graph-capture/): capture system/local/mixed identities once, preflight bands and resume using immutable indexes after translation is disabled. Six full/partial cycle byte oracles pass; routing22655PASS, WDK PASS. Not DDI-wired/deployed; retained-path emission and OS lifetime remain open"
-  - id: M298
-    status: MEASURED
-    date: "2026-09-23"
-    claim: "Captured local/system/mixed graph batches emit matching actual copy packets"
-    status_text: "MEASURED (host emitter only)"
-    evidence: "[retained-graph-packets](../evidence/windows/2026-09-23-E27-m9-inference/retained-graph-packets/): actual7/83DWORD packet replay preserves bytes after VA changes; capacity refusal and scratch-complete boundaries verified. Routing22817/focused304PASS; broken restore16failures. WDK PASS, not deployed or selected by DDI"
-  - id: M338
-    status: MEASURED
-    date: "2026-09-24"
-    claim: "Current105 inference baseline and UMD function cost measured"
-    status_text: "MEASURED (unit A)"
-    evidence: "[bench07105](../evidence/windows/2026-09-24-E27-m9-recovery/bench07105/RESULT.md): native0/loader/JSONsettings matchM321;Tiny1101.128220/118.277614tokens/s;stories48980.311409/533.487457 withlargevariation. UMD10365calls/159.7743ms,notwholelatency. Reserved50->75,heap0,allfencescomplete/noTDR. No causal improvement or Windows superiority claim,sameboot"
+    claim: "Creating the Mesa virtual context during CreateDevice eliminates empty broadcast-context signal diagnostics in the bounded E26 trace (242 before, 0 after). Shared red/blue and green staging controls pass; task0, deviceRemoved S_OK. Fresh DWM still loops through primary setup without Present, so full desktop remains unresolved. KMD0.7.55.1 unchanged."
+    detail: "[H17 evidence](../evidence/windows/2026-09-22-E26-d3d-desktop/context-0755/README.md)"
   - id: M471
     status: MEASURED
     date: "2026-09-25"
     claim: "On unchanged147, bounded UMD diagnostics reduce same-Winlogon3s render median23.849->1.919ms, present starts84->176 and glitch events83->0; maxrender gap17.064ms, zero trace loss. New UMD shared/pixel completion controls pass. Process/scene recreation limits causality; physical owner feedback, S4 and soak remain pending."
     status_text: "MEASURED (unit A)"
     evidence: "[quiet renderer controls](../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147/RESULT.md)"
+  - id: M474
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Notepad startup AV reads beyond a tight1428x33 shared surface during a4x4 llvmpipe raster stamp. Padded owned storage and preserved import/rotation geometry fix the observed startup crash; five shared pixel extents and307200pixel readback pass on unchangedKMD147. No M10 FIFO acceptance."
+    status_text: "MEASURED (unit A)"
+    evidence: "[surface padding regression](../evidence/windows/2026-09-25-E31-surface-padding/RESULT.md)"
   - id: M477
     status: MEASURED
     date: "2026-09-25"
     claim: "Atomic shared-resource closure fixes repeated B2Ww retention: old UMD retains 66 objects / 13,728 bytes per two mixed cycles; UMD8279AC7F returns all measured pool tags to their initial counts/bytes. Shared pixels, eight compute hashes, both model texts and cube pass. Two-cycle control only, no M11 acceptance."
     status_text: "MEASURED (unit A)"
     evidence: "[resource closure regression](../evidence/windows/2026-09-25-E32-resource-close/RESULT.md)"
-  - id: M490
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Explicit D3DKMT mapping COPY passes four sampled A/B readbacks and delayed-fence ordering on KMD151 without a reboot. Native-copy ranges remain zero; UPDATE_PAGE_TABLE increases. This validates the tested API behavior on the OS-selected path, not execution of the new native-copy DDI or relocation while waiting."
-    status_text: "MEASURED (unit A)"
-    evidence: "[mapping COPY control](../evidence/windows/2026-09-25-E33-explicit-mapping-copy/RESULT.md)"
-  - id: M494
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Asteroids initially fails before GPU submission:16 IBs/2012032bytes exceed the1MiB gather limit. Experimental dynamic gather16CDEA79 gets255 outer Present completions/256 successful Vulkan Present returns, then Windows bugchecks0x116;660-frame acceptance fails. Baseline ICD restored after automatic reboot. No image/performance claim or promotion; TDR cause remains open."
-    status_text: "MEASURED (unit A)"
-    evidence: "[gather and TDR](../evidence/windows/2026-09-25-E33-gather-capacity/RESULT.md)"
   - id: M496
     status: MEASURED
     date: "2026-09-25"
     claim: "Mesa native DXGI lookup re-enters app-local DXVK during adapter initialization. Full system DLL paths remove startup deadlock: original DXVK3.1.1 detects BC-250 and submits, then exposes missing Win32 present-wait callback. D3D11 remains incomplete. Candidate98C53B48 passes native Vulkan660-frame regression at1080x720; baseline restored, Linux parity pending."
     status_text: "MEASURED (unit A)"
     evidence: "[DXGI and regression](../evidence/windows/2026-09-25-E33-system-dxgi/RESULT.md)"
-  - id: M497
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "Win32 present-wait callbacks and finite WDDM fence deadlines implemented. CandidateA6D11B64 passes all15 release CTS Win32 present-id/wait and7 timeline-wait cases, no skips. D3D11/DXVK Asteroids completes660frames1080x720; capture matches earlier763628F6 run. Owner sees separate3960-frame showcase. Baseline restored without reset; full CTS/Linux image/performance parity remain open."
-    status_text: "MEASURED (unit A)"
-    evidence: "[present waits](../evidence/windows/2026-09-25-E33-present-wait/RESULT.md)"
-  - id: M498
-    status: MEASURED
-    date: "2026-09-25"
-    claim: "D3D12/vkd3d Asteroids exceeded the16-IB collector before submission. Candidate8B5EC055 replaces that cap with reusable queue storage;18fragments/2011168bytes execute and660frames1080x720 complete, exit0, six module witnesses and complete CPU/GPU CSVs. Visible asteroid capture retained; baseline restored without reset. Linux/Proton image/performance parity remains pending."
-    status_text: "MEASURED (unit A)"
-    evidence: "[D3D12 collection](../evidence/windows/2026-09-25-E33-d3d12-ib-collection/RESULT.md)"
-  - id: M499
-    status: MEASURED
-    date: "2026-09-26"
-    claim: "DXUT rejected windowed1080x720 by checking fullscreen display modes. Limit that check to fullscreen and use DXUT quitafterframe659 for660frames. D3D9 completes660frames, exit0,1080x720 textured-cube capture and all3modules; D3D10 renders660frames but PNG capture fails80004005, exit5, not accepted. Baseline ICD restored; Linux parity pending."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Instancing window](../evidence/windows/2026-09-26-E33-instancing-window/RESULT.md)"
-  - id: M500
-    status: MEASURED
-    date: "2026-09-26"
-    claim: "D3D10 Instancing direct PNG capture fails80004005 on an sRGB backbuffer. Explicit byte-preserving UNORM staging copy/readback then PNG save succeeds:660frames1080x720, exit0, five module witnesses, visible island/tree capture. GPU generation retained and baseline restored. Linux/Proton image/performance parity remains pending."
-    status_text: "MEASURED (unit A)"
-    evidence: "[D3D10 capture](../evidence/windows/2026-09-26-E33-d3d10-capture/RESULT.md)"
-  - id: M505
-    status: MEASURED
-    date: "2026-09-26"
-    claim: "Zink front/back test reproduced one-image swapchain exhaustion. Win32 requests an extra image when allowed; acquisition bound uses surface minimum. Diagnostic shows2 images and pass; final1EC5E9B4 passes same upstream test, blit control and10 resize transitions with7 exact readbacks. No reset; baseline restored. Full piglit and Linux parity pending."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Zink front/back fix](../evidence/windows/2026-09-26-E33-zink-front-back/RESULT.md)"
-  - id: M530
-    status: MEASURED
-    date: "2026-09-26"
-    claim: "Explicit OML swap intervals0/1 both fail Zink with SBC0 vs1-3 and both pass RadeonSI using unchanged tests. Zink post-controls pass; no reset. All1080 reference outcomes retained (925pass/149skip/1warn/5fail); exact44079 remainder starts full019 without filtering or oracle changes."
-    status_text: "MEASURED (unit A)"
-    evidence: "[OML intervals](../evidence/linux/2026-09-26-E33-glx-oml-intervals/RESULT.md)"
   - id: M531
     status: MEASURED
     date: "2026-09-26"
     claim: "Native D3D custom UMD through Zink/RADV on unit A passes4096 exact pixels after clear and shader draw, exit0 including teardown (run011). Zero GPU vertex resource and context-aware resource release repair CPU-frontend assumptions. App-local offscreen probe only; system DWM remains CPU8279AC7F. No native sharing, presentation, performance or full M13 acceptance claim."
     status_text: "MEASURED (unit A)"
     evidence: "[Native D3D GPU draw](../evidence/windows/2026-09-26-E34-native-d3d-zink/RESULT.md)"
+  - id: M533
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Native D3D -> Zink memory object -> RADV renders into an imported shared LB7A allocation: clear and shader readbacks pass4096 pixels each, original WDDM Lock2 reads4096 exact shader-red pixels, run002 exit0 including teardown. Diagnostic NT handle only, not runtime allocation/Present. Run001 failed original allocation check; Win32 environment lookup correction selects import. Baseline ICD restored after both tests."
+    status_text: "MEASURED (unit A)"
+    evidence: "[D3D shared GPU render](../evidence/windows/2026-09-26-E34-native-shared/RESULT.md)"
   - id: M534
     status: MEASURED
     date: "2026-09-26"
@@ -123,6 +68,12 @@ facts:
     claim: "Three hKMResource controls: nonzero input hRTResource, compiled Allocate layout agrees with WDK26100; GetSharedHandle succeeds on CPU and GPU UMD despite GPU callback hKMResource0. CPU second-device open passes; GPU open fails8007000e in USER_MEMORY import. Two independent Zink screens pass three4096-pixel clears, including survivor after first-device destruction. Baselines restored, DWM1856 unchanged. Hosted and GPU DWM remain unproven."
     status_text: "MEASURED (unit A)"
     evidence: "[Runtime controls](../evidence/windows/2026-09-26-E34-runtime-controls/RESULT.md)"
+  - id: M536
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Per-screen Vulkan instances pass the native two-device4096-pixel/lifetime control. Enumeration-only hosted RADV creates/destroys two paging queues via their matching D3D runtime callbacks, all HRESULT0; cache keyed by runtime identity, no borrowed-device DestroyDevice. Pixel control still uses standalone RADV; hosted logical-device creation intentionally unavailable. Baselines restored, DWM1856 unchanged; G0 not passed."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted paging bootstrap](../evidence/windows/2026-09-26-E34-hosted-bootstrap/RESULT.md)"
   - id: M539
     status: MEASURED
     date: "2026-09-26"
@@ -135,12 +86,44 @@ facts:
     claim: "Persistent hosted Zink screens pass native two-device red/blue/survivor-green readbacks,4096 exact pixels each, run013 exit0. Scoped DDI entry ownership and synchronous program jobs keep callbacks in the runtime domain; no wrong-thread diagnostic. Restoration needed rename after mapped-DLL copy failure; baseline hashes verified by restore013, DWM1052 unchanged. Runtime-surface import, Present and G0 remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[Hosted screens](../evidence/windows/2026-09-26-E34-hosted-screen/RESULT.md)"
+  - id: M541
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Hosted Zink imports runtime-owned shared LB7A allocations through private identity/allocation/GPU-VA contract, without surface Lock2. Three64x64 exact-color readbacks pass including surviving second device, run018 exit0. Separate staging oracle remains. Windows modifier placeholders and private image-layout pNext corrected. Baselines restored, DWM1052 unchanged. Cross-device contents, native Present and G0 remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted runtime surfaces](../evidence/windows/2026-09-26-E34-hosted-import/RESULT.md)"
+  - id: M542
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Borrowed-BO destruction now excludes runtime-owned allocations from RADV Evict. Unchanged shared-color control run019 exits0 with three exact4096-pixel readbacks and survivor teardown; all8 scoped gates pass. Independent baseline restoration succeeds, DWM1052 unchanged. Source ownership fix plus content regression, not per-allocation eviction trace; Present/G0 remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Borrowed residency regression](../evidence/windows/2026-09-26-E34-borrowed-residency/RESULT.md)"
+  - id: M543
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Hosted ABI4 publishes GPU progress fences; run026 orders render->Present->next render through GPU wait/signal callbacks on distinct contexts.120 native Presents pass, final readback0/76800 mismatches; three composed-screen ROIs each contain46800 exact expected pixels. Direct GFX-context Present failed887a0005 in run025 and is not retained. Baselines restored, DWM1052 remains CPU; DISCARD/blit control does not prove no-copy or G0."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted native Present](../evidence/windows/2026-09-26-E34-hosted-present/RESULT.md)"
   - id: M544
     status: MEASURED
     date: "2026-09-26"
     claim: "Hosted ABI5 preserves removal HRESULTs as STATUS_DEVICE_REMOVED and reports sticky loss to Vulkan/D3D. Positive run027 passes120 Presents and76800 pixels. Injected third-submit refusal (run028) and invalid local fence observation (run029) yield application Present/GetDeviceRemovedReason887a0005 at frame2, expected exit0. Baselines restored, DWM1052 unchanged. No actual TDR or recovery/leak/no-copy certification."
     status_text: "MEASURED (unit A)"
     evidence: "[Hosted device loss](../evidence/windows/2026-09-26-E34-hosted-loss/RESULT.md)"
+  - id: M545
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Native hosted two-buffer FLIP_SEQUENTIAL control confirms effect3/buffers2, completes120 Presents and exits0. Final readback0/76800 mismatches; three composed-screen ROIs each contain46800 exact expected red/blue/green pixels. Candidate015 unchanged from M544; baselines restored, CPU DWM1052 unchanged. Internal rotation callbacks, direct scanout, no-copy and GPU DWM remain unproven."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted flip-model window](../evidence/windows/2026-09-26-E34-hosted-flip/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M544", "auto": true, "cue": "...800 exact expected red/blue/green pixels. Candidate015 unchanged from M544; baselines restored, CPU DWM1052 unchanged. Internal rotation callbac..."}
+  - id: M546
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Hosted teardown resets completed Zink batches and requires sole resource/object references before runtime deallocation; borrowed BO CPU mapping rejected. run031 passes120 flip Presents,76800 final pixels and three46800-pixel screen ROIs; both releases report refs1/object_refs1 before successful Deallocate. Five-file patch replay and8 scoped gates pass. Baselines restored, CPU DWM1052 unchanged. Broad lifetime/loss cleanup and G0 remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Hosted allocation lifetime](../evidence/windows/2026-09-26-E34-hosted-lifetime/RESULT.md)"
   - id: M549
     status: MEASURED
     date: "2026-09-26"
@@ -159,12 +142,24 @@ facts:
     claim: "run032 injects7 CreateDevice failures: E_OUTOFMEMORY/null outputs,7 successful context cleanups. Same process then creates2 native devices and passes3 exact4096-pixel readbacks including survivor rendering. Baselines restored, CPU DWM9648 unchanged. BD-035 partial-init paths validated; destruction-callback failures, BD-036 and G0 remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[Creation failure recovery](../evidence/windows/2026-09-26-E34-create-failures/RESULT.md)"
+  - id: M552
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "DestroyResource uses deferred zero-flag Deallocate2 without explicit GPU-VA free; completion failure marks hosted loss and continues cleanup. run033 positive recreation/pixels passes; injected-loss034/035 each report887a0005 and complete deallocation/device teardown,exit0. Three-file replay/8 gates pass; baselines restored,CPU DWM9648 unchanged. Actual TDR, failing deallocation and G0 unproven."
+    status_text: "MEASURED (unit A and host)"
+    evidence: "[Loss-time resource cleanup](../evidence/windows/2026-09-26-E34-destroy-cleanup/RESULT.md)"
   - id: M554
     status: MEASURED
     date: "2026-09-26"
     claim: "SPIR-V bare sampler used driver_location instead of translated binding; corrected UMD5A48852B passes1x1/2x2 t1/s0 controls046/049 with3x4096 pixels each. Sampler/texture/wrap negatives047/048/050 each reject4096 pixels,exit6. Earlier043-045 failures retained.8 gates/three-file replay pass; baselines restored,CPU DWM9648 unchanged. Tested separate-slot SAMPLE path passes; broad sampling and G0 remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[Sampler binding correction](../evidence/windows/2026-09-26-E34-sampler-binding/RESULT.md)"
+  - id: M555
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "Native textured draw prototype039 passes3x4096 pixels after zero-base VertexID lowering and empty-layout initialization. Texture-index negative040 rejects4096 pixels; sampler-index negative041 incorrectly passes, reproduced042 without shader cache. Separate-sampler support NOT accepted. Earlier036 assertion/037-038 AV retained; baselines restored,CPU DWM9648 unchanged. G0 open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Texture prototype and failed negative control](../evidence/windows/2026-09-26-E34-texture-prototype/RESULT.md); [ID correction](../evidence/windows/2026-09-27-E34-fact-id-correction/CORRECTION.md)"
   - id: M557
     status: MEASURED
     date: "2026-09-27"
@@ -177,6 +172,18 @@ facts:
     claim: "Identical VertexID control0EF77CFC passes zero/start5/indexed-base7 cases on WARP058, baseline llvmpipe059 and hosted Zink060 UMD A68C2451: exact float RGBA at3 points per case. Zink lowering now runs in shader_init before info gathering with draw_parameters guard; frontend NOBASE unchanged. Initial invalid-signature WARP056 retained. Eight gates/replay pass; CPU DWM1528 unchanged and baselines restored. G0 open."
     status_text: "MEASURED (unit A)"
     evidence: "[Vertex-ID offsets](../evidence/windows/2026-09-27-E34-vertex-id/RESULT.md)"
+  - id: M559
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Audit control061 detects exactly3 image maps/144 requested bytes with correct VertexID pixels. Native flip062 completes120 Presents, monitored submitted/completed values agree through120, image maps remain0 in sampled rendering interval then1/307200 for final0/76800 readback. Persistent buffer maps are separately visible. Eight gates/seven-file replay pass; baselines restored, CPU DWM1528 unchanged. Counters alone do not prove no CPU copies or G0."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Audit positive controls](../evidence/windows/2026-09-27-E34-audit-controls/RESULT.md)"
+  - id: M561
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Classified map control063 passes VertexID pixels and records3 image READ requests of3x1 RGBA32_FLOAT/144 bytes with0 bucket overflow; persistent buffer requests separate. Eight gates and three-file replay pass; CPU DWM5324 unchanged, baselines restored. Actual persistent writes and DWM no-copy still require audit."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Map classification control](../evidence/windows/2026-09-27-E34-map-buckets/RESULT.md)"
   - id: M563
     status: MEASURED
     date: "2026-09-27"
@@ -191,33 +198,52 @@ facts:
     claim: "vkd3d-proton 472989aa over the WDDM RADV port reports D3D12 feature level 11_1 for the BC-250: TiledResourcesTier 0 (sparse still gated) is the only gap to 12_0/12_1; ResourceBindingTier 3, ConservativeRasterizationTier 3, ROVs, typed UAV loads, SM 6.8, RaytracingTier 1.1 present, mesh/VRS 0. Identical from the E36 consolidated ICD FAD08ECB and the D3DKMT-enumeration candidate 93B1D1FD, which also passes the E14 smoke. The pre-M496 baseline 9C40083C hangs at instance creation: minidump shows the ICD re-entering DXVK's CreateDXGIFactory2 on its held singleton lock. No rendering; baselines restored."
     status_text: "MEASURED (unit A)"
     evidence: "[D3D12 feature level](../evidence/windows/2026-09-27-E37-d3d12-feature-level/RESULT.md)"
-  - id: M569
+  - id: M565
     status: MEASURED
     date: "2026-09-27"
-    claim: "Registered Vulkan ICD on unit A promoted from 9C40083C (pre-M496 DXGI-by-name lookup) to 93B1D1FD (fork amdgpu-wddm/radv-wddm2-kmt-enum c34ab7cd: M496 full-path lookup plus D3DKMT adapter enumeration). Source comparison first: the hosted candidate 3508416F tree and the fork 940ab0eb differ in 3 of 86 changed files, licence headers and one comment only, so no ICD work is left out. Candidate passed the M546 flip control (120 Presents, 0/76800, three 46800-pixel ROIs) and, after promotion in place, the E14 smoke with live module witness. Old file kept as vulkan_radeon.9C40083C.dll; registry, UMD 8279AC7F, DWM 84 and KMD unchanged."
+    claim: "Completed-batch reclaim passes short072, contrasting067 device loss. Full073 exposes68x36 pitch320 rejected by RADV. Final UMD23F5269C uses256-byte alignment and passes074:1000 bidirectional exchanges,10 generations,2702400 pixels per direction,20 sole-reference closes. Global live KMD objects195 unchanged and submitted/completed deltas6000/6000. Native flip075 passes120 Presents and0/76800 readback. Eight gates/pitch replay pass; baselines restored,DWM84 unchanged. Broader sharing/residency and G0 gates remain open."
     status_text: "MEASURED (unit A)"
-    evidence: "[ICD baseline promotion](../evidence/windows/2026-09-27-E38-icd-baseline-promotion/RESULT.md)"
+    evidence: "[Sharing lifetime and pitch validation](../evidence/windows/2026-09-27-E34-cross-process-fixed/RESULT.md)"
+  - id: M566
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "CPU076/077 and hosted078/079 preserve an imported68x36 texture after its owner exits normally or is terminated after GPU completion. Each checks29376 ownership-phase pixels (before/after exit plus ten new writes) and20480 exchange pixels per direction, zero mismatches; survivor device remains healthy. Global KMD live objects195 unchanged in each GPU run, submission/completion deltas95/95. Baselines restored,DWM84 retained. In-flight termination, residency/TDR and broader G0 gates remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Shared texture owner exit](../evidence/windows/2026-09-27-E34-owner-exit/RESULT.md)"
+  - id: M567
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Native FL10_0 graphics controls080/081/082 pass eight depth/stencil, blend, conditional-shader and render-to-texture image stages on WARP, CPU and hosted GPU. Each checks32768 pixels; GPU hashes match WARP in all stages. CPU blend differs within the defined one-step UNORM8 tolerance, other hashes match. Global KMD work deltas17/17, live objects195 unchanged; resource teardown healthy, baselines restored and DWM84 retained. Sustained DWM/sharing/lifecycle gates remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Native graphics state](../evidence/windows/2026-09-27-E34-graphics-state/RESULT.md)"
+  - id: M570
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "With RADV_EXPERIMENTAL=sparse in the process environment, vkd3d-proton 472989aa over the promoted WDDM RADV ICD 93B1D1FD reports D3D12 feature level 12_1 and TiledResourcesTier 4 for the BC-250 (all other options identical to the default run, which stays at 11_1 / tier 0). The feature level therefore depends only on the port's sparse gate (radv_physical_device.c has_sparse or the experimental flag), not on the pending sparse CTS completion; correctness of sparse under load is not shown here. No swap, no rendering."
+    status_text: "MEASURED (unit A)"
+    evidence: "[FL with sparse flag](../evidence/windows/2026-09-27-E39-fl-sparse-flag/RESULT.md)"
+  - id: M572
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "WARP083/CPU084/GPU085 pass three batched solid-color cases: scissor/constant updates, DISCARD vertex/constant buffers, and indexed draws with nonzero start/base.768 draws and12288 final-image pixels per renderer, all hashes match; original M567 checks also pass. GPU work deltas23/23, live objects192 unchanged, baselines93B1D1FD/8279AC7F restored and DWM5748 unchanged. BD-043 not reproduced; sampled textures, intermediate images and presentation are not covered."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Batched draw isolation](../evidence/windows/2026-09-27-E34-batched-draws/RESULT.md)"
     edges:
-      - {"type": "uses", "to": "M496", "auto": true, "cue": "...e lookup) to 93B1D1FD (fork amdgpu-wddm/radv-wddm2-kmt-enum c34ab7cd: M496 full-path lookup plus D3DKMT adapter enumeration). Source comparison ..."}
-      - {"type": "uses", "to": "M546", "auto": true, "cue": "...nd one comment only, so no ICD work is left out. Candidate passed the M546 flip control (120 Presents, 0/76800, three 46800-pixel ROIs) and, aft..."}
-  - id: M571
-    status: MEASURED
-    date: "2026-09-27"
-    claim: "The Witcher 3 4.0 DX12 build (bin/x64_dx12, 4.0.0.103190) launched with vkd3d-proton 472989aa and DXVK 3.1.1 dxgi.dll next to it, RADV_EXPERIMENTAL=sparse, on the registered ICD 93B1D1FD renders its main menu correctly (three identical 1920x1200 captures at 21, 62 and 122 s) and stays responsive for the 150 s bound; module witness shows our d3d12/d3d12core/dxgi and vulkan_radeon 93B1D1FD; the vkd3d log shows DXR 1.1 state objects created and four failed shared-fence KMT handle exports that the game tolerates. First D3D12 frame content on the port. Menu only, no gameplay, no timing; game directory and settings restored."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Witcher 3 DX12 menu](../evidence/windows/2026-09-27-E40-witcher3-dx12-vkd3d/RESULT.md)"
+      - {"type": "uses", "to": "M567", "auto": true, "cue": "... and12288 final-image pixels per renderer, all hashes match; original M567 checks also pass. GPU work deltas23/23, live objects192 unchanged, ba..."}
   - id: M574
     status: MEASURED
     date: "2026-09-27"
     claim: "WARP086/CPU087 pass eight textured batch snapshots; hosted GPU088/089 terminate0xC0000409 before the first textured result, after eight prior graphics checks pass. Dump089 shows assertion count != 1 in pipe_reference_described via zink_batch_reference_program during Draw (FAST_FAIL_FATAL_APP_EXIT7). Baselines restored, CPU DWM5748 retained; relationship to BD-043 not established."
     status_text: "MEASURED (unit A)"
     evidence: "[Textured batch failure](../evidence/windows/2026-09-27-E34-textured-batch-failure/RESULT.md)"
-  - id: M577
+  - id: M575
     status: MEASURED
     date: "2026-09-27"
-    claim: "PresentMon 2.6.0 records no present of the Witcher 3 DX12 build on the port: two steered runs (225 s and 162 s, menu, save load and the Kaer Morhen scene rendering normally, ICD 93B1D1FD, vkd3d-proton 472989aa) gave a 0-byte CSV both with display/GPU tracking and with present cadence only, while the ETW session (DXGI, DxgKrnl, Kernel-Process providers) was running and the game had loaded the system dxgi.dll and DComp. Source reason: on the BC250 the WDDM RADV winsys selects Mesa's CPU-image WSI (radv_wddm2_wsi_init sets wsi->sw = true; the D3D12/DXGI bridge hooks exist but are not installed because no D3D12 UMD exists for the adapter, ADR 0015), so wsi_common_win32 takes the per-frame CPU copy/swizzle into a DIB, GDI BitBlt and DwmFlush path, which emits no DXGI or dxgkrnl present events (corrected 2026-09-27: the first wording said the hook was missing). Frame timing of this path needs an in-stack instrument. Restored after each run, Tctl peak 79.9."
+    claim: "Invalidating the cached graphics program on non-NULL stage replacement fixes M574 control090: eight textured snapshots match WARP/CPU. Regressions091/092/093 pass768 batched draws,1000 cross-process exchanges and120 flip Presents. UMD50491FA3/ICD3508416F; global submitted/completed deltas29/29,23/23,6000/6000,123/123 and live objects186 unchanged. Baselines restored, CPU DWM5748 unchanged. BD-043 and G0 dynamic visual acceptance remain open."
     status_text: "MEASURED (unit A)"
-    evidence: "[E42](../evidence/windows/2026-09-27-E42-witcher3-dx12-frame-timing/RESULT.md)"
+    evidence: "[Program binding fix](../evidence/windows/2026-09-27-E34-program-binding-fixed/RESULT.md)"
+    edges:
+      - {"type": "supersedes", "to": "M574", "scope": "partial", "cue": "...ating the cached graphics program on non-NULL stage replacement fixes M574 control090: eight textured snapshots match WARP/CPU. Regressions091/0..."}
   - id: M578
     status: MEASURED
     date: "2026-09-27"
@@ -230,6 +256,18 @@ facts:
     claim: "Candidate042 UMD8CDF2C85/ICD3508416F corrects frontend buffer-release ownership. Unchanged control098 passes viewport and stream/layout images, then fails vb-nooverwrite at4032/4096 pixels (exit2); full matrix and BD-043 remain open. Baselines restored, CPU DWM4400 unchanged."
     status_text: "MEASURED (unit A)"
     evidence: "[Partial buffer ownership validation](../evidence/windows/2026-09-27-E34-buffer-ownership-partial/RESULT.md)"
+  - id: M582
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Idle DISCARD fix UMD67E4C9F5/ICD3508416F passes control100:48 state images,196608 pixels and3072 draws across both Flush patterns, plus8 graphics cases. Diagnostic099 reproduced4032/4096 failure and mixed staging/direct maps. Exact patch replay verified; baselines restored, CPU DWM4400 retained. Sharing/Present and DWM validation remain pending; G0 open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Idle DISCARD control](../evidence/windows/2026-09-27-E34-idle-discard/RESULT.md)"
+  - id: M584
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "UMD67E4C9F5/ICD3508416F passes textured101,1000-exchange sharing102 (2702400 pixels per direction), and interactive flip104 (120 Presents,0/76800 differences).103 session0 swapchain creation fails887a0022 and is excluded. Baselines restored, CPU DWM4400 unchanged,104 task removed. Desktop validation remains pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Post-fix regressions](../evidence/windows/2026-09-27-E34-idle-discard-regressions/RESULT.md)"
   - id: M586
     status: MEASURED
     date: "2026-09-27"
@@ -244,30 +282,42 @@ facts:
     claim: "Repeated index DISCARD control passes64 images on WARP111/CPU112 but GPU113 UMD67E4C9F5 fails4032/4096 pixels in the new case. Clearing the cached index binding after backing replacement (UMD49AFB21F,114) makes all64 images/262144 pixels/4096 draws match WARP/CPU without diagnostic flush/wait or broad state forcing. Baselines restored, CPU DWM9192 retained. Desktop/sharing/Present validation pending, G0 open."
     status_text: "MEASURED (unit A)"
     evidence: "[Index DISCARD fix](../evidence/windows/2026-09-27-E34-index-discard-fixed/RESULT.md)"
-  - id: M597
+  - id: M592
     status: MEASURED
     date: "2026-09-27"
-    claim: "Clean Mesa source snapshot a0ad8af5 records36 hosted UMD input changes. Fresh615-step build succeeds; all12949 tracked files unchanged and tree clean. Candidate053 UMD5C74BF98 is bound to source/build hashes, with old49AFB21F preserved. Control118 prepared but not run; exact-artifact runtime validation and G0 remain open. No lab change."
-    status_text: "MEASURED (development build)"
-    evidence: "[Clean UMD build](../evidence/windows/2026-09-27-E34-clean-umd-build/RESULT.md)"
-  - id: M637
+    claim: "Index DISCARD candidate UMD49AFB21F/ICD3508416F passes textured115,1000-exchange sharing116 (2702400 pixels per direction), and interactive flip117 (120 Presents,0/76800 final differences). Baselines restored, CPU DWM9192 unchanged,117 task removed. Desktop validation pending, no promotion."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Index DISCARD regressions](../evidence/windows/2026-09-27-E34-index-discard-regressions/RESULT.md)"
+  - id: M599
     status: MEASURED
     date: "2026-09-27"
-    claim: "GPU Present distinguishes malformed buffer pointers/alignment from exhausted remaining capacity; unresolved allocation identity and unsupported format receive specific DDI errors. Fresh-context minimum capacities are compile-time checked.13 gates pass; DDI retry/status behavior not runtime-tested or deployed."
-    status_text: "MEASURED (host compilation/tests)"
-    evidence: "[Present statuses](../evidence/windows/2026-09-27-E34-present-status/RESULT.md)"
+    claim: "Clean-source UMD5C74BF98/ICD3508416F passes controls118-121:64 state images match WARP111, eight textured snapshots,1000 bidirectional exchanges (2702400 pixels each direction),120 interactive flip Presents with0/76800 final differences. Baselines restored, CPU DWM8116 unchanged,121 task removed. New-binary desktop validation and G0 remain open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Clean UMD regressions](../evidence/windows/2026-09-27-E34-clean-umd-regressions/RESULT.md)"
+  - id: M633
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "On KMD159, CPU123 and hosted GPU125 both pass101 exchanges/two generations across3 devices: duplicate-import close/write/reopen and normal owner-exit survival,452864 pixels each with no mismatches. Baseline files restored, DWM/boot retained, no TDR, tasks removed.124 stopped at a malformed hash pin before test launch. GPU Present0/full G0 open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Duplicate imports](../evidence/windows/2026-09-27-E34-duplicate-import/RESULT.md)"
   - id: M638
     status: CONFIRMED
     date: "2026-09-27"
     claim: "Exact hosted UMD source a0ad8af5 creates shared/presentable runtime surfaces as typed LB7A and imports those handles into Zink before the CPU Lock2 branch. Thus UMD-created DWM textures do not necessarily mean BC2A; no BC2A extension prerequisite is established for this path. Actual CDD destination/context, residency and ordering remain unmeasured."
     status_text: "CONFIRMED (source inspection only)"
     evidence: "[Interop surface identity](../evidence/windows/2026-09-27-E34-interop-surface-identity/RESULT.md)"
-  - id: M670
+  - id: M642
     status: MEASURED
     date: "2026-09-27"
-    claim: "Actual detached Windows-subsystem control starts with stderr descriptor-2:031 dup2 helper fails,032 shared freopen helper succeeds and readable marker passes. Secure/shared CRT controls also pass; /W4/WX builds and host PS5 parse pass.032 adds CreateDevice FILETIME/QPC brackets; prepared only, runtime/G0 unverified."
-    status_text: "MEASURED (host validation)"
-    evidence: "[Detached startup log](../evidence/windows/2026-09-27-E34-detached-startup-log/RESULT.md)"
+    claim: "On KMD160, CPU126 and hosted GPU127 pass101 exchanges/two generations across3 devices, duplicate-import reopen and normal owner-exit survival:452864 verified pixels each,zero mismatches. Baselines restored,DWM/boot retained,health15/guard0,tasks removed. Initial127 launcher stopped before task creation on stale CPU receipt path. Interop/GPU Present0; G0 open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[KMD160 shared imports](../evidence/windows/2026-09-27-E34-duplicate-import160/RESULT.md)"
+  - id: M680
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "Isolated Mesa9f8a1ff9 builds UMD04186900 with opt-in per-allocation uploader audit. Actual-code host control verifies4 allocations/4144 bytes,3 helper copies/4112 bytes,rollover across2 buffers,failed initial allocation and disabled-audit behavior;3 resources released. No lab deployment, performance or exhaustive CPU-store/G0 claim."
+    status_text: "MEASURED (host build/control)"
+    evidence: "[Uploader audit build](../evidence/windows/2026-09-27-E34-uploader-audit-build/RESULT.md)"
   - id: M684
     status: MEASURED
     date: "2026-09-27"
@@ -310,12 +360,24 @@ facts:
     claim: "Texture client005 on exact166/UMD3484e1f4 passes three76800-pixel checks and18 draws. GPU interval:32 completed descriptor spans/1792 bytes, no image-write map;12 intentional frame uploads separately detected. Store counters reconcile, no pending spans. CPU baseline restored/tasks removed. Instrument control only; DWM/G0 still open."
     status_text: "MEASURED (unit A)"
     evidence: "[Texture store control005](../evidence/windows/2026-09-28-E34-audit-client005/RESULT.md)"
-  - id: M714
+  - id: M703
     status: MEASURED
     date: "2026-09-28"
-    claim: "Same166 registered-node DIF install succeeds with problem22 retained; binding/configure/enable phases pass. Verify job times out70s after two stable CPU/health samples, so supervisor reports restore-unverified at115.106s. Independent final CPU preflight passes exact166/UMD8279/health15, same boot/DWM,67.2C; log setting restored/task removed. No169 replacement or G0 proof."
+    claim: "Audit client006 on exact166/UMD00b2e15e passes3 pixel controls and joins all29 independently expected Presents to2 imported surfaces with matching owner/allocation and wait/signal witnesses. No runtime-surface CPU maps; deliberate12 CPU-copy frames detected. CPU DWM/boot unchanged and rollback passes; not DWM/G0 acceptance."
     status_text: "MEASURED (unit A)"
-    evidence: "[Same166 registered control](../evidence/windows/2026-09-28-E34-same166-registered-control/RESULT.md)"
+    evidence: "[Runtime identity control006](../evidence/windows/2026-09-28-E34-audit-client006/RESULT.md)"
+  - id: M704
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Audit client007 on exact166/UMDd7948d8e passes pixel/copy controls and29 runtime Present joins. Independent marker8 snapshot reports completed29/signaled29, matching the known workload and event stream; no runtime surface maps. CPU DWM/boot preserved, rollback passes. Small-client control, not G0 acceptance."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Present count control007](../evidence/windows/2026-09-28-E34-audit-client007/RESULT.md)"
+  - id: M707
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Native hosted GPU window client001 produces31 textured frames and both primary/composed captures pass all76800 frozen client pixels. Exact candidate modules verified; CPU DWM/boot retained and rollback passes. Combined GPU DWM, independent hardware-execution and full no-copy scope remain separate."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Native window001](../evidence/windows/2026-09-28-E34-window-client001/RESULT.md)"
   - id: M725
     status: MEASURED
     date: "2026-09-28"
@@ -382,6 +444,12 @@ facts:
     claim: "Runtime009 native system D3D11 GPU FL11_1 renders64x64/two frames with exact ICDC0CE witness and checksum21f6950fc86132f4 matching CPU FL10_0; no API/query failure. Independent restoration passes41.885s. Offscreen control only, not full M14/Present/performance acceptance."
     status_text: "MEASURED (unit A)"
     evidence: "[Runtime009](../evidence/windows/2026-09-28-E34-m14-runtime009/RESULT.md)"
+  - id: M737
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Runtime010 completes native CPU/GPU draws/fill/shaders with exit0 and no API/query failures, but all three image checksums differ; strict gate rejects draws. Cause/extent unmeasured without pixels. Baseline restored41.566s."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Runtime010](../evidence/windows/2026-09-28-E34-m14-runtime010/RESULT.md)"
   - id: M738
     status: MEASURED
     date: "2026-09-28"
@@ -394,12 +462,6 @@ facts:
     claim: "Perapp001 same-GPU DXVK on exact ICDC0CE reproduces all three native runtime011 images byte for byte; CPU control also repeats. Both clients exit0, strict checks pass without tolerance. Independent restoration passes50.085s, task Missing. Offscreen equivalence only; window Present/lifecycle/performance remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[Same-GPU control](../evidence/windows/2026-09-28-E34-m14-perapp001/RESULT.md)"
-  - id: M741
-    status: MEASURED
-    date: "2026-09-28"
-    claim: "Window001 stops before D3D11 startup: user-session Cpu phase receives Win32 error5 opening privileged Bc250Rd for telemetry. GPU not launched; independent CPU171 restore/postflight/tree closure pass25.772s, task Missing. Controller/user-client split prepared, untested."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Window001 admission](../evidence/windows/2026-09-28-E34-m14-window001/RESULT.md)"
   - id: M744
     status: MEASURED
     date: "2026-09-28"
@@ -412,12 +474,30 @@ facts:
     claim: "Window004 CPU control passes; rebuilt ABI1.4 shell rejects frozen ABI1.3 engine with E_NOINTERFACE before GPU device creation. Host production-loader controls reproduce rejection and accept matching ABI1.3 header with the same DLLs. CPU171 restored41.800s, task Missing; window descriptor remains unmeasured."
     status_text: "MEASURED (unit A and host loader controls)"
     evidence: "[ABI pair admission](../evidence/windows/2026-09-28-E34-m14-window004/RESULT.md)"
+  - id: M746
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Window005 identifies the rejected GPU swap-chain descriptor: BGRA64x64, bindA8, misc20002 (SHARED and DISPLAYABLE), no primary descriptor. Existing converter rejects DISPLAYABLE. CPU passes; CPU171 restored44.619s, task Missing. Runtime-path fix prepared; successful GPU Present remains unmeasured."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Displayable descriptor](../evidence/windows/2026-09-28-E34-m14-window005/RESULT.md)"
   - id: M747
     status: MEASURED
     date: "2026-09-28"
     claim: "Window006 native system-D3D11 GPU FL11_1 window/Present control passes after DISPLAYABLE handling; six CPU/GPU scene PAMs match runtime011 byte for byte. No API/query failures. CPU171 restored49.543s, both Jobs closed and task Missing. Composition, copy-free transport, performance and broader D3D12/FL12_1 remain unproved."
     status_text: "MEASURED (unit A)"
     evidence: "[Native GPU window](../evidence/windows/2026-09-28-E34-m14-window006/RESULT.md)"
+  - id: M748
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Resize001 CPU and native GPU each pass three ResizeBuffers and twelve Presents/exact color readbacks across64x64,65x33,127x79,64x64. Independent host inspection validates every pixel in24 PAMs. CPU171 restored43.030s, both Jobs closed and task Missing. Synchronized functional control only; no performance, transport or exhaustive lifetime claim."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Resize and rotation](../evidence/windows/2026-09-28-E34-m14-resize001/RESULT.md)"
+  - id: M749
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Caps003 direct engineABI1.4/ICDC0CE passes injected allocation/Map/deferred-Update OOM and recovery, but reports0 heap usage through256MiB allocation/release/Trim, failing two assertions. Engine exits1 with closed Job; CPU171 postflight unchanged28.107s. New pair not admitted; native DDI error propagation remains unmeasured."
+    status_text: "MEASURED (unit A)"
+    evidence: "[ABI1.4 memory gate](../evidence/windows/2026-09-28-E34-m14-caps003/RESULT.md)"
   - id: M751
     status: MEASURED
     date: "2026-09-28"
@@ -438,6 +518,18 @@ facts:
     evidence: "[Native error probe](../evidence/windows/2026-09-28-E34-m14-errors001/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M754", "auto": true, "cue": "...le fails; static runtime fallback analysis and read-control follow in M754. CPU171 restored/postflight/tree closure52.323s, task Missing."}
+  - id: M754
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Native errors002 passes CPU/GPU controls: CreateBuffer OOM/null then recovery; write-only Map fallback with sticky0x887A0005, subsequent staging READ returns0x887A0005/null; Update sticky removal. Exact DC65/C388, CPU171 restored/postflight/tree closure51.183s, task Missing."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Read-side error control](../evidence/windows/2026-09-28-E34-m14-errors002/RESULT.md)"
+  - id: M755
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "Renamed engine11B0/test3E39 and ICDC388 pass caps006 with0 failures: Trim80->588->588->17MiB, OOM/recovery pass. Exact in-process ICD witness; FL11_1 config18ECA577 admitted. Engine10.508s, closed Job and unchanged CPU171 postflight29.069s."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Renamed pair admission](../evidence/windows/2026-09-28-E34-m14-caps006/RESULT.md)"
   - id: M756
     status: MEASURED
     date: "2026-09-28"
@@ -456,6 +548,12 @@ facts:
     claim: "Offline unit-A System32 D3D12Core10.0.22621.5415 FillAPIVersions iterates52 records ending at R8/build92, without108. Diagnostic adapter retargeted0092; host gates pass. Native negotiation remains unmeasured."
     status_text: "MEASURED (unit A binary, static analysis)"
     evidence: "[Runtime DDI versions](../evidence/windows/2026-09-28-E34-m15-runtime001/RESULT.md)"
+  - id: M759
+    status: MEASURED
+    date: "2026-09-28"
+    claim: "RT-fixed ICD9496 passes standalone D3D12 engine002 copy/readback and DXIL compute, each0/16384 differences; exact ICD witness. Job closed, CPU171 unchanged25.207s,67C. Non-RT regression only; RT traversal remains unmeasured."
+    status_text: "MEASURED (unit A)"
+    evidence: "[RT candidate regression](../evidence/windows/2026-09-28-E34-m15-engine002/RESULT.md)"
   - id: M763
     status: MEASURED
     date: "2026-09-28"
@@ -468,14 +566,6 @@ facts:
     claim: "Current CPU171 three-entry registration: KMT UMDRIVERNAME succeeds for DX9/10/11 but DX12 returns0xC000000D without a name. Diagnostic KMD-backed OpenAdapter12 still passes. Job empty, baseline unchanged18.729s; no registration mutation or runtime device test."
     status_text: "MEASURED (unit A)"
     evidence: "[DX12 UMD name query](../evidence/windows/2026-09-28-E34-m15-adapter-names001/RESULT.md)"
-  - id: M766
-    status: MEASURED
-    date: "2026-09-28"
-    claim: "Retained dxgkrnl AAF502AD static UMDRIVERNAME case calls CopyUmdFileName/GetUMDFileName, selecting stored ADAPTER_RENDER strings; empty or <> yields0xC000000D. Initialize parses up to6 names. Supports stored-name hypothesis for M765, not a measured branch, refresh lifetime or sufficient restart."
-    status_text: "MEASURED (unit A binary, static analysis)"
-    evidence: "[DX12 name selection](../evidence/windows/2026-09-28-E34-m15-name-selection001/RESULT.md)"
-    edges:
-      - {"type": "uses", "to": "M765", "auto": true, "cue": ".... Initialize parses up to6 names. Supports stored-name hypothesis for M765, not a measured branch, refresh lifetime or sufficient restart."}
   - id: M768
     status: MEASURED
     date: "2026-09-28"

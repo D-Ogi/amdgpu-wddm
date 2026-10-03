@@ -22,6 +22,20 @@ facts:
     claim: "Cache-intent-v2 benchmark remains below Linux1000MHz TinyLlama reference"
     status_text: "MEASURED (unit A)"
     evidence: "[bench07100-v2](../evidence/windows/2026-09-23-E27-m9-inference/bench07100-v2/): b9564,pp512/tg128,r3,t6,ngl99,1000MHz:1099.25/116.79tokens/s versusLinux1119.59/154.92;stories15M48516.72/533.42 with high generation spread. FinalGFX12923/12923,paging72525/72525,zero faults/noTDR. Single-session comparison, backend/default caveats; not causal cache speedup proof"
+  - id: M321
+    status: MEASURED
+    date: "2026-09-23"
+    claim: "Current07102 TinyLlama baseline remains below Linux"
+    status_text: "MEASURED (unit A)"
+    evidence: "[bench07102-v2](../evidence/windows/2026-09-23-E27-m9-inference/bench07102-v2/): b9564 Vulkan ngl99/t6/pp512/tg128/r3, exactv2ICD witnesses, nativeexits0. TinyLlama1082.322790/115.061026 tokens/s, comparedLinux1119.59/154.92@1000MHz with M274 configuration caveats. No causal performance-change claim. Finalgfx16960/16960,paging425844/425844,noTDR,timeouts/refusals0,sameboot"
+    edges:
+      - {"type": "uses", "to": "M274", "auto": true, "cue": "....322790/115.061026 tokens/s, comparedLinux1119.59/154.92@1000MHz with M274 configuration caveats. No causal performance-change claim. Finalgfx16..."}
+  - id: M338
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Current105 inference baseline and UMD function cost measured"
+    status_text: "MEASURED (unit A)"
+    evidence: "[bench07105](../evidence/windows/2026-09-24-E27-m9-recovery/bench07105/RESULT.md): native0/loader/JSONsettings matchM321;Tiny1101.128220/118.277614tokens/s;stories48980.311409/533.487457 withlargevariation. UMD10365calls/159.7743ms,notwholelatency. Reserved50->75,heap0,allfencescomplete/noTDR. No causal improvement or Windows superiority claim,sameboot"
   - id: M380
     status: MEASURED
     date: "2026-09-24"
@@ -45,6 +59,48 @@ facts:
     evidence: "[paired raw JSON and configuration](../evidence/windows/2026-09-24-E27-m9-recovery/radv-main/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M412", "auto": true, "cue": "Paired new/old ICD benchmarks with KMD127, M412 desktop, same headless worker and pp512/tg128,r3,t6,ngl99 yield TinyL..."}
+  - id: M493
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Asteroids Vulkan on KMD151/Mesa4D027149 times out. A stage-instrumented30-second reproduction completes initialization and five Present calls; the sixth Present does not return. That method includes submission, presentation and acquisition, so the exact blocking call remains open. Neither660-frame/image acceptance nor Linux parity passes. Registry restored without reboot."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Asteroids Present stall](../evidence/windows/2026-09-25-E33-asteroids-present/RESULT.md)"
+  - id: M494
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Asteroids initially fails before GPU submission:16 IBs/2012032bytes exceed the1MiB gather limit. Experimental dynamic gather16CDEA79 gets255 outer Present completions/256 successful Vulkan Present returns, then Windows bugchecks0x116;660-frame acceptance fails. Baseline ICD restored after automatic reboot. No image/performance claim or promotion; TDR cause remains open."
+    status_text: "MEASURED (unit A)"
+    evidence: "[gather and TDR](../evidence/windows/2026-09-25-E33-gather-capacity/RESULT.md)"
+  - id: M495
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Asteroids Vulkan completes660 frames at1080x720 on KMD151/ICD16CDEA79 after fixing retained-duration-query capacity, initial window dimensions and the PowerShell parser. All660 CPU/GPU rows validate; final image visibly renders the scene. Same GPU generation before/after and baseline ICD restored. Linux image/performance parity and full API/CTS acceptance remain pending; prior TDR causality is not fully established."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Asteroids660](../evidence/windows/2026-09-25-E33-asteroids-660/RESULT.md)"
+  - id: M498
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "D3D12/vkd3d Asteroids exceeded the16-IB collector before submission. Candidate8B5EC055 replaces that cap with reusable queue storage;18fragments/2011168bytes execute and660frames1080x720 complete, exit0, six module witnesses and complete CPU/GPU CSVs. Visible asteroid capture retained; baseline restored without reset. Linux/Proton image/performance parity remains pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[D3D12 collection](../evidence/windows/2026-09-25-E33-d3d12-ib-collection/RESULT.md)"
+  - id: M499
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "DXUT rejected windowed1080x720 by checking fullscreen display modes. Limit that check to fullscreen and use DXUT quitafterframe659 for660frames. D3D9 completes660frames, exit0,1080x720 textured-cube capture and all3modules; D3D10 renders660frames but PNG capture fails80004005, exit5, not accepted. Baseline ICD restored; Linux parity pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Instancing window](../evidence/windows/2026-09-26-E33-instancing-window/RESULT.md)"
+  - id: M500
+    status: MEASURED
+    date: "2026-09-26"
+    claim: "D3D10 Instancing direct PNG capture fails80004005 on an sRGB backbuffer. Explicit byte-preserving UNORM staging copy/readback then PNG save succeeds:660frames1080x720, exit0, five module witnesses, visible island/tree capture. GPU generation retained and baseline restored. Linux/Proton image/performance parity remains pending."
+    status_text: "MEASURED (unit A)"
+    evidence: "[D3D10 capture](../evidence/windows/2026-09-26-E33-d3d10-capture/RESULT.md)"
+  - id: M571
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "The Witcher 3 4.0 DX12 build (bin/x64_dx12, 4.0.0.103190) launched with vkd3d-proton 472989aa and DXVK 3.1.1 dxgi.dll next to it, RADV_EXPERIMENTAL=sparse, on the registered ICD 93B1D1FD renders its main menu correctly (three identical 1920x1200 captures at 21, 62 and 122 s) and stays responsive for the 150 s bound; module witness shows our d3d12/d3d12core/dxgi and vulkan_radeon 93B1D1FD; the vkd3d log shows DXR 1.1 state objects created and four failed shared-fence KMT handle exports that the game tolerates. First D3D12 frame content on the port. Menu only, no gameplay, no timing; game directory and settings restored."
+    status_text: "MEASURED (unit A)"
+    evidence: "[Witcher 3 DX12 menu](../evidence/windows/2026-09-27-E40-witcher3-dx12-vkd3d/RESULT.md)"
   - id: M573
     status: MEASURED
     date: "2026-09-27"
@@ -53,6 +109,12 @@ facts:
     evidence: "[Witcher 3 DX12 scene](../evidence/windows/2026-09-27-E41-witcher3-dx12-gameplay/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M571", "auto": true, "cue": "...3.8 GB, Tctl peak 77.8 during loading; vkd3d log identical in kind to M571 (DXR state objects, four failed shared-fence KMT exports), no device ..."}
+  - id: M577
+    status: MEASURED
+    date: "2026-09-27"
+    claim: "PresentMon 2.6.0 records no present of the Witcher 3 DX12 build on the port: two steered runs (225 s and 162 s, menu, save load and the Kaer Morhen scene rendering normally, ICD 93B1D1FD, vkd3d-proton 472989aa) gave a 0-byte CSV both with display/GPU tracking and with present cadence only, while the ETW session (DXGI, DxgKrnl, Kernel-Process providers) was running and the game had loaded the system dxgi.dll and DComp. Source reason: on the BC250 the WDDM RADV winsys selects Mesa's CPU-image WSI (radv_wddm2_wsi_init sets wsi->sw = true; the D3D12/DXGI bridge hooks exist but are not installed because no D3D12 UMD exists for the adapter, ADR 0015), so wsi_common_win32 takes the per-frame CPU copy/swizzle into a DIB, GDI BitBlt and DwmFlush path, which emits no DXGI or dxgkrnl present events (corrected 2026-09-27: the first wording said the hook was missing). Frame timing of this path needs an in-stack instrument. Restored after each run, Tctl peak 79.9."
+    status_text: "MEASURED (unit A)"
+    evidence: "[E42](../evidence/windows/2026-09-27-E42-witcher3-dx12-frame-timing/RESULT.md)"
   - id: M580
     status: MEASURED
     date: "2026-09-27"
@@ -80,6 +142,20 @@ facts:
     claim: "The Witcher 3 preset HIGH, 1920x1080 fullscreen output with the game's FSR 2 upscaling in its Auto quality mode (AAMode 5, FSR2Quality 0: the game's DX12 default, which the session tooling did not set; every settings backup since 2026-09-29 shows it), DRS off, same engine, ICD and route: on the GPU-composed desktop 35.5 and 35.4 frames/s in the 40 s window (217, 218; median 26.7 and 27.9 ms) against 21.1 frames/s (median 48.1 ms) on the CPU-composed desktop (214); DPM raised to 2000 MHz on the GPU route and never on the CPU route; DxgKrnl DMA busy 79.2 % and 73.3 % against 36.2 % of the window; 0 VM faults and 0 kernel software blits; Task Manager's counters attribute the 3D engine (61.7 % average in 217's world) to the game and show DWM at 8.6 % of one logical CPU. GPU DWM promoted to the lab default at 2026-10-01T01:50Z"
     status_text: "MEASURED (unit A)"
     evidence: "[GPU DWM ladder](../evidence/windows/2026-10-01-E34-gpu-dwm-ladder/RESULT.md)"
+  - id: M775
+    status: MEASURED
+    date: "2026-10-01"
+    date_from: "evidence-path"
+    claim: "The Witcher 3 at native 1920x1080 fullscreen (FXAA, no upscaler, frame generation and dynamic resolution off) on one build, kernel driver 0.7.193.1 with DPM up to 2000 MHz, D3D12 shell 6D22D305 (adapter107), engine 15E3E24E and ICD 2A13235D, desktop composed on the GPU, 7-minute interactive sessions: 40 s window low 45.3, high 31.3 and high with RT 9.3 frames/s (trials 246, 249, 250; medians 21.55, 31.10 and 107.02 ms); the 3D engine 65.4 %, 96.0 % and 97.8 % busy in those windows, at 2000 MHz for high and high with RT; every shot correct; no bugcheck, fence timeout or TDR, and the GCVM protection fault status, which that driver never clears, read 0 after trial 250; high with RT equals trial 223's 9.1 frames/s at an 1800 MHz thermal cap, so that frame does not follow the shader clock"
+    status_text: "MEASURED (unit A)"
+    evidence: "[E47](../evidence/windows/2026-10-01-E47-witcher3-preset-matrix/RESULT.md)"
+  - id: M776
+    status: MEASURED
+    date: "2026-10-01"
+    date_from: "evidence-path"
+    claim: "GPU memory bandwidth on unit A through Vulkan compute (`tools/win/vkmembw`, 256 MiB buffers, GPU timestamps, copy and read checked against CPU oracles; kernel driver 0.7.193.1, registered Vulkan ICD): copy 386-389 GB/s, read 373-386 GB/s, write 370-375 GB/s (GB = 10^9 bytes, copy counted as read plus write), the same with the shader clock at 1000 MHz (no warmup, 60 governor samples at 1000) and at 2000 MHz (after a 2 s copy warmup), and the same from the DEVICE_LOCAL type and the HOST_VISIBLE + HOST_COHERENT type of heap 0; a negative control one element short fails both checks; the same binary reads about 900 GB/s on an RTX 4090 (1008 nominal). DRAM is not in a low state under this driver, and its bandwidth does not follow the shader clock"
+    status_text: "MEASURED (unit A)"
+    evidence: "[E48](../evidence/windows/2026-10-01-E48-gpu-memory-bandwidth/README.md)"
   - id: M777
     status: MEASURED
     date: "2026-10-01"

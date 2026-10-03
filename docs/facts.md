@@ -14,14 +14,14 @@ Facts are kept as a graph in [`facts/data/`](facts/data/), one YAML file per are
 
 | Area | Facts | Status | Graphs |
 |---|---|---|---|
-| [Hardware, registers and firmware](facts/hardware.md) | 106 | 3 HYPOTHESIS, 71 MEASURED, 30 CONFIRMED, 2 REFUTED | [graphs](facts/graphs/hardware.md) |
-| [Kernel driver and WDDM](facts/kmd.md) | 336 | 236 MEASURED, 99 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/kmd.md) |
-| [Display, DWM and Present](facts/display.md) | 130 | 126 MEASURED, 4 CONFIRMED | [graphs](facts/graphs/display.md) |
-| [ICD, Vulkan, OpenGL and compute](facts/icd.md) | 69 | 65 MEASURED, 4 CONFIRMED | [graphs](facts/graphs/icd.md) |
-| [Direct3D through the system runtime](facts/d3d.md) | 87 | 85 MEASURED, 2 CONFIRMED | [graphs](facts/graphs/d3d.md) |
-| [Games and performance](facts/games.md) | 12 | 12 MEASURED | [graphs](facts/graphs/games.md) |
-| [Linux reference](facts/linux.md) | 24 | 1 HYPOTHESIS, 20 MEASURED, 2 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/linux.md) |
-| [Tooling, build and lab](facts/tooling.md) | 25 | 23 MEASURED, 2 CONFIRMED | [graphs](facts/graphs/tooling.md) |
+| [Hardware, registers and firmware](facts/hardware.md) | 96 | 3 HYPOTHESIS, 65 MEASURED, 26 CONFIRMED, 2 REFUTED | [graphs](facts/graphs/hardware.md) |
+| [Kernel driver and WDDM](facts/kmd.md) | 288 | 189 MEASURED, 99 CONFIRMED | [graphs](facts/graphs/kmd.md) |
+| [Display, DWM and Present](facts/display.md) | 137 | 129 MEASURED, 7 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/display.md) |
+| [ICD, Vulkan, OpenGL and compute](facts/icd.md) | 62 | 57 MEASURED, 5 CONFIRMED | [graphs](facts/graphs/icd.md) |
+| [Direct3D through the system runtime](facts/d3d.md) | 102 | 101 MEASURED, 1 CONFIRMED | [graphs](facts/graphs/d3d.md) |
+| [Games and performance](facts/games.md) | 24 | 24 MEASURED | [graphs](facts/graphs/games.md) |
+| [Linux reference](facts/linux.md) | 47 | 1 HYPOTHESIS, 40 MEASURED, 5 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/linux.md) |
+| [Tooling, build and lab](facts/tooling.md) | 33 | 33 MEASURED | [graphs](facts/graphs/tooling.md) |
 
 Live facts only, one line each: [`facts/current.md`](facts/current.md) (785). Every ID and its page: [`facts/ids.md`](facts/ids.md).
 
@@ -31,39 +31,31 @@ Relations between areas: the number of edges from facts in one area to facts in 
 
 ```mermaid
 flowchart LR
-  hardware["Hardware, registers and firmware<br/>106 facts, 23 internal edges"]
-  kmd["Kernel driver and WDDM<br/>336 facts, 94 internal edges"]
-  display["Display, DWM and Present<br/>130 facts, 23 internal edges"]
-  icd["ICD, Vulkan, OpenGL and compute<br/>69 facts, 5 internal edges"]
-  d3d["Direct3D through the system runtime<br/>87 facts, 3 internal edges"]
-  games["Games and performance<br/>12 facts, 2 internal edges"]
-  linux["Linux reference<br/>24 facts, 1 internal edges"]
-  tooling["Tooling, build and lab<br/>25 facts, 0 internal edges"]
-  d3d -->|2| display
-  d3d -->|2| kmd
-  d3d -->|1| tooling
-  display -->|3| d3d
-  display -->|6| hardware
-  display -->|3| kmd
-  display -->|1| tooling
-  games -->|1| d3d
-  games -->|2| icd
-  hardware -->|2| display
-  hardware -->|8| kmd
-  hardware -->|2| linux
-  icd -->|1| d3d
-  icd -->|1| games
-  icd -->|5| kmd
-  kmd -->|1| d3d
-  kmd -->|3| display
-  kmd -->|8| hardware
-  kmd -->|2| icd
-  kmd -->|2| linux
-  kmd -->|1| tooling
-  linux -->|4| hardware
+  hardware["Hardware, registers and firmware<br/>96 facts, 19 internal edges"]
+  kmd["Kernel driver and WDDM<br/>288 facts, 83 internal edges"]
+  display["Display, DWM and Present<br/>137 facts, 37 internal edges"]
+  icd["ICD, Vulkan, OpenGL and compute<br/>62 facts, 7 internal edges"]
+  d3d["Direct3D through the system runtime<br/>102 facts, 7 internal edges"]
+  games["Games and performance<br/>24 facts, 4 internal edges"]
+  linux["Linux reference<br/>47 facts, 8 internal edges"]
+  tooling["Tooling, build and lab<br/>33 facts, 1 internal edges"]
+  d3d -->|1| display
+  display -->|2| d3d
+  display -->|4| hardware
+  display -->|4| kmd
+  games -->|2| display
+  hardware -->|3| kmd
+  hardware -->|7| linux
+  icd -->|2| d3d
+  icd -->|1| kmd
+  icd -->|1| linux
+  kmd -->|5| hardware
+  kmd -->|3| linux
+  linux -->|7| hardware
+  linux -->|3| icd
   linux -->|1| kmd
-  tooling -->|1| display
-  tooling -->|1| hardware
+  tooling -->|1| d3d
+  tooling -->|2| display
   tooling -->|1| kmd
 ```
 

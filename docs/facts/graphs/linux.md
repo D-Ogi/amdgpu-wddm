@@ -6,56 +6,98 @@ Table: [`../linux.md`](../linux.md). Colours: status. Edge types: `supersedes`, 
 
 ## Corrections and support
 
-6 facts, 3 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+10 facts, 5 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
   M5["M5"]:::MEASURED
   M10["M10"]:::MEASURED
   M12["M12"]:::MEASURED
+  M35["M35<br/>hardware"]:::MEASURED
+  M333["M333"]:::CONFIRMED
+  M509["M509<br/>icd"]:::MEASURED
+  M510["M510"]:::MEASURED
   S3["S3<br/>hardware"]:::HYPOTHESIS
   S4["S4"]:::HYPOTHESIS
   R3["R3<br/>hardware"]:::REFUTED
   M5 -.->|refutes| S3
   M10 ==>|supports| S4
   M12 -.->|refutes| R3
+  M333 ==>|supersedes| M35
+  M510 ==>|supports| M509
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class S3,R3 other
+  class M35,M509,S3,R3 other
 ```
 
 ## References
 
-11 facts, 7 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+29 facts, 25 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
   M5["M5"]:::MEASURED
   M18["M18<br/>hardware"]:::MEASURED
-  M40["M40<br/>kmd"]:::MEASURED
-  M41["M41<br/>hardware"]:::MEASURED
+  M24["M24"]:::MEASURED
+  M25["M25<br/>hardware"]:::MEASURED
+  M35["M35<br/>hardware"]:::MEASURED
+  M38["M38<br/>kmd"]:::MEASURED
+  M40["M40"]:::MEASURED
+  M41["M41"]:::MEASURED
   M42["M42"]:::MEASURED
+  M43["M43<br/>hardware"]:::MEASURED
+  M44["M44<br/>hardware"]:::MEASURED
+  M46["M46"]:::MEASURED
   M48["M48"]:::MEASURED
-  M54["M54<br/>hardware"]:::MEASURED
-  M55["M55<br/>hardware"]:::MEASURED
-  M78["M78"]:::MEASURED
-  M101["M101<br/>kmd"]:::MEASURED
-  M133["M133<br/>kmd"]:::MEASURED
+  M50["M50"]:::MEASURED
+  M53["M53"]:::MEASURED
+  M54["M54"]:::MEASURED
+  M55["M55"]:::MEASURED
+  M58["M58<br/>hardware"]:::MEASURED
+  M59["M59<br/>hardware"]:::MEASURED
+  M78["M78<br/>kmd"]:::MEASURED
+  M95["M95<br/>hardware"]:::MEASURED
+  M113["M113<br/>kmd"]:::MEASURED
+  M114["M114<br/>kmd"]:::MEASURED
+  M139["M139<br/>icd"]:::CONFIRMED
+  M333["M333"]:::CONFIRMED
+  M508["M508<br/>icd"]:::MEASURED
+  M510["M510"]:::MEASURED
+  M515["M515<br/>icd"]:::MEASURED
+  M516["M516"]:::MEASURED
   M18 --> M5
-  M54 --> M42
-  M101 --> M78
-  M133 --> M78
+  M35 --> M333
+  M43 --> M40
+  M58 --> M54
+  M58 --> M55
+  M59 --> M55
+  M95 --> M53
+  M78 --> M55
+  M113 --> M40
+  M114 --> M40
+  M139 --> M50
+  M24 --> M25
+  M40 --> M38
+  M41 --> M24
+  M41 --> M25
   M48 --> M40
   M48 --> M41
-  M78 --> M55
+  M50 --> M46
+  M54 --> M42
+  M54 --> M44
+  M55 --> M44
+  M55 --> M53
+  M55 --> M54
+  M510 --> M508
+  M516 --> M515
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M18,M40,M41,M54,M55,M101,M133 other
+  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515 other
 ```
 

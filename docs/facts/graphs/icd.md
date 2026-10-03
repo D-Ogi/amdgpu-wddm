@@ -12,8 +12,8 @@ Table: [`../icd.md`](../icd.md). Colours: status. Edge types: `supersedes`, `ref
 flowchart LR
   M251["M251<br/>kmd"]:::MEASURED
   M253["M253"]:::CONFIRMED
-  M509["M509<br/>kmd"]:::MEASURED
-  M510["M510"]:::MEASURED
+  M509["M509"]:::MEASURED
+  M510["M510<br/>linux"]:::MEASURED
   M253 ==>|supersedes| M251
   M510 ==>|supports| M509
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
@@ -21,58 +21,51 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M251,M509 other
+  class M251,M510 other
 ```
 
 ## References
 
-24 facts, 14 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+19 facts, 12 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
-  M46["M46<br/>kmd"]:::MEASURED
-  M50["M50"]:::MEASURED
-  M139["M139<br/>kmd"]:::CONFIRMED
-  M166["M166<br/>kmd"]:::MEASURED
+  M50["M50<br/>linux"]:::MEASURED
+  M139["M139"]:::CONFIRMED
+  M166["M166"]:::MEASURED
   M252["M252"]:::MEASURED
   M253["M253"]:::CONFIRMED
-  M274["M274<br/>games"]:::MEASURED
-  M321["M321"]:::MEASURED
-  M412["M412"]:::MEASURED
-  M413["M413<br/>games"]:::MEASURED
-  M415["M415<br/>games"]:::MEASURED
-  M465["M465"]:::CONFIRMED
-  M467["M467<br/>kmd"]:::CONFIRMED
   M479["M479"]:::MEASURED
   M480["M480"]:::MEASURED
   M483["M483"]:::MEASURED
-  M508["M508<br/>kmd"]:::MEASURED
-  M510["M510"]:::MEASURED
+  M496["M496<br/>d3d"]:::MEASURED
+  M508["M508"]:::MEASURED
+  M509["M509"]:::MEASURED
+  M510["M510<br/>linux"]:::MEASURED
   M515["M515"]:::MEASURED
-  M516["M516"]:::MEASURED
-  M569["M569<br/>d3d"]:::MEASURED
+  M516["M516<br/>linux"]:::MEASURED
+  M546["M546<br/>d3d"]:::MEASURED
+  M569["M569"]:::MEASURED
   M581["M581"]:::MEASURED
   M583["M583"]:::MEASURED
   M665["M665"]:::MEASURED
   M139 --> M50
-  M467 --> M465
-  M50 --> M46
   M252 --> M253
   M253 --> M166
-  M321 --> M274
   M480 --> M479
   M483 --> M480
-  M510 --> M508
-  M516 --> M515
+  M509 --> M508
+  M569 --> M496
+  M569 --> M546
   M583 --> M581
   M665 --> M569
-  M413 --> M412
-  M415 --> M412
+  M510 --> M508
+  M516 --> M515
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M46,M139,M166,M274,M413,M415,M467,M508,M569 other
+  class M50,M496,M510,M516,M546 other
 ```
 

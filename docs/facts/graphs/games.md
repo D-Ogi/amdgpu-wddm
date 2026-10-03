@@ -15,12 +15,12 @@ None in this area.
 ```mermaid
 flowchart LR
   M274["M274"]:::MEASURED
-  M321["M321<br/>icd"]:::MEASURED
+  M321["M321"]:::MEASURED
   M380["M380"]:::MEASURED
-  M412["M412<br/>icd"]:::MEASURED
+  M412["M412<br/>display"]:::MEASURED
   M413["M413"]:::MEASURED
   M415["M415"]:::MEASURED
-  M571["M571<br/>d3d"]:::MEASURED
+  M571["M571"]:::MEASURED
   M573["M573"]:::MEASURED
   M607["M607"]:::MEASURED
   M610["M610"]:::MEASURED
@@ -35,6 +35,6 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M321,M412,M571 other
+  class M412 other
 ```
 
