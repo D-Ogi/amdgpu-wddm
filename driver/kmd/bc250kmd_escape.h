@@ -35,7 +35,13 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C5u       // revision 197: the DPM thermal cap's re-entry steps a hot step after the
+#define BC250_KMD_VERSION 0x000700C6u       // revision 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
+                                            // ends the GPU DWM interop session, so a clean restart no
+                                            // longer reads as a dead boot (BD-059): \Callback\PowerState
+                                            // and the adapter's D3 for a system action unmark, S0 marks
+                                            // again; RUN_INTEROP ends 3 system-power and 4 adapter-d3,
+                                            // flags POWER_CALLBACK and DOWN. No struct changed.
+                                            // 197: the DPM thermal cap's re-entry steps a hot step after the
                                             // last cap change, not at every crossing of 87 C, and RUN_DPM_TUNE
                                             // ABI 2 (152 bytes, ABI 1 still taken) sets the hot step and an
                                             // optional soft release below 87 C at run time (BD-055).
@@ -292,9 +298,13 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 #define BC250_INTEROP_FLAG_CDD_ABSENT 256u       // EnableCddDwmInterop absent: default 1
 #define BC250_INTEROP_FLAG_BLIT_UNREADABLE 512u  // not a REG_DWORD, or the read failed
 #define BC250_INTEROP_FLAG_CDD_UNREADABLE 1024u
+#define BC250_INTEROP_FLAG_POWER_CALLBACK 2048u  // the \Callback\PowerState registration is in place (0.7.198)
+#define BC250_INTEROP_FLAG_DOWN 4096u            // a system power transition began and has not come back (0.7.198)
 #define BC250_INTEROP_END_NONE 0u
 #define BC250_INTEROP_END_STOP 1u                // the device stopped with the session marked
 #define BC250_INTEROP_END_USERS 2u               // the last device that used the path was destroyed (DWM exit)
+#define BC250_INTEROP_END_SYSTEM_POWER 3u        // a system sleep or shutdown began: \Callback\PowerState (0.7.198)
+#define BC250_INTEROP_END_ADAPTER_D3 4u          // the adapter went to D3 for a system sleep or shutdown (0.7.198)
 typedef struct _BC250_ESCAPE_INTEROP {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;

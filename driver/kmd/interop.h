@@ -15,9 +15,11 @@ typedef struct _BC250_INTEROP_SNAP {
 } BC250_INTEROP_SNAP;
 
 typedef struct _BC250_INTEROP_STATE {
-    KMUTEX Lock;                            // start, user begin/end, stop: PASSIVE_LEVEL registry transitions
+    KMUTEX Lock;                            // start, user begin/end, stop, power: PASSIVE_LEVEL registry transitions
     KSPIN_LOCK SnapLock;                    // Snap, read by the escape and the summary
-    BOOLEAN Marked;                         // InteropSession is on disk for this start (under Lock)
+    struct bc250_interop_session Session;   // under Lock: users, marked (InteropSession on disk), down
+    LIST_ENTRY Link;                        // in the power callback's list from InteropStart to InteropStop/Remove
+    BOOLEAN Listed;                         // under the list's lock
     BC250_INTEROP_SNAP Work;                // under Lock
     BC250_INTEROP_SNAP Snap;                // under SnapLock, a copy of Work
 } BC250_INTEROP_STATE;
