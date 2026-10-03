@@ -6,24 +6,27 @@ Table: [`../icd.md`](../icd.md). Colours: status. Edge types: `supersedes`, `ref
 
 ## Corrections and support
 
-2 facts, 1 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+4 facts, 2 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
   M251["M251<br/>kmd"]:::MEASURED
   M253["M253"]:::CONFIRMED
+  M509["M509<br/>kmd"]:::MEASURED
+  M510["M510"]:::MEASURED
   M253 ==>|supersedes| M251
+  M510 ==>|supports| M509
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M251 other
+  class M251,M509 other
 ```
 
 ## References
 
-25 facts, 15 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+24 facts, 14 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -44,7 +47,6 @@ flowchart LR
   M480["M480"]:::MEASURED
   M483["M483"]:::MEASURED
   M508["M508<br/>kmd"]:::MEASURED
-  M509["M509<br/>kmd"]:::MEASURED
   M510["M510"]:::MEASURED
   M515["M515"]:::MEASURED
   M516["M516"]:::MEASURED
@@ -61,7 +63,6 @@ flowchart LR
   M480 --> M479
   M483 --> M480
   M510 --> M508
-  M510 --> M509
   M516 --> M515
   M583 --> M581
   M665 --> M569
@@ -72,6 +73,6 @@ flowchart LR
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M46,M139,M166,M274,M413,M415,M467,M508,M509,M569 other
+  class M46,M139,M166,M274,M413,M415,M467,M508,M569 other
 ```
 

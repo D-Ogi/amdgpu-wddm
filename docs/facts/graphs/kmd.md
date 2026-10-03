@@ -6,7 +6,7 @@ Table: [`../kmd.md`](../kmd.md). Colours: status. Edge types: `supersedes`, `ref
 
 ## Corrections and support
 
-30 facts, 16 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+32 facts, 17 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -40,6 +40,8 @@ flowchart LR
   M303["M303"]:::MEASURED
   M306["M306"]:::MEASURED
   M313["M313"]:::MEASURED
+  M509["M509"]:::MEASURED
+  M510["M510<br/>icd"]:::MEASURED
   M58 ==>|supersedes| M44
   M242 ==>|supersedes| M241
   M44 ==>|supports| M39
@@ -56,17 +58,18 @@ flowchart LR
   M306 ==>|supersedes| M303
   M313 ==>|supersedes| M288
   M253 ==>|supersedes| M251
+  M510 ==>|supports| M509
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
   classDef CONFIRMED fill:#d1fae5,stroke:#047857,color:#000
   classDef REFUTED fill:#fee2e2,stroke:#b91c1c,color:#000
   classDef other stroke-dasharray:4 3
-  class M39,M58,M242,M253 other
+  class M39,M58,M242,M253,M510 other
 ```
 
 ## References
 
-118 facts, 115 relations, in 2 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+118 facts, 114 relations, in 2 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ### Part 1
 
@@ -313,7 +316,6 @@ flowchart LR
   M50 --> M46
   M253 --> M166
   M510 --> M508
-  M510 --> M509
   M563 --> M565
   M766 --> M765
   M654 --> M653

@@ -67,4 +67,4 @@ flowchart LR
   tooling -->|1| kmd
 ```
 
-Edges: 187 uses, 7 supports, 6 refutes, 16 supersedes; 207 of them auto-derived.
+Edges: 186 uses, 8 supports, 6 refutes, 16 supersedes; 206 of them auto-derived.
