@@ -116,12 +116,18 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_TARGET_PERMILLE	800u	/* a raise aims at this share at the new clock */
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
 #define BC250_DPM_DOWN_HOLD_MS		200u
-#define BC250_DPM_HOT_MC		BC250_CLOCK_HOT_MC	/* 87 C: one step down at once, no raise */
-#define BC250_DPM_HOT_STEP_MS		500u	/* still hot after this: another step down */
+#define BC250_DPM_HOT_MC		BC250_CLOCK_HOT_MC	/* 87 C: one step down, no raise */
+#define BC250_DPM_HOT_STEP_MS		500u	/* the default hot step: at most one step down per this */
 #define BC250_DPM_CRITICAL_MC		90000	/* the floor at once */
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */
+/* The soft release (BD-055), off by default: below HOT_MC - delta for a whole step, the cap rises one level. Without
+ * it the cap holds anywhere between RELEASE_MC and HOT_MC, so under a sustained load one excursion past 87 C costs
+ * levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500..1600 MHz, frozen at 85.6-86.2 C). */
+#define BC250_DPM_SOFT_DELTA_MC		0u	/* 0: no soft release */
+#define BC250_DPM_SOFT_STEP_MS		3000u
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
+#define BC250_DPM_CAP_MS_MAX		0x7FFFFFFFu	/* where the time since the last cap change saturates */
 
 /* The busy signal (docs/design/dpm.md, "Busy"). The miniport samples GRBM_STATUS.GUI_ACTIVE every
  * HW_SAMPLE_US and counts the samples and the active ones per tick: the graphics engine's own
@@ -150,11 +156,22 @@ struct bc250_dpm_tune {
 	unsigned int	down_permille;
 	unsigned int	down_hold_ms;
 	unsigned int	floor_level;		/* BC250_DPM_FLOOR_LEVEL: no runtime floor */
+	/* The thermal cap's timing (0.7.197, BD-055). Not the limits: HOT, RELEASE and CRITICAL stay fixed. */
+	unsigned int	hot_step_ms;		/* at most one thermal step down per this */
+	unsigned int	soft_delta_mc;		/* soft release below HOT_MC - this; 0: none */
+	unsigned int	soft_step_ms;		/* held below that for this: the cap rises one level */
 };
 #define BC250_DPM_TUNE_MIN_PERMILLE	100u
 #define BC250_DPM_TUNE_MAX_PERMILLE	1000u
 #define BC250_DPM_TUNE_MIN_HOLD_MS	100u	/* at most one lowering per four ticks of the 25 ms governor */
 #define BC250_DPM_TUNE_MAX_HOLD_MS	5000u
+#define BC250_DPM_TUNE_MIN_HOT_STEP_MS	250u	/* ten governor ticks: the part's thermal response is slower still */
+#define BC250_DPM_TUNE_MAX_HOT_STEP_MS	10000u
+/* The soft threshold lies strictly between RELEASE_MC and HOT_MC, at least half a degree from each. */
+#define BC250_DPM_TUNE_MIN_SOFT_DELTA_MC 500u
+#define BC250_DPM_TUNE_MAX_SOFT_DELTA_MC 4500u
+#define BC250_DPM_TUNE_MIN_SOFT_STEP_MS	2000u	/* a soft raise never follows a thermal change by less than this */
+#define BC250_DPM_TUNE_MAX_SOFT_STEP_MS	30000u
 /* Why a tune was refused. Shared with the escape and the CLI. */
 enum bc250_dpm_tune_error {
 	BC250_DPM_TUNE_OK = 0,
@@ -164,6 +181,7 @@ enum bc250_dpm_tune_error {
 	BC250_DPM_TUNE_RAISE = 4,		/* invariant 2: a raise could land below down */
 	BC250_DPM_TUNE_HOLD = 5,		/* down_hold_ms outside MIN..MAX_HOLD_MS */
 	BC250_DPM_TUNE_FLOOR = 6,		/* the floor is not a table level at or below the start's ceiling */
+	BC250_DPM_TUNE_THERMAL = 7,		/* hot step, soft delta or soft step outside its range */
 	BC250_DPM_TUNE_COUNT
 };
 void bc250_dpm_tune_default(struct bc250_dpm_tune *t);
@@ -189,7 +207,10 @@ void bc250_dpm_tune_default(struct bc250_dpm_tune *t);
  *    is 739.2 permille (961 at 1000 MHz raised to 1300 MHz), above 650.
  *
  * The hold's lower bound is about SMU traffic (each lowering is a transaction), not stability: with both
- * invariants the host test finds no oscillation down to a one-tick hold. */
+ * invariants the host test finds no oscillation down to a one-tick hold.
+ *
+ * The thermal timing last: hot step MIN..MAX_HOT_STEP_MS, soft delta 0 or MIN..MAX_SOFT_DELTA_MC, soft step
+ * MIN..MAX_SOFT_STEP_MS (checked even while the soft release is off, so that turning it on later is one field). */
 enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level);
 
 struct bc250_dpm_input {
@@ -205,6 +226,9 @@ struct bc250_dpm_governor {
 	unsigned int	thermal_cap;		/* the thermal clamp, max_level when released */
 	unsigned int	avg_permille;		/* busy, exponential average, 1/4 per tick */
 	unsigned int	down_ms, hot_ms, release_ms;
+	unsigned int	soft_ms;		/* held below the soft threshold */
+	unsigned int	cap_ms;			/* since the thermal cap last changed, saturating */
+	unsigned int	soft_releases;		/* cap raises by the soft release */
 	int		hot;			/* inside a >= 87 C episode */
 	int		stable;			/* SetStablePowerState(TRUE) */
 	unsigned int	throttle;		/* enum bc250_dpm_throttle of the last step */

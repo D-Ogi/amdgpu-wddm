@@ -344,10 +344,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         return STATUS_SUCCESS;
     }
     // DPM runtime tuning (0.7.185): thresholds and floor the governor thread takes at its next tick; software state,
-    // locking and lifetime argued at DpmTuneRequest (dpm.c).
+    // locking and lifetime argued at DpmTuneRequest (dpm.c). Two exact sizes: ABI 2 (0.7.197) and its ABI 1 prefix;
+    // DpmTuneRequest matches the size against AbiVersion and touches nothing past the size it was given.
     if (command == BC250_ESCAPE_RUN_DPM_TUNE) {
-        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM_TUNE)) return STATUS_INVALID_PARAMETER;
-        DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM_TUNE) &&
+            Escape->PrivateDriverDataSize != BC250_DPM_TUNE_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
+        DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
     // Interop switches: the start's decision and the session marker, software state as well (interop.c).

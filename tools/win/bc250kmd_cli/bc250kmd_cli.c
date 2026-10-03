@@ -8,6 +8,12 @@
 //   bc250kmd_cli list                 every display adapter dxgkrnl knows, with its hardware id and LUID
 //   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
+//   bc250kmd_cli health read|confirm  the cached start-health witness, and its checked confirmation
+//   bc250kmd_cli clock read|set       one KMD clock sample, or a complete operating-point transaction
+//   bc250kmd_cli telemetry | vram     what the monitor's GPU line shows (bc250control.dll exports the same reads)
+//   bc250kmd_cli dpm [n [ms]]       the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
+//   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
+//   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
 // private escape. That failure is a measurement too, so every step prints its own NTSTATUS instead of one
@@ -268,14 +274,13 @@ static int Info(const WCHAR *wantedId)
 // Offsets are BAR5 byte offsets and come from tools/regcalc (on the target: bc250rd's reglist.txt), never from
 // memory. The driver checks them against its own generated tables, so a wrong one is refused, not executed.
 
-static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result, int hardwareAccess)
+// Finds the adapter whose hardware id matches and opens it: 0 with *handle set, or 1 after reporting why not.
+static int OpenAdapterById(const WCHAR *wantedId, D3DKMT_HANDLE *handle, NTSTATUS *result)
 {
     BC250_ADAPTER adapters[16];
     int count = FindAdapters(adapters, 16);
     int chosen = -1;
     D3DKMT_OPENADAPTERFROMDEVICENAME open = { 0 };
-    D3DKMT_CLOSEADAPTER close = { 0 };
-    D3DKMT_ESCAPE escape = { 0 };
 
     for (int i = 0; i < count && chosen < 0; i++)
         if (MatchesHardwareId(adapters[i].HardwareId, wantedId)) chosen = i;
@@ -284,23 +289,135 @@ static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, NTS
     open.pDeviceName = adapters[chosen].InterfacePath;
     *result = D3DKMTOpenAdapterFromDeviceName(&open);
     if (!NT_SUCCESS(*result)) { PrintStatus("D3DKMTOpenAdapterFromDeviceName", *result); return 1; }
+    *handle = open.hAdapter;
+    return 0;
+}
 
-    escape.hAdapter = open.hAdapter;
+static NTSTATUS EscapeOn(D3DKMT_HANDLE adapter, void *data, unsigned size, int softwareOnly)
+{
+    D3DKMT_ESCAPE escape = { 0 };
+
+    escape.hAdapter = adapter;
     escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
-    escape.Flags.HardwareAccess = hardwareAccess ? 1u : 0u;
-    escape.Flags.NoAdapterSynchronization = hardwareAccess ? 0u : 1u;
+    if (softwareOnly) escape.Flags.NoAdapterSynchronization = 1;
+    else escape.Flags.HardwareAccess = 1;   // dxgkrnl then serializes the call with the rest of the adapter's work
     escape.pPrivateDriverData = data;
     escape.PrivateDriverDataSize = size;
-    *result = D3DKMTEscape(&escape);
+    return D3DKMTEscape(&escape);
+}
 
-    close.hAdapter = open.hAdapter;
+static void CloseAdapterHandle(D3DKMT_HANDLE adapter)
+{
+    D3DKMT_CLOSEADAPTER close = { 0 };
+
+    close.hAdapter = adapter;
     D3DKMTCloseAdapter(&close);
+}
+
+// With softwareOnly the escape carries NoAdapterSynchronization and nothing else: the typed snapshots (DPM) that
+// the driver answers without idling the adapter refuse any other flag combination.
+static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int softwareOnly, NTSTATUS *result)
+{
+    D3DKMT_HANDLE adapter = 0;
+
+    if (OpenAdapterById(wantedId, &adapter, result)) return 1;
+    *result = EscapeOn(adapter, data, size, softwareOnly);
+    CloseAdapterHandle(adapter);
     return 0;
+}
+
+// ---- reads of the log ring and the paging journal without adapter synchronization (0.7.184.1) --------------------
+//
+// The commands the driver answers with NoAdapterSynchronization alone from 0.7.184.1 on (display.c
+// SoftwareReadEscape; test_escape_flags.py keeps the two lists equal). With HardwareAccess dxgkrnl takes the adapter
+// lock for the escape, and a lab profile of a Witcher 3 session (2026-10-01) put the game's main thread in WrResource
+// waits readied by this tool, 1.2-1.3 ms per frame, from the samplers' `log N`, `log summary` and `journal` reads.
+// LOG_SUMMARY is not on the list: the driver walks state a stop frees and reads display registers for it, and
+// refuses it without HardwareAccess (display.c LogEscape), so its first page keeps the old flags.
+static int SoftwareRead(unsigned long command)
+{
+    switch (command) {
+    case BC250_ESCAPE_GET_LOG:
+    case BC250_ESCAPE_GET_PAGING_JOURNAL:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+// A driver up to 0.7.183.1 refuses NoAdapterSynchronization for these commands: STATUS_DEVICE_NOT_READY, with
+// Status REFUSED and nothing else written, Version included. (0.7.184.1 writes Version before any refusal of its
+// own.) The first refused software read therefore sends the same request again with HardwareAccess on the same
+// handle, and every later read of this process does so at once; the held adapter of `journal follow` forgets it
+// when it reopens (a reloaded driver may be a newer one).
+static int g_ReadsHard;                     // a software read was refused: this driver wants HardwareAccess
+static unsigned long g_SoftReads, g_HardReads;
+
+typedef char BC250_CLI_READ_FITS[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) <= sizeof(BC250_ESCAPE_LOG)) ? 1 : -1];
+// Status and Version sit at the same offsets in both replies (the common head of the escape structures).
+typedef char BC250_CLI_READ_HEAD[(FIELD_OFFSET(BC250_ESCAPE_LOG, Status) == FIELD_OFFSET(BC250_ESCAPE_PAGING_JOURNAL, Status) &&
+                                  FIELD_OFFSET(BC250_ESCAPE_LOG, Version) == FIELD_OFFSET(BC250_ESCAPE_PAGING_JOURNAL, Version))
+                                 ? 1 : -1];
+
+static NTSTATUS ReadEscapeOn(D3DKMT_HANDLE adapter, unsigned long command, void *data, unsigned size)
+{
+    static unsigned char request[sizeof(BC250_ESCAPE_LOG)];     // the request as sent, for the fallback
+    const BC250_ESCAPE_LOG *reply = (const BC250_ESCAPE_LOG *)data;     // Status and Version only (see above)
+    NTSTATUS status;
+
+    if (SoftwareRead(command) && !g_ReadsHard && size <= sizeof(request)) {
+        memcpy(request, data, size);
+        status = EscapeOn(adapter, data, size, 1);
+        if (NT_SUCCESS(status) && !(reply->Status == BC250_ESCAPE_STATUS_REFUSED && reply->Version == 0)) {
+            g_SoftReads++;
+            return status;
+        }
+        memcpy(data, request, size);        // whatever the refusal wrote: the same request again
+        g_ReadsHard = 1;
+    }
+    g_HardReads++;
+    return EscapeOn(adapter, data, size, 0);
+}
+
+// One read with its own adapter open and close, as SendEscape.
+static int SendReadEscape(const WCHAR *wantedId, unsigned long command, void *data, unsigned size, NTSTATUS *result)
+{
+    D3DKMT_HANDLE adapter = 0;
+
+    if (OpenAdapterById(wantedId, &adapter, result)) return 1;
+    *result = ReadEscapeOn(adapter, command, data, size);
+    CloseAdapterHandle(adapter);
+    return 0;
+}
+
+// The held adapter of `journal follow` (0.7.183.1): opened at the first read and kept for the whole run, so a
+// sampler no longer walks the display device interfaces and opens the adapter once per interval. A failed escape
+// closes it (a PnP disable/enable of the adapter, as the GPU DWM ladder does, leaves the handle stale), and the
+// next read opens it again. Nothing else in this tool holds an adapter. From 0.7.184.1 its reads go through
+// ReadEscapeOn.
+static D3DKMT_HANDLE g_HeldAdapter;
+static unsigned long g_HeldOpens;
+
+static int SendEscapeHeld(const WCHAR *wantedId, unsigned long command, void *data, unsigned size, NTSTATUS *result)
+{
+    if (g_HeldAdapter == 0) {
+        if (OpenAdapterById(wantedId, &g_HeldAdapter, result)) { g_HeldAdapter = 0; return 1; }
+        g_HeldOpens++;
+        g_ReadsHard = 0;
+    }
+    *result = ReadEscapeOn(g_HeldAdapter, command, data, size);
+    if (!NT_SUCCESS(*result)) { CloseAdapterHandle(g_HeldAdapter); g_HeldAdapter = 0; }
+    return 0;
+}
+
+static void ReleaseHeldAdapter(void)
+{
+    if (g_HeldAdapter != 0) { CloseAdapterHandle(g_HeldAdapter); g_HeldAdapter = 0; }
 }
 
 static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
 {
-    return SendEscapeFlags(wantedId,data,size,result,1);
+    return SendEscapeFlags(wantedId, data, size, 0, result);
 }
 
 #ifdef BC250_CONTROL_DLL
@@ -320,7 +437,7 @@ BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
     data->Magic=BC250_ESCAPE_MAGIC;data->Command=BC250_ESCAPE_RUN_CLOCK;
     data->AbiVersion=BC250_CLOCK_ABI;data->Op=op;
     data->RequestedMHz=mhz;data->RequestedMv=mv;
-    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),&status,op==BC250_CLOCK_OP_SET))return status;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),op!=BC250_CLOCK_OP_SET,&status))return status;
     if(!NT_SUCCESS(status))return status;
     if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
     if(data->Status!=BC250_ESCAPE_STATUS_DONE || !data->Ready)
@@ -343,7 +460,7 @@ BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULO
     data->Status=BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
     data->AbiVersion=BC250_START_HEALTH_ABI;data->Op=op;
     data->ExpectedGeneration=generation;data->ExpectedEpoch=epoch;
-    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),&status,op==BC250_START_HEALTH_CONFIRM))return status;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),op!=BC250_START_HEALTH_CONFIRM,&status))return status;
     if(!NT_SUCCESS(status))return status;
     if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
     if(data->Status!=BC250_ESCAPE_STATUS_DONE || data->NtStatus!=0)
@@ -410,9 +527,9 @@ static int Clock(int argc,wchar_t** argv)
 // handle, as the exports above do, so no handle outlives a driver update. A failed open looks the path up again.
 
 #ifndef BC250_ESCAPE_RUN_DPM
-// driver/kmd/bc250kmd_escape.h in this tree predates the DPM escape (KMD 0.7.175 and later). Until the header
-// carries it, this is the 0.7.177 definition under the header's own names; tools/win/bc250mon/test_telemetry.py
-// compares it with the header of the KMD that ships it. Once the header defines it, this block drops out.
+// Only for a driver/kmd/bc250kmd_escape.h that predates the DPM escape (KMD 0.7.175 and later); this tree's header
+// defines it, so here the block drops out. It is the 0.7.177 definition under the header's own names;
+// tools/win/bc250mon/test_telemetry.py compares it with the header of the KMD that ships it.
 #define BC250_ESCAPE_RUN_DPM 23u
 #define BC250_DPM_ABI 1u
 #define BC250_DPM_OP_READ 0u
@@ -1489,7 +1606,8 @@ static int Log(const WCHAR *fromText, int summary)
         log.Magic = BC250_ESCAPE_MAGIC;
         log.Command = (summary && first) ? BC250_ESCAPE_LOG_SUMMARY : BC250_ESCAPE_GET_LOG;
         log.From = from;
-        if (SendEscape(BC250_DEFAULT_HWID, &log, sizeof(log), &status)) return 1;
+        // LOG_SUMMARY keeps HardwareAccess; GET_LOG pages go without adapter synchronization (ReadEscapeOn).
+        if (SendReadEscape(BC250_DEFAULT_HWID, log.Command, &log, sizeof(log), &status)) return 1;
         if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
         if (log.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
         if (log.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
@@ -1524,6 +1642,604 @@ static int Log(const WCHAR *fromText, int summary)
     return 0;
 }
 
+// ---- journal: the paging journal (BC250_ESCAPE_GET_PAGING_JOURNAL, docs/design/paging-journal.md) ---------------
+//
+// "journal [from]" prints the driver's paging journal from record index `from` (default: the oldest record still
+// held), one line per record: index, driver time in seconds since boot (interrupt time), kind, page table
+// level/index/count/valid entries, the GPU VA, the allocation handle, the offset or byte count, the position in
+// the paging buffer, the OS fence and the SDMA sequence that carried it.
+//
+// From 0.7.193.1 two kinds reuse those four words for identity, and the tail of the line spells it out: a
+// `destroy` names the process and thread that called it and the process that created the allocation, and the
+// new `gfx-submit` kind names the context, its process and the IB1 and root of one GFX job (KMD193, written for
+// the 0x116 of trial 245, where nothing in the journal could say whose job had faulted).
+
+static const char *const g_JournalKind[] = { "?", "update-cpu", "update-gpu", "vfill", "vtransfer", "flush-tlb",
+                                             "destroy", "transfer", "fill", "gfx-submit" };
+
+static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long i)
+{
+    const BC250_PAGING_JOURNAL_RECORD *r = &journal->Records[i];
+    const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
+    char segments[64] = "";
+    char identity[128] = "";
+
+    // KMD193 (0.7.193.1 and later) puts identity in the words each kind left unused, so the same L/i/n/v
+    // columns mean something else for these two kinds. Print what they mean rather than four bare numbers.
+    // An older driver leaves them zero, which prints as a destroy with no process and reads as "not recorded".
+    if (r->Kind == BC250_PJ_DESTROY_ALLOCATION && (r->Level | r->Index | r->Count | r->Valid) != 0)
+        snprintf(identity, sizeof(identity), " by pid %lu tid %lu, created by pid %lu, bc2a v%lu gem 0x%llX",
+                 r->Level, r->Index, r->Count, r->Valid, r->Dma);
+    else if (r->Kind == BC250_PJ_GFX_SUBMIT)
+        snprintf(identity, sizeof(identity), " node %lu ctx 0x%llX pid %lu%s%s ib 0x%llX root 0x%llX",
+                 r->Level, r->Allocation, r->Index, (r->Count & BC250_PJ_CTX_UMD) ? " umd" : "",
+                 (r->Count & BC250_PJ_CTX_SYSTEM) ? " system" : "", r->Va, r->Offset);
+    else if (r->Flags & BC250_PJ_FLAG_PROCESS)
+        snprintf(identity, sizeof(identity), " hprocess 0x%llX (no allocation)", r->Allocation);
+
+    // UPDATE records of 0.7.183.1 and later carry the PTE segments of their valid entries in Flags bits 16-31
+    // (BC250_PJ_FLAG_SEGMENT): " seg 0,1" = system memory and segment 1. Older drivers leave the bits zero.
+    if ((r->Kind == BC250_PJ_UPDATE_CPU || r->Kind == BC250_PJ_UPDATE_GPU) && (r->Flags & BC250_PJ_FLAG_SEGMENT_MASK)) {
+        const char *separator = " seg ";
+        size_t used = 0;
+        for (unsigned s = 0; s < 16 && used < sizeof(segments); s++) {
+            if (!(r->Flags & (1u << (BC250_PJ_FLAG_SEGMENT_SHIFT + s)))) continue;
+            if (s == 15) used += (size_t)snprintf(segments + used, sizeof(segments) - used, "%s15+", separator);
+            else used += (size_t)snprintf(segments + used, sizeof(segments) - used, "%s%u", separator, s);
+            separator = ",";
+        }
+    }
+    printf("%8llu %14.6f %-10s L%lu i%-3lu n%-3lu v%-3lu va 0x%012llX alloc 0x%016llX off 0x%llX dma 0x%llX "
+           "fence %lu seq %lu flags 0x%lX%s%s%s\n",
+           journal->Next - journal->Returned + i, (double)r->Time / 1e7, kind, r->Level, r->Index, r->Count,
+           r->Valid, r->Va, r->Allocation, r->Offset, r->Dma, r->Fence, r->Seq, r->Flags,
+           (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "", segments, identity);
+}
+
+// One escape of `journal follow`, on the held adapter: the records from `from` into *journal. 0 on success, 1 when
+// the adapter could not be opened or the escape failed (the held handle is closed then and the next call reopens
+// it), 3 on a driver refusal; `report` prints the reason.
+static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long from, int report)
+{
+    NTSTATUS status;
+
+    memset(journal, 0, sizeof(*journal));
+    journal->Magic = BC250_ESCAPE_MAGIC;
+    journal->Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
+    journal->From = from;
+    if (SendEscapeHeld(BC250_DEFAULT_HWID, journal->Command, journal, sizeof(*journal), &status)) return 1;
+    if (!NT_SUCCESS(status)) { if (report) PrintStatus("D3DKMTEscape", status); return 1; }
+    if (journal->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { if (report) printf("refused: caller is not an administrator\n"); return 3; }
+    if (journal->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
+        if (report) printf("refused: this driver build has no paging journal (0.7.179 or older)\n");
+        return 3;
+    }
+    if (journal->Status != BC250_ESCAPE_STATUS_DONE) {
+        if (report) printf("refused: driver status %lu, NTSTATUS 0x%08lX %s\n", journal->Status, journal->NtStatus,
+                           StatusName((NTSTATUS)journal->NtStatus));
+        return 3;
+    }
+    return 0;
+}
+
+// journal follow SECONDS [MS]: one process, one adapter handle, one escape per interval, printing the records the
+// KMD added since the previous read (the first read only positions the cursor at Next). The trial sampler that
+// spawned a fresh bc250kmd_cli every second alongside the present heartbeat left the lab's sshd accepting
+// nothing for as long as it ran (2026-09-30, trial 152 and scratch\dpm\test-shape.sh); a single long process
+// like `dpm N MS` never did. A liveness line every 30 s, a summary at the end.
+//
+// 0.7.183.1: the adapter is opened once and held (SendEscapeHeld); up to 182 every read found and opened it
+// again. A failed read no longer ends the run: the handle is dropped, the failure is printed once, and the next
+// interval reopens. A journal whose total fell below the cursor belongs to a reloaded driver (the PnP restart
+// of the GPU DWM ladder), and the cursor goes back to its oldest record.
+//
+// 0.7.184.1: the reads carry NoAdapterSynchronization alone (ReadEscapeOn), falling back to HardwareAccess against an
+// older driver; the final line counts the escapes of each kind.
+static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
+{
+    static BC250_ESCAPE_PAGING_JOURNAL journal;
+    unsigned long long from, printed = 0, lost = 0;
+    unsigned long seconds, ms = 1000, reads = 0, failures = 0, failing = 0, restarts = 0;
+    ULONGLONG start, lastLive;
+    WCHAR *end;
+    int rc;
+
+    seconds = wcstoul(secondsText, &end, 10);
+    if (*end || seconds == 0 || seconds > 86400) { fprintf(stderr, "journal follow SECONDS [MS]: SECONDS 1..86400\n"); return 2; }
+    if (msText != NULL) {
+        ms = wcstoul(msText, &end, 10);
+        if (*end || ms < 50 || ms > 60000) { fprintf(stderr, "journal follow SECONDS [MS]: MS 50..60000\n"); return 2; }
+    }
+    rc = JournalPage(&journal, ~0ull, 1);
+    if (rc) { ReleaseHeldAdapter(); return rc; }
+    from = journal.Next;
+    printf("journal follow: %lu s every %lu ms from record %llu (%llu written so far, ring of %lu, table %s)\n",
+           seconds, ms, from, journal.Total, journal.Capacity,
+           (journal.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM" : "display-only");
+    fflush(stdout);
+    start = lastLive = GetTickCount64();
+    for (;;) {
+        ULONGLONG now = GetTickCount64();
+        if (now - start >= (ULONGLONG)seconds * 1000ull) break;
+        rc = JournalPage(&journal, from, 0);
+        if (rc == 3) {
+            printf("journal follow: the driver refused read %lu (status %lu)\n", reads + 1, journal.Status);
+            fflush(stdout);
+            ReleaseHeldAdapter();
+            return rc;
+        }
+        if (rc) {
+            failures++;
+            if (!failing++) printf("journal follow: t=%llu s read %lu failed, reopening the adapter at the next interval\n",
+                                   (now - start) / 1000ull, reads + 1);
+            fflush(stdout);
+            Sleep(ms);
+            continue;
+        }
+        if (failing) {
+            printf("journal follow: t=%llu s reads resumed after %lu failed (adapter opens %lu)\n",
+                   (now - start) / 1000ull, failing, g_HeldOpens);
+            failing = 0;
+        }
+        if (journal.Total < from) {
+            printf("journal follow: the journal holds %llu records, fewer than the cursor %llu: a reloaded driver; "
+                   "following from its oldest record\n", journal.Total, from);
+            restarts++;
+            from = 0;
+            continue;
+        }
+        reads++;
+        lost += journal.Lost;
+        for (unsigned long i = 0; i < journal.Returned && i < BC250_PAGING_JOURNAL_MAX; i++) PrintJournalRecord(&journal, i);
+        printed += journal.Returned;
+        if (journal.Next > from) from = journal.Next;
+        if (journal.Returned == BC250_PAGING_JOURNAL_MAX) continue;   // a burst: drain it before sleeping
+        if (now - lastLive >= 30000ull) {
+            printf("journal follow: t=%llu s reads %lu printed %llu lost %llu next %llu\n",
+                   (now - start) / 1000ull, reads, printed, lost, from);
+            lastLive = now;
+        }
+        fflush(stdout);
+        Sleep(ms);
+    }
+    printf("journal follow: done, %lu reads, %llu records printed, %llu lost to the ring, next %llu; "
+           "%lu failed reads, %lu adapter opens, %lu driver reloads; escapes: %lu without adapter synchronization, "
+           "%lu with HardwareAccess\n",
+           reads, printed, lost, from, failures, g_HeldOpens, restarts, g_SoftReads, g_HardReads);
+    ReleaseHeldAdapter();
+    return 0;
+}
+
+static int Journal(const WCHAR *fromText)
+{
+    static BC250_ESCAPE_PAGING_JOURNAL journal;     // 4.6 KB: a static, like the log's
+    unsigned long long from = 0, printed = 0;
+    int first = 1;
+    NTSTATUS status;
+    WCHAR *end;
+
+    if (fromText != NULL) {
+        from = _wcstoui64(fromText, &end, 10);
+        if (*end || fromText[0] == L'-') {
+            fprintf(stderr, "journal [from], where from is a decimal record index, not %ls\n", fromText);
+            return 2;
+        }
+    }
+    for (;;) {
+        memset(&journal, 0, sizeof(journal));
+        journal.Magic = BC250_ESCAPE_MAGIC;
+        journal.Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
+        journal.From = from;
+        if (SendReadEscape(BC250_DEFAULT_HWID, journal.Command, &journal, sizeof(journal), &status)) return 1;
+        if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+        if (journal.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+        if (journal.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
+            printf("refused: this driver build has no paging journal (0.7.179 or older)\n");
+            return 3;
+        }
+        if (journal.Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("refused: driver status %lu, NTSTATUS 0x%08lX %s\n", journal.Status, journal.NtStatus,
+                   StatusName((NTSTATUS)journal.NtStatus));
+            return 3;
+        }
+        if (first)
+            printf("journal      %llu records since this driver load, ring of %lu, %llu requested but overwritten; table %s\n",
+                   journal.Total, journal.Capacity, journal.Lost,
+                   (journal.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM" : "display-only");
+        first = 0;
+        for (unsigned long i = 0; i < journal.Returned && i < BC250_PAGING_JOURNAL_MAX; i++) {
+            PrintJournalRecord(&journal, i);
+            printed++;
+        }
+        if (journal.Returned == 0 || journal.Next <= from) break;   // the end, or a driver that is not moving on
+        from = journal.Next;
+        if (printed > 4ull * journal.Capacity) {
+            printf("             stopped at %llu records; ask again from %llu\n", printed, from);
+            break;
+        }
+    }
+    printf("             %llu records printed\n", printed);
+    return 0;
+}
+
+// ---- dpm: the clock governor's telemetry (BC250_ESCAPE_RUN_DPM, docs/design/dpm.md) ------------------------------
+//
+// "dpm [count [interval ms]]" prints one line per sample: the level the governor committed, the SMU's readback,
+// temperature, GFX busy share, what the load wants, the thermal cap, the ceiling and what holds the clock, then where
+// the busy share came from (grbm: GUI_ACTIVE samples; submit: the ring's submit-to-fence time), the submit share
+// and the SDMA0 (paging) not-idle share.
+// "dpm confirm" clears the pending mark of a DPM start once the start is healthy (administrator).
+
+static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
+                                           "registry", "no-smu", "not-run", "smu-error" };
+static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-hard", "sensor", "max-setting",
+                                             "stable", "smu", "fixed" };
+
+static int DpmQuery(BC250_ESCAPE_DPM *d, unsigned long op, unsigned long long generation)
+{
+    NTSTATUS status;
+    memset(d, 0, sizeof(*d));
+    d->Magic = BC250_ESCAPE_MAGIC;
+    d->Command = BC250_ESCAPE_RUN_DPM;
+    d->AbiVersion = BC250_DPM_ABI;
+    d->Op = op;
+    d->ExpectedGeneration = generation;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, d, sizeof(*d), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
+    return 0;
+}
+
+static void DpmPrint(const BC250_ESCAPE_DPM *d)
+{
+    SYSTEMTIME now;
+    GetLocalTime(&now);
+    printf("%02u:%02u:%02u.%03u %s%s %4lu MHz %4lu mV (SMU %4lu MHz VID %3lu%s) %5.1f C%s busy %5.1f%% avg %5.1f%% "
+           "want %4lu cap %4lu max %4lu throttle %s%s%s%s%s  up %lu down %lu thermal %lu err %lu  src %s submit %5.1f%% sdma %5.1f%%\n",
+           now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
+           d->Mode == 1 ? "dpm" : "fixed", (d->Flags & BC250_DPM_FLAG_RUNNING) ? "" : "(stopped)",
+           d->CurrentMHz, d->CurrentMv, d->ObservedMHz, d->ObservedVid,
+           (d->Flags & BC250_DPM_FLAG_CLOCK) ? "" : " old",
+           d->TemperatureMc / 1000.0, (d->Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "?",
+           d->BusyPermille / 10.0, d->BusyAvgPermille / 10.0, d->WantMHz, d->CapMHz, d->MaxMHz,
+           d->Throttle < 8 ? g_DpmThrottle[d->Throttle] : "?",
+           (d->Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "",
+           (d->Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "",
+           (d->Flags & BC250_DPM_FLAG_PAUSED) ? " paused" : "",
+           (d->Flags & BC250_DPM_FLAG_SESSION) ? " session" : "",
+           d->Raises, d->Lowers, d->ThermalEvents, d->Errors,
+           (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0, d->SdmaBusyPermille / 10.0);
+}
+
+// ---- dpm tune / dpm floor: the governor's thresholds and a runtime floor (BC250_ESCAPE_RUN_DPM_TUNE, 0.7.185.1) ----
+//
+// "dpm tune <up> <target> <down> [hold ms]" sets the thresholds in permille (the hold stays as it is when omitted),
+// "dpm tune reset" puts thresholds and floor back to the defaults, "dpm floor <MHz|off>" sets or clears the runtime
+// floor, "dpm tune" prints what is in force. The driver checks every value (bc250_dpm_tune_check: ranges, order, the
+// two invariants, the hold, the floor against the start's ceiling) and logs every change with its old and new values.
+// Writes need an administrator and a running DPM start; nothing survives a device start. Like `dpm`, every request
+// goes with NoAdapterSynchronization alone: the escape is software state, and the governor thread applies it.
+//
+// "dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms>" (0.7.197.1, ABI 2) sets the thermal cap's
+// timing: at most one step down per hot step, and with a delta, one level back after the soft step held below
+// 87 C - delta. The tool asks with ABI 2 and falls back to ABI 1 (120 bytes) once a driver before 0.7.197 fails the
+// 152-byte escape with STATUS_INVALID_PARAMETER; everything but `thermal` then works as before.
+
+static const char *const g_TuneError[] = { "none", "range", "order", "lowering-invariant", "raise-invariant", "hold",
+                                           "floor", "thermal" };
+#define TUNE_ERRORS (sizeof(g_TuneError) / sizeof(g_TuneError[0]))
+
+static unsigned long g_TuneAbi = BC250_DPM_TUNE_ABI;   // BC250_DPM_TUNE_ABI_1 after a driver refused ABI 2
+
+// One RUN_DPM_TUNE round trip. 0 when the driver answered (whatever Status says), 1 after reporting why not.
+static int TuneQuery(BC250_ESCAPE_DPM_TUNE *t, unsigned long op, unsigned long long generation, int quiet)
+{
+    NTSTATUS status;
+    unsigned size;
+    for (;;) {
+        if (g_TuneAbi != BC250_DPM_TUNE_ABI && op == BC250_DPM_TUNE_OP_THERMAL) {
+            if (!quiet) printf("# this driver predates 0.7.197.1 (RUN_DPM_TUNE ABI 1): no thermal timing to set\n");
+            return 1;
+        }
+        size = g_TuneAbi == BC250_DPM_TUNE_ABI ? (unsigned)sizeof(*t) : BC250_DPM_TUNE_ABI1_SIZE;
+        if (g_TuneAbi != BC250_DPM_TUNE_ABI)
+            memset((unsigned char *)t + BC250_DPM_TUNE_ABI1_SIZE, 0, sizeof(*t) - BC250_DPM_TUNE_ABI1_SIZE);
+        t->Magic = BC250_ESCAPE_MAGIC;
+        t->Command = BC250_ESCAPE_RUN_DPM_TUNE;
+        t->AbiVersion = g_TuneAbi;
+        t->Op = op;
+        t->ExpectedGeneration = generation;
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, t, size, 1, &status)) return 1;
+        if (status != (NTSTATUS)0xC000000Dl || g_TuneAbi != BC250_DPM_TUNE_ABI) break;
+        // STATUS_INVALID_PARAMETER for 152 bytes: a driver before 0.7.197.1, which takes ABI 1 alone.
+        g_TuneAbi = BC250_DPM_TUNE_ABI_1;
+    }
+    if (!NT_SUCCESS(status)) {
+        // A driver before 0.7.185.1 has no such command and refuses NoAdapterSynchronization for it.
+        if (!quiet) {
+            PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM_TUNE)", status);
+            printf("# a driver before 0.7.185.1 (0x000700B9) has no runtime tuning\n");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int TuneRead(BC250_ESCAPE_DPM_TUNE *t, int quiet)
+{
+    memset(t, 0, sizeof(*t));
+    if (TuneQuery(t, BC250_DPM_TUNE_OP_READ, 0, quiet)) return 1;
+    if (t->Status != BC250_ESCAPE_STATUS_DONE) {
+        if (!quiet) printf("dpm tune: read refused, status %lu NTSTATUS 0x%08lX\n", t->Status, t->NtStatus);
+        return 1;
+    }
+    return 0;
+}
+
+static void TuneFloorText(char *text, size_t size, unsigned long mhz)
+{
+    if (mhz) _snprintf_s(text, size, _TRUNCATE, "%lu MHz", mhz);
+    else _snprintf_s(text, size, _TRUNCATE, "off");
+}
+
+// "below 85.5 C for 3000 ms" or "off". 87 C is BC250_DPM_HOT_MC (driver/shim/include/bc250_dpm.h), fixed since 0.7.195.
+static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs)
+{
+    if (deltaMc) {
+        long below = 87000l - (long)deltaMc;
+        _snprintf_s(text, size, _TRUNCATE, "below %ld.%ld C for %lu ms", below / 1000l, (below % 1000l) / 100l, stepMs);
+    } else _snprintf_s(text, size, _TRUNCATE, "off");
+}
+
+// "up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default)": the values in force, and where
+// they come from.
+static void TunePrintState(const BC250_ESCAPE_DPM_TUNE *t)
+{
+    char floor[32];
+    TuneFloorText(floor, sizeof(floor), t->FloorMHz);
+    printf("up %lu target %lu down %lu permille, hold %lu ms (%s), floor %s (%s)", t->UpPermille, t->TargetPermille,
+           t->DownPermille, t->DownHoldMs, (t->Flags & BC250_DPM_TUNE_FLAG_THRESHOLDS) ? "runtime" : "default", floor,
+           (t->Flags & BC250_DPM_TUNE_FLAG_FLOOR) ? "runtime" : "default");
+    if (t->AbiVersion == BC250_DPM_TUNE_ABI) {
+        TuneSoftText(floor, sizeof(floor), t->SoftReleaseDeltaMc, t->SoftReleaseStepMs);
+        printf(", hot step %lu ms, soft release %s (%s)", t->HotStepMs, floor,
+               (t->Flags & BC250_DPM_TUNE_FLAG_THERMAL) ? "runtime" : "default");
+    }
+}
+
+static void TuneExplain(const BC250_ESCAPE_DPM_TUNE *t, unsigned long up)
+{
+    if (t->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("  needs an elevated prompt\n"); return; }
+    if (t->NtStatus == 0xC000022Dul) { printf("  STATUS_RETRY: the device restarted between the read and the write; run it again\n"); return; }
+    if (t->NtStatus == 0xC0000184ul) {      // STATUS_INVALID_DEVICE_STATE (ntstatus.h, not in windows.h)
+        printf("  no running DPM governor: a fixed-lab start (DpmMode 0), a stopped device or a governor that gave up\n");
+        return;
+    }
+    switch (t->Error) {
+    case 1: printf("  every threshold is 100..1000 permille\n"); break;
+    case 2: printf("  the order is down < target < up\n"); break;
+    case 3: printf("  invariant 1: (down + 1) x 1100 <= up x 1000, so a step down never lands at or above up; with up %lu, "
+                   "down at most %lu\n", up, up * 10ul / 11ul >= 1 ? up * 10ul / 11ul - 1ul : 0ul); break;
+    case 4: printf("  invariant 2: a raise from some clock would land below down; raise target or lower down\n"); break;
+    case 5: printf("  the hold is 100..5000 ms\n"); break;
+    case 6: printf("  the floor is a clock of the table (1000..2000 in 100 MHz steps) at or below this start's ceiling, %lu MHz\n",
+                   t->MaxMHz); break;
+    case 7: printf("  hot step 250..10000 ms, soft delta off or 500..4500 mC (between 82 and 87 C), soft step 2000..30000 ms\n");
+            break;
+    default: break;
+    }
+}
+
+// After a write: the governor thread takes the values at its next 25 ms tick. Wait for it a little, then say so.
+static void TuneWaitApplied(BC250_ESCAPE_DPM_TUNE *t)
+{
+    int i;
+    for (i = 0; i < 8 && !(t->Flags & BC250_DPM_TUNE_FLAG_APPLIED); i++) {
+        Sleep(50);
+        if (TuneRead(t, 1)) break;
+    }
+    if (t->Flags & BC250_DPM_TUNE_FLAG_APPLIED) printf("governor: running serial %lu\n", t->Applied);
+    else printf("governor: NOT running these yet (serial %lu, governor at %lu): paused, stopped or gave up?\n",
+                t->Serial, t->Applied);
+}
+
+static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const char *name)
+{
+    BC250_ESCAPE_DPM_TUNE before, t;
+    char floorBefore[32], floorAfter[32];
+    if (TuneRead(&before, 0)) return 1;
+    t = *in;
+    if (op == BC250_DPM_TUNE_OP_THRESHOLDS && t.DownHoldMs == 0) t.DownHoldMs = before.DownHoldMs;
+    if (TuneQuery(&t, op, before.Generation, 0)) return 1;
+    if (t.Status != BC250_ESCAPE_STATUS_DONE) {
+        printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s; in force: ", name, t.Status, t.NtStatus,
+               t.Error < TUNE_ERRORS ? g_TuneError[t.Error] : "?");
+        TunePrintState(&before);
+        printf("\n");
+        TuneExplain(&t, in->UpPermille);
+        return 1;
+    }
+    TuneFloorText(floorBefore, sizeof(floorBefore), before.FloorMHz);
+    TuneFloorText(floorAfter, sizeof(floorAfter), t.FloorMHz);
+    printf("%s: up %lu -> %lu, target %lu -> %lu, down %lu -> %lu permille, hold %lu -> %lu ms, floor %s -> %s "
+           "(ceiling %lu MHz, serial %lu)\n", name, before.UpPermille, t.UpPermille, before.TargetPermille, t.TargetPermille,
+           before.DownPermille, t.DownPermille, before.DownHoldMs, t.DownHoldMs, floorBefore, floorAfter, t.MaxMHz, t.Serial);
+    if (t.AbiVersion == BC250_DPM_TUNE_ABI) {
+        TuneSoftText(floorBefore, sizeof(floorBefore), before.SoftReleaseDeltaMc, before.SoftReleaseStepMs);
+        TuneSoftText(floorAfter, sizeof(floorAfter), t.SoftReleaseDeltaMc, t.SoftReleaseStepMs);
+        printf("%s: hot step %lu -> %lu ms, soft release %s -> %s\n", name, before.HotStepMs, t.HotStepMs, floorBefore,
+               floorAfter);
+    }
+    printf("in force: ");
+    TunePrintState(&t);
+    printf("\n");
+    TuneWaitApplied(&t);
+    return 0;
+}
+
+static int ParseNumber(const WCHAR *text, unsigned long *value)
+{
+    WCHAR *end = NULL;
+    if (text == NULL || !*text) return 1;
+    *value = wcstoul(text, &end, 10);
+    return end == NULL || *end != 0;
+}
+
+static int DpmTune(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM_TUNE t;
+    memset(&t, 0, sizeof(t));
+    if (argc == 3) {
+        if (TuneRead(&t, 0)) return 1;
+        printf("driver 0x%08lX, mode %s, ceiling %lu MHz, generation %llu: ", t.Version, t.Mode == 1 ? "dpm" : "fixed",
+               t.MaxMHz, t.Generation);
+        TunePrintState(&t);
+        printf("; defaults up %lu target %lu down %lu hold %lu ms; serial %lu, governor at %lu%s, floor ticks %llu\n",
+               t.DefaultUpPermille, t.DefaultTargetPermille, t.DefaultDownPermille, t.DefaultDownHoldMs, t.Serial,
+               t.Applied, (t.Flags & BC250_DPM_TUNE_FLAG_GOVERNING) ? "" : " (not governing)", t.FloorTicks);
+        if (t.AbiVersion == BC250_DPM_TUNE_ABI) {
+            char soft[32];
+            TuneSoftText(soft, sizeof(soft), t.DefaultSoftReleaseDeltaMc, t.DefaultSoftReleaseStepMs);
+            printf("thermal defaults: hot step %lu ms, soft release %s (soft step %lu ms)\n", t.DefaultHotStepMs, soft,
+                   t.DefaultSoftReleaseStepMs);
+        } else printf("# RUN_DPM_TUNE ABI 1 (a driver before 0.7.197.1): no thermal timing\n");
+        return 0;
+    }
+    if (argc == 4 && !_wcsicmp(argv[3], L"reset")) return TuneWrite(BC250_DPM_TUNE_OP_RESET, &t, "dpm tune reset");
+    if (argc >= 4 && !_wcsicmp(argv[3], L"thermal")) {
+        if (argc != 7 || ParseNumber(argv[4], &t.HotStepMs) ||
+            (_wcsicmp(argv[5], L"off") && (ParseNumber(argv[5], &t.SoftReleaseDeltaMc) || !t.SoftReleaseDeltaMc)) ||
+            ParseNumber(argv[6], &t.SoftReleaseStepMs)) {
+            fprintf(stderr, "usage: bc250kmd_cli dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms>\n");
+            return 2;
+        }
+        if (!_wcsicmp(argv[5], L"off")) t.SoftReleaseDeltaMc = 0;
+        return TuneWrite(BC250_DPM_TUNE_OP_THERMAL, &t, "dpm tune thermal");
+    }
+    if (argc == 6 || argc == 7) {
+        if (ParseNumber(argv[3], &t.UpPermille) || ParseNumber(argv[4], &t.TargetPermille) ||
+            ParseNumber(argv[5], &t.DownPermille) || (argc == 7 && (ParseNumber(argv[6], &t.DownHoldMs) || !t.DownHoldMs))) {
+            fprintf(stderr, "dpm tune: <up> <target> <down> [hold ms] are decimal numbers (permille, ms)\n");
+            return 2;
+        }
+        return TuneWrite(BC250_DPM_TUNE_OP_THRESHOLDS, &t, "dpm tune");
+    }
+    fprintf(stderr, "usage: bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | thermal <hot ms> <soft mC|off> "
+                    "<soft ms> | reset]\n");
+    return 2;
+}
+
+static int DpmFloor(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM_TUNE t;
+    memset(&t, 0, sizeof(t));
+    if (argc != 4 || (_wcsicmp(argv[3], L"off") && ParseNumber(argv[3], &t.FloorMHz))) {
+        fprintf(stderr, "usage: bc250kmd_cli dpm floor <MHz|off>   (MHz: 1000..2000 in 100 MHz steps, at most DpmMaxMHz)\n");
+        return 2;
+    }
+    if (!_wcsicmp(argv[3], L"off")) t.FloorMHz = 0;
+    return TuneWrite(BC250_DPM_TUNE_OP_FLOOR, &t, "dpm floor");
+}
+
+static int Dpm(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM d;
+    BC250_ESCAPE_DPM_TUNE t;
+    unsigned long count = 1, interval = 1000, i;
+    if (argc >= 3 && !_wcsicmp(argv[2], L"tune")) return DpmTune(argc, argv);
+    if (argc >= 3 && !_wcsicmp(argv[2], L"floor")) return DpmFloor(argc, argv);
+    if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | confirm | tune ... | floor ...\n"); return 2; }
+    if (argc >= 3 && !_wcsicmp(argv[2], L"confirm")) {
+        if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
+        if (DpmQuery(&d, BC250_DPM_OP_CONFIRM, d.Generation)) return 1;
+        printf("dpm confirm: status %lu NTSTATUS 0x%08lX, flags 0x%lX%s%s\n", d.Status, d.NtStatus, d.Flags,
+               (d.Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "", (d.Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "");
+        return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 1;
+    }
+    if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
+    if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
+    if (count == 0) count = 1;
+    for (i = 0; i < count; i++) {
+        if (i) Sleep(interval);
+        if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
+        if (d.Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("dpm: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d.Status, d.NtStatus, d.Version);
+            return 1;
+        }
+        if (i == 0) {
+            // The header keeps its old head (dpm-lib.ps1 parses it); the governor's thresholds and floor follow it.
+            printf("driver 0x%08lX, requested %s, reason %s, generation %llu, ticks %llu, uptime %llu ms", d.Version,
+                   d.Requested == 1 ? "dpm" : (d.Requested == 0 ? "fixed" : "invalid"),
+                   d.Reason < 9 ? g_DpmReason[d.Reason] : "?", d.Generation, d.Ticks, d.UptimeMs);
+            if (TuneRead(&t, 1) == 0) {
+                printf("; ");
+                TunePrintState(&t);
+            } else printf("; tune n/a (driver before 0x000700B9)");
+            printf("\n");
+        }
+        DpmPrint(&d);
+    }
+    return 0;
+}
+
+// ---- interop: the GPU DWM interop switches (BC250_ESCAPE_RUN_INTEROP, docs/design/gpu-dwm-interop-switches.md) --
+//
+// One line of what the start decided: which switches were requested (EnableGpuPresentBlit "blit",
+// EnableCddDwmInterop "cdd"), which are effective, the reason, and whether the driver closed them itself after an
+// unclean boot; a second line with the session marker. Exit 0 when the escape answered, whatever the state.
+
+static const char *const g_InteropReason[] = { "none", "not-requested", "invalid-setting", "unused", "unclean",
+                                               "registry", "unused", "not-run" };
+static const char *const g_InteropEnd[] = { "none", "device-stop", "last-user-gone" };
+
+static const char *InteropBits(unsigned long bits)
+{
+    static const char *const names[] = { "none", "blit", "cdd", "blit+cdd" };
+    return names[bits & 3u];
+}
+
+static void InteropSetting(const char *name, unsigned long value, unsigned long flags, unsigned long absent,
+                           unsigned long unreadable)
+{
+    if (flags & absent) printf(" %s=absent(1)", name);
+    else if (flags & unreadable) printf(" %s=unreadable", name);
+    else printf(" %s=%lu", name, value);
+}
+
+static int Interop(void)
+{
+    BC250_ESCAPE_INTEROP d;
+    NTSTATUS status;
+    memset(&d, 0, sizeof(d));
+    d.Magic = BC250_ESCAPE_MAGIC;
+    d.Command = BC250_ESCAPE_RUN_INTEROP;
+    d.AbiVersion = BC250_INTEROP_ABI;
+    d.Op = BC250_INTEROP_OP_READ;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, &d, sizeof(d), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_INTEROP)", status); return 1; }
+    if (d.Status != BC250_ESCAPE_STATUS_DONE) {
+        printf("interop: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d.Status, d.NtStatus, d.Version);
+        return 1;
+    }
+    printf("driver 0x%08lX, requested %s, effective %s, reason %s%s, generation %llu\n", d.Version,
+           InteropBits(d.Requested), InteropBits(d.Effective), d.Reason < 8 ? g_InteropReason[d.Reason] : "?",
+           (d.Flags & BC250_INTEROP_FLAG_VALID) ? "" : " (no full WDDM start)", d.Generation);
+    printf("settings");
+    InteropSetting("EnableGpuPresentBlit", d.BlitSetting, d.Flags, BC250_INTEROP_FLAG_BLIT_ABSENT, BC250_INTEROP_FLAG_BLIT_UNREADABLE);
+    InteropSetting("EnableCddDwmInterop", d.CddSetting, d.Flags, BC250_INTEROP_FLAG_CDD_ABSENT, BC250_INTEROP_FLAG_CDD_UNREADABLE);
+    if (d.Flags & BC250_INTEROP_FLAG_CLOSED_BY_DRIVER)
+        printf("  closed by the driver: %s", d.ClosedReason < 8 ? g_InteropReason[d.ClosedReason] : "?");
+    printf("%s%s%s%s\n", (d.Flags & BC250_INTEROP_FLAG_UNCLEAN) ? "  last boot died in a session" : "",
+           (d.Flags & BC250_INTEROP_FLAG_STALE) ? "  stale marker of this boot cleared" : "",
+           (d.Flags & BC250_INTEROP_FLAG_PERSISTED) ? "  close written" : "",
+           (d.Flags & BC250_INTEROP_FLAG_PERSIST_FAILED) ? "  close NOT written (retried next start)" : "");
+    printf("session %s, users %lu, marks %lu, unmarks %lu, mark failures %lu, last end %s, previous end %s, "
+           "boot %lu, marker found %lu\n",
+           (d.Flags & BC250_INTEROP_FLAG_SESSION) ? "marked" : "not marked", d.Users, d.Marks, d.Unmarks, d.MarkFailures,
+           d.LastEnd < 3 ? g_InteropEnd[d.LastEnd] : "?", d.PreviousEnd < 3 ? g_InteropEnd[d.PreviousEnd] : "?",
+           d.BootId, d.SessionBootId);
+    return 0;
+}
+
 // ---- ---------------------------------------------------------------------------------------------------------
 
 int wmain(int argc, wchar_t **argv)
@@ -1550,6 +2266,11 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
+                        "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
+                        "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
+                        "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
+                        "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
+                        "       bc250kmd_cli journal follow SECONDS [MS]  (one process printing new records every MS, default 1000)\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -1581,6 +2302,11 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 0);
     if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
+    if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
+    if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
+    if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
+        return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);
+    if (!_wcsicmp(argv[1], L"journal") && argc <= 3) return Journal(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
         if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);

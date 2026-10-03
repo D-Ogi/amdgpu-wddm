@@ -118,13 +118,28 @@ def dpm_tune_problems(display_source, dpm_source, cli_source):
     else:
         if refusal < 0 or dispatch.start() > refusal:
             found.append("display.c: RUN_DPM_TUNE is dispatched after the NoAdapterSynchronization refusal")
-        if not re.search(r"PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM_TUNE\)", dispatch.group(1)) or \
-           "Escape->Flags.Value" not in dispatch.group(1):
+        # 0.7.197.1: two exact sizes, ABI 2 and its ABI 1 prefix, and the size handed on to DpmTuneRequest.
+        if not re.search(r"PrivateDriverDataSize\s*!=\s*sizeof\(BC250_ESCAPE_DPM_TUNE\)\s*&&\s*"
+                         r"Escape->PrivateDriverDataSize\s*!=\s*BC250_DPM_TUNE_ABI1_SIZE\)", dispatch.group(1)) or \
+           "Escape->Flags.Value" not in dispatch.group(1) or \
+           not re.search(r"DpmTuneRequest\(device,[^;]*Escape->PrivateDriverDataSize,", dispatch.group(1)):
             found.append("display.c: RUN_DPM_TUNE dispatch without the exact size check or the flag word")
+    # The ABI 1 size must never see an ABI 2 field: each one is read or written only inside an `if (abi2)` block, and
+    # abi2 / abi1 pair each AbiVersion with its own size.
+    if not re.search(r"abi2\s*=\s*abi\s*==\s*BC250_DPM_TUNE_ABI\s*&&\s*Size\s*==\s*sizeof\(BC250_ESCAPE_DPM_TUNE\)", body) or \
+       not re.search(r"abi1\s*=\s*abi\s*==\s*BC250_DPM_TUNE_ABI_1\s*&&\s*Size\s*==\s*BC250_DPM_TUNE_ABI1_SIZE", body) or \
+       not re.search(r"if\s*\(\s*!\(abi1\s*\|\|\s*abi2\)", body):
+        found.append("dpm.c: DpmTuneRequest does not pair AbiVersion with the escape's size")
+    guarded = [m.span() for m in re.finditer(r"if\s*\(abi2\)\s*\{[^{}]*\}", body)]
+    for m in re.finditer(r"Data->(HotStepMs|SoftReleaseDeltaMc|SoftReleaseStepMs|DefaultHotStepMs|"
+                         r"DefaultSoftReleaseDeltaMc|DefaultSoftReleaseStepMs|Reserved2)", body):
+        if not any(a <= m.start() < b for a, b in guarded):
+            found.append(f"dpm.c: DpmTuneRequest touches Data->{m.group(1)} outside an if (abi2) block")
+            break
     query = function_body(cli_source, "TuneQuery")
     if query is None:
         found.append("bc250kmd_cli.c: TuneQuery not found")
-    elif not re.search(r"SendEscapeFlags\(BC250_DEFAULT_HWID,\s*t,\s*sizeof\(\*t\),\s*1,", query):
+    elif not re.search(r"SendEscapeFlags\(BC250_DEFAULT_HWID,\s*t,\s*size,\s*1,", query):
         found.append("bc250kmd_cli.c: TuneQuery does not send with NoAdapterSynchronization alone (softwareOnly 1)")
     # Exactly one request is built, in TuneQuery: no other path can send it with other flags.
     builders = re.findall(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM_TUNE\s*;", cli_source)
@@ -150,8 +165,17 @@ class DpmTuneFlagsTest(unittest.TestCase):
             # The dispatch moved behind the refusal: drop it, as a stand-in.
             (display.replace("command == BC250_ESCAPE_RUN_DPM_TUNE", "command == 0xFFFFFFFFu", 1), dpm, cli),
             # The CLI sends with HardwareAccess.
-            (display, dpm, cli.replace("SendEscapeFlags(BC250_DEFAULT_HWID, t, sizeof(*t), 1,",
-                                       "SendEscapeFlags(BC250_DEFAULT_HWID, t, sizeof(*t), 0,", 1)),
+            (display, dpm, cli.replace("SendEscapeFlags(BC250_DEFAULT_HWID, t, size, 1,",
+                                       "SendEscapeFlags(BC250_DEFAULT_HWID, t, size, 0,", 1)),
+            # 0.7.197.1: the ABI 1 size admitted without its pairing to AbiVersion 1.
+            (display, dpm.replace("abi == BC250_DPM_TUNE_ABI_1 && Size == BC250_DPM_TUNE_ABI1_SIZE",
+                                  "abi == BC250_DPM_TUNE_ABI_1", 1), cli),
+            # An ABI 2 field written for every caller, the ABI 1 size included.
+            (display, dpm.replace("    Data->FloorTicks = Data->Generation = 0;\n",
+                                  "    Data->FloorTicks = Data->Generation = 0;\n    Data->HotStepMs = 0;\n", 1), cli),
+            # The dispatch admitting any size.
+            (display.replace("Escape->PrivateDriverDataSize != BC250_DPM_TUNE_ABI1_SIZE)",
+                             "Escape->PrivateDriverDataSize < BC250_DPM_TUNE_ABI1_SIZE)", 1), dpm, cli),
         ]
         for i, (d, k, c) in enumerate(mutations):
             with self.subTest(mutation=i):

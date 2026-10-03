@@ -8,11 +8,11 @@
 #define BC250_CONTROL_API
 #define BC250_DEFAULT_HWID L"fixture"
 static int mode,accessFlag,calls,failures,checks;
-static int SendEscapeFlags(const WCHAR* id,void* p,unsigned size,LONG* status,int access)
+static int SendEscapeFlags(const WCHAR* id,void* p,unsigned size,int softwareOnly,LONG* status)
 {
     BC250_ESCAPE_START_HEALTH* d=p;
     (void)id;(void)size;
-    calls++;accessFlag=access;*status=0;
+    calls++;accessFlag=!softwareOnly;*status=0;
     if(mode==1){*status=(LONG)0xC000000E;return 1;}
     if(mode==2){*status=(LONG)0xC000009E;return 0;}
     if(mode==3)return 0; /* untouched UNKNOWN_COMMAND */

@@ -13,6 +13,7 @@
 #include "dcn_translate.h"
 #include "umd_blob.h"
 #include "umd_caps.h"
+#include "gpu_clock.h"            // BD-056: the SMUIO TSC read and its pairing with the QPC
 #include "firmware_metadata.h"
 #include "gfx_completion_queue.h"
 #include "gfx_blt.h"
@@ -5201,28 +5202,66 @@ static VOID Bc250WddmSetStablePowerState(_In_ const HANDLE hAdapter, _In_ const 
     DpmSetStable((BC250_DEVICE*)hAdapter, pArgs->Enabled ? TRUE : FALSE);
 }
 
+static LONG volatile g_CalibrateFallbackLogged;     // the QPC stand-in below is logged once per driver load
+
+static int CalibrateRead(void* Context, unsigned long Offset, unsigned long* Value)
+{
+    ULONG value = 0;
+    NTSTATUS status = MmioRead((const BC250_DEVICE*)Context, Offset, &value);
+    *Value = value;
+    return NT_SUCCESS(status) ? 0 : 1;
+}
+
+static unsigned long long CalibrateCpu(void* Context)
+{
+    UNREFERENCED_PARAMETER(Context);
+    return (unsigned long long)KeQueryPerformanceCounter(NULL).QuadPart;
+}
+
+// BD-056. The D3D12 runtime hands GpuFrequency to applications as ID3D12CommandQueue::GetTimestampFrequency and the
+// pair as GetClockCalibration, and the timestamps they scale are what the CP writes (RELEASE_MEM/EOP), in the SMUIO
+// golden TSC's 100 MHz. Until 0.7.197 this answered stage A's CPU clock (the QPC, 10 MHz) as both counters, so every
+// D3D12 GPU duration on this stack read 10x too long (frameloop quick-20261002T225506Z: GPU timeline over frame
+// interval 10.01 and 9.97). Now: the TSC read as amdgpu reads it (gpu_clock.h), paired with the QPC around it, the
+// narrowest of GPU_CLOCK_SAMPLES pairs, and the frequency the UMD already reads from the caps blob
+// (device.gpu_counter_freq, 100000 kHz). Node 1 (copy, SDMA) stamps from the same counter and gets the same answer.
+// If the BAR does not answer (no mapping, a refused read, all ones), the QPC scaled to that frequency stands in:
+// durations stay right, only the correlation with the GPU's own timestamps is lost, and the log says so once.
 static DXGKDDI_CALIBRATEGPUCLOCK Bc250WddmCalibrateGpuClock;
 static NTSTATUS Bc250WddmCalibrateGpuClock(_In_ const HANDLE hAdapter, _In_ UINT32 NodeOrdinal, _In_ UINT32 EngineOrdinal,
                                            _Out_ DXGKARG_CALIBRATEGPUCLOCK* pClockCalibration)
 {
-    LARGE_INTEGER frequency;
-    LARGE_INTEGER counter = KeQueryPerformanceCounter(&frequency);
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm = WddmOf(hAdapter);
     UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
+    const unsigned long long gpuHz = UmdCapsGpuCounterHz();
+    GPU_CLOCK_PAIR pair = {0};
+    int error;
 
     UNREFERENCED_PARAMETER(EngineOrdinal);
-    // ADR 0008 stage D: node 1 accepted once wddm->NodeCount says it exists (design note section 6); its answer
-    // is the same shape as node 0's, below - the CPU counter, since node 1 has no GPU timestamp of its own either.
+    // ADR 0008 stage D: node 1 accepted once wddm->NodeCount says it exists (design note section 6).
     if (NodeOrdinal != BC250_WDDM_NODE_3D && !(NodeOrdinal == BC250_WDDM_NODE_COPY && nodeCount > BC250_WDDM_NODE_COPY))
         return STATUS_INVALID_PARAMETER;
-    // Stage A's engine is the CPU, so its clock is the CPU's: one counter, read once, reported as both. A GPU
-    // timestamp of our own arrives with the first real submission.
     RtlZeroMemory(pClockCalibration, sizeof(*pClockCalibration));
-    pClockCalibration->GpuFrequency = (ULONGLONG)frequency.QuadPart;
-    pClockCalibration->GpuClockCounter = (ULONGLONG)counter.QuadPart;
-    pClockCalibration->CpuClockCounter = (ULONGLONG)counter.QuadPart;
+    error = GpuClockCalibrate(device, CalibrateRead, CalibrateCpu, BC250_REG_SMUIO_GOLDEN_TSC_COUNT_UPPER_Cyan_Skillfish,
+                              BC250_REG_SMUIO_GOLDEN_TSC_COUNT_LOWER_Cyan_Skillfish, &pair);
+    pClockCalibration->GpuFrequency = gpuHz;
+    if (error == 0) {
+        pClockCalibration->GpuClockCounter = pair.Gpu;
+        pClockCalibration->CpuClockCounter = pair.Cpu;
+    } else {
+        LARGE_INTEGER qpcHz;
+        LARGE_INTEGER qpc = KeQueryPerformanceCounter(&qpcHz);
+        pClockCalibration->GpuClockCounter = GpuClockScale((ULONGLONG)qpc.QuadPart, (ULONGLONG)qpcHz.QuadPart, gpuHz);
+        pClockCalibration->CpuClockCounter = (ULONGLONG)qpc.QuadPart;
+        if (InterlockedCompareExchange(&g_CalibrateFallbackLogged, 1, 0) == 0)
+            GuardLog("wddm: CalibrateGpuClock: TSC read failed (%d: 1 refused, 2 all ones), the QPC scaled to %llu Hz "
+                     "stands in", error, gpuHz);
+    }
     if (WddmFirstCalls(wddm, WddmDdiCalibrateGpuClock))
-        GuardLog("wddm: CalibrateGpuClock node %u, frequency %llu", NodeOrdinal, pClockCalibration->GpuFrequency);
+        GuardLog("wddm: CalibrateGpuClock node %u, frequency %llu, gpu %llu (tsc %08lX:%08lX%s), cpu %llu, window %llu",
+                 NodeOrdinal, pClockCalibration->GpuFrequency, pClockCalibration->GpuClockCounter, pair.Upper, pair.Lower,
+                 error ? ", QPC fallback" : "", pClockCalibration->CpuClockCounter, pair.Window);
     return STATUS_SUCCESS;
 }
 
