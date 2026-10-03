@@ -44,6 +44,12 @@ namespace AmdgpuWddmControl
         public Dictionary<string, long> DefaultParameters { get; set; }     // manifest.json "defaults"; null: none
         public Dictionary<string, long> DefaultRouter { get; set; }
         public string DefaultsError { get; set; }
+        // The desktop compositor of the interactive session (BD-060): when its DWM started, in seconds after the
+        // session's winlogon and after the boot; null when not readable.
+        public int? DwmSession { get; set; }
+        public string DwmStartUtc { get; set; }
+        public double? DwmStartAfterSessionSeconds { get; set; }
+        public double? DwmStartAfterBootSeconds { get; set; }
 
         public RecoverySnapshot() { Parameters = new Dictionary<string, long>(); DwmRoute = "unknown"; }
 
@@ -81,9 +87,8 @@ namespace AmdgpuWddmControl
         public string Action, Refusal, Title, Change, Effect;
         public readonly List<RegWrite> Writes = new List<RegWrite>();
         public readonly List<string> Notes = new List<string>();
-        public bool RestartDwm, WatchDwm, ConfirmStart, OfferRestart, Undoable = true;
+        public bool ConfirmStart, OfferRestart, Undoable = true;
         public string UndoOf;                  // undo: the backup file it restores
-        public uint DwmForceCpuAfter = 1;      // RestartDwm: the route the restart should end on (0 GPU, 1 CPU)
 
         public bool Refused { get { return Refusal != null; } }
 
@@ -96,7 +101,6 @@ namespace AmdgpuWddmControl
             w.AppendLine("takes effect: " + Effect);
             foreach (var x in Writes) w.AppendLine("  " + x);
             if (ConfirmStart) w.AppendLine("  confirm this driver start (start-health CONFIRM with this start's generation and epoch)");
-            if (RestartDwm) w.AppendLine("  restart DWM" + (WatchDwm ? ", watch it 60 s, on a crash or replacement set DwmForceCpu 1 and restart DWM again" : ""));
             foreach (var n in Notes) w.AppendLine("note: " + n);
             w.AppendLine("undo: " + (Undoable ? "yes (Undo last action)" : "no"));
             return w.ToString();
@@ -128,7 +132,7 @@ namespace AmdgpuWddmControl
         public string Utc { get; set; }
         public string RunId { get; set; }
         public bool Undoable { get; set; }
-        public bool RestartsDwm { get; set; }
+        public bool RestartsDwm { get; set; }    // written by 0.3 and earlier, which restarted DWM; not used now
         public string Undoes { get; set; }      // the backup file an undo restored
         public List<BackupValue> Values { get; set; }
         public string File { get; set; }        // set when read, not stored
@@ -145,7 +149,12 @@ namespace AmdgpuWddmControl
         // tests compare these with that file when the build is given it.
         public const ulong ConfirmMinReadyMs = 60000, ConfirmFreshMs = 5000;
         public const uint ConfirmRequiredFlags = 7;         // BC250_START_HEALTH_REQUIRED (FULL | READY | VISIBLE)
-        public const int WatchSeconds = 60, DwmStartSeconds = 20;
+        // BD-060: a session's first DWM starts with the session's winlogon. One that started later than these bounds
+        // replaced it (killed, crashed, or the display driver restarted).
+        public const int CompositorSessionBoundSeconds = 120, CompositorBootBoundSeconds = 300;
+
+        // Why no action restarts the desktop compositor (DWM) any more.
+        public const string Bd060Note = "The app does not restart the desktop compositor (DWM): on Windows 11 a DWM restart leaves some apps, for example the Explorer command bar and Task Manager, ignoring mouse clicks until Windows restarts (BD-060).";
 
         // The only values an action or an undo may write. Never: the temperature limits, firmware paths, the other
         // KMD service values, BIOS or firmware settings, test signing.
@@ -303,16 +312,42 @@ namespace AmdgpuWddmControl
             return gpu ? "gpu" : cpu ? "cpu" : "unknown";
         }
 
-        // The DWM watchdog's verdict after a restart: null while it waits, "ok" when DWM held for the whole window,
-        // else the failure. firstPid: the first DWM that started after the restart; dwmNow: the DWMs started since.
-        // windowSeconds: WatchSeconds onto the GPU route, a short settle time onto the CPU route.
-        public static string WatchVerdict(int? firstPid, ICollection<int> dwmNow, int crashes, double elapsedSeconds, double windowSeconds)
+        // BD-060: true when the session's DWM is not the session's first one, null when the start times are not
+        // readable. The session's winlogon is the reference; without it, the boot with a wider bound.
+        public static bool? CompositorRestarted(RecoverySnapshot s)
         {
-            if (crashes > 0) return "DWM crashed (Application Error 1000, dwm.exe)";
-            if (firstPid == null) return elapsedSeconds >= DwmStartSeconds ? "no DWM started within " + DwmStartSeconds + " s" : null;
-            if (!dwmNow.Contains(firstPid.Value)) return "DWM exited and was replaced";
-            if (dwmNow.Any(p => p != firstPid.Value)) return "a second DWM started";
-            return elapsedSeconds >= windowSeconds ? "ok" : null;
+            if (s.DwmStartAfterSessionSeconds != null) return s.DwmStartAfterSessionSeconds.Value > CompositorSessionBoundSeconds;
+            if (s.DwmStartAfterBootSeconds != null) return s.DwmStartAfterBootSeconds.Value > CompositorBootBoundSeconds;
+            return null;
+        }
+
+        static string Duration(double seconds)
+        {
+            Func<double, string> n = v => Math.Round(v).ToString(CultureInfo.InvariantCulture);
+            return seconds < 120 ? n(seconds) + " s" : seconds < 7200 ? n(seconds / 60) + " min"
+                : seconds < 172800 ? n(seconds / 3600) + " h" : n(seconds / 86400) + " days";
+        }
+
+        // The compositor line of the Overview, the Recovery page, --status and the bug report.
+        public static string CompositorText(RecoverySnapshot s)
+        {
+            var restarted = CompositorRestarted(s);
+            if (restarted == null) return "The start time of the desktop compositor (DWM) cannot be read.";
+            string when = s.DwmStartAfterSessionSeconds != null ? Duration(s.DwmStartAfterSessionSeconds.Value) + " after the session began"
+                : Duration(s.DwmStartAfterBootSeconds.Value) + " after Windows started";
+            if (restarted == false) return "Running since the session began (DWM started " + when + ").";
+            return "Desktop compositor restarted in this session (DWM started " + when + "). Some Windows 11 apps, for example the Explorer command bar and Task Manager, ignore mouse clicks until Windows restarts (BD-060).";
+        }
+
+        // One line for scripts (the installer's verify): yes, no or unknown, then the readings.
+        public static string CompositorStatusLine(RecoverySnapshot s)
+        {
+            var restarted = CompositorRestarted(s);
+            Func<double?, string> n = v => v == null ? "-" : Math.Round(v.Value).ToString(CultureInfo.InvariantCulture);
+            return "compositor-restarted: " + (restarted == null ? "unknown" : restarted.Value ? "yes" : "no") +
+                " (session " + (s.DwmSession == null ? "-" : s.DwmSession.Value.ToString(CultureInfo.InvariantCulture)) +
+                ", DWM started " + (s.DwmStartUtc ?? "-") + ", " + n(s.DwmStartAfterSessionSeconds) + " s after the session, " +
+                n(s.DwmStartAfterBootSeconds) + " s after boot)";
         }
 
         // ---- the states ------------------------------------------------------------------------------------------
@@ -326,6 +361,10 @@ namespace AmdgpuWddmControl
                 lines.Add(l);
                 return l;
             };
+            // The desktop compositor first: it matters with or without the driver (BD-060).
+            var restarted = CompositorRestarted(s);
+            add("Desktop compositor", CompositorText(s), restarted == true ? "warn" : restarted == false ? "ok" : "info",
+                restarted == true ? "restart" : null, restarted == true ? "Restart Windows" : null);
             if (!s.DriverInstalled)
             {
                 add("Driver", "The bc250kmd driver is not installed on this PC. There is nothing to recover.", "info", null, null);
@@ -386,6 +425,8 @@ namespace AmdgpuWddmControl
             string seen = s.DwmRoute == "unknown" ? "" : " DWM now runs on the " + s.DwmRoute.ToUpperInvariant() + " route" + (string.IsNullOrEmpty(s.DwmRouteDetail) ? "" : " (" + s.DwmRouteDetail + ")") + ".";
             if (!s.RouterInstalled)
                 add("Desktop composition", "The release's desktop router is not installed." + seen, "info", null, null);
+            else if ((s.DwmForceCpu ?? 0) != 0 && s.DwmRoute == "gpu")
+                add("Desktop composition", "CPU route selected for the next start; DWM runs on the GPU route until Windows restarts." + seen, "info", "restart", "Restart Windows");
             else if ((s.DwmForceCpu ?? 0) != 0)
             {
                 // The release's own choice comes from manifest.json, never from this app.
@@ -401,9 +442,12 @@ namespace AmdgpuWddmControl
             else if (!openNow)
                 add("Desktop composition", "GPU route selected, but the GPU desktop path is closed, so DWM stays on the CPU route." + seen, "warn",
                     requested && closed == null ? "restart" : "reopen-gpu-path", requested && closed == null ? "Restart Windows" : "Reopen the GPU desktop path");
+            else if (s.DwmRoute == "cpu")
+                add("Desktop composition", "GPU route selected, but DWM runs on the CPU route. A route chosen in this session takes effect at the next restart of Windows." + seen,
+                    "info", "restart", "Restart Windows");
             else
-                add("Desktop composition", "GPU route selected. If the desktop goes black or restarts, switch it back to the CPU route." + seen,
-                    s.DwmRoute == "cpu" ? "warn" : "info", "desktop-cpu", "Desktop on the CPU route");
+                add("Desktop composition", "GPU route selected. If the desktop goes black or restarts, put it back on the CPU route and restart Windows." + seen,
+                    "info", "desktop-cpu", "Desktop on the CPU route");
 
             // Clock control.
             uint? mode = s.P("DpmMode"), max = s.P("DpmMaxMHz"), lastMode = s.P("DpmLastMode"), lastReason = s.P("DpmLastReason");
@@ -473,9 +517,8 @@ namespace AmdgpuWddmControl
                 case "desktop-cpu":
                     bool gpu = action == "desktop-gpu";
                     p.Title = gpu ? "Desktop composition on the GPU" : "Desktop composition on the CPU";
-                    p.Change = "Sets DwmForceCpu " + (gpu ? 0 : 1) + " and restarts the desktop (DWM): the screen goes black for a few seconds." +
-                        (gpu ? " The app watches DWM for " + WatchSeconds + " s; if it crashes or is replaced, it sets the CPU route again and restarts DWM once more." : "");
-                    p.Effect = "at once (DWM restart); open windows stay open";
+                    p.Change = "Sets DwmForceCpu " + (gpu ? 0 : 1) + ": the desktop (DWM) uses the " + (gpu ? "GPU" : "CPU") + " route from the next restart of Windows.";
+                    p.Effect = "at the next restart of Windows";
                     if (!s.RouterInstalled) return Refuse(p, "The release's desktop router is not installed.");
                     if (gpu)
                     {
@@ -487,7 +530,10 @@ namespace AmdgpuWddmControl
                     p.Writes.Add(RegWrite.Dword(RouterPath, "DwmForceCpu", gpu ? 0u : 1u));
                     if (Same(s, p.Writes[0]) && s.DwmRoute == (gpu ? "gpu" : "cpu"))
                         return Refuse(p, "The desktop already runs on the " + (gpu ? "GPU" : "CPU") + " route.");
-                    p.RestartDwm = true; p.WatchDwm = gpu; p.DwmForceCpuAfter = gpu ? 0u : 1u;
+                    if (Same(s, p.Writes[0]))
+                        return Refuse(p, "The " + (gpu ? "GPU" : "CPU") + " route is selected already: restart Windows to use it.");
+                    p.Notes.Add(Bd060Note);
+                    p.OfferRestart = true;
                     break;
 
                 case "confirm-start":
@@ -561,15 +607,11 @@ namespace AmdgpuWddmControl
                     }
                     p.Change = "Restores the values found before \"" + target.Action + "\" of " + target.Utc + ".";
                     var router = p.Writes.FirstOrDefault(w => w.Name == "DwmForceCpu");
-                    if (target.RestartsDwm && router != null)
-                    {
-                        uint after = router.Delete ? 0u : (uint)router.Number;
-                        if (after == 0 && !SwitchesOpenNow(s))
-                            return Refuse(p, "Undo would put the desktop on the GPU route, but the GPU desktop path is closed for this start.");
-                        p.RestartDwm = true; p.WatchDwm = after == 0; p.DwmForceCpuAfter = after;
-                        p.Effect = "at once (DWM restart)";
-                    }
-                    else { p.Effect = "at the next restart of Windows"; p.OfferRestart = true; }
+                    if (router != null && (router.Delete || router.Number == 0) && !SwitchesOpenNow(s))
+                        return Refuse(p, "Undo would put the desktop on the GPU route, but the GPU desktop path is closed for this start.");
+                    if (router != null) p.Notes.Add(Bd060Note);
+                    p.Effect = "at the next restart of Windows";
+                    p.OfferRestart = true;
                     break;
             }
             foreach (var w in p.Writes)

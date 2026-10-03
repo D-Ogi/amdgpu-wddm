@@ -58,19 +58,27 @@ the elevated helper plan every action through it, so the confirmation dialog, `-
 the same list. The states: driver start (confirmed or not, `UnconfirmedStarts` against the limit of 2, `LastStage`),
 GPU desktop path (`EnableGpuPresentBlit`, `EnableCddDwmInterop`, `InteropClosedReason`, the escape's effective
 switches, users and last session end), desktop composition (`DwmForceCpu` and the route DWM really loaded), clock
-control (`DpmMode`, `DpmPending`, `DpmConfirmed`, the running mode and the reason of a fallback) and the start
-confirmation task.
+control (`DpmMode`, `DpmPending`, `DpmConfirmed`, the running mode and the reason of a fallback), the start
+confirmation task, and the desktop compositor (below).
+
+No action restarts, stops or signals DWM (BD-060): on this Windows 11 build a forced DWM restart in a session leaves
+WinUI 3 content (the Explorer command bar, Task Manager) without mouse input until a new boot, and restarting Explorer
+does not help. Every change is written and takes effect at the next restart of Windows; the window then offers
+"Restart now", a normal restart through `ExitWindowsEx` (`EWX_REBOOT`, planned) after a confirmation, so programs can
+keep unsaved work. A unit test reads every source file and fails on `Kill()` outside the bug report's own child tool,
+on `TerminateProcess`, `taskkill`, `shutdown.exe` or a forced restart, and on any use of the `dwm` process other than
+reading it.
 
 | Action (`--action`) | Writes | Takes effect | Refused when |
 |---|---|---|---|
 | `reopen-gpu-path` | `EnableGpuPresentBlit` 1, `EnableCddDwmInterop` 1, delete `InteropClosedReason` | next restart (offered) | open already, or reopened and waiting for the restart |
-| `desktop-gpu` | `DwmForceCpu` 0, DWM restart, 60 s watchdog | at once | the driver is not running; the effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`); the GPU desktop files are missing; DWM is on the GPU route already |
-| `desktop-cpu` | `DwmForceCpu` 1, DWM restart | at once | DWM is on the CPU route already |
+| `desktop-gpu` | `DwmForceCpu` 0 | next restart (offered) | the driver is not running; the effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`); the GPU desktop files are missing; DWM is on the GPU route already; the GPU route is selected already (restart Windows) |
+| `desktop-cpu` | `DwmForceCpu` 1 | next restart (offered) | DWM is on the CPU route already; the CPU route is selected already (restart Windows) |
 | `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD); not undoable | at once | the driver is not running; confirmed already; not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s; the helper retries the reading for 10 s) |
 | `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid; stored already |
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
 | `reset-defaults` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason` | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; all at their defaults already |
-| `undo` | the values the newest undoable backup found | as the action it undoes | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
+| `undo` | the values the newest undoable backup found | next restart (offered) | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
 limits, firmware paths, other KMD service values, BIOS or firmware settings, or test signing. The reset takes no
@@ -79,10 +87,9 @@ value from this app: without `"defaults"` in the manifest it is refused.
 The elevated helper plans again from its own reading, saves the old values to
 `%ProgramData%\amdgpu-wddm\control\backup-<utc>.json` (the directory is writable by administrators and SYSTEM only,
 since undo applies these files), writes, logs every step to `control-actions.log` in the same directory, reads every
-value back (a failed write restores the backup at once) and reports the result. The DWM watchdog: after the restart
-onto the GPU route it polls every second for 60 s; a crash (Application Error 1000 for `dwm.exe`), a replaced DWM or
-no DWM within 20 s sets `DwmForceCpu` 1, restarts DWM again and reports "fell back to CPU". Exit codes: 0 done,
-1 failed, 2 usage, 3 refused, 4 fell back to the CPU route, 5 needs administrator.
+value back (a failed write restores the backup at once) and reports the result. Exit codes: 0 done, 1 failed,
+2 usage, 3 refused, 5 needs administrator (4, "fell back to the CPU route", belonged to the DWM watchdog of 0.3 and
+earlier, which restarted DWM).
 
 ```powershell
 amdgpu_wddm_control.exe --action reopen-gpu-path --dry-run --out plan.txt    # states and plan, nothing written, no UAC
@@ -96,6 +103,25 @@ A close mark (`InteropClosedReason` 4) means different things by driver version.
 (`BC250_KMD_VERSION` 0x000700C6) BD-059 is fixed and a normal restart keeps the path open, so the page says the last
 session ended without a clean shutdown (power loss, crash or reset); on 0.7.197 and earlier it names BD-059. The
 version comes from the driver's interop, start health or DPM reply; without one, both causes are named.
+
+## Desktop compositor restarted (BD-060)
+
+The Overview's "Desktop compositor" row, the first Recovery state, `--status` and the bug report's
+`recovery-states.txt` say whether the interactive session's DWM is the session's first one. Winlogon starts the first
+DWM with the session; a DWM that started more than 120 s after the session's `winlogon.exe` replaced it (killed,
+crashed, or the display driver was restarted, for example by a driver update without a reboot). Without a readable
+winlogon start, the reference is the boot with a 300 s bound. A restarted compositor reads "Desktop compositor
+restarted in this session (DWM started <time> after the session began). Some Windows 11 apps, for example the Explorer
+command bar and Task Manager, ignore mouse clicks until Windows restarts (BD-060).", with "Restart Windows" as the
+remedy. From session 0 (an elevated script over SSH) the console session is read.
+
+```powershell
+amdgpu_wddm_control.exe --status --out status.txt    # no window, nothing written, no UAC
+```
+
+The second line of the file is for scripts such as the installer's verify:
+`compositor-restarted: yes|no|unknown (session N, DWM started <utc>, <s> s after the session, <s> s after boot)`,
+followed by every Recovery state.
 
 ## Bug report
 

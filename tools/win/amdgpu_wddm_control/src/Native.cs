@@ -8,6 +8,48 @@ using System.Runtime.InteropServices;
 
 namespace AmdgpuWddmControl
 {
+    // A normal restart of Windows through ExitWindowsEx (EWX_REBOOT, planned, "application: reconfiguration"):
+    // programs are asked to close and can keep their unsaved work. The window calls it only after the user confirms.
+    public static class WindowsRestart
+    {
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        struct TokenPrivilege { public uint Count; public long Luid; public uint Attributes; }
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        static extern bool LookupPrivilegeValue(string system, string name, out long luid);
+        [DllImport("advapi32.dll", SetLastError = true)]
+        static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TokenPrivilege state, uint length, IntPtr previous, IntPtr returnLength);
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern bool ExitWindowsEx(uint flags, uint reason);
+        [DllImport("kernel32.dll")]
+        static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32.dll")]
+        static extern bool CloseHandle(IntPtr handle);
+
+        const uint TokenAdjustPrivileges = 0x20, TokenQuery = 0x8, PrivilegeEnabled = 2;
+        const uint EwxReboot = 0x2;
+        const uint ReasonPlannedApplicationReconfig = 0x80000000u | 0x00040000u | 0x00000004u;
+
+        // null when Windows accepted the restart, else the error.
+        public static string Request()
+        {
+            IntPtr token;
+            if (!OpenProcessToken(GetCurrentProcess(), TokenAdjustPrivileges | TokenQuery, out token)) return "OpenProcessToken error " + Marshal.GetLastWin32Error();
+            try
+            {
+                var p = new TokenPrivilege { Count = 1, Attributes = PrivilegeEnabled };
+                if (!LookupPrivilegeValue(null, "SeShutdownPrivilege", out p.Luid)) return "LookupPrivilegeValue error " + Marshal.GetLastWin32Error();
+                if (!AdjustTokenPrivileges(token, false, ref p, 0, IntPtr.Zero, IntPtr.Zero)) return "AdjustTokenPrivileges error " + Marshal.GetLastWin32Error();
+                int e = Marshal.GetLastWin32Error();
+                if (e != 0) return "this account may not restart Windows (error " + e + ")";
+            }
+            finally { CloseHandle(token); }
+            return ExitWindowsEx(EwxReboot, ReasonPlannedApplicationReconfig) ? null : "ExitWindowsEx error " + Marshal.GetLastWin32Error();
+        }
+    }
+
     public sealed class KmdResult<T> where T : class
     {
         public T Value;

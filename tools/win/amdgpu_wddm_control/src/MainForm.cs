@@ -330,7 +330,7 @@ namespace AmdgpuWddmControl
             var p = Page("Overview", "Overview", "The driver and the GPU now. Values update every 2 seconds.");
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = Theme.Sz(930, 0) };
             _driver = new Card("Driver");
-            foreach (var k in new[] { "Status", "Release", "GPU", "Kernel driver", "Start check", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition", "Recovery" }) _driver.Row(k);
+            foreach (var k in new[] { "Status", "Release", "GPU", "Kernel driver", "Start check", "Driver package", "Driver date", "Video memory", "Test signing", "Desktop composition", "Desktop compositor", "Recovery" }) _driver.Row(k);
             _gpu = new Card("GPU now");
             foreach (var k in new[] { "Clock", "Voltage", "Temperature", "Load", "Clock control", "Clock ceiling", "Limited by" }) _gpu.Row(k);
             row.Controls.Add(_driver); row.Controls.Add(_gpu);
@@ -746,7 +746,7 @@ namespace AmdgpuWddmControl
             };
             actions.Add(Theme.Label("GPU desktop path (takes effect at the next restart):", null, Theme.Dim));
             actions.Add(row("Reopen the GPU desktop path", "reopen-gpu-path"));
-            actions.Add(Theme.Label("Desktop composition (restarts the desktop now; the GPU route is watched for 60 seconds and falls back to the CPU route on a crash):", null, Theme.Dim));
+            actions.Add(Theme.Label("Desktop composition (takes effect at the next restart):", null, Theme.Dim));
             var route = row("Desktop on the CPU route", "desktop-cpu");
             var gpu = Theme.Button("Desktop on the GPU route", (s, e) => DoAction("desktop-gpu"));
             _actionButtons.Add(gpu);
@@ -796,13 +796,17 @@ namespace AmdgpuWddmControl
             try { snapshot = RecoveryProbe.Read(); backups = RecoveryProbe.Backups(); }
             catch (Exception e) { _driver.Set("Recovery", "Cannot read the states: " + e.Message, Theme.Warn); return; }
             _stateLines = Recovery.Describe(snapshot);
+            var restarted = Recovery.CompositorRestarted(snapshot);
+            _driver.Set("Desktop compositor", restarted == null ? "-" : restarted.Value
+                ? "Restarted in this session: restart Windows (BD-060, see Recovery)" : "Running since the session began",
+                restarted == true ? (Color?)Theme.Warn : null);
             _states.Controls.Clear();
             foreach (var line in _stateLines)
             {
                 var block = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = Theme.Pad(0, 0, 0, 10) };
                 block.Controls.Add(Theme.Label(line.Topic, Theme.Bold));
                 var text = Theme.Label(line.Text, null, line.Severity == "warn" ? Theme.Warn : line.Severity == "ok" ? Theme.Good : Theme.Text);
-                text.MaximumSize = Theme.Sz(880, 0);
+                text.MaximumSize = Theme.Sz(860, 0);
                 block.Controls.Add(text);
                 if (line.Action != null)
                 {
@@ -855,7 +859,7 @@ namespace AmdgpuWddmControl
             if (ceiling != null || action == "set-clocks") { verb.Add("--ceiling"); verb.Add(ceiling == null ? "unset" : ceiling.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
             foreach (var b in _actionButtons) b.Enabled = false;
             _perfApply.Enabled = false;
-            result.Text = plan.RestartDwm ? "Restarting the desktop" + (plan.WatchDwm ? " and watching it for 60 seconds" : "") + "..." : "Working...";
+            result.Text = "Working...";
             result.ForeColor = Theme.Dim;
             Task.Run(() => Program.RunElevatedCode(verb.ToArray())).ContinueWith(t =>
             {
@@ -885,9 +889,9 @@ namespace AmdgpuWddmControl
 
         void OfferRestart(string question)
         {
-            if (MessageBox.Show(this, question + "\n\nSave your work in other programs first.", Program.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            try { Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true }); }
-            catch (Exception e) { MessageBox.Show(this, "Windows did not restart: " + e.Message, Program.ProductName); }
+            if (MessageBox.Show(this, question + "\n\nWindows asks other programs to close; save your work in them first.", Program.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            var error = WindowsRestart.Request();
+            if (error != null) MessageBox.Show(this, "Windows did not restart: " + error, Program.ProductName);
         }
 
         // ---- Diagnostics -------------------------------------------------------------------------------------------
@@ -900,6 +904,7 @@ namespace AmdgpuWddmControl
             foreach (var line in new[]
             {
                 "- the driver log and the driver state (clocks, temperature, settings)",
+                "- the Recovery states, including a desktop compositor restart in this session",
                 "- the installed driver files with versions and checksums",
                 "- DirectX diagnostics (dxdiag) and the D3D12 and Vulkan capability checks",
                 "- Windows events of the last 24 hours from the display drivers",

@@ -150,12 +150,20 @@ if (-not $NoSmoke) {
     if (($r.Code -ne 0 -and $r.Code -ne 3) -or -not $r.Text.Contains('dry run: nothing was written')) { throw "dry run on this PC failed (exit $($r.Code)): $($r.Text)" }
     $u = Invoke-DryRun @('--action', 'set-clocks', '--ceiling', '1500', '--dry-run', '--snapshot', $snapshot) 'set-clocks-without-mode'
     if ($u.Code -ne 2) { throw "set-clocks without --mode must be refused as usage (exit $($u.Code))" }
+    foreach ($a in 'desktop-gpu', 'desktop-cpu', 'undo') {
+        $u = Invoke-DryRun @('--action', $a, '--dry-run', '--snapshot', $snapshot) "no-dwm-$a"
+        if ($u.Text -match 'restart DWM|DWM restart|watchdog') { throw "dry run $a still names a DWM restart: $($u.Text)" }
+    }
+    $st = Invoke-DryRun @('--status') 'status'
+    if ($st.Code -ne 0 -or $st.Text -notmatch '(?m)^compositor-restarted: (yes|no|unknown) \(session') { throw "--status failed (exit $($st.Code)): $($st.Text)" }
+    $statusLine = (($st.Text -split "`r?`n") | Where-Object { $_ -like 'compositor-restarted:*' } | Select-Object -First 1)
     # A real run writes --out too. Only where it cannot change anything: without administrator it stops at once.
     $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $admin) {
         $u = Invoke-DryRun @('--action', 'reopen-gpu-path') 'real-run-not-elevated'
         if ($u.Code -ne 5 -or -not $u.Text.Contains('needs administrator') -or -not $u.Text.Contains('exit 5')) { throw "a real run must write --out (exit $($u.Code)): $($u.Text)" }
     }
+    Write-Host "  status of this PC: $statusLine"
     Write-Host "  dry runs: $($expect.Count) actions planned from the BD-059 snapshot as expected; this PC: $((($r.Text -split "`r?`n") | Where-Object { $_ -match '^\s+(refused|change):' } | Select-Object -First 1).Trim())"
 }
 

@@ -401,7 +401,7 @@ static class UnitTests
         // 1. Reopen.
         var p = Recovery.Plan("reopen-gpu-path", Closed());
         Check(!p.Refused && Writes(p, "EnableGpuPresentBlit=1", "EnableCddDwmInterop=1", "InteropClosedReason-"), "reopen writes both switches and deletes the close mark");
-        Check(p.OfferRestart && p.Undoable && !p.RestartDwm && p.Effect.Contains("next restart"), "reopen: next restart, undoable, no DWM restart");
+        Check(p.OfferRestart && p.Undoable && p.Effect.Contains("next restart"), "reopen: next restart, undoable");
         Check(p.Notes.Any(n => n.Contains("Known issue BD-059:")), "reopen names BD-059 on KMD 0.7.197");
         var c6 = Closed(); c6.Interop.Version = 0x000700C6;
         var p6 = Recovery.Plan("reopen-gpu-path", c6);
@@ -432,16 +432,20 @@ static class UnitTests
         var noRouter = Open(); noRouter.RouterInstalled = false;
         Check(Recovery.Plan("desktop-gpu", noRouter).Refusal.Contains("router"), "GPU route refused without the router");
         p = Recovery.Plan("desktop-gpu", Open());
-        Check(!p.Refused && Writes(p, "DwmForceCpu=0") && p.RestartDwm && p.WatchDwm && p.DwmForceCpuAfter == 0 && p.Undoable, "GPU route: DwmForceCpu 0, DWM restart, watched");
+        Check(!p.Refused && Writes(p, "DwmForceCpu=0") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Undoable, "GPU route: DwmForceCpu 0, at the next restart, restart offered");
+        Check(p.Notes.Contains(Recovery.Bd060Note) && !p.Text().Contains("restart DWM"), "GPU route: no DWM restart, BD-060 named");
         var onGpu = Open(); onGpu.DwmForceCpu = 0; onGpu.DwmRoute = "gpu";
         Check(Recovery.Plan("desktop-gpu", onGpu).Refusal.Contains("already"), "GPU route refused when DWM is on it already");
-        onGpu.DwmRoute = "unknown";
-        Check(!Recovery.Plan("desktop-gpu", onGpu).Refused, "GPU route allowed when the running route is unknown (restart re-checks)");
+        onGpu.DwmRoute = "cpu";
+        Check(Recovery.Plan("desktop-gpu", onGpu).Refusal.Contains("selected already: restart Windows"), "GPU route selected but not running yet: refused, restart Windows");
+        onGpu.DwmRoute = "gpu";
         p = Recovery.Plan("desktop-cpu", Closed());
         Check(Recovery.Plan("desktop-cpu", Closed()).Refusal.Contains("already"), "CPU route refused when DWM is on it already");
         var cpuUnknown = Closed(); cpuUnknown.DwmRoute = "unknown";
+        Check(Recovery.Plan("desktop-cpu", cpuUnknown).Refusal.Contains("selected already: restart Windows"), "CPU route stored, running route unknown: refused, restart Windows");
+        cpuUnknown.DwmForceCpu = 0;
         p = Recovery.Plan("desktop-cpu", cpuUnknown);
-        Check(!p.Refused && Writes(p, "DwmForceCpu=1") && p.RestartDwm && !p.WatchDwm && p.DwmForceCpuAfter == 1, "CPU route: DwmForceCpu 1, DWM restart, not watched");
+        Check(!p.Refused && Writes(p, "DwmForceCpu=1") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Notes.Contains(Recovery.Bd060Note), "CPU route: DwmForceCpu 1, at the next restart, BD-060 named");
         Check(!Recovery.Plan("desktop-cpu", onGpu).Refused, "CPU route allowed from the GPU route");
 
         // 3. Confirm.
@@ -495,7 +499,7 @@ static class UnitTests
         // Undo.
         Check(Recovery.Plan("undo", Closed()).Refusal.Contains("no action"), "undo refused without backups");
         Func<string, string, bool, string, BackupValue[], BackupRecord> rec = (file, action, undoable, undoes, values) =>
-            new BackupRecord { File = file, Action = action, Utc = "2026-10-03T" + file.Substring(16, 6), Undoable = undoable, Undoes = undoes, Values = values.ToList(), RestartsDwm = action.StartsWith("desktop") };
+            new BackupRecord { File = file, Action = action, Utc = "2026-10-03T" + file.Substring(16, 6), Undoable = undoable, Undoes = undoes, Values = values.ToList() };
         var b1 = rec("backup-20260103T100000000Z.json", "reopen-gpu-path", true, null, new[]
         {
             new BackupValue { Path = Recovery.ParametersPath, Name = "EnableGpuPresentBlit", Existed = true, Kind = "DWord", Number = 0 },
@@ -505,14 +509,16 @@ static class UnitTests
         var b2 = rec("backup-20260103T110000000Z.json", "confirm-start", false, null, new BackupValue[0]);
         p = Recovery.Plan("undo", Closed(), null, null, new[] { b1, b2 });
         Check(!p.Refused && p.UndoOf == b1.File && Writes(p, "EnableGpuPresentBlit=0", "InteropClosedReason=4", "EnableCddDwmInterop-"), "undo restores the newest undoable backup, deletes what was absent");
-        Check(!p.Undoable && p.OfferRestart && !p.RestartDwm, "undo: not undoable itself, restart offered");
+        Check(!p.Undoable && p.OfferRestart && p.Effect == "at the next restart of Windows", "undo: not undoable itself, restart offered");
         var u1 = rec("backup-20260103T120000000Z.json", "undo", false, b1.File, new BackupValue[0]);
         Check(Recovery.Plan("undo", Closed(), null, null, new[] { b1, b2, u1 }).Refused, "an undone backup is not undone twice");
         var b3 = rec("backup-20260103T130000000Z.json", "desktop-cpu", true, null, new[] { new BackupValue { Path = Recovery.RouterPath, Name = "DwmForceCpu", Existed = true, Kind = "DWord", Number = 0 } });
         Equal(b3.File, Recovery.UndoTarget(new[] { b1, b2, u1, b3 }).File, "newest undoable wins");
         Check(Recovery.Plan("undo", Closed(), null, null, new[] { b3 }).Refusal.Contains("GPU desktop path is closed"), "undo onto the GPU route refused while the switches are closed");
         p = Recovery.Plan("undo", Open(), null, null, new[] { b3 });
-        Check(!p.Refused && p.RestartDwm && p.WatchDwm && p.DwmForceCpuAfter == 0, "undo onto the GPU route restarts DWM with the watchdog");
+        Check(!p.Refused && Writes(p, "DwmForceCpu=0") && p.OfferRestart && p.Effect == "at the next restart of Windows" && p.Notes.Contains(Recovery.Bd060Note), "undo onto the GPU route: at the next restart, no DWM restart");
+        var old = rec("backup-20260103T130500000Z.json", "desktop-cpu", true, null, b3.Values.ToArray()); old.RestartsDwm = true;
+        Check(Recovery.Plan("undo", Open(), null, null, new[] { old }).OfferRestart, "undo of a 0.3 backup that restarted DWM: also at the next restart");
         var evil = rec("backup-20260103T140000000Z.json", "reopen-gpu-path", true, null, new[] { new BackupValue { Path = Recovery.ParametersPath, Name = "UnconfirmedStarts", Existed = true, Kind = "DWord", Number = 2 } });
         Check(Recovery.Plan("undo", Closed(), null, null, new[] { evil }).Refusal.Contains("does not change"), "undo refuses a backup outside the allow-list");
         evil = rec("backup-20260103T150000000Z.json", "reopen-gpu-path", true, null, new[] { new BackupValue { Path = @"SYSTEM\CurrentControlSet\Control\CI\Policy", Name = "DwmForceCpu", Existed = false } });
@@ -564,17 +570,18 @@ static class UnitTests
         Check(line(Recovery.Describe(early), "Driver start").Action == null, "an early start recommends waiting");
         var trial = Open(); trial.Parameters["DpmMode"] = 1; trial.Parameters["DpmPending"] = 0x10005DC; trial.Dpm = new DpmState { Mode = 1, MaxMHz = 1500 };
         Check(line(Recovery.Describe(trial), "Clock control").Action == "confirm-start", "clocks on trial recommend the confirmation");
-        Equal(1, Recovery.Describe(new RecoverySnapshot()).Count, "not installed: one line");
+        var bare = Recovery.Describe(new RecoverySnapshot());
+        Check(bare.Count == 2 && bare[0].Topic == "Desktop compositor" && bare[1].Topic == "Driver", "not installed: the compositor line and the driver line");
 
-        // The watchdog.
-        Equal(null, Recovery.WatchVerdict(null, new int[0], 0, 5, 60), "watch: waiting for DWM");
-        Check(Recovery.WatchVerdict(null, new int[0], 0, 20, 60).StartsWith("no DWM"), "watch: no DWM in 20 s fails");
-        Equal(null, Recovery.WatchVerdict(100, new[] { 100 }, 0, 30, 60), "watch: holding");
-        Equal("ok", Recovery.WatchVerdict(100, new[] { 100 }, 0, 60, 60), "watch: held 60 s");
-        Check(Recovery.WatchVerdict(100, new[] { 100 }, 1, 30, 60).Contains("Application Error 1000"), "watch: a dwm.exe crash fails");
-        Check(Recovery.WatchVerdict(100, new[] { 104 }, 0, 30, 60).Contains("replaced"), "watch: a replaced DWM fails");
-        Check(Recovery.WatchVerdict(100, new[] { 100, 104 }, 0, 30, 60).Contains("second"), "watch: a second DWM fails");
-        Equal("ok", Recovery.WatchVerdict(100, new[] { 100 }, 0, 5, 5), "settle: 5 s on the CPU route");
+        // Pending route changes: written, used at the next restart.
+        var cpuPending = Open(); cpuPending.DwmForceCpu = 1; cpuPending.DwmRoute = "gpu";
+        var cp = line(Recovery.Describe(cpuPending), "Desktop composition");
+        Check(cp.Text.StartsWith("CPU route selected for the next start") && cp.Action == "restart", "CPU route chosen, DWM still on the GPU route: restart recommended");
+        var gpuPending = Open(); gpuPending.DwmForceCpu = 0; gpuPending.DwmRoute = "cpu";
+        var gp = line(Recovery.Describe(gpuPending), "Desktop composition");
+        Check(gp.Text.StartsWith("GPU route selected, but DWM runs on the CPU route") && gp.Action == "restart", "GPU route chosen, DWM on the CPU route: restart recommended");
+
+        Compositor();
 
         Equal("gpu", Recovery.RouteFromModules(new[] { @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll", @"C:\Program Files\amdgpu-wddm\desktop\bc250d3d_zink.dll" }), "route from zink");
         Equal("gpu", Recovery.RouteFromModules(new[] { @"C:\Program Files\amdgpu-wddm\desktop\amdgpu_wddm_radv.dll" }), "route from the desktop RADV");
@@ -637,6 +644,66 @@ static class UnitTests
         Equal("", Show(DpmSettings.PlanWrites(null, 1700, false, 1700)), "clocks: a stored ceiling shown checked is not rewritten");
     }
 
+    // BD-060: a DWM that started long after its session replaced the session's first one.
+    static void Compositor()
+    {
+        var s = Closed();
+        Equal(null, Recovery.CompositorRestarted(s), "compositor: no readings, unknown");
+        Check(Recovery.CompositorStatusLine(s).StartsWith("compositor-restarted: unknown"), "compositor: unknown in the status line");
+        s.DwmStartAfterSessionSeconds = 3; s.DwmStartAfterBootSeconds = 40; s.DwmSession = 1; s.DwmStartUtc = "2026-10-03 18:00:03Z";
+        Equal(false, Recovery.CompositorRestarted(s), "compositor: DWM 3 s after winlogon is the session's first");
+        Check(Recovery.CompositorText(s).StartsWith("Running since the session began"), "compositor: first DWM text");
+        Equal("compositor-restarted: no (session 1, DWM started 2026-10-03 18:00:03Z, 3 s after the session, 40 s after boot)", Recovery.CompositorStatusLine(s), "compositor: status line");
+        Check(line0(s).Severity == "ok" && line0(s).Action == null, "compositor: first DWM, ok, no action");
+        s.DwmStartAfterSessionSeconds = Recovery.CompositorSessionBoundSeconds;
+        Equal(false, Recovery.CompositorRestarted(s), "compositor: at the bound, not restarted");
+        s.DwmStartAfterSessionSeconds = 1800; s.DwmStartAfterBootSeconds = 1840;
+        Equal(true, Recovery.CompositorRestarted(s), "compositor: DWM 30 min after winlogon was restarted");
+        Equal("Desktop compositor restarted in this session (DWM started 30 min after the session began). Some Windows 11 apps, for example the Explorer command bar and Task Manager, ignore mouse clicks until Windows restarts (BD-060).",
+            Recovery.CompositorText(s), "compositor: restarted text names the consequence and the remedy");
+        Check(line0(s).Severity == "warn" && line0(s).Action == "restart", "compositor: restarted, warn, restart recommended");
+        Check(Recovery.CompositorStatusLine(s).StartsWith("compositor-restarted: yes"), "compositor: yes in the status line");
+        s.DwmStartAfterSessionSeconds = 664773;
+        Check(Recovery.CompositorText(s).Contains("DWM started 8 days after the session began"), "compositor: days for a long session");
+        s.DwmStartAfterSessionSeconds = 10800;
+        Check(Recovery.CompositorText(s).Contains("DWM started 3 h after"), "compositor: hours");
+        var late = Closed(); late.DwmStartAfterSessionSeconds = 2; late.DwmStartAfterBootSeconds = 7200;
+        Equal(false, Recovery.CompositorRestarted(late), "compositor: a session begun 2 h after boot (logon after logoff) is not a restart");
+        var bootOnly = Closed(); bootOnly.DwmStartAfterBootSeconds = 200;
+        Equal(false, Recovery.CompositorRestarted(bootOnly), "compositor: without winlogon, 200 s after boot is within the boot bound");
+        bootOnly.DwmStartAfterBootSeconds = 900;
+        Equal(true, Recovery.CompositorRestarted(bootOnly), "compositor: without winlogon, 15 min after boot is a restart");
+        Check(Recovery.CompositorText(bootOnly).Contains("15 min after Windows started"), "compositor: boot reference named");
+    }
+
+    static StateLine line0(RecoverySnapshot s) { return Recovery.Describe(s).First(l => l.Topic == "Desktop compositor"); }
+
+    // BD-060, statically: no source stops, kills or signals DWM, and none restarts Windows other than through
+    // WindowsRestart (ExitWindowsEx without force). The one Kill() allowed ends the bug report's own child tool.
+    static void NoDwmRestart(string root)
+    {
+        var dir = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src");
+        var files = Directory.GetFiles(dir, "*.cs");
+        Check(files.Length >= 10, "static check: the sources are found");
+        int kills = 0;
+        foreach (var f in files)
+        {
+            var name = Path.GetFileName(f);
+            var text = File.ReadAllText(f);
+            foreach (var bad in new[] { "TerminateProcess", "taskkill", "shutdown.exe", "uxsms", "CloseMainWindow", "EWX_FORCE", "EwxForce", "InitiateSystemShutdown", "NtTerminateProcess", "DebugActiveProcess" })
+                Check(!text.Contains(bad), "static check: " + name + " has no " + bad);
+            var k = System.Text.RegularExpressions.Regex.Matches(text, @"\.Kill\s*\(").Count;
+            if (name == "BugReport.cs") Equal(1, k, "static check: BugReport.cs kills only its own timed-out child tool");
+            else Equal(0, k, "static check: " + name + " calls no Kill()");
+            kills += k;
+            // Every line naming the dwm process only reads it.
+            foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
+                Check(l.Contains("GetProcessesByName(\"dwm\")") || l.Contains("Started(\"dwm\""), "static check: " + name + " only reads the dwm process: " + l.Trim());
+        }
+        Equal(1, kills, "static check: one Kill() in all sources");
+        Check(File.ReadAllText(Path.Combine(dir, "Native.cs")).Contains("ExitWindowsEx(EwxReboot, "), "static check: the restart is ExitWindowsEx EWX_REBOOT without force");
+    }
+
     static int Main(string[] args)
     {
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
@@ -649,6 +716,7 @@ static class UnitTests
         Redaction();
         Manifest();
         SettingsRule();
+        NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");

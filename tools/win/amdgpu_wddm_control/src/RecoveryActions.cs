@@ -4,20 +4,23 @@
 //   1. saves the old value of everything it will write to %ProgramData%\amdgpu-wddm\control\backup-<utc>.json,
 //   2. writes, logging each step to control-actions.log in the same directory,
 //   3. reads every value back and reports the result (a failed write restores the backup at once),
-//   4. for a desktop route change restarts DWM, and onto the GPU route watches it for 60 s: on a crash
-//      (Application Error 1000, dwm.exe) or a replaced DWM it sets DwmForceCpu 1 and restarts DWM again.
+//   4. never restarts, stops or signals DWM (BD-060): every change takes effect at the next restart of Windows,
+//      which the window offers.
 // --dry-run prints the states and the plan and writes nothing; --snapshot <json> (dry run only) plans from a
 // recorded snapshot instead of this PC.
 //
-// Exit codes: 0 done, 1 failed, 2 usage, 3 refused, 4 desktop fell back to the CPU route, 5 needs administrator.
+// --status prints the states without an action (the installer's verify, the bug report).
+//
+// Exit codes: 0 done, 1 failed, 2 usage, 3 refused, 5 needs administrator (4 was "fell back to the CPU route" of the
+// DWM watchdog, removed with the DWM restart).
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
@@ -80,6 +83,7 @@ namespace AmdgpuWddmControl
                     f.StartsWith("amdgpu_wddm", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase));
             }
             ReadTask(s);
+            ReadCompositor(s);
             s.ConfirmLogLast = LastLine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "start-confirm.log"));
             return s;
         }
@@ -100,6 +104,93 @@ namespace AmdgpuWddmControl
                 if (m.DefaultParameters == null || m.DefaultRouter == null) s.DefaultsError = "manifest.json has no \"defaults\"";
             }
             catch (Exception e) { s.DefaultsError = "manifest.json: " + e.Message; }
+        }
+
+        [DllImport("kernel32.dll")]
+        static extern ulong GetTickCount64();
+
+        [DllImport("kernel32.dll")]
+        static extern uint WTSGetActiveConsoleSessionId();
+
+        [DllImport("ntdll.dll")]
+        static extern int NtQuerySystemInformation(int informationClass, IntPtr buffer, int length, out int returned);
+
+        const int SystemProcessInformation = 5;
+        const int StatusInfoLengthMismatch = unchecked((int)0xC0000004);
+
+        // Session and start time (UTC) of every process with this image name, from the system's process list
+        // (SYSTEM_PROCESS_INFORMATION, x64: CreateTime at 0x20, ImageName at 0x38, SessionId at 0x64). No process is
+        // opened: a normal user may not open DWM or winlogon at all.
+        static List<KeyValuePair<int, DateTime>> Starts(string image)
+        {
+            var list = new List<KeyValuePair<int, DateTime>>();
+            int size = 1 << 20;
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                var buffer = Marshal.AllocHGlobal(size);
+                try
+                {
+                    int returned;
+                    int status = NtQuerySystemInformation(SystemProcessInformation, buffer, size, out returned);
+                    if (status == StatusInfoLengthMismatch) { size = Math.Max(size * 2, returned + 65536); continue; }
+                    if (status != 0) return list;
+                    long offset = 0;
+                    while (true)
+                    {
+                        var entry = new IntPtr(buffer.ToInt64() + offset);
+                        int next = Marshal.ReadInt32(entry, 0x00);
+                        int nameBytes = Marshal.ReadInt16(entry, 0x38) & 0xFFFF;
+                        var name = Marshal.ReadIntPtr(entry, 0x40);
+                        if (name != IntPtr.Zero && nameBytes > 0 && string.Equals(Marshal.PtrToStringUni(name, nameBytes / 2), image, StringComparison.OrdinalIgnoreCase))
+                            list.Add(new KeyValuePair<int, DateTime>(Marshal.ReadInt32(entry, 0x64), DateTime.FromFileTimeUtc(Marshal.ReadInt64(entry, 0x20))));
+                        if (next == 0) break;
+                        offset += next;
+                    }
+                    return list;
+                }
+                finally { Marshal.FreeHGlobal(buffer); }
+            }
+            return list;
+        }
+
+        // The desktop compositor of the interactive session (this process's session, or the console session from
+        // session 0): when its DWM started, against the session's winlogon (which starts the session's first DWM)
+        // and against the boot. Read only: start times, nothing is opened for writing (BD-060).
+        public static void ReadCompositor(RecoverySnapshot s)
+        {
+            try
+            {
+                int session;
+                using (var self = Process.GetCurrentProcess()) session = self.SessionId;
+                if (session == 0) session = (int)WTSGetActiveConsoleSessionId();
+                s.DwmSession = session;
+                var dwm = Started("dwm.exe", session);
+                if (dwm == null) return;
+                s.DwmStartUtc = dwm.Value.ToString("yyyy-MM-dd HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+                var logon = Started("winlogon.exe", session);
+                if (logon != null) s.DwmStartAfterSessionSeconds = Math.Round((dwm.Value - logon.Value).TotalSeconds);
+                var boot = DateTime.UtcNow - TimeSpan.FromMilliseconds(GetTickCount64());
+                s.DwmStartAfterBootSeconds = Math.Round((dwm.Value - boot).TotalSeconds);
+            }
+            catch (Exception) { }
+        }
+
+        // The earliest start (UTC) of the processes with this image name in one session; null when there is none.
+        static DateTime? Started(string image, int session)
+        {
+            var times = Starts(image).Where(x => x.Key == session).Select(x => x.Value).ToList();
+            return times.Count == 0 ? (DateTime?)null : times.Min();
+        }
+
+        // The states as text: the compositor line for scripts, then every state line.
+        public static string StatusText(RecoverySnapshot s)
+        {
+            var w = new StringBuilder();
+            w.AppendLine(Recovery.CompositorStatusLine(s));
+            w.AppendLine("states:");
+            foreach (var l in Recovery.Describe(s))
+                w.AppendLine("  [" + l.Severity + "] " + l.Topic + ": " + l.Text + (l.Action != null ? "  -> recommended: " + l.Action : ""));
+            return w.ToString();
         }
 
         // The modules of every running DWM. Needs administrator; otherwise error says so.
@@ -186,7 +277,7 @@ namespace AmdgpuWddmControl
 
     public static class RecoveryRunner
     {
-        public const int Done = 0, Failed = 1, Usage = 2, Refused = 3, FellBack = 4, NeedsAdministrator = 5;
+        public const int Done = 0, Failed = 1, Usage = 2, Refused = 3, NeedsAdministrator = 5;
 
         sealed class Options
         {
@@ -257,9 +348,7 @@ namespace AmdgpuWddmControl
             catch (Exception e) { Emit(o, "dry run failed: " + e.Message + "\n"); return Failed; }
             w.AppendLine(Program.ProductName + " " + Program.VersionText + " dry run, " + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss'Z'", CultureInfo.InvariantCulture) +
                 ", snapshot " + (o.SnapshotFile ?? "of this PC"));
-            w.AppendLine("states:");
-            foreach (var l in Recovery.Describe(s))
-                w.AppendLine("  [" + l.Severity + "] " + l.Topic + ": " + l.Text + (l.Action != null ? "  -> recommended: " + l.Action : ""));
+            w.Append(RecoveryProbe.StatusText(s));
             var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, backups);
             w.AppendLine("plan:");
             foreach (var line in plan.Text().TrimEnd().Split('\n')) w.AppendLine("  " + line.TrimEnd('\r'));
@@ -329,7 +418,6 @@ namespace AmdgpuWddmControl
                     if (why != null) { Log("result: failed: " + why); return Failed; }
                 }
                 if (!Apply(plan.Writes, backup)) { Log("result: failed: a write did not read back; the old values were restored"); return Failed; }
-                if (plan.RestartDwm) return RestartDesktop(plan);
                 Log("result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
                 return Done;
             }
@@ -342,7 +430,7 @@ namespace AmdgpuWddmControl
             {
                 Action = o.Action, Utc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), RunId = o.RunId,
                 Args = new[] { o.Mode != null ? "mode=" + o.Mode : null, o.Ceiling != null ? "ceiling=" + o.Ceiling : null }.Where(a => a != null).ToArray(),
-                Undoable = plan.Undoable, RestartsDwm = plan.RestartDwm, Undoes = plan.UndoOf,
+                Undoable = plan.Undoable, Undoes = plan.UndoOf,
             };
             var names = plan.Writes.Select(w => new[] { w.Path, w.Name }).ToList();
             if (plan.ConfirmStart)
@@ -452,78 +540,6 @@ namespace AmdgpuWddmControl
                 Thread.Sleep(500);
             }
             return why;
-        }
-
-        // ---- the desktop restart and its watchdog ------------------------------------------------------------------
-
-        static int RestartDesktop(ActionPlan plan)
-        {
-            string route;
-            var verdict = RestartDwm(plan.WatchDwm, out route);
-            if (verdict == "ok")
-            {
-                string note = plan.DwmForceCpuAfter == 0 && route == "cpu" ? " DWM stayed on the CPU route: the desktop router chose the CPU UMD." : "";
-                Log("result: done: DWM restarted and held " + (plan.WatchDwm ? Recovery.WatchSeconds + " s" : "") + " on the " + route.ToUpperInvariant() + " route." + note);
-                return Done;
-            }
-            Log("watchdog: " + verdict);
-            if (plan.DwmForceCpuAfter == 1) { Log("result: failed: " + verdict + " (on the CPU route)"); return Failed; }
-            var cpu = RegWrite.Dword(Recovery.RouterPath, "DwmForceCpu", 1);
-            Write(cpu); Log("wrote: " + cpu + (ReadsBack(cpu) ? " (read back OK)" : " (read back MISMATCH)"));
-            var again = RestartDwm(false, out route);
-            Log("result: fell back to CPU: " + verdict + "; DWM restarted on the " + route.ToUpperInvariant() + " route" + (again == "ok" ? "" : " (" + again + ")") + ".");
-            return FellBack;
-        }
-
-        // Stops every DWM (winlogon starts a new one) and watches the new one: for WatchSeconds with watch, else a few
-        // seconds of settling. Returns "ok" or the failure; route is what the new DWM loaded.
-        static string RestartDwm(bool watch, out string route)
-        {
-            route = "unknown";
-            var since = DateTime.UtcNow.AddSeconds(-1);
-            var old = new HashSet<int>(Ids());
-            Log("restarting DWM (" + old.Count + " running)" + (watch ? ", watching " + Recovery.WatchSeconds + " s" : ""));
-            foreach (var p in Process.GetProcessesByName("dwm")) using (p) try { p.Kill(); } catch (Exception e) { Log("could not stop DWM " + p.Id + ": " + e.Message); }
-            int? first = null;
-            var clock = Stopwatch.StartNew();
-            string verdict;
-            while (true)
-            {
-                Thread.Sleep(1000);
-                var now = Ids().Where(id => !old.Contains(id)).ToList();
-                if (first == null && now.Count > 0) { first = now.Min(); Log("new DWM " + first + " after " + clock.Elapsed.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s"); }
-                verdict = Recovery.WatchVerdict(first, now, watch ? Crashes(since) : 0, clock.Elapsed.TotalSeconds, watch ? Recovery.WatchSeconds : 5);
-                if (verdict != null) break;
-            }
-            if (first != null)
-                try
-                {
-                    using (var p = Process.GetProcessById(first.Value))
-                        route = Recovery.RouteFromModules(p.Modules.Cast<ProcessModule>().Select(m => m.FileName));
-                }
-                catch (Exception) { }
-            return verdict;
-        }
-
-        static IEnumerable<int> Ids()
-        {
-            foreach (var p in Process.GetProcessesByName("dwm")) using (p) yield return p.Id;
-        }
-
-        static int Crashes(DateTime sinceUtc)
-        {
-            string q = "*[System[Provider[@Name='Application Error'] and (EventID=1000) and TimeCreated[@SystemTime>='" +
-                sinceUtc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture) + "']]]";
-            int n = 0;
-            try
-            {
-                using (var reader = new EventLogReader(new EventLogQuery("Application", PathType.LogName, q)))
-                    for (var e = reader.ReadEvent(); e != null; e = reader.ReadEvent())
-                        using (e)
-                            if (e.Properties.Count > 0 && string.Equals(e.Properties[0].Value as string, "dwm.exe", StringComparison.OrdinalIgnoreCase)) n++;
-            }
-            catch (EventLogException) { }
-            return n;
         }
     }
 }

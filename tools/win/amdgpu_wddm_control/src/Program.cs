@@ -10,6 +10,8 @@
 //   amdgpu_wddm_control.exe --action <name> [--ceiling MHz] --dry-run [--snapshot <json>] [--out <file>]
 //                                                    no window: the Recovery states and the plan of one action, nothing
 //                                                    written (RecoveryActions.cs)
+//   amdgpu_wddm_control.exe --status [--out <file>]  no window: the Recovery states, first a "compositor-restarted:"
+//                                                    line (BD-060) for the installer's verify; nothing written
 //   amdgpu_wddm_control.exe --version
 //   (internal, elevated copy) --action <name> ... | --apply-profiles <image> <list or empty to remove> ...
 //
@@ -42,6 +44,7 @@ namespace AmdgpuWddmControl
         static int Main(string[] args)
         {
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
+            if (args.Length > 0 && args[0] == "--status") return Status(args);
             if (args.Length > 0 && (args[0] == "--action" || args[0] == "--apply-profiles")) return Dispatch(args);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -112,6 +115,21 @@ namespace AmdgpuWddmControl
                 try { File.WriteAllText(path + ".error.txt", "smoke report failed: " + e); } catch (Exception) { }
                 return 1;
             }
+        }
+
+        static int Status(string[] args)
+        {
+            if (!(args.Length == 1 || args.Length == 3 && args[1] == "--out")) { Console.Error.WriteLine("usage: --status [--out file]"); return 2; }
+            string text;
+            try
+            {
+                text = ProductName + " " + VersionText + " status, " + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture) +
+                    Environment.NewLine + RecoveryProbe.StatusText(RecoveryProbe.Read());
+            }
+            catch (Exception e) { text = "status failed: " + e.Message + Environment.NewLine; }
+            if (args.Length == 3) File.WriteAllText(args[2], text);
+            else Console.Out.Write(text);
+            return text.StartsWith("status failed", StringComparison.Ordinal) ? 1 : 0;
         }
 
         static int Dispatch(string[] args)
