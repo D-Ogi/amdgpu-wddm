@@ -301,6 +301,7 @@ void APIENTRY set_graphics_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_
     auto* r = record_of<RootSignatureRecord>(h.pDrvPrivate, Tag::RootSignature, l->h.device);
     if (h.pDrvPrivate && !r) return invalid(l);
     ID3D12RootSignature* signature = r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr;
+    l->root_signatures[1] = r ? h.pDrvPrivate : nullptr;
     record(l, [=](List* e) { e->SetGraphicsRootSignature(signature); });
 }
 

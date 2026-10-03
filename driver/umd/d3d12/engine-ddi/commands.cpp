@@ -229,6 +229,7 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
         return;
     }
     if (l->pool) leave_pool(l);                 // a Reset without a Close: the list leaves its earlier pool
+    l->root_signatures[0] = l->root_signatures[1] = nullptr;   // the engine's Reset unbound them
     l->recording = true;
     l->pool = p;
     p->open_lists.fetch_add(1, std::memory_order_release);
@@ -322,14 +323,52 @@ void APIENTRY execute_bundle(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HCOMMANDLIST hbun
 // markers is not established here, and nothing reaches the engine.
 void APIENTRY set_marker(D3D12DDI_HCOMMANDLIST h, UINT64) { (void)list_of(h, "SetMarker"); }
 
-// Seen once, in the state the runtime writes into a list it has just reset. There the engine's Reset has
-// already cleared every root binding, so nothing is left to do. The engine has no call that clears the
-// arguments of a list in use: a null signature unbinds the signature and keeps the arguments. Whether the
-// runtime ever asks for that is not known; until it is, the slot changes nothing and says so once.
+// BD-046. The runtime has no ClearState DDI: for CreateCommandList, Reset and the API's ClearState it calls the
+// individual state DDIs, and this one "to clear root arguments to 0" (DirectX-Specs d3d/CPUEfficiency.md). On a
+// just-reset list nothing is bound and nothing is done. Mid-list (ClearState) the signatures stay bound and every
+// argument of each bound signature is set to zero through the engine's own calls, in parameter order: constants to
+// 0, root descriptors to VA 0 (a null descriptor in the engine), tables to handle 0. Otherwise the arguments set
+// before the ClearState stay, and a root descriptor keeps naming a buffer the application may destroy after it.
 void APIENTRY clear_root_arguments(D3D12DDI_HCOMMANDLIST h) {
-    if (!list_of(h, "ClearRootArguments")) return;
-    static std::atomic<bool> once{false};
-    if (!once.exchange(true)) log_line("ClearRootArguments: no engine operation, root state left as it is");
+    using List = ID3D12GraphicsCommandList;
+    CommandListRecord* l = list_of(h, "ClearRootArguments");
+    if (!l) return;
+    static constexpr UINT kZeros[D3D12_MAX_ROOT_COST] = {};
+    for (int graphics = 0; graphics < 2; ++graphics) {
+        const auto* r = record_of<RootSignatureRecord>(l->root_signatures[graphics], Tag::RootSignature, l->h.device);
+        if (!r) continue;
+        for (UINT i = 0; i < r->shapes; ++i) {
+            const RootParameterShape p = r->shape()[i];
+            switch (p.type) {
+            case D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS: {
+                const UINT n = p.constants < D3D12_MAX_ROOT_COST ? p.constants : D3D12_MAX_ROOT_COST;
+                if (graphics)
+                    record(l, [=](List* e, const UINT* d) { e->SetGraphicsRoot32BitConstants(i, n, d, 0); }, in(kZeros, n));
+                else
+                    record(l, [=](List* e, const UINT* d) { e->SetComputeRoot32BitConstants(i, n, d, 0); }, in(kZeros, n));
+                break;
+            }
+            case D3D12DDI_ROOT_PARAMETER_TYPE_CBV:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootConstantBufferView(i, 0); });
+                else record(l, [=](List* e) { e->SetComputeRootConstantBufferView(i, 0); });
+                break;
+            case D3D12DDI_ROOT_PARAMETER_TYPE_SRV:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootShaderResourceView(i, 0); });
+                else record(l, [=](List* e) { e->SetComputeRootShaderResourceView(i, 0); });
+                break;
+            case D3D12DDI_ROOT_PARAMETER_TYPE_UAV:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootUnorderedAccessView(i, 0); });
+                else record(l, [=](List* e) { e->SetComputeRootUnorderedAccessView(i, 0); });
+                break;
+            case D3D12DDI_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE:
+                if (graphics) record(l, [=](List* e) { e->SetGraphicsRootDescriptorTable(i, D3D12_GPU_DESCRIPTOR_HANDLE{0}); });
+                else record(l, [=](List* e) { e->SetComputeRootDescriptorTable(i, D3D12_GPU_DESCRIPTOR_HANDLE{0}); });
+                break;
+            default:
+                break;
+            }
+        }
+    }
 }
 
 // DDI 0092 names this slot, but the alpha factor travels as the fourth component of OMSetBlendFactor

@@ -446,9 +446,18 @@ struct DescriptorHeapRecord {
     D3D12_GPU_DESCRIPTOR_HANDLE gpu;
 };
 
+// One root parameter as ClearRootArguments needs it (BD-046): its type, and for 32-bit constants their count.
+struct RootParameterShape {
+    D3D12DDI_ROOT_PARAMETER_TYPE type;
+    UINT constants;
+};
 struct RootSignatureRecord {
     RecordHeader h;                             // engine: ID3D12RootSignature
     UINT parameters;
+    UINT shapes;                                // RootParameterShape entries that follow the record (CalcPrivate-
+                                                // RootSignatureSize sized them): parameters, or 0 without them
+    const RootParameterShape* shape() const noexcept { return reinterpret_cast<const RootParameterShape*>(this + 1); }
+    RootParameterShape* shape() noexcept { return reinterpret_cast<RootParameterShape*>(this + 1); }
 };
 
 // ---- Shaders and graphics state (pipelines.cpp, graphics.cpp). None of these records holds an engine object. ----
@@ -513,6 +522,9 @@ struct CommandListRecord {
     void* pool;                                 // while recording: the pool record it was reset into (counted there)
     // Deferred replay (replay.h): the ring and the position where the list's last pending entry ends, 0 if none.
     std::atomic<uint64_t> replay_tail{0};
+    // The root signatures the Set*RootSignature slots bound since the last Reset, [0] compute and [1] graphics: the
+    // runtime's handles, validated again where used. What ClearRootArguments clears (BD-046). Recording thread only.
+    void* root_signatures[2]{};
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 

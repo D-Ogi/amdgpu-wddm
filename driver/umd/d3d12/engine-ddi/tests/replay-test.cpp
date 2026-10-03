@@ -689,8 +689,13 @@ public:
         return S_OK;
     }
     UINT STDMETHODCALLTYPE GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE) override { return kDescriptor; }
+    Thing root_signature;                                   // what CreateRootSignature hands out (BD-046)
     HRESULT STDMETHODCALLTYPE CreateRootSignature(UINT, const void*, SIZE_T, REFIID, void** out) override {
-        return none(out);
+        if (!out) return E_INVALIDARG;
+        root_signature.id = 900;
+        root_signature.AddRef();
+        *out = &root_signature;
+        return S_OK;
     }
     void STDMETHODCALLTYPE CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC*,
                                                    D3D12_CPU_DESCRIPTOR_HANDLE) override {
@@ -2007,6 +2012,79 @@ int main() {
               "cost: no allocation while recording (off %llu, on %llu over %llu calls)", ull(allocations[0]),
               ull(allocations[1]), ull(kCalls));
         check(f.off(), "cost: policy off");
+    }
+
+    // BD-046. ClearRootArguments mid-list (the API's ClearState): each bound signature keeps its binding and gets
+    // every argument set to zero, in parameter order, compute before graphics; a signature unbound by a null set is
+    // left alone, and on a just-reset list nothing is bound and nothing happens. The same calls with the replay
+    // policy off and on.
+    {
+        std::string root_lines[2];
+        for (int on = 0; on < 2; ++on) {
+            Fixture f;
+            if (on) check(f.on(), "clear root arguments: policy on");
+            D3D12DDI_DESCRIPTOR_RANGE_0013 range{};
+            range.RangeType = D3D12DDI_DESCRIPTOR_RANGE_TYPE_SRV;
+            range.NumDescriptors = 2;
+            D3D12DDI_ROOT_PARAMETER_0013 params[5]{};
+            params[0].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+            params[0].Constants.Num32BitValues = 4;
+            params[1].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_CBV;
+            params[2].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_SRV;
+            params[2].Descriptor.ShaderRegister = 1;
+            params[3].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_UAV;
+            params[4].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[4].DescriptorTable.NumDescriptorRanges = 1;
+            params[4].DescriptorTable.pDescriptorRanges = &range;
+            D3D12DDI_ROOT_SIGNATURE_0013 desc{};
+            desc.NumParameters = 5;
+            desc.pRootParameters = params;
+            D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013 args{};
+            args.Version = D3D12DDI_ROOT_SIGNATURE_VERSION_1_1;
+            args.pRootSignature_1_1 = &desc;
+            const SIZE_T size = g_core.pfnCalcPrivateRootSignatureSize(f.hdevice, &args);
+            std::vector<uint64_t> storage((size + 7) / 8);
+            const D3D12DDI_HROOTSIGNATURE rs{storage.data()};
+            check(size == sizeof(RootSignatureRecord) + 5 * sizeof(RootParameterShape) &&
+                      g_core.pfnCreateRootSignature(f.hdevice, &args, rs) == S_OK,
+                  "clear root arguments: a signature of five parameters, one of each type, its shapes sized");
+            ListBox& l = f.list();
+            f.reset(l);
+            g_list.pfnClearRootArguments(l.h);                      // just reset: nothing bound
+            const UINT values[4] = {1, 2, 3, 4};
+            g_list.pfnSetComputeRootSignature(l.h, rs);
+            g_list.pfnSetGraphicsRootSignature(l.h, rs);
+            g_list.pfnSetGraphicsRoot32BitConstants(l.h, 0, 4, values, 0);
+            g_list.pfnSetGraphicsRootConstantBufferView(l.h, 1, 0x10000);
+            g_list.pfnSetComputeRootUnorderedAccessView(l.h, 3, 0x20000);
+            g_list.pfnSetComputeRootDescriptorTable(l.h, 4, D3D12DDI_GPU_DESCRIPTOR_HANDLE{0x300});
+            g_list.pfnClearRootArguments(l.h);                      // both bound: both cleared
+            g_list.pfnSetGraphicsRootSignature(l.h, D3D12DDI_HROOTSIGNATURE{nullptr});
+            g_list.pfnClearRootArguments(l.h);                      // graphics unbound: compute only
+            f.close(l);
+            f.reset(l);
+            g_list.pfnClearRootArguments(l.h);                      // the Reset unbound both
+            f.close(l);
+            for (const std::string& line : lines_of(l.engine.log))
+                if (line.find("Root") != std::string::npos) root_lines[on] += line + "\n";
+            g_core.pfnDestroyRootSignature(f.hdevice, rs);
+            if (on) check(f.off(), "clear root arguments: policy off");
+        }
+        auto cleared = [](const char* bind) {
+            const std::string b = bind;
+            return "Set" + b + "Root32BitConstants(0,4,[00000000000000000000000000000000],0,)\n" + "Set" + b +
+                   "RootConstantBufferView(1,0,)\n" + "Set" + b + "RootShaderResourceView(2,0,)\n" + "Set" + b +
+                   "RootUnorderedAccessView(3,0,)\n" + "Set" + b + "RootDescriptorTable(4,0,)\n";
+        };
+        const std::string expected = std::string("SetComputeRootSignature(#900,)\nSetGraphicsRootSignature(#900,)\n") +
+                                     "SetGraphicsRoot32BitConstants(0,4,[01000000020000000300000004000000],0,)\n" +
+                                     "SetGraphicsRootConstantBufferView(1,10000,)\n" +
+                                     "SetComputeRootUnorderedAccessView(3,20000,)\n" +
+                                     "SetComputeRootDescriptorTable(4,300,)\n" + cleared("Compute") + cleared("Graphics") +
+                                     "SetGraphicsRootSignature(0,)\n" + cleared("Compute");
+        check(root_lines[0] == expected, "clear root arguments: every argument zeroed in order, signatures kept%s%s",
+              root_lines[0] == expected ? "" : "; got\n", root_lines[0] == expected ? "" : root_lines[0].c_str());
+        check(root_lines[1] == root_lines[0], "clear root arguments: the same calls with the replay policy on");
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
