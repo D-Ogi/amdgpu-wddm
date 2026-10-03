@@ -1,0 +1,19 @@
+# Read from each trial's own before.json inside collected.tar, captured on the lab unit before the
+# trial swapped anything. "desktop UMD" and "system ICD" are the registered desktop Direct3D
+# user-mode driver file and the registered Vulkan ICD, not a statement about which of them the
+# compositor loaded: the last column lists what DWM actually had mapped. The D3D12 triplet of
+# each trial is in supervisor-NNN.json under "artifacts". The clock column is the idle operating
+# point before the session; DPM raises it under load.
+trial	kernel driver	SYS	desktop UMD	system ICD	KMD ABI	health flags	clock	Tctl before	registered D3D12 UMD	DWM modules
+300	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.6 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+304	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.6 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+305	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.6 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+306	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.8 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+307	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.9 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+313	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.8 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+314	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.6 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+315	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.5 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+316	0.7.193.1	E3F75D80	10D9C983	CF3948D6	0x000700C1	15	1000 MHz / VID 116	67.6 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+317	0.7.196.1	22FDE5B8	10D9C983	CF3948D6	0x000700C4	15	1000 MHz / VID 116	67.6 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+318	0.7.196.1	22FDE5B8	10D9C983	CF3948D6	0x000700C4	15	1000 MHz / VID 116	67.9 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31
+320	0.7.196.1	22FDE5B8	10D9C983	CF3948D6	0x000700C4	15	1000 MHz / VID 116	67.8 C	amdgpu_wddm_d3d12.dll	bc250d3d_zink.dll 18BFC610; bc250d3d_router.dll 674AD261; amdgpu_wddm_radv.dll 66FE8F31

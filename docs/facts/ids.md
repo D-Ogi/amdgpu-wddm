@@ -786,6 +786,8 @@ Where each ID lives. An ID is never reused or renumbered.
 | [M780](d3d.md#m780) | MEASURED | d3d | 2026-10-02 |
 | [M781](d3d.md#m781) | MEASURED | d3d | 2026-10-02 |
 | [M782](d3d.md#m782) | MEASURED | d3d | 2026-10-02 |
+| [M783](kmd.md#m783) | MEASURED | kmd | 2026-10-02 |
+| [M784](d3d.md#m784) | MEASURED | d3d | 2026-10-02 |
 | [S1](hardware.md#s1) | HYPOTHESIS | hardware | 2026-09-21 |
 | [S2](hardware.md#s2) | HYPOTHESIS | hardware | 2026-09-21 |
 | [S3](hardware.md#s3) | HYPOTHESIS | hardware | 2026-09-21 |

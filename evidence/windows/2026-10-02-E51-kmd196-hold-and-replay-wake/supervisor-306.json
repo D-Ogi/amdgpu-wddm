@@ -1,0 +1,88 @@
+{
+ "status": "functional-restored",
+ "tree_closed": true,
+ "baseline_restored": true,
+ "runtime_functional": true,
+ "runtime_entered": true,
+ "caps_succeeded": false,
+ "artifacts": {
+  "amdgpu_wddm_d3d12.dll": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+  "amdgpu_wddm_vkd3d.dll": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+  "amdgpu_wddm_radv.dll": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC"
+ },
+ "phases": [
+  "Capture",
+  "Install",
+  "runtime",
+  "Restore",
+  "Verify"
+ ],
+ "errors": [],
+ "candidate_retained": false,
+ "elapsed": 260.4386201,
+ "game": {
+  "launched": true,
+  "pid": 13068,
+  "session": 1,
+  "exe_sha256": "9406ECCC12B68E08920931442EF6A57340E910D3E01F2082E88232487433FE51",
+  "exe_version": "5.0.0.1044392(Build Machine)",
+  "elapsed_seconds": 229,
+  "has_exited": false,
+  "bounded_stop": true,
+  "stop_reason": "operator-quit",
+  "last_title": "The Witcher 3",
+  "responding_last": true,
+  "peak_ws_mb": 3576,
+  "peak_threads": 64,
+  "screenshots": 4,
+  "modules": {
+   "amdgpu_wddm_vkd3d.dll": {
+    "path": "C:\\BC250\\m15\\registration002\\amdgpu_wddm_vkd3d.dll",
+    "sha256": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+    "seen_at": 24
+   },
+   "amdgpu_wddm_radv.dll": {
+    "path": "C:\\BC250\\m15\\registration002\\amdgpu_wddm_radv.dll",
+    "sha256": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC",
+    "seen_at": 24
+   },
+   "dxgi.dll": {
+    "path": "C:\\Windows\\SYSTEM32\\dxgi.dll",
+    "sha256": "DDC578A287120BAC2BFCCBAECBDE5EB41E397B023853340204A3B4FAD98BDA3B",
+    "seen_at": 0
+   },
+   "amdgpu_wddm_d3d12.dll": {
+    "path": "C:\\BC250\\m15\\registration002\\amdgpu_wddm_d3d12.dll",
+    "sha256": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+    "seen_at": 24
+   },
+   "d3d12core.dll": {
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\D3D12_0\\D3D12Core.dll",
+    "sha256": "681C72042ED1691A326C2AADFF47A1957ED998F649158312C155C1B2AB71F44C",
+    "seen_at": 0
+   },
+   "libxess.dll": {
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\libxess.dll",
+    "sha256": "251659DD84A3E84DE67C886A4186E01F3ECA49B00641906FE38BB6B807E5D5B7",
+    "seen_at": 0
+   },
+   "sl.interposer.dll": {
+    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\sl.interposer.dll",
+    "sha256": "8C87C9499461DA561EDD529AA9BF7831D67D7B94EBB1C1A5ED54EF4934E1EA4C",
+    "seen_at": 0
+   },
+   "d3d12.dll": {
+    "path": "C:\\Windows\\SYSTEM32\\d3d12.dll",
+    "sha256": "9992F5B26F9DDE36F3EC911EF6C404CF7C89C94FD56C152815252800CF5140CC",
+    "seen_at": 0
+   }
+  },
+  "launch": "steam",
+  "launch_seconds": 2,
+  "app_profile": "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay",
+  "settings": {
+   "user.settings": "unchanged",
+   "dx12user.settings": "restored"
+  }
+ }
+}

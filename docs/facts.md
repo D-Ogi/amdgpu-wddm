@@ -10,20 +10,20 @@ Facts are kept as a graph in [`facts/data/`](facts/data/), one YAML file per are
 - IDs (`M`, measured or derived by us; `S`, read from source code; `R`, refuted prior art) are never reused or renumbered. `python tools/facts/gen_facts.py next-id` gives the next one.
 - Edges marked `"auto": true` were derived from explicit wording when the table was migrated (2026-10-03); the wording is kept in `cue`.
 
-## Areas (787 facts)
+## Areas (789 facts)
 
 | Area | Facts | Status | Graphs |
 |---|---|---|---|
 | [Hardware, registers and firmware](facts/hardware.md) | 106 | 3 HYPOTHESIS, 71 MEASURED, 30 CONFIRMED, 2 REFUTED | [graphs](facts/graphs/hardware.md) |
-| [Kernel driver and WDDM](facts/kmd.md) | 335 | 235 MEASURED, 99 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/kmd.md) |
+| [Kernel driver and WDDM](facts/kmd.md) | 336 | 236 MEASURED, 99 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/kmd.md) |
 | [Display, DWM and Present](facts/display.md) | 130 | 126 MEASURED, 4 CONFIRMED | [graphs](facts/graphs/display.md) |
 | [ICD, Vulkan, OpenGL and compute](facts/icd.md) | 69 | 65 MEASURED, 4 CONFIRMED | [graphs](facts/graphs/icd.md) |
-| [Direct3D through the system runtime](facts/d3d.md) | 86 | 84 MEASURED, 2 CONFIRMED | [graphs](facts/graphs/d3d.md) |
+| [Direct3D through the system runtime](facts/d3d.md) | 87 | 85 MEASURED, 2 CONFIRMED | [graphs](facts/graphs/d3d.md) |
 | [Games and performance](facts/games.md) | 12 | 12 MEASURED | [graphs](facts/graphs/games.md) |
 | [Linux reference](facts/linux.md) | 24 | 1 HYPOTHESIS, 20 MEASURED, 2 CONFIRMED, 1 REFUTED | [graphs](facts/graphs/linux.md) |
 | [Tooling, build and lab](facts/tooling.md) | 25 | 23 MEASURED, 2 CONFIRMED | [graphs](facts/graphs/tooling.md) |
 
-Live facts only, one line each: [`facts/current.md`](facts/current.md) (783). Every ID and its page: [`facts/ids.md`](facts/ids.md).
+Live facts only, one line each: [`facts/current.md`](facts/current.md) (785). Every ID and its page: [`facts/ids.md`](facts/ids.md).
 
 ## Overview
 
@@ -32,10 +32,10 @@ Relations between areas: the number of edges from facts in one area to facts in 
 ```mermaid
 flowchart LR
   hardware["Hardware, registers and firmware<br/>106 facts, 23 internal edges"]
-  kmd["Kernel driver and WDDM<br/>335 facts, 94 internal edges"]
+  kmd["Kernel driver and WDDM<br/>336 facts, 94 internal edges"]
   display["Display, DWM and Present<br/>130 facts, 23 internal edges"]
   icd["ICD, Vulkan, OpenGL and compute<br/>69 facts, 5 internal edges"]
-  d3d["Direct3D through the system runtime<br/>86 facts, 2 internal edges"]
+  d3d["Direct3D through the system runtime<br/>87 facts, 3 internal edges"]
   games["Games and performance<br/>12 facts, 2 internal edges"]
   linux["Linux reference<br/>24 facts, 1 internal edges"]
   tooling["Tooling, build and lab<br/>25 facts, 0 internal edges"]
@@ -67,4 +67,4 @@ flowchart LR
   tooling -->|1| kmd
 ```
 
-Edges: 186 uses, 7 supports, 6 refutes, 16 supersedes; 207 of them auto-derived.
+Edges: 187 uses, 7 supports, 6 refutes, 16 supersedes; 207 of them auto-derived.

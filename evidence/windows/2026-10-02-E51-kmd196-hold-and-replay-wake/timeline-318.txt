@@ -1,0 +1,229 @@
+$ python analyze.py w3-high-318/run.gtl --fps 36.8
+
+<BC250_ROOT>\scratch\m15\gpu-timeline\runs\w3-high-318\run.gtl: set full, 55634 samples over 60.00 s = 927/s (asked 1009), failed reads 0, late periods 3155
+read cost per sample: mean 28.7 us, p50 22.9, p99 80.6, max 12897.2; GRBM_GFX_INDEX 0x00000000 -> 0x00000000
+
+GPU time (time-weighted; unweighted in brackets; +- batch-means standard error):
+  idle              4.3 % +- 0.3   (4.5)
+  pipeline         93.7 % +- 0.3   (93.5)
+  cp_only           2.0 % +- 0.1   (2.0)
+  other_active      0.0 % +- 0.0   (0.0)
+    cp_only/drain               1.2 %
+    cp_only/fetch               0.4 %
+    cp_only/other               0.1 %
+    cp_only/parse               0.0 %
+    cp_only/poll                0.0 %
+    cp_only/sync                0.1 %
+    cp_only/write               0.0 %
+    pipeline/drain             35.8 %
+    pipeline/fed               57.9 %
+  pipeline by what is busy: draw (PA/SC/DB/CB) 31.4 %, front only (GE/SX/BCI/GDS) 0.2 %, shader only (SPI/TA) 62.1 %
+  cp_only with EA/UTCL2/TCP/GL2/GL1/CH busy: drain 1.1 %, fetch 0.3 %, other 0.0 %, parse 0.0 %, poll 0.0 %, sync 0.1 %, write 0.0 %
+  class changed between the first and last GRBM_STATUS of a sample: 2.85 %
+  anomalies: idle with CP_STAT.CP_BUSY 32
+
+per frame at 36.8 fps (27.17 ms): idle 1.18 ms, pipeline 25.46 ms, cp_only 0.53 ms, other_active 0.00 ms
+  cp_only/drain 0.34, cp_only/fetch 0.11, cp_only/other 0.03, cp_only/parse 0.01, cp_only/poll 0.00, cp_only/sync 0.04, cp_only/write 0.00, pipeline/drain 9.73, pipeline/fed 15.73
+
+idle runs: 27.3/s, p50 1.1 ms, p90 2.2 ms; idle time by run length: 0-1.5 ms 55 %, 1.5-4 ms 17 %, 4-8 ms 5 %, 8-16 ms 9 %, >=16 ms 14 %
+busy runs: 27.4/s, p50 27.0 ms, p90 71.2 ms
+SDMA0 busy 0.1 %; SDMA1 busy 0.0 %; CP_RB0_RPTR moved between samples 127/s; SPI busy SE0 91.8 % SE1 91.8 % (SE0 == SE1 in 86 %)
+
+top CP bit combinations in cp_only (share of all time):
+    0.08 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.ROQ_STATE_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.ME_WAITING_ON_PARTIAL_FLUSH CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.STQ_TO_ME_NOT_RDY_TO_RCV CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    0.08 %  [other] CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG
+    0.04 %  [fetch] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.UTCL2IU_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.DMA_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.ME_PARSING_PACKETS CP_BUSY_STAT.ME_PARSER_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    0.04 %  [other] CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG
+    0.03 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.ME_WAITING_ON_PARTIAL_FLUSH CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    0.02 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.DC_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    0.02 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    0.02 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.QUERY_BUSY CP_STAT.TCIU_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.PFP_PARSING_PACKETS CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.PFP_TO_MEQ_NOT_RDY_TO_RCV CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+
+top CP bit combinations in pipeline/drain (share of all time):
+   10.23 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.DC_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    2.95 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.DC_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.QUERY_BUSY CP_STAT.SCRATCH_RAM_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    2.79 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.DC_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    2.45 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.ROQ_STATE_BUSY CP_STAT.DC_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.PFP_PARSING_PACKETS CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.PFP_TO_MEQ_NOT_RDY_TO_RCV CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.STQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    1.26 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    1.13 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.ROQ_STATE_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.PFP_PARSING_PACKETS CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.PFP_TO_MEQ_NOT_RDY_TO_RCV CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.STQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    1.00 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.DC_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.PFP_PARSING_PACKETS CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.PFP_TO_MEQ_NOT_RDY_TO_RCV CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+    0.98 %  [drain] CP_STAT.ROQ_RING_BUSY CP_STAT.ROQ_INDIRECT1_BUSY CP_STAT.ROQ_INDIRECT2_BUSY CP_STAT.PFP_BUSY CP_STAT.MEQ_BUSY CP_STAT.ME_BUSY CP_STAT.QUERY_BUSY CP_STAT.CP_BUSY CP_BUSY_STAT.PFP_PARSING_PACKETS CP_BUSY_STAT.SEM_POLLING_FOR_PASS CP_BUSY_STAT.GFX_CONTEXT_BUSY CP_BUSY_STAT.EOP_DONE_BUSY CP_STALLED_STAT1.ME_HAS_ACTIVE_CE_BUFFER_FLAG CP_STALLED_STAT1.ME_HAS_ACTIVE_DE_BUFFER_FLAG CP_STALLED_STAT2.PFP_TO_MEQ_NOT_RDY_TO_RCV CP_STALLED_STAT2.MEQ_TO_ME_NOT_RDY_TO_RCV CP_STALLED_STAT2.EOPD_FIFO_NEEDS_SC_EOP_DONE CP_CPF_STALLED_STAT1.RING_FETCHING_DATA CP_CPF_STALLED_STAT1.INDR2_FETCHING_DATA
+
+field shares (all / idle / pipeline / cp_only), fields set in at least 0.5 % of samples:
+  GRBM_STATUS
+    ME0PIPE0_CMDFIFO_AVAIL               8.19   8.00   8.20   7.89  (mean value)
+    RSMU_RQ_PENDING                    100.0% 100.0% 100.0% 100.0%
+    ME0PIPE0_CF_RQ_PENDING              12.3%   0.0%  13.0%   6.8%
+    ME0PIPE0_PF_RQ_PENDING               3.9%   0.0%   4.1%   0.3%
+    DB_CLEAN                            78.5% 100.0%  77.1%  99.0%
+    CB_CLEAN                            79.7% 100.0%  78.3%  98.8%
+    TA_BUSY                             87.3%   0.0%  93.3%   0.0%
+    GE_BUSY_NO_DMA                      32.0%   0.0%  34.2%   0.0%
+    SX_BUSY                             26.0%   0.0%  27.8%   0.0%
+    GE_BUSY                             32.0%   0.0%  34.2%   0.0%
+    SPI_BUSY                            92.4%   0.0%  98.8%   0.0%
+    BCI_BUSY                            19.8%   0.0%  21.1%   0.0%
+    SC_BUSY                             28.0%   0.0%  29.9%   0.0%
+    PA_BUSY                             11.0%   0.0%  11.8%   0.0%
+    DB_BUSY                             26.4%   0.0%  28.2%   0.0%
+    CP_BUSY                             95.5%   0.0% 100.0% 100.0%
+    CB_BUSY                             22.3%   0.0%  23.8%   0.0%
+    GUI_ACTIVE                          95.5%   0.0% 100.0% 100.0%
+  GRBM_STATUS2
+    ME0PIPE1_CMDFIFO_AVAIL               8.00   8.00   8.00   8.00  (mean value)
+    UTCL2_BUSY                          82.1%   0.0%  87.3%  21.2%
+    EA_BUSY                             88.2%   0.0%  93.5%  37.9%
+    RMI_BUSY                            22.0%   0.0%  23.5%   0.2%
+    EA_LINK_BUSY                        96.0%  13.3%  99.9%  98.7%
+    RLC_BUSY                             0.5%   0.2%   0.2%  15.4%
+    TCP_BUSY                            87.2%   0.0%  93.2%   2.8%
+    CPF_BUSY                            95.5%   0.4% 100.0%  98.0%
+    CPG_BUSY                            95.5%   0.2% 100.0%  96.4%
+  GRBM_STATUS3
+    PH_BUSY                              9.3%   0.0%   9.7%  12.6%
+    CH_BUSY                             66.4%   0.2%  69.7%  60.0%
+    GL2CC_BUSY                          91.8%   0.2%  97.0%  55.0%
+    GL1CC_BUSY                          91.1%   0.0%  96.7%  34.5%
+    GUS_LINK_BUSY                       54.4%   0.1%  57.8%  17.3%
+    GUS_BUSY                            50.4%   0.0%  53.6%  14.4%
+    UTCL1_BUSY                          87.1%   0.0%  93.0%  10.3%
+    PMM_BUSY                             0.8%   0.0%   0.5%  19.3%
+  GRBM_STATUS_SE0
+    DB_CLEAN                            78.6% 100.0%  77.2%  98.0%
+    CB_CLEAN                            79.8% 100.0%  78.5%  98.8%
+    UTCL1_BUSY                          85.4%   0.0%  91.0%  13.3%
+    TCP_BUSY                            86.7%   0.0%  92.4%  14.8%
+    GL1CC_BUSY                          90.1%   0.0%  95.7%  32.0%
+    RMI_BUSY                            20.9%   0.0%  22.3%   0.4%
+    BCI_BUSY                            19.4%   0.0%  20.7%   0.5%
+    PA_BUSY                             10.7%   0.0%  11.1%  14.5%
+    TA_BUSY                             86.7%   0.0%  92.4%  14.2%
+    SX_BUSY                             25.6%   0.0%  27.3%   0.9%
+    SPI_BUSY                            91.8%   0.0%  97.4%  39.4%
+    SC_BUSY                             27.7%   0.0%  29.4%   8.9%
+    DB_BUSY                             26.1%   0.0%  27.8%   4.7%
+    CB_BUSY                             21.7%   0.0%  23.1%   3.6%
+  GRBM_STATUS_SE1
+    DB_CLEAN                            78.7% 100.0%  77.2%  97.8%
+    CB_CLEAN                            79.9% 100.0%  78.5%  98.7%
+    UTCL1_BUSY                          85.5%   0.1%  91.1%  12.3%
+    TCP_BUSY                            86.7%   0.1%  92.4%  16.8%
+    GL1CC_BUSY                          90.1%   0.1%  95.6%  32.5%
+    RMI_BUSY                            20.8%   0.0%  22.2%   0.5%
+    BCI_BUSY                            19.4%   0.0%  20.7%   1.5%
+    PA_BUSY                             10.7%   0.0%  11.1%  12.3%
+    TA_BUSY                             86.8%   0.1%  92.4%  16.8%
+    SX_BUSY                             25.6%   0.0%  27.4%   1.8%
+    SPI_BUSY                            91.8%   0.1%  97.3%  40.9%
+    SC_BUSY                             27.7%   0.0%  29.4%  10.8%
+    DB_BUSY                             25.9%   0.0%  27.6%   5.6%
+    CB_BUSY                             21.6%   0.0%  23.0%   5.5%
+  CP_STAT
+    ROQ_RING_BUSY                       95.4%   0.6%  99.9%  92.7%
+    ROQ_INDIRECT1_BUSY                  94.5%   0.1%  99.2%  87.6%
+    ROQ_INDIRECT2_BUSY                  94.1%   0.1%  98.9%  81.9%
+    ROQ_STATE_BUSY                      16.1%   0.0%  17.0%   8.0%
+    DC_BUSY                             59.8%   0.1%  63.6%  14.8%
+    UTCL2IU_BUSY                         0.8%   0.0%   0.5%  16.9%
+    PFP_BUSY                            95.4%   1.3%  99.9%  93.4%
+    MEQ_BUSY                            94.9%   0.2%  99.8%  80.9%
+    ME_BUSY                             61.4%   0.4%  64.2%  68.4%
+    QUERY_BUSY                          82.3%   0.1%  87.1%  42.3%
+    DMA_BUSY                             1.3%   0.0%   1.0%  21.1%
+    RCIU_BUSY                           14.3%   0.1%  15.0%  10.5%
+    SCRATCH_RAM_BUSY                    13.7%   0.3%  14.4%  12.2%
+    GCRIU_BUSY                           0.8%   0.2%   0.7%   7.2%
+    CE_BUSY                              2.9%   0.2%   3.0%   5.0%
+    TCIU_BUSY                           26.8%   0.0%  28.2%  22.0%
+    ROQ_CE_RING_BUSY                     2.9%   0.3%   3.0%   5.8%
+    CP_BUSY                             95.5%   1.3% 100.0%  93.6%
+  CP_BUSY_STAT
+    REG_BUS_FIFO_BUSY                    0.7%   0.0%   0.8%   0.5%
+    PFP_PARSING_PACKETS                 27.3%   0.1%  28.8%  19.2%
+    ME_PARSING_PACKETS                   6.7%   0.1%   6.9%  13.1%
+    RCIU_PFP_BUSY                        1.1%   0.1%   1.1%   0.1%
+    RCIU_ME_BUSY                         7.1%   0.0%   7.5%   0.6%
+    SEM_POLLING_FOR_PASS                33.1%   0.1%  34.9%  21.1%
+    GFX_CONTEXT_BUSY                    31.7%  41.1%  31.3%  31.8%
+    ME_PARSER_BUSY                      14.0%   0.1%  14.6%  19.8%
+    EOP_DONE_BUSY                       82.3%   0.1%  87.0%  43.6%
+    CE_PARSING_PACKETS                   2.9%   0.4%   3.0%   5.2%
+  CP_STALLED_STAT1
+    ME_HAS_ACTIVE_CE_BUFFER_FLAG       100.0% 100.0% 100.0% 100.0%
+    ME_HAS_ACTIVE_DE_BUFFER_FLAG       100.0% 100.0% 100.0% 100.0%
+    RCIU_WAITING_ON_GRBM_FREE            6.8%   0.0%   7.3%   0.1%
+    RCIU_WAITING_ON_VGT_FREE             1.0%   0.0%   1.1%   0.3%
+  CP_STALLED_STAT2
+    PFP_TO_MEQ_NOT_RDY_TO_RCV           28.3%   0.0%  30.0%  11.7%
+    PFP_TO_VGT_WRITES_PENDING            1.0%   0.0%   1.1%   0.4%
+    ME_RCIU_NOT_RDY_TO_RCV               6.7%   0.0%   7.2%   0.2%
+    ME_WAITING_ON_PARTIAL_FLUSH          3.3%   0.0%   3.3%  11.5%
+    MEQ_TO_ME_NOT_RDY_TO_RCV            94.6%   0.2%  99.4%  80.7%
+    STQ_TO_ME_NOT_RDY_TO_RCV            16.1%   0.0%  17.0%   8.3%
+    EOPD_FIFO_NEEDS_SC_EOP_DONE         81.1%   0.1%  86.0%  36.3%
+    EOPD_FIFO_NEEDS_WR_CONFIRM           0.9%   0.0%   0.9%   6.1%
+  CP_STALLED_STAT3
+    CE_WAITING_ON_CE_BUFFER_FLAG         2.9%   0.0%   3.0%   3.5%
+    UTCL1_WAITING_ON_TRANS               0.7%   0.0%   0.5%  14.5%
+  CP_CPF_STATUS
+    POST_WPTR_GFX_BUSY                  95.5%   3.2% 100.0%  92.5%
+    CSF_BUSY                            95.4%   2.5%  99.9%  91.8%
+    ROQ_RING_BUSY                       95.4%   1.9%  99.9%  91.1%
+    ROQ_INDIRECT1_BUSY                  94.5%   1.0%  99.1%  86.9%
+    ROQ_INDIRECT2_BUSY                  94.1%   0.3%  98.8%  83.7%
+    ROQ_STATE_BUSY                      16.1%   0.0%  17.1%   8.3%
+    ROQ_CE_RING_BUSY                     2.9%   1.4%   3.0%   3.5%
+    TCIU_BUSY                            2.0%   1.1%   1.7%  16.6%
+    CPF_GFX_BUSY                        95.4%   2.5%  99.9%  91.8%
+    CPF_CMP_BUSY                         2.1%   1.6%   1.7%  17.6%
+    GRBM_CPF_STAT_BUSY                   2.85   0.04   2.99   2.54  (mean value)
+    CPF_BUSY                            95.5%   3.2% 100.0%  92.5%
+  CP_CPF_BUSY_STAT
+    CSF_RING_BUSY                       95.4%   2.6%  99.9%  90.9%
+    CSF_INDIRECT2_BUSY                  92.0%   0.9%  96.6%  81.8%
+    CSF_ARBITER_BUSY                     1.6%   1.3%   1.5%   6.6%
+  CP_CPF_STALLED_STAT1
+    RING_FETCHING_DATA                  95.3%   2.9%  99.8%  89.8%
+    INDR2_FETCHING_DATA                 90.9%   0.8%  95.6%  74.0%
+  SDMA0_STATUS_REG
+    IDLE                                99.9% 100.0%  99.9%  99.9%
+    REG_IDLE                           100.0% 100.0% 100.0% 100.0%
+    RB_EMPTY                            99.9% 100.0%  99.9%  99.9%
+    RB_CMD_IDLE                         99.9% 100.0%  99.9%  99.9%
+    IB_CMD_IDLE                        100.0% 100.0% 100.0% 100.0%
+    BLOCK_IDLE                          99.9% 100.0%  99.9%  99.9%
+    EX_IDLE                             99.9% 100.0%  99.9%  99.9%
+    EX_IDLE_POLL_TIMER_EXPIRE           99.9% 100.0%  99.9%  99.9%
+    MC_WR_IDLE                          99.9% 100.0%  99.9%  99.9%
+    SRBM_IDLE                          100.0% 100.0% 100.0% 100.0%
+    CONTEXT_EMPTY                       99.9% 100.0%  99.9%  99.9%
+    RB_MC_RREQ_IDLE                     99.9% 100.0%  99.9%  99.9%
+    IB_MC_RREQ_IDLE                    100.0% 100.0% 100.0% 100.0%
+    MC_RD_IDLE                         100.0% 100.0% 100.0% 100.0%
+    DELTA_RPTR_EMPTY                   100.0% 100.0% 100.0% 100.0%
+    MC_RD_NO_POLL_IDLE                 100.0% 100.0% 100.0% 100.0%
+    PREV_CMD_IDLE                       99.9% 100.0%  99.9%  99.9%
+    SEM_IDLE                           100.0% 100.0% 100.0% 100.0%
+    INT_IDLE                           100.0% 100.0% 100.0% 100.0%
+  SDMA1_STATUS_REG
+    IDLE                               100.0% 100.0% 100.0% 100.0%
+    REG_IDLE                           100.0% 100.0% 100.0% 100.0%
+    RB_EMPTY                           100.0% 100.0% 100.0% 100.0%
+    RB_CMD_IDLE                        100.0% 100.0% 100.0% 100.0%
+    IB_CMD_IDLE                        100.0% 100.0% 100.0% 100.0%
+    BLOCK_IDLE                         100.0% 100.0% 100.0% 100.0%
+    EX_IDLE                            100.0% 100.0% 100.0% 100.0%
+    EX_IDLE_POLL_TIMER_EXPIRE          100.0% 100.0% 100.0% 100.0%
+    MC_WR_IDLE                         100.0% 100.0% 100.0% 100.0%
+    SRBM_IDLE                          100.0% 100.0% 100.0% 100.0%
+    CONTEXT_EMPTY                      100.0% 100.0% 100.0% 100.0%
+    RB_MC_RREQ_IDLE                    100.0% 100.0% 100.0% 100.0%
+    IB_MC_RREQ_IDLE                    100.0% 100.0% 100.0% 100.0%
+    MC_RD_IDLE                         100.0% 100.0% 100.0% 100.0%
+    DELTA_RPTR_EMPTY                   100.0% 100.0% 100.0% 100.0%
+    MC_RD_NO_POLL_IDLE                 100.0% 100.0% 100.0% 100.0%
+    PREV_CMD_IDLE                      100.0% 100.0% 100.0% 100.0%
+    SEM_IDLE                           100.0% 100.0% 100.0% 100.0%
+    INT_IDLE                           100.0% 100.0% 100.0% 100.0%
+  CP_RB0_RPTR
+    RB_RPTR                            907.40 901.94 907.25 926.82  (mean value)

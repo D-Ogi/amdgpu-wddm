@@ -537,3 +537,11 @@ facts:
     evidence: "[E50, section 5](../evidence/windows/2026-10-02-E50-native-d3d12-system-runtime/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M780", "auto": true, "cue": "...process environment or an application profile, and tier 0 without it (M780). Measured: an inline ray query in a cs_6_5 shader, 64 of 64 words ex..."}
+  - id: M784
+    status: MEASURED
+    date: "2026-10-02"
+    claim: "The D3D12 shell registered on unit A since 2026-10-02T17:13Z is `5A1B7BAF`, built from `e9f5e701` on `m15/replay-wake`, two commits above the shell before it. Measured on The Witcher 3 at native 1920x1080 low, kernel driver 0.7.193.1, engine `D79FEC49` and ICD `F9DCB33B` throughout, one 40 s window in the game world per trial: deferred replay off 51.5 frames/s with the GPU busy 71.9 % of the window (300, shell `DCE50410`); on, 52.4 and 80.9 % (304); waking a sleeping replay worker once 8 KiB are pending instead of on the first publish, 53.6 and 82.6 % (305, shell `406FD683`, `2322765d`); draining no ring at `ResetCommandPool` while no list of that pool is open, 54.8 and 92.0 % (306, `5A1B7BAF`, `e9f5e701`). The ladder is monotone, +6.4 % over the four steps, and the present interval median fell 18.66 -> 16.98 ms. At high with ray tracing the same shell reads 9.5 frames/s, interval median 106.78 ms, GPU busy 97.9 % (307). All five sessions closed functional-restored with the game responding, stopped by the operator inside the session bound, and our three modules mapped in the game process. Trial 308 promoted the shell and 309 is the capability check on the promoted artifact (M780)"
+    status_text: "MEASURED (unit A)"
+    evidence: "[E51, section 3](../evidence/windows/2026-10-02-E51-kmd196-hold-and-replay-wake/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M780", "cue": "...309 is the capability check on the promoted artifact (M780)"}

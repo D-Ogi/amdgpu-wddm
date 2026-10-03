@@ -23,7 +23,7 @@ flowchart LR
 
 ## References
 
-21 facts, 12 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
+22 facts, 13 relations, in 1 graph(s) of at most 60 facts (a larger single cluster keeps its own graph). Dashed boxes belong to other areas.
 
 ```mermaid
 flowchart LR
@@ -48,6 +48,7 @@ flowchart LR
   M767["M767<br/>kmd"]:::MEASURED
   M780["M780"]:::MEASURED
   M782["M782"]:::MEASURED
+  M784["M784"]:::MEASURED
   M767 --> M766
   M545 --> M544
   M723 --> M697
@@ -59,6 +60,7 @@ flowchart LR
   M753 --> M754
   M766 --> M765
   M782 --> M780
+  M784 --> M780
   M573 --> M571
   classDef HYPOTHESIS fill:#fff3c4,stroke:#9a7b00,color:#000
   classDef MEASURED fill:#dbeafe,stroke:#1d4ed8,color:#000
