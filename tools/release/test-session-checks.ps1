@@ -119,6 +119,27 @@ Check ((Format-Inputs $next) -eq 'fw= params= switches=') 'cleared at completion
 # The state of a tester.10 phase 1 (no install_switches) still resumes its folder and settings.
 $old = [pscustomobject]@{ schema = 1; phase = 'testsigning-pending'; package_version = '0.7.198.100-tester.10'; firmware_source_dir = 'C:\amdgpu-wddm-firmware'; command_line_parameters = [pscustomobject]@{ DpmMaxMHz = 1500 } } | ConvertTo-Json | ConvertFrom-Json
 Check ((Format-Inputs (Get-InstallInputs $none $old '0.7.198.100-tester.10')) -eq 'fw=C:\amdgpu-wddm-firmware params=DpmMaxMHz=1500 switches=') 'a tester.10 state at testsigning-pending resumes its folder and settings'
+# A newer package takes over a tester.10 phase 1 (test signing pending, or active with phase 2 not begun) with its own
+# arguments: the state names it from then on, so its argument-free continuation after the driver package restart
+# restores what it saved. The phase is not touched: test signing is still finished first.
+foreach ($ph in 'testsigning-pending', 'testsigning-active') {
+    $st = [pscustomobject]@{ schema = 1; phase = $ph; package_version = '0.7.198.100-tester.10'; firmware_source_dir = 'C:\old-fw'; command_line_parameters = [pscustomobject]@{ DpmMaxMHz = 1500 } } | ConvertTo-Json | ConvertFrom-Json
+    $ia = Get-InstallAction -State $st -PackageVersion $v11 -InstalledVersion '0.7.198.100-tester.10' -Repair $false
+    $in = Get-InstallInputs @{ FirmwareDir = 'F:\fw11'; CuMode = 24; NoControlApp = [switch]$true } $st $v11
+    Check (($ia.action -eq 'install') -and ((Format-Inputs $in) -eq 'fw=F:\fw11 params=CuMode=24 switches=NoControlApp') -and (@($in.restored).Count -eq 0)) "takeover at ${ph}: action install, only the new package's own arguments (nothing from tester.10's run)"
+    $was = Set-InstallPackage $st $v11
+    Save-InstallInputs $st $in
+    Check (($was -eq '0.7.198.100-tester.10') -and ($st.package_version -eq $v11) -and ($st.phase -eq $ph)) "takeover at ${ph}: the state names the new package, the phase stays (test signing first)"
+    if ($ph -eq 'testsigning-pending') {
+        # The run after the test-signing restart (this package's, from RunOnce) has no arguments either.
+        $mid = Get-InstallInputs $none (Step-State $st 'testsigning-pending') $v11
+        Check ((Format-Inputs $mid) -eq 'fw=F:\fw11 params=CuMode=24 switches=NoControlApp') "takeover at ${ph}: the run after the test-signing restart restores them: $(Format-Inputs $mid)"
+    }
+    $next = Get-InstallInputs $none (Step-State $st 'driver-pending-restart') $v11
+    Check ((Format-Inputs $next) -eq 'fw=F:\fw11 params=CuMode=24 switches=NoControlApp') "takeover at ${ph}, then the driver package restart without arguments: $(Format-Inputs $next)"
+}
+Check ($null -eq (Set-InstallPackage ([pscustomobject]@{ phase = 'new' }) $v11)) 'a state without a package version: nothing to take over'
+Check ($null -eq (Set-InstallPackage ([pscustomobject]@{ phase = 'testsigning-active'; package_version = $v11 }) $v11)) 'the same package: nothing to take over'
 
 $ia = Get-InstallAction -State ([pscustomobject]@{ phase = 'driver-pending-restart' }) -PackageVersion $v11 -InstalledVersion $v11 -Repair $false
 Check (($ia.action -eq 'resume') -and ($ia.message -match 'continuing the installation')) "same version at driver-pending-restart: $($ia.action) (not a repair, previous_package_version kept)"

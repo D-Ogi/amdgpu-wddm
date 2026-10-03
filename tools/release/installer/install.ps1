@@ -428,6 +428,10 @@ switch ($action.action) {
         Set-StateValue $state 'package_version' $packageVersion
     }
     'resume' { Write-Step $action.message }
+    'install' {
+        $was = Set-InstallPackage $state $packageVersion
+        if ($was) { Write-Info "this package ($packageVersion) takes over the unfinished installation of $was (phase $($state.phase)); test signing is finished first as before" }
+    }
 }
 # Saved with the state before any step that can end in a restart, for an install, an upgrade and a repair alike.
 Save-InstallInputs $state $installInputs
@@ -490,7 +494,11 @@ if ($state.phase -eq 'new') {
 }
 if ($state.phase -eq 'testsigning-pending') {
     if (-not $script:TestSigningActive) {
-        Write-Host 'Test signing is set but not active yet: restart the computer, then run install.cmd again.' -ForegroundColor Yellow
+        # This run's package and inputs are kept, and the run after the restart is this package's: a newer package
+        # that took over an older one's phase 1 continues as itself.
+        if (-not $script:DryRunMode) { Save-InstallState $state }
+        Set-ResumeAtLogon (Join-Path $package 'install.cmd')
+        Write-Host 'Test signing is set but not active yet: restart the computer. The installer continues after you log on again (if it does not, run install.cmd again).' -ForegroundColor Yellow
         if ($script:SecureBoot -eq 'on') { Write-Host 'Secure Boot is on, so Windows ignores test signing. Turn it off in the BIOS setup.' -ForegroundColor Yellow }
         exit 5
     }

@@ -190,6 +190,17 @@ function Save-InstallInputs($State, $Inputs) {
     Set-StateValue $State 'command_line_parameters' $(if ($Inputs.parameters.Count) { [pscustomobject]$Inputs.parameters } else { $null })
     Set-StateValue $State 'install_switches' $(if (@($Inputs.switches).Count) { @($Inputs.switches) } else { $null })
 }
+# Another package that continues an unfinished install (phase 1 not finished, Get-InstallAction 'install') takes it
+# over: the state names this package from now on, so the inputs it saves come back for its own argument-free
+# continuation. The phases stay as they are: test signing is still checked and finished first. Returns the version that
+# the state named before, or $null when nothing was taken over.
+function Set-InstallPackage($State, [string]$PackageVersion) {
+    $p = $State.PSObject.Properties['package_version']
+    if (-not $p -or -not $p.Value -or ([string]$p.Value -eq $PackageVersion)) { return $null }
+    $was = [string]$p.Value
+    Set-StateValue $State 'package_version' $PackageVersion
+    return $was
+}
 function Clear-InstallInputs($State) {
     foreach ($n in 'firmware_source_dir', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
 }

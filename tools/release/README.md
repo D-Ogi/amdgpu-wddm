@@ -45,7 +45,9 @@ it establishes (0 completed, 3010 restart required, 259 no device change reporte
 the GPU still names the old service after 3010, phase 2 continues after the restart (`driver-pending-restart`,
 action `resume`), and the inputs of the install (`-FirmwareDir`, `-DpmMaxMHz`, `-CuMode`, `-NoControlApp`,
 `-NoReboot`, `-Force`) come from the state, as after the test-signing restart; they are cleared when phase 2
-completes. The installer never changes the KMD's BD-059 session marker; a closed GPU desktop path is reopened with
+completes. A newer package started over an older one's unfinished phase 1 takes the installation over: the state
+names it from then on (its inputs come back after its own restarts), test signing is still finished first, and the
+run after the test-signing restart is the newer package's (RunOnce armed again). The installer never changes the KMD's BD-059 session marker; a closed GPU desktop path is reopened with
 the control application (INSTALL.md). The KMD's own INF stays without `Reboot`, because the lab's deployment kits
 restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks for a
 restart. Install records the session's DWM (process ID and creation time) before the driver package, right after it

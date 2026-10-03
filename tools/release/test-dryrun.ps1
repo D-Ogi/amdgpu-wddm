@@ -131,8 +131,8 @@ $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object
 Check ($marker.Count -eq 0) "the BD-059 session marker stays under KMD ownership: no installer code names it$(if ($marker.Count) { ': ' + ($marker -join ', ') })"
 $pos = @("Invoke-Change 'pnputil /add-driver", "Add-DwmObservation 'after the driver package'", "Save-Phase 'driver-pending-restart'", "Add-DwmObservation 'end of phase 2'", "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
 Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($src -match "Set-StateValue \`$state 'dwm_observations'")) 'DWM observations before and right after the driver package (ahead of the restart-pending branch) and at the end of phase 2 go into the state'
-$pos = @('$installInputs = Get-InstallInputs $PSBoundParameters $early', 'Save-InstallInputs $state $installInputs', "if (`$state.phase -eq 'new')", "Save-Phase 'driver-pending-restart'", 'Clear-InstallInputs $state', "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
-Check ((@($pos | Where-Object { $_ -lt 0 }).Count -eq 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($pos[4] -lt $pos[5]) -and ([regex]::Matches($src, 'Clear-InstallInputs').Count -eq 1)) 'install inputs: restored first, saved before any restart for every install action, cleared only when phase 2 completes'
+$pos = @('$installInputs = Get-InstallInputs $PSBoundParameters $early', '$was = Set-InstallPackage $state $packageVersion', 'Save-InstallInputs $state $installInputs', "if (`$state.phase -eq 'new')", "Save-Phase 'driver-pending-restart'", 'Clear-InstallInputs $state', "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
+Check ((@($pos | Where-Object { $_ -lt 0 }).Count -eq 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($pos[4] -lt $pos[5]) -and ($pos[5] -lt $pos[6]) -and ([regex]::Matches($src, 'Clear-InstallInputs').Count -eq 1)) 'install inputs: restored first, bound to the package that takes an unfinished install over, saved before any restart for every install action, cleared only when phase 2 completes'
 'BD-060 session rules (test-session-checks.ps1 under 5.1, HKCU scratch key)'
 $rs = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-session-checks.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Inf', (Join-Path $Package 'payload\kmd\bc250kmd.inf'), '-WorkRoot', $WorkBase)
 $rs.text
@@ -278,6 +278,26 @@ try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun'
 Check (($r.code -eq 0) -and ($r.text -match "options of this install, kept until it completes: -FirmwareDir $([regex]::Escape($goodDir)) -CuMode 40 -NoControlApp") -and ($r.text -notmatch 'from the first run of this install')) "upgrade with arguments: its options are kept for the continuation (exit $($r.code))"
 if ($r.code -ne 0) { $r.text }
 Remove-Item -LiteralPath $dir -Recurse -Force
+# This package over a tester.10 phase 1 that did not finish, with its own arguments: it takes the installation over
+# (the state names it, so its inputs come back after its restarts), and test signing is still finished first.
+foreach ($c in @(
+        @{ phase = 'testsigning-active'; code = 0 }
+        @{ phase = 'testsigning-pending'; code = 5 })) {
+    $dir = Join-Path $WorkBase ('state-takeover-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+    [void][IO.Directory]::CreateDirectory($dir)
+    [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ([ordered]@{ schema = 1; phase = $c.phase; package_version = '0.7.198.100-tester.10'; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); testsigning_set_by_installer = $true; firmware_source_dir = 'C:\tester10-fw'; updated_utc = '2026-10-03T00:00:00Z' } | ConvertTo-Json))
+    $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+    try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', $goodDir, '-NoControlApp') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+    Check ($r.code -eq $c.code) "takeover at $($c.phase): exit $($r.code) (expected $($c.code))"
+    Check (($r.text -match "this package \($([regex]::Escape($pkgVersion))\) takes over the unfinished installation of 0\.7\.198\.100-tester\.10 \(phase $($c.phase)\)") -and ($r.text -match "options of this install, kept until it completes: -FirmwareDir $([regex]::Escape($goodDir)) -NoControlApp") -and ($r.text -notmatch 'tester10-fw')) "takeover at $($c.phase): the state names this package with its own options"
+    if ($c.phase -eq 'testsigning-pending') {
+        Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> $([regex]::Escape((Join-Path $Package 'install.cmd')))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s'
+    } else {
+        Check (($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit /set')) 'takeover at testsigning-active: phase 2 runs, test signing is not set again'
+    }
+    if ($r.code -ne $c.code) { $r.text }
+    Remove-Item -LiteralPath $dir -Recurse -Force
+}
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 
 'uninstall -DryRun'
