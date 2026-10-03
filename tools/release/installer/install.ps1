@@ -4,6 +4,7 @@
 #   1. preflight, System Restore point, test signing on (asks first), then a restart. Skipped when test signing is
 #      already active in the running boot.
 #   2. certificate, driver package, user-mode drivers, registry, firmware, start-confirm task, control app; restart.
+#      The GPU changes driver at that restart: no device restart and no DWM restart under the running desktop.
 #   3. verify: driver bound, version, start health, D3D12 device at feature level 12_1, Vulkan enumerates the GPU.
 # -DryRun runs every check and prints every change without making it. -Verify runs phase 3 only.
 # Network: the package does not contain the AMD GPU firmware. Phase 2 downloads it from linux-firmware at the commit
@@ -245,6 +246,12 @@ function Invoke-Verify {
         if ($Ok) { Write-Host ('   [pass] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Green } else { Write-Host ('   [FAIL] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Red }
         Write-Log ('   verify {0}: {1} {2}' -f $Name, $Ok, $Detail)
     }
+    # A warning names a state that needs the tester's action but is not a driver failure: it does not fail verify.
+    function Add-Warning([string]$Name, [string]$Detail) {
+        [void]$results.Add([pscustomobject]@{ check = $Name; pass = $true; warning = $true; detail = $Detail })
+        Write-Host ('   [warn] {0,-20} {1}' -f $Name, $Detail) -ForegroundColor Yellow
+        Write-Log ('   verify {0}: warning {1}' -f $Name, $Detail)
+    }
     if (-not $script:DryRunMode) {
         # Files replaced while in use: the restart deletes their old copies; this catches any it could not.
         $n = (Remove-OldCopies -Directory $InstallRoot -Recurse) + (Remove-OldCopies -Directory (Join-Path $env:windir 'System32') -Filter 'bc250umd.dll.old-*')
@@ -337,6 +344,20 @@ function Invoke-Verify {
     if ($io -match 'died in a session') { $ioClosed += '; last boot died in a session' }
     Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
 
+    # BD-060: a DWM restarted inside this logon session (killed or crashed; the installer never restarts it) leaves
+    # some Windows 11 apps without mouse clicks until the next restart. A warning with its remedy: it is a state of the
+    # session, not of the driver.
+    $mySession = (Get-Process -Id $PID).SessionId
+    $logon = $null
+    try { $logon = Get-SessionLogonUtc $mySession } catch { Write-Log "   session logon time: $($_.Exception.Message)" }
+    $starts = Get-SessionDwmStartUtc $mySession
+    $dwmRestart = Get-DwmRestartFinding -SessionId $mySession -LogonUtc $logon -DwmStartUtc $starts
+    switch ($dwmRestart.state) {
+        'restarted' { Add-Warning 'DWM restarted in this session' $dwmRestart.detail }
+        'first' { Add-Result 'DWM restarted in this session' $true $dwmRestart.detail }
+        default { Write-Host "   [skip] DWM restarted in this session  $($dwmRestart.detail)" -ForegroundColor Yellow; Write-Log "   verify DWM restarted in this session: $($dwmRestart.detail)" }
+    }
+
     # D3D12 through the system runtime, as an application sees it.
     $caps = Join-Path $InstallRoot 'tools\amdgpu_wddm_d3d12caps.exe'
     $vdir = Join-Path $script:StateDir 'verify'
@@ -389,6 +410,8 @@ if ($script:VerifyOnly) {
     if (-not $DryRun) { Save-Phase $(if ($bad.Count) { 'verify-failed' } else { 'verified' }) }
     if ($bad.Count) { Write-Host "Verification: $($bad.Count) check(s) failed. See INSTALL.md, section 'If something fails'." -ForegroundColor Red; exit 3 }
     Write-Host 'Verification passed. The BC-250 runs on the amdgpu-wddm driver.' -ForegroundColor Green
+    $warned = @($r | Where-Object { $_.PSObject.Properties['warning'] -and $_.warning })
+    if ($warned.Count) { Write-Host "$($warned.Count) warning(s) above ([warn]): read the remedy on each line." -ForegroundColor Yellow }
     exit 0
 }
 switch ($action.action) {
@@ -564,23 +587,47 @@ if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $sta
     Write-Info "driver settings before the driver package: $($parametersBefore.Count) of $(@($judgedNames).Count) values present"
 }
 
-# The driver package. The device starts once right away with the INF's closed gates (display only); the registry
-# below opens them for the next start.
-Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install' {
-    $n = Invoke-Native pnputil.exe @('/add-driver', (Join-Path $package 'payload\kmd\bc250kmd.inf'), '/install')
+# The driver package. Its INF carries the Reboot directive (build-release.ps1): Windows installs the package but does
+# not restart a GPU that is already started (on Microsoft Basic Display or on the previous release), so the desktop
+# and DWM keep their device for the rest of this session (BD-060, common.ps1). pnputil answers 3010 and the GPU
+# changes driver at the restart that ends phase 2. A GPU that is not started is installed at once (exit 0), with the
+# INF's closed gates (display only). Nothing here stops or restarts DWM; the registry below opens the gates for the
+# next start.
+$infFile = Join-Path $package 'payload\kmd\bc250kmd.inf'
+if (-not (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile)))) { throw 'payload\kmd\bc250kmd.inf has no Reboot directive: this package would restart the GPU under the running desktop' }
+$pnp = Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install (the GPU changes to it at the next restart)' {
+    $n = Invoke-Native pnputil.exe @('/add-driver', $infFile, '/install')
     Write-Log $n.text
-    # 3010: done, restart needed. 259: the package is in the driver store and no device needed an update, which is
-    # what a re-run over an earlier run's install sees; the binding check below decides.
-    if ($n.code -notin @(0, 3010, 259)) { throw "pnputil failed ($($n.code)): $($n.text)" }
-    if ($n.code -eq 259) { Write-Info 'pnputil: package already in the driver store, no device update needed' }
-} | Out-Null
+    # 3010: installed, the device changes at the restart. 0: installed on a device that was not started. 259: the
+    # package is in the driver store and no device needed an update, which is what a re-run over an earlier run's
+    # install sees; the binding check below decides.
+    $o = Get-DriverPackageOutcome $n.code
+    if (-not $o.ok) { throw "pnputil failed ($($n.code)): $($n.text)" }
+    Write-Info "pnputil: $($o.text)"
+    return $o
+}
 $instance = $null
 if ($script:Device) { $instance = $script:Device.DeviceID }
 $classKey = $null
 if (-not $script:DryRunMode) {
     $svc = Get-DeviceServiceName -InstanceId $instance
     $script:CurrentStep = 'check that the GPU is bound to the new driver package'
+    if ($svc -ne $script:ServiceName -and $pnp.deferred) {
+        # The install is complete apart from the device restart, so the device's registry should name the new service
+        # already. If it still names the old one, phase 2 finishes after the restart instead of writing into the old
+        # driver's key.
+        Write-Info "the GPU is still on '$svc' until the restart: phase 2 continues after the next logon"
+        Save-Phase 'driver-pending-restart'
+        Set-ResumeAtLogon (Join-Path $package 'install.cmd')
+        Request-Restart 'the GPU changes to the new driver package at the next start.'
+        exit 0
+    }
     if ($svc -ne $script:ServiceName) { throw "the GPU is on '$svc' after pnputil, not on $($script:ServiceName)" }
+    if ($pnp.inPlace -and (Test-StaleInteropMarker $script:ParametersKey)) {
+        Invoke-Change 'remove Parameters\InteropSession, the GPU desktop session marker of the driver instance that the device update stopped in this boot (the next start would read it as a crash and close the GPU desktop path)' {
+            Remove-ItemProperty -LiteralPath $script:ParametersKey -Name InteropSession -ErrorAction Stop
+        } | Out-Null
+    }
     $classKey = Get-DeviceDriverKey -InstanceId $instance
     if (-not $classKey) { throw 'no software key for the GPU' }
     Set-StateValue $state 'class_key' $classKey
@@ -607,8 +654,9 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
 # DpmMaxMHz, thermal limits are the driver's own. KeepLog 0: no log files on the tester's disk. UnconfirmedStarts 0 is
-# the INF's own reset; the display-only start above already counted one. Judged on the values from before pnputil;
-# the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before pnputil back.
+# the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
+# from before pnputil; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
+# pnputil back.
 Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $infParameterNames
 
 # Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.

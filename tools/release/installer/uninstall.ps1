@@ -55,6 +55,9 @@ $icdJson = Join-Path $root 'vulkan\radeon_icd.json'
 Invoke-Change "remove '$icdJson' from $($script:KhronosKey)" { Remove-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -ErrorAction SilentlyContinue } | Out-Null
 Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile, release record)" { Remove-Item -LiteralPath $script:SoftwareKey -Recurse -Force -ErrorAction SilentlyContinue } | Out-Null
 
+# The GPU leaves the driver now, under the running desktop: pnputil has no documented way to defer the removal of a
+# driver from a started device to the next restart, and a package kept until then could leave the GPU without a
+# driver at that start. The restart that ends the uninstall gives a fresh session (BD-060, common.ps1).
 $pkgs = @(Get-OurDriverPackages)
 if (-not $pkgs.Count) { Write-Info 'no bc250kmd driver package in the driver store' }
 foreach ($p in $pkgs) {
@@ -131,5 +134,6 @@ if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the c
 if ($DryRun) { Write-Host ''; Write-Host 'Dry run complete: nothing was changed.' -ForegroundColor Green; exit 0 }
 Write-Host ''
 Write-Host "Uninstall complete. Restart the computer to finish. Log: $($script:LogPath)" -ForegroundColor Green
+Write-Host 'Until the restart, some Windows 11 apps (the command bar of File Explorer, Task Manager) can ignore mouse clicks: the GPU changed to Microsoft Basic Display Adapter under the running desktop.' -ForegroundColor Yellow
 if (-not $NoReboot -and (Read-Confirmation -Question 'Restart now?' -Expect 'Y')) { Restart-Computer -Force }
 exit 0

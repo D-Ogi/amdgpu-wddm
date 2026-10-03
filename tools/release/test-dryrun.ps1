@@ -112,6 +112,22 @@ $common = [IO.File]::ReadAllText((Join-Path $Package 'installer\common.ps1'))
 Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-1-5-32-545:\(OI\)\(CI\)RX") -and ($common -match "'/reset', '/T'") -and ($common -match 'function Set-StateDirAccess \{\s+if \(\$script:DryRunMode\) \{ return \}')) 'the state folder (logs, verify results) gets administrators/SYSTEM full and users read, children reset; not in a dry run'
 Check ([string]$m.kmd_abi -eq '0x000700C6' -or [version]($m.kmd_build) -lt [version]'0.7.198.0') "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
+# BD-060: nothing in the installer stops or restarts DWM or the GPU under the running desktop; the driver package
+# changes the GPU at the restart (INF Reboot directive), and only uninstall moves it in place (documented there).
+$scripts = @(Get-ChildItem -LiteralPath (Join-Path $Package 'installer') -Filter *.ps1 | ForEach-Object { [pscustomobject]@{ name = $_.Name; text = [IO.File]::ReadAllText($_.FullName) } })
+$bad = @(foreach ($s in $scripts) { foreach ($p in 'Stop-Process', 'taskkill', 'Restart-Service', 'Stop-Service', '/restart-device', '/disable-device', '/enable-device', '/remove-device', 'Disable-PnpDevice', 'Enable-PnpDevice', 'Restart-PnpDevice') { if ($s.text -match [regex]::Escape($p)) { "$($s.name): $p" } } })
+Check ($bad.Count -eq 0) "no installer script stops or restarts DWM, a service or the GPU$(if ($bad.Count) { ': ' + ($bad -join '; ') })"
+$pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, "Invoke-Native pnputil\.exe @\('(/[a-z-]+)'")) { "$($s.name) $($mm.Groups[1].Value)" } })
+Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+$pos = @('Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile))', "Invoke-Change 'pnputil /add-driver") | ForEach-Object { $src.IndexOf($_) }
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1])) 'install.ps1 refuses a package INF without the Reboot directive before pnputil'
+Check ($r.text -match 'would: pnputil /add-driver payload\\kmd\\bc250kmd\.inf /install \(the GPU changes to it at the next restart\)') 'the walk-through shows the driver package for the next restart'
+Check (($src -match "Add-Warning 'DWM restarted in this session'") -and ($src -match 'Get-SessionLogonUtc \$mySession') -and ($src -match 'Get-SessionDwmStartUtc \$mySession')) 'verify warns when the session''s DWM started after the logon'
+'BD-060 session rules (test-session-checks.ps1 under 5.1, HKCU scratch key)'
+$rs = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-session-checks.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Inf', (Join-Path $Package 'payload\kmd\bc250kmd.inf'))
+$rs.text
+Check ($rs.code -eq 0) "INF Reboot directive, pnputil outcomes, stale session marker, DWM restart finding: exit $($rs.code)"
+
 'file replacement and re-run (test-filesafe.ps1 under 5.1, inside a scratch folder)'
 $work = Join-Path $WorkBase ('filesafe-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
 $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-filesafe.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', $work)

@@ -245,6 +245,137 @@ function Get-InfParameterNames([string]$InfPath) {
     foreach ($l in [IO.File]::ReadAllLines($InfPath)) { if ($l -match '^\s*HKR\s*,\s*Parameters\s*,\s*([A-Za-z0-9_]+)\s*,') { $names += $Matches[1] } }
     return , $names
 }
+
+# ---------------------------------------------------------------------------------------------------------------
+# No device restart and no DWM restart under the running desktop (BD-060). After a DWM restart inside a logon session
+# (DWM killed or crashed, winlogon starts a new one), Windows 11 build 22631 delivers no mouse input to WinUI 3 content
+# (the command bar of File Explorer, Task Manager) until the next sign-in or restart, with any display driver. A GPU
+# restarted in place under the desktop takes DWM's devices away, and it can leave the BD-059 session marker of the
+# stopped driver behind (the next boot then closes the GPU desktop path as "died in a session").
+
+# The INF's Reboot directive in each install section that its models name: Windows 8 and later then install the
+# package but do not restart a device that is already started, pnputil answers 3010, and the device changes driver
+# at the next restart (INF Reboot directive, Remarks). build-release.ps1 adds it to the packaged INF.
+function Get-InfInstallSections([string[]]$Lines) {
+    # [Manufacturer] names the models sections (name, plus name.decoration for each decoration); each model line
+    # names its install section.
+    $clean = @($Lines | ForEach-Object { ($_ -replace ';.*$', '').Trim() })
+    $models = @(); $sections = @(); $current = ''
+    foreach ($t in $clean) {
+        if ($t -match '^\[(.+)\]$') { $current = $Matches[1]; continue }
+        if ($current -eq 'Manufacturer' -and $t -match '=\s*(.+)$') {
+            $parts = @($Matches[1] -split ',' | ForEach-Object { $_.Trim() })
+            $models += $parts[0]
+            if ($parts.Count -gt 1) { foreach ($d in $parts[1..($parts.Count - 1)]) { if ($d) { $models += "$($parts[0]).$d" } } }
+        }
+    }
+    foreach ($t in $clean) {
+        if ($t -match '^\[(.+)\]$') { $current = $Matches[1]; continue }
+        if ($models -contains $current -and $t -match '=\s*([A-Za-z0-9_.]+)\s*,') { $sections += $Matches[1] }
+    }
+    return , @($sections | Select-Object -Unique)
+}
+function Test-InfDefersDeviceRestart([string[]]$Lines) {
+    $sections = Get-InfInstallSections $Lines
+    if (-not $sections.Count) { return $false }
+    foreach ($s in $sections) {
+        $in = $false; $found = $false
+        foreach ($l in $Lines) {
+            $t = ($l -replace ';.*$', '').Trim()
+            if ($t -match '^\[(.+)\]$') { $in = ($Matches[1] -eq $s); continue }
+            if ($in -and $t -eq 'Reboot') { $found = $true }
+        }
+        if (-not $found) { return $false }
+    }
+    return $true
+}
+# The INF text with a Reboot line as the first line of each install section that lacks one; nothing else changes.
+function Add-InfRebootDirective([string]$Text) {
+    $lines = $Text -split "`r?`n"
+    $sections = Get-InfInstallSections $lines
+    if (-not $sections.Count) { throw 'INF: no install section found through [Manufacturer] and its models' }
+    if (Test-InfDefersDeviceRestart $lines) { return $Text }
+    $nl = $(if ($Text -match "`r`n") { "`r`n" } else { "`n" })
+    foreach ($s in $sections) {
+        $hx = [regex]('(?m)^\[' + [regex]::Escape($s) + '\][ \t]*\r?\n')
+        if ($hx.Matches($Text).Count -ne 1) { throw "INF: expected exactly one [$s] section" }
+        $Text = $hx.Replace($Text, { param($m) $m.Value + 'Reboot                                          ; release package: the GPU changes driver at the next restart' + $nl })
+    }
+    if (-not (Test-InfDefersDeviceRestart ($Text -split "`r?`n"))) { throw 'INF: Reboot directive missing after the rewrite' }
+    return $Text
+}
+# What pnputil /add-driver /install did to the GPU.
+function Get-DriverPackageOutcome([int]$Code) {
+    switch ($Code) {
+        3010 { return [pscustomobject]@{ ok = $true; deferred = $true; inPlace = $false; text = 'the driver package is installed; the GPU changes to it at the next restart (no device restart under the running desktop)' } }
+        0 { return [pscustomobject]@{ ok = $true; deferred = $false; inPlace = $true; text = 'the driver package is installed and the GPU started on it at once (it was not started before)' } }
+        259 { return [pscustomobject]@{ ok = $true; deferred = $false; inPlace = $false; text = 'the driver package is already in the driver store and no device needed an update' } }
+        default { return [pscustomobject]@{ ok = $false; deferred = $false; inPlace = $false; text = "pnputil exit $Code" } }
+    }
+}
+# The BD-059 session marker of a driver instance that a device restart stopped in this boot: Parameters\InteropSession
+# together with this boot's record, the volatile Parameters\InteropBoot\Marked = 1. The KMD calls that marker stale when
+# its next start of the same boot finds it. After an in-place restart the new instance runs display-only with the
+# INF's gates, or does not start at all, so nothing clears the marker in this boot, and the next boot would read it as
+# a death in a session. A marker without this boot's record is an earlier boot's: it stays for the KMD to judge.
+function Test-StaleInteropMarker([string]$ParametersKey) {
+    $session = (Get-ItemProperty -LiteralPath $ParametersKey -Name InteropSession -ErrorAction SilentlyContinue).InteropSession
+    if ($null -eq $session) { return $false }
+    $marked = (Get-ItemProperty -LiteralPath (Join-Path $ParametersKey 'InteropBoot') -Name Marked -ErrorAction SilentlyContinue).Marked
+    return ($marked -eq 1)
+}
+
+# The first DWM of a session starts with the session, before the logon; a DWM that started after the logon replaced
+# one that was killed or crashed. Times in UTC; $LogonUtc $null: nobody is logged on to the session.
+function Get-DwmRestartFinding {
+    param([int]$SessionId, $LogonUtc, [datetime[]]$DwmStartUtc = @())
+    $f = { param([datetime]$t) $t.ToString('yyyy-MM-dd HH:mm:ss') + 'Z' }
+    if ($SessionId -eq 0) { return [pscustomobject]@{ state = 'none'; detail = 'session 0 has no desktop: run verify.cmd in the desktop session' } }
+    if ($null -eq $LogonUtc) { return [pscustomobject]@{ state = 'none'; detail = "no logon time for session $SessionId" } }
+    if (-not @($DwmStartUtc).Count) { return [pscustomobject]@{ state = 'none'; detail = "no DWM in session $SessionId" } }
+    $last = @($DwmStartUtc | Sort-Object)[-1]
+    if ($last -gt $LogonUtc) {
+        return [pscustomobject]@{ state = 'restarted'; detail = "yes: the desktop compositor (DWM) of session $SessionId started at $(& $f $last), after the logon at $(& $f $LogonUtc). Some Windows 11 apps (the command bar of File Explorer, Task Manager) then ignore mouse clicks until the next restart. This is Windows behaviour, not a driver failure. Restart the computer." }
+    }
+    return [pscustomobject]@{ state = 'first'; detail = "no: the DWM of session $SessionId started at $(& $f $last), before the logon at $(& $f $LogonUtc)" }
+}
+# The start times of the DWM processes of a session, UTC (Win32_Process, readable without elevation).
+function Get-SessionDwmStartUtc([int]$SessionId) {
+    return , @(Get-CimInstance Win32_Process -Filter "Name='dwm.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $SessionId -and $_.CreationDate } | ForEach-Object { $_.CreationDate.ToUniversalTime() })
+}
+# The logon time of a session (WTSQuerySessionInformation, WTSSessionInfo), UTC; $null when nobody is logged on.
+function Get-SessionLogonUtc([int]$SessionId) {
+    if (-not ('AmdgpuWddmInstaller.Wts' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace AmdgpuWddmInstaller {
+public static class Wts {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct WTSINFOW {
+        public int State, SessionId, IncomingBytes, OutgoingBytes, IncomingFrames, OutgoingFrames, IncomingCompressedBytes, OutgoingCompressedBytes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string WinStationName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 17)] public string Domain;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 21)] public string UserName;
+        public long ConnectTime, DisconnectTime, LastInputTime, LogonTime, CurrentTime;
+    }
+    [DllImport("wtsapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool WTSQuerySessionInformationW(IntPtr server, int sessionId, int infoClass, out IntPtr buffer, out int bytes);
+    [DllImport("wtsapi32.dll")]
+    static extern void WTSFreeMemory(IntPtr memory);
+    public static long LogonTime(int sessionId) {
+        IntPtr buffer; int bytes;
+        if (!WTSQuerySessionInformationW(IntPtr.Zero, sessionId, 24, out buffer, out bytes)) return -1;
+        try { return ((WTSINFOW)Marshal.PtrToStructure(buffer, typeof(WTSINFOW))).LogonTime; } finally { WTSFreeMemory(buffer); }
+    }
+}
+}
+'@
+    }
+    $t = [AmdgpuWddmInstaller.Wts]::LogonTime($SessionId)
+    if ($t -le 0) { return $null }
+    return [DateTime]::FromFileTimeUtc($t)
+}
 function Format-RegistryPlan($Plan) {
     $parts = @()
     foreach ($e in @($Plan)) {

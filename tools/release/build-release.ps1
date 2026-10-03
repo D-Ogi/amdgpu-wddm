@@ -107,9 +107,17 @@ foreach ($f in Get-ChildItem -LiteralPath $lic -File) {
 }
 
 Write-Host 'driver version'
-# DriverVer = <date>,$DriverVer in the packaged INF, nothing else changes; the catalog below is made from this INF.
+# Two changes to the packaged INF, nothing else; the catalog below is made from this INF.
+#  - DriverVer = <date>,$DriverVer.
+#  - The Reboot directive in each install section (BD-060): Windows then installs the package without restarting a
+#    GPU that is already started, and the GPU changes driver at the restart that ends the install, so DWM keeps its
+#    devices for the rest of the session. The lab's deployment kits restart the device in place on purpose, so the
+#    KMD's own INF stays without it.
+. (Join-Path $PSScriptRoot 'installer\common.ps1')
 $infPath = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
 $infText = [IO.File]::ReadAllText($infPath)
+$infText = Add-InfRebootDirective $infText
+'  Reboot directive in [{0}]' -f ((Get-InfInstallSections ($infText -split "`r?`n")) -join '], [')
 # Only the 4th field is the release's: the first three name the KMD build (kmd_version).
 $kmdBase = (([string]$sources.kmd_version) -split '\.')[0..2] -join '.'
 if ($DriverVer -notmatch ('^' + [regex]::Escape($kmdBase) + '\.\d+$')) { throw "DriverVer $DriverVer does not belong to KMD $($sources.kmd_version)" }
