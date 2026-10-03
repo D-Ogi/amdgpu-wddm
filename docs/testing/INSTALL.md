@@ -52,7 +52,8 @@ The installer does not change BIOS or firmware settings.
 4. Let the computer restart. After you log on, the installer starts again by itself (accept the administrator
    prompt). If it does not start, run `install.cmd` again.
 5. Phase 2: the installer downloads the GPU firmware and checks it, then installs the certificate, the driver, the
-   user-mode drivers and the firmware, and sets the registry values. The screen can go black for some seconds when the driver starts. Then the computer restarts again.
+   user-mode drivers and the firmware, and sets the registry values. The screen does not change: the GPU changes to
+   the new driver at the next start. Then the computer restarts again.
 6. Phase 3: after the second logon, the installer verifies the driver and shows a pass or fail table.
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
@@ -169,6 +170,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
+- `verify.cmd` shows `[warn] DWM restarted in this session`, or Windows 11 apps (the command bar of File Explorer,
+  Task Manager) ignore mouse clicks after the screen went black for a moment: the desktop compositor (DWM) was
+  restarted. Restart the computer. This is Windows behaviour, not a driver failure.
 
 ## Uninstall
 

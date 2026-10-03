@@ -44,8 +44,10 @@ Package version: `0.7.198.100-tester.10`. New since `0.7.197.100-tester.6`:
   it is missing.
 - After each logon, a small blue window shows for about one minute. Do not close it: it confirms the driver start.
   Without the confirmation, the driver falls back to Microsoft Basic Display Adapter after two restarts.
-- The adapter name in Windows is "BC-250 GPU (bc250kmd, display-only, lab build)". The words "display-only"
-  and "lab build" are wrong for this release; a later release corrects the name.
+- If the desktop compositor (DWM) restarts, the screen goes black for a moment and comes back. After that, some
+  Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks until you restart the
+  computer; the keyboard still works. This is Windows behaviour, also with Microsoft Basic Display Adapter. The
+  installer does not restart the compositor, and `verify.cmd` shows a warning when it was restarted.
 
 ## How to report a bug
 
