@@ -69,7 +69,7 @@ namespace AmdgpuWddmControl
     {
         public bool Valid;                  // the format of interfaces.md section 2, a real run with results
         public bool Passed;                 // outcome 'passed'
-        public string Utc, PackageVersion, ManifestSha256;
+        public string Utc, PackageVersion, ManifestSha256, ManifestSource;
         public int PassedCount, FailedCount;
     }
 
@@ -105,7 +105,7 @@ namespace AmdgpuWddmControl
     public static class DriverCard
     {
         public const string KmdImagePath = "payload/kmd/bc250kmd.sys";
-        static readonly Regex Sha = new Regex("^[0-9A-Fa-f]{64}$"), Build = new Regex(@"^\d+\.\d+\.\d+\.\d+$"), Abi = new Regex("^0x[0-9A-Fa-f]{8}$");
+        static readonly Regex Sha = new Regex("^[0-9A-Fa-f]{64}$"), UpperSha = new Regex("^[0-9A-F]{64}$"), Build = new Regex(@"^\d+\.\d+\.\d+\.\d+$"), Abi = new Regex("^0x[0-9A-Fa-f]{8}$");
 
         // kmd_abi: "0x000700C7" or decimal; null when it does not parse.
         public static uint? ParseAbi(string text)
@@ -178,7 +178,8 @@ namespace AmdgpuWddmControl
         public static VerifyReport InstalledReport(DriverFacts f)
         {
             if (string.IsNullOrEmpty(f.InstalledVersion) || f.InstalledManifestSha256 == null) return null;
-            return f.Reports.Where(r => r != null && r.Valid && r.PackageVersion == f.InstalledVersion && SameHash(r.ManifestSha256, f.InstalledManifestSha256))
+            return f.Reports.Where(r => r != null && r.Valid && r.PackageVersion == f.InstalledVersion &&
+                    string.Equals(r.ManifestSha256, f.InstalledManifestSha256, StringComparison.Ordinal))
                 .OrderByDescending(r => Utc(r.Utc) ?? DateTime.MinValue).FirstOrDefault();
         }
 
@@ -299,7 +300,7 @@ namespace AmdgpuWddmControl
         {
             var d = Json(text);
             if (d == null) return null;
-            var r = new VerifyReport { Utc = S(d, "utc"), PackageVersion = S(d, "package_version"), ManifestSha256 = S(d, "manifest_sha256") };
+            var r = new VerifyReport { Utc = S(d, "utc"), PackageVersion = S(d, "package_version"), ManifestSha256 = S(d, "manifest_sha256"), ManifestSource = S(d, "manifest_source") };
             object results, dry, complete;
             bool listOk = d.TryGetValue("results", out results) && results is object[] && ((object[])results).Length > 0;
             if (listOk)
@@ -314,7 +315,10 @@ namespace AmdgpuWddmControl
             bool isComplete = d.TryGetValue("complete", out complete) && complete is bool && (bool)complete;
             bool notDry = d.TryGetValue("dry_run", out dry) && dry is bool && !(bool)dry;
             r.Passed = outcome == "passed";
-            r.Valid = S(d, "schema") == "amdgpu-wddm.verify-report/1" && notDry && listOk && (outcome == "failed" || (r.Passed && isComplete && r.FailedCount == 0));
+            // manifest_source "package": a verify of a package that is not installed (no manifest in the install root); it
+            // never binds the installed release (interfaces-setup.md section 9).
+            r.Valid = S(d, "schema") == "amdgpu-wddm.verify-report/1" && notDry && listOk && (outcome == "failed" || (r.Passed && isComplete && r.FailedCount == 0)) &&
+                r.ManifestSha256 != null && UpperSha.IsMatch(r.ManifestSha256) && r.ManifestSource != "package";
             return r;
         }
 

@@ -262,6 +262,9 @@ static partial class UnitTests
 
     static readonly DateTime OracleBase = new DateTime(2026, 10, 4, 0, 0, 0, DateTimeKind.Utc);
 
+    // The oracle writes its synthetic hashes in lowercase; the engine writes uppercase hex (BitConverter in the app).
+    static string Upper(string hash) { return hash == null ? null : hash.ToUpperInvariant(); }
+
     static long OracleBoot(string label)
     {
         long n;
@@ -301,7 +304,7 @@ static partial class UnitTests
                 f.Packages.Add(new KnownPackage { Name = JS(p, "release"), Version = JS(p, "version"), ManifestSha256 = JS(p, "manifest_sha256"), ImageSha256 = JS(p, "driver_image_sha256"),
                     KmdBuild = JS(p, "kmd_build"), KmdAbi = JS(p, "kmd_abi"), KmdVersion = JS(p, "kmd_version"), Source = "oracle" });
             string installedManifest;
-            f.InstalledManifestSha256 = f.InstalledVersion != null && manifests.TryGetValue(f.InstalledVersion, out installedManifest) ? installedManifest : null;
+            f.InstalledManifestSha256 = f.InstalledVersion != null && manifests.TryGetValue(f.InstalledVersion, out installedManifest) ? Upper(installedManifest) : null;
             var w = J(i, "witness");
             if (w != null)
             {
@@ -323,7 +326,7 @@ static partial class UnitTests
             var vr = J(i, "verification");
             if (vr != null)
                 f.Reports.Add(new VerifyReport { Valid = JB(vr, "readable") == true, Passed = JS(vr, "outcome") == "pass", Utc = Recovery.Stamp(OracleBase), PackageVersion = JS(vr, "package_version"),
-                    ManifestSha256 = JS(vr, "manifest_sha256"), PassedCount = 1, FailedCount = JS(vr, "outcome") == "pass" ? 0 : 1 });
+                    ManifestSha256 = Upper(JS(vr, "manifest_sha256")), PassedCount = 1, FailedCount = JS(vr, "outcome") == "pass" ? 0 : 1 });
             var infDate = JS(i, "dates", "inf_driver_date");
             DateTime inf;
             if (infDate != null && DateTime.TryParseExact(infDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out inf))

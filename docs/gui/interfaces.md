@@ -96,9 +96,10 @@ install stopped. The phase never says whether the package was verified.
 Verification: the newest `%ProgramData%\amdgpu-wddm\installer\verify\verify-*.json` (format: the engine's
 `Write-VerifyReport`) that is valid and belongs to the installed package. Valid: schema
 `amdgpu-wddm.verify-report/1`, `dry_run` false, a non-empty `results` list whose entries have a boolean `pass`,
-`outcome` `passed` or `failed`, and `passed` only with `complete` true and every result passing. Belongs to the
-installed package: `package_version` equals `Release\Version` and `manifest_sha256` equals the SHA256 of
-`<InstallDir>\manifest.json`. Then `passed` -> "verified", `failed` -> "not verified". No such report (none, only
+`outcome` `passed` or `failed`, and `passed` only with `complete` true and every result passing; `manifest_sha256`
+is 64 uppercase hex digits, and `manifest_source` is not `package` (a verify of a package that is not installed never
+binds). Belongs to the installed package: `package_version` equals `Release\Version` and `manifest_sha256` equals the
+SHA256 of `<InstallDir>\manifest.json` (uppercase hex, ordinal comparison). Then `passed` -> "verified", `failed` -> "not verified". No such report (none, only
 invalid ones, or only reports of another package) -> "could not be checked".
 
 Known packages for the "unknown / ambiguous" decision: `<InstallDir>\manifest.json` and every
