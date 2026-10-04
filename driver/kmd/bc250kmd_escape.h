@@ -35,7 +35,13 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700CBu       // revision 203 (INF 0.7.203.1, on 202): the DPM governor's
+#define BC250_KMD_VERSION 0x000700CCu       // revision 204 (INF 0.7.204.1, on 203): the DPM warm zone
+                                            // (no raise) starts at 87 C, the hot limit, instead of
+                                            // 85 C (owner, 2026-10-04). The thermal ramp's interval
+                                            // runs from 1 s at 70 C to 4 s at 87 C. At 87 C and above
+                                            // the hot cap lowers one level per hot step and the warm
+                                            // rule refuses every raise. No escape struct changed.
+                                            // 203 (INF 0.7.203.1, on 202): the DPM governor's
                                             // thermal ramp (BC250_DPM_RAMP_KNEE_MC, session 367). From
                                             // 70 C up to the 85 C warm zone a raise goes one level at
                                             // most, at least 1 s (70 C) to 4 s (85 C) after the last
@@ -221,7 +227,7 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // the share of GRBM_STATUS.GUI_ACTIVE samples when FLAG_HW_BUSY is set, else the GFX ring's submit-to-fence share;
 // SubmitBusyPermille is the latter always, SdmaBusyPermille the share of SDMA0 not-idle samples (the paging node).
 // Both were Reserved (zero) in 0.7.175-176: a caller still sends them as zero, so the ABI stays 1.
-// Throttle 8 (thermal-warm, a raise refused from 85 C) is new in 0.7.200, throttle 9 (thermal-ramp, a raise cut to
+// Throttle 8 (thermal-warm, a raise refused from 85 C, from 87 C since 0.7.204) is new in 0.7.200, throttle 9 (thermal-ramp, a raise cut to
 // one level or held from 70 C) in 0.7.203; the layout and the ABI stay. A tool built before them shows the number
 // it does not know as "?".
 #define BC250_DPM_ABI 1u
