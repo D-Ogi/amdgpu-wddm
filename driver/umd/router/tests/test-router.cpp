@@ -411,7 +411,10 @@ static void IdentityTests()
         printf("  note: no 8.3 alias on the layout volume either; fixture alias case skipped\n");
     cases.push_back({base + L"\\Windows2\\game.exe", base + L"\\Windows", Component::No, "Windows2 sibling"});
     cases.push_back({base + L"\\Windows.old\\game.exe", base + L"\\Windows", Component::No, "Windows.old sibling"});
-    cases.push_back({Layout + L"\\dwm\\dwm.exe", win, Component::No, "image outside the Windows directory"});
+    wchar_t self[MAX_PATH];
+    const DWORD selfn = GetModuleFileNameW(nullptr, self, MAX_PATH);
+    if (selfn && selfn < MAX_PATH)
+        cases.push_back({self, win, Component::No, "this test's image (outside the Windows directory)"});
 
     for (const Case &c : cases) {
         const Component got = ClassifyComponent(c.image.c_str(), c.windows_dir.empty() ? nullptr : c.windows_dir.c_str());
