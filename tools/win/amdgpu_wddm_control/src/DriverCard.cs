@@ -6,13 +6,14 @@
 //                     step or the start-confirm task, names the driver's reply ABI, is not followed by an install
 //                     action of this boot, is bound to exactly one known package by manifest SHA256, release, version,
 //                     full kmd_build, kmd_abi and KMD image SHA256 (a complete manifest mapping), and the app's own
-//                     loaded-image evidence of this boot has the same image SHA256 and build. Otherwise "cannot be
+//                     loaded-image evidence of this boot, where Windows gives the app the driver image bases, has the
+//                     same image SHA256 and build (where it does not, the witness's own record stands). Otherwise "cannot be
 //                     determined exactly": ambiguous when the mapping is complete and two or more packages share the
 //                     reply ABI, unknown in every other case. The reply carries only the ABI (decision 6); a build or a
 //                     release is never derived from it. Never the newest matching release, never Release\Version.
 //   Installed         HKLM\SOFTWARE\amdgpu-wddm\Release\Version only (decision 7); the installer's phase says only
 //                     whether it waits for the restart or the install stopped.
-//   Verification      only a valid verify-*.json of the installed package (version and manifest SHA256): passed ->
+//   Verification      only the newest valid verify-*.json of the installed package (version and manifest SHA256): passed ->
 //                     verified, failed -> not verified, none -> could not be checked (decision 8). Never the phase.
 // Dates: the INF DriverVer date is "Driver date"; the GitHub publication date is "Released", only after a check.
 using System;
@@ -60,6 +61,9 @@ namespace AmdgpuWddmControl
     public sealed class LoadedImage
     {
         public bool Available, OfStartedDevice;
+        // Windows listed the loaded drivers without their image bases (Windows 11 24H2 and later, for a reader without
+        // SeDebugPrivilege) and bc250kmd.sys was not among the named ones: no cross-check, and no contradiction (936 A6).
+        public bool BasesHidden;
         public long? BootId;
         public string Sha256, KmdBuild;     // KmdBuild: the build the known manifests record for this image hash
         public string Detail;               // report only
@@ -85,9 +89,11 @@ namespace AmdgpuWddmControl
         public string InstalledVersion;         // Release\Version; null when missing
         public string InstalledManifestSha256;  // SHA256 of <InstallDir>\manifest.json; null when unreadable
         public string Phase, StatePackageVersion;   // state.json (the package version only binds the phase; report)
-        public List<VerifyReport> Reports = new List<VerifyReport>();
+        public List<VerifyReport> Reports = new List<VerifyReport>();     // the valid reports read, newest first
+        public string ReportSearchNote;         // non-null: the search for the installed package's report did not end (report only)
         public string DriverDate;               // INF DriverVer date as Windows stores it (M-D-YYYY)
         public string WitnessNote;              // why a present witness was not read (report only)
+        public string MappingNote;              // why a kept package or the installed manifest could not be read (report only)
     }
 
     public sealed class DriverCardView
@@ -166,7 +172,10 @@ namespace AmdgpuWddmControl
             if (f.Mapping != MappingStatus.Complete) return "the manifest mapping is " + f.Mapping.ToString().ToLowerInvariant();
             int bound = Distinct(f.Packages).Count(p => Binds(p, w));
             if (bound != 1) return bound == 0 ? "no known package binds the witness (manifest, release, version, build, ABI and image)" : bound + " known packages bind the witness";
+            // The witness's writer (elevated) recorded the loaded image's SHA256 in this boot (rule 2 above). The app's own
+            // list of loaded drivers is a cross-check only where Windows gives it the image bases (936 A6).
             var img = f.Image;
+            if (img != null && img.BasesHidden) return null;
             if (img == null || !img.Available || !img.OfStartedDevice) return "no evidence of the loaded driver image" + (img != null && img.Detail != null ? " (" + img.Detail + ")" : "");
             if (img.BootId != f.BootId) return "the loaded-image evidence is of another boot";
             if (!SameHash(img.Sha256, w.KmdImageSha256)) return "the loaded image has SHA256 " + img.Sha256 + ", the witness names " + w.KmdImageSha256;
@@ -174,13 +183,17 @@ namespace AmdgpuWddmControl
             return null;
         }
 
+        // A valid report of the installed package (version and manifest SHA256, ordinal).
+        public static bool OfInstalled(VerifyReport r, DriverFacts f)
+        {
+            return r != null && r.Valid && !string.IsNullOrEmpty(f.InstalledVersion) && f.InstalledManifestSha256 != null &&
+                r.PackageVersion == f.InstalledVersion && string.Equals(r.ManifestSha256, f.InstalledManifestSha256, StringComparison.Ordinal);
+        }
+
         // Verification of the installed package only (decision 8): its newest valid report.
         public static VerifyReport InstalledReport(DriverFacts f)
         {
-            if (string.IsNullOrEmpty(f.InstalledVersion) || f.InstalledManifestSha256 == null) return null;
-            return f.Reports.Where(r => r != null && r.Valid && r.PackageVersion == f.InstalledVersion &&
-                    string.Equals(r.ManifestSha256, f.InstalledManifestSha256, StringComparison.Ordinal))
-                .OrderByDescending(r => Utc(r.Utc) ?? DateTime.MinValue).FirstOrDefault();
+            return f.Reports.Where(r => OfInstalled(r, f)).OrderByDescending(r => Utc(r.Utc) ?? DateTime.MinValue).FirstOrDefault();
         }
 
         public static DriverCardView Decide(DriverFacts f)
@@ -216,11 +229,13 @@ namespace AmdgpuWddmControl
             v.ReportText = "running release: " + v.Running + (v.RunningRelease != null ? " " + v.RunningRelease + " (" + v.RunningVersion + ")" : "") +
                 (problem != null ? " (" + problem + ")" : " (witness of this boot, bound to its manifest and the loaded image)") +
                 (v.Candidates.Count > 0 ? "; packages sharing the reply ABI: " + string.Join(", ", v.Candidates) : "") +
-                "; manifest mapping " + f.Mapping.ToString().ToLowerInvariant() + " (" + packages.Count + " packages)" +
+                "; manifest mapping " + f.Mapping.ToString().ToLowerInvariant() + " (" + packages.Count + " packages" + (f.MappingNote != null ? "; " + f.MappingNote : "") + ")" +
                 "; driver reply " + (f.ReplyAbi != null ? KmdReply.VersionText(f.ReplyAbi.Value) + " (0x" + f.ReplyAbi.Value.ToString("X8", CultureInfo.InvariantCulture) + ")" : "none") +
-                "; loaded image " + (f.Image != null && f.Image.Available ? f.Image.Sha256 + " build " + (f.Image.KmdBuild ?? "unknown") : "unknown" + (f.Image != null && f.Image.Detail != null ? " (" + f.Image.Detail + ")" : "")) +
+                "; loaded image " + (f.Image != null && f.Image.BasesHidden ? "not listed by Windows for this reader (null driver bases), the witness's record of this boot is used"
+                    : f.Image != null && f.Image.Available ? f.Image.Sha256 + " build " + (f.Image.KmdBuild ?? "unknown") : "unknown" + (f.Image != null && f.Image.Detail != null ? " (" + f.Image.Detail + ")" : "")) +
                 "; installed " + (v.InstalledVersion ?? "unknown") + "; installer state " + (f.Phase ?? "none") + " for " + (f.StatePackageVersion ?? "none") +
                 "; verification " + v.Verification + (report != null ? " (" + report.Utc + ": " + report.PassedCount + " passed, " + report.FailedCount + " failed)" : "") +
+                (f.ReportSearchNote != null ? " (report search incomplete: " + f.ReportSearchNote + ")" : "") +
                 (f.WitnessNote != null ? "; " + f.WitnessNote : "");
             return v;
         }
@@ -298,15 +313,16 @@ namespace AmdgpuWddmControl
             };
         }
 
-        // state.json: the phase, the package it is for and the newest install action.
-        public static void ParseState(string text, DriverFacts f)
+        // state.json: the phase, the package it is for and the newest install action. false: damaged.
+        public static bool ParseState(string text, DriverFacts f)
         {
             var d = Json(text);
-            if (d == null) return;
+            if (d == null) return false;
             f.Phase = S(d, "phase");
             f.StatePackageVersion = S(d, "package_version");
             var boot = N(d, "mutation_boot_id");
             if (boot != null) f.InstallActions.Add(new InstallAction { BootId = boot.Value, Utc = S(d, "mutation_utc") });
+            return true;
         }
 
         // A verify report of the engine (Write-VerifyReport). Valid: the schema, not a dry run, a non-empty result list
@@ -358,10 +374,12 @@ namespace AmdgpuWddmControl
             return complete ? p : null;
         }
 
-        // The mapping from what was read: no manifest at all = absent; one that could not be read in full =
-        // incomplete; two manifests that disagree about one release or one KMD image = conflicting.
-        public static MappingStatus Mapping(int manifestsFound, List<KnownPackage> packages)
+        // The mapping from what was read: discovery that failed (a directory that could not be listed) = incomplete;
+        // no manifest at all = absent; one that could not be read in full = incomplete; two manifests that disagree
+        // about one release or one KMD image = conflicting.
+        public static MappingStatus Mapping(int manifestsFound, List<KnownPackage> packages, bool discoveryComplete = true)
         {
+            if (!discoveryComplete) return MappingStatus.Incomplete;
             if (manifestsFound == 0) return MappingStatus.Absent;
             if (packages.Count(p => p != null) < manifestsFound) return MappingStatus.Incomplete;
             var list = Distinct(packages);
@@ -379,9 +397,88 @@ namespace AmdgpuWddmControl
         }
     }
 
-    // The I/O of the Driver card: reads only; installer files must be owned by Administrators or SYSTEM.
+    // One file of the installer as the Driver card reads it: absence and failure stay apart (936 A2/A3).
+    public enum FileStatus { Ok, Absent, Untrusted, TooLarge, Failed }
+
+    public sealed class FileBytes
+    {
+        public FileStatus Status;
+        public byte[] Bytes;                    // Ok only
+        public string Error;                    // report only
+    }
+
+    // The installer's files. The app reads LocalInstallerFiles; the tests inject their own.
+    public interface IInstallerFiles
+    {
+        FileBytes Read(string path, int max);
+        // Full paths. Empty when the directory does not exist; throws when it exists but cannot be listed.
+        string[] Directories(string dir);
+        string[] Files(string dir, string pattern);
+    }
+
+    public sealed class LocalInstallerFiles : IInstallerFiles
+    {
+        readonly bool _anyOwner;                // the build's fixtures
+
+        public LocalInstallerFiles(bool anyOwner) { _anyOwner = anyOwner; }
+
+        // The owner is checked on the open handle, so the file read is the file checked.
+        public FileBytes Read(string path, int max)
+        {
+            FileStream fs;
+            try { fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); }
+            catch (FileNotFoundException) { return new FileBytes { Status = FileStatus.Absent }; }
+            catch (DirectoryNotFoundException) { return new FileBytes { Status = FileStatus.Absent }; }
+            catch (Exception e) { return new FileBytes { Status = FileStatus.Failed, Error = e.Message }; }
+            try
+            {
+                using (fs)
+                {
+                    if (fs.Length > max) return new FileBytes { Status = FileStatus.TooLarge, Error = "larger than " + max + " bytes" };
+                    if (!_anyOwner && !Trusted(fs)) return new FileBytes { Status = FileStatus.Untrusted, Error = "not owned by Administrators or SYSTEM" };
+                    var b = new byte[fs.Length];
+                    int n = 0, r;
+                    while (n < b.Length && (r = fs.Read(b, n, b.Length - n)) > 0) n += r;
+                    if (n != b.Length) return new FileBytes { Status = FileStatus.Failed, Error = "the file changed while it was read" };
+                    return new FileBytes { Status = FileStatus.Ok, Bytes = b };
+                }
+            }
+            catch (Exception e) { return new FileBytes { Status = FileStatus.Failed, Error = e.Message }; }
+        }
+
+        static bool Trusted(FileStream fs)
+        {
+            var owner = fs.GetAccessControl().GetOwner(typeof(SecurityIdentifier));
+            return owner != null && (owner.Equals(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null)) || owner.Equals(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null)));
+        }
+
+        public string[] Directories(string dir)
+        {
+            try { return Directory.GetDirectories(dir); }
+            catch (DirectoryNotFoundException) { return new string[0]; }
+        }
+
+        public string[] Files(string dir, string pattern)
+        {
+            try { return Directory.GetFiles(dir, pattern); }
+            catch (DirectoryNotFoundException) { return new string[0]; }
+        }
+    }
+
+    // The bound of one search for the installed package's verify report; a search it cuts is incomplete (936 A3).
+    public sealed class ProbeBudget
+    {
+        public int MaxReports = 2000;
+        public long MaxReportBytes = 64L << 20;
+        public TimeSpan MaxTime = TimeSpan.FromSeconds(10);
+    }
+
+    // The I/O of the Driver card: reads only; installer files must be owned by Administrators or SYSTEM. The window
+    // calls Read off its UI thread (936 A3).
     public static class DriverCardProbe
     {
+        public const int MaxFile = 4 << 20;
+
         static string Installer
         {
             get
@@ -393,23 +490,6 @@ namespace AmdgpuWddmControl
 
         static bool Fixture { get { return Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_INSTALLER") != null; } }
 
-        static bool Trusted(string path)
-        {
-            if (Fixture) return true;    // the build's fixtures
-            try
-            {
-                var owner = File.GetAccessControl(path, AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier));
-                return owner.Equals(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null)) || owner.Equals(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null));
-            }
-            catch (Exception) { return false; }
-        }
-
-        static byte[] ReadSmall(string path)
-        {
-            try { return File.Exists(path) && new FileInfo(path).Length <= 4 << 20 && Trusted(path) ? File.ReadAllBytes(path) : null; }
-            catch (Exception) { return null; }
-        }
-
         static string Text(byte[] b) { return b == null ? null : new UTF8Encoding(false).GetString(b).TrimStart('﻿'); }
 
         static string Hash(byte[] b)
@@ -420,58 +500,105 @@ namespace AmdgpuWddmControl
 
         public static DriverFacts Read(uint? replyAbi, long? bootId, string installedVersion, string installDir, string driverDate)
         {
-            var f = new DriverFacts { ReplyAbi = replyAbi, BootId = bootId, InstalledVersion = installedVersion, DriverDate = driverDate };
-            var witnessPath = Path.Combine(Installer, "running-release.json");
-            var text = Text(ReadSmall(witnessPath));
-            f.Witness = text != null ? DriverCard.ParseWitness(text) : null;
-            if (text == null && File.Exists(witnessPath)) f.WitnessNote = "running-release.json is not owned by Administrators or SYSTEM, or unreadable";
-            else if (text != null && f.Witness == null) f.WitnessNote = "running-release.json is damaged or of an unknown schema";
-            var state = Text(ReadSmall(Path.Combine(Installer, "state.json")));
-            if (state != null) DriverCard.ParseState(state, f);
-            try
-            {
-                var dir = Path.Combine(Installer, "verify");
-                if (Directory.Exists(dir))
-                    foreach (var file in Directory.GetFiles(dir, "verify-*.json").OrderByDescending(x => x, StringComparer.OrdinalIgnoreCase).Take(20))
-                    {
-                        var r = DriverCard.ParseVerify(Text(ReadSmall(file)));
-                        if (r != null) f.Reports.Add(r);
-                    }
-            }
-            catch (Exception) { }
-
-            var manifests = new List<string>();
-            string installed = string.IsNullOrEmpty(installDir) ? null : Path.Combine(installDir, "manifest.json");
-            if (installed != null && File.Exists(installed)) manifests.Add(installed);
-            try
-            {
-                var kept = Path.Combine(Installer, "packages");
-                if (Directory.Exists(kept)) manifests.AddRange(Directory.GetDirectories(kept).Select(d => Path.Combine(d, "manifest.json")).Where(File.Exists));
-            }
-            catch (Exception) { }
-            var parsed = new List<KnownPackage>();
-            foreach (var m in manifests)
-            {
-                var bytes = ReadSmall(m);
-                var sha = Hash(bytes);
-                if (m == installed) f.InstalledManifestSha256 = sha;
-                parsed.Add(bytes != null ? DriverCard.ParsePackage(Text(bytes), sha, m) : null);
-            }
-            f.Mapping = DriverCard.Mapping(manifests.Count, parsed);
-            f.Packages = parsed.Where(p => p != null).ToList();
+            var f = Read(new LocalInstallerFiles(Fixture), Installer, replyAbi, bootId, installedVersion, installDir, driverDate, new ProbeBudget());
             f.Image = LoadedKmd(bootId, f.Packages);
             return f;
         }
 
+        // Everything but the loaded image, from the given files.
+        public static DriverFacts Read(IInstallerFiles files, string installer, uint? replyAbi, long? bootId, string installedVersion, string installDir, string driverDate, ProbeBudget budget)
+        {
+            var f = new DriverFacts { ReplyAbi = replyAbi, BootId = bootId, InstalledVersion = installedVersion, DriverDate = driverDate };
+            var witness = files.Read(Path.Combine(installer, "running-release.json"), MaxFile);
+            if (witness.Status == FileStatus.Ok)
+            {
+                f.Witness = DriverCard.ParseWitness(Text(witness.Bytes));
+                if (f.Witness == null) f.WitnessNote = "running-release.json is damaged or of an unknown schema";
+            }
+            else if (witness.Status != FileStatus.Absent) f.WitnessNote = "running-release.json is not read (" + witness.Error + ")";
+
+            // A state.json that exists but cannot be read may hide an install action of this boot: one of unknown time.
+            var state = files.Read(Path.Combine(installer, "state.json"), MaxFile);
+            if (state.Status == FileStatus.Ok ? !DriverCard.ParseState(Text(state.Bytes), f) : state.Status == FileStatus.Failed || state.Status == FileStatus.TooLarge)
+                if (bootId != null) f.InstallActions.Add(new InstallAction { BootId = bootId.Value });
+
+            // Known packages: a manifest that is known to be absent is no package; one that cannot be read, or a
+            // directory of kept packages that cannot be listed, leaves the mapping incomplete (936 A2).
+            var parsed = new List<KnownPackage>();
+            var notes = new List<string>();
+            int found = 0;
+            bool discovered = true;
+            Action<string, bool> manifest = (path, installedCopy) =>
+            {
+                var m = files.Read(path, MaxFile);
+                if (m.Status == FileStatus.Absent) return;
+                found++;
+                if (m.Status != FileStatus.Ok) { parsed.Add(null); notes.Add(path + " is not read (" + m.Error + ")"); return; }
+                var sha = Hash(m.Bytes);
+                if (installedCopy) f.InstalledManifestSha256 = sha;
+                parsed.Add(DriverCard.ParsePackage(Text(m.Bytes), sha, path));
+            };
+            if (!string.IsNullOrEmpty(installDir)) manifest(Path.Combine(installDir, "manifest.json"), true);
+            try
+            {
+                foreach (var d in files.Directories(Path.Combine(installer, "packages")).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                    manifest(Path.Combine(d, "manifest.json"), false);
+            }
+            catch (Exception e) { discovered = false; notes.Add("the kept packages cannot be listed (" + e.Message + ")"); }
+            f.Mapping = DriverCard.Mapping(found, parsed, discovered);
+            f.Packages = parsed.Where(p => p != null).ToList();
+            if (notes.Count > 0) f.MappingNote = string.Join("; ", notes);
+
+            if (!string.IsNullOrEmpty(f.InstalledVersion) && f.InstalledManifestSha256 != null) FindReport(files, Path.Combine(installer, "verify"), f, budget);
+            return f;
+        }
+
+        // The newest valid report of the installed package (936 A3): every verify-<utc>.json, newest name first, until the
+        // first one of the installed package. Invalid, oversized, untrusted and other-package reports are passed over; a
+        // report that cannot be read, a directory that cannot be listed or the budget end the search as incomplete.
+        static void FindReport(IInstallerFiles files, string dir, DriverFacts f, ProbeBudget budget)
+        {
+            string[] names;
+            try { names = files.Files(dir, "verify-*.json"); }
+            catch (Exception e) { f.ReportSearchNote = "the verify directory cannot be listed (" + e.Message + ")"; return; }
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            long bytes = 0;
+            int read = 0;
+            foreach (var file in names.OrderByDescending(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+            {
+                if (read >= budget.MaxReports || bytes >= budget.MaxReportBytes || clock.Elapsed >= budget.MaxTime)
+                {
+                    f.ReportSearchNote = "stopped by its bound after " + read + " of " + names.Length + " reports";
+                    return;
+                }
+                read++;
+                var b = files.Read(file, MaxFile);
+                if (b.Status == FileStatus.Failed) { f.ReportSearchNote = Path.GetFileName(file) + " is not read (" + b.Error + ")"; return; }
+                if (b.Status != FileStatus.Ok) continue;
+                bytes += b.Bytes.Length;
+                var r = DriverCard.ParseVerify(Text(b.Bytes));
+                if (r == null || !r.Valid) continue;
+                f.Reports.Add(r);
+                if (DriverCard.OfInstalled(r, f)) return;
+            }
+        }
+
         // The loaded bc250kmd.sys: the module Windows lists as loaded, its file's SHA256, valid only when the file was
-        // not created or written after this boot started (as the engine's witness writer requires).
+        // not created or written after this boot started (as the engine's witness writer requires). Where Windows lists
+        // the drivers without image bases, the app has no evidence of its own and BasesHidden says so (936 A6).
         static LoadedImage LoadedKmd(long? bootId, List<KnownPackage> packages)
         {
             var img = new LoadedImage();
             try
             {
-                var module = LoadedDrivers().FirstOrDefault(n => string.Equals(Path.GetFileName(n), "bc250kmd.sys", StringComparison.OrdinalIgnoreCase));
-                if (module == null) { img.Detail = "bc250kmd.sys is not among the loaded drivers"; return img; }
+                bool hidden;
+                var module = LoadedDrivers(out hidden).FirstOrDefault(n => string.Equals(Path.GetFileName(n), "bc250kmd.sys", StringComparison.OrdinalIgnoreCase));
+                if (module == null)
+                {
+                    img.BasesHidden = hidden;
+                    img.Detail = hidden ? "Windows lists the loaded drivers without their image bases" : "bc250kmd.sys is not among the loaded drivers";
+                    return img;
+                }
                 var path = Win32Path(module);
                 var boot = BootUtc();
                 if (path == null || !File.Exists(path)) { img.Detail = "the loaded module " + module + " has no readable file"; return img; }
@@ -512,19 +639,28 @@ namespace AmdgpuWddmControl
             return _bootUtc;
         }
 
-        static IEnumerable<string> LoadedDrivers()
+        static IEnumerable<string> LoadedDrivers(out bool hidden)
         {
+            hidden = false;
             int needed;
             EnumDeviceDrivers(null, 0, out needed);
             if (needed <= 0) return new string[0];
             var bases = new IntPtr[needed / IntPtr.Size + 16];
             if (!EnumDeviceDrivers(bases, bases.Length * IntPtr.Size, out needed)) return new string[0];
+            return DriverNames(bases, Math.Min(bases.Length, needed / IntPtr.Size),
+                b => { var sb = new StringBuilder(1024); return GetDeviceDriverFileNameW(b, sb, sb.Capacity) > 0 ? sb.ToString() : null; }, out hidden);
+        }
+
+        // The names of the listed drivers. hidden: an image base is null (Windows 11 24H2 and later, for a reader without
+        // SeDebugPrivilege) or has no name, so a name missing from the list proves nothing.
+        public static List<string> DriverNames(IntPtr[] bases, int count, Func<IntPtr, string> name, out bool hidden)
+        {
+            hidden = false;
             var list = new List<string>();
-            for (int i = 0; i < Math.Min(bases.Length, needed / IntPtr.Size); i++)
+            for (int i = 0; i < count; i++)
             {
-                if (bases[i] == IntPtr.Zero) continue;
-                var sb = new StringBuilder(1024);
-                if (GetDeviceDriverFileNameW(bases[i], sb, sb.Capacity) > 0) list.Add(sb.ToString());
+                var n = bases[i] == IntPtr.Zero ? null : name(bases[i]);
+                if (n == null) hidden = true; else list.Add(n);
             }
             return list;
         }

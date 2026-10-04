@@ -60,10 +60,20 @@ Reader acceptance rules. The app names a release as running ("exact") only when 
    KMD image), and exactly one known package binds the whole witness: its manifest file's SHA256 equals
    `manifest_sha256`, and its `name`, `version`, `kmd_build`, `kmd_abi` and KMD component hash equal `release`,
    `version`, `kmd_build`, `kmd_abi` and `kmd_image_sha256`.
-6. The app's own loaded-image evidence of this boot agrees: the `bc250kmd.sys` module that Windows lists as loaded
-   (`EnumDeviceDrivers`) is a file not created or written after the boot started, its SHA256 equals
-   `kmd_image_sha256`, and its build equals `kmd_build`. The image carries no version resource; its build is the
-   `kmd_build` that the known manifests record for that image hash (none, or manifests that disagree: no build).
+6. The loaded image. The witness's writers run elevated and record the loaded image's SHA256 in `kmd_image_sha256`
+   together with this boot's `boot_id`; with rule 2 that record is the loaded-image evidence of this boot. The app
+   runs as the invoking user (it is never elevated for this) and uses its own list of loaded drivers
+   (`EnumDeviceDrivers`) only as a cross-check:
+   - When Windows gives the app the image bases and `bc250kmd.sys` is among the listed modules, that module must be
+     a file not created or written after the boot started, its SHA256 must equal `kmd_image_sha256`, and its build
+     must equal `kmd_build`. Any difference fails the rule. The image carries no version resource; its build is the
+     `kmd_build` that the known manifests record for that image hash (none, or manifests that disagree: no build).
+   - When the bases are visible and `bc250kmd.sys` is not listed, or the list cannot be read, the rule fails.
+   - When Windows returns null image bases (Windows 11 24H2 and later, for a process without SeDebugPrivilege;
+     [EnumDeviceDrivers](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-enumdevicedrivers)), or
+     a base has no name, and `bc250kmd.sys` is not among the named modules, the app has no evidence of its own. That
+     is not a contradiction: the witness's record stands, and the support report says that the cross-check did not
+     run.
 
 When a rule fails, the app falls back: the mapping is complete and two or more known packages have the reply's
 `kmd_abi` -> "one of several" (ambiguous). Every other case -> "unknown" (no reply, an incomplete or conflicting
@@ -102,9 +112,20 @@ binds). Belongs to the installed package: `package_version` equals `Release\Vers
 SHA256 of `<InstallDir>\manifest.json` (uppercase hex, ordinal comparison). Then `passed` -> "verified", `failed` -> "not verified". No such report (none, only
 invalid ones, or only reports of another package) -> "could not be checked".
 
+The search: off the window's UI thread, every `verify-*.json` in name order, newest first (the engine names them
+`verify-<yyyyMMddTHHmmssfffZ>.json`), until the first valid report of the installed package. Invalid reports, reports
+of another package, files larger than 4 MiB and files with another owner are passed over. A report that exists but
+cannot be read, a `verify` directory that cannot be listed, or the search's bound (2000 reports, 64 MiB, 10 s) ends
+the search as incomplete: "could not be checked" unless the report was found before.
+
 Known packages for the "unknown / ambiguous" decision: `<InstallDir>\manifest.json` and every
 `%ProgramData%\amdgpu-wddm\installer\packages\*\manifest.json` (the kept repair set and, from phase 3, the previous
-package). A package is a candidate when its `kmd_abi` equals the reply's version.
+package). A package is a candidate when its `kmd_abi` equals the reply's version. A manifest that does not exist is
+no package. A manifest that exists but cannot be read (denied, another owner, larger than 4 MiB), or a `packages`
+directory that exists but cannot be listed, makes the mapping incomplete (rule 5 of section 1 then fails).
+
+A `state.json` that exists but cannot be read or parsed counts as an install action of this boot at an unknown
+time (rule 4 of section 1 then fails); a missing `state.json`, or one with another owner (ignored), records none.
 
 ## 3. Recent launches (written by the D3D12 and D3D11 shells, stream C)
 

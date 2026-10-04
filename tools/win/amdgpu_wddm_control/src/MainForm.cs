@@ -414,22 +414,53 @@ namespace AmdgpuWddmControl
             try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
             var vram = Kmd.VideoMemory();
             _vram = vram.Value;
-            ReadDriverCard();
             _upd = UpdateCheck.LoadCache();
             ReadRecent();
-            _upgradeDone = DriverCard.UpgradeLatch(_upgradeDone, _drv, _prefs.LastSeenRelease);
-            if (!_smoke && !ReadOnlyProbe && _drv != null && DriverCard.UpgradeVerified(_drv))
-                _prefs.LastSeenRelease = _drv.InstalledVersion;
+            ReadDriverCard(!_smoke && !ReadOnlyProbe);
             ComputeStatus();
             ShowPage(_page, null, false);
         }
 
-        void ReadDriverCard()
+        int _drvRead;       // the newest Driver card read; an older one that ends later is dropped
+
+        // The Driver card reads the installer's files and every verify report it needs: in the window off the UI thread
+        // (936 A3), the card keeps its last answer until the read ends.
+        void ReadDriverCard(bool background)
         {
             uint? reply = _snap.Dpm != null ? _snap.Dpm.Version : _snap.Health != null ? _snap.Health.Version : _snap.Interop != null ? _snap.Interop.Version : (uint?)null;
             if (reply == 0) reply = null;
-            try { _drv = DriverCard.Decide(DriverCardProbe.Read(reply, DriverCardProbe.BootId(), _inv.ReleaseVersion.Length > 0 ? _inv.ReleaseVersion : null, _inv.ReleaseDir, _inv.DriverDate)); }
-            catch (Exception) { _drv = null; }
+            string installed = _inv.ReleaseVersion.Length > 0 ? _inv.ReleaseVersion : null, dir = _inv.ReleaseDir, date = _inv.DriverDate;
+            Func<DriverCardView> read = () =>
+            {
+                try { return DriverCard.Decide(DriverCardProbe.Read(reply, DriverCardProbe.BootId(), installed, dir, date)); }
+                catch (Exception) { return null; }
+            };
+            int id = ++_drvRead;
+            if (!background) { ApplyDriverCard(read()); return; }
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var view = read();
+                try
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        if (id != _drvRead || IsDisposed) return;
+                        string before = _drv != null ? _drv.ReportText : null, latch = _upgradeDone;
+                        ApplyDriverCard(view);
+                        ComputeStatus();
+                        if ((view != null ? view.ReportText : null) != before || _upgradeDone != latch) ShowPage(_page, null, false); else UpdateGuide();
+                    }));
+                }
+                catch (InvalidOperationException) { }
+            });
+        }
+
+        void ApplyDriverCard(DriverCardView view)
+        {
+            _drv = view;
+            _upgradeDone = DriverCard.UpgradeLatch(_upgradeDone, _drv, _prefs.LastSeenRelease);
+            if (!_smoke && !ReadOnlyProbe && _drv != null && DriverCard.UpgradeVerified(_drv))
+                _prefs.LastSeenRelease = _drv.InstalledVersion;
         }
 
         void ComputeStatus()

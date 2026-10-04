@@ -200,6 +200,170 @@ static partial class UnitTests
         f = Facts(); f.Phase = "installed";
         Check(!DriverCard.UpgradeDone(DriverCard.Decide(f), "0.7.198.100-tester.10"), "no upgrade-done while the restart is pending");
         UpgradeLatchTests();
+        LoadedImageTests();
+        ProbeTests();
+    }
+
+    // 936 A6: the witness's writer recorded the loaded image in this boot; the app's own list is a cross-check only
+    // where Windows gives it the image bases.
+    static void LoadedImageTests()
+    {
+        var f = Facts(); f.Image = new LoadedImage { BasesHidden = true, Detail = "Windows lists the loaded drivers without their image bases" };
+        var v = DriverCard.Decide(f);
+        Equal(RunningKind.Exact, v.Running, "A6 null bases from the app: the witness of this boot stands: " + v.ReportText);
+        Check(v.ReportText.Contains("null driver bases"), "A6 null bases are named in the report");
+        f.Witness.BootId = 52;
+        Check(DriverCard.Decide(f).Running != RunningKind.Exact, "A6 null bases do not excuse a witness of another boot");
+        Equal(RunningKind.Exact, DriverCard.Decide(Facts()).Running, "A6 matching bases: the cross-check agrees");
+        f = Facts(); f.Image.Sha256 = ShaI2;
+        v = DriverCard.Decide(f);
+        Check(v.Running != RunningKind.Exact && v.ReportText.Contains("the loaded image has SHA256"), "A6 mismatching bases fail: " + v.ReportText);
+        f = Facts(); f.Image = new LoadedImage { Detail = "bc250kmd.sys is not among the loaded drivers" };
+        Check(DriverCard.Decide(f).Running != RunningKind.Exact, "A6 bases visible but no bc250kmd.sys among them: not exact");
+
+        bool hidden;
+        var names = DriverCardProbe.DriverNames(new[] { IntPtr.Zero, IntPtr.Zero, IntPtr.Zero }, 3, b => "x", out hidden);
+        Check(hidden && names.Count == 0, "A6 all-null bases (24H2 without SeDebugPrivilege) are hidden");
+        names = DriverCardProbe.DriverNames(new[] { new IntPtr(0x1000), new IntPtr(0x2000) }, 2, b => b.ToInt64() == 0x1000 ? @"\SystemRoot\System32\ntoskrnl.exe" : @"\SystemRoot\System32\drivers\bc250kmd.sys", out hidden);
+        Check(!hidden && names.Count == 2, "A6 visible bases are listed by name");
+        names = DriverCardProbe.DriverNames(new[] { new IntPtr(0x1000), new IntPtr(0x2000) }, 2, b => b.ToInt64() == 0x1000 ? "ntoskrnl.exe" : null, out hidden);
+        Check(hidden && names.Count == 1, "A6 a base without a name proves nothing either");
+    }
+
+    // The installer's files for the probe tests: content per path, directories that cannot be listed.
+    sealed class FakeInstallerFiles : IInstallerFiles
+    {
+        public readonly Dictionary<string, FileBytes> Content = new Dictionary<string, FileBytes>(StringComparer.OrdinalIgnoreCase);
+        public readonly List<string> Dirs = new List<string>();
+        public readonly HashSet<string> Unlistable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        public void Put(string path, string text) { Content[path] = new FileBytes { Status = FileStatus.Ok, Bytes = System.Text.Encoding.UTF8.GetBytes(text) }; }
+        public void Put(string path, FileStatus status) { Content[path] = new FileBytes { Status = status, Error = status.ToString() }; }
+
+        public FileBytes Read(string path, int max)
+        {
+            FileBytes b;
+            return Content.TryGetValue(path, out b) ? b : new FileBytes { Status = FileStatus.Absent };
+        }
+
+        public string[] Directories(string dir)
+        {
+            if (Unlistable.Contains(dir)) throw new UnauthorizedAccessException("access denied");
+            return Dirs.Where(d => string.Equals(System.IO.Path.GetDirectoryName(d), dir, StringComparison.OrdinalIgnoreCase)).ToArray();
+        }
+
+        public string[] Files(string dir, string pattern)
+        {
+            if (Unlistable.Contains(dir)) throw new UnauthorizedAccessException("access denied");
+            return Content.Keys.Where(p => string.Equals(System.IO.Path.GetDirectoryName(p), dir, StringComparison.OrdinalIgnoreCase) &&
+                System.IO.Path.GetFileName(p).StartsWith("verify-", StringComparison.OrdinalIgnoreCase) && p.EndsWith(".json", StringComparison.OrdinalIgnoreCase)).ToArray();
+        }
+    }
+
+    const string Inst = @"X:\ProgramData\amdgpu-wddm\installer", AppDir = @"X:\Program Files\amdgpu-wddm";
+
+    static string Sha256Hex(string text)
+    {
+        using (var sha = System.Security.Cryptography.SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text))).Replace("-", "");
+    }
+
+    static string VerifyJson(string version, string manifestSha, string outcome = "passed", bool dry = false)
+    {
+        return "{\"schema\":\"amdgpu-wddm.verify-report/1\",\"utc\":\"2026-10-04T08:00:00Z\",\"dry_run\":" + (dry ? "true" : "false") + ",\"package_version\":\"" + version +
+            "\",\"manifest_sha256\":\"" + manifestSha + "\",\"manifest_source\":\"install-root\",\"outcome\":\"" + outcome + "\",\"complete\":true,\"results\":[{\"pass\":" +
+            (outcome == "passed" ? "true" : "false") + "}]}";
+    }
+
+    // A whole installer: the installed manifest, a kept copy of it, the witness, state.json and one passed report.
+    static FakeInstallerFiles Installed(out string manifestSha)
+    {
+        const string B = "0.7.199.100-tester.11";
+        var manifest = "{\"name\":\"amdgpu-wddm-tester-" + B + "\",\"version\":\"" + B + "\",\"kmd_build\":\"0.7.199.1\",\"kmd_abi\":\"0x000700C7\",\"kmd_version\":\"0.7.199.100\",\"components\":[{\"package_path\":\"payload/kmd/bc250kmd.sys\",\"sha256\":\"" + ShaI + "\"}]}";
+        manifestSha = Sha256Hex(manifest);
+        var files = new FakeInstallerFiles();
+        files.Put(AppDir + @"\manifest.json", manifest);
+        files.Dirs.Add(Inst + @"\packages\" + B);
+        files.Put(Inst + @"\packages\" + B + @"\manifest.json", manifest);
+        files.Put(Inst + @"\running-release.json", "{\"schema\":1,\"boot_id\":53,\"recorded_utc\":\"2026-10-04T08:00:00.000Z\",\"recorded_by\":\"verify\",\"release\":\"amdgpu-wddm-tester-" + B +
+            "\",\"version\":\"" + B + "\",\"manifest_sha256\":\"" + manifestSha + "\",\"kmd_image_sha256\":\"" + ShaI + "\",\"kmd_build\":\"0.7.199.1\",\"kmd_abi\":\"0x000700C7\"}");
+        files.Put(Inst + @"\state.json", "{\"phase\":\"verified\",\"package_version\":\"" + B + "\"}");
+        files.Put(Inst + @"\verify\verify-20261004T080000000Z.json", VerifyJson(B, manifestSha));
+        return files;
+    }
+
+    static DriverCardView Probe(FakeInstallerFiles files, ProbeBudget budget = null) { DriverFacts f; return Probe(files, out f, budget); }
+
+    static DriverCardView Probe(FakeInstallerFiles files, out DriverFacts f, ProbeBudget budget = null)
+    {
+        f = DriverCardProbe.Read(files, Inst, Reply199, 53, "0.7.199.100-tester.11", AppDir, "10-3-2026", budget ?? new ProbeBudget());
+        f.Image = new LoadedImage { Available = true, OfStartedDevice = true, BootId = 53, Sha256 = ShaI, KmdBuild = DriverCard.BuildOfImage(ShaI, f.Packages) };
+        return DriverCard.Decide(f);
+    }
+
+    // 936 A2 (discovery failure is incomplete) and A3 (the newest valid report of the installed package, not the
+    // newest twenty files), through DriverCardProbe.Read over injected files.
+    static void ProbeTests()
+    {
+        const string B = "0.7.199.100-tester.11";
+        string sha;
+        DriverFacts f;
+        var v = Probe(Installed(out sha), out f);
+        Check(v.Running == RunningKind.Exact && v.Verification == VerifyKind.Verified && f.Mapping == MappingStatus.Complete, "probe: a whole installer reads exact and verified: " + v.ReportText);
+
+        // A2
+        var files = Installed(out sha); files.Unlistable.Add(Inst + @"\packages");
+        v = Probe(files, out f);
+        Check(f.Mapping == MappingStatus.Incomplete && v.Running != RunningKind.Exact && f.MappingNote.Contains("cannot be listed"),
+            "A2 an unreadable packages directory leaves the mapping incomplete, with a readable installed manifest and a valid witness: " + v.ReportText);
+        files = Installed(out sha); files.Dirs.Add(Inst + @"\packages\other"); files.Put(Inst + @"\packages\other\manifest.json", FileStatus.Failed);
+        v = Probe(files, out f);
+        Check(f.Mapping == MappingStatus.Incomplete && v.Running != RunningKind.Exact, "A2 a discovered package whose manifest cannot be read: incomplete, not dropped");
+        files = Installed(out sha); files.Dirs.Add(Inst + @"\packages\other"); files.Put(Inst + @"\packages\other\manifest.json", FileStatus.Untrusted);
+        Check(Probe(files).Running != RunningKind.Exact, "A2 a kept manifest with an untrusted owner: incomplete");
+        files = Installed(out sha); files.Dirs.Add(Inst + @"\packages\empty");
+        v = Probe(files, out f);
+        Check(f.Mapping == MappingStatus.Complete && v.Running == RunningKind.Exact, "A2 a package directory known to have no manifest is no package");
+        files = Installed(out sha); files.Put(AppDir + @"\manifest.json", FileStatus.Failed);
+        v = Probe(files, out f);
+        Check(f.Mapping == MappingStatus.Incomplete && f.InstalledManifestSha256 == null && v.Verification == VerifyKind.Unknown, "A2 an unreadable installed manifest: incomplete, verification unknown");
+        files = Installed(out sha); files.Content.Remove(Inst + @"\packages\" + B + @"\manifest.json"); files.Dirs.Clear();
+        Check(Probe(files).Running == RunningKind.Exact, "A2 no kept packages at all is a known absence");
+        Equal(MappingStatus.Incomplete, DriverCard.Mapping(0, new List<KnownPackage>(), false), "A2 failed discovery with nothing found is incomplete, not absent");
+
+        // state.json that exists but cannot be read may hide an install action of this boot.
+        files = Installed(out sha); files.Put(Inst + @"\state.json", FileStatus.Failed);
+        Check(Probe(files).Running != RunningKind.Exact, "an unreadable state.json voids the witness of this boot");
+        files = Installed(out sha); files.Put(Inst + @"\state.json", "{damaged");
+        Check(Probe(files).Running != RunningKind.Exact, "a damaged state.json voids the witness of this boot");
+        files = Installed(out sha); files.Content.Remove(Inst + @"\state.json");
+        Check(Probe(files).Running == RunningKind.Exact, "no state.json: no install action recorded");
+
+        // A3: a matching report behind 25 newer nonmatching or invalid ones.
+        files = Installed(out sha);
+        for (int i = 0; i < 25; i++)
+        {
+            var name = Inst + @"\verify\verify-20261004T09" + i.ToString("00") + "00000Z.json";
+            switch (i % 5)
+            {
+                case 0: files.Put(name, VerifyJson(B, sha, dry: true)); break;
+                case 1: files.Put(name, VerifyJson("0.7.198.100-tester.10", sha)); break;
+                case 2: files.Put(name, VerifyJson(B, ShaM2)); break;
+                case 3: files.Put(name, "{not json"); break;
+                default: files.Put(name, i % 2 == 0 ? FileStatus.TooLarge : FileStatus.Untrusted); break;
+            }
+        }
+        v = Probe(files, out f);
+        Check(v.Verification == VerifyKind.Verified && f.ReportSearchNote == null, "A3 the matching report behind 25 newer nonmatching or invalid ones is found: " + v.ReportText);
+        v = Probe(files, out f, new ProbeBudget { MaxReports = 10 });
+        Check(v.Verification == VerifyKind.Unknown && f.ReportSearchNote != null && v.ReportText.Contains("report search incomplete"), "A3 a search cut by its bound is incomplete: " + v.ReportText);
+        files.Put(Inst + @"\verify\verify-20261004T100000000Z.json", VerifyJson(B, sha, "failed"));
+        Equal(VerifyKind.Failed, Probe(files).Verification, "A3 the newest report of the installed package decides");
+        files.Put(Inst + @"\verify\verify-20261004T110000000Z.json", FileStatus.Failed);
+        v = Probe(files, out f);
+        Check(v.Verification == VerifyKind.Unknown && f.ReportSearchNote.Contains("is not read"), "A3 a newer report that cannot be read ends the search as incomplete");
+        files = Installed(out sha); files.Unlistable.Add(Inst + @"\verify");
+        v = Probe(files, out f);
+        Check(v.Verification == VerifyKind.Unknown && f.ReportSearchNote != null, "A3 a verify directory that cannot be listed: could not be checked");
     }
 
     // 936 A1: consecutive refreshes as MainForm.RefreshAll runs them; the verdict holds only while its evidence does.
