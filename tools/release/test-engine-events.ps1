@@ -35,7 +35,7 @@ $n = 0
 
 # One engine run: a fresh folder for its events and result, its own invocation id, optional test state and cancel.
 function Invoke-Engine {
-    param([string]$Name, [string[]]$Arguments = @(), $State, [switch]$Cancel, [string]$PackageDir = $Package, [string]$Script = 'install.ps1', [switch]$NoInvocation, [switch]$StaleResult)
+    param([string]$Name, [string[]]$Arguments = @(), $State, [switch]$Cancel, [string]$PackageDir = $Package, [string]$Script = 'install.ps1', [switch]$NoInvocation, [switch]$StaleResult, [hashtable]$Env = @{})
     $script:n++
     $dir = Join-Path $work ('{0:D2}-{1}' -f $script:n, ($Name -replace '[^a-z0-9]+', '-'))
     [void][IO.Directory]::CreateDirectory($dir)
@@ -54,7 +54,11 @@ function Invoke-Engine {
         [IO.File]::WriteAllText((Join-Path $stateDir 'state.json'), ($State | ConvertTo-Json -Depth 4))
         $env:AMDGPU_WDDM_TEST_STATE_DIR = $stateDir
     }
-    try { $r = Invoke-Headless -File $ps51 -Arguments $a -TimeoutSeconds 240 } finally { if ($State) { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR } }
+    foreach ($k in $Env.Keys) { Set-Item -Path "Env:\$k" -Value $Env[$k] }
+    try { $r = Invoke-Headless -File $ps51 -Arguments $a -TimeoutSeconds 240 } finally {
+        if ($State) { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+        foreach ($k in $Env.Keys) { Remove-Item -Path "Env:\$k" -ErrorAction SilentlyContinue }
+    }
     $ev = @()
     if (Test-Path -LiteralPath $events) { $ev = @(Get-Content -LiteralPath $events | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json }) }
     $res = $null
@@ -124,7 +128,11 @@ Check ((($stages -join ',') -eq ($want -join ','))) "stages: $($stages -join ', 
 Check ((Get-Seq $r 'settings-plan') -lt (Get-Seq $r 'step')) 'the settings-impact plan comes before the first step'
 $cancel = @(Get-Events $r 'cancel')
 $filesSeq = [int](@(Get-Events $r 'stage' | Where-Object { $_.id -eq 'files' })[0].seq)
-Check (($cancel.Count -eq 2) -and $cancel[0].available -and ($cancel[0].where -eq 'before-changes') -and -not $cancel[1].available -and ($cancel[1].where -eq 'driver-install') -and ([int]$cancel[1].seq -lt $filesSeq)) 'cancel offered before the changes, withdrawn before the files and the driver install'
+# Phase 1 withdraws Cancel before test signing; the dry run then shows phase 2 as the new run after the restart, which
+# offers it again until the driver install (interfaces-setup.md section 10).
+$cancelWant = $(if ($tsActive) { 'before-changes=True,driver-install=False' } else { 'before-changes=True,test-signing=False,phase-2=True,driver-install=False' })
+$cancelHave = @($cancel | ForEach-Object { "$($_.where)=$([bool]$_.available)" }) -join ','
+Check (($cancelHave -eq $cancelWant) -and ([int]$cancel[-1].seq -lt $filesSeq)) "cancel offered before the changes, withdrawn before test signing and before the files and the driver install: $cancelHave"
 $steps = @(Get-Events $r 'step')
 Check (($steps.Count -ge 15) -and -not @($steps | Where-Object { -not $_.dry_run }).Count) "$($steps.Count) step events, each marked dry run"
 $rr = @(Get-Events $r 'restart-required')
@@ -215,6 +223,42 @@ $prepDest = Join-Path $work 'prepared-deadline'
 $r = Invoke-Engine 'prepare deadline passed' @('-Destination', $prepDest, '-DeadlineUtc', $past) -Script 'prepare-offline.ps1'
 Test-Stream $r 'prepare deadline passed'
 Check (($r.code -eq 8) -and ($r.result.message_id -eq 'result.deadline') -and ($r.result.stop.where -eq 'stage:prepare-check') -and -not (Test-Path -LiteralPath $prepDest) -and -not (Test-Path -LiteralPath "$prepDest.partial")) 'prepare-offline after its deadline: stopped at the first stage, no folder written'
+
+'[G-STAGE] cancel on both sides of every stop point (R8): before it stops there; after it the run goes on to the next one'
+# AMDGPU_WDDM_TEST_CANCEL_AT creates the cancel file just before or just after a stop point looks (dry run only). A
+# fresh dry run walks phase 1 (before-changes, after-staging) and phase 2 (before-driver-install) in one process;
+# after the last stop point of a phase, Cancel is withdrawn ('cancel' event available false) and nothing stops.
+function Get-CancelOffers($R) { return (@(Get-Events $R 'cancel') | ForEach-Object { "$($_.where)=$($_.available)" }) -join ',' }
+if (-not $tsActive) {
+    foreach ($c in @(
+            @{ at = 'before-changes:before'; code = 8; where = 'before-changes' }
+            @{ at = 'before-changes:after'; code = 8; where = 'stage:test-signing' }
+            @{ at = 'after-staging:before'; code = 8; where = 'after-staging' }
+            @{ at = 'after-staging:after'; code = 8; where = 'stage:install'; withdrawn = 'test-signing' }
+            @{ at = 'before-driver-install:before'; code = 8; where = 'before-driver-install' }
+            @{ at = 'before-driver-install:after'; code = 0; where = $null; withdrawn = 'driver-install' })) {
+        $r = Invoke-Engine "cancel $($c.at)" @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning') -Env @{ AMDGPU_WDDM_TEST_CANCEL_AT = $c.at }
+        Test-Stream $r "cancel $($c.at)"
+        $offers = Get-CancelOffers $r
+        $ok = ($r.code -eq $c.code) -and ([string]$r.result.stop.where -eq [string]$c.where)
+        if ($c.code -eq 8) { $ok = $ok -and ($r.result.stop.by -eq 'cancel') }
+        if ($c.withdrawn) { $ok = $ok -and ($offers -match "(^|,)$($c.withdrawn)=False") }
+        Check $ok "cancel at $($c.at): exit $($r.code), stopped at $(if ($r.result.stop) { $r.result.stop.where } else { 'no stop point (the run finished)' }); offers $offers"
+    }
+} else { '  (skipped: test signing is active on this PC, phase 1 has no after-staging point)' }
+if ($FirmwareDir) {
+    foreach ($c in @(
+            @{ at = 'before-copy:before'; code = 8; where = 'before-copy'; folder = $false }
+            @{ at = 'before-copy:after'; code = 8; where = 'stage:copy'; folder = $false }
+            @{ at = 'after-copy:before'; code = 8; where = 'after-copy'; folder = $false }
+            @{ at = 'after-copy:after'; code = 0; where = $null; folder = $true })) {
+        $dest = Join-Path $work ('prepared-cancel-' + ($c.at -replace '[^a-z]+', '-'))
+        $r = Invoke-Engine "prepare cancel $($c.at)" @('-Destination', $dest, '-FirmwareDir', $FirmwareDir) -Script 'prepare-offline.ps1' -Env @{ AMDGPU_WDDM_TEST_CANCEL_AT = $c.at }
+        Test-Stream $r "prepare cancel $($c.at)"
+        $ok = ($r.code -eq $c.code) -and ([string]$r.result.stop.where -eq [string]$c.where) -and ((Test-Path -LiteralPath $dest) -eq $c.folder) -and -not (Test-Path -LiteralPath "$dest.partial")
+        Check $ok "prepare-offline, cancel at $($c.at): exit $($r.code), stopped at $(if ($r.result.stop) { $r.result.stop.where } else { 'no stop point (prepared)' }), folder $(Test-Path -LiteralPath $dest), no .partial left"
+    }
+} else { '  (prepare-offline cases skipped: no -FirmwareDir)' }
 
 '[G-STAGE] child closure: every process the engine started ends with it'
 $env:AMDGPU_WDDM_TEST_CHILD_SECONDS = '120'

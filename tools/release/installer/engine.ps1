@@ -131,8 +131,24 @@ function Enter-EngineLock([string]$Directory = $script:StateDir) {
 # engine ends the run when the caller created <EventsFile>.cancel or the -DeadlineUtc time has passed. Between stop
 # points the engine finishes what it started; a deadline that passes there is announced once per stage ('deadline'
 # event) and acted on at the next stop point. The window learns from 'cancel' events whether its Cancel button can work.
+# $script:CancelOpen mirrors the last 'cancel' event: a stage boundary is a stop point only while it is true, so a run
+# never stops where it said that Cancel cannot work. Before the first change everything can stop.
+$script:CancelOpen = $true
 function Set-CancelAvailable([bool]$Available, [string]$Where) {
+    $script:CancelOpen = $Available
     Write-EngineEvent 'cancel' ([ordered]@{ available = $Available; where = $Where })
+}
+# A stage boundary: a stop point in a run that changes nothing while Cancel is offered, else only the deadline notice.
+function Invoke-StageStop([string]$Where, [bool]$Stoppable) {
+    if ($Stoppable -and $script:CancelOpen) { Invoke-CancelPoint $Where } else { Write-DeadlineNotice $Where }
+}
+# Host tests only, in a dry run, a plan or prepare-offline (no system change): AMDGPU_WDDM_TEST_CANCEL_AT =
+# '<stop point>:before' creates the cancel file just before that stop point looks for it, '<stop point>:after' just
+# after it passed, so a test can cancel on either side of one boundary.
+function Invoke-TestCancelAt([string]$Where, [string]$Side) {
+    $at = [string]$env:AMDGPU_WDDM_TEST_CANCEL_AT
+    if (-not $at -or -not $script:EngineCancelFile -or -not ($script:DryRunMode -or $script:EngineMode -eq 'prepare-offline')) { return }
+    if ($at -eq "${Where}:$Side") { [IO.File]::WriteAllText($script:EngineCancelFile, '') }
 }
 function Test-CancelRequested {
     return [bool]($script:EngineCancelFile -and (Test-Path -LiteralPath $script:EngineCancelFile))
@@ -141,8 +157,9 @@ function Test-DeadlinePassed {
     return [bool]($null -ne $script:EngineDeadline -and [DateTime]::UtcNow -ge $script:EngineDeadline)
 }
 function Invoke-CancelPoint([string]$Where) {
+    Invoke-TestCancelAt $Where 'before'
     $by = $(if (Test-CancelRequested) { 'cancel' } elseif (Test-DeadlinePassed) { 'deadline' } else { $null })
-    if (-not $by) { return }
+    if (-not $by) { Invoke-TestCancelAt $Where 'after'; return }
     if ($script:OnStop) { try { & $script:OnStop } catch { Write-Log "   clean-up at the stop point failed: $($_.Exception.Message)" } }
     $script:EngineStop = [ordered]@{ by = $by; where = $Where; deadline_utc = $script:EngineDeadlineText }
     if ($by -eq 'cancel') {

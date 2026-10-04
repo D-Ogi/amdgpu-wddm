@@ -104,10 +104,11 @@ $script:EnginePhaseBefore = $(if ($early) { [string]$early.phase } else { $null 
 Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = [bool]$Gui; dry_run = [bool]$DryRun; package = $package; contract = $script:EngineContract; phase = $script:EnginePhaseBefore; deadline_utc = $script:EngineDeadlineText; job = $script:EngineJob })
 Start-EngineTestChild
 # A stage of the run, for the log, the console and the setup window's progress list. In a run that changes nothing
-# (plan, dry run, verify) every stage boundary is a stop point; in a real install the deadline is only announced here
-# and acted on at the next stop point.
+# (plan, dry run, verify) a stage boundary is a stop point while Cancel is offered, so a dry run stops where a real
+# install would and nowhere it said Cancel cannot work; in a real install the deadline is only announced here and acted
+# on at the next stop point.
 function Enter-Stage([string]$Id, [string]$Text) {
-    if ($script:DryRunMode -or $script:EngineMode -eq 'verify') { Invoke-CancelPoint "stage:$Id" } else { Write-DeadlineNotice "stage:$Id" }
+    Invoke-StageStop "stage:$Id" ($script:DryRunMode -or $script:EngineMode -eq 'verify')
     Write-Step $Text
     Write-EngineEvent 'stage' ([ordered]@{ id = $Id; text = $Text })
 }
@@ -712,8 +713,10 @@ if ($state.phase -eq 'new') {
             }
             Set-StateValue $state 'bitlocker' $choice
         }
-        # The continuation of this install runs after the restart from the staged closure.
+        # The continuation of this install runs after the restart from the staged closure. Its after-staging stop point
+        # is the last one of phase 1: test signing, the state and RunOnce follow without a stop.
         Initialize-Closure
+        Set-CancelAvailable $false 'test-signing'
         Invoke-Change 'bcdedit /set {current} testsigning on' {
             $n = Invoke-Native bcdedit.exe @('/set', '{current}', 'testsigning', 'on')
             if ($n.code -ne 0) { throw "bcdedit failed: $($n.text)" }
@@ -725,6 +728,8 @@ if ($state.phase -eq 'new') {
         if (-not $script:DryRunMode) { Exit-Engine -Code 0 -Outcome 'restart-required' -MessageId 'result.restart-test-signing' }
         Write-Info '(dry run: phase 2 is shown as it would run after the restart)'
         Save-Phase 'testsigning-active'
+        # The run after the restart is a new one that offers Cancel again until its own last stop point.
+        Set-CancelAvailable $true 'phase-2'
     }
 }
 if ($state.phase -eq 'testsigning-pending') {
@@ -733,6 +738,7 @@ if ($state.phase -eq 'testsigning-pending') {
         # that took over an older one's phase 1 continues as itself, from its own closure.
         if (-not $script:DryRunMode) { Save-InstallState $state }
         Initialize-Closure
+        Set-CancelAvailable $false 'continuation'
         Set-ResumeAtLogon 'continue'
         Write-Host 'Test signing is set but not active yet: restart the computer. The installer continues after you log on again (if it does not, run install.cmd again).' -ForegroundColor Yellow
         if ($script:SecureBoot -eq 'on') { Write-Host 'Secure Boot is on, so Windows ignores test signing. Turn it off in the BIOS setup.' -ForegroundColor Yellow }
