@@ -35,7 +35,14 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C8u       // revision 200 (INF 0.7.200.1, on 199): the DPM governor
+#define BC250_KMD_VERSION 0x000700C9u       // revision 201 (INF 0.7.201.1, on 200): the full table offers
+                                            // VidPN source modes in A8B8G8R8, A2B10G10R10 and
+                                            // A16B16G16R16F beside A8R8G8B8 (display_modes.h), so DXGI
+                                            // can list modes for those formats (3DMark, session
+                                            // native-caps349); the scan-out stays 8-bit. Registry value
+                                            // OfferComposedSourceModes 0 turns them off. No escape
+                                            // struct changed.
+                                            // 200 (INF 0.7.200.1, on 199): the DPM governor
                                             // refuses a raise of clock or voltage from 85 C up to the
                                             // 87 C hot limit (BC250_DPM_WARM_MC, session 344); the dpm
                                             // log lines count the refused steps ("warm N"), throttle 8

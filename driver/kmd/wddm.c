@@ -2213,7 +2213,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->FullWddm = g_FullWddm;
     Device->Wddm = NULL;
     RtlZeroMemory(&Device->WddmAperture,sizeof(Device->WddmAperture));
+    Device->ComposedSourceModes = FALSE;
+    Device->CommittedSourceFormat = 0;
     if (!g_FullWddm) return STATUS_SUCCESS;                            // gate closed: this file does nothing at all
+    // 0.7.201: source modes of the composed formats (display_modes.h), on unless the value is 0.
+    Device->ComposedSourceModes = GuardReadSetting(L"OfferComposedSourceModes", 1) != 0;
+    GuardLog("wddm: composed source modes %s", Device->ComposedSourceModes ? "offered" : "off");
 
     // Required state must exist before the adapter starts accepting paging work.
     wddm = (BC250_WDDM*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*wddm), BC250_WDDM_TAG);
