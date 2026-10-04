@@ -103,6 +103,23 @@ level every hot step (500 ms by default) while it stays hot. At 90 C, or with an
 floor. Below 82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its
 readbacks, so a stale decision cannot raise either; lowering is always allowed.
 
+From 0.7.200 a warm zone starts 2 C below the hot threshold (`BC250_DPM_WARM_MC`, 85 C). The rules are:
+
+- At 85 C or more and below 87 C, the governor does not raise the clock or the voltage. The level stays where it is.
+  This applies to a raise from the load and to a raise from the runtime floor.
+- In the warm zone, a lowering from the load occurs as below 85 C.
+- The warm zone does not change the thermal cap. The hot step, the critical rule, the release below 82 C and the soft
+  release operate as before.
+- With a soft-release delta less than 2 C, the soft threshold is in the warm zone. There, the soft release can
+  increase the cap. The clock goes up to the new cap only when a reading is below 85 C.
+- Below 85 C, the governor operates as before 0.7.200.
+
+When the warm zone stops a raise, the throttle reason is `thermal-warm` (8). The counter `warm` in the driver log
+lines counts the governor ticks with a stopped raise. The owner asked for this zone after session 344 (The Ascent,
+menu, no frame cap). In that session the governor kept 1500 MHz / 919 mV while Tctl increased from 83.5 C to 85.3 C,
+because no rule stopped a raise between 82 C and 87 C. `test_warm` in `dpm_test.c` covers the edges (84.999,
+85.000, 86.999 and 87.000 C). The plant model gives the same results with and without the zone.
+
 From 0.7.197 (BD-055) the drop on entering the hot band is at once only when the cap last moved at least a hot step
 ago. Before, every upward crossing of 87 C stepped, so a reading hovering at the limit walked the clock down at the
 crossing rate rather than the hot step. A re-entry inside the hot step now clamps the cap to the running clock (no
@@ -111,7 +128,7 @@ runtime value (250-10000 ms), and so is an optional soft release, off by default
 (500-4500 mC, so the threshold stays strictly between 82 and 87 C) for a whole soft step (2000-30000 ms) without a
 break, the cap rises one level. Without it the cap holds anywhere in 82-87 C, so under a sustained load one excursion
 past 87 C cost levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500-1600 MHz, frozen at
-85.6-86.2 C). The thresholds themselves (87, 82, 90 C) are not tunable. `dpm_test.c` covers the rule edge by edge
+85.6-86.2 C). The thresholds themselves (85, 87, 82, 90 C) are not tunable. `dpm_test.c` covers the rule edge by edge
 and runs a synthetic two-node plant (fast hot spot over a slow sink, scene changes, sensor noise) with the legacy
 timing, each change alone and both: the legacy rule latches one level down for the rest of the run; a 2 s hot step
 with a 1.5 C / 3 s soft release recovers between heavy scenes with no cap changes closer than 2 s and no reading
@@ -169,7 +186,8 @@ start, without a restart and without the registry:
   admitted tune of a grid under constant demand (no oscillation) and shows that tunes breaking only invariant 2 do
   cycle. A refused tune names the reason and leaves the values as they were.
 - The floor lifts only what the load asks for. The thermal cap (87 C, released below 82 C), the critical rule (90 C),
-  a missing sensor and SetStablePowerState all still win: each brings the clock below the floor. `want` in the
+  a missing sensor and SetStablePowerState all still win: each brings the clock below the floor. From 0.7.200 the
+  warm zone (85 C to 87 C) also stops a raise to the floor. The clock stays at its level until a reading is below 85 C. `want` in the
   telemetry stays the load's own answer, so a floored run still shows what the governor would have chosen.
 - Every change is a line in the driver log with old and new values, e.g. `dpm: tune (floor): up 900->900 target
   800->800 down 650->650 permille, hold 200->200 ms, floor 0->2000 MHz, serial 3` (floor 0 = none). While the values
@@ -192,10 +210,13 @@ start, without a restart and without the registry:
 - `bc250kmd_cli dpm [count [interval ms]]`: mode, requested mode, reason, the thresholds and floor in force with their
   source (default or runtime, 0.7.185), then per sample the committed clock and
   voltage, the SMU readback (MHz, VID), temperature, busy and average busy, demand, thermal cap, ceiling, throttle
-  reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed) and counters, then the busy
+  reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed, thermal-warm) and counters, then the busy
   source (grbm or submit), the submit share and the SDMA0 share (0.7.177).
   It uses `BC250_ESCAPE_RUN_DPM` with NoAdapterSynchronization only: a software snapshot, no adapter idle.
 - The driver log (`bc250kmd_cli log`) gets every transition, a telemetry line every 5 s and a line in the summary.
+  From 0.7.200 these lines show `warm N` after `thermal N`: N is the number of governor ticks in which the warm zone
+  stopped a raise. The `RUN_DPM` escape does not carry this counter. A CLI built before 0.7.200 shows throttle 8 as
+  `?`.
 
 ## Other places that assumed 1000 MHz
 
