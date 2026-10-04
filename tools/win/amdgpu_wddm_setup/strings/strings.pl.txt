@@ -14,6 +14,8 @@ rail.finish|mt-safe|a6c7a84b|Koniec
 rail.folder|mt-safe|74ccd433|Folder
 rail.prepare|mt-safe|ee820467|Przygotowanie
 rail.current|mt-safe|3d59ee1e|bieżący krok
+rail.done|mt-safe|a4c3ed04|gotowe
+rail.failed|mt-safe|a1f6bdb2|zatrzymano tutaj
 elevation.declined|mt|0a586e33|Instalator potrzebuje uprawnień administratora, aby zainstalować lub naprawić sterownik. Nic nie zostało zmienione. Uruchom instalator ponownie i wybierz Tak, gdy Windows zapyta.
 
 # ---- welcome ----
@@ -39,12 +41,15 @@ folder.incomplete|mt|73bc7acc|Ten przygotowany folder jest niekompletny. Przygot
 
 # ---- checking ----
 checking.title|mt-safe|cae3765d|Sprawdzanie tego komputera
-checking.body|mt|3402b2d2|To potrwa kilka sekund. Nic nie jest zmieniane.
+checking.body|mt|8fff775a|To może potrwać do minuty. Nic nie jest zmieniane.
 checking.list|mt-safe|de07d072|Sprawdzenia
 checking.waiting|mt|db75f750|Rozpoczynanie sprawdzeń...
 
 # ---- checks ----
 check.other|mt|6b757578|Inne sprawdzenie (szczegóły w pliku dla pomocy technicznej).
+check.mark.ok|mt-safe|436fe71b|Zaliczone
+check.mark.warn|mt-safe|d8da2c49|Uwaga
+check.mark.fail|mt-safe|cb5b28f8|Niezaliczone
 check.package.ok|mt|3a077fcf|Pliki instalatora są kompletne.
 check.package.damaged|mt|8eaa1e54|Pliki instalatora są uszkodzone lub niekompletne.
 check.admin.ok|mt|a3e85529|Instalator działa z uprawnieniami administratora.
@@ -238,6 +243,7 @@ result.offline-prepared.title|mt-safe|58c76c43|Folder jest gotowy
 result.offline-prepared.body|mt|2a59d535|Skopiuj folder na komputer bez internetu i uruchom z niego instalator. Wybierz tam „Folder przygotowany dla komputera bez internetu”.
 result.failed-checks|mt|ecefee18|Sprawdzenia, które nie przeszły
 result.nothing-changed|mt|54ca5460|Nic nie zostało zmienione.
+result.already-installed|mt|c90b9352|Ten komputer ma już wersję {0} sterownika.
 result.changes-made|mt|8e3dd6e8|Przed zatrzymaniem instalator wprowadził część zmian i pozostają one bez zmian. Uruchom instalator ponownie, aby dokończyć, albo użyj Napraw w amdgpu-wddm Control.
 result.changes-unknown|mt|88bf7384|Instalator nie wie, czy cokolwiek zostało zmienione. Uruchom go ponownie; będzie kontynuował tam, gdzie to możliwe.
 result.support|mt|3e9e40b3|Plik dla pomocy technicznej zawiera szczegóły do zgłoszenia problemu. Nic nie jest wysyłane automatycznie.
@@ -266,6 +272,7 @@ guide.welcome|mt|65339917|Nic się nie zmieni, dopóki nie naciśniesz Zainstalu
 guide.prepare|mt|9ee5d83f|Przygotowany folder działa na każdym BC-250 bez internetu, także przy późniejszej naprawie.
 guide.page-tip|mt|70da7524|Ustawienia zmienione w amdgpu-wddm Control zostają zachowane przy aktualizacji.
 guide.work-in-progress|mt|f3e8ef82|Pracuję nad tym. To może potrwać kilka minut.
+guide.checking|mt|687b400d|Sprawdzam ten komputer. To może potrwać do minuty.
 guide.pending-restart|mt|d31250df|Twoje zmiany są zapisane. Instalator będzie kontynuował po następnym ponownym uruchomieniu Windows.
 guide.install-stopped|mt|47319a31|Instalator nie dokończył pracy. Strona mówi, co zrobić dalej.
 guide.verification-failed|mt|1abe91c5|Sterownik nie przeszedł sprawdzeń. Naprawa zwykle pomaga.

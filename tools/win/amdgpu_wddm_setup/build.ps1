@@ -79,7 +79,7 @@ if (-not $NoSmoke) {
         stale   = @('-Scenario', 'stale'), @('result: none (the result belongs to another run', 'view: Problem result.none.title changes-unknown offer-retry')
         crash   = @('-Scenario', 'crash'), @('exit: 6', 'result: none', 'view: Problem result.none.title changes-made changes-unknown')
         restart = @('-Scenario', 'restart'), @('outcome: restart-required', 'restart: restart.test-signing', 'view: Restart result.restart-test-signing.title changes-made offer-restart', 'restart event restart.test-signing')
-        refused = @('-Scenario', 'refused'), @('outcome: refused', 'view: Problem result.preflight-refused.title nothing-changed offer-retry', 'No ASRock BC-250 graphics chip was found')
+        refused = @('-Scenario', 'refused'), @('outcome: refused', 'view: Problem result.preflight-refused.title nothing-changed offer-retry retry-secondary', 'No ASRock BC-250 graphics chip was found')
     }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     foreach ($e in $expect.GetEnumerator()) {

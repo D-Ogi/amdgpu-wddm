@@ -177,8 +177,21 @@ namespace AmdgpuWddmSetup
         public bool ChangesMade;            // some changes were made before the stop (no promise to undo them)
         public bool ChangesUnknown;         // no bound result: setup cannot tell
         public bool OfferRestart, OfferRetry, OfferRepair;
+        public bool RetryHelps = true;      // false: a new try in this session meets the same refusal (Try again is not the default)
+        public bool AlreadyInstalled;       // the engine found this version installed and checked, but the run did not end as "already"
+        public string PackageVersion;
         public string[] FailedChecks = new string[0];
         public string[] ConsentsNeeded = new string[0];
+
+        // Failed checks that a new try cannot change while setup is open: the hardware, the Windows edition, the setup
+        // files, a development installation, and Secure Boot (it changes only in the firmware settings, after a restart).
+        // The engine does not mark a cause as transient, so the window decides by check id. A refusal with one failed check
+        // outside this list (free space, the Visual C++ runtime, the firmware download, ...) keeps Try again as the default.
+        public static readonly HashSet<string> RetryCannotFix = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "gpu.missing", "gpu.several", "windows.not-x64", "windows.too-old", "package.damaged", "firmware.no-list",
+            "lab-install.present", "secureboot.on",
+        };
 
         static readonly HashSet<string> Known = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -246,7 +259,34 @@ namespace AmdgpuWddmSetup
             }
             // A3: a pre-mutation stop may say that nothing was changed; after a change no text promises a way back.
             if (v.Kind == ViewKind.Success || v.Kind == ViewKind.Restart || v.Kind == ViewKind.Information) v.NothingChanged = false;
+            v.RetryHelps = r.MessageId != "result.package-damaged" && !(r.FailedChecks.Length > 0 && r.FailedChecks.All(RetryCannotFix.Contains));
+            v.AlreadyInstalled = r.Action == "already" && r.Outcome != "already";
+            v.PackageVersion = r.PackageVersion;
             return v;
+        }
+    }
+
+    public enum RailState { Pending, Done, Current, Failed }
+
+    // The step rail. A run that stops shows the step it stopped in as current (failed for a problem, plain for a
+    // cancel), the steps before it done and the steps after it not done: a refusal at Check never shows Review and
+    // Install as done.
+    public static class Rail
+    {
+        // count: the steps of the flow (5, or 3 for preparing a folder); screenStep: the step of the screen shown;
+        // view: the finished run's view when the result screen shows it, else null; runKind: plan, install or prepare.
+        public static RailState[] States(int count, int screenStep, ResultView view, string runKind)
+        {
+            int current = screenStep;
+            bool failed = false;
+            if (view != null && (view.Kind == ViewKind.Problem || view.Kind == ViewKind.Cancelled))
+            {
+                current = count == 3 || runKind == "plan" ? 1 : 3;     // Prepare; Check; Install
+                failed = view.Kind == ViewKind.Problem;
+            }
+            var states = new RailState[count];
+            for (int i = 0; i < count; i++) states[i] = i < current ? RailState.Done : i > current ? RailState.Pending : failed ? RailState.Failed : RailState.Current;
+            return states;
         }
     }
 

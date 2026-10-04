@@ -15,6 +15,13 @@ window shows them in plain words. Contract: `docs/gui/interfaces-setup.md`.
 | Done | One of five outcomes (A3): success, information, problem, cancelled, restart; whether anything changed; the next step (retry, repair from amdgpu-wddm Control, support file) |
 | Prepare | `--prepare-offline`: a destination, an optional firmware folder, the copy, the result |
 
+The step rail marks the step in which a run stopped: a refusal at Check shows Check as current and stopped, and
+Review, Install and Finish as not done. On a problem the default button is Repair when offered, else Try again, else
+Close. Try again is not the default when every failed check is one a new try cannot change while setup is open
+(`ResultView.RetryCannotFix`: `gpu.missing`, `gpu.several`, `windows.not-x64`, `windows.too-old`, `package.damaged`,
+`firmware.no-list`, `lab-install.present`, `secureboot.on`) or the setup files are damaged. The engine does not mark
+causes as transient, so the window decides by check id.
+
 Ordinary words only: no driver internals, codes or file names in the window (G-NOINT, checked in every language and
 every screen by the build). The details are in the support file, a zip that the user saves on request: the window's
 summary and, per engine run, the command line, events, result, engine output and log, with the user name, computer

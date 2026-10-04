@@ -153,7 +153,8 @@ namespace AmdgpuWddmSetup
                     w.AppendLine("restart: " + (result.RestartRequired ? result.RestartReason : "no"));
                 }
                 w.AppendLine("view: " + view.Kind + " " + view.TitleId + (view.NothingChanged ? " nothing-changed" : "") + (view.ChangesMade ? " changes-made" : "") + (view.ChangesUnknown ? " changes-unknown" : "") +
-                    (view.OfferRestart ? " offer-restart" : "") + (view.OfferRetry ? " offer-retry" : "") + (view.OfferRepair ? " offer-repair" : ""));
+                    (view.OfferRestart ? " offer-restart" : "") + (view.OfferRetry ? " offer-retry" : "") + (view.OfferRetry && !view.RetryHelps ? " retry-secondary" : "") + (view.OfferRepair ? " offer-repair" : "") +
+                    (view.AlreadyInstalled ? " already-installed" : ""));
                 w.AppendLine("events: " + run.LastSeq + " ignored " + run.Ignored + " problems " + run.Problems.Count + (run.Problems.Count > 0 ? " (" + string.Join("; ", run.Problems) + ")" : ""));
                 w.AppendLine("mode: " + run.Mode);
                 w.AppendLine("stages: " + string.Join(",", run.Stages));

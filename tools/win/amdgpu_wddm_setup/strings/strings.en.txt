@@ -16,6 +16,8 @@ rail.finish|src|-|Finish
 rail.folder|src|-|Folder
 rail.prepare|src|-|Prepare
 rail.current|src|-|current step
+rail.done|src|-|done
+rail.failed|src|-|stopped here
 elevation.declined|src|-|Setup needs administrator permission to install or repair the driver. Nothing was changed. Start setup again and choose Yes when Windows asks.
 
 # ---- welcome ----
@@ -41,12 +43,15 @@ folder.incomplete|src|-|This prepared folder is incomplete. Prepare it again.
 
 # ---- checking ----
 checking.title|src|-|Checking this PC
-checking.body|src|-|This takes a few seconds. Nothing is changed.
+checking.body|src|-|This can take up to a minute. Nothing is changed.
 checking.list|src|-|Checks
 checking.waiting|src|-|Starting the checks...
 
 # ---- checks (one per check of the installer) ----
 check.other|src|-|Another check (details in the support file).
+check.mark.ok|src|-|Passed
+check.mark.warn|src|-|Note
+check.mark.fail|src|-|Did not pass
 check.package.ok|src|-|The setup files are complete.
 check.package.damaged|src|-|The setup files are damaged or incomplete.
 check.admin.ok|src|-|Setup runs with administrator permission.
@@ -240,6 +245,7 @@ result.offline-prepared.title|src|-|The folder is ready
 result.offline-prepared.body|src|-|Copy the folder to the PC without internet and start setup from it. Choose "A folder prepared for a PC without internet" there.
 result.failed-checks|src|-|Checks that did not pass
 result.nothing-changed|src|-|Nothing was changed.
+result.already-installed|src|-|This PC already has version {0} of the driver.
 result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in amdgpu-wddm Control.
 result.changes-unknown|src|-|Setup cannot tell whether anything was changed. Start setup again; it continues where it can.
 result.support|src|-|The support file has the details for a problem report. Nothing is sent automatically.
@@ -268,6 +274,7 @@ guide.welcome|src|-|Nothing changes until you press Install. Setup shows every c
 guide.prepare|src|-|A prepared folder works on any BC-250 without internet, also for a later repair.
 guide.page-tip|src|-|Settings you changed in amdgpu-wddm Control are kept when you update.
 guide.work-in-progress|src|-|I am working on it. This can take a few minutes.
+guide.checking|src|-|I am checking this PC. This can take up to a minute.
 guide.pending-restart|src|-|Your changes are saved. Setup continues after the next restart of Windows.
 guide.install-stopped|src|-|Setup did not finish. The page says what to do next.
 guide.verification-failed|src|-|The driver did not pass its checks. A repair usually helps.

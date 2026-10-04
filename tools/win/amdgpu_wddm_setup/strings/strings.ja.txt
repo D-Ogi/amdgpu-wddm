@@ -14,6 +14,8 @@ rail.finish|mt-safe|a6c7a84b|完了
 rail.folder|mt-safe|74ccd433|フォルダー
 rail.prepare|mt-safe|ee820467|準備
 rail.current|mt-safe|3d59ee1e|現在の手順
+rail.done|mt-safe|a4c3ed04|完了
+rail.failed|mt-safe|a1f6bdb2|ここで停止
 elevation.declined|mt|0a586e33|ドライバーのインストールまたは修復には管理者のアクセス許可が必要です。何も変更されていません。セットアップをもう一度起動し、Windows の確認で [はい] を選んでください。
 
 # ---- welcome ----
@@ -39,12 +41,15 @@ folder.incomplete|mt|73bc7acc|この準備済みフォルダーは不完全で�
 
 # ---- checking ----
 checking.title|mt-safe|cae3765d|この PC を確認しています
-checking.body|mt|3402b2d2|数秒かかります。何も変更されません。
+checking.body|mt|8fff775a|最大 1 分ほどかかります。何も変更されません。
 checking.list|mt-safe|de07d072|確認項目
 checking.waiting|mt|db75f750|確認を開始しています...
 
 # ---- checks ----
 check.other|mt|6b757578|その他の確認 (詳細はサポート ファイルにあります)。
+check.mark.ok|mt-safe|436fe71b|合格
+check.mark.warn|mt-safe|d8da2c49|注意
+check.mark.fail|mt-safe|cb5b28f8|不合格
 check.package.ok|mt|3a077fcf|セットアップ ファイルはすべてそろっています。
 check.package.damaged|mt|8eaa1e54|セットアップ ファイルが壊れているか、不足しています。
 check.admin.ok|mt|a3e85529|セットアップは管理者のアクセス許可で実行されています。
@@ -238,6 +243,7 @@ result.offline-prepared.title|mt-safe|58c76c43|フォルダーの準備ができ
 result.offline-prepared.body|mt|2a59d535|このフォルダーをインターネットのない PC にコピーし、そこからセットアップを起動してください。その際「インターネットのない PC 用に準備したフォルダー」を選んでください。
 result.failed-checks|mt|ecefee18|合格しなかった確認
 result.nothing-changed|mt|54ca5460|何も変更されていません。
+result.already-installed|mt|c90b9352|この PC には、ドライバーのバージョン {0} がすでにあります。
 result.changes-made|mt|8e3dd6e8|セットアップが停止する前に一部の変更が行われ、その変更はそのまま残っています。完了するにはセットアップをもう一度起動するか、amdgpu-wddm Control の [修復] を使ってください。
 result.changes-unknown|mt|88bf7384|何かが変更されたかどうかを判断できません。セットアップをもう一度起動してください。可能なところから続行します。
 result.support|mt|3e9e40b3|サポート ファイルには問題の報告に必要な詳細が含まれます。自動的に送信されることはありません。
@@ -266,6 +272,7 @@ guide.welcome|mt|65339917|[インストール] を押すまで何も変わりま
 guide.prepare|mt|9ee5d83f|準備したフォルダーは、インターネットのないどの BC-250 でも使えます。後の修復にも使えます。
 guide.page-tip|mt|70da7524|amdgpu-wddm Control で変更した設定は、更新後もそのまま残ります。
 guide.work-in-progress|mt|f3e8ef82|作業中です。数分かかることがあります。
+guide.checking|mt|687b400d|この PC を確認しています。最大 1 分ほどかかります。
 guide.pending-restart|mt|d31250df|変更は保存されました。次に Windows を再起動すると、セットアップは続行します。
 guide.install-stopped|mt|47319a31|セットアップは完了しませんでした。次に行うことは画面に表示されています。
 guide.verification-failed|mt|1abe91c5|ドライバーが確認に合格しませんでした。たいていは修復で直ります。

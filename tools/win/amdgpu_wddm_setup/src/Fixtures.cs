@@ -32,10 +32,10 @@ namespace AmdgpuWddmSetup
 
         static string Check(string id, string result) { return Ev("check", "\"id\":\"" + id + "\",\"result\":\"" + result + "\",\"name\":\"x\",\"detail\":\"fixture\""); }
 
-        public static string ResultJson(string mode, string outcome, int exit, string message, bool mutated, string extra = "")
+        public static string ResultJson(string mode, string outcome, int exit, string message, bool mutated, string extra = "", string action = "install")
         {
             return "{\"schema\":\"" + EngineRun.ResultSchema + "\",\"invocation\":\"" + Id + "\",\"engine\":{\"contract\":\"" + EngineRun.Contract + "\",\"package_version\":\"" + Version +
-                "\"},\"mode\":\"" + mode + "\",\"dry_run\":" + (mode == "plan" ? "true" : "false") + ",\"action\":\"install\",\"outcome\":\"" + outcome + "\",\"exit_code\":" + exit +
+                "\"},\"mode\":\"" + mode + "\",\"dry_run\":" + (mode == "plan" ? "true" : "false") + ",\"action\":\"" + action + "\",\"outcome\":\"" + outcome + "\",\"exit_code\":" + exit +
                 ",\"mutated\":" + (mutated ? "true" : "false") + ",\"nothing_changed\":" + (mutated ? "false" : "true") + ",\"message_id\":\"" + message + "\"" + extra + "}";
         }
 
@@ -126,6 +126,8 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
                 new Fixture { Name = "result-verified", Flow = "continue", Screen = Screen.Result, Events = RunEvents("preflight", false, false, "verify"), Result = ResultJson("verify", "verified", 0, "result.verified", false) },
                 new Fixture { Name = "result-refused", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\",\"vcruntime.missing\"]") },
+                // gui-L4 trials: this version installed and checked, refused because of a development installation.
+                new Fixture { Name = "result-refused-lab", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"lab-install.present\"]", "already") },
                 new Fixture { Name = "result-failed", Screen = Screen.Result, Events = RunEvents("driver", false, true), Result = ResultJson("run", "failed", 6, "result.step-failed", true, ",\"step\":\"pnputil /add-driver\",\"detail\":\"exit 5\"") },
                 new Fixture { Name = "result-none", Screen = Screen.Result, Events = RunEvents("files", false, true), NoResult = true },
                 new Fixture { Name = "result-cancelled", Screen = Screen.Result, Events = RunEvents("preflight", false, false), Result = ResultJson("run", "cancelled", 8, "result.cancelled", false), SupportSaved = @"C:\Users\Public\Desktop\amdgpu-wddm-setup.zip" },

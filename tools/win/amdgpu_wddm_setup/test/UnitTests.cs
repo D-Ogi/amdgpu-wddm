@@ -33,6 +33,7 @@ static class UnitTests
             Model();
             ResultBinding();
             Views();
+            RailSteps();
             Settings();
             Notes(repo);
             Prepared();
@@ -184,6 +185,38 @@ static class UnitTests
         Check(V("verify-failed", 3, "result.verify-failed", false).OfferRepair, "verify-failed offers a repair");
         Equal("result.other.title", V("refused", 2, "result.some-future-id", false).TitleId, "an unknown message id has a generic text");
         Check(V("prepared", 0, "result.offline-prepared", false).Kind == ViewKind.Success, "prepared is a success");
+
+        // Try again is the default only when a new try can help (gui-L4 trials: a development installation).
+        Check(!V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"lab-install.present\"]").RetryHelps, "retry: a development installation is not fixed by a new try");
+        Check(!V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\"]").RetryHelps, "retry: no BC-250 and Secure Boot on");
+        Check(V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"space.low\"]").RetryHelps, "retry: one fixable check keeps Try again the default");
+        Check(V("refused", 2, "result.firmware-unreachable", false, ",\"failed_checks\":[\"firmware.unreachable\"]").RetryHelps, "retry: an unreachable download can work on a new try");
+        Check(V("refused", 2, "result.preflight-error", false).RetryHelps, "retry: an error without failed checks keeps Try again");
+        Check(!V("refused", 2, "result.package-damaged", false).RetryHelps, "retry: damaged setup files need a new download");
+        Check(ResultView.For(null, new EngineRun(Id)).RetryHelps, "retry: no bound result keeps Try again");
+        foreach (var id in ResultView.RetryCannotFix) Check(Strings.Has("check." + id), "retry: check." + id + " is a check id the window knows");
+
+        // The engine planned "already" but refused: the page says that this version is installed.
+        v = V("refused", 2, "result.preflight-refused", false, ",\"action\":\"already\",\"failed_checks\":[\"lab-install.present\"]");
+        Check(v.AlreadyInstalled && v.PackageVersion == "v", "already: a refusal of an installed version says so");
+        Check(!V("already", 0, "result.already", false, ",\"action\":\"already\"").AlreadyInstalled, "already: the already result has its own title");
+        Check(!V("refused", 2, "result.preflight-refused", false, ",\"action\":\"install\"").AlreadyInstalled, "already: not for an install");
+        Check(Strings.Has("result.already-installed"), "already: result.already-installed has words");
+    }
+
+    static string Rails(RailState[] s) { return string.Join(",", s.Select(x => x.ToString())); }
+
+    static void RailSteps()
+    {
+        var refused = V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"lab-install.present\"]");
+        Equal("Done,Failed,Pending,Pending,Pending", Rails(Rail.States(5, 4, refused, "plan")), "rail: a refusal at Check (gui-L4 trials)");
+        Equal("Done,Done,Done,Failed,Pending", Rails(Rail.States(5, 4, V("failed", 6, "result.step-failed", true), "install")), "rail: a failure during Install");
+        Equal("Done,Done,Done,Current,Pending", Rails(Rail.States(5, 4, V("cancelled", 8, "result.cancelled", false), "install")), "rail: a cancel during Install is current, not failed");
+        Equal("Done,Done,Done,Done,Current", Rails(Rail.States(5, 4, V("verified", 0, "result.verified", false), "install")), "rail: success at Finish");
+        Equal("Done,Failed,Pending", Rails(Rail.States(3, 2, V("refused", 2, "result.prepare-destination", false), "prepare")), "rail: a prepare refusal");
+        Equal("Done,Done,Current,Pending,Pending", Rails(Rail.States(5, 2, null, "plan")), "rail: the Review screen");
+        Equal("Done,Failed,Pending,Pending,Pending", Rails(Rail.States(5, 4, ResultView.For(null, new EngineRun(Id)), "plan")), "rail: a plan without a result");
+        foreach (var id in new[] { "rail.done", "rail.failed", "rail.current", "check.mark.ok", "check.mark.warn", "check.mark.fail", "guide.checking" }) Check(Strings.Has(id), id + " has words");
     }
 
     static void Settings()
@@ -265,6 +298,7 @@ static class UnitTests
         Equal(SetupCause.InstallStopped, SetupGuide.Pick(new[] { SetupCause.VerificationFailed, SetupCause.InstallStopped }), "guide: inside rank 1 the plan's order");
         Equal("07-hopeful", SetupGuide.Expression(SetupCause.PendingRestart), "guide: expression of a pending restart");
         foreach (SetupCause c in Enum.GetValues(typeof(SetupCause))) Check(Strings.Has(SetupGuide.TextId(c)), "guide: " + c + " has words");
+        Check(Strings.In("en", "checking.body").Contains("up to a minute") && Strings.In("en", "guide.checking").Contains("up to a minute"), "guide: the Checking page and its tip give the same time");
     }
 
     static void Arguments()

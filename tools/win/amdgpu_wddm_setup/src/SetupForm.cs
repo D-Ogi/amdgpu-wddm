@@ -195,19 +195,23 @@ namespace AmdgpuWddmSetup
         {
             _rail.Controls.Clear();
             var steps = _flow == "prepare" ? new[] { "rail.folder", "rail.prepare", "rail.finish" } : new[] { "rail.welcome", "rail.check", "rail.plan", "rail.install", "rail.finish" };
-            int current = RailIndex();
+            var states = Rail.States(steps.Length, RailIndex(), Current == Screen.Result ? _view : null, _runKind);
             var stack = Ui.Stack(Theme.S(RailWidth));
             stack.Location = new Point(0, _rail.Padding.Top);
             for (int i = 0; i < steps.Length; i++)
             {
-                bool on = i == current, done = i < current;
+                var state = states[i];
+                bool on = state == RailState.Current || state == RailState.Failed, done = state == RailState.Done;
                 var row = new Panel { Size = new Size(Theme.S(RailWidth - 16), Theme.S(40)), Margin = Theme.Pad(8, 0, 8, 4), BackColor = on ? Theme.CardHi : Theme.Nav };
                 if (on) row.Controls.Add(new Panel { Dock = DockStyle.Left, Width = Theme.S(4), BackColor = Theme.Accent });
-                var label = Ui.Label((done ? "✓  " : (i + 1) + "  ") + Strings.T(steps[i]), on ? Theme.Bold : Theme.Body, on ? Theme.Text : done ? Theme.Good : Theme.Dim, Theme.S(RailWidth - 40));
+                var mark = done ? "✓" : state == RailState.Failed ? "✗" : (i + 1).ToString();
+                var color = state == RailState.Failed ? Theme.Accent : on ? Theme.Text : done ? Theme.Good : Theme.Dim;
+                var label = Ui.Label(mark + "  " + Strings.T(steps[i]), on ? Theme.Bold : Theme.Body, color, Theme.S(RailWidth - 40));
                 label.Location = new Point(Theme.S(16), (Theme.S(40) - label.PreferredSize.Height) / 2);
+                // One name per step for a screen reader: the label carries the step and its state, the row has none.
+                var said = done ? "rail.done" : state == RailState.Failed ? "rail.failed" : on ? "rail.current" : null;
+                label.AccessibleName = Strings.T(steps[i]) + (said != null ? " (" + Strings.T(said) + ")" : "");
                 row.Controls.Add(label);
-                row.AccessibleRole = AccessibleRole.StaticText;
-                row.AccessibleName = Strings.T(steps[i]) + (on ? " (" + Strings.T("rail.current") + ")" : "");
                 stack.Controls.Add(row);
             }
             _rail.Controls.Add(stack);
@@ -264,6 +268,7 @@ namespace AmdgpuWddmSetup
             BuildRail();
             UpdateGuide();
             AssignTabOrder();
+            Unnamed(this);
             _content.ResumeLayout(true);
             ResumeLayout(true);
             _content.AutoScrollPosition = new Point(0, 0);
@@ -329,6 +334,8 @@ namespace AmdgpuWddmSetup
                 SetPrepared(dir);
                 Show(Screen.Welcome);
             });
+            // The folder belongs to the prepared-folder choice only.
+            path.Enabled = browse.Enabled = _usePrepared;
             source.Add(Ui.Row(path, browse));
             Label status = null;
             if (_usePrepared)
@@ -415,6 +422,7 @@ namespace AmdgpuWddmSetup
             var color = c.Result == "ok" ? Theme.Good : c.Result == "warn" ? Theme.Warn : Theme.Accent;
             var m = Ui.Label(mark, Theme.Bold, color);
             m.MinimumSize = new Size(Theme.S(22), 0);
+            m.AccessibleName = Strings.T(c.Result == "ok" ? "check.mark.ok" : c.Result == "warn" ? "check.mark.warn" : "check.mark.fail");
             var t = Ui.Label(CheckText(c.Id), null, Theme.Text, card.Inner - Theme.S(30));
             card.Add(Ui.Row(m, t));
         }
@@ -572,6 +580,7 @@ namespace AmdgpuWddmSetup
             var mark = new Panel { Width = Theme.S(48), Height = Theme.S(4), BackColor = color, Margin = Theme.Pad(0, 0, 0, 10) };
             _content.Controls.Add(mark);
             Title(Strings.T(v.TitleId));
+            if (v.AlreadyInstalled) Para(Strings.T("result.already-installed", v.PackageVersion ?? "-"));
             Para(Strings.T(v.BodyId));
             if (v.FailedChecks.Length > 0)
             {
@@ -588,9 +597,12 @@ namespace AmdgpuWddmSetup
                 if (_supportError != null) Para(Strings.T("result.support.failed"), Theme.Warn);
             }
 
-            AddButton("ui.close", (s, e) => Close(), v.Kind == ViewKind.Success || v.Kind == ViewKind.Information);
-            if (v.OfferRepair) AddButton("result.repair", (s, e) => { _flow = "repair"; RunPlan(); }, v.Kind == ViewKind.Problem);
-            if (v.OfferRetry) AddButton("result.retry", (s, e) => { if (_flow == "prepare") Show(Screen.Prepare); else RunPlan(); }, !v.OfferRepair && v.Kind != ViewKind.Success && v.Kind != ViewKind.Information);
+            // The default button: Repair for a problem that offers it, Try again when a new try can help, else Close.
+            bool repairFirst = v.OfferRepair && v.Kind == ViewKind.Problem;
+            bool retryFirst = v.OfferRetry && v.RetryHelps && !v.OfferRepair && v.Kind != ViewKind.Success && v.Kind != ViewKind.Information;
+            AddButton("ui.close", (s, e) => Close(), !repairFirst && !retryFirst);
+            if (v.OfferRepair) AddButton("result.repair", (s, e) => { _flow = "repair"; RunPlan(); }, repairFirst);
+            if (v.OfferRetry) AddButton("result.retry", (s, e) => { if (_flow == "prepare") Show(Screen.Prepare); else RunPlan(); }, retryFirst);
             if (v.Kind != ViewKind.Success || _flow == "prepare") AddButton("result.save-support", (s, e) => SaveSupport());
             CancelButton = (IButtonControl)_buttons.Controls[0];
         }
@@ -780,7 +792,8 @@ namespace AmdgpuWddmSetup
             }
             var cause = SetupGuide.Pick(causes);
             _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
-            _guideText.Text = Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : SetupGuide.TextId(cause));
+            // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
+            _guideText.Text = Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause));
             GuideCause = cause;
         }
 
@@ -882,6 +895,18 @@ namespace AmdgpuWddmSetup
             foreach (Control k in c.Controls) Number(k, ref m);
         }
 
+        // Layout panels have no accessible name. Without an explicit one, Windows names a window after the label next to
+        // it, so a screen reader read the rail step, the body text and the card titles a second and third time as panes.
+        // An empty AccessibleName keeps the name blank (WinForms uses any non-null value as it is).
+        static void Unnamed(Control c)
+        {
+            foreach (Control k in c.Controls)
+            {
+                if (k is Panel && k.AccessibleName == null) k.AccessibleName = "";
+                Unnamed(k);
+            }
+        }
+
         // ---- headless rendering and checks (G-RENDER, G-A11Y, G-NOINT) --------------------------------------------
 
         // Builds a screen from fixture data without running an engine.
@@ -958,6 +983,8 @@ namespace AmdgpuWddmSetup
                 bool inGroup = c is RadioButton && c.Parent.Controls.OfType<RadioButton>().Any(o => o.TabStop || o.Checked);
                 if (!c.TabStop && !inGroup) problems.Add(Current + ": " + Describe(c) + " is not reachable with Tab");
             }
+            // A layout panel without its own name takes the name of a label next to it: the text is read again.
+            foreach (var p in Panels(this).Where(p => p.AccessibleName == null)) problems.Add(Current + ": " + Describe(p) + " has no explicit accessible name (it repeats a label)");
             var order = reachable.Select(TabPath).ToList();
             if (order.Distinct().Count() != order.Count) problems.Add(Current + ": two controls share a tab position");
             bool working = Current == Screen.Working || Current == Screen.Checking;
@@ -973,6 +1000,15 @@ namespace AmdgpuWddmSetup
                 if (!HasVisibleFlag(k)) continue;
                 if (k is ButtonBase || k is TextBox || k is ListControl) into.Add(k);
                 Walk(k, into);
+            }
+        }
+
+        static IEnumerable<Control> Panels(Control c)
+        {
+            foreach (Control k in c.Controls)
+            {
+                if (k is Panel) yield return k;
+                foreach (var p in Panels(k)) yield return p;
             }
         }
 
