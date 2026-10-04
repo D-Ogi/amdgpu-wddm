@@ -10,18 +10,21 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `new-release-cert.ps1` | Creates the release test-signing certificate once, in a private directory outside the repository (never in the repo or the package). Separate from the lab certificate. |
 | `release-sources.json` | The registered lab artifacts that make up the release, with SHA256. The build refuses any other byte. |
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
-| `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd` (package root) and the PowerShell 5.1 scripts. |
+| `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts; with `-SetupApp`, also the setup window `setup\amdgpu_wddm_setup.exe` (`tools/win/amdgpu_wddm_setup`). |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
 | `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call), and it and both copies of `bc250control.dll` come from one control-app build folder. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
 | `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
 | `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
 | `test-session-checks.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-060): the INF `Reboot` directive (found through `[Manufacturer]` and its models, added once after each install section header, line endings kept, present in the packaged INF), the pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes; no installer function for the KMD's BD-059 session marker), the install inputs that the argument-free run after a restart takes from the state (an offline fresh install and an upgrade, both resume phases, the resumed run's own arguments, another package version, cleared at completion, a tester.10 state), the `resume` action, and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon (a record with a missing or malformed field is ignored and replaced by the next recording), a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. |
+| `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window or `install.cmd`), the kept repair set, the running-release witness writer, the compatibility record and the engine lock. |
+| `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the footprint unchanged. |
+| `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once
-pwsh -File tools\release\build-release.ps1 [-ControlApp <dir> -ControlAppExe <exe>]
+pwsh -File tools\release\build-release.ps1 [-ControlApp <dir> -ControlAppExe <exe>] [-SetupApp <setup build folder>]
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
@@ -69,9 +72,25 @@ settings stay. Installer-owned and always written: the paths into the install ro
 graphics registration (`UserModeDriverName`, `VulkanDriverName`, the Khronos entry), `UnconfirmedStarts` and the
 `Release` key. When a default changes, edit `defaults` only; `legacy_applied` stays as tester.7 wrote it.
 
-install.ps1 exit codes: 0 done (or already installed and verified), 2 preflight refused, 3 verification failed,
-4 not confirmed, 5 test signing not active, 6 a step failed (run again), 7 verify before the pending restart,
-10 handed to an elevated window.
+install.ps1 exit codes: 0 done (or already installed and verified, or a restart asked for), 2 refused (preflight, or
+no administrator rights in a setup-window run), 3 verification failed, 4 not confirmed, 5 test signing not active,
+6 a step failed (run again), 7 verify before the pending restart, 8 cancelled from the setup window at a safe point,
+9 another install action holds the engine lock, 10 handed to an elevated window.
+
+Setup window and engine (`docs/gui/interfaces-setup.md`): the setup window runs `install.ps1` with `-Gui` (events
+and a terminal result bound to its invocation id, cancel at safe points, no prompts) and `-Plan` (read only: checks,
+decision, settings-impact plan). Restarts are planned, never forced: on the command line `install.ps1` asks "Restart
+now?" and then asks Windows for a normal restart (ExitWindowsEx with a planned reason; programs may keep unsaved
+work); the setup window asks the same in its own words. Each install stages a continuation closure (the whole package
+and its firmware folder) in the installer's state folder; RunOnce runs the closure's setup window with `--continue`,
+or its `install.cmd` for a command-line run. After completion the closure stays as the repair set (this release and
+the previous one) and `Release\RepairSetup` names its setup window. `prepare-offline.cmd` makes a folder with the
+package and the firmware for a BC-250 without internet. `build-release.ps1` writes `compatibility.json` (engine
+contract, the INF `Reboot` directive, firmware list, settings table schema, the continuation) and refuses a package
+whose record does not verify; it takes the release notes from `docs/testing/release-notes/<version>.md` (sections New,
+Fixed, Known issues, Settings affected required) as `RELEASE-NOTES.md`. Verify and the start-confirm task write the
+running-release witness `%ProgramData%\amdgpu-wddm\installer\running-release.json` (the loaded KMD image, its reply
+and the boot).
 
 `build-release.ps1` and `test-dryrun.ps1` need PowerShell 7 (`headless.ps1` starts every child process without a
 window, with stdin closed and a time bound). The installer itself is Windows PowerShell 5.1.

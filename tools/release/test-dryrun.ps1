@@ -315,6 +315,32 @@ Check ($r.code -eq 0) "G-EVT, G-STAGE: exit $($r.code)"
 $r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-offline.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1800
 $r.text
 Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
+# The setup window, when the package carries it, against this package's real engine: a plan run and a dry run through
+# the window's own engine client, each screen in four languages without internals (--smoke-engine shows no window).
+$setupExe = Join-Path $Package 'setup\amdgpu_wddm_setup.exe'
+if (Test-Path -LiteralPath $setupExe) {
+    'setup window against the real engine (--smoke-engine: plan and dry run, no window)'
+    foreach ($c in @(
+            @{ name = 'plan'; flags = @('--plan'); engine = @('-Plan', '-DryRunIgnoreBoard', '-FirmwareDir', $goodDir); expect = @('result: bound', 'outcome: planned', 'view: Plan result.planned.title nothing-changed', 'decision: install') }
+            @{ name = 'dry run'; flags = @(); engine = @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-FirmwareDir', $goodDir); expect = @('result: bound', 'message: result.dry-run-complete', 'mutated: false', 'view: Information result.dry-run-complete.title') })) {
+        $out = Join-Path $WorkBase ('setup-smoke-' + ($c.name -replace ' ', '-') + '-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+        $stateDir = "$out-state"
+        [void][IO.Directory]::CreateDirectory($stateDir)
+        $env:AMDGPU_WDDM_TEST_STATE_DIR = $stateDir
+        try { $r = Invoke-Headless -File $setupExe -Arguments (@('--smoke-engine', $Package, $out) + $c.flags + @('--') + $c.engine) -TimeoutSeconds 900 } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+        $summary = [string](Get-Content -LiteralPath (Join-Path $out 'summary.txt') -Raw -ErrorAction SilentlyContinue)
+        $missing = @($c.expect | Where-Object { -not $summary.Contains($_) })
+        $screens = @([regex]::Matches($summary, '(?m)^screen (en|pl|ja|ko): \w+; internals none; missing strings none').Count)
+        Check (($r.code -eq 0) -and ($missing.Count -eq 0)) "setup window $($c.name): exit $($r.code)$(if ($missing.Count) { '; missing: ' + ($missing -join ', ') })"
+        Check ($summary -match '(?m)^unknown checks: \r?$') "setup window $($c.name): every check the engine reported has words"
+        Check ($summary -match '(?m)^events: \d+ ignored 0 problems 0') "setup window $($c.name): events in order, none ignored"
+        Check ($screens[0] -eq 4) "setup window $($c.name): the screen in EN, PL, JA and KO without internals or missing strings"
+        if (($r.code -ne 0) -or $missing.Count -or ($screens[0] -ne 4)) { $summary }
+        Remove-Item -LiteralPath $stateDir -Recurse -Force
+    }
+    $cr0 = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
+    Check (($cr0.continuation.setup_exe -eq 'setup/amdgpu_wddm_setup.exe') -and (@($m.files | Where-Object { $_.path -eq 'setup/amdgpu_wddm_setup.exe' }).Count -eq 1)) 'the compatibility record names the setup window as the continuation, manifest.json lists it'
+} else { '  (no setup window in this package: skipped)' }
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 
 'package records: compatibility, release notes, witness writer, planned restarts only'

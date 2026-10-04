@@ -11,8 +11,8 @@ technical `detail` fields, KMD versions, fences and error codes go only to the l
 
 ## 1. Invocation
 
-The window starts `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <package>\installer\install.ps1` hidden
-(CreateNoWindow), from its own elevated process, with:
+The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File
+<package>\installer\install.ps1` hidden (CreateNoWindow), from its own elevated process, with:
 
 | Argument | Meaning |
 |---|---|
@@ -165,7 +165,23 @@ translation `RELEASE-NOTES.<lang>.md` is used when present; otherwise the window
 
 `<package>\setup\amdgpu_wddm_setup.exe` (WinForms, .NET Framework 4.8, `asInvoker`; it relaunches itself elevated
 with `runas` when it has to change the system). Arguments: none (welcome), `--continue` (from RunOnce),
-`--repair` (from the control app's Help, section 4 of interfaces.md), `--package <dir>`, `--prepare-offline`;
-`--smoke-render <dir> <scale> <lang>` and `--smoke-engine <package>` are headless test entries that never show a
-window. Strings: `setup\strings\<lang>.json` (`en`, `pl`, `ja`, `ko`), each entry with `text`, `source_sha256` (of
-the English text it translates) and `status` (`mt`, `mt-safe`, `rev`); English is the source.
+`--repair` (from the control app's Help, section 4 of interfaces.md), `--prepare-offline` (no elevation; it only
+copies), and the options `--package <dir>` (another package than the exe's own), `--run-root <dir>` (where each
+engine run keeps its events, result and log; default `%TEMP%\amdgpu-wddm-setup`, one `<utc>-<id8>` folder per run,
+Administrators and SYSTEM only when elevated) and `--dry-run` (welcome or `--repair` only: the install run passes
+`-DryRun` to the engine, so every screen is reached and nothing changes; lab item L4). `--version` prints the
+version. Two headless test entries never show a window:
+
+- `--smoke-render <dir> <scale> <lang> [--text-scale <f>] [--package <dir>]`: every screen from recorded engine
+  output, drawn to `<dir>\<screen>.png` with its visible text, and `<dir>\layout.txt` starting with `ok: ` or listing
+  overlaps, controls outside the window or the scroll range, G-A11Y and G-NOINT findings and missing strings;
+- `--smoke-engine <package> <out-dir> [--script <name>] [--cancel] [--plan] -- <engine args>`: one real engine run
+  through the same client as the window, `<out-dir>\summary.txt` (model, result binding, chosen screen, the screen
+  in each language checked for internals) and `<out-dir>\support.zip`.
+
+Strings: `strings.<lang>.txt` (`en`, `pl`, `ja`, `ko`) embedded in the exe, the control app's format
+(`id|status|hash8|text`, status `mt`, `mt-safe` or `rev`, hash of the English text a line translates; English is
+the source; `stamp.ps1` refreshes the hashes). The window's language is the control app's choice
+(`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the header
+switches it. The tip panel follows the control app's guide setting: no character art in the setup window yet, the
+same tip text with a plain title.

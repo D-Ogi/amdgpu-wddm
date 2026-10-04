@@ -84,7 +84,7 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
-# The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe and its string tables. The installer's
+# The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The installer's
 # continuation runs it from the staged closure after each restart that a setup-window run asked for.
 if ($SetupApp) {
     $setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
@@ -92,11 +92,6 @@ if ($SetupApp) {
     $setupDst = Join-Path $pkg 'setup'
     [void][IO.Directory]::CreateDirectory($setupDst)
     foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File | Where-Object { $_.Extension -in '.exe', '.config' }) { Copy-Item -LiteralPath $f.FullName -Destination $setupDst }
-    $setupStrings = Join-Path $SetupApp 'strings'
-    if (Test-Path -LiteralPath $setupStrings) {
-        [void][IO.Directory]::CreateDirectory((Join-Path $setupDst 'strings'))
-        foreach ($f in Get-ChildItem -LiteralPath $setupStrings -File -Filter '*.json') { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $setupDst 'strings') }
-    }
     '  setup window: {0} ({1})' -f $setupExe, (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.Substring(0, 8)
 }
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
