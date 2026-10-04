@@ -120,6 +120,58 @@ menu, no frame cap). In that session the governor kept 1500 MHz / 919 mV while T
 because no rule stopped a raise between 82 C and 87 C. `test_warm` in `dpm_test.c` covers the edges (84.999,
 85.000, 86.999 and 87.000 C). The plant model gives the same results with and without the zone.
 
+From 0.7.203 a thermal ramp starts at 70 C (`BC250_DPM_RAMP_KNEE_MC`). The rules are:
+
+- At 70 C or more and below 85 C, a raise goes up one level (100 MHz) at most.
+- A raise occurs only when the last raise is at least the ramp interval ago. The interval is 1000 ms at 70 C. It
+  increases linearly to 4000 ms at 85 C (`bc250_dpm_ramp_interval_ms`). At 80 C it is 3000 ms. At 84 C it is 3800 ms.
+- Each raise starts the interval again. This includes a raise below 70 C and a raise whose SMU transaction failed.
+- The ramp applies to a raise from the load, to a raise from the runtime floor and to a clock that follows a released
+  cap.
+- The ramp does not change a lowering, the thermal cap, the warm zone or the limits (85, 87, 82 and 90 C).
+- Below 70 C, the governor operates as before 0.7.203.
+
+The ramp values are constants. The `RUN_DPM_TUNE` escape (ABI 2) has no field for them, and a new field is an ABI
+change.
+
+When the ramp makes a raise smaller or stops it, the throttle reason is `thermal-ramp` (9). The counter `ramp` in the
+driver log lines counts these governor ticks. `want` in the telemetry stays the level that the load asks for.
+
+The reason is session 367 (KMD 0.7.202.1, `DpmMaxMHz` 2000). The governor was at 1000 MHz, and Tctl was 75.7 C after
+an earlier load. A load spike (busy 93 %) raised the clock to 2000 MHz / 1000 mV in three ticks. The hot spot then
+increased by approximately 12 C in 5 s. Tctl was 87.1 C approximately 9 s after the last idle telemetry line. The
+warm zone did not stop this, because it examines only the reading of the current tick. At that tick the raise was
+complete. The hot rule then lowered the clock from 1900 MHz to 1500 MHz in 1.6 s. The lab runner stopped the session,
+because Tctl stayed at 87 C for three samples.
+
+The hot spot has a fast time constant of approximately 3 s. With one level per interval, the reading shows the effect
+of each raise before the next raise. From 80 C the interval is longer than this time constant. A jump to 2000 MHz adds
+approximately 15 C. Thus a jump from below 70 C stays below 87 C.
+
+`test_ramp` in `dpm_test.c` covers the edges (69.999 and 70.000 C, 84.9 C, a stalled tick, the floor, the warm zone).
+`test_plant367` runs session 367 on a two-node plant. The plant constants come from the lab: 12 C in 5 s at 2000 MHz,
+and a steady state of 82.8 C at 1300 MHz and 86.0 C at 1400 MHz. Sessions 361-365 held 1300-1400 MHz at 84-86 C with
+the 1500 MHz ceiling. The test compares the rule before 0.7.203 with the ramp:
+
+| Start 75.7 C, ceiling 2000 MHz, ten minutes | Before 0.7.203 | Ramp |
+|---|---|---|
+| Hot spot peak (model) | 87.5 C | 86.6 C |
+| Highest reading (with +-0.4 C noise) | 87.9 C | 87.0 C |
+| First reading at 87 C or more | 4.3 s | 29.1 s |
+| Longest time at 87 C or more without a break | 1950 ms | 25 ms (one tick) |
+| Clock at the end | 1300 MHz (cap latched) | 1400 MHz |
+| First time at the end clock | - | 9.1 s |
+| Last level change | 7.4 s | 54.7 s |
+
+With the ramp, the clock goes to 1500 MHz once while the sink is below its steady state at 1400 MHz. The sink
+increases with a time constant of 90 s. Two single-tick readings at 87.0 C then occur, and the hot rule lowers the
+clock one level at once. A rule that reads only the temperature of the current tick cannot see this slow increase.
+
+The test also runs starts from 50 C to 82 C. Before 0.7.203, the hot spot goes above 87 C for each start from 74 C
+(9 of 33 starts). With the ramp, the hot spot stays below 87 C for all starts (peak 86.7 C). From a cold start the two
+rules give the same result: the clock gets to 2000 MHz below 70 C, and the hot rule lowers it on the slow increase of
+the sink. The plant constants are not measurements of the full thermal system. The lab must confirm the result.
+
 From 0.7.197 (BD-055) the drop on entering the hot band is at once only when the cap last moved at least a hot step
 ago. Before, every upward crossing of 87 C stepped, so a reading hovering at the limit walked the clock down at the
 crossing rate rather than the hot step. A re-entry inside the hot step now clamps the cap to the running clock (no
@@ -187,7 +239,8 @@ start, without a restart and without the registry:
   cycle. A refused tune names the reason and leaves the values as they were.
 - The floor lifts only what the load asks for. The thermal cap (87 C, released below 82 C), the critical rule (90 C),
   a missing sensor and SetStablePowerState all still win: each brings the clock below the floor. From 0.7.200 the
-  warm zone (85 C to 87 C) also stops a raise to the floor. The clock stays at its level until a reading is below 85 C. `want` in the
+  warm zone (85 C to 87 C) also stops a raise to the floor. The clock stays at its level until a reading is below 85 C.
+  From 0.7.203, at 70 C or more, the clock goes up to the floor one level per ramp interval. `want` in the
   telemetry stays the load's own answer, so a floored run still shows what the governor would have chosen.
 - Every change is a line in the driver log with old and new values, e.g. `dpm: tune (floor): up 900->900 target
   800->800 down 650->650 permille, hold 200->200 ms, floor 0->2000 MHz, serial 3` (floor 0 = none). While the values
@@ -210,13 +263,16 @@ start, without a restart and without the registry:
 - `bc250kmd_cli dpm [count [interval ms]]`: mode, requested mode, reason, the thresholds and floor in force with their
   source (default or runtime, 0.7.185), then per sample the committed clock and
   voltage, the SMU readback (MHz, VID), temperature, busy and average busy, demand, thermal cap, ceiling, throttle
-  reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed, thermal-warm) and counters, then the busy
+  reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed, thermal-warm, thermal-ramp) and counters, then the busy
   source (grbm or submit), the submit share and the SDMA0 share (0.7.177).
   It uses `BC250_ESCAPE_RUN_DPM` with NoAdapterSynchronization only: a software snapshot, no adapter idle.
 - The driver log (`bc250kmd_cli log`) gets every transition, a telemetry line every 5 s and a line in the summary.
   From 0.7.200 these lines show `warm N` after `thermal N`: N is the number of governor ticks in which the warm zone
   stopped a raise. The `RUN_DPM` escape does not carry this counter. A CLI built before 0.7.200 shows throttle 8 as
   `?`.
+- From 0.7.203 these lines also show `ramp N` after `warm N`. N is the number of governor ticks in which the thermal
+  ramp made a raise smaller or stopped it. The `RUN_DPM` escape does not carry this counter. A CLI built before
+  0.7.203 shows throttle 9 as `?`.
 
 ## Other places that assumed 1000 MHz
 
