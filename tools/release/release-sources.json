@@ -9,6 +9,9 @@
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
+    "d3d11_shell": "bc250-win m14/dxgi-private-hints 7abf21de",
+    "d3d11_engine": "dxvk fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49",
+    "d3d11_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "files": [
@@ -63,10 +66,10 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/approuter-fix/build-router-06a0975b/bc250d3d_router.dll",
-      "sha256": "F65C0E0419B4BE6D82212A269086E96FBFD649243847A3B0017A78646A19F3B8",
-      "size": 22016,
-      "role": "desktop/application router (amdgpu-wddm 06a0975b, driver/umd/router: gpu-default keeps Windows components on the CPU UMD)"
+      "source": "scratch/approuter-fix/build-router-631d25da/bc250d3d_router.dll",
+      "sha256": "692D9060203763F1278DA68E395932E606FEA74574CCD1A5071D2F76AFB62E3B",
+      "size": 22528,
+      "role": "desktop/application router (amdgpu-wddm 631d25da, driver/umd/router: gpu-default keeps Windows components and unresolved images on the CPU UMD)"
     },
     {
       "component": "desktop-umd",
@@ -95,34 +98,34 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_d3d11.dll",
-      "sha256": "E748418C1F7DF57309E424D5DB7D464F68DA1BF8F82820707FA56F0E58FA00BB",
-      "size": 445952,
-      "role": "GPU D3D11 shell (app-route-001)"
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_d3d11.dll",
+      "sha256": "7E9F1692157E79FEC9B0BC2E9F92E73BD4907D00ECBF4885E5B88ABC1B3F76A1",
+      "size": 598528,
+      "role": "GPU D3D11 shell (amdgpu-wddm m14/dxgi-private-hints 7abf21de: engine-private DXGI hints, static CRT; built against DXVK fork 0c187731; app-route-dp5)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_d3d11.config",
-      "sha256": "A9B498ED8911B81D76693C1BC90066929364D661AE43D2B971FAAE198D4E9917",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_d3d11.config",
+      "sha256": "FD848638B5DD2A5195DEFFAE30C0BDB6D64044F7D42A8566828A89A7B2131DCC",
       "size": 132,
-      "role": "GPU D3D11 caps record"
+      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD F9DCB33B (tools/build/write-umd-config.py; capabilities carried from fl12caps001, not re-measured on this pair)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_dxvk.dll",
-      "sha256": "8E9B31875F3A97C046F91397D7DEEBE7037E419503A13CEDEE772401BCB2780A",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_dxvk.dll",
+      "sha256": "7D28D8F57368C89082E65FD33991AE988B3523C7922909206F0598BF6FBB0554",
       "size": 4403200,
-      "role": "GPU D3D11 engine (DXVK fork)"
+      "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49: r8 0c187731 + the initializer's throttle wait)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/m15/app-route/package-001/app-route-001/gpu/amdgpu_wddm_radv.dll",
-      "sha256": "D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27",
-      "size": 24285696,
-      "role": "GPU D3D11 ICD"
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_radv.dll",
+      "sha256": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC",
+      "size": 22361600,
+      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/draw-path ae98c795, static CRT): the same build as payload/d3d12/amdgpu_wddm_radv.dll, so a process using D3D11 and D3D12 loads one RADV build"
     },
     {
       "component": "vulkan-icd",
