@@ -233,7 +233,7 @@ void test_same_process() {
     // The same pid with another creation time is another process (pid reuse).
     rl::Inputs reused=inputs(store,exe,41);reused.start+=1;
     CHECK(rl::commit(reused,rl::ApiD3D12)==rl::Outcome::Recorded);
-    CHECK(read_list(store,e) && e[0].starts==3);
+    CHECK(read_list(store,e) && e.size()==1 && e[0].starts==3);
     // Two modules of one process at the same moment: one launch, both APIs (or one entry lost as Busy).
     for(int round=0;round<20;++round){
         const std::wstring two=L"C:\\Games\\two-"+std::to_wstring(round)+L".exe";
@@ -255,13 +255,13 @@ void test_prune() {
         CHECK(rl::commit(inputs(store,L"C:\\Games\\p"+std::to_wstring(i)+L".exe",1000+i),rl::ApiD3D12)==rl::Outcome::Recorded);
     std::vector<rl::Entry> e;
     CHECK(read_list(store,e) && e.size()==rl::kMaxEntries);
-    CHECK(e.front().path==L"C:\\Games\\p69.exe" && e.back().path==L"C:\\Games\\p6.exe" && !find(e,L"C:\\Games\\p5.exe"));
+    CHECK(!e.empty() && e.front().path==L"C:\\Games\\p69.exe" && e.back().path==L"C:\\Games\\p6.exe" && !find(e,L"C:\\Games\\p5.exe"));
     // A launch whose clock reads earlier than every entry is still the most recent one and is kept.
     CHECK(rl::commit(inputs(store,L"C:\\Games\\early.exe",7,0x0000000100000000ull),rl::ApiD3D12)==rl::Outcome::Recorded);
     CHECK(read_list(store,e) && e.size()==rl::kMaxEntries && e.front().path==L"C:\\Games\\early.exe");
     // An older entry launched again moves to the front without losing its count.
     CHECK(rl::commit(inputs(store,L"C:\\Games\\p30.exe",2000),rl::ApiD3D11)==rl::Outcome::Recorded);
-    CHECK(read_list(store,e) && e.front().path==L"C:\\Games\\p30.exe" && e.front().starts==2 && e.size()==rl::kMaxEntries);
+    CHECK(read_list(store,e) && e.size()==rl::kMaxEntries && e.front().path==L"C:\\Games\\p30.exe" && e.front().starts==2);
 }
 
 void test_store_states() {
