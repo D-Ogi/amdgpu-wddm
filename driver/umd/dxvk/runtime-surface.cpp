@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface.h"
 #include "runtime-surface-format.h"
+#include "diagnostics.h"
 namespace bc250::umd {
 HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
     const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
@@ -13,9 +14,17 @@ HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
     out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
     out.phase=SurfacePhase::failed;
     HRESULT hr=allocate_runtime_surface(runtime,request,out.allocation);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) {
+        surface_diagnostic("allocate",hr,request.surface.Format,request.surface.Width,request.surface.Height,
+            request.surface.Pitch,request.surface.Size,(request.primary ? 1ull : 0ull)<<32|request.vidpn_source);
+        return hr;
+    }
     hr=map_runtime_surface(runtime,queue,out.allocation.allocation,out.bytes,out.mapping);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) {
+        surface_diagnostic("map",hr,request.surface.Format,request.surface.Width,request.surface.Height,
+            request.surface.Pitch,request.surface.Size,0);
+        return hr;
+    }
     out.phase=SurfacePhase::paging;
     return S_FALSE; // Even completed paging still needs an image and texture.
 }
@@ -52,7 +61,11 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     imported.size=surface.bytes;
     hr=create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,
         imported,surface.pitch,surface.texture);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) {
+        surface_diagnostic("texture",hr,UINT(surface.desc.Format),surface.desc.Width,surface.desc.Height,
+            surface.pitch,surface.bytes,surface.desc.BindFlags);
+        return hr;
+    }
     surface.phase=SurfacePhase::ready;
     return S_OK;
 }

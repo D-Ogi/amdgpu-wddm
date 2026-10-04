@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-image-memory.h"
+#include "diagnostics.h"
 namespace bc250::umd {
 namespace {
 HRESULT status(VkResult result) {
@@ -30,7 +31,10 @@ HRESULT import_runtime_image_memory(RuntimeDevice &runtime,VkDevice device,VkIma
         properties.memoryTypeCount>VK_MAX_MEMORY_TYPES) return E_INVALIDARG;
     VkMemoryRequirements requirements{}; vk.requirements(device,image,&requirements);
     if (!requirements.size || requirements.size>source.size || !requirements.alignment ||
-        source.va%requirements.alignment) return E_INVALIDARG;
+        source.va%requirements.alignment) {
+        surface_diagnostic("memory-requirements",E_INVALIDARG,0,0,0,requirements.size,source.size,requirements.alignment);
+        return E_INVALIDARG;
+    }
     UINT memoryType=properties.memoryTypeCount;
     for (UINT i=0;i<properties.memoryTypeCount;++i) {
         if ((requirements.memoryTypeBits & (1u<<i)) &&
@@ -79,7 +83,14 @@ HRESULT create_linear_runtime_image(RuntimeDevice &runtime,VkDevice device,const
     if (!layout.offset && layout.rowPitch==pitch && layout.size && layout.size<=source.size &&
         rowBytes<=layout.size && VkDeviceSize(info.extent.height-1)<=(layout.size-rowBytes)/pitch)
         hr=import_runtime_image_memory(runtime,device,created.image,vk.memory,properties,source,created.memory);
-    if (FAILED(hr)) { vk.destroy(device,created.image,nullptr); return hr; }
+    if (FAILED(hr)) {
+        // Measured layout against the runtime storage: offset, row pitch, size; then pitch, storage, row bytes.
+        surface_diagnostic("image-layout",hr,unsigned(info.format),info.extent.width,info.extent.height,
+            layout.offset,layout.rowPitch,layout.size);
+        surface_diagnostic("image-storage",hr,unsigned(info.format),info.extent.width,info.extent.height,
+            pitch,source.size,rowBytes);
+        vk.destroy(device,created.image,nullptr); return hr;
+    }
     out=created; return S_OK;
 }
 void destroy_runtime_image(VkDevice device,const RuntimeImageDispatch &vk,RuntimeImage &image) {
