@@ -57,7 +57,17 @@ function Test-CompatibilityRecord {
     $listed = @($m.files | Where-Object { $_.path -eq $script:CompatibilityFile }).Count -eq 1
     $rec = $null
     if (-not (Test-Path -LiteralPath $p) -or -not $listed) { Add-Reason 'compat.missing' "no $($script:CompatibilityFile) listed in manifest.json (a package built before the record existed)" }
-    else { try { $rec = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json } catch { Add-Reason 'compat.unreadable' $_.Exception.Message } }
+    else {
+        # A content hash says only that the file is the one built; the record must still be one JSON object of the
+        # supported schema. JSON null, a number, a string, an array or an empty file is no record (the text is checked
+        # first: Windows PowerShell unrolls a one-element array into its element).
+        $raw = [IO.File]::ReadAllText($p).Trim().TrimStart([char]0xFEFF)
+        if ($raw -notmatch '^\{') { Add-Reason 'compat.unknown-schema' "not a JSON object: $(if ($raw.Length -gt 40) { $raw.Substring(0, 40) + '...' } elseif ($raw) { $raw } else { 'empty' })" }
+        else {
+            try { $rec = ConvertFrom-Json -InputObject $raw } catch { Add-Reason 'compat.unreadable' $_.Exception.Message }
+            if ($null -ne $rec -and -not ($rec -is [pscustomobject])) { Add-Reason 'compat.unknown-schema' 'not a JSON object'; $rec = $null }
+        }
+    }
     if ($rec -and $rec.schema -ne $script:CompatibilitySchema) { Add-Reason 'compat.unknown-schema' "schema $($rec.schema)"; $rec = $null }
     if ($rec) {
         if ([string]$rec.version -ne [string]$m.version) { Add-Reason 'compat.other-package' "record of $($rec.version) in package $($m.version)" }

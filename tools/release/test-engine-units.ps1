@@ -34,12 +34,13 @@ $fwPin = [pscustomobject]@{ commit = ('0' * 40); install_dir = 'C:\BC250\firmwar
 $infGood = "[Version]`r`nSignature = `"`$Windows NT`$`"`r`n`r`n[Manufacturer]`r`n%P% = Models,NTamd64`r`n`r`n[Models.NTamd64]`r`n%D% = Bc250_Install, PCI\VEN_1002&DEV_13FE`r`n`r`n[Bc250_Install]`r`nReboot`r`nCopyFiles = F`r`n"
 $infTester10 = $infGood -replace "Reboot`r`n", ''
 function New-FakePackage {
-    param([string]$Dir, [string]$Version = '0.7.199.100-test.1', [string]$Inf = $infGood, [switch]$NoRecord, [scriptblock]$EditRecord, $Firmware = $fwPin)
+    param([string]$Dir, [string]$Version = '0.7.199.100-test.1', [string]$Inf = $infGood, [switch]$NoRecord, [scriptblock]$EditRecord, $Firmware = $fwPin, [AllowNull()][AllowEmptyString()][string]$RecordText = $null, [switch]$RawRecord)
     Write-Text (Join-Path $Dir 'payload\kmd\bc250kmd.inf') $Inf
     Write-Text (Join-Path $Dir 'payload\kmd\bc250kmd.sys') "kmd image $Version"
     Write-Text (Join-Path $Dir 'installer\registry-defaults.json') '{ "schema": 1, "defaults": { "parameters": { "DpmMode": 1 }, "desktop_router": { "DwmForceCpu": 0 } } }'
     Write-Text (Join-Path $Dir 'install.cmd') '@echo off'
-    if (-not $NoRecord) {
+    if ($RawRecord) { Write-Text (Join-Path $Dir 'compatibility.json') $RecordText }
+    elseif (-not $NoRecord) {
         $rec = New-CompatibilityRecord -PackageRoot $Dir -Version $Version -Firmware $Firmware -KmdBuild '0.7.199.1' -KmdAbi '0x000700C7' -DriverVer '0.7.199.100'
         if ($EditRecord) { & $EditRecord $rec }
         Write-Text (Join-Path $Dir 'compatibility.json') ($rec | ConvertTo-Json -Depth 6)
@@ -252,6 +253,14 @@ Check $cv.ok 'a set with its complete firmware verifies'
 [IO.File]::AppendAllText((Join-Path $pkg 'compatibility.json'), ' ')
 $cv = Test-CompatibilityRecord -PackageRoot $pkg
 Check ((-not $cv.ok) -and (@($cv.reasons) -contains 'compat.package-damaged')) 'a record changed after the build fails the package integrity'
+# R11: a listed, hash-valid record that is not one JSON object of the schema is no record.
+foreach ($c in @(@{ name = 'JSON null'; text = 'null' }, @{ name = 'a number'; text = '7' }, @{ name = 'a string'; text = '"amdgpu-wddm.compatibility/1"' },
+        @{ name = 'an array'; text = '[ { "schema": "amdgpu-wddm.compatibility/1" } ]' }, @{ name = 'an empty file'; text = '' }, @{ name = 'an empty object'; text = '{}' })) {
+    $d = Join-Path $work ('compat-raw-' + ($c.name -replace '[^a-z0-9]+', '-'))
+    [void](New-FakePackage -Dir $d -RawRecord -RecordText $c.text)
+    $cv = Test-CompatibilityRecord -PackageRoot $d
+    Check ((-not $cv.ok) -and ($null -eq $cv.record) -and (@($cv.reasons | Where-Object { $_ -in 'compat.unknown-schema', 'compat.unreadable' }).Count -ge 1)) "$($c.name) as the record: refused ($(@($cv.reasons) -join ', '))"
+}
 
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
