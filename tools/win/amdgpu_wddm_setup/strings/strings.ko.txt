@@ -121,6 +121,8 @@ settings.auto-clock.off|mt|3df7a04f|자동 그래픽 클럭: 꺼짐
 settings.cores|mt|36cd7560|그래픽 코어: {0}
 settings.desktop.gpu|mt|7befc32c|그래픽 칩이 바탕 화면을 그림
 settings.desktop.cpu|mt|0fcc82b2|프로세서가 바탕 화면을 그림 (안전 모드)
+settings.d3d11.gpu|mt|c45dd50d|Direct3D 11 및 10.1 게임과 앱은 그래픽 칩이 그립니다 (Windows 자체 앱과 Direct3D 10.0 앱은 프로세서에 남습니다)
+settings.d3d11.listed|mt|747f87a0|Direct3D 11 게임과 앱은 프로세서가 그립니다 (목록에 있는 것은 제외)
 settings.game|mt|f203abf1|{0} 권장 설정
 settings.other|mt|b4abd830|기타 드라이버 설정 {0}개 (그중 새 설정 또는 변경 {1}개)
 settings.decision.set|mt-safe|11507a0e|새 설정

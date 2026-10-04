@@ -195,12 +195,18 @@ static class UnitTests
         plan.Rows.Add(new SettingRow { Group = "d3d12:witcher3.exe", Name = "Experiment", Decision = "update", Value = "a,b" });
         plan.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableMmio", Decision = "same", Value = 1 });
         plan.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableFullWddm", Decision = "update", Value = 2 });
+        plan.Rows.Add(new SettingRow { Group = "app_router", Name = "Mode", Decision = "update", Current = "allowlist", Value = "gpu-default" });
+        plan.Rows.Add(new SettingRow { Group = "app_router", Name = "Allow", Decision = "same", Value = "dxdiag.exe" });
         var lines = SettingsView.Lines(plan);
-        Equal(6, lines.Count, "settings: five named lines and one for the rest");
+        Equal(7, lines.Count, "settings: six named lines and one for the rest");
         var text = string.Join("\n", lines.Select(l => Strings.In("en", l.TextId, l.Args) + (l.DecisionId != null ? ": " + Strings.In("en", l.DecisionId) : "")));
         Check(text.Contains("Graphics clock limit: 1700 MHz: your value is kept"), "settings: a kept value shows the user's value");
         Check(text.Contains("Automatic graphics clock: off") && text.Contains("Graphics cores: 40") && text.Contains("processor (safe mode)") && text.Contains("witcher3.exe"), "settings: the named settings in plain words");
-        Check(text.Contains("2 other driver settings, 1 of them new or changed"), "settings: the rest counted");
+        Check(text.Contains("3 other driver settings, 1 of them new or changed"), "settings: the rest counted");
+        Check(text.Contains("Direct3D 11 and 10.1 games and apps drawn by the graphics chip") && !text.Contains("gpu-default"), "settings: the D3D11 route of tester.11 in plain words (GPU, Windows' own apps on the processor)");
+        var old = new SettingsPlan();
+        old.Rows.Add(new SettingRow { Group = "app_router", Name = "Mode", Decision = "kept", Current = "allowlist", Value = "gpu-default" });
+        Check(SettingsView.Lines(old)[0].TextId == "settings.d3d11.listed", "settings: a kept allowlist route says so");
         Check(!Regex.IsMatch(text, "Dpm|Enable|Dwm|Experiment|parameters"), "settings: no registry names in the window");
         foreach (var d in new[] { "set", "same", "update", "kept", "command" }) Check(Strings.Has("settings.decision." + d), "settings: decision " + d + " has words");
     }

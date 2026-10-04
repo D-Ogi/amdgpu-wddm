@@ -36,6 +36,10 @@ namespace AmdgpuWddmSetup
                 else if (group == "parameters" && name == "DpmMode") line = new SettingLine { TextId = Number(shown) == 0 ? "settings.auto-clock.off" : "settings.auto-clock.on" };
                 else if (group == "parameters" && name == "CuMode") line = new SettingLine { TextId = "settings.cores", Args = new[] { Json.Show(shown) } };
                 else if (group == "desktop_router" && name == "DwmForceCpu") line = new SettingLine { TextId = Number(shown) == 1 ? "settings.desktop.cpu" : "settings.desktop.gpu" };
+                // The D3D11 route (tester.11 on): gpu-default sends Direct3D 11 and 10.1 applications to the graphics chip,
+                // while Windows' own applications and Direct3D 10.0 stay on the processor; allowlist sends only the listed ones.
+                else if (group == "app_router" && name == "Mode" && Json.Show(shown) == "gpu-default") line = new SettingLine { TextId = "settings.d3d11.gpu" };
+                else if (group == "app_router" && name == "Mode" && Json.Show(shown) == "allowlist") line = new SettingLine { TextId = "settings.d3d11.listed" };
                 else if (group.StartsWith("d3d12:", StringComparison.Ordinal)) line = new SettingLine { TextId = "settings.game", Args = new object[] { group.Substring(6) } };
                 if (line == null)
                 {

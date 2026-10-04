@@ -123,6 +123,8 @@ settings.auto-clock.off|src|-|Automatic graphics clock: off
 settings.cores|src|-|Graphics cores: {0}
 settings.desktop.gpu|src|-|Desktop drawn by the graphics chip
 settings.desktop.cpu|src|-|Desktop drawn by the processor (safe mode)
+settings.d3d11.gpu|src|-|Direct3D 11 and 10.1 games and apps drawn by the graphics chip (Windows' own apps and Direct3D 10.0 apps stay on the processor)
+settings.d3d11.listed|src|-|Direct3D 11 games and apps drawn by the processor, except the listed ones
 settings.game|src|-|Recommended settings for {0}
 settings.other|src|-|{0} other driver settings, {1} of them new or changed
 settings.decision.set|src|-|new

@@ -121,6 +121,8 @@ settings.auto-clock.off|mt|3df7a04f|Automatyczne taktowanie grafiki: wyłączone
 settings.cores|mt|36cd7560|Rdzenie graficzne: {0}
 settings.desktop.gpu|mt|7befc32c|Pulpit rysowany przez układ graficzny
 settings.desktop.cpu|mt|0fcc82b2|Pulpit rysowany przez procesor (tryb bezpieczny)
+settings.d3d11.gpu|mt|c45dd50d|Gry i aplikacje Direct3D 11 i 10.1 rysowane przez układ graficzny (aplikacje samego Windows i aplikacje Direct3D 10.0 zostają na procesorze)
+settings.d3d11.listed|mt|747f87a0|Gry i aplikacje Direct3D 11 rysowane przez procesor, z wyjątkiem tych z listy
 settings.game|mt|f203abf1|Zalecane ustawienia dla {0}
 settings.other|mt|b4abd830|Inne ustawienia sterownika: {0}, w tym nowe lub zmienione: {1}
 settings.decision.set|mt-safe|11507a0e|nowe
