@@ -3,14 +3,25 @@
 The control application for testers of the amdgpu-wddm driver on the ASRock BC-250. It runs on the tester's own PC,
 by hand, like the vendor's control panel: a normal window, no service, no autostart, no network, no lab tools.
 
+The window speaks to ordinary users (GUI-PLAN-v7, phase 1): plain words, no driver internals, error codes or internal
+versions. A unit test and the render gate check every visible text against `PlainWords.Internals`; technical detail
+goes only into the support report and the Support page (shown when "Show support options" is on). Texts come from
+`strings/strings.<lang>.txt` (English is the source; Polish, Japanese and Korean are machine translations marked `mt`).
+
 | Page | What it shows or changes |
 |---|---|
-| Overview | KMD version, driver package version and date, GPU name, video memory in use, test signing, whether the desktop composes on the GPU (the release's desktop router wins: `DwmForceCpu` 1 reads
-"CPU route (GPU route disabled, BD-058)"), a one-line Recovery summary, clock, voltage, temperature, load, DPM mode, ceiling and the current limit; the installed components (the KMD service image, every `*DriverName` value of the display driver key, Vulkan driver manifests and their libraries) with file version and SHA-256 |
-| Performance | DPM on or off and the ceiling (1000-2000 MHz on the 100 MHz grid, default 1500); temperature protection as read-only text |
-| Applications | D3D12 application profiles: the `Experiment` value of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` as check boxes with plain descriptions; names outside the catalog are shown and kept, not edited |
-| Recovery | The driver's start and recovery states, each in plain English with one recommended action, and five safe actions (below) |
-| Diagnostics | "Create bug report": a zip on the Desktop, after the tester has seen the file list and each file's text |
+| Home | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
+| Games | One entry per game file name (recent launches, stored profiles, the release's defaults, added games); per game the D3D12 application profile as grouped check boxes with origin and cost, Apply/Discard, Undo/Redo and "Recommended" |
+| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid), the compute unit choice (section 7 of the plan), Restore defaults (keep or reset the games) with undo; features the driver cannot do yet as "Coming later" |
+| Display | The monitors Windows reports, Identify, a link to the Windows display settings; mode, scaling, HDR and VRR as "Coming later" |
+| Performance | Live temperature, clock and load (every 2 s, only while shown and not minimized), the shader cache sizes; power, fan and voltage as "No reading" or "Coming later" |
+| Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
+| Settings | Language, update check at start, recent launches, Nagi, tips, animations, support options, what data the app keeps |
+| Help | Four symptom guides, one explanation per setting (through search), Repair, Restart Windows, the support report, About |
+| Support | The driver's start and recovery states in English, the technical actions (below), the installed components |
+
+`--recovery` opens a small recovery view that never loads `bc250control.dll`: the installed release, the symptom
+guides, Repair, Restart Windows and the support report.
 
 ## How it talks to the driver
 
@@ -31,8 +42,9 @@ request the release's logon task sends: administrator only, `HardwareAccess`, on
 or unconfirmed start; the page shows the last start's reason.
 
 The window runs as the invoking user. A change starts an elevated copy of the program (one UAC prompt) with one verb,
-`--action <name>` or `--apply-profiles <exe> <list> ...` (an empty list removes the application's key), which checks
-its arguments with the same functions as the window and reads the value back.
+`--action <name>` (a game's settings: `--action game-profile --image <name.exe> --value <switches>`, an empty value
+removes the game's key; `game-undo` and `game-redo` take `--image`), which checks its arguments with the same
+functions as the window and reads the value back.
 
 ## Settings rule
 
@@ -95,8 +107,12 @@ observed in this session while the GPU route is selected.
 | `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD); not undoable | at once | the driver is not running; confirmed already; not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s; the helper retries the reading for 10 s) |
 | `enable-dpm [--ceiling N]` | `DpmMode` 1, and `DpmMaxMHz` N only when a ceiling is chosen | next restart (offered) | N is not 1000-2000 on the 100 MHz grid; stored already |
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
-| `reset-defaults` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason` | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; all at their defaults already |
-| `undo` | the values the newest undoable backup found | next restart (offered) | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
+| `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason`; Standard (24) graphics cores; with `--games reset` every game profile set to the release's recommendation or removed | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; `--games reset` without the release's game list; all at their defaults already |
+| `undo` | the values the newest undoable backup found (not per-game changes, not the graphics-core part) | next restart (offered) | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
+| `cu-mode --cu 24\|40` | the graphics-core values through `CuMode.Plan` (plan section 7); not undoable, the old values are kept for diagnosis | next restart (offered) | no choice; the stored state cannot be read or is the choice already |
+| `cu-confirm` | the start-health confirmation of a 40-core start | at once | the driver is not running; no 40-core start waits |
+| `game-profile --image <exe> --value <list>` | `Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` (an empty list removes the key) | next start of the game | not a file name or a catalog list; stored already |
+| `game-undo\|game-redo --image <exe>` | the game's value before its newest change (undo) or before its newest undo (redo) | next start of the game | nothing to undo or redo for that game |
 | `restart-compositor --accept-bd060` | nothing; stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
@@ -214,9 +230,20 @@ errors, `--smoke` (the pages built and refreshed once without a window, which on
 for this PC's user and computer name) and the Recovery dry runs (every action planned from `test/snapshot-bd059.json`,
 the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or refusal; a snapshot without `--dry-run`
 refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
-write `--out`) and `--smoke-render <dir> <scale>` at 1, 1.25 and 1.5 (every page drawn to a PNG without a
-window, with an unsaved demo profile on Applications, and the whole page as `<page>-full.png`; the build fails when
-two sibling controls overlap, a page is wider than the window or its last control lies outside the scroll range).
+write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
+is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
+5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--nagi]
+[--switch-to xx] [--fixture <snapshot.json>]` in 23 runs: four languages at 1, 1.25, 1.5 and 2, with
+`test/snapshot-bd059.json` as the fixture, text at 150 %, Nagi shown, and two language switches. Every page is drawn
+to a PNG without a window at the default size and at the minimum size, and the whole page as `<page>-full.png`. The
+build fails when two sibling controls overlap, a text is cut, a page is wider than the window or its last control
+lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
+stop, the art shows while "Show Nagi" is off, or a language switch leaves old texts behind. The unit tests also check
+every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
+
+`-NagiArt <dir>` embeds the guide character's art (`nagi.<expression>@128.png` and `@256.png`, from the files that
+`Guide.ArtFile` names) as resources. The art is not part of this repository; without `-NagiArt` the guide panel shows
+text only.
 
 The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
 as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release

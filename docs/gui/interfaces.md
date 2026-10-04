@@ -113,7 +113,7 @@ Commit protocol (one bounded protocol for writers, prune and clear):
 | `ReduceAnimations` | off (Windows "Animation effects" off also reduces) | 1 when checked; removed when unchecked |
 | `ShowSupportOptions` | off (D5) | 1 when checked; removed when unchecked |
 | `GettingStartedDismissed` | the card shows | 1 on "Dismiss"; removed by Help -> "Getting started" |
-| `HiddenGames` (REG_MULTI_SZ) | nothing hidden | the hidden entries' keys |
+| `HiddenGames` (REG_MULTI_SZ) | nothing hidden | the file names (`witcher3.exe`) of the hidden entries; the Games list has one entry per file name, as the profiles do (B3) |
 | `LastSeenRelease` (REG_SZ) | - | the verified release the app last showed, for the one-time "upgrade done" verdict |
 
 Update check cache: `HKCU\Software\amdgpu-wddm\Control\Update` (REG_SZ values, ISO 8601 UTC):
