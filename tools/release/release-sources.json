@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.201.1",
-  "kmd_abi": "0x000700C9",
+  "kmd_version": "0.7.202.1",
+  "kmd_abi": "0x000700CA",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win be24501d (kmd201-dxgi-modes)",
+    "kmd": "bc250-win 6dbfc532 (kmd202-bd065-blt-present)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
@@ -19,18 +19,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/dxgi-modes/build/kmd/package/bc250kmd.inf",
-      "sha256": "96E3B8689D4EED85C2A461E1991E8A6BD2ECC4242790E5B72CAD739DC1DEC7E9",
-      "size": 7868,
-      "role": "KMD 0.7.201.1 INF (commit be24501d, kmd201-dxgi-modes on kmd200-dpm-warm 5116c058); the release re-stamps DriverVer and adds the Reboot directive"
+      "source": "scratch/bd065/build-kmd-c/package/bc250kmd.inf",
+      "sha256": "7BE392814F77F844578C32FE8679F8694DA5BE0E4329D64BA12E532D5B6C380E",
+      "size": 8013,
+      "role": "KMD 0.7.202.1 INF (commit 6dbfc532, kmd202-bd065-blt-present on kmd201-dxgi-modes ef41aec3); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/dxgi-modes/build/kmd/package/bc250kmd.sys",
-      "sha256": "E6BD98B1D29DF7F934F1CB9C8CC2140126D403B355018322A7C3978071BC4404",
-      "size": 481680,
-      "role": "KMD 0.7.201.1 (commit be24501d, kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats, on 5116c058); re-signed with the release certificate, code unchanged"
+      "source": "scratch/bd065/build-kmd-c/package/bc250kmd.sys",
+      "sha256": "FAB407BC4EC02328D7EDCA67BA8E7C92DC201D28362F4ABA9FB38FA420231548",
+      "size": 482704,
+      "role": "KMD 0.7.202.1 (commit 6dbfc532, kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
@@ -99,10 +99,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/approuter-fix/d3d11-10bit/artifact/amdgpu_wddm_d3d11.dll",
-      "sha256": "A360BCBB7BE2D5885A0020F2B358ED25338EA4BC0EB6F6DD9CB1CC45C0334A45",
-      "size": 605696,
-      "role": "GPU D3D11 shell (amdgpu-wddm m14/d3d11-composed-primaries 7ae6462f = 7abf21de engine-private DXGI hints, static CRT + 3274b3d3 shared A8/FP16/RGB10A2 runtime surfaces + composed RGB10A2/RGBA16F primaries that keep their VidPn source + surface step diagnostics; built against DXVK fork 0c187731)"
+      "source": "scratch/bd065/artifact/amdgpu_wddm_d3d11.dll",
+      "sha256": "AD750E519F9260F7CDC554B391880CF051DA4C168A5338521CD8C3FFE288D797",
+      "size": 605184,
+      "role": "GPU D3D11 shell (amdgpu-wddm bd065-shell-bgra-shadow 32b074a5 = BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, on m14/d3d11-composed-primaries 7ae6462f = 7abf21de engine-private DXGI hints, static CRT + 3274b3d3 shared A8/FP16/RGB10A2 runtime surfaces + composed RGB10A2/RGBA16F primaries that keep their VidPn source + surface step diagnostics; built against DXVK fork 0c187731)"
     },
     {
       "component": "d3d11-umd",
@@ -172,9 +172,9 @@
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
       "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.dll",
-      "sha256": "C1F8A29F4E9117608D13B6E0814F6915B19A49A9C1CFF20F1B27DE27086EC60C",
-      "size": 514048,
-      "role": "x86 GPU D3D11 shell for 32-bit processes (amdgpu-wddm 7ae6462f + the x86 export and test patch; BD-064)"
+      "sha256": "69AFE349D430E63029959DBE0D7C805F1D9AC5C7AB0C0A179DB91BF3F89430C6",
+      "size": 521728,
+      "role": "x86 GPU D3D11 shell for 32-bit processes (amdgpu-wddm 32b074a5 = 7ae6462f + BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, + the x86 export and test patch; BD-064)"
     },
     {
       "component": "d3d11-umd-wow64",

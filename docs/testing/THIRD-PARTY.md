@@ -18,7 +18,7 @@ and NOTICE in the package root).
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `driver/umd/dxvk` |
 | `syswow64\bc250umd.dll` | amdgpu-wddm `driver/umd-stub`, x86 build |
 | `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `631d25da` (`driver/umd/router`) with the BD-064 x86 changes (Wow path values, 64-bit policy view, plain export names), x86 build |
-| `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `7ae6462f` (`driver/umd/dxvk`) with the BD-064 x86 changes (plain export name), x86 build |
+| `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `32b074a5` (`driver/umd/dxvk`) with the BD-064 x86 changes (plain export name), x86 build |
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `d8347cf031d2ee3bc2a79b5b142d2612875d96a3` (branch `release/control-app-t11`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`; the build at `dd30a44d` gives the same bytes) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `dd30a44d94500e7002b297a3ca5e19c43e1d9ff1` (branch `release/control-app-t11`) |
