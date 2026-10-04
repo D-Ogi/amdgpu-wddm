@@ -282,10 +282,20 @@ $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
 
-# Verification needs no preflight: it reads the installed copy (verify.cmd in the install root) or the package.
+# Verification needs no preflight. It checks the installed release against one manifest, which also names it in the
+# verify report: <install root>\manifest.json, read once (its bytes are hashed and parsed together), whatever package
+# started the verification; the package's own manifest only when nothing is installed there.
 if ($action.action -eq 'verify' -and -not ($DryRun -and -not $Verify)) {
-    $m = Join-Path $package 'manifest.json'
-    if (Test-Path -LiteralPath $m) { $script:Manifest = Get-Content -LiteralPath $m -Raw | ConvertFrom-Json }
+    $script:VerifyManifestSource = 'install-root'
+    $m = Join-Path $InstallRoot 'manifest.json'
+    if (-not (Test-Path -LiteralPath $m)) { $m = Join-Path $package 'manifest.json'; $script:VerifyManifestSource = 'package' }
+    $script:VerifyManifestSha256 = $null
+    if (Test-Path -LiteralPath $m) {
+        $bytes = [IO.File]::ReadAllBytes($m)
+        $script:VerifyManifestSha256 = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($bytes)) -replace '-', '')
+        $script:Manifest = (New-Object Text.UTF8Encoding $false).GetString($bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+    }
+    Write-Info "verifies against $m ($($script:VerifyManifestSource)): $(if ($script:Manifest) { $script:Manifest.version } else { 'no manifest' })"
     $state = $early
     if (-not $state) { $state = [pscustomobject]@{ schema = 1; phase = 'unknown' } }
     $script:VerifyOnly = $true
@@ -517,11 +527,8 @@ function Invoke-Verify {
 function Write-VerifyReport($Results) {
     try {
         $list = @($Results)
-        $mp = Join-Path $InstallRoot 'manifest.json'
-        $source = 'install-root'
-        if (-not (Test-Path -LiteralPath $mp)) { $mp = Join-Path $package 'manifest.json'; $source = 'package' }
-        $mf = $null; $msha = $null
-        if (Test-Path -LiteralPath $mp) { $mf = Get-Content -LiteralPath $mp -Raw | ConvertFrom-Json; $msha = Get-Sha256 $mp }
+        # The manifest the checks used (read once at the start of verification), never a second reading.
+        $mf = $script:Manifest; $msha = $script:VerifyManifestSha256; $source = $script:VerifyManifestSource
         $failed = @($list | Where-Object { -not $_.pass }).Count
         $complete = [bool]$script:VerifyComplete
         $report = [ordered]@{
