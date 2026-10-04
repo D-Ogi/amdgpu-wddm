@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.200.1",
-  "kmd_abi": "0x000700C8",
+  "kmd_version": "0.7.201.1",
+  "kmd_abi": "0x000700C9",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 5116c058 (kmd200-dpm-warm)",
+    "kmd": "bc250-win be24501d (kmd201-dxgi-modes)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
@@ -18,18 +18,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/kmd200/build/kmd/package/bc250kmd.inf",
-      "sha256": "09C1E92213C91543BD59B8E2D102AB5688CC97CD7B20B38D357A6EC2CF444004",
+      "source": "scratch/dxgi-modes/build/kmd/package/bc250kmd.inf",
+      "sha256": "96E3B8689D4EED85C2A461E1991E8A6BD2ECC4242790E5B72CAD739DC1DEC7E9",
       "size": 7868,
-      "role": "KMD 0.7.200.1 INF (commit 5116c058, kmd200-dpm-warm on kmd-t11 0aec4c58); the release re-stamps DriverVer and adds the Reboot directive"
+      "role": "KMD 0.7.201.1 INF (commit be24501d, kmd201-dxgi-modes on kmd200-dpm-warm 5116c058); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/kmd200/build/kmd/package/bc250kmd.sys",
-      "sha256": "5DD2502B27E74D48574EF1FD56D3D516E5B3D340A576A8F13D82A8CAA1B346C1",
-      "size": 480144,
-      "role": "KMD 0.7.200.1 (commit 5116c058, kmd200-dpm-warm: no DPM raise from 85 C, on kmd-t11 0aec4c58); re-signed with the release certificate, code unchanged"
+      "source": "scratch/dxgi-modes/build/kmd/package/bc250kmd.sys",
+      "sha256": "E6BD98B1D29DF7F934F1CB9C8CC2140126D403B355018322A7C3978071BC4404",
+      "size": 481680,
+      "role": "KMD 0.7.201.1 (commit be24501d, kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats, on 5116c058); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
