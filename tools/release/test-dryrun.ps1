@@ -291,14 +291,42 @@ foreach ($c in @(
     Check ($r.code -eq $c.code) "takeover at $($c.phase): exit $($r.code) (expected $($c.code))"
     Check (($r.text -match "this package \($([regex]::Escape($pkgVersion))\) takes over the unfinished installation of 0\.7\.198\.100-tester\.10 \(phase $($c.phase)\)") -and ($r.text -match "options of this install, kept until it completes: -FirmwareDir $([regex]::Escape($goodDir)) -NoControlApp") -and ($r.text -notmatch 'tester10-fw')) "takeover at $($c.phase): the state names this package with its own options"
     if ($c.phase -eq 'testsigning-pending') {
-        Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> $([regex]::Escape((Join-Path $Package 'install.cmd')))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s'
+        # The run after the restart is this package's, from its continuation closure (GUI plan A1), not the folder it started from.
+        $closureCmd = [regex]::Escape('cmd.exe" /d /c ' + (Join-Path $dir "packages\$pkgVersion\install.cmd"))
+        Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*$closureCmd") -and ($r.text -match "would: stage the continuation closure: every file of this package and the firmware folder $([regex]::Escape($goodDir))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s, from its closure'
     } else {
         Check (($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit /set')) 'takeover at testsigning-active: phase 2 runs, test signing is not set again'
     }
     if ($r.code -ne $c.code) { $r.text }
     Remove-Item -LiteralPath $dir -Recurse -Force
 }
+
+# The setup window's contract with the engine (GUI plan, docs/gui/interfaces-setup.md).
+'engine units: RunOnce command line, closure, repair set, witness, compatibility record, lock (test-engine-units.ps1 under 5.1)'
+$r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-engine-units.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', $WorkBase)
+$r.text
+Check ($r.code -eq 0) "G-STAGE units, witness writer, C7 record, engine lock: exit $($r.code)"
+$pwsh = (Get-Process -Id $PID).Path
+'G-EVT and G-STAGE: events and terminal result of the engine (test-engine-events.ps1)'
+$r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-engine-events.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1200
+$r.text
+Check ($r.code -eq 0) "G-EVT, G-STAGE: exit $($r.code)"
+'G-OFF: prepared folder and kept repair set with the network unavailable (test-offline.ps1)'
+$r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-offline.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1800
+$r.text
+Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
+
+'package records: compatibility, release notes, witness writer, planned restarts only'
+$cr = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
+Check (($cr.schema -eq 'amdgpu-wddm.compatibility/1') -and $cr.no_live_rebind.reboot_directive -and (@($m.files | Where-Object { $_.path -eq 'compatibility.json' }).Count -eq 1)) 'compatibility.json: the Reboot directive recorded, listed in manifest.json'
+$notesText = Get-Content -LiteralPath (Join-Path $Package 'RELEASE-NOTES.md') -Raw
+Check (@('New', 'Fixed', 'Known issues', 'Settings affected' | Where-Object { $notesText -notmatch "(?m)^## $_\s*$" }).Count -eq 0) 'RELEASE-NOTES.md has New / Fixed / Known issues / Settings affected'
+Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\release-witness.ps1')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'installer\release-witness.ps1')).Hash) 'release-witness.ps1 ships next to the installed start-confirm task'
+Check (($sc0 -match "Write-RunningReleaseWitness -InstallRoot \(Split-Path \`$here\) -RecordedBy 'start-confirm'") -and ($sc0.IndexOf('Write-RunningReleaseWitness') -gt $sc0.IndexOf('if ($Probe) {'))) 'the start-confirm task writes the running-release witness (not in -Probe)'
+Check (($src -match "Write-RunningReleaseWitness -InstallRoot \`$InstallRoot -RecordedBy 'verify'")) 'verify writes the running-release witness'
+$forced = @(foreach ($s in $scripts) { if ($s.text -match 'Restart-Computer|shutdown(\.exe)?\s+/r') { $s.name } })
+Check ($forced.Count -eq 0) "no installer script forces a restart (planned ExitWindowsEx after the user's yes only)$(if ($forced.Count) { ': ' + ($forced -join ', ') })"
 
 'uninstall -DryRun'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun')
