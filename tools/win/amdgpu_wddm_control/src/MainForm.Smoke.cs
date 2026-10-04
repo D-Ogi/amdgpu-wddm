@@ -55,7 +55,7 @@ namespace AmdgpuWddmControl
             w.AppendLine(Program.ProductName + " " + Program.VersionText);
             w.AppendLine("Status: " + _status.Title);
             foreach (var i in _status.Items) w.AppendLine("  [" + i.Severity + "] " + i.Text + (i.Action != null ? " -> " + i.Action : ""));
-            w.AppendLine("Guide: " + _verdict.Cause + " (" + _verdict.Expression + ")");
+            w.AppendLine("Guide: " + (_verdict == null ? "none" : _verdict.Cause + " (" + _verdict.Expression + ")"));
             string back = _page;
             foreach (var page in PageNames)
             {

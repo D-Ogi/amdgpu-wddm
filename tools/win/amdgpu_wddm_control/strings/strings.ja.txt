@@ -83,8 +83,10 @@ guide.cu-confirm-failed|mt|210bc0ed|40 コアの確認ができませんでし�
 guide.cu-not-saved|mt|3f220554|40 コアの確認を保存できませんでした。次回の起動で使用される設定は、グラフィックス ページに表示されます。
 guide.gpu-desktop-closed|mt|2be154cc|予期しないシャットダウンの後、デスクトップは安全で低速な方法を使用しています。高速な方法はホームから再びオンにできます。
 guide.desktop-replaced|mt|5c77c3e9|このセッションで Windows がデスクトップを再起動しました。Windows を再起動するまで、一部のアプリがマウスに反応しない場合があります。
+guide.installing|mt|0fc1d034|ドライバーをインストールしています。数分かかる場合があります。
 guide.pending-restart|mt|43402a6a|変更は保存されました。次回 Windows を再起動した後に有効になります。
-guide.work-in-progress|mt|5128c7cc|処理しています。1 分ほどかかる場合があります。
+guide.repairing|mt|5128c7cc|処理しています。1 分ほどかかる場合があります。
+guide.creating-report|mt|ad4df524|サポートレポートを収集しています。1 分ほどかかる場合があります。
 guide.upgrade-done|mt|298dabef|更新プログラムがインストールされ、チェックされました。楽しんでください！
 guide.welcome|mt|99bfb2d9|こんにちは、Nagi です。ホームには PC の状態が表示されます。その他の項目はすべて左側のメニューにあります。
 guide.about|mt|dccc95f8|このドライバーは、このボードが大好きな人たちが作っています。アカウントも追跡もありません。
@@ -99,6 +101,8 @@ status.title.problem|mt|4241fd03|確認が必要な項目があります
 status.title.attention|mt|2908a908|これを確認してください
 status.title.pending|mt|93aab4b5|完了するには Windows を再起動してください
 status.title.ok|mt-safe|6dbc080d|プレイの準備完了
+status.title.unknown|mt|3e28dda8|状態は不明です
+status.unreadable|mt|8c31205d|アプリは現在ドライバーの状態を読み取れませんでした。
 status.ok-detail|mt|a5875517|ドライバーは動作中で、対応が必要な項目はありません。
 status.not-installed|mt|20e303d1|この PC には amdgpu-wddm ドライバーがインストールされていません。
 status.not-installed.next|mt|663c2562|リリース ページにある amdgpu-wddm セットアップでインストールしてください。

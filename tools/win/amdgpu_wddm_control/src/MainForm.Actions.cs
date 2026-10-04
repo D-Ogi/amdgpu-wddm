@@ -36,14 +36,14 @@ namespace AmdgpuWddmControl
                 if (more.Image != null) { verb.Add("--image"); verb.Add(more.Image); }
                 if (more.Value != null) { verb.Add("--value"); verb.Add(more.Value); }
             }
-            _work = true;
+            _work = GuideCause.Repairing;       // a change by the recovery helper: rank 4's repair (section 6)
             ComputeStatus();
             Result(Strings.T("action.working"), true);
             Enabled = false;
             Task.Run(() => Program.RunElevatedCode(verb.ToArray())).ContinueWith(t =>
             {
                 Enabled = true;
-                _work = false;
+                _work = null;
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : RecoveryRunner.Failed;
                 bool ok = code == RecoveryRunner.Done;
                 if (action == "cu-confirm") _cuConfirmFailed = !ok;

@@ -83,8 +83,10 @@ guide.cu-confirm-failed|mt|210bc0ed|40코어 확인에 실패했습니다. 홈�
 guide.cu-not-saved|mt|3f220554|40코어 확인을 저장할 수 없습니다. 다음 시작에 사용할 설정은 그래픽에 표시됩니다.
 guide.gpu-desktop-closed|mt|2be154cc|예기치 않은 종료 후 데스크톱이 안전하지만 느린 방식을 사용합니다. 홈에서 빠른 방식을 다시 켤 수 있습니다.
 guide.desktop-replaced|mt|5c77c3e9|이 세션에서 Windows가 데스크톱을 다시 시작했습니다. Windows를 다시 시작할 때까지 일부 앱이 마우스에 반응하지 않을 수 있습니다.
+guide.installing|mt|0fc1d034|드라이버를 설치하는 중입니다. 몇 분 정도 걸릴 수 있습니다.
 guide.pending-restart|mt|43402a6a|변경 내용이 저장되었습니다. 다음에 Windows를 다시 시작하면 적용됩니다.
-guide.work-in-progress|mt|5128c7cc|작업 중입니다. 1분 정도 걸릴 수 있습니다.
+guide.repairing|mt|5128c7cc|작업 중입니다. 1분 정도 걸릴 수 있습니다.
+guide.creating-report|mt|ad4df524|지원 보고서를 수집하는 중입니다. 1분 정도 걸릴 수 있습니다.
 guide.upgrade-done|mt|298dabef|업데이트가 설치되고 확인되었습니다. 즐거운 시간 보내세요!
 guide.welcome|mt|99bfb2d9|안녕하세요, Nagi입니다. 홈에서는 PC가 지금 하고 있는 일을 보여 주고, 나머지는 모두 왼쪽 메뉴에 있습니다.
 guide.about|mt|dccc95f8|이 드라이버는 이 보드를 무척 좋아하는 사람들이 만들었습니다. 계정도 없고 추적도 없습니다.
@@ -99,6 +101,8 @@ status.title.problem|mt|4241fd03|확인이 필요한 문제가 있습니다
 status.title.attention|mt-safe|2908a908|확인해 주세요
 status.title.pending|mt|93aab4b5|완료하려면 Windows를 다시 시작하세요
 status.title.ok|mt-safe|6dbc080d|게임 준비 완료
+status.title.unknown|mt|3e28dda8|상태를 알 수 없음
+status.unreadable|mt|8c31205d|앱이 지금 드라이버 상태를 읽지 못했습니다.
 status.ok-detail|mt|a5875517|드라이버가 실행 중이며 처리할 일이 없습니다.
 status.not-installed|mt|20e303d1|이 PC에 amdgpu-wddm 드라이버가 설치되어 있지 않습니다.
 status.not-installed.next|mt|663c2562|릴리스 페이지의 amdgpu-wddm 설치 프로그램으로 설치하세요.

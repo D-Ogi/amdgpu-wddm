@@ -31,7 +31,8 @@ namespace AmdgpuWddmControl
         VideoMemoryState _vram;
         StatusCard _status;
         GuideVerdict _verdict;
-        bool _work, _laterRestart, _cuConfirmFailed, _upgradeDone;
+        GuideCause? _work;                      // the user-started work that runs (rank 4), null: none
+        bool _laterRestart, _cuConfirmFailed, _upgradeDone;
         string _lastResult;                 // the plain result of the last action, shown on the page that ran it
         string _lastResultPage;
         bool _lastResultOk;
@@ -384,11 +385,13 @@ namespace AmdgpuWddmControl
             if (_guide == null) return;
             var causes = new List<GuideCause>();
             if (_status != null) causes.AddRange(_status.Causes);
+            if (_status != null && _status.Healthy) causes.Add(GuideCause.AllGood);      // explicit, only after a read (497.4)
             if (_page == "home" && !_prefs.GettingStartedDismissed) causes.Add(GuideCause.Welcome);
             if (_page == "help") causes.Add(GuideCause.About);
             if ((_page == "settings" || _page == "display" || _page == "graphics") && Guide.ShowUnaskedTip(_prefs.ShowTipsAutomatically)) causes.Add(GuideCause.PageTip);
             _verdict = Guide.Choose(causes);
-            string text = _verdict.Cause == GuideCause.PageTip && Strings.Has("guide.tip." + _page) ? Strings.T("guide.tip." + _page) : Strings.T(_verdict.TextId);
+            string text = _verdict == null ? Strings.T("status.unreadable")
+                : _verdict.Cause == GuideCause.PageTip && Strings.Has("guide.tip." + _page) ? Strings.T("guide.tip." + _page) : Strings.T(_verdict.TextId);
             _guide.Show(_verdict, text, Visible && WindowState != FormWindowState.Minimized);
         }
 
@@ -407,7 +410,7 @@ namespace AmdgpuWddmControl
         {
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
             try { _inv = Inventory.Read(false); } catch (Exception) { _inv = new InventoryState(); }
-            try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable" }; }
+            try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
             var vram = Kmd.VideoMemory();
             _vram = vram.Value;
             ReadDriverCard();
@@ -432,7 +435,7 @@ namespace AmdgpuWddmControl
         {
             _status = HomeStatus.Compute(new StatusInputs
             {
-                Snapshot = _snap, Driver = _drv, WorkInProgress = _work, UpgradeDone = _upgradeDone, UpdateAvailable = UpdateCheck.IsCandidateNewer(_upd, InstalledVersion),
+                Snapshot = _snap, Driver = _drv, Work = _work, UpgradeDone = _upgradeDone, UpdateAvailable = UpdateCheck.IsCandidateNewer(_upd, InstalledVersion),
                 CuConfirmFailed = _cuConfirmFailed, LaterRestart = _laterRestart,
             });
         }

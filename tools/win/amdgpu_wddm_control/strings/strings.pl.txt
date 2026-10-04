@@ -83,8 +83,10 @@ guide.cu-confirm-failed|mt|210bc0ed|Nie udało się potwierdzić 40 rdzeni. Spr�
 guide.cu-not-saved|mt|3f220554|Nie udało się zapisać potwierdzenia 40 rdzeni. Strona Grafika pokazuje, czego użyje następne uruchomienie.
 guide.gpu-desktop-closed|mt|2be154cc|Po nieoczekiwanym wyłączeniu pulpit działa w bezpieczny, wolniejszy sposób. Szybszy pulpit możesz z powrotem włączyć na Stronie głównej.
 guide.desktop-replaced|mt|5c77c3e9|Windows ponownie uruchomił pulpit w tej sesji. Niektóre aplikacje mogą nie reagować na mysz, dopóki nie uruchomisz ponownie systemu Windows.
+guide.installing|mt|0fc1d034|Sterownik jest instalowany. To może potrwać kilka minut.
 guide.pending-restart|mt|43402a6a|Zmiany są zapisane. Zaczną działać po następnym ponownym uruchomieniu systemu Windows.
-guide.work-in-progress|mt|5128c7cc|Pracuję nad tym. To może potrwać minutę.
+guide.repairing|mt|5128c7cc|Pracuję nad tym. To może potrwać minutę.
+guide.creating-report|mt|ad4df524|Zbieram raport dla pomocy technicznej. To może potrwać minutę.
 guide.upgrade-done|mt|298dabef|Aktualizacja jest zainstalowana i sprawdzona. Miłej zabawy!
 guide.welcome|mt|99bfb2d9|Cześć, jestem Nagi. Strona główna pokazuje, co robi Twój komputer; wszystko inne znajdziesz w menu po lewej.
 guide.about|mt|dccc95f8|Ten sterownik tworzą ludzie, którzy bardzo lubią tę płytę. Bez konta, bez śledzenia.
@@ -99,6 +101,8 @@ status.title.problem|mt-safe|4241fd03|Coś wymaga Twojej uwagi
 status.title.attention|mt-safe|2908a908|Sprawdź to
 status.title.pending|mt|93aab4b5|Uruchom ponownie system Windows, aby dokończyć
 status.title.ok|mt-safe|6dbc080d|Gotowe do gry
+status.title.unknown|mt|3e28dda8|Stan nieznany
+status.unreadable|mt|8c31205d|Aplikacja nie mogła teraz odczytać stanu sterownika.
 status.ok-detail|mt|a5875517|Sterownik działa i nic nie czeka na Twoją reakcję.
 status.not-installed|mt|20e303d1|Sterownik amdgpu-wddm nie jest zainstalowany na tym komputerze.
 status.not-installed.next|mt|663c2562|Zainstaluj go instalatorem amdgpu-wddm ze strony wydania.

@@ -82,8 +82,10 @@ guide.cu-confirm-failed|src|-|Confirming 40 cores did not work. Try again on Hom
 guide.cu-not-saved|src|-|The 40-core confirmation could not be saved. Graphics shows what the next start uses.
 guide.gpu-desktop-closed|src|-|After an unexpected shutdown the desktop uses the safe, slower way. You can turn the faster way back on from Home.
 guide.desktop-replaced|src|-|Windows restarted its desktop in this session. Some apps may ignore the mouse until you restart Windows.
+guide.installing|src|-|The driver is being installed. This can take a few minutes.
 guide.pending-restart|src|-|Your changes are saved. They start to work after the next restart of Windows.
-guide.work-in-progress|src|-|I am working on it. This can take a minute.
+guide.repairing|src|-|I am working on it. This can take a minute.
+guide.creating-report|src|-|I am collecting the support report. This can take a minute.
 guide.upgrade-done|src|-|The update is installed and checked. Have fun!
 guide.welcome|src|-|Hi, I'm Nagi. Home shows what your PC is doing; the menu on the left has everything else.
 guide.about|src|-|This driver is made by people who like this board a lot. No account, no tracking.
@@ -99,6 +101,8 @@ status.title.problem|src|-|Something needs your attention
 status.title.attention|src|-|Please check this
 status.title.pending|src|-|Restart Windows to finish
 status.title.ok|src|-|Ready to play
+status.title.unknown|src|-|Status not known
+status.unreadable|src|-|The app could not read the driver's status right now.
 status.ok-detail|src|-|The driver is running and nothing is waiting for you.
 status.not-installed|src|-|The amdgpu-wddm driver is not installed on this PC.
 status.not-installed.next|src|-|Install it with the amdgpu-wddm setup from the release page.

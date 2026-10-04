@@ -72,7 +72,7 @@ static partial class UnitTests
     static void GuideVerdicts()
     {
         var all = Enum.GetValues(typeof(GuideCause)).Cast<GuideCause>().ToList();
-        Equal(GuideCause.AllGood, Guide.Choose(null).Cause, "G-ART: nothing active is all good");
+        Check(Guide.Choose(null) == null && Guide.Choose(new GuideCause[0]) == null, "G-ART: nothing active is no verdict, never an implicit all good (497.4)");
         foreach (var a in all)
             foreach (var b in all)
             {
@@ -94,6 +94,26 @@ static partial class UnitTests
         Equal("02-curious", Guide.Expression(GuideCause.PageTip), "page tip is curious");
         Equal("cu-unknown-after-40", Guide.Id(GuideCause.CuUnknownAfter40), "kebab id");
         Equal(GuideCause.PendingRestart, Guide.Choose(new[] { GuideCause.AllGood, GuideCause.UpdateAvailable, GuideCause.PendingRestart, GuideCause.Welcome }).Cause, "rank 3 beats 6, 7 and 8");
+        Check(Guide.Rank(GuideCause.Installing) == 4 && Guide.Order(GuideCause.Installing) == 1 && Guide.Order(GuideCause.Repairing) == 2 && Guide.Order(GuideCause.CreatingReport) == 3,
+            "G-ART: rank 4 is installing, repair, support report, in that order");
+        Check(Guide.Order(GuideCause.DesktopReplaced) == 6 && Guide.Order(GuideCause.PageTip) == 3 && Guide.Order(GuideCause.AllGood) == 1, "G-ART: places inside a rank");
+
+        // Guide.Evaluate: the whole decision as a pure function.
+        var on = new GuideContext { ShowNagi = true, ArtAvailable = true, FramesFound = 12, FramesComplete = true, WindowsAnimations = true };
+        var none = Guide.Evaluate(new GuideCause[0], on);
+        Check(none.Verdict == null && none.Figure == null && !none.Animate && none.MaxAnimationSeconds == 0, "G-ART: no status read, no verdict and no art (497.4)");
+        var good = Guide.Evaluate(new[] { GuideCause.AllGood }, on);
+        Check(good.Verdict.Cause == GuideCause.AllGood && good.Figure == "09-thumbs-up" && good.Animate && good.MaxAnimationSeconds == 2, "G-ART: an explicit all good may play once");
+        var hidden = Guide.Evaluate(new[] { GuideCause.Repairing }, new GuideContext { ShowNagi = true, ArtAvailable = true, FramesFound = 12, FramesComplete = true, WindowVisible = false });
+        Check(hidden.Figure == "05-thinking" && !hidden.PaintNow && !hidden.Animate, "G-PERF: hidden keeps the figure, paints nothing and plays nothing");
+        Check(!Guide.Evaluate(new[] { GuideCause.AllGood }, new GuideContext { ShowNagi = true, ArtAvailable = true, FramesFound = 12, FramesComplete = true, Trigger = GuideTrigger.None }).Animate,
+            "G-ART: no playback without a verdict change or the panel opening");
+        Check(!Guide.Evaluate(new[] { GuideCause.AllGood }, new GuideContext { ShowNagi = true, ArtAvailable = true, FramesFound = Guide.MaxFrames + 1, FramesComplete = true }).Animate &&
+            !Guide.Evaluate(new[] { GuideCause.AllGood }, new GuideContext { ShowNagi = true, ArtAvailable = true, FramesFound = 12, FramesComplete = false }).Animate,
+            "G-ART: an oversized or failed frame set falls back to the static figure");
+        var off = Guide.Evaluate(new[] { GuideCause.UpdateAvailable }, new GuideContext { ArtAvailable = true, FramesFound = 12, FramesComplete = true, ShowTipsAutomatically = true });
+        Check(off.Verdict.Cause == GuideCause.UpdateAvailable && off.Figure == null && !off.Animate && off.AutomaticTips, "G-ART: Show Nagi off keeps the verdict, no art; tips are independent");
+        Check(Guide.Evaluate(new[] { GuideCause.AllGood }, new GuideContext { ShowNagi = true, ArtAvailable = false }).Figure == null, "G-ART: missing art is the text-only panel");
         // Animation: never with ranks 1-3, reduced animations, Windows animations off, hidden window or no frames.
         Check(Guide.MayAnimate(true, false, true, 4, true, 12), "animates when everything allows it");
         Check(Guide.MayAnimate(true, false, null, 8, true, 12), "unknown Windows setting does not block");
@@ -356,8 +376,13 @@ static partial class UnitTests
         Check(later.Items.Any(i => i.Text.StartsWith(Strings.T("status.pending-later", "").Split(':')[0], StringComparison.Ordinal)), "Home: Later keeps it pending");
         s = WithDefaults(); s.Parameters["InteropClosedReason"] = 2;
         Check(HomeStatus.Compute(new StatusInputs { Snapshot = s }).Items.Any(i => i.Action == "reopen-gpu-path"), "Home: a closed GPU desktop path offers to reopen it");
-        var upd = HomeStatus.Compute(new StatusInputs { Snapshot = WithDefaults(), UpdateAvailable = true, WorkInProgress = true });
-        Check(upd.Items.Any(i => i.Action == "page:driver") && upd.Items.Any(i => i.Cause == GuideCause.WorkInProgress), "Home: update and work items");
+        var upd = HomeStatus.Compute(new StatusInputs { Snapshot = WithDefaults(), UpdateAvailable = true, Work = GuideCause.CreatingReport });
+        Check(upd.Items.Any(i => i.Action == "page:driver") && upd.Items.Any(i => i.Cause == GuideCause.CreatingReport), "Home: update and work items");
+        var unread = HomeStatus.Compute(new StatusInputs { Snapshot = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true } });
+        Check(!unread.StatusRead && !unread.Healthy && !unread.Causes.Any() && unread.Severity == "unknown" && unread.Items[0].Text == Strings.T("status.unreadable"),
+            "497.4: a failed status read claims nothing: no cause, no all good");
+        Check(!HomeStatus.Compute(new StatusInputs()).Healthy && !HomeStatus.Compute(new StatusInputs()).Causes.Any(), "497.4: no snapshot, no verdict");
+        Check(ok.StatusRead && ok.Healthy == !ok.Causes.Any(c => Guide.Rank(c) <= 3) && !none.Healthy, "497.4: all good only after a read with nothing of rank 1-3");
         foreach (var c in new[] { none, ok, pending, upd })
             foreach (var i in c.Items)
             {

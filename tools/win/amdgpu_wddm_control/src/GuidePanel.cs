@@ -1,7 +1,7 @@
 // The guide panel (section 6): a fixed reserved area in the side panel, never over settings, warnings or content.
 // Its text always shows; Nagi's image only with "Show Nagi" checked and the art embedded in the exe (build.ps1
 // -NagiArt; the owner's art is never committed). Without art it is the text-only panel. A frame sequence plays once
-// when the verdict changes, only when Guide.MayAnimate allows it, on a timer that exists only while it plays. The
+// when the verdict changes, only when Guide.Present allows it, on a timer that exists only while it plays. The
 // image is decorative: screen readers get the text, not the picture.
 using System;
 using System.Collections.Generic;
@@ -104,22 +104,30 @@ namespace AmdgpuWddmControl
         public string Text2 { get { return _text.Text; } }
         public bool Playing { get { return _frames != null; } }
 
+        // v null: no verdict (nothing read): the text-only panel.
         public void Show(GuideVerdict v, string text, bool windowVisible)
         {
             int size = Guide.ArtSize(Theme.Scale);
-            bool artAvailable = _prefs.ShowNagi && NagiArt.Has(v.Expression, size);
-            bool show = Guide.ShowArt(_prefs.ShowNagi, artAvailable);
+            bool changed = v == null || _shownExpression != v.Expression;
+            var frames = v != null && changed && _prefs.ShowNagi ? NagiArt.Frames(v.Expression, size) : new List<Image>();
+            var d = Guide.Present(v, new GuideContext
+            {
+                ShowNagi = _prefs.ShowNagi, ReduceAnimations = _prefs.ReduceAnimations, ShowTipsAutomatically = _prefs.ShowTipsAutomatically,
+                WindowsAnimations = AppPrefs.WindowsAnimations(), WindowVisible = windowVisible && !Paused,
+                ArtAvailable = v != null && _prefs.ShowNagi && NagiArt.Has(v.Expression, size),
+                FramesFound = frames.Count, FramesComplete = true, Trigger = changed ? GuideTrigger.VerdictChanged : GuideTrigger.None,
+            });
+            bool show = d.Figure != null;
             _title.Text = Strings.T(show ? "guide.title" : "guide.title.plain");
             _text.Text = text;
             _art.Visible = show;
             if (!show) { Stop(); _art.Image = null; _shownExpression = null; return; }
-            if (_shownExpression == v.Expression) return;
-            _shownExpression = v.Expression;
+            if (!changed) return;
+            _shownExpression = d.Figure;
             Stop();
-            _art.Image = NagiArt.Load(Guide.Resource(v.Expression, size));
+            _art.Image = NagiArt.Load(Guide.Resource(d.Figure, size));
             if (_art.Image == null) { _art.Visible = false; return; }
-            var frames = NagiArt.Frames(v.Expression, size);
-            if (Guide.MayAnimate(_prefs.ShowNagi, _prefs.ReduceAnimations, AppPrefs.WindowsAnimations(), v.Rank, windowVisible && !Paused, frames.Count))
+            if (d.Animate)
             {
                 _sequence = frames; _frame = 0;
                 _frames = new Timer { Interval = Guide.FrameMs };

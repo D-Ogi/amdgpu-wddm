@@ -11,7 +11,8 @@ namespace AmdgpuWddmControl
     {
         public RecoverySnapshot Snapshot;           // null: nothing could be read
         public DriverCardView Driver;               // null: not read
-        public bool WorkInProgress, UpgradeDone, UpdateAvailable, CuConfirmFailed;
+        public GuideCause? Work;                    // Installing, Repairing or CreatingReport while user-started work runs
+        public bool UpgradeDone, UpdateAvailable, CuConfirmFailed;
         public bool LaterRestart;                   // the user chose "Later" for a restart this session
     }
 
@@ -29,6 +30,8 @@ namespace AmdgpuWddmControl
         public string Title, Severity;
         public readonly List<StatusItem> Items = new List<StatusItem>();
         public readonly List<string> Pending = new List<string>();     // what waits for the restart, in plain words
+        public bool StatusRead;                     // false: nothing could be read, so no verdict claims anything
+        public bool Healthy;                        // read, and nothing of rank 1-3: the explicit "all good" cause (497.4)
         public IEnumerable<GuideCause> Causes { get { return Items.Where(i => i.Cause != null).Select(i => i.Cause.Value); } }
     }
 
@@ -71,11 +74,14 @@ namespace AmdgpuWddmControl
             var c = new StatusCard();
             var s = x.Snapshot;
             var d = x.Driver;
-            if (s != null && !s.DriverInstalled) Item(c, GuideCause.DriverNotRunning, "not-installed", "problem");
-            else if (s == null || !s.DriverRunning) Item(c, GuideCause.DriverNotRunning, "driver-not-running", "problem", "restart");
+            c.StatusRead = s != null && !s.ReadFailed;
+            if (!c.StatusRead) Item(c, null, "unreadable", "unknown");
+            else if (!s.DriverInstalled) Item(c, GuideCause.DriverNotRunning, "not-installed", "problem");
+            else if (!s.DriverRunning) Item(c, GuideCause.DriverNotRunning, "driver-not-running", "problem", "restart");
             if (d != null && d.InstallStopped) Item(c, GuideCause.InstallStopped, "install-stopped", "problem", "repair");
             if (d != null && d.Verification == VerifyKind.Failed) Item(c, GuideCause.VerificationFailed, "verification-failed", "problem", "repair");
 
+            if (!c.StatusRead) s = null;      // the rest reads the snapshot only when it was read
             CuView cu = null;
             if (s != null && s.DriverInstalled)
             {
@@ -96,12 +102,13 @@ namespace AmdgpuWddmControl
 
             c.Pending.AddRange(PendingRestart(s, d));
             if (c.Pending.Count > 0) Item(c, GuideCause.PendingRestart, x.LaterRestart ? "pending-later" : "pending-restart", "pending", "restart", string.Join(", ", c.Pending));
-            if (x.WorkInProgress) Item(c, GuideCause.WorkInProgress, "work-in-progress", "info");
+            if (x.Work != null) Item(c, x.Work, "work-in-progress", "info");
             if (x.UpgradeDone && d != null) Item(c, GuideCause.UpgradeDone, "upgrade-done", "ok", null, d.InstalledVersion);
             if (x.UpdateAvailable) Item(c, GuideCause.UpdateAvailable, "update-available", "info", "page:driver");
 
             int rank = c.Causes.Any() ? Guide.Rank(c.Causes.Min()) : 8;
-            c.Severity = rank == 1 ? "problem" : rank == 2 ? "attention" : rank == 3 ? "pending" : "ok";
+            c.Healthy = c.StatusRead && rank > 3;
+            c.Severity = rank == 1 ? "problem" : rank == 2 ? "attention" : rank == 3 ? "pending" : c.StatusRead ? "ok" : "unknown";
             c.Title = Strings.T("status.title." + c.Severity);
             return c;
         }

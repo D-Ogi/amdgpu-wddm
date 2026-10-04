@@ -80,7 +80,7 @@ namespace AmdgpuWddmControl
             caps.Checked = _reportCaps; caps.CheckedChanged += (s, e) => _reportCaps = caps.Checked;
             report.Add(dx); report.Add(caps);
             var create = Ui.Button(Strings.T("help.report.create"), (s, e) => CreateReport(), true);
-            create.Enabled = !_work;
+            create.Enabled = _work == null;
             report.Add(create);
             if (_reportStatus != null) report.Add(Ui.Label(_reportStatus, null, _reportOk ? Theme.Good : Theme.Dim, report.Inner));
             p.Controls.Add(report);
@@ -101,15 +101,15 @@ namespace AmdgpuWddmControl
 
         void CreateReport()
         {
-            if (_smoke || _work) return;
-            _work = true; ComputeStatus();
+            if (_smoke || _work != null) return;
+            _work = GuideCause.CreatingReport; ComputeStatus();
             _reportStatus = Strings.T("help.report.collecting"); _reportOk = false;
             ShowPage(_page, null, false);
             var report = new BugReport(Redactor.ForThisPc());
             bool dxdiag = _reportDxdiag, caps = _reportCaps;
             Task.Run(() => report.Collect(dxdiag, caps, true, _ => { })).ContinueWith(t =>
             {
-                _work = false; ComputeStatus();
+                _work = null; ComputeStatus();
                 if (t.IsFaulted) { _reportStatus = Strings.T("help.report.failed"); ShowPage(_page, null, false); return; }
                 var path = BugReport.DefaultPath(DateTime.Now);
                 using (var preview = new ReportPreview(report, path))

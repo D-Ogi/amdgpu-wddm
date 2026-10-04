@@ -31,6 +31,7 @@ namespace AmdgpuWddmControl
         public long? DwmForceCpu { get; set; }
         public long? RequireKmdSwitches { get; set; }
         public string DriverError { get; set; }                     // null when the escapes answered
+        public bool ReadFailed { get; set; }                        // the probe itself failed: nothing is known (497.4)
         public InteropState Interop { get; set; }
         public StartHealthState Health { get; set; }
         public DpmState Dpm { get; set; }
