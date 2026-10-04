@@ -8,7 +8,7 @@
  * time. Raises happen at once, lowerings one step at a time after DOWN_HOLD_MS below DOWN on the
  * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
- * top and wins over everything but the floor. The thresholds and a runtime floor can change at run
+ * top and wins over everything but the floor; from WARM_MC (85 C) no raise happens at all. The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
  * every limit. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
  */
@@ -292,6 +292,17 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 			g->throttle = thermal != BC250_DPM_THROTTLE_NONE ? thermal : BC250_DPM_THROTTLE_THERMAL_SOFT;
 		else g->throttle = BC250_DPM_THROTTLE_MAX_SETTING;
 		target = limit;
+	}
+	/* The warm zone (WARM_MC up to HOT_MC, 0.7.200): no raise of clock or voltage, the level holds; a lowering, and the
+	 * paths above, act as below it. It comes last, so it bounds a raise from the load and from the runtime floor alike,
+	 * and it names the reason when it is what holds the level. The soft release keeps its own rule: with a delta under
+	 * 2 C its threshold lies inside this zone, and there it still raises the cap as before; the clock follows the
+	 * raised cap only once a reading is below WARM_MC. So a soft release never becomes a raise while warm, and the
+	 * cap's timing (cap_ms, soft_ms) is the same with or without this zone. */
+	if (in->temperature_mc >= BC250_DPM_WARM_MC && in->temperature_mc < BC250_DPM_HOT_MC && target > cur) {
+		target = cur;
+		g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
+		g->warm_holds++;
 	}
 	return target;
 }

@@ -302,6 +302,9 @@ typedef char dpm_critical_is_90c[(BC250_DPM_CRITICAL_MC == 90000) ? 1 : -1];
 /* The soft threshold (HOT - delta) lies strictly between RELEASE and HOT for every admitted delta. */
 typedef char dpm_soft_threshold_inside[(BC250_DPM_TUNE_MIN_SOFT_DELTA_MC > 0u &&
 					BC250_DPM_HOT_MC - (int)BC250_DPM_TUNE_MAX_SOFT_DELTA_MC > BC250_DPM_RELEASE_MC) ? 1 : -1];
+/* The warm zone starts 2 C under HOT, above RELEASE (0.7.200). */
+typedef char dpm_warm_is_85c[(BC250_DPM_WARM_MC == 85000 && BC250_DPM_HOT_MC - BC250_DPM_WARM_MC == 2000 &&
+			      BC250_DPM_WARM_MC > BC250_DPM_RELEASE_MC) ? 1 : -1];
 /* A soft raise is never faster than the hot step that undoes it. */
 typedef char dpm_soft_slower_than_hot[(BC250_DPM_TUNE_MIN_SOFT_STEP_MS >= BC250_DPM_TUNE_MIN_HOT_STEP_MS) ? 1 : -1];
 
@@ -317,7 +320,7 @@ static void test_thermal(void)
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
 	CHECK(run(&g, 1000, 85, 25) == 10);
 	CHECK(run_mc(&g, 1000, 86999, 25) == 10);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.thermal_events == 0 && g.thermal_cap == 10);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.thermal_events == 0 && g.thermal_cap == 10 && g.warm_holds == 0);
 	/* 87 C at the top: one step down at once, under full load. */
 	CHECK(run_mc(&g, 1000, 87000, 25) == 9);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1 && g.thermal_cap == 9);
@@ -728,6 +731,75 @@ static void test_floor(void)
 	CHECK(level < 3);
 }
 
+/* ---- the warm zone (0.7.200) --------------------------------------------------------------------- */
+
+/* After session 344 (1500 MHz held while Tctl rose 83.5 -> 85.3 C): from 85 C up to 87 C no raise, the level holds;
+ * lowerings and the thermal paths act as below it. */
+static void test_warm(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_tune t;
+	struct bc250_dpm_input in;
+	unsigned int i;
+
+	/* Full load at 1500 MHz: refused at 85.0 C and at 86.9 C, the cap untouched, no hot entry. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
+	CHECK(run_mc(&g, 1000, 85000, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
+	CHECK(g.want == 9 && g.raises == 0);		/* want stays the load's own answer */
+	CHECK(run_mc(&g, 1000, 86900, 25) == 5 && g.warm_holds == 2);
+	CHECK(run_mc(&g, 1000, 86999, 25) == 5 && g.warm_holds == 3);
+	for (i = 0; i < 400; i++) CHECK(run_mc(&g, 1000, 86000, 25) == 5);
+	CHECK(g.warm_holds == 403u && g.thermal_events == 0 && g.thermal_cap == 10 && g.raises == 0);
+	/* 84.999 C and 84.9 C: the raise goes through, as before 0.7.200 (1500 x 1000 / 800 = 1875 -> 1900). */
+	CHECK(run_mc(&g, 1000, 84999, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_NONE && g.warm_holds == 403u);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
+	CHECK(run_mc(&g, 1000, 84900, 25) == 9 && g.warm_holds == 0);
+	/* A busy share in the band that asks for no raise is no hold. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5; g.avg_permille = 800;
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 800, 86000, 25) == 5);
+	CHECK(g.warm_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* A lowering still happens in the band, after the same hold as at 60 C, one step at a time. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 8;
+	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 85000, 25) == 8);
+	CHECK(run_mc(&g, 0, 86999, 25) == 7 && g.lowers == 1 && g.warm_holds == 0);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* 87 C is HOT, not warm: one step down at once, as before. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
+	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(g.thermal_events == 1 && g.thermal_cap == 9 && g.warm_holds == 0);
+	/* Back in the band at the cap: the cap holds (no release above 82 C) and so does the clock. The cap, not the zone,
+	 * holds the level, so the reason stays thermal-soft and no hold is counted. */
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 85000, 25) == 9);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.warm_holds == 0 && g.thermal_cap == 9);
+	/* Below the cap the zone is what holds the level. */
+	g.level = 6;
+	CHECK(run_mc(&g, 1000, 85000, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
+	/* The release below 82 C is unchanged: one level per RELEASE_STEP_MS. */
+	g.level = 9;
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == 9);
+	CHECK(run_mc(&g, 1000, 81999, 25) == 10 && g.thermal_cap == 10);
+
+	/* The runtime floor is a raise too: refused in the band, taken below it. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 3;
+	t = tune(900, 800, 650, 200, 10);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	CHECK(run_mc(&g, 0, 85500, 25) == 3 && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
+	CHECK(run_mc(&g, 0, 84000, 25) == 10 && g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* At the max setting there is nothing to refuse: the setting names the reason. */
+	bc250_dpm_init(&g, 6); g.level = 6;
+	CHECK(run_mc(&g, 1000, 86000, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING && g.warm_holds == 0);
+
+	/* SetStablePowerState and a missing sensor go to the floor, never a hold. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5; g.stable = 1;
+	CHECK(run_mc(&g, 1000, 86000, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_STABLE && g.warm_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
+	in = tick(1000, 0, 25); in.temperature_mc = 86000; in.temperature_valid = 0;
+	CHECK(bc250_dpm_step(&g, &in) == 0 && g.throttle == BC250_DPM_THROTTLE_SENSOR && g.warm_holds == 0);
+}
+
 /* ---- the thermal timing (0.7.197, BD-055) ------------------------------------------------------- */
 
 /* A governor at the top under full load with a thermal tune; the tune must be admitted. */
@@ -807,8 +879,10 @@ static void test_soft_release(void)
 	init_thermal(&g, 500, 1500, 3000);
 	CHECK(run(&g, 1000, 87, 25) == 9);
 	for (i = 1; i < 3000u / 25u; i++) CHECK(run_mc(&g, 1000, 85499, 25) == 9);
-	CHECK(run_mc(&g, 1000, 85499, 25) == 10 && g.soft_releases == 1 && g.thermal_cap == 10);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
+	/* 85.499 C is in the warm zone (0.7.200): the cap rises as before, the clock follows it only below 85 C. */
+	CHECK(run_mc(&g, 1000, 85499, 25) == 9 && g.soft_releases == 1 && g.thermal_cap == 10);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
+	CHECK(run_mc(&g, 1000, 84999, 25) == 10 && g.throttle == BC250_DPM_THROTTLE_NONE && g.warm_holds == 1);
 	/* At the threshold itself: no raise. */
 	init_thermal(&g, 500, 1500, 3000);
 	CHECK(run(&g, 1000, 87, 25) == 9);
@@ -820,14 +894,16 @@ static void test_soft_release(void)
 	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);
 	CHECK(run_mc(&g, 1000, 85600, 25) == 9);
 	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);
-	CHECK(run(&g, 1000, 85, 25) == 10 && g.soft_releases == 1);
+	CHECK(run(&g, 1000, 85, 25) == 9 && g.soft_releases == 1 && g.thermal_cap == 10);
+	CHECK(run(&g, 1000, 84, 25) == 10);
 	/* A hot tick restarts it too, and it steps (cap_ms is past the hot step). */
 	init_thermal(&g, 500, 1500, 3000);
 	g.thermal_cap = 8; g.level = 8;
 	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 8);
 	CHECK(run(&g, 1000, 87, 25) == 7 && g.soft_releases == 0);
 	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 7);
-	CHECK(run(&g, 1000, 85, 25) == 8 && g.soft_releases == 1);
+	CHECK(run(&g, 1000, 85, 25) == 7 && g.soft_releases == 1 && g.thermal_cap == 8);
+	CHECK(run(&g, 1000, 84, 25) == 8);
 	/* The soft path climbs one level per step, all the way up; below 82 C the fast path (1 s) takes over. */
 	init_thermal(&g, 500, 1500, 3000);
 	g.thermal_cap = 4; g.level = 4;
@@ -844,7 +920,8 @@ static void test_soft_release(void)
 	init_thermal(&g, 500, 500, 2000);
 	g.thermal_cap = 8; g.level = 8;
 	for (i = 0; i < 2000u / 25u; i++) level = run_mc(&g, 1000, 86499, 25);
-	CHECK(level == 9);
+	CHECK(level == 8 && g.thermal_cap == 9 && g.soft_releases == 1);	/* warm: the cap only */
+	CHECK(run(&g, 1000, 84, 25) == 9);
 	/* Critical goes to the floor; the soft release brings it back, a level per step, never past the setting. */
 	bc250_dpm_init(&g, 6);
 	{
@@ -854,7 +931,9 @@ static void test_soft_release(void)
 	}
 	CHECK(run(&g, 1000, 90, 25) == 0);
 	for (i = 0; i < 20u * 3000u / 25u; i++) level = run(&g, 1000, 85, 25);
-	CHECK(level == 6 && g.thermal_cap == 6 && g.soft_releases == 6);
+	CHECK(level == 0 && g.thermal_cap == 6 && g.soft_releases == 6);	/* 85 C is warm: the cap only */
+	CHECK(run(&g, 1000, 84, 25) == 3);
+	CHECK(run(&g, 1000, 84, 25) == 6);
 	/* A missing sensor resets the hold as critical does. */
 	init_thermal(&g, 500, 1500, 3000);
 	g.thermal_cap = 8; g.level = 8;
@@ -982,6 +1061,7 @@ int main(void)
 	test_tune_check();
 	test_tune_no_oscillation();
 	test_floor();
+	test_warm();
 	test_reentry();
 	test_soft_release();
 	test_plant();
