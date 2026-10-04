@@ -41,7 +41,6 @@ cu.effect|mt|60ee9b9b|코어가 많을수록 전력 소비와 발열이 늘어�
 
 # ---- driver card ----
 drv.running.exact|mt|f02b57d6|실행 중인 버전: {0}
-drv.running.none|mt|3d132d13|실행 중인 버전: 드라이버가 실행되고 있지 않습니다.
 drv.running.unknown|mt|2f2c0a8f|실행 중인 버전: 정확히 확인할 수 없습니다.
 drv.installed|mt|15ffa882|설치됨: {0}
 drv.installed.pending|mt|65d41410|설치됨: {0}, Windows 다시 시작을 기다리는 중입니다.

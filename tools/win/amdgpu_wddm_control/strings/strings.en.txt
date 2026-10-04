@@ -43,7 +43,6 @@ cu.effect|src|-|More cores use more power and make more heat: about 30 W more at
 
 # ---- driver card (WU-043) ----
 drv.running.exact|src|-|Running version: {0}
-drv.running.none|src|-|Running version: the driver is not running.
 drv.running.unknown|src|-|Running version: cannot be determined exactly.
 drv.installed|src|-|Installed: {0}
 drv.installed.pending|src|-|Installed: {0}, waiting for the restart of Windows.

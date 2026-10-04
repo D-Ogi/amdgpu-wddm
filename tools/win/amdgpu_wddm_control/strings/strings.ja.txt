@@ -41,7 +41,6 @@ cu.effect|mt|60ee9b9b|コアが増えると消費電力と発熱が増えます�
 
 # ---- driver card ----
 drv.running.exact|mt|f02b57d6|実行中のバージョン: {0}
-drv.running.none|mt|3d132d13|実行中のバージョン: ドライバーは動作していません。
 drv.running.unknown|mt|2f2c0a8f|実行中のバージョン: 正確には特定できません。
 drv.installed|mt|15ffa882|インストール済み: {0}
 drv.installed.pending|mt|65d41410|インストール済み: {0}、Windows の再起動待ちです。

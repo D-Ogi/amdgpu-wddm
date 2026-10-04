@@ -41,7 +41,6 @@ cu.effect|mt|60ee9b9b|Więcej rdzeni zużywa więcej energii i wytwarza więcej 
 
 # ---- driver card ----
 drv.running.exact|mt|f02b57d6|Działająca wersja: {0}
-drv.running.none|mt|3d132d13|Działająca wersja: sterownik nie działa.
 drv.running.unknown|mt|2f2c0a8f|Działająca wersja: nie można jej dokładnie ustalić.
 drv.installed|mt|15ffa882|Zainstalowana: {0}
 drv.installed.pending|mt|65d41410|Zainstalowana: {0}, czeka na ponowne uruchomienie Windows.
