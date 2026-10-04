@@ -414,7 +414,7 @@ namespace AmdgpuWddmControl
             _upd = UpdateCheck.LoadCache();
             ReadRecent();
             if (_drv != null && DriverCard.UpgradeDone(_drv, _prefs.LastSeenRelease)) _upgradeDone = true;
-            if (!_smoke && !ReadOnlyProbe && _drv != null && _drv.Verification == VerifyKind.Verified && !_drv.InstalledPending && _drv.InstalledVersion != null)
+            if (!_smoke && !ReadOnlyProbe && _drv != null && DriverCard.UpgradeVerified(_drv))
                 _prefs.LastSeenRelease = _drv.InstalledVersion;
             ComputeStatus();
             ShowPage(_page, null, false);
