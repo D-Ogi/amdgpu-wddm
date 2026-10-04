@@ -226,6 +226,10 @@ result.cancelled.title|mt|5efba629|Instalacja została anulowana
 result.cancelled.body|mt|60ecbf18|Instalator zatrzymał się w bezpiecznym miejscu.
 result.cancelled-after-changes.title|mt|5efba629|Instalacja została anulowana
 result.cancelled-after-changes.body|mt|7e3e0e36|Instalator zatrzymał się w bezpiecznym miejscu, po tym jak zaczął zmieniać ten komputer.
+result.deadline.title|mt|37bea89c|Instalator zatrzymał się: minął limit czasu
+result.deadline.body|mt|99cbc2bc|Instalator osiągnął wyznaczony limit czasu i zatrzymał się w bezpiecznym miejscu.
+result.deadline-after-changes.title|mt|37bea89c|Instalator zatrzymał się: minął limit czasu
+result.deadline-after-changes.body|mt|b329d221|Instalator osiągnął wyznaczony limit czasu i zatrzymał się w bezpiecznym miejscu, po tym jak zaczął zmieniać ten komputer.
 result.offline-prepared.title|mt-safe|58c76c43|Folder jest gotowy
 result.offline-prepared.body|mt|2a59d535|Skopiuj folder na komputer bez internetu i uruchom z niego instalator. Wybierz tam „Folder przygotowany dla komputera bez internetu”.
 result.failed-checks|mt|ecefee18|Sprawdzenia, które nie przeszły

@@ -228,6 +228,10 @@ result.cancelled.title|src|-|Setup was cancelled
 result.cancelled.body|src|-|Setup stopped at a safe point.
 result.cancelled-after-changes.title|src|-|Setup was cancelled
 result.cancelled-after-changes.body|src|-|Setup stopped at a safe point after it had started to change this PC.
+result.deadline.title|src|-|Setup stopped: time limit reached
+result.deadline.body|src|-|Setup reached the time limit it was given and stopped at a safe point.
+result.deadline-after-changes.title|src|-|Setup stopped: time limit reached
+result.deadline-after-changes.body|src|-|Setup reached the time limit it was given and stopped at a safe point after it had started to change this PC.
 result.offline-prepared.title|src|-|The folder is ready
 result.offline-prepared.body|src|-|Copy the folder to the PC without internet and start setup from it. Choose "A folder prepared for a PC without internet" there.
 result.failed-checks|src|-|Checks that did not pass

@@ -28,6 +28,7 @@ param(
     [string]$InvocationId,                  # the setup window's id of this run, echoed in every event and the result
     [string]$EventsFile,                    # events, one JSON object per line (appended)
     [string]$ResultFile,                    # the terminal result (written once, at the end)
+    [string]$DeadlineUtc,                   # ISO 8601 UTC: stop at the first stop point after this time (interfaces-setup.md 10)
     [switch]$Verify,
     [switch]$Force,                         # install even over a development-lab installation (not supported)
     [switch]$NoReboot,                      # never restart; tell the tester to do it
@@ -71,7 +72,7 @@ if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProces
     & $ps -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @PSBoundParameters
     exit $LASTEXITCODE
 }
-Initialize-Engine -Gui ([bool]$Gui) -InvocationId $InvocationId -EventsFile $EventsFile -ResultFile $ResultFile -Mode $(if ($Plan) { 'plan' } elseif ($Verify) { 'verify' } elseif ($DryRun) { 'dry-run' } else { 'run' })
+Initialize-Engine -Gui ([bool]$Gui) -InvocationId $InvocationId -EventsFile $EventsFile -ResultFile $ResultFile -DeadlineUtc $DeadlineUtc -Mode $(if ($Plan) { 'plan' } elseif ($Verify) { 'verify' } elseif ($DryRun) { 'dry-run' } else { 'run' })
 # A relative -FirmwareDir means the folder the tester started from; the elevated copy starts in System32.
 if ($FirmwareDir) {
     $FirmwareDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FirmwareDir)
@@ -98,9 +99,13 @@ $early = Read-InstallState
 if ($early -and $early.install_root) { $InstallRoot = $early.install_root }
 Write-Info "install root: $InstallRoot"
 $script:EnginePhaseBefore = $(if ($early) { [string]$early.phase } else { $null })
-Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = [bool]$Gui; dry_run = [bool]$DryRun; package = $package; contract = $script:EngineContract; phase = $script:EnginePhaseBefore })
-# A stage of the run, for the log, the console and the setup window's progress list.
+Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = [bool]$Gui; dry_run = [bool]$DryRun; package = $package; contract = $script:EngineContract; phase = $script:EnginePhaseBefore; deadline_utc = $script:EngineDeadlineText; job = $script:EngineJob })
+Start-EngineTestChild
+# A stage of the run, for the log, the console and the setup window's progress list. In a run that changes nothing
+# (plan, dry run, verify) every stage boundary is a stop point; in a real install the deadline is only announced here
+# and acted on at the next stop point.
 function Enter-Stage([string]$Id, [string]$Text) {
+    if ($script:DryRunMode -or $script:EngineMode -eq 'verify') { Invoke-CancelPoint "stage:$Id" } else { Write-DeadlineNotice "stage:$Id" }
     Write-Step $Text
     Write-EngineEvent 'stage' ([ordered]@{ id = $Id; text = $Text })
 }
@@ -388,6 +393,7 @@ function Invoke-Verify {
             $running = (Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue).State -eq 'Running'
             $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
             if (($ranThisBoot -and -not $running) -or $script:DryRunMode) { break }
+            if (Test-DeadlinePassed) { Write-DeadlineNotice 'verify:start-confirm-wait'; break }
             if ($waited.Elapsed.TotalSeconds -ge 120) { break }
             if (-not $announced) { Write-Info 'waiting for the start-confirm task of this logon to finish (at most 120 s)...'; $announced = $true }
             Start-Sleep -Seconds 2

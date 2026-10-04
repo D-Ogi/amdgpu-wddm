@@ -17,7 +17,8 @@ param(
     [switch]$Gui,
     [string]$InvocationId,
     [string]$EventsFile,
-    [string]$ResultFile
+    [string]$ResultFile,
+    [string]$DeadlineUtc                    # ISO 8601 UTC: stop at the first stop point after this time
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -34,12 +35,18 @@ trap {
     Remove-Partial
     Exit-Engine -Code 6 -Outcome 'failed' -MessageId 'result.step-failed' -Detail ([string]$_.Exception.Message) -Step $script:CurrentStep
 }
-Initialize-Engine -Gui ([bool]$Gui) -InvocationId $InvocationId -EventsFile $EventsFile -ResultFile $ResultFile -Mode 'prepare-offline'
+Initialize-Engine -Gui ([bool]$Gui) -InvocationId $InvocationId -EventsFile $EventsFile -ResultFile $ResultFile -DeadlineUtc $DeadlineUtc -Mode 'prepare-offline'
 # Only the destination is written: no install action, no old copies scheduled for deletion at a restart.
 $script:OnFirstChange = $null
 $script:ScheduleOldCopies = $false
 $script:EngineAction = 'prepare-offline'
-function Enter-Stage([string]$Id, [string]$Text) { Write-Step $Text; Write-EngineEvent 'stage' ([ordered]@{ id = $Id; text = $Text }) }
+# Only <destination>.partial is written before 'finish': every stage boundary before it is a stop point, and a stop
+# removes the partial folder. The rename in 'finish' is not stopped.
+$script:OnStop = { Remove-Partial }
+function Enter-Stage([string]$Id, [string]$Text) {
+    if ($Id -ne 'finish') { Invoke-CancelPoint "stage:$Id" } else { Write-DeadlineNotice "stage:$Id" }
+    Write-Step $Text; Write-EngineEvent 'stage' ([ordered]@{ id = $Id; text = $Text })
+}
 function Stop-Refused([string]$CheckId, [string]$MessageId, [string]$Detail) {
     Write-Fail $Detail
     Write-Host 'Nothing was prepared.' -ForegroundColor Red
@@ -52,7 +59,7 @@ function Stop-Refused([string]$CheckId, [string]$MessageId, [string]$Detail) {
 $Destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Destination).TrimEnd('\')
 if ($FirmwareDir) { $FirmwareDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FirmwareDir) }
 Write-Host 'amdgpu-wddm: prepare a folder for an installation without internet' -ForegroundColor White
-Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = [bool]$Gui; dry_run = $false; package = $package; contract = $script:EngineContract; destination = $Destination })
+Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = [bool]$Gui; dry_run = $false; package = $package; contract = $script:EngineContract; destination = $Destination; deadline_utc = $script:EngineDeadlineText; job = $script:EngineJob })
 
 Enter-Stage 'prepare-check' 'Package and destination'
 $integrity = Test-PackageManifest -PackageRoot $package
@@ -87,7 +94,7 @@ if ($FirmwareDir) {
     catch { Stop-Refused 'firmware.unreachable' 'result.firmware-unreachable' $_.Exception.Message }
 }
 Set-CancelAvailable $true 'before-copy'
-if (Test-CancelRequested) { Remove-Partial; Invoke-CancelPoint 'before-copy' }
+Invoke-CancelPoint 'before-copy'
 
 Enter-Stage 'copy' 'Copy and check'
 $script:CurrentStep = "copy the package and the firmware into $($script:Partial)"
@@ -108,6 +115,7 @@ $check = Test-PackageManifest -PackageRoot $script:Partial
 if (-not $check.ok) { throw "prepared folder: $($check.detail)" }
 $bad = Test-FirmwareFolder $fw (Join-Path $script:Partial 'firmware')
 if ($bad.Count) { throw "prepared folder firmware: $($bad -join '; ')" }
+Invoke-CancelPoint 'after-copy'
 Set-CancelAvailable $false 'finish'
 
 Enter-Stage 'finish' 'Finish'

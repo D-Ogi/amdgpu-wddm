@@ -226,6 +226,10 @@ result.cancelled.title|mt|5efba629|설치가 취소되었습니다
 result.cancelled.body|mt|60ecbf18|설치 프로그램이 안전한 지점에서 멈췄습니다.
 result.cancelled-after-changes.title|mt|5efba629|설치가 취소되었습니다
 result.cancelled-after-changes.body|mt|7e3e0e36|설치 프로그램이 이 PC를 변경하기 시작한 후 안전한 지점에서 멈췄습니다.
+result.deadline.title|mt|37bea89c|설치가 멈췄습니다: 제한 시간에 도달했습니다
+result.deadline.body|mt|99cbc2bc|설치 프로그램이 주어진 제한 시간에 도달하여 안전한 지점에서 멈췄습니다.
+result.deadline-after-changes.title|mt|37bea89c|설치가 멈췄습니다: 제한 시간에 도달했습니다
+result.deadline-after-changes.body|mt|b329d221|설치 프로그램이 이 PC를 변경하기 시작한 후 주어진 제한 시간에 도달하여 안전한 지점에서 멈췄습니다.
 result.offline-prepared.title|mt-safe|58c76c43|폴더가 준비되었습니다
 result.offline-prepared.body|mt|2a59d535|이 폴더를 인터넷이 없는 PC로 복사하고 거기에서 설치 프로그램을 시작하세요. 그때 "인터넷이 없는 PC용으로 준비한 폴더"를 선택하세요.
 result.failed-checks|mt|ecefee18|통과하지 못한 확인

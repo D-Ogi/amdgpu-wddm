@@ -187,7 +187,8 @@ namespace AmdgpuWddmSetup
             "result.verify-before-restart", "result.verified", "result.verified-with-warnings", "result.preflight-refused",
             "result.preflight-error", "result.needs-admin", "result.package-damaged", "result.firmware-folder-bad",
             "result.firmware-unreachable", "result.prepare-destination", "result.busy", "result.verify-failed", "result.step-failed",
-            "result.cancelled", "result.cancelled-after-changes", "result.offline-prepared", "result.planned", "result.needs-consent",
+            "result.cancelled", "result.cancelled-after-changes", "result.deadline", "result.deadline-after-changes", "result.offline-prepared",
+            "result.planned", "result.needs-consent",
         };
 
         public static IEnumerable<string> KnownMessageIds { get { return Known; } }

@@ -226,6 +226,10 @@ result.cancelled.title|mt|5efba629|セットアップはキャンセルされま
 result.cancelled.body|mt|60ecbf18|セットアップは安全な時点で停止しました。
 result.cancelled-after-changes.title|mt|5efba629|セットアップはキャンセルされました
 result.cancelled-after-changes.body|mt|7e3e0e36|この PC の変更を始めた後、セットアップは安全な時点で停止しました。
+result.deadline.title|mt|37bea89c|セットアップは停止しました: 制限時間に達しました
+result.deadline.body|mt|99cbc2bc|セットアップは指定された制限時間に達し、安全な時点で停止しました。
+result.deadline-after-changes.title|mt|37bea89c|セットアップは停止しました: 制限時間に達しました
+result.deadline-after-changes.body|mt|b329d221|この PC の変更を始めた後、セットアップは指定された制限時間に達し、安全な時点で停止しました。
 result.offline-prepared.title|mt-safe|58c76c43|フォルダーの準備ができました
 result.offline-prepared.body|mt|2a59d535|このフォルダーをインターネットのない PC にコピーし、そこからセットアップを起動してください。その際「インターネットのない PC 用に準備したフォルダー」を選んでください。
 result.failed-checks|mt|ecefee18|合格しなかった確認

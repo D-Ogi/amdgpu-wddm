@@ -147,7 +147,7 @@ Check ($r.result.invocation -match '^[0-9a-f]{8}-[0-9a-f]{4}-') "an id is genera
 '[G-EVT] cancel at the safe point'
 $r = Invoke-Engine 'cancel' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning') -Cancel
 Test-Stream $r 'cancel'
-Check (($r.code -eq 8) -and ($r.result.outcome -eq 'cancelled') -and ($r.result.message_id -eq 'result.cancelled') -and -not $r.result.mutated) 'cancelled before any change: exit 8, result.cancelled'
+Check (($r.code -eq 8) -and ($r.result.outcome -eq 'cancelled') -and ($r.result.message_id -eq 'result.cancelled') -and -not $r.result.mutated -and ($r.result.stop.by -eq 'cancel')) "cancelled before any change: exit 8, result.cancelled, stop by cancel at $($r.result.stop.where)"
 Check (-not (Get-Events $r 'step').Count) 'no step after the cancel'
 
 '[G-EVT] repair and upgrade decisions over an installed release'
@@ -198,6 +198,60 @@ if ($null -ne $bootId) {
     $r = Invoke-Engine 'verify same boot' @('-DryRun', '-Verify') -State $st4
     Check (($r.code -eq 7) -and ($r.result.message_id -eq 'result.verify-before-restart')) 'verify in the boot that asked for the restart: refused as restart pending'
 } else { '  (skipped: BootId not readable on this PC)' }
+
+'[G-STAGE] deadline: the run stops at the first stop point after -DeadlineUtc (interfaces-setup.md section 10)'
+$past = [DateTime]::UtcNow.AddMinutes(-1).ToString('o')
+$r = Invoke-Engine 'deadline passed' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-DeadlineUtc', $past)
+Test-Stream $r 'deadline passed'
+Check (($r.code -eq 8) -and ($r.result.outcome -eq 'cancelled') -and ($r.result.message_id -eq 'result.deadline') -and -not $r.result.mutated -and ($r.result.stop.by -eq 'deadline') -and ($r.result.stop.where -eq 'stage:preflight') -and -not (Get-Events $r 'step').Count) "deadline passed: exit 8, result.deadline at $($r.result.stop.where), nothing changed, no step"
+Check ((@(Get-Events $r 'start')[0].job -eq 'kill-on-close') -and ($r.result.children.job -eq 'kill-on-close') -and ($r.result.children.left_at_exit -eq 0)) "the run's own job object: $($r.result.children.job), $($r.result.children.left_at_exit) process(es) left at its end"
+$r = Invoke-Engine 'deadline unreadable' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-DeadlineUtc', 'soon')
+Check (($r.code -eq 8) -and ($r.result.message_id -eq 'result.deadline') -and ($r.result.deadline_utc -match '^unreadable')) 'an unreadable deadline counts as passed: stopped before any change'
+$future = [DateTime]::UtcNow.AddMinutes(10).ToString('o')
+$r = Invoke-Engine 'deadline later' @('-Plan', '-DryRunIgnoreBoard', '-DeadlineUtc', $future)
+Test-Stream $r 'deadline later'
+Check (($r.code -eq 0) -and ($r.result.outcome -eq 'planned') -and ($null -eq $r.result.stop) -and (@(Get-Events $r 'start')[0].deadline_utc) -and ($r.result.deadline_utc)) 'a deadline that has not passed: the plan completes, start and result name the deadline'
+$prepDest = Join-Path $work 'prepared-deadline'
+$r = Invoke-Engine 'prepare deadline passed' @('-Destination', $prepDest, '-DeadlineUtc', $past) -Script 'prepare-offline.ps1'
+Test-Stream $r 'prepare deadline passed'
+Check (($r.code -eq 8) -and ($r.result.message_id -eq 'result.deadline') -and ($r.result.stop.where -eq 'stage:prepare-check') -and -not (Test-Path -LiteralPath $prepDest) -and -not (Test-Path -LiteralPath "$prepDest.partial")) 'prepare-offline after its deadline: stopped at the first stage, no folder written'
+
+'[G-STAGE] child closure: every process the engine started ends with it'
+$env:AMDGPU_WDDM_TEST_CHILD_SECONDS = '120'
+try { $r = Invoke-Engine 'children at the end' @('-Plan', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_CHILD_SECONDS }
+$tc = @(Get-Events $r 'test-child')
+Check (($r.code -eq 0) -and $tc.Count -and ($r.result.children.left_at_exit -ge 2) -and ($r.result.children.ended -eq $r.result.children.left_at_exit) -and -not (Get-Process -Id ([int]$tc[0].pid) -ErrorAction SilentlyContinue) -and @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$([int]$tc[0].pid)").Count -eq 0) "normal end: the engine ended its $($r.result.children.left_at_exit) left-over child process(es) (cmd.exe and its ping) and recorded them"
+# The caller terminates the engine while its child and grandchild run: Windows ends both with the job.
+$kdir = Join-Path $work 'kill'
+[void][IO.Directory]::CreateDirectory($kdir)
+$kev = Join-Path $kdir 'events.jsonl'
+$psi = New-Object Diagnostics.ProcessStartInfo
+$psi.FileName = $ps51
+foreach ($x in @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Package 'installer\install.ps1'), '-Gui', '-InvocationId', ([guid]::NewGuid().ToString()), '-EventsFile', $kev, '-ResultFile', (Join-Path $kdir 'result.json'), '-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning')) { [void]$psi.ArgumentList.Add($x) }
+$psi.Environment['PSModulePath'] = (@([Environment]::GetEnvironmentVariable('PSModulePath', 'Machine'), [Environment]::GetEnvironmentVariable('PSModulePath', 'User')) | Where-Object { $_ }) -join ';'
+$psi.Environment['AMDGPU_WDDM_TEST_CHILD_SECONDS'] = '120'
+$psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+$engine = [Diagnostics.Process]::Start($psi)
+$childPid = $null; $grandPid = $null
+$clock = [Diagnostics.Stopwatch]::StartNew()
+while ($clock.Elapsed.TotalSeconds -lt 60 -and -not $engine.HasExited -and -not $grandPid) {
+    Start-Sleep -Milliseconds 200
+    if (-not $childPid -and (Test-Path -LiteralPath $kev)) {
+        $e = @(Get-Content -LiteralPath $kev | Where-Object { $_ -match '"type":"test-child"' } | ForEach-Object { $_ | ConvertFrom-Json })
+        if ($e.Count) { $childPid = [int]$e[0].pid }
+    }
+    if ($childPid) { $g = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$childPid" | Where-Object { $_.Name -ieq 'PING.EXE' }); if ($g.Count) { $grandPid = [int]$g[0].ProcessId } }
+}
+$wasRunning = -not $engine.HasExited
+if ($wasRunning) { $engine.Kill() }
+[void]$engine.WaitForExit(30000)
+$gone = $false
+for ($i = 0; $i -lt 50 -and -not $gone -and $childPid -and $grandPid; $i++) {
+    $gone = -not (Get-Process -Id $childPid -ErrorAction SilentlyContinue) -and -not (Get-Process -Id $grandPid -ErrorAction SilentlyContinue)
+    if (-not $gone) { Start-Sleep -Milliseconds 100 }
+}
+Check ($wasRunning -and $childPid -and $grandPid -and $gone -and -not (Test-Path -LiteralPath (Join-Path $kdir 'result.json'))) "engine terminated by its caller after $([int]$clock.Elapsed.TotalSeconds) s: its cmd.exe and ping.exe ended with it (no result: changes unknown to the caller)"
+if (-not $gone) { foreach ($p in $childPid, $grandPid) { if ($p) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } } }
 
 $after = Get-Footprint
 Check ($before -eq $after) "system footprint unchanged: $after"

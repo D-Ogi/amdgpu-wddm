@@ -27,12 +27,27 @@ $script:EngineRestart  = $null
 $script:EngineConsents = @()
 $script:EngineFailedChecks = @()
 $script:EngineLock     = $null
-$script:EngineBoot     = $null
 $script:EngineMutationSeen = $false
+$script:EngineDeadline = $null          # [DateTime] UTC from -DeadlineUtc; $null: no deadline
+$script:EngineDeadlineText = $null
+$script:EngineStop     = $null          # the result's 'stop' record when a stop point ended the run
+$script:EngineJob      = 'none'         # 'kill-on-close' once the engine runs in its own job object
+$script:OnStop         = $null          # clean-up before a stop point ends the run (prepare-offline: its .partial folder)
 
 function Initialize-Engine {
-    param([bool]$Gui, [string]$InvocationId, [string]$EventsFile, [string]$ResultFile, [string]$Mode = 'run')
+    param([bool]$Gui, [string]$InvocationId, [string]$EventsFile, [string]$ResultFile, [string]$Mode = 'run', [string]$DeadlineUtc)
     $script:GuiMode = $Gui
+    # Every process the engine starts from here on belongs to its job and ends with it (section 10 of the contract).
+    if ($Gui) { Enter-EngineJob }
+    if ($DeadlineUtc) {
+        $d = [DateTime]::MinValue
+        if ([DateTime]::TryParse($DeadlineUtc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AdjustToUniversal, AssumeUniversal', [ref]$d)) {
+            $script:EngineDeadline = $d; $script:EngineDeadlineText = $d.ToString('o')
+        } else {
+            # An unreadable deadline counts as passed: the run stops at its first stop point, before any change.
+            $script:EngineDeadline = [DateTime]::MinValue; $script:EngineDeadlineText = "unreadable: $DeadlineUtc"
+        }
+    }
     if (-not $InvocationId -and ($Gui -or $EventsFile -or $ResultFile)) { $InvocationId = [guid]::NewGuid().ToString() }
     $script:EngineInvocationId = $InvocationId
     $script:EngineEventsFile = $(if ($EventsFile) { [IO.Path]::GetFullPath($EventsFile) } else { $null })
@@ -107,20 +122,123 @@ function Enter-EngineLock([string]$Directory = $script:StateDir) {
     } catch { return $false }
 }
 
-# ---- cancel -------------------------------------------------------------------------------------------------------
-# Cancel is possible only at a safe point: before the first change of a phase, never in the middle of one. The window
-# learns from 'cancel' events whether its Cancel button can work now.
+# ---- cancel and deadline (docs/gui/interfaces-setup.md section 10) -----------------------------------------------
+# A run stops only at a stop point: before the first change of a phase, never in the middle of one, and, in a run that
+# changes nothing (plan, dry run, verify, the copy of prepare-offline), at every stage boundary. At a stop point the
+# engine ends the run when the caller created <EventsFile>.cancel or the -DeadlineUtc time has passed. Between stop
+# points the engine finishes what it started; a deadline that passes there is announced once per stage ('deadline'
+# event) and acted on at the next stop point. The window learns from 'cancel' events whether its Cancel button can work.
 function Set-CancelAvailable([bool]$Available, [string]$Where) {
     Write-EngineEvent 'cancel' ([ordered]@{ available = $Available; where = $Where })
 }
 function Test-CancelRequested {
     return [bool]($script:EngineCancelFile -and (Test-Path -LiteralPath $script:EngineCancelFile))
 }
+function Test-DeadlinePassed {
+    return [bool]($null -ne $script:EngineDeadline -and [DateTime]::UtcNow -ge $script:EngineDeadline)
+}
 function Invoke-CancelPoint([string]$Where) {
-    if (Test-CancelRequested) {
+    $by = $(if (Test-CancelRequested) { 'cancel' } elseif (Test-DeadlinePassed) { 'deadline' } else { $null })
+    if (-not $by) { return }
+    if ($script:OnStop) { try { & $script:OnStop } catch { Write-Log "   clean-up at the stop point failed: $($_.Exception.Message)" } }
+    $script:EngineStop = [ordered]@{ by = $by; where = $Where; deadline_utc = $script:EngineDeadlineText }
+    if ($by -eq 'cancel') {
         Write-Host "Stopped at a safe point ($Where): cancelled from the setup window." -ForegroundColor Yellow
         Exit-Engine -Code 8 -Outcome 'cancelled' -MessageId $(if ($script:Mutated) { 'result.cancelled-after-changes' } else { 'result.cancelled' }) -Detail "cancel requested; stopped at the safe point '$Where'"
     }
+    Write-Host "Stopped at a safe point ($Where): the deadline $($script:EngineDeadlineText) has passed." -ForegroundColor Yellow
+    Exit-Engine -Code 8 -Outcome 'cancelled' -MessageId $(if ($script:Mutated) { 'result.deadline-after-changes' } else { 'result.deadline' }) -Detail "deadline $($script:EngineDeadlineText) passed; stopped at the safe point '$Where'"
+}
+# Outside a stop point: the deadline has passed, the engine finishes the stage it is in.
+function Write-DeadlineNotice([string]$Where) {
+    if (-not (Test-DeadlinePassed)) { return }
+    Write-Log "   deadline $($script:EngineDeadlineText) passed in '$Where': this part cannot stop safely, it is finished first"
+    Write-EngineEvent 'deadline' ([ordered]@{ passed = $true; where = $Where; deadline_utc = $script:EngineDeadlineText; action = 'finishing' })
+}
+
+# ---- the engine's child processes ---------------------------------------------------------------------------------
+# A setup-window run (-Gui) puts itself into a new job object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE before it starts
+# any process. Every process it starts later (pnputil, bcdedit, the probes, their own children) is in that job and
+# cannot break away. The only handle to the job is the engine's own, not inheritable: when the engine process ends in
+# any way (its exit, a crash, or a caller that terminates it), Windows closes the handle and ends every process still
+# in the job. At a normal end, Exit-Engine ends any left-over child itself and records it in the result ('children').
+# Work that a Windows service performs for the engine (the PnP service's driver installation, WMI providers) is not a
+# child of the engine and is not in the job.
+if (-not ('AmdgpuWddmEngine.Job' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace AmdgpuWddmEngine {
+public static class Job {
+    [StructLayout(LayoutKind.Sequential)] struct BasicLimit {
+        public long PerProcessUserTimeLimit, PerJobUserTimeLimit; public uint LimitFlags; public UIntPtr MinimumWorkingSetSize, MaximumWorkingSetSize;
+        public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass, SchedulingClass; }
+    [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong a, b, c, d, e, f; }
+    [StructLayout(LayoutKind.Sequential)] struct ExtendedLimit {
+        public BasicLimit Basic; public IoCounters Io; public UIntPtr ProcessMemoryLimit, JobMemoryLimit, PeakProcessMemoryUsed, PeakJobMemoryUsed; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateJobObjectW(IntPtr attributes, string name);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref ExtendedLimit info, int size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int infoClass, IntPtr info, int size, out int returned);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    static IntPtr handle = IntPtr.Zero;
+    // null when this process runs in its new kill-on-close job, else the reason.
+    public static string Enter() {
+        if (handle != IntPtr.Zero) return null;
+        IntPtr job = CreateJobObjectW(IntPtr.Zero, null);
+        if (job == IntPtr.Zero) return "CreateJobObject error " + Marshal.GetLastWin32Error();
+        var info = new ExtendedLimit();
+        info.Basic.LimitFlags = 0x2000;     // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if (!SetInformationJobObject(job, 9, ref info, Marshal.SizeOf(typeof(ExtendedLimit)))) return "SetInformationJobObject error " + Marshal.GetLastWin32Error();
+        if (!AssignProcessToJobObject(job, GetCurrentProcess())) return "AssignProcessToJobObject error " + Marshal.GetLastWin32Error();
+        handle = job;
+        return null;
+    }
+    // The ids of the processes in the job now (this process included); empty without a job.
+    public static long[] Processes() {
+        if (handle == IntPtr.Zero) return new long[0];
+        int n = 1024, size = 8 + n * IntPtr.Size, got;
+        IntPtr buf = Marshal.AllocHGlobal(size);
+        try {
+            if (!QueryInformationJobObject(handle, 3, buf, size, out got)) return new long[0];   // JobObjectBasicProcessIdList
+            int count = Marshal.ReadInt32(buf, 4);
+            var r = new long[count];
+            for (int i = 0; i < count; i++) r[i] = Marshal.ReadIntPtr(buf, 8 + i * IntPtr.Size).ToInt64();
+            return r;
+        } finally { Marshal.FreeHGlobal(buf); }
+    }
+}
+}
+'@
+}
+function Enter-EngineJob {
+    $why = [AmdgpuWddmEngine.Job]::Enter()
+    if ($why) { $script:EngineJob = "none: $why"; Write-Log "   no job object for the engine's children: $why" } else { $script:EngineJob = 'kill-on-close' }
+}
+# At the end of a run: every process the engine started and that still runs is ended now (the job would end it with the
+# engine anyway). Returns the result's 'children' record.
+function Close-EngineChildren {
+    if ($script:EngineJob -ne 'kill-on-close') { return [ordered]@{ job = $script:EngineJob; left_at_exit = $null; ended = $null } }
+    $left = @([AmdgpuWddmEngine.Job]::Processes() | Where-Object { $_ -ne $PID })
+    foreach ($p in $left) { Stop-Process -Id ([int]$p) -Force -ErrorAction SilentlyContinue }
+    # A process counts as ended when it is gone (one may end by itself, or with its parent, before its own turn).
+    $running = $left
+    for ($i = 0; $i -lt 50 -and $running.Count; $i++) {
+        $running = @($left | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })
+        if ($running.Count) { Start-Sleep -Milliseconds 100 }
+    }
+    $ended = $left.Count - $running.Count
+    if ($left.Count) { Write-Log "   ended $ended of $($left.Count) child process(es) still running at the end of the run: $($left -join ', ')" }
+    return [ordered]@{ job = 'kill-on-close'; left_at_exit = $left.Count; ended = $ended }
+}
+
+# Host tests only (AMDGPU_WDDM_TEST_CHILD_SECONDS, honoured in a dry run or a plan): a cmd.exe that waits on ping, a
+# child and a grandchild that outlive their step, so that the tests can show that both end with the engine.
+function Start-EngineTestChild {
+    $s = 0
+    if (-not $script:DryRunMode -or -not [int]::TryParse([string]$env:AMDGPU_WDDM_TEST_CHILD_SECONDS, [ref]$s) -or $s -le 0) { return }
+    $p = Start-Process -FilePath (Join-Path $env:windir 'System32\cmd.exe') -ArgumentList '/d', '/c', "ping -n $s 127.0.0.1 >nul" -WindowStyle Hidden -PassThru
+    Write-EngineEvent 'test-child' ([ordered]@{ pid = $p.Id })
 }
 
 # ---- the terminal result ----------------------------------------------------------------------------------------
@@ -132,6 +250,7 @@ function Exit-Engine {
     try { if ($script:state -and $script:state.PSObject.Properties['phase']) { $phaseAfter = [string]$script:state.phase } } catch { }
     $restart = $script:EngineRestart
     if (-not $restart) { $restart = [ordered]@{ required = $false } }
+    $children = Close-EngineChildren
     $r = [ordered]@{
         schema = $script:ResultSchema
         invocation = $script:EngineInvocationId
@@ -155,8 +274,11 @@ function Exit-Engine {
         step = $(if ($Step) { $Step } else { $null })
         detail = $Detail
         log = $script:LogPath
+        deadline_utc = $script:EngineDeadlineText
+        stop = $script:EngineStop
+        children = $children
     }
-    Write-EngineEvent 'result' ([ordered]@{ outcome = $Outcome; exit_code = $Code; message_id = $MessageId; mutated = [bool]$script:Mutated })
+    Write-EngineEvent 'result' ([ordered]@{ outcome = $Outcome; exit_code = $Code; message_id = $MessageId; mutated = [bool]$script:Mutated; stop = $(if ($script:EngineStop) { $script:EngineStop.by } else { $null }) })
     if ($script:EngineResultFile) {
         try { Write-FileAtomic $script:EngineResultFile ($r | ConvertTo-Json -Depth 10) } catch { Write-Log "   result not written: $($_.Exception.Message)" }
     }
