@@ -108,7 +108,7 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_SMU = 6,		/* the governor stopped after SMU failures */
 	BC250_DPM_THROTTLE_FIXED = 7,		/* this start is fixed-lab */
 	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* 85 C (0.7.200): a raise refused, the level holds */
-	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 75-85 C (0.7.203): a raise cut to one level, or held for the interval */
+	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 70-85 C (0.7.203): a raise cut to one level, or held for the interval */
 	BC250_DPM_THROTTLE_COUNT
 };
 
