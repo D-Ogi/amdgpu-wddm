@@ -138,6 +138,34 @@ Check (($p.previous -eq '0.7.198.100-tester.10') -and -not @($p.remove).Count) '
 $p = Get-RepairSetPlan $disk '0.7.200.100-tester.13' @($m.version, '0.7.198.100-tester.10', '0.7.200.100-tester.13')
 Check (($p.previous -eq $m.version) -and ((@($p.remove) -join ',') -eq '0.7.198.100-tester.10')) 'an upgrade keeps the set it replaces as previous and removes the one before'
 
+'[G-STAGE] kept repair set: each set is checked against the firmware of its own manifest (R10)'
+$saveStateDir = $script:StateDir
+$script:StateDir = Join-Path $work 'state-r10'
+$pk = Get-PackagesDir
+$fw2Files = @([pscustomobject]@{ name = 'fw_a.bin'; path = 'amdgpu/fw_a.bin'; text = 'firmware a, older release' }, [pscustomobject]@{ name = 'LICENSE.amdgpu'; path = 'LICENSE.amdgpu'; text = 'licence' })
+$fwPin2 = [pscustomobject]@{ commit = ('1' * 40); install_dir = 'C:\BC250\firmware'; url_templates = $fwPin.url_templates
+    files = @($fw2Files | ForEach-Object { [pscustomobject]@{ name = $_.name; path = $_.path; sha256 = (Get-TextSha $_.text); size = $_.text.Length } }) }
+function New-KeptSet([string]$Version, $Pin, $Files) {
+    $d = Join-Path $pk $Version
+    Write-Text (Join-Path $d 'manifest.json') (([ordered]@{ schema = 1; name = "pkg-$Version"; version = $Version; firmware = $Pin }) | ConvertTo-Json -Depth 6)
+    foreach ($f in $Files) { Write-Text (Join-Path $d "firmware\$($f.name)") $f.text }
+    return (Get-Content -LiteralPath (Join-Path $d 'manifest.json') -Raw | ConvertFrom-Json)
+}
+foreach ($c in @(
+        @{ name = 'older set with its own, different firmware'; files = $fw2Files; want = $true }
+        @{ name = 'older set holding the new release''s firmware instead of its own'; files = $fwFiles; want = $false })) {
+    Remove-Item -LiteralPath $pk -Recurse -Force -ErrorAction SilentlyContinue
+    [void](New-KeptSet '0.7.198.100-tester.10' $fwPin2 $c.files)
+    $mNew = New-KeptSet '0.7.199.100-tester.11' $fwPin $fwFiles
+    Write-Text (Join-Path $pk 'index.json') (([ordered]@{ schema = $script:RepairIndexSchema; active = [ordered]@{ version = '0.7.198.100-tester.10' } }) | ConvertTo-Json)
+    $idx = Complete-RepairSet -Manifest $mNew -Closure (Join-Path $pk '0.7.199.100-tester.11')
+    Check (($idx.previous.version -eq '0.7.198.100-tester.10') -and ($idx.previous.firmware_complete -eq $c.want) -and $idx.previous.manifest_valid -and $idx.active.firmware_complete) "$($c.name): previous firmware_complete $($idx.previous.firmware_complete) (want $($c.want)), active complete"
+}
+Write-Text (Join-Path $pk '0.7.198.100-tester.10\manifest.json') '{ "version": "0.7.197.100-tester.1" }'
+$idx = Complete-RepairSet -Manifest $mNew -Closure (Join-Path $pk '0.7.199.100-tester.11')
+Check ((-not $idx.previous.manifest_valid) -and (-not $idx.previous.firmware_complete)) 'a set whose manifest names another version or no firmware is not complete'
+$script:StateDir = $saveStateDir
+
 '[G-EVT] settings-impact rows from the registry-default plans'
 $plan = Get-RegistryDefaultPlan -Defaults ([pscustomobject]@{ DpmMode = 1; DpmMaxMHz = 1500; EnableFullWddm = 2 }) -Previous ([pscustomobject]@{ DpmMaxMHz = 1400; EnableFullWddm = 2 }) -Current @{ DpmMaxMHz = 1400; EnableFullWddm = 1 } -Explicit @{} -Owned ([ordered]@{ UnconfirmedStarts = 0 })
 $imp = Get-SettingsImpact @(@{ group = 'parameters'; plan = $plan })

@@ -847,13 +847,19 @@ function Complete-RepairSet {
     $present = @(Get-ChildItem -LiteralPath $dir -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
     $plan = Get-RepairSetPlan (Read-RepairSetIndex) ([string]$Manifest.version) $present
     foreach ($v in @($plan.remove)) { Remove-PathOrSchedule (Join-Path $dir $v) }
+    # Each set against its own manifest: a previous version keeps the firmware of its own release, which can differ
+    # from this one's. A set whose manifest is missing, unreadable, of another version or without a firmware list is
+    # not complete.
     $entry = {
         param([string]$Version)
         if (-not $Version) { return $null }
         $d = Join-Path $dir $Version
         $m = Join-Path $d 'manifest.json'
-        return [ordered]@{ version = $Version; dir = $d; manifest_sha256 = $(if (Test-Path -LiteralPath $m) { Get-Sha256 $m } else { $null })
-            firmware_complete = ((Test-FirmwareFolder $Manifest.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeRelative)) }
+        $own = $null
+        if (Test-Path -LiteralPath $m) { try { $own = Get-Content -LiteralPath $m -Raw | ConvertFrom-Json } catch { $own = $null } }
+        $valid = ($own -is [pscustomobject]) -and ([string]$own.version -eq $Version) -and $own.firmware -and @($own.firmware.files).Count
+        return [ordered]@{ version = $Version; dir = $d; manifest_sha256 = $(if (Test-Path -LiteralPath $m) { Get-Sha256 $m } else { $null }); manifest_valid = [bool]$valid
+            firmware_complete = [bool]($valid -and (Test-FirmwareFolder $own.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeRelative)) }
     }
     $index = [ordered]@{ schema = $script:RepairIndexSchema; updated_utc = [DateTime]::UtcNow.ToString('o'); active = (& $entry $plan.active); previous = (& $entry $plan.previous) }
     [IO.File]::WriteAllText((Join-Path $dir 'index.json'), ($index | ConvertTo-Json -Depth 4))
