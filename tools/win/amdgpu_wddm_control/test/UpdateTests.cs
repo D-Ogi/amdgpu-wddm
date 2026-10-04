@@ -129,7 +129,7 @@ static partial class UnitTests
     }
 
     // A body that never ends: one byte every 20 ms, so no per-read timeout would ever fire.
-    sealed class TrickleStream : Stream
+    class TrickleStream : Stream
     {
         public override int Read(byte[] buffer, int offset, int count) { Thread.Sleep(20); buffer[offset] = (byte)' '; return 1; }
         public override bool CanRead { get { return true; } }
@@ -193,7 +193,63 @@ static partial class UnitTests
         Check(finishes == 1 && finished.Outcome == UpdateOutcome.Failed && !runner.Running && records.Count == 1,
             "R7: the late answer is dropped (once Finished, the timeout, nothing recorded twice)");
         stuck = false; done.Reset();
-        Check(runner.Start("0.7.199.100-tester.11") && transport.Gets == 2, "R7: after the worker ended a new check may start");
+        // 936 A5: Start returns before its worker reaches Get; the counter is read after the completion signal.
+        Check(runner.Start("0.7.199.100-tester.11"), "R7: after the worker ended a new check may start");
         Check(done.WaitOne(10000) && finished.Outcome == UpdateOutcome.UpToDate, "R7: the new check runs to its result");
+        Check(transport.Gets == 2, "R7: the new check made exactly one more request (" + transport.Gets + ")");
+        DeadlineTests();
+    }
+
+    // A body whose Read blocks until the run is aborted; its abort time is the supervisor's cancellation time.
+    sealed class BlockedStream : TrickleStream
+    {
+        public readonly ManualResetEvent Aborted = new ManualResetEvent(false);
+        public override int Read(byte[] buffer, int offset, int count) { Aborted.WaitOne(); throw new IOException("aborted"); }
+    }
+
+    // A complete one-page answer whose disposal ends only after the deadline: the work completes just after it.
+    sealed class LateStream : MemoryStream
+    {
+        readonly CheckRun _run;
+        public LateStream(byte[] b, CheckRun run) : base(b) { _run = run; }
+        protected override void Dispose(bool disposing) { while (_run.LeftMs > 0) Thread.Sleep(5); Thread.Sleep(30); base.Dispose(disposing); }
+    }
+
+    // 936 A4: the abort at the absolute deadline, not at budget + grace; a success after the deadline is a timeout.
+    static void DeadlineTests()
+    {
+        var budget = TimeSpan.FromMilliseconds(400);
+        var grace = TimeSpan.FromMilliseconds(1500);
+        var clock = new System.Diagnostics.Stopwatch();
+        long abortMs = -1;
+        var body = new BlockedStream();
+        var blocked = new FakeTransport { OnGet = (u, run) =>
+        {
+            run.OnAbort(() => { Interlocked.CompareExchange(ref abortMs, clock.ElapsedMilliseconds, -1); body.Aborted.Set(); });
+            return new ReleaseAnswer { Status = 200, Body = body };
+        } };
+        UpdateResult finished = null;
+        var done = new ManualResetEvent(false);
+        var runner = new UpdateRunner(blocked, budget, grace, r => { }, r => { finished = r; done.Set(); });
+        clock.Start();
+        Check(runner.Start("0.7.199.100-tester.11"), "A4: a check with a blocked read starts");
+        Check(done.WaitOne(10000), "A4: the blocked read ends");
+        long at = Interlocked.Read(ref abortMs);
+        Check(at >= (long)budget.TotalMilliseconds - 20 && at < (long)budget.TotalMilliseconds + 300,
+            "A4: the abort comes at the deadline (" + at + " ms, budget " + (int)budget.TotalMilliseconds + ", grace " + (int)grace.TotalMilliseconds + ")");
+        Check(finished != null && finished.Outcome == UpdateOutcome.Failed && finished.Detail.Contains("longer than"), "A4: a blocked read is a timeout");
+        Check(clock.ElapsedMilliseconds < (long)(budget + grace).TotalMilliseconds, "A4: the blocked check finishes before budget + grace (" + clock.ElapsedMilliseconds + " ms)");
+
+        // The whole answer is read in time, but the work completes just after the deadline.
+        var page = System.Text.Encoding.UTF8.GetBytes("[" + Release("v0.7.199.100-tester.11") + "]");
+        var late = new FakeTransport { OnGet = (u, run) => new ReleaseAnswer { Status = 200, Body = new LateStream(page, run) } };
+        var direct = UpdateCheck.Fetch(late, new CheckRun(budget), "0.7.199.100-tester.11");
+        Check(direct.Outcome == UpdateOutcome.Failed && direct.Detail.Contains("longer than"), "A4: Fetch rejects a success completed after the deadline: " + direct.Outcome);
+        Check(UpdateCheck.Fetch(new FakeTransport { OnGet = (u, run) => new ReleaseAnswer { Status = 200, Body = new MemoryStream(page) } }, new CheckRun(budget), "0.7.199.100-tester.11").Outcome == UpdateOutcome.UpToDate,
+            "A4: the same answer in time is a result");
+        finished = null; done.Reset();
+        runner = new UpdateRunner(late, budget, grace, r => { }, r => { finished = r; done.Set(); });
+        Check(runner.Start("0.7.199.100-tester.11") && done.WaitOne(10000), "A4: the late check finishes");
+        Check(finished.Outcome == UpdateOutcome.Failed && finished.Detail.Contains("longer than"), "A4: the runner publishes a timeout for a completion after the deadline: " + finished.Outcome);
     }
 }

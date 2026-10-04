@@ -354,7 +354,8 @@ namespace AmdgpuWddmControl
                 int items = CountItems(body);
                 if (items < PerPage) { complete = true; break; }
             }
-            return Decide(all, installed, complete);
+            var result = Decide(all, installed, complete);
+            return run.Over ? TimedOut() : result;      // a result finished after the deadline is not a result (936 A4)
         }
 
         static int CountItems(string json)
@@ -518,8 +519,9 @@ namespace AmdgpuWddmControl
 
         void Supervise(Job job)
         {
+            // The abort comes at the absolute deadline itself (936 A4); the grace is only for the cleanup after it.
             UpdateResult r;
-            if (job.Worker.Join(_budget + _grace)) r = job.Result ?? new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "no result" };
+            if (job.Worker.Join(job.Run.LeftMs)) r = job.Result ?? new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "no result" };
             else
             {
                 job.Run.Abort();
