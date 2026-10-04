@@ -8,6 +8,7 @@ cu.choice.unreadable|mt|ee127a9b|選択を読み取れません。
 cu.choice.after-restart|mt|07660ab1|次回の Windows 再起動後に適用されます。
 cu.run.standard|mt|a1be65f1|現在の動作: {0} コア。
 cu.run.waiting|mt|c00ce647|現在の動作: {0} コア、まだ確認されていません。新しい 40 コア設定が確認されない場合、次回の起動は 24 コアに戻ります。
+cu.run.waiting-short|mt|76106f98|現在の動作: {0} コア、まだ確認されていません。
 cu.run.confirm-failed|mt|d0b0b5c5|40 コアの確認に失敗しました。未確認のままの場合、次回の起動は 24 コアに戻ります。
 cu.run.confirmed|mt|231f98dc|40 コアすべて、確認済み。
 cu.run.confirmed-fewer|mt|fe3b6fd7|現在の動作: {0} コア (確認済み)。
@@ -35,7 +36,7 @@ cu.preview.remove-disable|mt|9e25fab8|以前の診断用コア制限を削除し
 cu.result.nothing|mt|54ca5460|何も変更されていません。
 cu.result.saved|mt-safe|fca046cc|保存しました。
 cu.result.failed|mt|ec48fa5b|変更を完了できませんでした。
-cu.result.cleanup-incomplete|mt|40b9b472|整理が完了していません。次回の起動は標準の 24 コアを使います。残っている以前の診断用コア制限によってコア数が減ることはありません。
+cu.result.cleanup-incomplete|mt|894af8af|整理が完了していません。次回の起動は標準の 24 コアを使います。残っている以前の診断用コア制限によってコア数が減ることはありません。
 cu.effect|mt|60ee9b9b|コアが増えると消費電力と発熱が増えます。当社のテスト機では 1500 MHz で約 30 W 増えました。これは参考値であり、お使いの PC での保証ではありません。
 
 # ---- driver card ----

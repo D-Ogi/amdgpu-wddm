@@ -56,6 +56,70 @@ static partial class UnitTests
         }
     }
 
+    // Native return codes injected under CheckedCuRegistry (review 927 R1).
+    sealed class FakeRegApi : IRegApi
+    {
+        public readonly Dictionary<string, uint> Values = new Dictionary<string, uint>();
+        public int QueryStatus, DeleteStatus, SetStatus, FlushStatus, Flushes;
+        public uint QueryType = 4;
+        public byte[] QueryData;
+        public int Query(string name, out uint type, out byte[] data)
+        {
+            type = QueryType; data = QueryData;
+            if (QueryStatus != 0) return QueryStatus;
+            uint v;
+            if (QueryData == null && !Values.TryGetValue(name, out v)) return CheckedCuRegistry.FileNotFound;
+            if (QueryData == null) data = BitConverter.GetBytes(Values[name]);
+            return 0;
+        }
+        public int Delete(string name) { if (DeleteStatus != 0) return DeleteStatus; return Values.Remove(name) ? 0 : CheckedCuRegistry.FileNotFound; }
+        public int SetDword(string name, uint value) { if (SetStatus == 0) Values[name] = value; return SetStatus; }
+        public int Flush() { Flushes++; return FlushStatus; }
+    }
+
+    static void CuNativeAdapter()
+    {
+        var api = new FakeRegApi(); api.Values["CuMode"] = 40;
+        var reg = new CheckedCuRegistry(api);
+        Equal((uint?)40, reg.Read("CuMode"), "R1 a REG_DWORD reads");
+        Equal((uint?)null, reg.Read("CuModeConfirmed"), "R1 ERROR_FILE_NOT_FOUND is absent");
+        api.QueryStatus = 5;
+        Throws<CuRegistryException>(() => reg.Read("CuMode"), "R1 ERROR_ACCESS_DENIED on read is an error, never absent");
+        try { reg.Read("CuMode"); } catch (CuRegistryException x) { Equal(5, x.Status, "R1 the LSTATUS is kept"); }
+        api.QueryStatus = 1018;
+        Throws<CuRegistryException>(() => reg.Read("CuMode"), "R1 ERROR_KEY_DELETED on read is an error");
+        api.QueryStatus = 0; api.QueryType = 1; api.QueryData = new byte[] { 0x34, 0, 0x30, 0 };
+        Throws<CuRegistryException>(() => reg.Read("CuMode"), "R1 a REG_SZ is not a REG_DWORD");
+        api.QueryType = 4; api.QueryData = new byte[8];
+        Throws<CuRegistryException>(() => reg.Read("CuMode"), "R1 eight bytes are not a REG_DWORD");
+        api.QueryData = null;
+        reg.Delete("CuModeConfirmed");
+        Check(true, "R1 deleting an absent value succeeds");
+        api.DeleteStatus = 5;
+        Throws<CuRegistryException>(() => reg.Delete("CuDisableWgp"), "R1 a delete that fails is an error, not 'removed'");
+        api.DeleteStatus = 0; api.SetStatus = 1021;
+        Throws<CuRegistryException>(() => reg.SetDword("CuMode", 40), "R1 ERROR_CANTWRITE on set is an error");
+        api.SetStatus = 0; api.FlushStatus = 1016;
+        Throws<CuRegistryException>(() => reg.Flush(), "R1 a failed RegFlushKey is an error");
+        Throws<InvalidOperationException>(() => reg.Delete("CuModePending"), "R1 CuModePending is never removed");
+        Throws<InvalidOperationException>(() => reg.SetDword("CuModeConfirmed", 40), "R1 CuModeConfirmed is never written");
+
+        // Through the setter: the native codes decide the result.
+        api = new FakeRegApi(); api.Values["CuMode"] = 24; api.Values["CuModeConfirmed"] = CuMode.Encode(40, 8); api.Values["CuDisableWgp"] = 8;
+        api.FlushStatus = 1016;
+        var plan = CuMode.Plan(CuMode.ReadAll(new CheckedCuRegistry(api)), 40);
+        var res = CuMode.Execute(plan, new CheckedCuRegistry(api));
+        Check(res.FlushFailed && !res.Completed && api.Flushes == 1, "R1 the flush always runs and its failure is reported");
+        Equal(CuNext.Unknown, CuMode.PredictAfter(res), "R1 a failed native flush predicts nothing");
+        api = new FakeRegApi(); api.Values["CuMode"] = 40; api.Values["CuDisableWgp"] = 8; api.DeleteStatus = 5;
+        plan = CuMode.Plan(CuMode.ReadAll(new CheckedCuRegistry(api)), 24);
+        res = CuMode.Execute(plan, new CheckedCuRegistry(api));
+        Check(!res.Completed && res.FailedStep == 0 && res.Error.Contains("LSTATUS 5"), "R1 a native delete failure stops at S1 with its LSTATUS: " + res.Error);
+        Equal((uint?)40, CuMode.ChoiceOf(res.ReadBack) == 40 ? (uint?)40 : null, "R1 the read-back after the failure shows the old mode");
+        api = new FakeRegApi(); api.Values["CuMode"] = 40; api.QueryStatus = 5;
+        Throws<CuRegistryException>(() => CuMode.ReadAll(new CheckedCuRegistry(api)), "R1 an unreadable value never reads as absent");
+    }
+
     static CuModeState Snap(uint flags, uint applied, uint reason, uint active, ulong generation = 5, uint disable = 0)
     {
         return new CuModeState { Flags = flags, Applied = applied, Reason = reason, ActiveCus = active, Generation = generation, DisableMask = disable, Requested = applied };
@@ -123,7 +187,8 @@ static partial class UnitTests
 
         // F4 Confirm with delete-Pending failure: PENDING=1, CONFIRMED=0 after.
         v = CuMode.View(Snap(V | P, 40, 0, 40), 5, St(40, null, null, 40), true);
-        Equal("Confirming 40 cores did not work. If it stays unconfirmed, the next start returns to 24 cores.", v.Running, "F4 text");
+        Equal("Running now: 40 cores, not confirmed yet. Confirming 40 cores did not work. If it stays unconfirmed, the next start returns to 24 cores.", v.Running, "F4 text: the Waiting sentence and the failure");
+        Equal(CuTransaction.Failed, CuMode.ConfirmOutcome(v.Class), "F4 a CONFIRM that leaves Waiting failed");
         Check(v.OfferConfirm && v.OfferReport, "F4 manual retry and report offered");
 
         // F5 store-Confirmed failure, 40 still selected.
@@ -150,7 +215,7 @@ static partial class UnitTests
         // F7 the user's explicit retry: stored 40, the snapshot stays Fallback until the restart.
         v = CuMode.View(Snap(V, 24, CuMode.ReasonPendingUnconfirmed, 24), 5, St(40));
         Equal(CuClass.Fallback, v.Class, "F7 class"); Equal("Your choice: All (40). It applies after the next Windows restart.", v.Choice, "F7 choice");
-        Check(!v.OfferTry40, "F7 no second [Try 40 again]"); Equal(CuNext.Ask40, v.Next, "F7 next start asks again");
+        Check(v.OfferTry40, "F7 [Try 40 again] stays the Fallback state's next step"); Equal(CuNext.Ask40, v.Next, "F7 next start asks again");
         var plan = CuMode.Plan(St(24), 40);
         Check(!plan.Refused && plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-40", "flush-readback" }), "F7 [Try 40 again] = the setter (S1, S4)");
 
@@ -237,7 +302,30 @@ static partial class UnitTests
             var next = CuMode.PredictAfter(res);
             if (sub == "a") { Equal(CuNext.Confirmed40, next, "F14c(a) the masked 40 start"); Check(CuMode.NextText(res.ReadBack, next).Contains("diagnostic core limit"), "F14c(a) never an unmasked 40"); }
             else Equal(CuNext.Unknown, next, "F14c(" + sub + ") Unknown");
+            // Review 927 R2: the choice comes from the read-back, independent of the prediction; 497.2: unknown only
+            // when the verifying read failed.
+            Equal(sub == "a" ? CuChoice.All40 : sub == "b" ? CuChoice.Standard24 : CuChoice.Unknown, CuMode.ChoiceAfter(res), "F14c(" + sub + ") choice");
+            Check(CuMode.ResultText(plan, res).Contains(sub == "a" ? "Your choice: All (40)." : sub == "b" ? "Your choice: Standard (24)." : "Your choice cannot be read."), "F14c(" + sub + ") choice text");
+            Equal(CuTransaction.PartialFailure, CuMode.Transaction(plan, res), "F14c(" + sub + ") partial failure");
         }
+        // R2 / 497.1: a failed S4 flush of All (40) still shows the read-back choice All (40); the next start is unknown.
+        reg = new FakeCu(); reg.Values["CuMode"] = 24; reg.Values["CuModeConfirmed"] = CuMode.Encode(40, 8); reg.Values["CuDisableWgp"] = 8; reg.FailFlush = 0;
+        plan = CuMode.Plan(reg.Stored(), 40);
+        res = CuMode.Execute(plan, reg);
+        Check(res.FlushFailed && res.ReadBack != null && res.ReadBack.Mode == 40, "F14b flush failure: the read-back shows 40");
+        Equal(CuChoice.All40, CuMode.ChoiceAfter(res), "R2 F14b flush failure: choice All (40) from the read-back");
+        Check(CuMode.ResultText(plan, res).Contains("Your choice: All (40).") && CuMode.ResultText(plan, res).Contains("Next start: cannot be predicted."), "R2 F14b flush failure text: " + CuMode.ResultText(plan, res));
+        Check(CuMode.StoredAfter(res).NotDurable, "497.1 the read-back of an unflushed run is not durable");
+        // R3: the Not-saved sentence follows the prediction: unknown or refused never says 24 or 40 by itself.
+        v = CuMode.View(Snap(V, 40, 0, 40), 5, new CuStored { Mode = 40, NotDurable = true });
+        Check(v.Running.EndsWith("Next start: cannot be predicted.") && !v.Running.Contains("24 cores, as you chose") && !v.Running.Contains("try 40 cores again"), "R3 Not saved with an unknown next start: " + v.Running);
+        Check(v.OfferChoose24, "R3 Choose Standard (24) while 40 is chosen");
+        v = CuMode.View(Snap(V, 40, 0, 40), 5, St(40, null, null, 7));
+        Check(v.Running.EndsWith("Next start: 24 cores, because the 40-core setting was not confirmed."), "R3 Not saved with a live Pending: the fallback, from the prediction: " + v.Running);
+        v = CuMode.View(Snap(V, 40, 0, 40), 5, new CuStored { Unreadable = true });
+        Check(v.Running.EndsWith("Next start: cannot be predicted.") && !v.OfferChoose24, "R3 Not saved with unreadable values: " + v.Running);
+        Equal(CuTransaction.Complete, CuMode.ConfirmOutcome(CuClass.Confirmed), "F3 complete");
+        Equal(CuTransaction.PartialFailure, CuMode.ConfirmOutcome(CuClass.NotSaved), "F5 partial failure");
         // Negative check: no failure point of the 24 sequence deletes the mask or confirmation while CuMode=40 remains.
         for (int fail = 0; fail < 12; fail++)
         {
@@ -287,9 +375,11 @@ static partial class UnitTests
 
         // F16b a valid start, then an invalid CuMode written afterwards: the running class stays.
         v = CuMode.View(Snap(V, 24, 0, 24), 5, St(7));
-        Equal(CuClass.Standard, v.Class, "F16b Standard stays"); Check(v.Choice.StartsWith("Your choice is not valid"), "F16b choice"); Equal(CuNext.Standard, v.Next, "F16b next 24");
+        Equal(CuClass.Standard, v.Class, "F16b Standard stays"); Check(v.Choice.StartsWith("Your choice is not valid"), "F16b choice"); Equal(CuNext.Refused, v.Next, "F16b next 24 (refused)");
         v = CuMode.View(Snap(V | P, 40, 0, 40), 5, St(7, null, null, 40));
-        Equal(CuClass.Waiting, v.Class, "F16b Waiting stays"); Equal(CuNext.Standard, v.Next, "F16b next start 24 (INVALID_SETTING)");
+        Equal(CuClass.Waiting, v.Class, "F16b Waiting stays"); Equal(CuNext.Refused, v.Next, "F16b next start 24 (INVALID_SETTING)");
+        Equal(CuMode.ReasonInvalidSetting, CuMode.Prediction(St(32, null, null, 40)).Reason, "F16b an invalid mode is refused before the live Pending");
+        Equal("Next start: 24 cores.", v.NextStart, "F16b a refused next start reads as 24 cores");
 
         // S5: the setter never writes CuModeConfirmed, never touches CuModePending, never the last-reason value.
         foreach (var start in new[] { St(), St(40), St(40, 3, 40, 1), St(7, 0x100000, 9, 2), St(24, 1, 40) })
@@ -307,7 +397,15 @@ static partial class UnitTests
         Check(CuMode.Plan(St(24, null, 40), 24).Steps.All(s => s.Kind != "remove-mode"), "S1 leaves a KMD-stored 24");
         Check(CuMode.Plan(new CuStored { Unreadable = true }, 24).Refused, "unreadable values: refused");
         Equal(CuNext.Ask40, CuMode.Predict(St(40, 3, CuMode.Encode(40, 1))), "a confirmation of another mask does not match");
-        Equal(CuNext.Standard, CuMode.Predict(St(40, 0x100000)), "an invalid mask: INVALID_DISABLE -> 24");
+        Equal(CuNext.Refused, CuMode.Predict(St(40, 0x100000)), "an invalid mask: INVALID_DISABLE -> 24");
+        Equal(CuMode.ReasonInvalidDisable, CuMode.Prediction(St(40, 0x100000)).Reason, "INVALID_DISABLE reason");
+        var masked = CuMode.Prediction(St(40, 8, CuMode.Encode(40, 8)));
+        Check(masked.Next == CuNext.Confirmed40 && masked.ActiveCus == 38 && masked.State == CuClass.ConfirmedFewer && masked.Confirmed && !masked.Pending, "a confirmed masked request: 38 cores, confirmed with fewer cores");
+        var asks = CuMode.Prediction(St(40, 8));
+        Check(asks.Next == CuNext.Ask40 && asks.ActiveCus == 38 && asks.State == CuClass.Waiting && asks.Pending && !asks.Confirmed, "an unconfirmed masked request waits with 38 cores");
+        Equal(38u, CuMode.ActiveCus(8), "one disabled WGP takes two CUs"); Equal(40u, CuMode.ActiveCus(0), "no mask: 40");
+        Check(CuMode.Prediction(new CuStored { Mode = 40, NotDurable = true }) == null, "497.1: values of a run that was not flushed predict nothing");
+        Equal(CuChoice.All40, CuMode.Choice(new CuStored { Mode = 40, NotDurable = true }), "497.1: the choice still reads from the values");
     }
 
     // Wraps a fake so that its n-th mutating or flush operation throws.

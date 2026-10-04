@@ -56,6 +56,8 @@ namespace AmdgpuWddmControl
         // REG_DWORD (Parameters lists DWORDs only), so that such a value is unreadable, never absent.
         public CuModeState Cu { get; set; }
         public List<string> CuBadValues { get; set; }
+        // A setter run of this boot could not flush or verify its writes (cu-unflushed.json): no next-start prediction.
+        public bool CuNotDurable { get; set; }
         // Per-game switches: image -> Experiment as stored ("" for a key without the value), and the release's
         // recommended ones (manifest.json defaults.d3d12_applications; null: none).
         public Dictionary<string, string> GameProfiles { get; set; }
@@ -66,7 +68,7 @@ namespace AmdgpuWddmControl
         public CuStored StoredCu()
         {
             if (CuBadValues != null && CuBadValues.Count > 0) return new CuStored { Unreadable = true };
-            return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending") };
+            return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending"), NotDurable = CuNotDurable };
         }
 
         public uint? P(string name)
@@ -237,6 +239,15 @@ namespace AmdgpuWddmControl
         public string Utc { get; set; }
         public long? Value { get; set; }      // null: the value was removed
         public string Action { get; set; }
+        public string RunId { get; set; }
+    }
+
+    // cu-unflushed.json: the boot in which a CU setter run could not flush or verify its writes (plan 497 decision 1).
+    public sealed class CuUnflushedRecord
+    {
+        public int Schema { get; set; }
+        public long BootId { get; set; }
+        public string Utc { get; set; }
         public string RunId { get; set; }
     }
 

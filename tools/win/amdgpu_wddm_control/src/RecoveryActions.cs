@@ -96,6 +96,7 @@ namespace AmdgpuWddmControl
             ReadRoute(s);
             var route = LoadRouteRecord();
             if (route != null) { s.RouteWrittenUtc = Stamp(Recovery.Utc(route.Utc)); s.RouteWrittenValue = route.Value; }
+            s.CuNotDurable = CuUnflushedThisBoot();
             s.ConfirmLogLast = LastLine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "start-confirm.log"));
             return s;
         }
@@ -118,6 +119,21 @@ namespace AmdgpuWddmControl
         }
 
         public static string RouteRecordPath { get { return Path.Combine(StateOverride ?? ControlDirectory, "route-written.json"); } }
+
+        public static string CuUnflushedPath { get { return Path.Combine(StateOverride ?? ControlDirectory, "cu-unflushed.json"); } }
+
+        // True when a setter run of THIS boot could not flush or verify its writes (cu-unflushed.json).
+        static bool CuUnflushedThisBoot()
+        {
+            try
+            {
+                if (!File.Exists(CuUnflushedPath) || (StateOverride == null && !Trusted(CuUnflushedPath))) return false;
+                var r = new JavaScriptSerializer().Deserialize<CuUnflushedRecord>(File.ReadAllText(CuUnflushedPath));
+                var boot = DriverCardProbe.BootId();
+                return r != null && r.Schema == 1 && boot != null && r.BootId == boot.Value;
+            }
+            catch (Exception) { return false; }
+        }
 
         static RouteRecord LoadRouteRecord()
         {
@@ -859,7 +875,7 @@ namespace AmdgpuWddmControl
             CuSetterResult r;
             try
             {
-                using (var reg = new LiveCuRegistry()) r = CuMode.Execute(plan, reg);
+                using (var api = new Win32RegApi(CuMode.ParametersPath)) r = CuMode.Execute(plan, new CheckedCuRegistry(api));
             }
             catch (Exception e)
             {
@@ -867,11 +883,36 @@ namespace AmdgpuWddmControl
                 return false;
             }
             foreach (var l in r.Log) Log("CU " + l);
+            CuUnflushed(r);
             var text = CuMode.ResultText(plan, r);
             if (r.Completed) { Log("CU result: " + text); return true; }
             Log("CU read back: " + (r.ReadBack != null ? r.ReadBack.ToString() : "unknown") + (r.FlushFailed ? " (the flush failed: not durable)" : ""));
             Log("result: failed: " + text + " Error: " + r.Error);
             return false;
+        }
+
+        // cu-unflushed.json (plan 497 decision 1): written when a flush or the verifying read of this run failed, so
+        // that the window predicts no next start in this boot; removed by a completed run. A run that failed before
+        // any flush leaves an earlier record as it is.
+        static void CuUnflushed(CuSetterResult r)
+        {
+            var path = RecoveryProbe.CuUnflushedPath;
+            try
+            {
+                if (r.Completed) { if (File.Exists(path)) { File.Delete(path); Log("CU durability record removed: the run completed"); } return; }
+                if (!r.FlushFailed && !r.VerifyFailed) return;
+                var boot = DriverCardProbe.BootId();
+                if (boot == null) { Log("CU durability record not written: the boot cannot be read; the window predicts from the values it reads"); return; }
+                var rec = new CuUnflushedRecord { Schema = 1, BootId = boot.Value, Utc = Stamp(DateTime.UtcNow), RunId = _runId };
+                var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllText(temp, new JavaScriptSerializer().Serialize(rec));
+                var owner = new FileSecurity();
+                owner.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
+                File.SetAccessControl(temp, owner);
+                if (File.Exists(path)) File.Replace(temp, path, null, true); else File.Move(temp, path);
+                Log("CU durability record: boot " + rec.BootId + ", the next start is not predicted until a restart or a completed run");
+            }
+            catch (Exception e) { Log("CU durability record not written (" + e.Message + ")"); }
         }
 
         // [Confirm now] (Waiting only): CU CONFIRM with the Generation of a fresh READ, then READ again. One request,
@@ -897,42 +938,6 @@ namespace AmdgpuWddmControl
                 case CuClass.NotSaved: Log("result: failed: the confirmation could not be saved (Pending deleted, Confirmed not stored)"); return Failed;
                 default: Log("result: failed: the graphics-core state cannot be read after the confirmation"); return Failed;
             }
-        }
-
-        // The CU setter's registry: the driver's Parameters key, and only the operations the setter may make.
-        sealed class LiveCuRegistry : ICuRegistry, IDisposable
-        {
-            readonly RegistryKey _key;
-
-            public LiveCuRegistry()
-            {
-                _key = Registry.LocalMachine.OpenSubKey(CuMode.ParametersPath, true);
-                if (_key == null) throw new InvalidOperationException(@"HKLM\" + CuMode.ParametersPath + " does not exist");
-            }
-
-            public uint? Read(string name)
-            {
-                var v = _key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-                if (v == null) return null;
-                if (_key.GetValueKind(name) != RegistryValueKind.DWord) throw new InvalidOperationException(name + " is not a REG_DWORD");
-                return (uint)(int)v;
-            }
-
-            public void Delete(string name)
-            {
-                if (name != "CuMode" && name != "CuDisableWgp" && name != "CuModeConfirmed") throw new InvalidOperationException(name + " is not a value the setter removes");
-                _key.DeleteValue(name, false);
-            }
-
-            public void SetDword(string name, uint value)
-            {
-                if (name != "CuMode" || value != CuMode.Full) throw new InvalidOperationException("the setter writes only CuMode = 40");
-                _key.SetValue(name, unchecked((int)value), RegistryValueKind.DWord);
-            }
-
-            public void Flush() { _key.Flush(); }
-
-            public void Dispose() { _key.Dispose(); }
         }
 
         static void Write(RegWrite w)

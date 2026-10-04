@@ -4,7 +4,7 @@
 # packages under -Kits. Deterministic: the same sources give the same bytes (csc /deterministic, cl/link /Brepro).
 #
 #   pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\release\control-app\build\app
-#        [-StartConfirmCore <release installer's start-confirm-core.ps1>]
+#        [-StartConfirmCore <release installer's start-confirm-core.ps1>] [-Oracle <directory of the review oracles>]
 #
 # Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h, the
 # KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
@@ -27,6 +27,7 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [string]$StartConfirmCore,
     [string]$NagiArt,
+    [string]$Oracle,
     [switch]$NoSmoke
 )
 
@@ -47,9 +48,15 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs' | ForEach-Object { Join-Path $here "src\$_" }
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
-# 1. Unit tests of the pure parts.
+# 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
+# temp folder. With -Oracle the review oracles (oracle-cu.json, oracle-ver.json, oracle-art.json) in that directory are
+# checked too (test/OracleTests.cs); the oracles are read where they are and never copied into the repository.
+$testTmp = Join-Path $obj 'tmp'
+New-Item -ItemType Directory -Force $testTmp | Out-Null
+$env:TEMP = $testTmp; $env:TMP = $testTmp
+$env:AMDGPU_WDDM_ORACLE = $(if ($Oracle) { (Resolve-Path $Oracle).Path } else { '' })
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
     "/out:$obj\unit-tests.exe" @pure (Get-ChildItem "$here\test\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }

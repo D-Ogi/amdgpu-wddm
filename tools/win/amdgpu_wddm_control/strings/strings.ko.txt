@@ -8,6 +8,7 @@ cu.choice.unreadable|mt|ee127a9b|선택을 읽을 수 없습니다.
 cu.choice.after-restart|mt|07660ab1|다음 Windows 다시 시작 후에 적용됩니다.
 cu.run.standard|mt|a1be65f1|현재 실행: 코어 {0}개.
 cu.run.waiting|mt|c00ce647|현재 실행: 코어 {0}개, 아직 확인되지 않음. 새 40코어 설정이 확인되지 않으면 다음 시작은 24코어로 돌아갑니다.
+cu.run.waiting-short|mt|76106f98|현재 실행: 코어 {0}개, 아직 확인되지 않음.
 cu.run.confirm-failed|mt|d0b0b5c5|40코어 확인에 실패했습니다. 확인되지 않은 상태로 남으면 다음 시작은 24코어로 돌아갑니다.
 cu.run.confirmed|mt|231f98dc|40코어 모두, 확인됨.
 cu.run.confirmed-fewer|mt|fe3b6fd7|현재 실행: 코어 {0}개 (확인됨).
@@ -35,7 +36,7 @@ cu.preview.remove-disable|mt|9e25fab8|이전의 진단용 코어 제한을 제�
 cu.result.nothing|mt|54ca5460|아무것도 변경되지 않았습니다.
 cu.result.saved|mt-safe|fca046cc|저장했습니다.
 cu.result.failed|mt|ec48fa5b|변경을 완료할 수 없었습니다.
-cu.result.cleanup-incomplete|mt|40b9b472|정리가 완료되지 않았습니다. 다음 시작은 표준 24코어를 사용하며, 남아 있는 이전 진단용 코어 제한은 코어 수를 줄이지 않습니다.
+cu.result.cleanup-incomplete|mt|894af8af|정리가 완료되지 않았습니다. 다음 시작은 표준 24코어를 사용합니다. 남아 있는 이전 진단용 코어 제한은 코어 수를 줄이지 않습니다.
 cu.effect|mt|60ee9b9b|코어가 많을수록 전력 소비와 발열이 늘어납니다. 당사 테스트 장치에서 1500 MHz 기준 약 30 W 증가했습니다. 참고값이며 사용자 PC에 대한 보장은 아닙니다.
 
 # ---- driver card ----

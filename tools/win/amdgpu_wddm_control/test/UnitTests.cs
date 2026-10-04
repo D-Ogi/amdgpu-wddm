@@ -1008,6 +1008,7 @@ static partial class UnitTests
         CuLayout(header);
         CuReasons(args[0]);
         CuFixtures();
+        CuNativeAdapter();
         ShellTokens(args[0]);
         ProfileEditing();
         Dpm();

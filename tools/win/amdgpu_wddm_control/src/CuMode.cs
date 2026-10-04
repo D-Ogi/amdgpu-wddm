@@ -16,16 +16,33 @@ namespace AmdgpuWddmControl
 {
     public enum CuClass { Unknown, Standard, Waiting, Confirmed, ConfirmedFewer, NotSaved, Fallback, Refused }
 
-    public enum CuNext { Unknown, Standard, Fallback, Ask40, Confirmed40 }
+    // The next start as bc250_cu_decide will take it: Refused = the KMD refuses the stored values (INVALID_SETTING or
+    // INVALID_DISABLE) and starts with 24.
+    public enum CuNext { Unknown, Standard, Refused, Fallback, Ask40, Confirmed40 }
+
+    // The stored choice, the "Your choice" line.
+    public enum CuChoice { Unknown, Standard24, All40, Invalid }
+
+    // The next-start prediction in full: the mode the KMD applies, the cores that start, the class that start will
+    // have, its reason and its marks. Null from CuMode.Prediction when nothing can be predicted.
+    public sealed class CuPrediction
+    {
+        public CuNext Next;
+        public uint Mode, ActiveCus, Reason;
+        public CuClass State;
+        public bool Pending, Confirmed;
+    }
 
     // The four values the setter and the prediction look at. Null: absent. Unreadable: a value that exists but could
-    // not be read as a REG_DWORD (or the key could not be read): nothing is predicted from it.
+    // not be read as a REG_DWORD (or the key could not be read): nothing is predicted from it. NotDurable: a setter run
+    // of this boot could not flush or verify its writes (cu-unflushed.json, plan 497 decision 1): the values read now
+    // may not be what the next start reads, so the next start is not predicted until a restart or a completed run.
     public sealed class CuStored
     {
         public uint? Mode, Disable, Confirmed, Pending;
-        public bool Unreadable;
+        public bool Unreadable, NotDurable;
 
-        public CuStored Copy() { return new CuStored { Mode = Mode, Disable = Disable, Confirmed = Confirmed, Pending = Pending, Unreadable = Unreadable }; }
+        public CuStored Copy() { return new CuStored { Mode = Mode, Disable = Disable, Confirmed = Confirmed, Pending = Pending, Unreadable = Unreadable, NotDurable = NotDurable }; }
 
         public override string ToString()
         {
@@ -39,10 +56,14 @@ namespace AmdgpuWddmControl
     {
         public CuClass Class;
         public CuNext Next;
+        public CuChoice Stored;
         public string Choice, Running, NextStart, Note;
         public bool OfferConfirm, OfferTry40, OfferChoose24, OfferReport;
         public uint ChoiceMode;             // 24, 40, or 0 when the stored value is not valid or unreadable
     }
+
+    // The outcome of a setter run or a [Confirm now], as one word for the log and the tests.
+    public enum CuTransaction { NotApplicable, Complete, Failed, PartialFailure }
 
     public interface ICuRegistry
     {
@@ -87,6 +108,8 @@ namespace AmdgpuWddmControl
 
     public sealed class CuSetterResult
     {
+        // FlushFailed: a flush of the run failed; VerifyFailed: the read that verifies the stock selection failed.
+        // Either way the run established no durable state (plan 497 decisions 1 and 2).
         public bool Completed, AnyStepRan, FlushFailed, VerifyFailed;
         public int FailedStep = -1;                      // index into the plan's steps
         public string Error;
@@ -149,16 +172,37 @@ namespace AmdgpuWddmControl
 
         // ---- the next start ----------------------------------------------------------------------------------------
 
-        // bc250_cu_decide over the stored values, for the BC-250's topology. A live Pending -> the KMD's fallback.
+        // bc250_cu_decide over the stored values, for the BC-250's topology: absent or 24 -> stock before the mask is
+        // read; another mode -> INVALID_SETTING; a mask outside the topology -> INVALID_DISABLE; a live Pending -> the
+        // KMD's fallback; a Confirmed that matches the request -> a confirmed 40 start; otherwise a 40 start that asks.
         public static CuNext Predict(CuStored v)
         {
-            if (v == null || v.Unreadable) return CuNext.Unknown;
-            if (v.Mode == null || v.Mode == Stock) return CuNext.Standard;
-            if (v.Mode != Full) return CuNext.Standard;                    // INVALID_SETTING: stock
+            var p = Prediction(v);
+            return p == null ? CuNext.Unknown : p.Next;
+        }
+
+        public static CuPrediction Prediction(CuStored v)
+        {
+            if (v == null || v.Unreadable || v.NotDurable) return null;
+            Func<CuNext, CuClass, uint, CuPrediction> stock = (next, state, reason) =>
+                new CuPrediction { Next = next, Mode = Stock, ActiveCus = Stock, State = state, Reason = reason };
+            if (v.Mode == null || v.Mode == Stock) return stock(CuNext.Standard, CuClass.Standard, ReasonNone);
+            if (v.Mode != Full) return stock(CuNext.Refused, CuClass.Refused, ReasonInvalidSetting);
             uint disable = v.Disable ?? 0;
-            if ((disable & ~AllowedDisable) != 0) return CuNext.Standard;  // INVALID_DISABLE: stock
-            if ((v.Pending ?? 0) != 0) return CuNext.Fallback;
-            return v.Confirmed == Encode(Full, disable) ? CuNext.Confirmed40 : CuNext.Ask40;
+            if ((disable & ~AllowedDisable) != 0) return stock(CuNext.Refused, CuClass.Refused, ReasonInvalidDisable);
+            if ((v.Pending ?? 0) != 0) return stock(CuNext.Fallback, CuClass.Fallback, ReasonPendingUnconfirmed);
+            uint cus = ActiveCus(disable);
+            if (v.Confirmed == Encode(Full, disable))
+                return new CuPrediction { Next = CuNext.Confirmed40, Mode = Full, ActiveCus = cus, State = cus == Full ? CuClass.Confirmed : CuClass.ConfirmedFewer, Confirmed = true };
+            return new CuPrediction { Next = CuNext.Ask40, Mode = Full, ActiveCus = cus, State = CuClass.Waiting, Pending = true };
+        }
+
+        // The cores of a 40 start with a valid mask: each disabled WGP takes two CUs.
+        public static uint ActiveCus(uint disable)
+        {
+            uint bits = 0;
+            for (uint m = disable & AllowedDisable; m != 0; m &= m - 1) bits++;
+            return Full - 2 * bits;
         }
 
         // A 40 start that would run with an earlier diagnostic core limit (never for Standard: absent/24 returns
@@ -170,48 +214,65 @@ namespace AmdgpuWddmControl
 
         // ---- the view ----------------------------------------------------------------------------------------------
 
-        public static uint ChoiceOf(CuStored v)
+        // The stored choice only: never the running start and never the prediction.
+        public static CuChoice Choice(CuStored v)
         {
-            if (v == null || v.Unreadable) return 0;
-            if (v.Mode == null || v.Mode == Stock) return Stock;
-            return v.Mode == Full ? Full : 0;
+            if (v == null || v.Unreadable) return CuChoice.Unknown;
+            if (v.Mode == null || v.Mode == Stock) return CuChoice.Standard24;
+            return v.Mode == Full ? CuChoice.All40 : CuChoice.Invalid;
         }
 
-        // confirmFailed: the user pressed [Confirm now] in this start and Pending is still there.
+        public static uint ChoiceOf(CuStored v)
+        {
+            var c = Choice(v);
+            return c == CuChoice.Standard24 ? Stock : c == CuChoice.All40 ? Full : 0;
+        }
+
+        public static string ChoiceText(CuChoice c)
+        {
+            switch (c)
+            {
+                case CuChoice.Standard24: return Strings.T("cu.choice.standard");
+                case CuChoice.All40: return Strings.T("cu.choice.all");
+                case CuChoice.Invalid: return Strings.T("cu.choice.invalid");
+                default: return Strings.T("cu.choice.unreadable");
+            }
+        }
+
+        // confirmFailed: the user pressed [Confirm now] in this start and the start is still Waiting (deleting Pending
+        // failed): the Waiting sentence stays and the failure is said next to it.
         public static CuView View(CuModeState snapshot, ulong? startGeneration, CuStored stored, bool confirmFailed = false)
         {
-            var v = new CuView { Class = Classify(snapshot, startGeneration), Next = Predict(stored), ChoiceMode = ChoiceOf(stored) };
+            var v = new CuView { Class = Classify(snapshot, startGeneration), Next = Predict(stored), Stored = Choice(stored), ChoiceMode = ChoiceOf(stored) };
             int cores = snapshot != null ? (int)snapshot.ActiveCus : 0;
             uint applied = v.Class == CuClass.Unknown ? 0 : snapshot.Applied;
 
             // Your choice.
-            if (stored == null || stored.Unreadable) v.Choice = Strings.T("cu.choice.unreadable");
-            else if (v.ChoiceMode == 0) v.Choice = Strings.T("cu.choice.invalid");
-            else
-            {
-                v.Choice = Strings.T(v.ChoiceMode == Full ? "cu.choice.all" : "cu.choice.standard");
-                if (applied != 0 && applied != v.ChoiceMode) v.Choice += " " + Strings.T("cu.choice.after-restart");
-            }
+            v.Choice = ChoiceText(v.Stored);
+            if (v.ChoiceMode != 0 && applied != 0 && applied != v.ChoiceMode) v.Choice += " " + Strings.T("cu.choice.after-restart");
 
             // This start.
             switch (v.Class)
             {
                 case CuClass.Standard: v.Running = Strings.T("cu.run.standard", cores); break;
                 case CuClass.Waiting:
-                    v.Running = confirmFailed ? Strings.T("cu.run.confirm-failed") : Strings.T("cu.run.waiting", cores);
+                    v.Running = confirmFailed ? Strings.T("cu.run.waiting-short", cores) + " " + Strings.T("cu.run.confirm-failed") : Strings.T("cu.run.waiting", cores);
                     v.OfferConfirm = true;
                     v.OfferReport = confirmFailed;
                     break;
                 case CuClass.Confirmed: v.Running = Strings.T("cu.run.confirmed"); break;
                 case CuClass.ConfirmedFewer: v.Running = Strings.T("cu.run.confirmed-fewer", cores); break;
                 case CuClass.NotSaved:
-                    v.Running = Strings.T("cu.run.not-saved", cores) + " " + Strings.T(v.ChoiceMode == Full ? "cu.run.not-saved.next40" : "cu.run.not-saved.next24");
+                    // The second sentence follows the prediction, never the choice alone (review 927 R3).
+                    v.Running = Strings.T("cu.run.not-saved", cores) + " " + (v.Next == CuNext.Ask40 ? Strings.T("cu.run.not-saved.next40")
+                        : v.Next == CuNext.Standard ? Strings.T("cu.run.not-saved.next24") : NextText(stored, v.Next));
                     v.OfferReport = true;
-                    v.OfferChoose24 = v.ChoiceMode == Full;
+                    v.OfferChoose24 = v.Stored == CuChoice.All40;
                     break;
                 case CuClass.Fallback:
+                    // [Try 40 again] is the Fallback state's next step whatever is stored (plan v7 section 7).
                     v.Running = Strings.T("cu.run.fallback");
-                    v.OfferTry40 = v.ChoiceMode != Full;
+                    v.OfferTry40 = true;
                     break;
                 case CuClass.Refused: v.Running = Strings.T("cu.run.refused"); break;
                 default: v.Running = Strings.T("cu.run.unknown"); break;
@@ -225,7 +286,8 @@ namespace AmdgpuWddmControl
         {
             switch (next)
             {
-                case CuNext.Standard: return Strings.T("cu.next.standard");
+                case CuNext.Standard:
+                case CuNext.Refused: return Strings.T("cu.next.standard");
                 case CuNext.Fallback: return Strings.T("cu.next.fallback");
                 case CuNext.Ask40: return Strings.T(Limited(stored, next) ? "cu.next.ask40-limited" : "cu.next.ask40");
                 case CuNext.Confirmed40: return Strings.T(Limited(stored, next) ? "cu.next.confirmed40-limited" : "cu.next.confirmed40");
@@ -344,9 +406,8 @@ namespace AmdgpuWddmControl
                 }
             }
             if (res.FailedStep < 0) { res.Completed = true; return res; }
-            // F14c (c): the verifying read failed, the state is unknown.
-            if (res.VerifyFailed) return res;
-            // The actual state after a failure: read back CuMode, CuModeConfirmed, CuDisableWgp and CuModePending.
+            // The actual state after a failure (S6): read back CuMode, CuModeConfirmed, CuDisableWgp and CuModePending.
+            // After a failed verifying read (F14c (c)) the choice stays unknown whatever this read gives.
             try { res.ReadBack = ReadAll(r); res.Log.Add("read back after the failure: " + res.ReadBack); }
             catch (Exception e) { res.ReadBack = null; res.Log.Add("read back after the failure FAILED: " + e.Message); }
             return res;
@@ -359,11 +420,49 @@ namespace AmdgpuWddmControl
             return plan.Target == Full ? back.Mode == Full : back.Mode == null || back.Mode == Stock;
         }
 
-        // The prediction after a setter run: a failed flush or a failed verifying read establishes no durable state.
+        // The prediction after a setter run: a failed flush or a failed verifying read establishes no durable state
+        // (plan 497 decisions 1 and 2), even when the read-back shows the mode.
         public static CuNext PredictAfter(CuSetterResult r)
         {
-            if (r.FlushFailed || r.VerifyFailed || r.ReadBack == null) return CuNext.Unknown;
-            return Predict(r.ReadBack);
+            return Predict(StoredAfter(r));
+        }
+
+        // The stored values after a run as the window should treat them: the read-back, not durable after a failed
+        // flush or verifying read; null when the read-back failed.
+        public static CuStored StoredAfter(CuSetterResult r)
+        {
+            if (r.ReadBack == null) return null;
+            var s = r.ReadBack.Copy();
+            if (r.FlushFailed || r.VerifyFailed) s.NotDurable = true;
+            return s;
+        }
+
+        // The stored choice after a run: from the read-back alone, independent of the prediction (review 927 R2);
+        // unknown when the verifying read failed (plan 497 decision 2) or no read-back exists.
+        public static CuChoice ChoiceAfter(CuSetterResult r)
+        {
+            return r.VerifyFailed || r.ReadBack == null ? CuChoice.Unknown : Choice(r.ReadBack);
+        }
+
+        public static CuTransaction Transaction(CuSetterPlan plan, CuSetterResult r)
+        {
+            if (plan.Refused || !r.AnyStepRan) return CuTransaction.NotApplicable;
+            return r.Completed ? CuTransaction.Complete : CuTransaction.PartialFailure;
+        }
+
+        // [Confirm now], from the class the fresh READ after the CONFIRM gives: Confirmed (or with fewer cores) =
+        // complete; still Waiting (deleting Pending failed) = failed; Not saved (Pending deleted, Confirmed not stored) =
+        // a partial failure; anything else is not a known outcome of the CONFIRM.
+        public static CuTransaction ConfirmOutcome(CuClass after)
+        {
+            switch (after)
+            {
+                case CuClass.Confirmed:
+                case CuClass.ConfirmedFewer: return CuTransaction.Complete;
+                case CuClass.Waiting: return CuTransaction.Failed;
+                case CuClass.NotSaved: return CuTransaction.PartialFailure;
+                default: return CuTransaction.NotApplicable;
+            }
         }
 
         // The result text (A3): "Nothing was changed" only when the helper refused before any step.
@@ -371,8 +470,7 @@ namespace AmdgpuWddmControl
         {
             if (plan.Refused || !r.AnyStepRan) return Strings.T("cu.result.nothing") + (plan.Refused ? " " + plan.Refusal : "");
             var next = PredictAfter(r);
-            var choice = r.ReadBack == null || next == CuNext.Unknown ? Strings.T("cu.choice.unreadable")
-                : ChoiceOf(r.ReadBack) == Full ? Strings.T("cu.choice.all") : ChoiceOf(r.ReadBack) == Stock ? Strings.T("cu.choice.standard") : Strings.T("cu.choice.invalid");
+            var choice = ChoiceText(ChoiceAfter(r));
             if (r.Completed) return Strings.T("cu.result.saved") + " " + choice + " " + Strings.T("cu.choice.after-restart") + " " + NextText(r.ReadBack, next);
             // F14d: stock verified, the cleanup stopped: the next start uses 24 cores, a remaining mask does not reduce them.
             bool cleanup = plan.Target == Stock && next == CuNext.Standard && r.ReadBack != null && (r.ReadBack.Confirmed != null || r.ReadBack.Disable != null);
