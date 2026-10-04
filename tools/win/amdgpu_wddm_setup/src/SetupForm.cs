@@ -655,8 +655,7 @@ namespace AmdgpuWddmSetup
             var args = new List<string> { "-Plan" };
             if (_flow == "repair") args.Add("-Repair");
             args.AddRange(_args.EngineArgs);
-            StartRun("plan", Path.Combine(_package, "installer", "install.ps1"), args);
-            Show(Screen.Checking);
+            StartRun("plan", Path.Combine(_package, "installer", "install.ps1"), args, Screen.Checking);
         }
 
         void RunInstall()
@@ -667,34 +666,52 @@ namespace AmdgpuWddmSetup
             if (_bitLocker.Length > 0) { args.Add("-BitLocker"); args.Add(_bitLocker); }
             if (_args.DryRun) args.Add("-DryRun");
             args.AddRange(_args.EngineArgs);
-            StartRun("install", Path.Combine(_package, "installer", "install.ps1"), args);
-            Show(Screen.Working);
+            StartRun("install", Path.Combine(_package, "installer", "install.ps1"), args, Screen.Working);
         }
 
         void RunPrepare()
         {
             var args = new List<string> { "-Destination", _prepDestination };
             if (_prepUseFirmware) { args.Add("-FirmwareDir"); args.Add(_prepFirmware); }
-            StartRun("prepare", Path.Combine(_ownPackage, "installer", "prepare-offline.ps1"), args);
-            Show(Screen.Working);
+            StartRun("prepare", Path.Combine(_ownPackage, "installer", "prepare-offline.ps1"), args, Screen.Working);
         }
 
-        void StartRun(string kind, string script, List<string> args)
+        // Starts one engine run and shows its first screen. When the engine cannot start (a run folder that cannot be
+        // made, a package folder that is gone, a launch that Windows refuses), the run has no result: the result screen
+        // says so and stays; the support file says why when the run folder exists.
+        bool StartRun(string kind, string script, List<string> args, Screen first)
         {
             _runKind = kind;
             _supportSaved = _supportError = null;
-            _client = NewClient();
-            _active = _client.Run;
-            try { _client.Start(script, args); }
+            EngineClient client = null;
+            try
+            {
+                client = NewClient();
+                client.Start(script, args);
+            }
             catch (Exception e)
             {
-                // The engine could not even start (a damaged folder): the run has no result; the support file says why.
-                File.WriteAllText(_client.OutputFile, "start failed: " + e);
-                _view = ResultView.For(null, _client.Run);
+                if (client != null) { try { File.WriteAllText(client.OutputFile, "start failed: " + e); } catch (Exception) { } }
                 _client = null;
+                _active = client != null ? client.Run : null;
+                _view = ResultView.For(null, _active);
                 Show(Screen.Result);
+                return false;
             }
+            _client = client;
+            _active = client.Run;
+            Show(first);
+            return true;
         }
+
+        // --smoke-start-failure: the three ways the window starts the engine.
+        public void StartForTest(string kind)
+        {
+            if (kind == "plan") RunPlan();
+            else if (kind == "install") RunInstall();
+            else { _prepDestination = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-never-written"); RunPrepare(); }
+        }
+        public ResultView View { get { return _view; } }
 
         void PollEngine()
         {

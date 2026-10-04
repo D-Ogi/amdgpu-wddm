@@ -12,7 +12,8 @@
 #   2. the compile with warnings as errors, and the .NET 4.8 target in the image;
 #   3. --smoke-engine against a scripted fake engine (test/fake-engine.ps1): plan, noise, cancel, stale result, crash
 #      without a result, restart, refusal; the screen in four languages without internals; the support file without
-#      this PC's user or computer name;
+#      this PC's user or computer name; then --smoke-start-failure: plan, install and prepare with an engine that
+#      cannot start end on the result screen;
 #   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, and at a 150 %
 #      text size: no overlap, nothing outside the window, G-A11Y (names, Tab reach, Enter and Escape) and G-NOINT.
 # None of them shows a window; nothing is installed and nothing outside -Out is written (the runs' temporary files are
@@ -109,6 +110,14 @@ if (-not $NoSmoke) {
         } finally { $archive.Dispose() }
         Write-Host "  smoke-engine $($e.Key): $((($summary -split "`r?`n") | Where-Object { $_ -like 'view:*' }) -join '')"
     }
+
+    # 3b. An engine that cannot start (run folder, package folder) for plan, install and prepare: the result screen stays.
+    $dir = Join-Path $obj 'start-failure'
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    $code = Invoke-Exe @('--smoke-start-failure', $dir)
+    $summary = Get-Content (Join-Path $dir 'summary.txt') -Raw -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or $summary -notmatch '(?m)^ok\r?$' -or ([regex]::Matches($summary, '(?m)^\w+ [\w-]+: Result Problem\r?$')).Count -ne 6) { throw "smoke-start-failure (exit $code):`n$summary" }
+    Write-Host '  start failure: plan, install and prepare with a run folder or a package folder that cannot be used end on the result screen (6 cases)'
 
     # 4. Every screen at four DPIs and four languages, and at a 150 % text size.
     $renders = @(foreach ($scale in '1', '1.25', '1.5', '2') { foreach ($lang in 'en', 'pl', 'ja', 'ko') { , @($scale, $lang, '1') } })

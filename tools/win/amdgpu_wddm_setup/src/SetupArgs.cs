@@ -12,6 +12,8 @@
 //                                             no window: every screen from fixtures drawn to <dir>, checked
 //   amdgpu_wddm_setup.exe --smoke-engine <package> <out-dir> [--script <name>] [--cancel] [--plan] -- <engine args>
 //                                             no window: one engine run, its model and screens summarised
+//   amdgpu_wddm_setup.exe --smoke-start-failure <out-dir>
+//                                             no window: plan, install and prepare with an engine that cannot start
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -31,7 +33,7 @@ namespace AmdgpuWddmSetup
         public float Scale = 1f, TextScale = 1f;
         public bool Cancel, PlanRun;
 
-        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "version"; } }
+        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "version"; } }
 
         public static SetupArgs Parse(string[] args)
         {
@@ -72,6 +74,11 @@ namespace AmdgpuWddmSetup
                         a.Package = next();
                         a.SmokeDir = next();
                         if (a.Package == null || a.SmokeDir == null) a.Error = "--smoke-engine <package> <out-dir>";
+                        break;
+                    case "--smoke-start-failure":
+                        a.SetMode("smoke-start-failure");
+                        a.SmokeDir = next();
+                        if (a.SmokeDir == null) a.Error = "--smoke-start-failure <out-dir>";
                         break;
                     case "--script": a.Script = next(); if (a.Script != "install.ps1" && a.Script != "prepare-offline.ps1") a.Error = "--script install.ps1 or prepare-offline.ps1"; break;
                     case "--cancel": a.Cancel = true; break;

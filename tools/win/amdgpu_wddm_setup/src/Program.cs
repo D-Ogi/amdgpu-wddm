@@ -27,6 +27,7 @@ namespace AmdgpuWddmSetup
             Application.SetCompatibleTextRenderingDefault(false);
             if (a.Mode == "smoke-render") return SmokeRender(a);
             if (a.Mode == "smoke-engine") return SmokeEngine(a);
+            if (a.Mode == "smoke-start-failure") return SmokeStartFailure(a);
 
             Strings.Language = Native.ChosenLanguage() ?? Strings.SystemLanguage();
             Theme.Fonts();
@@ -72,6 +73,46 @@ namespace AmdgpuWddmSetup
             catch (Exception e)
             {
                 try { File.WriteAllText(layout, "render failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
+        // An engine that cannot start, for plan, install and prepare: a run folder that cannot be made (the run root is
+        // under a file) and a package folder that is gone. Each must end on the result screen and stay there, never on
+        // an endless Checking or Working screen. summary.txt: one line per case, then "ok" or the count of wrong ones.
+        static int SmokeStartFailure(SetupArgs a)
+        {
+            var w = new StringBuilder();
+            var summary = Path.Combine(a.SmokeDir, "summary.txt");
+            int bad = 0;
+            try
+            {
+                Directory.CreateDirectory(a.SmokeDir);
+                Strings.Language = "en";
+                var file = Path.Combine(a.SmokeDir, "run-root-is-a-file");
+                File.WriteAllText(file, "not a folder");
+                var gone = Path.Combine(a.SmokeDir, "package-that-is-gone");
+                foreach (var cause in new[] { "run-root", "package" })
+                    foreach (var kind in new[] { "plan", "install", "prepare" })
+                    {
+                        var root = cause == "run-root" ? Path.Combine(file, "runs") : Path.Combine(a.SmokeDir, "runs");
+                        var b = SetupArgs.Parse(new[] { "--run-root", root, "--package", gone });
+                        using (var form = new SetupForm(b, true))
+                        {
+                            form.StartForTest(kind);
+                            var v = form.View;
+                            var ok = form.Current == Screen.Result && v != null && v.Kind == ViewKind.Problem && v.ChangesUnknown;
+                            if (!ok) bad++;
+                            w.AppendLine(kind + " " + cause + ": " + form.Current + " " + (v != null ? v.Kind.ToString() : "-") + (ok ? "" : " WRONG"));
+                        }
+                    }
+                w.AppendLine(bad == 0 ? "ok" : bad + " wrong");
+                File.WriteAllText(summary, w.ToString(), new UTF8Encoding(false));
+                return bad == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(summary, w + "failed: " + e); } catch (Exception) { }
                 return 1;
             }
         }
