@@ -34,7 +34,7 @@ cu.refuse.already24|src|-|Standard (24) is selected already.
 cu.preview.write40|src|-|Selects all 40 graphics cores.
 cu.preview.remove-mode|src|-|Selects the standard 24 graphics cores.
 cu.preview.remove-confirmed|src|-|Removes the earlier confirmation of 40 cores, so the new setting is confirmed on its own start.
-cu.preview.remove-disable|src|-|Removes an earlier diagnostic core limit.
+cu.preview.remove-disable|src|-|An earlier diagnostic core limit is removed.
 cu.result.nothing|src|-|Nothing was changed.
 cu.result.saved|src|-|Saved.
 cu.result.failed|src|-|The change could not be completed.

@@ -1022,6 +1022,7 @@ static partial class UnitTests
         DriverCardTests();
         UpdateTests(args[0]);
         GuiTests(args[0]);
+        OracleTests();
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");
         return _failed == 0 ? 0 : 1;

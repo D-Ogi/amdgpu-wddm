@@ -244,7 +244,7 @@ static partial class UnitTests
         // F13 a non-zero mask with All (40): the preview names its removal, the read-back shows it absent.
         reg = new FakeCu(); reg.Values["CuMode"] = 40; reg.Values["CuDisableWgp"] = 0x21; reg.Values["CuModeConfirmed"] = CuMode.Encode(40, 0x21);
         plan = CuMode.Plan(reg.Stored(), 40);
-        Check(plan.Preview.Contains("Removes an earlier diagnostic core limit."), "F13 preview names the removal");
+        Check(plan.Preview.Contains("An earlier diagnostic core limit is removed."), "F13 preview names the removal");
         Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "remove-confirmed", "remove-disable", "flush-readback" }), "F13 steps S2, S3, S4");
         res = CuMode.Execute(plan, reg);
         Check(res.Completed && res.ReadBack.Disable == null, "F13 read-back without the mask"); Equal(CuNext.Ask40, CuMode.PredictAfter(res), "F13 next start 40, asks");

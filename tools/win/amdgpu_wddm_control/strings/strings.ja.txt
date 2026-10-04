@@ -32,7 +32,7 @@ cu.refuse.already24|mt|91c3ed3d|標準 (24) はすでに選択されています
 cu.preview.write40|mt|46267060|40 個すべてのグラフィックス コアを選択します。
 cu.preview.remove-mode|mt|3920ecbe|標準の 24 グラフィックス コアを選択します。
 cu.preview.remove-confirmed|mt|d10b327e|以前の 40 コアの確認を削除し、新しい設定がその起動で確認されるようにします。
-cu.preview.remove-disable|mt|9e25fab8|以前の診断用コア制限を削除します。
+cu.preview.remove-disable|mt|51075647|以前の診断用コア制限が削除されます。
 cu.result.nothing|mt|54ca5460|何も変更されていません。
 cu.result.saved|mt-safe|fca046cc|保存しました。
 cu.result.failed|mt|ec48fa5b|変更を完了できませんでした。

@@ -32,7 +32,7 @@ cu.refuse.already24|mt|91c3ed3d|Standard (24) jest już wybrany.
 cu.preview.write40|mt|46267060|Wybiera wszystkie 40 rdzeni graficznych.
 cu.preview.remove-mode|mt|3920ecbe|Wybiera standardowe 24 rdzenie graficzne.
 cu.preview.remove-confirmed|mt|d10b327e|Usuwa wcześniejsze potwierdzenie 40 rdzeni, aby nowe ustawienie zostało potwierdzone przy własnym starcie.
-cu.preview.remove-disable|mt|9e25fab8|Usuwa wcześniejsze diagnostyczne ograniczenie rdzeni.
+cu.preview.remove-disable|mt|51075647|Wcześniejsze diagnostyczne ograniczenie rdzeni zostanie usunięte.
 cu.result.nothing|mt|54ca5460|Nic nie zostało zmienione.
 cu.result.saved|mt|fca046cc|Zapisano.
 cu.result.failed|mt|ec48fa5b|Nie udało się dokończyć zmiany.

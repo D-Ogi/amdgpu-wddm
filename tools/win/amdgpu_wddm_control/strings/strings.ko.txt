@@ -32,7 +32,7 @@ cu.refuse.already24|mt|91c3ed3d|표준 (24)이 이미 선택되어 있습니다.
 cu.preview.write40|mt|46267060|그래픽 코어 40개를 모두 선택합니다.
 cu.preview.remove-mode|mt|3920ecbe|표준 그래픽 코어 24개를 선택합니다.
 cu.preview.remove-confirmed|mt|d10b327e|이전의 40코어 확인을 제거하여 새 설정이 자체 시작에서 확인되도록 합니다.
-cu.preview.remove-disable|mt|9e25fab8|이전의 진단용 코어 제한을 제거합니다.
+cu.preview.remove-disable|mt|51075647|이전의 진단용 코어 제한이 제거됩니다.
 cu.result.nothing|mt|54ca5460|아무것도 변경되지 않았습니다.
 cu.result.saved|mt-safe|fca046cc|저장했습니다.
 cu.result.failed|mt|ec48fa5b|변경을 완료할 수 없었습니다.
