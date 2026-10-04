@@ -23,9 +23,10 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-Plan` | checks and the decision only; changes nothing |
 | `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | the user's consents, given only after the window asked |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
+| `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 
-`prepare-offline.ps1 -Destination <dir> [-FirmwareDir <dir>]` takes the same `-Gui`, `-InvocationId`, `-EventsFile`
-and `-ResultFile`. The command-line installer (`install.cmd` without `-Gui`) keeps its behaviour, except that its
+`prepare-offline.ps1 -Destination <dir> [-FirmwareDir <dir>]` takes the same `-Gui`, `-InvocationId`, `-EventsFile`,
+`-ResultFile` and `-DeadlineUtc`. The command-line installer (`install.cmd` without `-Gui`) keeps its behaviour, except that its
 restart is now a planned one: it asks "Restart now?" and then calls `ExitWindowsEx(EWX_REBOOT)` with a planned
 reason, never `Restart-Computer -Force` (C17). `uninstall.cmd` does the same.
 
@@ -41,17 +42,19 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 
 | `type` | Fields | When |
 |---|---|---|
-| `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase` | first |
+| `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase`, `deadline_utc`, `job` (`kill-on-close`, or `none: <reason>`) | first |
 | `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `copy`, `finish` |
 | `check` | `id` (`<area>.<finding>`, for example `gpu.missing`, `firmware.folder-bad`), `result` (ok, warn, fail), `name`, `detail` | each preflight check |
 | `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (test-signing, bitlocker), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`) | once, before any change |
 | `settings-plan` | `summary` (`kept`, `updated`, `added`, `unchanged`, `command`), `rows` [`group`, `name`, `decision` (set, same, update, kept, command), `current`, `value`, `default`, `present`] | after the decision, before the first `step` (WU-006, WU-044) |
 | `cancel` | `available`, `where` | a safe point opens or closes |
+| `deadline` | `passed`, `where`, `deadline_utc`, `action` (`finishing`) | the deadline has passed inside a part that cannot stop; the run stops at the next stop point (section 10) |
+| `test-child` | `pid` | host tests only (`AMDGPU_WDDM_TEST_CHILD_SECONDS` in a dry run or plan) |
 | `install-action` | `action`, `boot_id` | the first real change of a run (state.json `mutation_*` saved) |
 | `step` | `description`, `dry_run` | each change (in a dry run: each change that would be made) |
 | `restart-required` | `reason_id` (restart.test-signing, restart.driver-package, restart.complete), `continuation` | a restart is needed |
 | `witness` | `written`, `reason` | verify tried to write the running-release witness |
-| `result` | `outcome`, `exit_code`, `message_id`, `mutated` | last |
+| `result` | `outcome`, `exit_code`, `message_id`, `mutated`, `stop` (`cancel`, `deadline` or null) | last |
 
 ## 3. Terminal result
 
@@ -74,7 +77,10 @@ the exit code alone is never the outcome.
   "restart": { "required": true, "reason_id": "restart.test-signing", "boot_id": 41,
                "continuation": { "kind": "continue", "exe": "...", "arguments": ["..."], "command": "...", "closure": "..." } },
   "consents_needed": [], "failed_checks": [],
-  "message_id": "result.restart-test-signing", "step": null, "detail": "...", "log": "C:\\ProgramData\\...\\install-....log"
+  "message_id": "result.restart-test-signing", "step": null, "detail": "...", "log": "C:\\ProgramData\\...\\install-....log",
+  "deadline_utc": null,
+  "stop": null,
+  "children": { "job": "kill-on-close", "left_at_exit": 0, "ended": 0 }
 }
 ```
 
@@ -92,7 +98,7 @@ the exit code alone is never the outcome.
 | needs-consent | 4 | result.needs-consent (`consents_needed`) |
 | verify-failed | 3 | result.verify-failed |
 | failed | 5, 6 | result.testsigning-not-active, result.step-failed (`step` names it) |
-| cancelled | 8 | result.cancelled, result.cancelled-after-changes |
+| cancelled | 8 | result.cancelled, result.cancelled-after-changes (`stop.by` cancel), result.deadline, result.deadline-after-changes (`stop.by` deadline) |
 | prepared | 0 | result.offline-prepared |
 
 The engine never restarts Windows in a `-Gui` run. The window offers "Restart now" or "Later"; "Restart now" calls
@@ -185,3 +191,96 @@ the source; `stamp.ps1` refreshes the hashes). The window's language is the cont
 (`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the header
 switches it. The tip panel follows the control app's guide setting: no character art in the setup window yet, the
 same tip text with a plain title.
+
+## 9. Running-release witness and verify report: how each value is obtained (writer side)
+
+The format and the reader's rules are `docs/gui/interfaces.md` sections 1 and 2. The writer
+(`installer\release-witness.ps1`, used by verify and by the start-confirm task) writes every field, never an empty
+one; when a value cannot be obtained, it writes no witness and logs why.
+
+| Field | Source |
+|---|---|
+| `boot_id` | `Get-BootIdentity` (release-witness.ps1), the one definition for the engine, verify, the task and the witness: `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters\BootId` read as an unsigned 32-bit number |
+| `recorded_utc` | the writer's clock at the reading, ISO 8601 UTC |
+| `recorded_by` | `verify` or `start-confirm` |
+| `release`, `version` | `name` and `version` of `<install root>\manifest.json` |
+| `manifest_sha256` | SHA256 of exactly that file, `<install root>\manifest.json` |
+| `kmd_image_sha256` | SHA256 of the file at the path of the `bc250kmd.sys` module that Windows lists as loaded (`EnumDeviceDrivers`, `GetDeviceDriverFileName`); must equal the manifest's `payload/kmd/bc250kmd.sys` hash |
+| `kmd_build` | the manifest's `kmd_build`, four parts (`0.7.199.1`); another shape gives no witness |
+| `kmd_abi` | the manifest's `kmd_abi` (`0x` and 8 hex digits); must equal the driver's reply (`bc250kmd_cli info`) |
+
+The loaded-image evidence holds only while the file at the loaded path is the image of this boot. So there is no
+witness when that file was created or written after the boot started (`LastBootUpTime`), or when `state.json`
+records an install action in this boot (`mutation_boot_id` = this boot): the start after the next restart writes it.
+The file gets Administrators as its owner (SYSTEM when the task wrote it); a file whose owner cannot be set is
+removed again.
+
+Verify report: every verify run that reaches its checks writes
+`%ProgramData%\amdgpu-wddm\installer\verify\verify-<yyyyMMddTHHmmssfffZ>.json` through a temporary file, also when the
+GPU is missing or a check throws (then with a failing `verify` result):
+
+```json
+{
+  "schema": "amdgpu-wddm.verify-report/1",
+  "utc": "2026-10-04T12:00:00.000Z", "invocation": "...", "boot_id": 1234, "dry_run": false,
+  "release": "amdgpu-wddm-tester-0.7.199.100-tester.11", "package_version": "0.7.199.100-tester.11",
+  "manifest_sha256": "64 hex digits of <install root>\\manifest.json", "manifest_source": "install-root",
+  "kmd_abi": "0x000700C7", "install_root": "C:\\Program Files\\amdgpu-wddm",
+  "outcome": "passed", "complete": true, "passed": 9, "failed": 0,
+  "results": [ { "check": "driver bound", "pass": true, "detail": "..." } ]
+}
+```
+
+`outcome` is `failed` when any result fails, the list is empty or the run stopped before its last check
+(`complete` false). `results[]` keeps the existing fields (`check`, `pass`, `detail`, and `warning` or `info` on
+results that do not fail). `manifest_source` is `package` only when the install root has no manifest (a verify of an
+uninstalled package); such a report does not bind an installed release.
+
+## 10. Cancel, deadline and child processes (lab kits and the setup window)
+
+A caller (the setup window, or a lab kit through its scenario adapter) runs the engine with `-Gui` and stops it in
+one of three ways; only the first two end with a terminal result.
+
+1. Cancel: create `<EventsFile>.cancel`.
+2. Deadline: pass `-DeadlineUtc <ISO 8601 UTC>` (absolute, so the caller's clock and the engine's start time do not
+   matter). An unreadable value counts as passed: the run stops at its first stop point, before any change.
+3. Terminate the engine process (`powershell.exe`, the process the caller started). This is the hard bound.
+
+Stop points, where the engine acts on 1 and 2 (the cancel file is read only there, the deadline only there):
+
+| Run | Stop points | Parts that do not stop (finished first) |
+|---|---|---|
+| plan, dry run, verify (`install.ps1 -Plan`, `-DryRun`, `-Verify`) | every stage boundary, plus `before-changes`, `after-staging`, `before-driver-install` | none; verify's wait for the start-confirm task (up to 120 s) also ends at the deadline |
+| install, repair, upgrade (real run) | `before-changes` (after preflight and the decision), `after-staging` (closure staged, before test signing), `before-driver-install` (phase 1 done, before files, driver package and settings) | phase 1 from `after-staging` to its restart (restore point, BitLocker, test signing); phase 2 from `before-driver-install` to the end (files, `pnputil`, settings, task, finish) |
+| prepare-offline | every stage boundary before `finish`, `before-copy`, `after-copy` (each removes `<destination>.partial`) | `finish` (the rename) |
+
+At a stop point after the deadline the engine ends with outcome `cancelled`, exit code 8, `message_id`
+`result.deadline` (nothing changed) or `result.deadline-after-changes`, and `stop` =
+`{ "by": "deadline", "where": "<stop point>", "deadline_utc": "..." }` (a cancel: `"by": "cancel"`,
+`result.cancelled` / `result.cancelled-after-changes`). When the deadline passes inside a part that does not stop, the
+engine logs it and writes one `deadline` event per stage (`action` `finishing`), finishes that part and stops at the
+next stop point; a real install's phase therefore ends either completed or at its restart. A caller that cannot wait
+for that uses 3.
+
+Child processes: a `-Gui` run creates a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and assigns itself to it
+before it starts any process (`start` event `job`). Every process it starts afterwards (pnputil, bcdedit, the
+probes, `powershell.exe` children, their own children) is in the job and cannot break away. The engine holds the only
+handle, not inheritable: when the engine process ends for any reason, also when the caller terminates it, Windows
+closes the handle and ends every process still in the job. At a normal end `Exit-Engine` ends any child still running
+and records `children` = `{ "job": "kill-on-close", "left_at_exit": n, "ended": n }` in the result. Work that a
+Windows service does for the engine (the PnP service's driver installation in `drvinst.exe`, WMI providers) is not
+the engine's child and is not in the job; Windows bounds it itself. When the job cannot be created, `job` is
+`none: <reason>` and only the caller's own job (if any) bounds the children.
+
+After 3 there is no terminal result: the caller treats the run as "changes unknown" (A3). The installer state shows
+how far the run got, and running the same package again continues or repairs it (phase 2 is idempotent).
+
+For a 180 s lab bound: start the engine with `-DeadlineUtc` = launch + 120 s or less, leaving room for the part in
+progress, and terminate the engine at 180 s if it has not exited; then check that no process remains whose parent
+was the engine. Durations of the parts that do not stop are not measured yet on unit A (lab items L4, L5).
+
+Tests (`tools/release/test-engine-events.ps1`, G-STAGE): a passed deadline stops a dry run at `stage:preflight` with
+`result.deadline` and no step; an unreadable deadline the same; a later deadline lets a plan complete and is named in
+`start` and the result; prepare-offline after its deadline writes no folder; at a normal end the engine ends its
+left-over test child and grandchild (`cmd.exe`, `ping.exe`) and records them; an engine terminated by its caller
+takes its child and grandchild with it.

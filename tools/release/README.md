@@ -18,7 +18,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
 | `test-session-checks.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-060): the INF `Reboot` directive (found through `[Manufacturer]` and its models, added once after each install section header, line endings kept, present in the packaged INF), the pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes; no installer function for the KMD's BD-059 session marker), the install inputs that the argument-free run after a restart takes from the state (an offline fresh install and an upgrade, both resume phases, the resumed run's own arguments, another package version, cleared at completion, a tester.10 state), the `resume` action, and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon (a record with a missing or malformed field is ignored and replaced by the next recording), a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. |
 | `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window or `install.cmd`), the kept repair set, the running-release witness writer, the compatibility record and the engine lock. |
-| `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the footprint unchanged. |
+| `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the deadline and the child-process closure (section 10), the footprint unchanged. |
 | `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 
@@ -74,7 +74,7 @@ graphics registration (`UserModeDriverName`, `VulkanDriverName`, the Khronos ent
 
 install.ps1 exit codes: 0 done (or already installed and verified, or a restart asked for), 2 refused (preflight, or
 no administrator rights in a setup-window run), 3 verification failed, 4 not confirmed, 5 test signing not active,
-6 a step failed (run again), 7 verify before the pending restart, 8 cancelled from the setup window at a safe point,
+6 a step failed (run again), 7 verify before the pending restart, 8 stopped at a safe point (cancelled, or past `-DeadlineUtc`),
 9 another install action holds the engine lock, 10 handed to an elevated window.
 
 Setup window and engine (`docs/gui/interfaces-setup.md`): the setup window runs `install.ps1` with `-Gui` (events
