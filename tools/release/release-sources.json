@@ -11,7 +11,7 @@
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
     "d3d11_shell": "bc250-win m14/dxgi-private-hints 7abf21de",
     "d3d11_engine": "dxvk fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49",
-    "d3d11_icd": "mesa fork amdgpu-wddm/quiet-stderr 89ef0dc8",
+    "d3d11_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "files": [
@@ -98,23 +98,23 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_d3d11.dll",
       "sha256": "7E9F1692157E79FEC9B0BC2E9F92E73BD4907D00ECBF4885E5B88ABC1B3F76A1",
       "size": 598528,
-      "role": "GPU D3D11 shell (amdgpu-wddm m14/dxgi-private-hints 7abf21de: engine-private DXGI hints, static CRT; built against DXVK fork 0c187731; app-route-quiet)"
+      "role": "GPU D3D11 shell (amdgpu-wddm m14/dxgi-private-hints 7abf21de: engine-private DXGI hints, static CRT; built against DXVK fork 0c187731; app-route-dp5)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_d3d11.config",
-      "sha256": "78C8B5E7670FB9A1B2F0E8B0FC0C28779D0D32F229852EC4B375906358992C1A",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_d3d11.config",
+      "sha256": "FD848638B5DD2A5195DEFFAE30C0BDB6D64044F7D42A8566828A89A7B2131DCC",
       "size": 132,
-      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD D73D827D (tools/build/write-umd-config.py; capabilities carried from fl12caps001, the exact-pair probe quietcaps001 is pending)"
+      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD F9DCB33B (tools/build/write-umd-config.py; capabilities carried from fl12caps001, not re-measured on this pair)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_dxvk.dll",
       "sha256": "7D28D8F57368C89082E65FD33991AE988B3523C7922909206F0598BF6FBB0554",
       "size": 4403200,
       "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49: r8 0c187731 + the initializer's throttle wait)"
@@ -122,10 +122,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_radv.dll",
-      "sha256": "D73D827D16D5304D481CF85A07EB38652B17AB3E88CC53A901A6F9757D204808",
-      "size": 22354944,
-      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/quiet-stderr 89ef0dc8, static CRT, an ancestor of the D3D12 ICD's ae98c795)"
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_radv.dll",
+      "sha256": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC",
+      "size": 22361600,
+      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/draw-path ae98c795, static CRT): the same build as payload/d3d12/amdgpu_wddm_radv.dll, so a process using D3D11 and D3D12 loads one RADV build"
     },
     {
       "component": "vulkan-icd",
