@@ -424,8 +424,16 @@ static void IdentityTests()
     CHECK(ClassifyComponent(nullptr, win.c_str()) == Component::Unknown, "null image is not Unknown");
     CHECK(ClassifyComponent(cmdExe.c_str(), nullptr) == Component::Unknown, "null Windows directory is not Unknown");
     // Removes the junction only, never its target. A failure would leave a link into the Windows directory behind.
-    if (!RemoveDirectoryW(junction.c_str()) && GetFileAttributesW(junction.c_str()) != INVALID_FILE_ATTRIBUTES)
-        CHECK(false, "junction %ls not removed, error %lu", junction.c_str(), GetLastError());
+    // Already absent counts only for the two not-found errors; any other state (query denied) fails.
+    if (!RemoveDirectoryW(junction.c_str())) {
+        const DWORD removeError = GetLastError();
+        const DWORD attributes = GetFileAttributesW(junction.c_str());
+        const DWORD queryError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+        const bool absent = attributes == INVALID_FILE_ATTRIBUTES &&
+                            (queryError == ERROR_FILE_NOT_FOUND || queryError == ERROR_PATH_NOT_FOUND);
+        CHECK(absent, "junction %ls not removed: RemoveDirectoryW error %lu, then attributes 0x%lx error %lu",
+              junction.c_str(), removeError, attributes, queryError);
+    }
 }
 
 // ---------------------------------------------------------------- scenarios
