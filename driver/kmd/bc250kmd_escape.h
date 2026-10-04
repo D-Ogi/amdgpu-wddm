@@ -196,6 +196,8 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // the share of GRBM_STATUS.GUI_ACTIVE samples when FLAG_HW_BUSY is set, else the GFX ring's submit-to-fence share;
 // SubmitBusyPermille is the latter always, SdmaBusyPermille the share of SDMA0 not-idle samples (the paging node).
 // Both were Reserved (zero) in 0.7.175-176: a caller still sends them as zero, so the ABI stays 1.
+// Throttle 8 (thermal-warm, a raise refused from 85 C) is new in 0.7.200; the layout and the ABI stay. A tool
+// built before it shows the number it does not know as "?".
 #define BC250_DPM_ABI 1u
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_OP_CONFIRM 1u
