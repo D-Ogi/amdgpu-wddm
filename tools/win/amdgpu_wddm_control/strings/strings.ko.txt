@@ -411,7 +411,9 @@ games.add|mt-safe|d6031d13|게임 추가...
 games.add.title|mt|6da9b3ee|게임의 프로그램 파일 선택
 games.add.filter|mt-safe|b6747064|프로그램
 games.add.invalid|mt|44a0074e|이 파일 이름은 게임 설정에 사용할 수 없습니다.
-games.launched|mt|107a215c|마지막 플레이: {0}
+games.launched|mt|2e7c7623|마지막 실행: {0} ({1})
+games.api.d3d12|mt-safe|05b30c4c|DirectX 12
+games.api.d3d11|mt-safe|1eed6087|DirectX 11
 games.has-settings|mt-safe|d9ad0a62|개별 설정 있음
 games.no-settings|mt-safe|62ce296b|개별 설정 없음
 games.hide|mt-safe|ac20a57b|숨기기
@@ -489,10 +491,13 @@ settings.language.note|mt|3880569c|일본어와 한국어 텍스트는 현재 �
 settings.updates.title|mt-safe|22e2bada|업데이트
 settings.update-start.note|mt|ae77c8bd|최대 1시간에 한 번 확인합니다. 사용자가 직접 하지 않으면 아무것도 다운로드하거나 설치하지 않습니다.
 settings.recent.title|mt-safe|085fe856|게임 목록
-settings.recent.note|mt|1416b04a|드라이버는 게임 목록을 위해 이 PC에서 시작한 게임을 기억합니다. 이 정보는 PC 밖으로 나가지 않습니다.
+settings.recent.note|mt|58f29ae6|드라이버는 게임 목록을 위해 이 PC에서 시작한 게임을 기억합니다. 목록은 업로드되지 않습니다.
+settings.recent.invalid|mt|5d19417d|이 목록에 저장된 설정이 올바르지 않아 게임이 기억되지 않습니다. 확인란을 선택하면 켜집니다.
+settings.recent.unreadable|mt|a63ef10f|게임 목록을 읽을 수 없습니다. 목록을 지우면 새 목록이 시작됩니다.
 settings.recent.clear|mt-safe|50da1a01|목록 지우기
 settings.recent.cleared|mt|c2c7e99b|목록이 지워졌습니다.
 settings.recent.busy|mt|fd22dbb3|게임이 시작되는 중이라 지금은 목록을 지울 수 없습니다. 잠시 후 다시 시도하세요.
+settings.recent.failed|mt|26db6f1a|목록을 지울 수 없습니다. 잠시 후 다시 시도하세요.
 settings.guide.title|mt-safe|8e02ab12|팁 및 가이드
 settings.guide.note|mt|529531e4|Nagi가 없으면 팁이 텍스트로 표시됩니다. 그 외에는 바뀌는 것이 없습니다.
 settings.animations.windows-off|mt|0962c940|Windows 애니메이션이 꺼져 있으므로 이 앱도 애니메이션을 사용하지 않습니다.
@@ -501,8 +506,9 @@ settings.support.note|mt|97dadddd|개발자가 요청할 때를 위해 도움말
 settings.data.1|mt|370b4dab|원격 분석 기능과 계정이 없습니다.
 settings.data.2|mt|fa14b2f8|이 앱은 업데이트 확인과 사용자가 시작한 다운로드에만 인터넷에 연결합니다.
 settings.data.3|mt|40bbfde4|지원 보고서는 사용자가 직접 보내기 전까지 이 PC에 남아 있습니다.
-settings.data.4|mt|0d111524|게임 목록은 이 PC에 남아 있습니다. 위에서 끄고 지울 수 있습니다.
+settings.data.4|mt|5439adf1|게임 목록은 이 PC의 Windows 계정에 저장되며 업로드되지 않습니다. 위에서 끄고 지울 수 있습니다.
 settings.data.5|mt|7e6b4f23|이 앱에서 선택한 내용은 현재 Windows 계정에만 저장됩니다.
+settings.data.6|mt|a55810ff|대부분의 DirectX 11 게임은 아직 게임 목록에 표시되지 않습니다. 어떤 게임이든 게임 페이지에서 직접 추가할 수 있습니다.
 # ---- Help (WU-058, WU-059, WU-063, WU-067) ----
 help.guides.title|mt|6ef2d14b|일반적인 문제 도움말
 help.guide.dark|mt|1faa0159|화면이 계속 어둡거나 드라이버가 시작되지 않음

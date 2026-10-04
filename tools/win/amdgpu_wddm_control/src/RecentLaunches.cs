@@ -1,188 +1,210 @@
-// Recent launches (A4, WU-007, WU-012, WU-075; docs/gui/interfaces.md section 3): written by the UMD frontends after
-// a successful outer device creation, read, pruned and cleared here. Per user, local only. The app never invents a
-// launch: an entry with a missing value, a wrong type or a key that is not the hash of its path is skipped. Labels
-// say "launched", never "played".
+// Recent launches (A4, WU-007, WU-012, WU-075): the list that the D3D12 and D3D11 shells write, read and cleared here.
+// The contract is docs/design/recent-launches.md (format version 1, stream C; docs/gui/interfaces.md section 3). Per
+// user, local only. The app never writes the list and never invents a launch: a list that is not valid as a whole
+// shows no entries, never a part. Labels say "launched", never "played".
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Security.Cryptography;
+using System.IO;
 using System.Text;
 using System.Threading;
-using Microsoft.Win32;
 
 namespace AmdgpuWddmControl
 {
     public sealed class RecentLaunch
     {
-        public string Key, Path, Image, Api;
-        public DateTime LastLaunchUtc;
-        public uint Launches;
+        public string Path, Image;
+        public DateTime LastLaunchUtc;      // creation time of the process of the last launch
+        public uint Pid, Launches, Apis;
+
+        // The API of the last launch as the window names it: bit 1 is D3D12, everything else D3D11.
+        public bool D3D12 { get { return (Apis & RecentLaunches.ApiD3D12) != 0; } }
     }
 
-    // One subkey's values as read (uint for REG_DWORD, ulong for REG_QWORD, string for REG_SZ); null: unreadable.
-    public interface IRecentStore
+    public enum RecentListState { Missing, Valid, Invalid, OtherVersion }
+
+    public sealed class RecentList
     {
-        IList<string> Keys();
-        IDictionary<string, object> Values(string key);
-        void DeleteKey(string key);
-        // Takes the commit mutex within the bound; false when another writer holds it.
-        bool Lock(int milliseconds);
+        public RecentListState State;
+        public List<RecentLaunch> Entries = new List<RecentLaunch>();
+    }
+
+    // The switch as the shells read it: absent or DWORD 1 = on, DWORD 0 = off, anything else records nothing.
+    public enum RecentSwitch { On, Off, Invalid }
+
+    // The list's files, so that tests run against memory and the window against %LOCALAPPDATA%.
+    public interface IRecentFiles
+    {
+        // The list's bytes, at most max + 1 of them; null when the file does not exist. Throws when it cannot be read.
+        byte[] ReadList(int max);
+        // One attempt at the lock on byte 0 of the lock file, no wait.
+        bool TryLock();
         void Unlock();
+        // Deletes the list and the writer's temporary file; never the lock file.
+        void DeleteList();
     }
 
-    public sealed class MemoryRecentStore : IRecentStore
+    public sealed class MemoryRecentFiles : IRecentFiles
     {
-        public readonly Dictionary<string, Dictionary<string, object>> Data = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
-        public bool Busy;
-        public int Deleted;
-        public IList<string> Keys() { return Data.Keys.ToList(); }
-        public IDictionary<string, object> Values(string key) { Dictionary<string, object> v; return Data.TryGetValue(key, out v) ? v : null; }
-        public void DeleteKey(string key) { if (Data.Remove(key)) Deleted++; }
-        public bool Lock(int milliseconds) { return !Busy; }
-        public void Unlock() { }
+        public byte[] List;
+        public bool Unreadable;
+        public int BusyAttempts;            // TryLock fails this many times first (int.MaxValue: always)
+        public int Attempts, Deletes;
+        public bool Locked;
+        public byte[] ReadList(int max) { if (Unreadable) throw new IOException("unreadable"); return List; }
+        public bool TryLock() { Attempts++; if (BusyAttempts > 0) { BusyAttempts--; return false; } Locked = true; return true; }
+        public void Unlock() { Locked = false; }
+        public void DeleteList() { if (!Locked) throw new InvalidOperationException("delete without the lock"); List = null; Deletes++; }
     }
 
-    public sealed class RegistryRecentStore : IRecentStore
+    public sealed class LocalRecentFiles : IRecentFiles
     {
-        Mutex _mutex;
+        readonly string _dir;
+        FileStream _lock;
 
-        public IList<string> Keys()
+        public LocalRecentFiles() : this(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), RecentLaunches.StoreDir)) { }
+        public LocalRecentFiles(string dir) { _dir = dir; }
+
+        string In(string name) { return System.IO.Path.Combine(_dir, name); }
+
+        public byte[] ReadList(int max)
         {
-            try { using (var k = Registry.CurrentUser.OpenSubKey(RecentLaunches.Path)) return k == null ? new List<string>() : k.GetSubKeyNames().ToList(); }
-            catch (Exception) { return new List<string>(); }
+            FileStream fs;
+            try { fs = new FileStream(In(RecentLaunches.ListName), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); }
+            catch (FileNotFoundException) { return null; }
+            catch (DirectoryNotFoundException) { return null; }
+            using (fs)
+            {
+                var buf = new byte[max + 1];
+                int n = 0, r;
+                while (n < buf.Length && (r = fs.Read(buf, n, buf.Length - n)) > 0) n += r;
+                var data = new byte[n];
+                Array.Copy(buf, data, n);
+                return data;
+            }
         }
 
-        public IDictionary<string, object> Values(string key)
+        public bool TryLock()
         {
             try
             {
-                using (var k = Registry.CurrentUser.OpenSubKey(RecentLaunches.Path + "\\" + key))
+                if (_lock == null)
                 {
-                    if (k == null) return null;
-                    var d = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var n in k.GetValueNames())
-                    {
-                        var v = k.GetValue(n);
-                        var kind = k.GetValueKind(n);
-                        d[n] = kind == RegistryValueKind.DWord ? (object)unchecked((uint)(int)v) : kind == RegistryValueKind.QWord ? (object)unchecked((ulong)(long)v)
-                            : kind == RegistryValueKind.String ? v : null;
-                    }
-                    return d;
+                    Directory.CreateDirectory(_dir);
+                    _lock = new FileStream(In(RecentLaunches.LockName), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
                 }
+                _lock.Lock(0, 1);
+                return true;
             }
-            catch (Exception) { return null; }
-        }
-
-        public void DeleteKey(string key)
-        {
-            try { using (var k = Registry.CurrentUser.OpenSubKey(RecentLaunches.Path, true)) if (k != null) k.DeleteSubKeyTree(key, false); }
-            catch (Exception) { }
-        }
-
-        public bool Lock(int milliseconds)
-        {
-            try
-            {
-                _mutex = new Mutex(false, RecentLaunches.MutexName);
-                try { if (_mutex.WaitOne(milliseconds)) return true; }
-                catch (AbandonedMutexException) { return true; }
-                _mutex.Dispose(); _mutex = null;
-                return false;
-            }
-            catch (Exception) { return false; }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
         }
 
         public void Unlock()
         {
-            if (_mutex == null) return;
-            try { _mutex.ReleaseMutex(); } catch (Exception) { }
-            _mutex.Dispose(); _mutex = null;
+            if (_lock == null) return;
+            try { _lock.Unlock(0, 1); } catch (IOException) { }
+            _lock.Dispose(); _lock = null;
+        }
+
+        public void DeleteList()
+        {
+            File.Delete(In(RecentLaunches.ListName));
+            File.Delete(In(RecentLaunches.TempName));
         }
     }
 
-    public enum ClearResult { Cleared, Busy }
+    public enum ClearResult { Cleared, Busy, Failed }
 
     public static class RecentLaunches
     {
-        public const string Path = @"Software\amdgpu-wddm\RecentLaunches";
         public const string SwitchName = "RecordRecentLaunches";
-        public const string MutexName = @"Local\amdgpu-wddm-recent-launches";
-        public const int Keep = 50, ClearWaitMs = 2000;
-        static readonly string[] Apis = { "D3D12", "D3D11", "Vulkan" };
+        public const string StoreDir = "amdgpu-wddm", ListName = "recent-launches.txt", LockName = "recent-launches.lock", TempName = "recent-launches.tmp";
+        public const string HeaderPrefix = "amdgpu-wddm recent-launches ", Header = HeaderPrefix + "1\n";
+        public const int MaxEntries = 64, MaxBytes = 8 << 20, ClearWaitMs = 2000, ClearRetryMs = 20;
+        public const uint ApiD3D12 = 1;
 
-        // The writers' normalization: a \\?\ or \\?\UNC\ prefix removed (UNC becomes \\), then the simple invariant upper
-        // case. The writer has already made the path full (GetFullPathNameW).
-        public static string Normalize(string path)
-        {
-            var p = path ?? "";
-            if (p.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) p = @"\\" + p.Substring(8);
-            else if (p.StartsWith(@"\\?\", StringComparison.Ordinal)) p = p.Substring(4);
-            return p.ToUpperInvariant();
-        }
+        static readonly Encoding Utf8Strict = new UTF8Encoding(false, true);
 
-        // The subkey name: 32 lower-case hex digits, the first 16 bytes of SHA-256 over the UTF-16LE normalized path.
-        public static string KeyOf(string path)
+        // Strict parse of a whole list (docs/design/recent-launches.md "Format"). Anything that is not one valid version 1
+        // list is Invalid or, for another version's header, OtherVersion; neither has entries.
+        public static RecentList Parse(byte[] data)
         {
-            using (var sha = SHA256.Create())
+            if (data == null) return new RecentList { State = RecentListState.Missing };
+            var bad = new RecentList { State = RecentListState.Invalid };
+            if (data.Length > MaxBytes) return bad;
+            string text;
+            try { text = Utf8Strict.GetString(data); } catch (DecoderFallbackException) { return bad; }
+            if (!text.StartsWith(Header, StringComparison.Ordinal))
             {
-                var h = sha.ComputeHash(Encoding.Unicode.GetBytes(Normalize(path)));
-                var w = new StringBuilder(32);
-                for (int i = 0; i < 16; i++) w.Append(h[i].ToString("x2", CultureInfo.InvariantCulture));
-                return w.ToString();
+                int eol = text.IndexOf('\n');
+                ulong version;
+                if (eol > HeaderPrefix.Length && text.StartsWith(HeaderPrefix, StringComparison.Ordinal) && Number(text.Substring(HeaderPrefix.Length, eol - HeaderPrefix.Length), false, out version) && version != 1)
+                    return new RecentList { State = RecentListState.OtherVersion };
+                return bad;
             }
-        }
-
-        // One subkey's record; null when any value is missing, of another type or does not agree with the key.
-        public static RecentLaunch Parse(string key, IDictionary<string, object> v)
-        {
-            if (v == null || key == null || key.Length != 32 || key.Any(c => !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f'))) return null;
-            object path, image, last, api, n;
-            if (!v.TryGetValue("Path", out path) || !(path is string) || !v.TryGetValue("Image", out image) || !(image is string) ||
-                !v.TryGetValue("LastLaunchUtc", out last) || !(last is ulong) || !v.TryGetValue("Api", out api) || !(api is string) ||
-                !v.TryGetValue("Launches", out n) || !(n is uint)) return null;
-            var p = (string)path;
-            if (p.Length == 0 || KeyOf(p) != key) return null;
-            string file;
-            try { file = System.IO.Path.GetFileName(p); } catch (ArgumentException) { return null; }
-            if (!string.Equals(file, (string)image, StringComparison.OrdinalIgnoreCase) || !Apis.Contains((string)api)) return null;
-            DateTime when;
-            try { when = DateTime.FromFileTimeUtc(unchecked((long)(ulong)last)); } catch (ArgumentOutOfRangeException) { return null; }
-            return new RecentLaunch { Key = key, Path = p, Image = (string)image, Api = (string)api, LastLaunchUtc = when, Launches = (uint)n };
-        }
-
-        // Every valid entry, newest first. Reading takes no lock: a half-written entry fails Parse and is skipped.
-        public static List<RecentLaunch> Read(IRecentStore store)
-        {
             var list = new List<RecentLaunch>();
-            foreach (var key in store.Keys())
+            int pos = Header.Length;
+            while (true)
             {
-                var r = Parse(key, store.Values(key));
-                if (r != null) list.Add(r);
+                int eol = text.IndexOf('\n', pos);
+                if (eol < 0) return bad;
+                var line = text.Substring(pos, eol - pos);
+                pos = eol + 1;
+                if (line.StartsWith("end ", StringComparison.Ordinal))
+                {
+                    ulong count;
+                    if (!Number(line.Substring(4), false, out count) || count != (ulong)list.Count || pos != text.Length) return bad;
+                    return new RecentList { State = RecentListState.Valid, Entries = list };
+                }
+                var f = line.Split(new[] { '\t' }, 5);
+                ulong start, pid, starts, apis;
+                if (f.Length != 5 || !Number(f[0], true, out start) || !Number(f[1], false, out pid) || pid > uint.MaxValue ||
+                    !Number(f[2], false, out starts) || starts > uint.MaxValue || !Number(f[3], false, out apis) || apis > uint.MaxValue) return bad;
+                var path = f[4];
+                if (path.Length == 0) return bad;
+                foreach (var c in path) if (c < 0x20) return bad;
+                string image;
+                try { image = System.IO.Path.GetFileName(path); } catch (ArgumentException) { return bad; }
+                DateTime when;
+                try { when = DateTime.FromFileTimeUtc(unchecked((long)start)); } catch (ArgumentOutOfRangeException) { return bad; }
+                list.Add(new RecentLaunch { Path = path, Image = image, LastLaunchUtc = when, Pid = (uint)pid, Launches = (uint)starts, Apis = (uint)apis });
+                if (list.Count > MaxEntries) return bad;
             }
-            return list.OrderByDescending(r => r.LastLaunchUtc).ThenBy(r => r.Path, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        // Prune under the mutex: the Keep newest valid entries stay; invalid subkeys are left to their writer. Returns the
-        // number removed, -1 when the mutex was busy (nothing removed).
-        public static int Prune(IRecentStore store)
+        // Digits only, no sign or space; the start field is exactly 16 upper-case hexadecimal digits.
+        static bool Number(string s, bool hex16, out ulong value)
         {
-            if (!store.Lock(0)) return -1;
-            try
-            {
-                int removed = 0;
-                foreach (var old in Read(store).Skip(Keep)) { store.DeleteKey(old.Key); removed++; }
-                return removed;
-            }
-            finally { store.Unlock(); }
+            value = 0;
+            if (s.Length == 0 || (hex16 && s.Length != 16)) return false;
+            foreach (var c in s)
+                if (!(c >= '0' && c <= '9' || hex16 && c >= 'A' && c <= 'F')) return false;
+            return ulong.TryParse(s, hex16 ? NumberStyles.AllowHexSpecifier : NumberStyles.None, CultureInfo.InvariantCulture, out value);
         }
 
-        // "Clear the list": under the mutex (2 s bound) every subkey goes. Busy: nothing was removed, say so.
-        public static ClearResult Clear(IRecentStore store)
+        // Reads without the lock and never writes; a list that cannot be read is Invalid.
+        public static RecentList Read(IRecentFiles files)
         {
-            if (!store.Lock(ClearWaitMs)) return ClearResult.Busy;
-            try { foreach (var key in store.Keys()) store.DeleteKey(key); return ClearResult.Cleared; }
-            finally { store.Unlock(); }
+            try { return Parse(files.ReadList(MaxBytes)); }
+            catch (Exception) { return new RecentList { State = RecentListState.Invalid }; }
         }
+
+        // "Clear the list" (docs/design/recent-launches.md "Clear and Off"): the lock, retried every 20 ms for up to
+        // 2 s, then the list and the temporary file go. Run it off the UI thread. Busy: nothing was removed.
+        public static ClearResult Clear(IRecentFiles files, Action<int> sleep = null)
+        {
+            sleep = sleep ?? Thread.Sleep;
+            for (int attempt = 0; !files.TryLock(); attempt++)
+            {
+                if (attempt >= ClearWaitMs / ClearRetryMs) return ClearResult.Busy;
+                sleep(ClearRetryMs);
+            }
+            try { files.DeleteList(); return ClearResult.Cleared; }
+            catch (Exception) { return ClearResult.Failed; }
+            finally { files.Unlock(); }
+        }
+
+        public static bool SamePath(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
     }
 }

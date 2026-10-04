@@ -29,6 +29,7 @@ namespace AmdgpuWddmControl
         {
             public string Image, Path, Stored, Recommended;
             public DateTime? LastLaunch;
+            public bool D3D12;
             public bool Hidden;
         }
 
@@ -46,7 +47,7 @@ namespace AmdgpuWddmControl
             {
                 if (!Profiles.IsValidImage(r.Image)) continue;
                 var e = get(r.Image);
-                if (e.LastLaunch == null || r.LastLaunchUtc > e.LastLaunch) { e.LastLaunch = r.LastLaunchUtc; e.Path = r.Path; }
+                if (e.LastLaunch == null || r.LastLaunchUtc > e.LastLaunch) { e.LastLaunch = r.LastLaunchUtc; e.Path = r.Path; e.D3D12 = r.D3D12; }
             }
             if (_snap.GameProfiles != null) foreach (var kv in _snap.GameProfiles) if (Profiles.IsValidImage(kv.Key)) get(kv.Key).Stored = kv.Value.Length == 0 ? null : kv.Value;
             if (_snap.DefaultApplications != null) foreach (var kv in _snap.DefaultApplications) if (Profiles.IsValidImage(kv.Key)) get(kv.Key).Recommended = kv.Value;
@@ -137,7 +138,7 @@ namespace AmdgpuWddmControl
                 name.MinimumSize = new Size(Math.Min(Theme.S(200), list.Inner / 3), 0);
                 name.TextAlign = ContentAlignment.MiddleLeft;
                 name.AccessibleName = entry.Image + (_gameEdits.ContainsKey(entry.Image) ? ", " + Strings.T("games.unsaved") : "");
-                string about = entry.LastLaunch != null ? Strings.T("games.launched", When(entry.LastLaunch.Value)) : entry.Stored != null ? Strings.T("games.has-settings") : Strings.T("games.no-settings");
+                string about = entry.LastLaunch != null ? Strings.T("games.launched", When(entry.LastLaunch.Value), Strings.T(entry.D3D12 ? "games.api.d3d12" : "games.api.d3d11")) : entry.Stored != null ? Strings.T("games.has-settings") : Strings.T("games.no-settings");
                 int infoWidth = Math.Max(Theme.S(120), list.Inner - Math.Min(Theme.S(200), list.Inner / 3) - Theme.S(130));
                 var info = Ui.Dim(about, infoWidth);
                 info.MinimumSize = new Size(Math.Min(infoWidth, Theme.S(220)), 0);

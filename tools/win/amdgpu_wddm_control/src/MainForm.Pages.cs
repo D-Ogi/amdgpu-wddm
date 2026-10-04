@@ -92,7 +92,7 @@ namespace AmdgpuWddmControl
                 var game = r;
                 var name = Ui.Label(game.Image, Theme.Bold, null, recent.Inner / 2);
                 name.MinimumSize = new Size(recent.Inner / 2, 0);
-                var when = Ui.Dim(Strings.T("games.launched", When(game.LastLaunchUtc)), recent.Inner / 2 - Theme.S(110));
+                var when = Ui.Dim(Strings.T("games.launched", When(game.LastLaunchUtc), Strings.T(game.D3D12 ? "games.api.d3d12" : "games.api.d3d11")), recent.Inner / 2 - Theme.S(110));
                 var open = Ui.Button(Strings.T("home.recent.settings"), (s, e) => { _game = game.Image; Navigate("games"); });
                 open.AccessibleName = Strings.T("home.recent.settings") + ": " + game.Image;
                 recent.Add(Ui.WrapRow(recent.Inner, name, when, open));
@@ -305,15 +305,36 @@ namespace AmdgpuWddmControl
             p.Controls.Add(upd);
 
             var rec = new CardPanel(Strings.T("settings.recent.title"), width);
-            rec.Add(PrefCheck("settings.recent", "recent", _prefs.RecordRecentLaunches, v => _prefs.RecordRecentLaunches = v, rec.Inner));
+            var invalid = _prefs.RecentLaunchesSwitch == RecentSwitch.Invalid;
+            var switchNote = Ui.Dim(invalid ? Strings.T("settings.recent.invalid") : "", rec.Inner);
+            rec.Add(PrefCheck("settings.recent", "recent", _prefs.RecordRecentLaunches, v => { _prefs.RecordRecentLaunches = v; switchNote.Text = ""; }, rec.Inner));
+            if (invalid) rec.Add(switchNote);
             rec.Add(Ui.Dim(Strings.T("settings.recent.note"), rec.Inner));
+            if (_recentState == RecentListState.Invalid) rec.Add(Ui.Dim(Strings.T("settings.recent.unreadable"), rec.Inner));
             var clearResult = Ui.Dim("", rec.Inner);
-            rec.Add(Ui.Button(Strings.T("settings.recent.clear"), (s, e) =>
+            Button clear = null;
+            clear = Ui.Button(Strings.T("settings.recent.clear"), (s, e) =>
             {
-                var r = RecentLaunches.Clear(new RegistryRecentStore());
-                clearResult.Text = Strings.T(r == ClearResult.Cleared ? "settings.recent.cleared" : "settings.recent.busy");
-                _recent = RecentLaunches.Read(new RegistryRecentStore());
-            }));
+                // The lock may take up to 2 s (docs/design/recent-launches.md): off the UI thread.
+                clear.Enabled = false;
+                clearResult.Text = "";
+                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    var r = RecentLaunches.Clear(new LocalRecentFiles());
+                    var list = RecentLaunches.Read(new LocalRecentFiles());
+                    try
+                    {
+                        BeginInvoke((Action)(() =>
+                        {
+                            _recent = list.Entries; _recentState = list.State;
+                            clearResult.Text = Strings.T(r == ClearResult.Cleared ? "settings.recent.cleared" : r == ClearResult.Busy ? "settings.recent.busy" : "settings.recent.failed");
+                            clear.Enabled = true;
+                        }));
+                    }
+                    catch (InvalidOperationException) { }
+                });
+            });
+            rec.Add(clear);
             rec.Add(clearResult);
             p.Controls.Add(rec);
 
@@ -332,7 +353,7 @@ namespace AmdgpuWddmControl
 
             var data = new CardPanel(Strings.T("search.settings.data"), width);
             Mark("settings.data", data);
-            for (int i = 1; i <= 5; i++) data.Add(Ui.Label("•  " + Strings.T("settings.data." + i), null, null, data.Inner));
+            for (int i = 1; i <= 6; i++) data.Add(Ui.Label("•  " + Strings.T("settings.data." + i), null, null, data.Inner));
             p.Controls.Add(data);
             return p;
         }

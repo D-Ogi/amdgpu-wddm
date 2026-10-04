@@ -33,9 +33,9 @@ namespace AmdgpuWddmControl
             var now = DateTime.UtcNow;
             _recent = new List<RecentLaunch>
             {
-                new RecentLaunch { Key = "00", Image = "witcher3.exe", Path = @"D:\Games\The Witcher 3\bin\x64_dx12\witcher3.exe", LastLaunchUtc = now.AddHours(-2), Api = "d3d12", Launches = 12 },
-                new RecentLaunch { Key = "01", Image = "ROTTR.exe", Path = @"D:\Games\Rise of the Tomb Raider\ROTTR.exe", LastLaunchUtc = now.AddDays(-1), Api = "d3d12", Launches = 3 },
-                new RecentLaunch { Key = "02", Image = "factorio.exe", Path = @"D:\Games\Factorio\bin\x64\factorio.exe", LastLaunchUtc = now.AddDays(-3), Api = "d3d11", Launches = 40 },
+                new RecentLaunch { Image = "witcher3.exe", Path = @"D:\Games\The Witcher 3\bin\x64_dx12\witcher3.exe", LastLaunchUtc = now.AddHours(-2), Apis = 1, Launches = 12 },
+                new RecentLaunch { Image = "ROTTR.exe", Path = @"D:\Games\Rise of the Tomb Raider\ROTTR.exe", LastLaunchUtc = now.AddDays(-1), Apis = 1, Launches = 3 },
+                new RecentLaunch { Image = "factorio.exe", Path = @"D:\Games\Factorio\bin\x64\factorio.exe", LastLaunchUtc = now.AddDays(-3), Apis = 2, Launches = 40 },
             };
             _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v1.0.1.0-tester.12", CandidateVersion = "1.0.1.0-tester.12" };
             _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "1.0.0.0-tester.11", DriverDate = "10-3-2026" });

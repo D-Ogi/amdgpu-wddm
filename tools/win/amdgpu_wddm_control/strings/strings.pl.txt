@@ -411,7 +411,9 @@ games.add|mt-safe|d6031d13|Dodaj grę...
 games.add.title|mt-safe|6da9b3ee|Wybierz plik programu gry
 games.add.filter|mt-safe|b6747064|Programy
 games.add.invalid|mt|44a0074e|Tej nazwy pliku nie można użyć dla ustawień gry.
-games.launched|mt|107a215c|Ostatnio grano: {0}
+games.launched|mt|2e7c7623|Ostatnio uruchomiono: {0} ({1})
+games.api.d3d12|mt-safe|05b30c4c|DirectX 12
+games.api.d3d11|mt-safe|1eed6087|DirectX 11
 games.has-settings|mt-safe|d9ad0a62|Ma własne ustawienia
 games.no-settings|mt-safe|62ce296b|Brak własnych ustawień
 games.hide|mt-safe|ac20a57b|Ukryj
@@ -489,10 +491,13 @@ settings.language.note|mt|3880569c|Teksty japońskie i koreańskie są na razie 
 settings.updates.title|mt-safe|22e2bada|Aktualizacje
 settings.update-start.note|mt|ae77c8bd|Najwyżej raz na godzinę. Bez Twojego udziału nic nie jest pobierane ani instalowane.
 settings.recent.title|mt-safe|085fe856|Lista gier
-settings.recent.note|mt|1416b04a|Sterownik zapamiętuje gry uruchamiane na tym komputerze na potrzeby listy na stronie Gry. Nic nie opuszcza tego komputera.
+settings.recent.note|mt|58f29ae6|Sterownik zapamiętuje gry uruchamiane na tym komputerze na potrzeby listy na stronie Gry. Lista nie jest nigdzie wysyłana.
+settings.recent.invalid|mt|5d19417d|Zapisane ustawienie tej listy jest nieprawidłowe, więc gry nie są zapamiętywane. Zaznacz pole, aby je włączyć.
+settings.recent.unreadable|mt|a63ef10f|Nie można odczytać listy gier. Wyczyść listę, aby zacząć nową.
 settings.recent.clear|mt-safe|50da1a01|Wyczyść listę
 settings.recent.cleared|mt|c2c7e99b|Lista jest pusta.
 settings.recent.busy|mt|fd22dbb3|Nie udało się teraz wyczyścić listy, ponieważ uruchamia się gra. Spróbuj ponownie za chwilę.
+settings.recent.failed|mt|26db6f1a|Nie udało się wyczyścić listy. Spróbuj ponownie za chwilę.
 settings.guide.title|mt|8e02ab12|Wskazówki i przewodniczka
 settings.guide.note|mt|529531e4|Bez Nagi wskazówki są wyświetlane jako tekst. Nic innego się nie zmienia.
 settings.animations.windows-off|mt|0962c940|Animacje w systemie Windows są wyłączone, więc ta aplikacja też nie używa animacji.
@@ -501,8 +506,9 @@ settings.support.note|mt|97dadddd|Pokazuje szczegóły techniczne i dodatkowe ak
 settings.data.1|mt|370b4dab|Nie ma telemetrii ani konta.
 settings.data.2|mt|fa14b2f8|Aplikacja łączy się z internetem tylko w celu sprawdzenia aktualizacji i pobrań uruchomionych przez Ciebie.
 settings.data.3|mt|40bbfde4|Raporty dla pomocy technicznej pozostają na tym komputerze, dopóki ich nie wyślesz.
-settings.data.4|mt|0d111524|Lista gier pozostaje na tym komputerze. Możesz ją wyłączyć i wyczyścić powyżej.
+settings.data.4|mt|5439adf1|Lista gier jest przechowywana dla Twojego konta Windows na tym komputerze i nie jest nigdzie wysyłana. Możesz ją wyłączyć i wyczyścić powyżej.
 settings.data.5|mt|7e6b4f23|Twoje wybory w tej aplikacji są przechowywane tylko dla Twojego konta Windows.
+settings.data.6|mt|a55810ff|Większości gier DirectX 11 nie ma jeszcze na liście gier. Każdą grę możesz dodać ręcznie na stronie Gry.
 # ---- Help (WU-058, WU-059, WU-063, WU-067) ----
 help.guides.title|mt-safe|6ef2d14b|Pomoc w typowych problemach
 help.guide.dark|mt|1faa0159|Ekran pozostaje czarny lub sterownik się nie uruchamia

@@ -411,7 +411,9 @@ games.add|mt-safe|d6031d13|ゲームを追加...
 games.add.title|mt|6da9b3ee|ゲームのプログラム ファイルを選択
 games.add.filter|mt-safe|b6747064|プログラム
 games.add.invalid|mt|44a0074e|このファイル名はゲームの設定に使用できません。
-games.launched|mt|107a215c|最終プレイ：{0}
+games.launched|mt|2e7c7623|最終起動：{0} ({1})
+games.api.d3d12|mt-safe|05b30c4c|DirectX 12
+games.api.d3d11|mt-safe|1eed6087|DirectX 11
 games.has-settings|mt-safe|d9ad0a62|独自の設定あり
 games.no-settings|mt-safe|62ce296b|独自の設定なし
 games.hide|mt-safe|ac20a57b|非表示
@@ -489,10 +491,13 @@ settings.language.note|mt|3880569c|日本語と韓国語のテキストは、現
 settings.updates.title|mt-safe|22e2bada|更新
 settings.update-start.note|mt|ae77c8bd|確認は最大で 1 時間に 1 回です。許可なしに何かがダウンロードまたはインストールされることはありません。
 settings.recent.title|mt-safe|085fe856|ゲーム一覧
-settings.recent.note|mt|1416b04a|ドライバーは、ゲーム一覧のために、この PC で起動したゲームを記憶します。この PC の外には何も送信されません。
+settings.recent.note|mt|58f29ae6|ドライバーは、ゲーム一覧のために、この PC で起動したゲームを記憶します。一覧はアップロードされません。
+settings.recent.invalid|mt|5d19417d|この一覧の保存された設定が無効なため、ゲームは記憶されません。チェックボックスをオンにすると有効になります。
+settings.recent.unreadable|mt|a63ef10f|ゲーム一覧を読み取れません。一覧を消去すると、新しい一覧が始まります。
 settings.recent.clear|mt-safe|50da1a01|一覧を消去
 settings.recent.cleared|mt|c2c7e99b|一覧を消去しました。
 settings.recent.busy|mt|fd22dbb3|ゲームの起動中のため、現在は一覧を消去できません。しばらくしてからもう一度お試しください。
+settings.recent.failed|mt|26db6f1a|一覧を消去できませんでした。しばらくしてからもう一度お試しください。
 settings.guide.title|mt-safe|8e02ab12|ヒントとガイド
 settings.guide.note|mt|529531e4|Nagi を表示しない場合、ヒントはテキストで表示されます。それ以外は何も変わりません。
 settings.animations.windows-off|mt|0962c940|Windows のアニメーションがオフのため、このアプリもアニメーションを表示しません。
@@ -501,8 +506,9 @@ settings.support.note|mt|97dadddd|開発者から依頼されたときのため�
 settings.data.1|mt|370b4dab|テレメトリもアカウントもありません。
 settings.data.2|mt|fa14b2f8|アプリがオンラインに接続するのは、更新の確認と、あなたが開始したダウンロードのときだけです。
 settings.data.3|mt|40bbfde4|サポート レポートは、あなた自身が送信するまでこの PC に保存されます。
-settings.data.4|mt|0d111524|ゲーム一覧はこの PC に保存されます。上でオフにしたり消去したりできます。
+settings.data.4|mt|5439adf1|ゲーム一覧は、この PC 上のあなたの Windows アカウント用に保存され、アップロードされません。上でオフにしたり消去したりできます。
 settings.data.5|mt|7e6b4f23|このアプリでの選択は、あなたの Windows アカウントにのみ保存されます。
+settings.data.6|mt|a55810ff|DirectX 11 のゲームの多くは、まだゲーム一覧に表示されません。どのゲームも [ゲーム] ページで手動で追加できます。
 # ---- Help (WU-058, WU-059, WU-063, WU-067) ----
 help.guides.title|mt-safe|6ef2d14b|よくある問題のヘルプ
 help.guide.dark|mt|1faa0159|画面が暗いままになる、またはドライバーが起動しない

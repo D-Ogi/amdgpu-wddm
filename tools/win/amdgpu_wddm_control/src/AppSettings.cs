@@ -1,8 +1,8 @@
 // The app's own preferences: HKCU\Software\amdgpu-wddm\Control (docs/gui/interfaces.md section 5). App state only;
 // the installer never writes them, so they survive updates (WU-049, C19). Rule R4: every preference is worded so that
 // its default is "value absent"; checking a box writes one value, unchecking it removes the value, and reading never
-// writes. The two owner exceptions (D2 update check at start, D3 recent launches) are on while absent and write 0 only
-// when the user turns them off.
+// writes. The two owner exceptions are on while absent: D2 (update check at start) writes 0 when turned off and removes
+// the value when turned on; D3 (recent launches, read by the shells) writes 1 or 0 on every change.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,11 +13,17 @@ namespace AmdgpuWddmControl
     // The few operations the preferences need, so that tests run against a dictionary and the window against HKCU.
     public interface IPrefStore
     {
-        object Get(string name);                    // uint, string, string[] or null when absent or unreadable
+        // uint, string, string[]; null when absent; PrefValue.Unusable when present but of another type or unreadable
+        object Get(string name);
         void SetDword(string name, uint value);
         void SetString(string name, string value);
         void SetMulti(string name, string[] value);
         void Delete(string name);
+    }
+
+    public static class PrefValue
+    {
+        public static readonly object Unusable = new object();
     }
 
     public sealed class MemoryPrefStore : IPrefStore
@@ -43,11 +49,12 @@ namespace AmdgpuWddmControl
                 {
                     if (k == null) return null;
                     var v = k.GetValue(name);
+                    if (v == null) return null;
                     if (v is int) return unchecked((uint)(int)v);
-                    return v is string || v is string[] ? v : null;
+                    return v is string || v is string[] ? v : PrefValue.Unusable;
                 }
             }
-            catch (Exception) { return null; }
+            catch (Exception) { return PrefValue.Unusable; }
         }
 
         static void With(Action<RegistryKey> a)
@@ -90,7 +97,13 @@ namespace AmdgpuWddmControl
         public bool ShowSupportOptions { get { return Flag("ShowSupportOptions"); } set { SetFlag("ShowSupportOptions", value); } }
         public bool GettingStartedDismissed { get { return Flag("GettingStartedDismissed"); } set { SetFlag("GettingStartedDismissed", value); } }
         public bool UpdateCheckAtStart { get { return OnUnlessZero("UpdateCheckAtStart"); } set { SetOnUnlessZero("UpdateCheckAtStart", value); } }
-        public bool RecordRecentLaunches { get { return OnUnlessZero(RecentLaunches.SwitchName); } set { SetOnUnlessZero(RecentLaunches.SwitchName, value); } }
+        // D3, read by the shells (docs/design/recent-launches.md "Switch"): absent or 1 = on, 0 = off, anything else
+        // records nothing and shows as off, "not valid". A change writes 1 or 0.
+        public RecentSwitch RecentLaunchesSwitch
+        {
+            get { var v = _store.Get(RecentLaunches.SwitchName); return v == null ? RecentSwitch.On : !(v is uint) ? RecentSwitch.Invalid : (uint)v == 1 ? RecentSwitch.On : (uint)v == 0 ? RecentSwitch.Off : RecentSwitch.Invalid; }
+        }
+        public bool RecordRecentLaunches { get { return RecentLaunchesSwitch == RecentSwitch.On; } set { if (value != RecordRecentLaunches || RecentLaunchesSwitch == RecentSwitch.Invalid) _store.SetDword(RecentLaunches.SwitchName, value ? 1u : 0u); } }
 
         // The chosen language; null: none chosen (Windows' language, else English). Written only on a choice.
         public string Language

@@ -45,8 +45,21 @@ static partial class UnitTests
         p.ShowNagi = true; p.ShowNagi = false;
         p.UpdateCheckAtStart = false; p.UpdateCheckAtStart = true;
         p.RecordRecentLaunches = false;
-        Equal(0u, (uint)store.Values[RecentLaunches.SwitchName], "D3: off is written as 0 (read by the UMDs)");
+        Equal(0u, (uint)store.Values[RecentLaunches.SwitchName], "D3: off is written as 0 (read by the shells)");
         p.RecordRecentLaunches = true;
+        Equal(1u, (uint)store.Values[RecentLaunches.SwitchName], "D3: on again is written as 1");
+        Equal(RecentSwitch.On, p.RecentLaunchesSwitch, "D3: 1 is on");
+        foreach (var other in new object[] { 2u, 0xFFFFFFFFu, "1", new[] { "1" }, PrefValue.Unusable })
+        {
+            store.Values[RecentLaunches.SwitchName] = other;
+            Equal(RecentSwitch.Invalid, p.RecentLaunchesSwitch, "D3: a value other than DWORD 0 or 1 is not valid (" + other + ")");
+            Check(!p.RecordRecentLaunches, "D3: a value that is not valid counts as off (" + other + ")");
+        }
+        int before = store.Writes;
+        p.RecordRecentLaunches = false;
+        Check(store.Writes == before + 1 && (uint)store.Values[RecentLaunches.SwitchName] == 0u, "D3: turning off over a value that is not valid writes 0");
+        p.RecordRecentLaunches = true;
+        store.Values.Remove(RecentLaunches.SwitchName);
         p.HiddenGames = new HashSet<string> { "a.exe" }; Check(p.HiddenGames.Contains("A.EXE"), "hidden games compare without case");
         p.HiddenGames = new HashSet<string>();
         p.LastSeenRelease = "1.0"; p.LastSeenRelease = null;
@@ -100,41 +113,98 @@ static partial class UnitTests
         Equal("nagi.01-wave-f03@256.png", Guide.FrameResource("01-wave", 3, 256), "frame resource name");
     }
 
-    static Dictionary<string, object> Launch(string path, DateTime utc, string api = "D3D12", uint n = 1)
+    static string Entry(DateTime utc, uint pid, uint starts, uint apis, string path)
     {
-        return new Dictionary<string, object> { { "Path", path }, { "Image", Path.GetFileName(path) }, { "LastLaunchUtc", (ulong)utc.ToFileTimeUtc() }, { "Api", api }, { "Launches", n } };
+        return utc.ToFileTimeUtc().ToString("X16") + "\t" + pid + "\t" + starts + "\t" + apis + "\t" + path;
     }
 
-    // A4: key derivation, strict parsing, newest first, prune keeps 50, clear under the mutex.
+    static byte[] ListBytes(params string[] entries)
+    {
+        var text = RecentLaunches.Header + string.Concat(entries.Select(e => e + "\n")) + "end " + entries.Length + "\n";
+        return new System.Text.UTF8Encoding(false).GetBytes(text);
+    }
+
+    static RecentListState StateOf(byte[] data) { return RecentLaunches.Parse(data).State; }
+
+    // A4 on stream C's file contract (docs/design/recent-launches.md v1): strict whole-list parse in file order, up to
+    // 64, the API bit, path identity without case, Clear under the lock with its bounded retry.
     static void RecentLaunchRecords()
     {
-        Equal(RecentLaunches.KeyOf(@"C:\Games\A.exe"), RecentLaunches.KeyOf(@"\\?\c:\games\a.EXE"), "A4: \\\\?\\ prefix and case do not change the key");
-        Equal(RecentLaunches.KeyOf(@"\\server\share\a.exe"), RecentLaunches.KeyOf(@"\\?\UNC\server\share\a.exe"), "A4: UNC prefix");
-        Check(Regex.IsMatch(RecentLaunches.KeyOf("x"), "^[0-9a-f]{32}$"), "A4: 32 lower-case hex digits");
-        var store = new MemoryRecentStore();
         var t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-        string p1 = @"D:\Games\Witcher 3\bin\witcher3.exe", p2 = @"E:\Other\witcher3.exe", p3 = @"D:\日本語\ゲーム.exe";
-        store.Data[RecentLaunches.KeyOf(p1)] = Launch(p1, t0);
-        store.Data[RecentLaunches.KeyOf(p2)] = Launch(p2, t0.AddHours(1));
-        store.Data[RecentLaunches.KeyOf(p3)] = Launch(p3, t0.AddHours(2), "Vulkan");
-        var wrongKey = Launch(p1, t0); store.Data["00000000000000000000000000000000"] = wrongKey;
-        var badImage = Launch(p1, t0); badImage["Image"] = "other.exe"; store.Data[RecentLaunches.KeyOf(p1 + "x")] = badImage;
-        var badApi = Launch(p2 + "y", t0); badApi["Api"] = "d3d9"; store.Data[RecentLaunches.KeyOf(p2 + "y")] = badApi;
-        var badType = Launch(p2 + "z", t0); badType["Launches"] = 3; store.Data[RecentLaunches.KeyOf(p2 + "z")] = badType;
-        var list = RecentLaunches.Read(store);
-        Equal(3, list.Count, "A4: invalid entries are skipped");
-        Equal(p3, list[0].Path, "A4: newest first (Unicode path kept)");
-        Equal(2, list.Count(r => r.Image == "witcher3.exe"), "A4: duplicate base names stay two entries");
-        for (int i = 0; i < 60; i++) { var p = @"C:\G\g" + i + ".exe"; store.Data[RecentLaunches.KeyOf(p)] = Launch(p, t0.AddMinutes(-i)); }
-        store.Busy = true;
-        Equal(-1, RecentLaunches.Prune(store), "A4: prune does nothing while the mutex is held");
-        Equal(ClearResult.Busy, RecentLaunches.Clear(store), "A4: clear reports busy");
-        Equal(0, store.Deleted, "A4: nothing deleted while busy");
-        store.Busy = false;
-        Equal(13, RecentLaunches.Prune(store), "A4: prune keeps the 50 newest valid entries");
-        Equal(50, RecentLaunches.Read(store).Count, "A4: 50 left");
-        Equal(ClearResult.Cleared, RecentLaunches.Clear(store), "A4: clear");
-        Equal(0, store.Data.Count, "A4: clear removes every subkey, invalid ones too");
+        string p1 = @"D:\Games\Witcher 3\bin\witcher3.exe", p2 = @"E:\Other\witcher3.exe", p3 = @"D:\日本語\ゲーム.exe", p4 = @"\\server\share\🎮\play.exe";
+        var good = ListBytes(Entry(t0, 10, 3, 3, p1), Entry(t0.AddHours(1), 11, 1, 2, p2), Entry(t0.AddHours(-1), 12, 4294967295, 0, p3), Entry(t0, 13, 1, 4, p4));
+        var list = RecentLaunches.Parse(good);
+        Equal(RecentListState.Valid, list.State, "A4: a valid list");
+        Equal(4, list.Entries.Count, "A4: every entry");
+        Check(list.Entries.Select(r => r.Path).SequenceEqual(new[] { p1, p2, p3, p4 }), "A4: the file's order is kept (launch order, not the clock); Unicode paths kept");
+        Check(list.Entries[0].D3D12 && !list.Entries[1].D3D12 && !list.Entries[2].D3D12 && !list.Entries[3].D3D12, "A4: bit 1 is D3D12, everything else D3D11");
+        Equal(t0, list.Entries[0].LastLaunchUtc, "A4: the start field is the FILETIME of the launch");
+        Check(list.Entries[0].Pid == 10 && list.Entries[0].Launches == 3 && list.Entries[2].Launches == 4294967295u, "A4: pid and starts");
+        Equal("ゲーム.exe", list.Entries[2].Image, "A4: the file name comes from the path");
+        Equal(2, list.Entries.Count(r => r.Image == "witcher3.exe"), "A4: two folders with one file name stay two entries");
+        int partial = 0;
+        for (int n = 0; n < good.Length; n++) { var cut = new byte[n]; Array.Copy(good, cut, n); var r = RecentLaunches.Parse(cut); if (r.State == RecentListState.Valid || r.Entries.Count > 0) partial++; }
+        Equal(0, partial, "A4: no truncation of a valid list is read as a list");
+        var enc = new System.Text.UTF8Encoding(false);
+        Func<string, RecentListState> text = s => StateOf(enc.GetBytes(s));
+        var h = RecentLaunches.Header;
+        Equal(RecentListState.Valid, text(h + "end 0\n"), "A4: an empty list");
+        Equal(0, RecentLaunches.Parse(enc.GetBytes(h + "end 0\n")).Entries.Count, "A4: an empty list has no entries");
+        Equal(RecentListState.Invalid, text(h + Entry(t0, 1, 1, 1, p1) + "\nend 2\n"), "A4: a count that does not match");
+        Equal(RecentListState.Invalid, text(h + "end 0\nx"), "A4: bytes after the end line");
+        Equal(RecentListState.Invalid, text(h + "end 0"), "A4: an end line without its line feed");
+        Equal(RecentListState.Invalid, text(h + Entry(t0, 1, 1, 1, p1).ToLowerInvariant() + "\nend 1\n"), "A4: lower-case hexadecimal start");
+        Equal(RecentListState.Invalid, text(h + "01DC0000000000\t1\t1\t1\tC:\\a.exe\nend 1\n"), "A4: a start field shorter than 16 digits");
+        Equal(RecentListState.Invalid, text(h + "0000000000000001\t-1\t1\t1\tC:\\a.exe\nend 1\n"), "A4: a sign in a number field");
+        Equal(RecentListState.Invalid, text(h + "0000000000000001\t4294967296\t1\t1\tC:\\a.exe\nend 1\n"), "A4: a pid above 32 bits");
+        Equal(RecentListState.Invalid, text(h + "0000000000000001\t1\t1\t1\t\nend 1\n"), "A4: an empty path");
+        Equal(RecentListState.Invalid, text(h + "0000000000000001\t1\t1\t1\tC:\\a\r.exe\nend 1\n"), "A4: a control character in the path");
+        Equal(RecentListState.Invalid, text(h + "0000000000000001\t1\t1\t1\tC:\\a\tb.exe\nend 1\n"), "A4: a sixth field");
+        Equal(RecentListState.Invalid, text(h + "0000000000000001\t1\t1\tC:\\a.exe\nend 1\n"), "A4: four fields");
+        Equal(RecentListState.Invalid, text("\uFEFF" + h + "end 0\n"), "A4: a byte order mark");
+        Equal(RecentListState.Invalid, text(h.Replace("\n", "\r\n") + "end 0\n"), "A4: CR LF line ends");
+        Equal(RecentListState.OtherVersion, text("amdgpu-wddm recent-launches 2\nend 0\n"), "A4: another version is not read");
+        Equal(RecentListState.Invalid, text("amdgpu-wddm recent-launches\nend 0\n"), "A4: a damaged header");
+        Equal(RecentListState.Invalid, StateOf(new byte[] { 0x61, 0xFF, 0x0A }), "A4: bytes that are not UTF-8");
+        Equal(RecentListState.Invalid, StateOf(ListBytes(Enumerable.Range(0, 65).Select(i => Entry(t0, (uint)i, 1, 1, @"C:\G\g" + i + ".exe")).ToArray())), "A4: 65 entries are not a list");
+        Equal(64, RecentLaunches.Parse(ListBytes(Enumerable.Range(0, 64).Select(i => Entry(t0, (uint)i, 1, 1, @"C:\G\g" + i + ".exe")).ToArray())).Entries.Count, "A4: 64 entries are shown");
+        Equal(RecentListState.Invalid, StateOf(new byte[RecentLaunches.MaxBytes + 1]), "A4: more than 8 MiB");
+        Equal(RecentListState.Missing, RecentLaunches.Read(new MemoryRecentFiles()).State, "A4: a missing file is an empty list");
+        Equal(RecentListState.Invalid, RecentLaunches.Read(new MemoryRecentFiles { List = good, Unreadable = true }).State, "A4: a list that cannot be read shows nothing");
+        Check(RecentLaunches.SamePath(@"C:\Games\A.exe", @"c:\games\a.EXE") && !RecentLaunches.SamePath(@"C:\A\g.exe", @"C:\B\g.exe"), "A4: paths compare ordinally without case");
+
+        var files = new MemoryRecentFiles { List = good, BusyAttempts = int.MaxValue };
+        int slept = 0;
+        Equal(ClearResult.Busy, RecentLaunches.Clear(files, ms => slept += ms), "A4: clear reports busy when the lock is not taken");
+        Check(files.List != null && files.Deletes == 0, "A4: nothing deleted while busy");
+        Equal(RecentLaunches.ClearWaitMs, slept, "A4: clear retries every 20 ms for 2 s");
+        Equal(RecentLaunches.ClearWaitMs / RecentLaunches.ClearRetryMs + 1, files.Attempts, "A4: one attempt per retry");
+        files = new MemoryRecentFiles { List = good, BusyAttempts = 3 };
+        Equal(ClearResult.Cleared, RecentLaunches.Clear(files, ms => { }), "A4: clear once the lock is free");
+        Check(files.List == null && files.Deletes == 1 && !files.Locked, "A4: the list is deleted under the lock and the lock released");
+
+        var dir = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-recent-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var local = new LocalRecentFiles(dir);
+            Equal(RecentListState.Missing, RecentLaunches.Read(local).State, "A4: no directory is an empty list");
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, RecentLaunches.ListName), good);
+            File.WriteAllBytes(Path.Combine(dir, RecentLaunches.TempName), good);
+            Equal(4, RecentLaunches.Read(local).Entries.Count, "A4: the file is read");
+            using (var writer = new FileStream(Path.Combine(dir, RecentLaunches.LockName), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
+            {
+                writer.Lock(0, 1);
+                Equal(ClearResult.Busy, RecentLaunches.Clear(new LocalRecentFiles(dir), ms => { }), "A4: a writer holding byte 0 keeps the list");
+                Check(File.Exists(Path.Combine(dir, RecentLaunches.ListName)), "A4: the list is still there");
+                writer.Unlock(0, 1);
+            }
+            using (new FileStream(Path.Combine(dir, RecentLaunches.ListName), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                Equal(ClearResult.Cleared, RecentLaunches.Clear(new LocalRecentFiles(dir), ms => { }), "A4: clear while a reader has the list open");
+            Check(!File.Exists(Path.Combine(dir, RecentLaunches.ListName)) && !File.Exists(Path.Combine(dir, RecentLaunches.TempName)), "A4: list and temporary file deleted");
+            Check(File.Exists(Path.Combine(dir, RecentLaunches.LockName)), "A4: the lock file is never deleted");
+        }
+        finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
     }
 
     // WU-009, WU-071: names and common terms in every language, width and kana folding, Coming-later rows.

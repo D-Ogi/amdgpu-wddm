@@ -54,7 +54,7 @@ namespace AmdgpuWddmControl
                     {
                         string path = null;
                         try { path = p.MainModule.FileName; } catch (Exception) { }
-                        if (path != null && RecentLaunches.KeyOf(path) == game.Key && !h.RunningGames.Contains(game.Image)) h.RunningGames.Add(game.Image);
+                        if (path != null && RecentLaunches.SamePath(path, game.Path) && !h.RunningGames.Contains(game.Image)) h.RunningGames.Add(game.Image);
                     }
             }
             return h;

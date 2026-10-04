@@ -27,6 +27,7 @@ namespace AmdgpuWddmControl
         DriverCardView _drv;
         UpdateCache _upd;
         List<RecentLaunch> _recent = new List<RecentLaunch>();
+        RecentListState _recentState = RecentListState.Missing;
         VideoMemoryState _vram;
         StatusCard _status;
         GuideVerdict _verdict;
@@ -395,6 +396,13 @@ namespace AmdgpuWddmControl
 
         // ---- data --------------------------------------------------------------------------------------------------
 
+        void ReadRecent()
+        {
+            var list = RecentLaunches.Read(new LocalRecentFiles());
+            _recent = list.Entries;
+            _recentState = list.State;
+        }
+
         public void RefreshAll()
         {
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
@@ -404,9 +412,7 @@ namespace AmdgpuWddmControl
             _vram = vram.Value;
             ReadDriverCard();
             _upd = UpdateCheck.LoadCache();
-            var store = new RegistryRecentStore();
-            if (!_smoke && !ReadOnlyProbe) RecentLaunches.Prune(store);
-            _recent = RecentLaunches.Read(store);
+            ReadRecent();
             if (_drv != null && DriverCard.UpgradeDone(_drv, _prefs.LastSeenRelease)) _upgradeDone = true;
             if (!_smoke && !ReadOnlyProbe && _drv != null && _drv.Verification == VerifyKind.Verified && !_drv.InstalledPending && _drv.InstalledVersion != null)
                 _prefs.LastSeenRelease = _drv.InstalledVersion;
