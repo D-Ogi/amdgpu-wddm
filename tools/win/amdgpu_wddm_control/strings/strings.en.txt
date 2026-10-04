@@ -527,7 +527,6 @@ settings.data.2|src|-|The app goes online only for the update check and for down
 settings.data.3|src|-|Support reports stay on this PC until you send them yourself.
 settings.data.4|src|-|The game list is kept for your Windows account on this PC and is not uploaded. You can turn it off and clear it above.
 settings.data.5|src|-|Your choices in this app are stored for your Windows account only.
-settings.data.6|src|-|Most DirectX 11 games are not in the game list yet. You can add any game by hand on the Games page.
 
 # ---- Help (WU-058, WU-059, WU-063, WU-067) ----
 help.guides.title|src|-|Help for common problems

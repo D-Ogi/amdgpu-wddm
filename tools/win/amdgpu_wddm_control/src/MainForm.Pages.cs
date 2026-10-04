@@ -353,7 +353,7 @@ namespace AmdgpuWddmControl
 
             var data = new CardPanel(Strings.T("search.settings.data"), width);
             Mark("settings.data", data);
-            for (int i = 1; i <= 6; i++) data.Add(Ui.Label("•  " + Strings.T("settings.data." + i), null, null, data.Inner));
+            for (int i = 1; i <= 5; i++) data.Add(Ui.Label("•  " + Strings.T("settings.data." + i), null, null, data.Inner));
             p.Controls.Add(data);
             return p;
         }

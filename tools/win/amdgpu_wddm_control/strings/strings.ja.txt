@@ -512,7 +512,6 @@ settings.data.2|mt|fa14b2f8|アプリがオンラインに接続するのは、�
 settings.data.3|mt|40bbfde4|サポート レポートは、あなた自身が送信するまでこの PC に保存されます。
 settings.data.4|mt|5439adf1|ゲーム一覧は、この PC 上のあなたの Windows アカウント用に保存され、アップロードされません。上でオフにしたり消去したりできます。
 settings.data.5|mt|7e6b4f23|このアプリでの選択は、あなたの Windows アカウントにのみ保存されます。
-settings.data.6|mt|a55810ff|DirectX 11 のゲームの多くは、まだゲーム一覧に表示されません。どのゲームも [ゲーム] ページで手動で追加できます。
 # ---- Help (WU-058, WU-059, WU-063, WU-067) ----
 help.guides.title|mt-safe|6ef2d14b|よくある問題のヘルプ
 help.guide.dark|mt|1faa0159|画面が暗いままになる、またはドライバーが起動しない
