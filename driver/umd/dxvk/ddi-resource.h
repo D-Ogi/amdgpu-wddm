@@ -11,6 +11,9 @@ struct DdiResource {
     // with image storage.
     D3DKMT_HANDLE present_allocation=0;
     UINT present_subresource=0;
+    // BD-065: a present buffer that is not shared, not a primary and not displayable. Flip-model buffers are
+    // shared with the compositor or are primaries; only a blt-model swap chain presents a buffer like this.
+    bool blt_model_buffer=false;
     RuntimeSurface *runtime_surface=nullptr; // DeviceOwner owns; COM object is borrowed.
 };
 struct ResourceDescription {

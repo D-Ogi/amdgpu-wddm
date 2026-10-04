@@ -205,6 +205,8 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
             s->runtime_surface=surface; s->object=surface->texture.texture;
             s->dimension=D3D10DDIRESOURCE_TEXTURE2D;
             s->present_allocation=surface->allocation.allocation; s->present_subresource=0;
+            s->blt_model_buffer=(desc->BindFlags&D3D10_DDI_BIND_PRESENT) && !request.primary && !request.shared &&
+                !request.displayable;
             if (desc->pInitialDataUP) {
                 const auto &initial=desc->pInitialDataUP[0];
                 owner.context()->UpdateSubresource(s->object,0,nullptr,initial.pSysMem,initial.SysMemPitch,initial.SysMemSlicePitch);
