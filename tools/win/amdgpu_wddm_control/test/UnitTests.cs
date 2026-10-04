@@ -1018,6 +1018,8 @@ static partial class UnitTests
         NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
+        DriverCardTests();
+        UpdateTests(args[0]);
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");
         return _failed == 0 ? 0 : 1;

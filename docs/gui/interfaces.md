@@ -118,4 +118,7 @@ Commit protocol (one bounded protocol for writers, prune and clear):
 
 Update check cache: `HKCU\Software\amdgpu-wddm\Control\Update` (REG_SZ values, ISO 8601 UTC):
 `LastAttemptUtc`, `LastAttemptOutcome`, `LastSuccessUtc`, `CandidateTag`, `CandidateVersion`, `CandidateUrl`,
-`CandidatePublishedUtc`, `NextAllowedUtc`. No result is ever stored as a plain "current" flag.
+`CandidatePublishedUtc`, `NextAllowedUtc`, `InstalledTag`, `InstalledPublishedUtc` (the installed release as the last
+successful check saw it; the Driver card's "Released" date comes only from these, and only while `InstalledTag`
+equals the installed version). No result is ever stored as a plain "current" flag; the candidate is compared with the
+installed version on every read.

@@ -37,3 +37,31 @@ cu.result.saved|mt|fca046cc|Zapisano.
 cu.result.failed|mt|ec48fa5b|Nie udało się dokończyć zmiany.
 cu.result.cleanup-incomplete|mt|40b9b472|Porządkowanie jest niepełne. Następny start użyje standardowych 24 rdzeni; pozostałe wcześniejsze diagnostyczne ograniczenie rdzeni ich nie zmniejsza.
 cu.effect|mt|60ee9b9b|Więcej rdzeni zużywa więcej energii i wytwarza więcej ciepła: około 30 W więcej przy 1500 MHz na naszym egzemplarzu testowym. To wartość orientacyjna, nie obietnica dla Twojego komputera.
+
+# ---- driver card ----
+drv.running.exact|mt|f02b57d6|Działająca wersja: {0}
+drv.running.none|mt|3d132d13|Działająca wersja: sterownik nie działa.
+drv.running.unknown|mt|2f2c0a8f|Działająca wersja: nie można jej dokładnie ustalić.
+drv.installed|mt|15ffa882|Zainstalowana: {0}
+drv.installed.pending|mt|65d41410|Zainstalowana: {0}, czeka na ponowne uruchomienie Windows.
+drv.installed.none|mt|f9cee8f4|Zainstalowana wersja: nieznana.
+drv.installed.stopped|mt|58f52a20|Ostatnia instalacja zatrzymała się przed końcem.
+drv.verify.ok|mt|af4213e7|Weryfikacja: zweryfikowano.
+drv.verify.failed|mt|d9c038fd|Weryfikacja: nie zweryfikowano (jedno ze sprawdzeń się nie powiodło).
+drv.verify.unknown|mt|72256755|Weryfikacja: nie udało się sprawdzić.
+drv.date|mt|05989de0|Data sterownika: {0}
+drv.date.none|mt|ce2d6c9e|Data sterownika: nieznana.
+drv.released|mt|48781b5a|Wydano: {0}
+drv.released.none|mt|63087412|Wydano: znane po sprawdzeniu aktualizacji.
+
+# ---- update check ----
+upd.available|mt|68e4656c|Dostępna aktualizacja: {0}
+upd.uptodate|mt|39fd9eaf|Masz najnowsze wydanie.
+upd.newest|mt|ffd32b15|Najnowsze wydanie to {0}.
+upd.incomplete|mt|fc36062b|Brak nowszego wydania wśród {0} najnowszych wydań.
+upd.failed|mt|bf1dd0e0|Nie udało się sprawdzić aktualizacji. Spróbuj ponownie później.
+upd.rate-limited|mt|2c365d35|Usługa aktualizacji poprosiła o odczekanie. Możesz sprawdzić ponownie po {0}.
+upd.last-success|mt|cac0e0b4|Ostatnie udane sprawdzenie: {0}.
+upd.never|mt|d413e103|Aktualizacje nie były jeszcze sprawdzane.
+upd.checking|mt|8bcaee3c|Sprawdzanie aktualizacji...
+upd.released|mt|48781b5a|Wydano: {0}

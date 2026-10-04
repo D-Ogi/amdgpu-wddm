@@ -39,3 +39,31 @@ cu.result.saved|src|-|Saved.
 cu.result.failed|src|-|The change could not be completed.
 cu.result.cleanup-incomplete|src|-|The cleanup is incomplete. The next start uses the standard 24 cores; an earlier diagnostic core limit that remains does not reduce them.
 cu.effect|src|-|More cores use more power and make more heat: about 30 W more at 1500 MHz on our test unit. This is a reference, not a promise for your PC.
+
+# ---- driver card (WU-043) ----
+drv.running.exact|src|-|Running version: {0}
+drv.running.none|src|-|Running version: the driver is not running.
+drv.running.unknown|src|-|Running version: cannot be determined exactly.
+drv.installed|src|-|Installed: {0}
+drv.installed.pending|src|-|Installed: {0}, waiting for the restart of Windows.
+drv.installed.none|src|-|Installed version: not known.
+drv.installed.stopped|src|-|The last installation stopped before it finished.
+drv.verify.ok|src|-|Verification: verified.
+drv.verify.failed|src|-|Verification: not verified (a check failed).
+drv.verify.unknown|src|-|Verification: could not be checked.
+drv.date|src|-|Driver date: {0}
+drv.date.none|src|-|Driver date: not known.
+drv.released|src|-|Released: {0}
+drv.released.none|src|-|Released: known after an update check.
+
+# ---- update check (A5) ----
+upd.available|src|-|Update available: {0}
+upd.uptodate|src|-|You have the newest release.
+upd.newest|src|-|The newest release is {0}.
+upd.incomplete|src|-|No newer release among the newest {0} releases.
+upd.failed|src|-|Could not check for updates. Try again later.
+upd.rate-limited|src|-|The update service asked us to wait. You can check again after {0}.
+upd.last-success|src|-|Last successful check: {0}.
+upd.never|src|-|Not checked for updates yet.
+upd.checking|src|-|Checking for updates...
+upd.released|src|-|Released: {0}

@@ -37,7 +37,7 @@ New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
-$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
@@ -79,6 +79,10 @@ $resources = @(Get-ChildItem "$here\strings\strings.*.txt" | ForEach-Object { "/
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources (Get-ChildItem "$here\src\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
+# The exe declares its framework (A5: SecurityProtocolType.SystemDefault means the OS's TLS choice only for a 4.7+ target).
+$image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe"))
+if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_control.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
+Write-Host '  target framework: .NETFramework,Version=v4.8 declared'
 
 # 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
 $env:AMDGPU_WDDM_CONTROL_STATE = Join-Path $obj 'state'

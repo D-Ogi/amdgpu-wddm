@@ -37,3 +37,31 @@ cu.result.saved|mt-safe|fca046cc|저장했습니다.
 cu.result.failed|mt|ec48fa5b|변경을 완료할 수 없었습니다.
 cu.result.cleanup-incomplete|mt|40b9b472|정리가 완료되지 않았습니다. 다음 시작은 표준 24코어를 사용하며, 남아 있는 이전 진단용 코어 제한은 코어 수를 줄이지 않습니다.
 cu.effect|mt|60ee9b9b|코어가 많을수록 전력 소비와 발열이 늘어납니다. 당사 테스트 장치에서 1500 MHz 기준 약 30 W 증가했습니다. 참고값이며 사용자 PC에 대한 보장은 아닙니다.
+
+# ---- driver card ----
+drv.running.exact|mt|f02b57d6|실행 중인 버전: {0}
+drv.running.none|mt|3d132d13|실행 중인 버전: 드라이버가 실행되고 있지 않습니다.
+drv.running.unknown|mt|2f2c0a8f|실행 중인 버전: 정확히 확인할 수 없습니다.
+drv.installed|mt|15ffa882|설치됨: {0}
+drv.installed.pending|mt|65d41410|설치됨: {0}, Windows 다시 시작을 기다리는 중입니다.
+drv.installed.none|mt|f9cee8f4|설치된 버전: 알 수 없습니다.
+drv.installed.stopped|mt|58f52a20|마지막 설치가 끝나기 전에 중단되었습니다.
+drv.verify.ok|mt|af4213e7|검증: 검증됨.
+drv.verify.failed|mt|d9c038fd|검증: 검증되지 않음 (확인 하나가 실패했습니다).
+drv.verify.unknown|mt|72256755|검증: 확인할 수 없었습니다.
+drv.date|mt|05989de0|드라이버 날짜: {0}
+drv.date.none|mt|ce2d6c9e|드라이버 날짜: 알 수 없습니다.
+drv.released|mt|48781b5a|출시일: {0}
+drv.released.none|mt|63087412|출시일: 업데이트를 확인하면 알 수 있습니다.
+
+# ---- update check ----
+upd.available|mt|68e4656c|업데이트 있음: {0}
+upd.uptodate|mt|39fd9eaf|최신 릴리스를 사용 중입니다.
+upd.newest|mt|ffd32b15|최신 릴리스는 {0}입니다.
+upd.incomplete|mt|fc36062b|최신 {0}개 릴리스 중 더 새로운 릴리스가 없습니다.
+upd.failed|mt|bf1dd0e0|업데이트를 확인할 수 없었습니다. 나중에 다시 시도하세요.
+upd.rate-limited|mt|2c365d35|업데이트 서비스가 잠시 기다리라고 요청했습니다. {0} 이후에 다시 확인할 수 있습니다.
+upd.last-success|mt|cac0e0b4|마지막으로 성공한 확인: {0}.
+upd.never|mt|d413e103|아직 업데이트를 확인하지 않았습니다.
+upd.checking|mt|8bcaee3c|업데이트를 확인하는 중...
+upd.released|mt|48781b5a|출시일: {0}

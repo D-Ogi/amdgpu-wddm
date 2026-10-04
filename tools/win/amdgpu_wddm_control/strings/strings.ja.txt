@@ -37,3 +37,31 @@ cu.result.saved|mt-safe|fca046cc|保存しました。
 cu.result.failed|mt|ec48fa5b|変更を完了できませんでした。
 cu.result.cleanup-incomplete|mt|40b9b472|整理が完了していません。次回の起動は標準の 24 コアを使います。残っている以前の診断用コア制限によってコア数が減ることはありません。
 cu.effect|mt|60ee9b9b|コアが増えると消費電力と発熱が増えます。当社のテスト機では 1500 MHz で約 30 W 増えました。これは参考値であり、お使いの PC での保証ではありません。
+
+# ---- driver card ----
+drv.running.exact|mt|f02b57d6|実行中のバージョン: {0}
+drv.running.none|mt|3d132d13|実行中のバージョン: ドライバーは動作していません。
+drv.running.unknown|mt|2f2c0a8f|実行中のバージョン: 正確には特定できません。
+drv.installed|mt|15ffa882|インストール済み: {0}
+drv.installed.pending|mt|65d41410|インストール済み: {0}、Windows の再起動待ちです。
+drv.installed.none|mt|f9cee8f4|インストール済みのバージョン: 不明です。
+drv.installed.stopped|mt|58f52a20|前回のインストールは完了前に停止しました。
+drv.verify.ok|mt|af4213e7|検証: 検証済み。
+drv.verify.failed|mt|d9c038fd|検証: 未検証 (確認に失敗しました)。
+drv.verify.unknown|mt|72256755|検証: 確認できませんでした。
+drv.date|mt|05989de0|ドライバーの日付: {0}
+drv.date.none|mt|ce2d6c9e|ドライバーの日付: 不明です。
+drv.released|mt|48781b5a|リリース日: {0}
+drv.released.none|mt|63087412|リリース日: 更新を確認すると分かります。
+
+# ---- update check ----
+upd.available|mt|68e4656c|更新があります: {0}
+upd.uptodate|mt|39fd9eaf|最新のリリースです。
+upd.newest|mt|ffd32b15|最新のリリースは {0} です。
+upd.incomplete|mt|fc36062b|最新の {0} 件のリリースの中に新しいリリースはありません。
+upd.failed|mt|bf1dd0e0|更新を確認できませんでした。後でもう一度お試しください。
+upd.rate-limited|mt|2c365d35|更新サービスから待つよう求められました。{0} 以降にもう一度確認できます。
+upd.last-success|mt|cac0e0b4|最後に成功した確認: {0}。
+upd.never|mt|d413e103|まだ更新を確認していません。
+upd.checking|mt|8bcaee3c|更新を確認しています...
+upd.released|mt|48781b5a|リリース日: {0}
