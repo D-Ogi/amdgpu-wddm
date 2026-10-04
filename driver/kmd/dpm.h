@@ -21,6 +21,7 @@ typedef struct _BC250_DPM_SNAP {
     ULONG TuneApplied, FloorTicks;          // 0.7.185: the tune serial the governor runs with; Gov.floor_ticks
     ULONG SoftReleases;                     // 0.7.197: Gov.soft_releases
     ULONG WarmHolds;                        // 0.7.200: Gov.warm_holds, driver log only (not in the escape)
+    ULONG RampHolds;                        // 0.7.203: Gov.ramp_holds, driver log only (not in the escape)
 } BC250_DPM_SNAP;
 
 typedef struct _BC250_DPM_STATE {

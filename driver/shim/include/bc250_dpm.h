@@ -108,6 +108,7 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_SMU = 6,		/* the governor stopped after SMU failures */
 	BC250_DPM_THROTTLE_FIXED = 7,		/* this start is fixed-lab */
 	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* 85 C (0.7.200): a raise refused, the level holds */
+	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 75-85 C (0.7.203): a raise cut to one level, or held for the interval */
 	BC250_DPM_THROTTLE_COUNT
 };
 
@@ -121,6 +122,21 @@ enum bc250_dpm_throttle {
 /* The warm zone (0.7.200, owner after session 344: 1500 MHz held while Tctl rose 83.5 -> 85.3 C): from here up to
  * HOT_MC no raise of clock or voltage; the level holds, a lowering still happens. Two degrees under HOT_MC. */
 #define BC250_DPM_WARM_MC		(BC250_DPM_HOT_MC - 2000)
+/* The thermal ramp (0.7.203, session 367): from RAMP_KNEE_MC up to WARM_MC a raise goes one level at most, and only
+ * when the last raise is at least the ramp interval ago. The interval grows linearly from RAMP_MIN_MS at the knee to
+ * RAMP_MAX_MS at WARM_MC (bc250_dpm_ramp_interval_ms). In session 367 the load raised 1000 -> 2000 MHz within one
+ * telemetry interval at 75.7 C; at 2000 MHz / 1000 mV the hot spot gained some 12 C in 5 s and read 87.1 C, and the
+ * 85 C warm zone could not act, because it looks only at the reading of the tick and the raise was already done. One
+ * level (100 MHz, at most 20 mV) per interval lets each raise show in the reading before the next one: the hot spot's
+ * fast time constant is about 3 s (session 367: some 12 C of a 15 C rise in 5 s), and from 80 C up the interval is
+ * longer than that. Below the knee the load raises as before: the knee plus the fast rise of a jump to 2000 MHz (about
+ * 15 C) stays under 87 C. test_plant367 in dpm_test.c holds the evidence: on its plant the old rule puts the hot spot
+ * past 87 C for every start from 74 C, the ramp for none up to 82 C, and both settle at the same clock from a cold
+ * start. Fixed values, not in struct bc250_dpm_tune: the RUN_DPM_TUNE escape (ABI 2, 152 bytes) has no field for them,
+ * and a new field is an ABI change. */
+#define BC250_DPM_RAMP_KNEE_MC		70000
+#define BC250_DPM_RAMP_MIN_MS		1000u
+#define BC250_DPM_RAMP_MAX_MS		4000u
 #define BC250_DPM_HOT_STEP_MS		500u	/* the default hot step: at most one step down per this */
 #define BC250_DPM_CRITICAL_MC		90000	/* the floor at once */
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
@@ -146,6 +162,9 @@ enum bc250_dpm_busy_source { BC250_DPM_BUSY_SUBMIT = 0, BC250_DPM_BUSY_GRBM = 1 
  * caller's two reads) counts as samples. */
 unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
 				     enum bc250_dpm_busy_source *source);
+/* The least time between two raises at a temperature (the thermal ramp, 0.7.203): 0 below RAMP_KNEE_MC, RAMP_MIN_MS at
+ * the knee, linear up to RAMP_MAX_MS at WARM_MC and above (where the warm zone refuses every raise anyway). */
+unsigned int bc250_dpm_ramp_interval_ms(int temperature_mc);
 
 /* ---- runtime tuning (0.7.185) --------------------------------------------------------------- */
 
@@ -241,6 +260,8 @@ struct bc250_dpm_governor {
 	struct bc250_dpm_tune tune;		/* the thresholds and floor in force; bc250_dpm_set_tune changes them */
 	unsigned int	floor_ticks;		/* steps in which the runtime floor lifted the request above want */
 	unsigned int	warm_holds;		/* steps in which the warm zone refused a raise (0.7.200) */
+	unsigned int	raise_ms;		/* since the last step that returned a raise, saturating (0.7.203) */
+	unsigned int	ramp_holds;		/* steps in which the thermal ramp cut or held a raise (0.7.203) */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);

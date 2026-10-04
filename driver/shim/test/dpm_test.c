@@ -333,16 +333,17 @@ static void test_thermal(void)
 	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == 8);
 	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 84, 25) == 8);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1);
-	/* Below 82 (81.999 is enough): one level per RELEASE_STEP_MS, back to the top. */
+	/* Below 82 (81.999 is enough): one level per RELEASE_STEP_MS, back to the top. The last level at 65 C, under the
+	 * thermal ramp's knee (test_ramp covers the clock that follows a released cap above it). */
 	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == 8);
 	CHECK(run_mc(&g, 1000, 81999, 25) == 9);
-	for (i = 0; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 75, 25);
+	for (i = 0; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 65, 25);
 	CHECK(level == 10 && g.thermal_cap == 10);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* A new episode after a cool spell clamps at once again, at exactly the limit: the spell has held the cap for
 	 * a hot step since its last raise (0.7.197: a re-entry inside the hot step does not step, test_reentry). */
-	for (i = 0; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 75, 25) == 10);
+	for (i = 0; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 65, 25) == 10);
 	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.thermal_events == 2);
 
 	/* 90 C: the floor at once, whatever the load; recovery goes through release, step by step. 89.999 C is
@@ -750,10 +751,11 @@ static void test_warm(void)
 	CHECK(run_mc(&g, 1000, 86999, 25) == 5 && g.warm_holds == 3);
 	for (i = 0; i < 400; i++) CHECK(run_mc(&g, 1000, 86000, 25) == 5);
 	CHECK(g.warm_holds == 403u && g.thermal_events == 0 && g.thermal_cap == 10 && g.raises == 0);
-	/* 84.999 C and 84.9 C: the raise goes through, as before 0.7.200 (1500 x 1000 / 800 = 1875 -> 1900). */
-	CHECK(run_mc(&g, 1000, 84999, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_NONE && g.warm_holds == 403u);
+	/* 84.999 C and 84.9 C: the raise goes through (1500 x 1000 / 800 = 1875 -> 1900 before 0.7.203), one level of it
+	 * since the thermal ramp (0.7.203). */
+	CHECK(run_mc(&g, 1000, 84999, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 403u);
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
-	CHECK(run_mc(&g, 1000, 84900, 25) == 9 && g.warm_holds == 0);
+	CHECK(run_mc(&g, 1000, 84900, 25) == 6 && g.warm_holds == 0 && g.want == 9);
 	/* A busy share in the band that asks for no raise is no hold. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5; g.avg_permille = 800;
 	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 800, 86000, 25) == 5);
@@ -786,7 +788,8 @@ static void test_warm(void)
 	t = tune(900, 800, 650, 200, 10);
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	CHECK(run_mc(&g, 0, 85500, 25) == 3 && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
-	CHECK(run_mc(&g, 0, 84000, 25) == 10 && g.throttle == BC250_DPM_THROTTLE_NONE);
+	CHECK(run_mc(&g, 0, 84000, 25) == 4 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);	/* one level (0.7.203) */
+	CHECK(run_mc(&g, 0, 60000, 25) == 10 && g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* At the max setting there is nothing to refuse: the setting names the reason. */
 	bc250_dpm_init(&g, 6); g.level = 6;
@@ -904,13 +907,19 @@ static void test_soft_release(void)
 	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 7);
 	CHECK(run(&g, 1000, 85, 25) == 7 && g.soft_releases == 1 && g.thermal_cap == 8);
 	CHECK(run(&g, 1000, 84, 25) == 8);
-	/* The soft path climbs one level per step, all the way up; below 82 C the fast path (1 s) takes over. */
+	/* The soft path climbs one level per step, all the way up; below 82 C the fast path (1 s) takes over. Since 0.7.203
+	 * the clock follows the cap one level per ramp interval (3.8 s at 84 C, 3.2 s at 81 C): the cap is at the top
+	 * after 18 s (6 s), the clock about 4 s (9 s) later. */
 	init_thermal(&g, 500, 1500, 3000);
 	g.thermal_cap = 4; g.level = 4;
 	for (i = 0; i < 6u * 3000u / 25u; i++) level = run(&g, 1000, 84, 25);
-	CHECK(level == 10 && g.soft_releases == 6);
+	CHECK(level < 10 && g.thermal_cap == 10 && g.soft_releases == 6);
+	for (i = 0; i < 8000u / 25u; i++) level = run(&g, 1000, 84, 25);
+	CHECK(level == 10);
 	g.thermal_cap = 4; g.level = 4; g.soft_ms = 0;
 	for (i = 0; i < 6u * 1000u / 25u; i++) level = run(&g, 1000, 81, 25);
+	CHECK(g.thermal_cap == 10 && level < 10);
+	for (i = 0; i < 12000u / 25u; i++) level = run(&g, 1000, 81, 25);
 	CHECK(level == 10 && g.soft_releases == 6);
 	/* The widest delta (82.5 C) and the narrowest (86.5 C). */
 	init_thermal(&g, 500, 4500, 2000);
@@ -932,8 +941,9 @@ static void test_soft_release(void)
 	CHECK(run(&g, 1000, 90, 25) == 0);
 	for (i = 0; i < 20u * 3000u / 25u; i++) level = run(&g, 1000, 85, 25);
 	CHECK(level == 0 && g.thermal_cap == 6 && g.soft_releases == 6);	/* 85 C is warm: the cap only */
-	CHECK(run(&g, 1000, 84, 25) == 3);
-	CHECK(run(&g, 1000, 84, 25) == 6);
+	CHECK(run(&g, 1000, 84, 25) == 1 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);	/* 0.7.203: one level */
+	for (i = 0; i < 5u * bc250_dpm_ramp_interval_ms(84000) / 25u; i++) level = run(&g, 1000, 84, 25);
+	CHECK(level == 6 && g.raises == 6);
 	/* A missing sensor resets the hold as critical does. */
 	init_thermal(&g, 500, 1500, 3000);
 	g.thermal_cap = 8; g.level = 8;
@@ -1020,6 +1030,204 @@ static void test_plant(void)
 	CHECK(slow.min_cap_gap_ms >= 2000u);
 }
 
+/* ---- the thermal ramp (0.7.203, session 367) ----------------------------------------------------- */
+
+/* One step of the governor before 0.7.203, for the A/B below. The ramp is the step's last transform, it only lowers the
+ * returned level, and it touches nothing but its own fields (raise_ms, ramp_holds, throttle); without a runtime floor
+ * and SetStablePowerState the level it cut is min(want, cap, ceiling), with the throttle the limits named. */
+static unsigned int step_without_ramp(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
+{
+	unsigned int level = bc250_dpm_step(g, in);
+	if (g->throttle == BC250_DPM_THROTTLE_THERMAL_RAMP) {
+		unsigned int limit = g->thermal_cap < g->max_level ? g->thermal_cap : g->max_level;
+		level = g->want < limit ? g->want : limit;
+		g->throttle = g->want > limit ? (g->thermal_cap < g->max_level ? BC250_DPM_THROTTLE_THERMAL_SOFT :
+						 BC250_DPM_THROTTLE_MAX_SETTING) : BC250_DPM_THROTTLE_NONE;
+	}
+	return level;
+}
+
+static void test_ramp(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, level;
+
+	/* The interval: 0 below the knee, 1 s at 70 C, linear to 4 s at 85 C, 4 s above. */
+	CHECK(bc250_dpm_ramp_interval_ms(69999) == 0u && bc250_dpm_ramp_interval_ms(-5000) == 0u);
+	CHECK(bc250_dpm_ramp_interval_ms(70000) == BC250_DPM_RAMP_MIN_MS);
+	CHECK(bc250_dpm_ramp_interval_ms(77500) == (BC250_DPM_RAMP_MIN_MS + BC250_DPM_RAMP_MAX_MS) / 2u);
+	CHECK(bc250_dpm_ramp_interval_ms(80000) == 3000u && bc250_dpm_ramp_interval_ms(84000) == 3800u);
+	CHECK(bc250_dpm_ramp_interval_ms(84999) < BC250_DPM_RAMP_MAX_MS);
+	CHECK(bc250_dpm_ramp_interval_ms(85000) == BC250_DPM_RAMP_MAX_MS && bc250_dpm_ramp_interval_ms(99000) == BC250_DPM_RAMP_MAX_MS);
+	for (i = 70000; i < 85000; i += 7) CHECK(bc250_dpm_ramp_interval_ms((int)i) <= bc250_dpm_ramp_interval_ms((int)i + 7));
+
+	/* Below the knee the load raises as before: 1000 -> 1300 -> 1700 -> 2000 in three ticks at 69.999 C. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 69999, 25) == 3 && run_mc(&g, 1000, 69999, 25) == 7 && run_mc(&g, 1000, 69999, 25) == 10);
+	CHECK(g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* At the knee: the first raise (none before) goes one level, the next waits a full interval. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 70000, 25) == 1 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.ramp_holds == 1);
+	CHECK(g.want == 3);					/* want stays the load's own answer */
+	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == 1);
+	CHECK(g.ramp_holds == BC250_DPM_RAMP_MIN_MS / 25u && g.raises == 1);
+	CHECK(run_mc(&g, 1000, 70000, 25) == 2 && g.raises == 2);
+	/* At 84.9 C the interval is 3980 ms: 159 ticks hold (3975 ms), the 160th raises. */
+	for (i = 1; i < bc250_dpm_ramp_interval_ms(84900) / 25u; i++) CHECK(run_mc(&g, 1000, 84900, 25) == 2);
+	CHECK(run_mc(&g, 1000, 84900, 25) == 2);
+	CHECK(run_mc(&g, 1000, 84900, 25) == 3 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+	/* A raise of one level is no hold: the load asks 2000 at 1900 MHz, the ramp lets it through. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 9;
+	CHECK(run_mc(&g, 915, 80000, 25) == 10 && g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* A raise below the knee starts the interval too: a reading at 70 C 25 ms later waits for the rest of it. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 69000, 25) == 3);
+	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == 3);
+	CHECK(run_mc(&g, 1000, 70000, 25) == 4);
+
+	/* Lowering is never held: idle at 80 C steps down after the usual hold. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 8; g.raise_ms = 0;
+	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 80000, 25) == 8);
+	CHECK(run_mc(&g, 0, 80000, 25) == 7 && g.ramp_holds == 0);
+
+	/* The warm zone and the hot band name their own reason; the ramp adds no hold there. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
+	CHECK(run_mc(&g, 1000, 85000, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.ramp_holds == 0);
+	CHECK(run_mc(&g, 1000, 87000, 25) == 4 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.ramp_holds == 0);
+
+	/* The runtime floor is a raise too: one level per interval above the knee. */
+	{
+		struct bc250_dpm_tune t = tune(900, 800, 650, 200, 10);
+		bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+		CHECK(run_mc(&g, 0, 78000, 25) == 1 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+		CHECK(run_mc(&g, 0, 60000, 25) == 10);	/* below the knee: at once */
+	}
+
+	/* A stalled tick counts as MAX_DT_MS, so one stall does not open a raise. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 84000, 25) == 1);
+	CHECK(run_mc(&g, 1000, 84000, 3600000u) == 1);
+	for (i = 0; i < 400; i++) level = run_mc(&g, 1000, 84000, 25);
+	CHECK(level == 3);	/* 1 s of the stall + 10 s at a 3.8 s interval: two more raises */
+}
+
+/* Session 367 on a plant: the governor at 1000 MHz with the hot spot at 75.7 C after an earlier load (the sink still
+ * warm), ceiling 2000 MHz, then a game whose work fills 93.1 % of 2000 MHz for ten minutes. The plant has the same two
+ * nodes as plant_run with constants fitted to the lab instead of to the scene-change shape: the hot spot's fast node
+ * (3 s, 16 C of the full-power rise) gains 12 C in 5 s at 2000 MHz / 1000 mV from 75.7 C, as in session 367, and the
+ * steady state at full load is 82.8 C at 1300 MHz, 86.0 C at 1400 and 89.5 C at 1500, so 1300-1400 MHz at 84-86 C, as
+ * in sessions 361-365 with the 1500 MHz ceiling. Ambient 56.6 C, sink 90 s and 36 C, sensor noise +-0.4 C. */
+struct ramp_result {
+	unsigned int peak_mc, die_peak_mc, hot_ms, longest_hot_ms, first_hot_ms, final_mhz, reach_ms, settle_ms, mean_mhz;
+	unsigned int raises, lowers;
+	unsigned int ramp_holds, warm_holds, thermal_events;
+};
+
+static struct ramp_result plant367_run(int ramp, int start_mc)
+{
+	struct bc250_dpm_governor g;
+	struct ramp_result r;
+	static unsigned char trace[600000u / 25u];	/* the level after each tick */
+	double die = start_mc / 1000.0, sink = die - 1.1;	/* 1.1 C: the fast node at 1000 MHz, 7 % busy */
+	unsigned long long mhz_sum = 0;
+	unsigned int i, n = 0, seed = 367u, last, hot_run = 0;
+	const unsigned int ticks = 600000u / 25u, demand = 1862u;
+
+	memset(&r, 0, sizeof(r));
+	r.first_hot_ms = ~0u;
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	last = g.level;
+	for (i = 0; i < ticks; i++) {
+		unsigned int mhz = bc250_dpm_level_mhz(g.level), busy = demand >= mhz ? 1000u : demand * 1000u / mhz, level;
+		double v = bc250_dpm_level_mv(g.level) / 1000.0;
+		double p = mhz / 2000.0 * v * v * (0.15 + 0.85 * busy / 1000.0);
+		struct bc250_dpm_input in = tick(busy, 0, 25);
+		seed = seed * 1103515245u + 12345u;
+		sink += (56.6 + 36.0 * p - sink) * 0.025 / 90.0;
+		die += (sink + 16.0 * p - die) * 0.025 / 3.0;
+		in.temperature_mc = (int)(die * 1000.0) + (int)((seed >> 16) % 801u) - 400;
+		level = ramp ? bc250_dpm_step(&g, &in) : step_without_ramp(&g, &in);
+		CHECK(level <= g.max_level && level <= g.thermal_cap);
+		bc250_dpm_commit(&g, level);
+		if (g.level != last) { r.settle_ms = i * 25u; last = g.level; }
+		if (in.temperature_mc >= BC250_DPM_HOT_MC) {
+			if (r.first_hot_ms == ~0u) r.first_hot_ms = i * 25u;
+			r.hot_ms += 25u;
+			hot_run += 25u;
+			if (hot_run > r.longest_hot_ms) r.longest_hot_ms = hot_run;
+		} else hot_run = 0;
+		if (in.temperature_mc > (int)r.peak_mc) r.peak_mc = (unsigned int)in.temperature_mc;
+		if (die * 1000.0 > r.die_peak_mc) r.die_peak_mc = (unsigned int)(die * 1000.0);
+		trace[i] = (unsigned char)g.level;
+		if (i >= 300000u / 25u) { mhz_sum += bc250_dpm_level_mhz(g.level); n++; }
+	}
+	r.final_mhz = bc250_dpm_level_mhz(g.level);
+	for (i = 0; trace[i] != g.level; i++) {}
+	r.reach_ms = i * 25u;
+	r.mean_mhz = (unsigned int)(mhz_sum / n);
+	r.raises = g.raises;
+	r.lowers = g.lowers;
+	r.ramp_holds = ramp ? g.ramp_holds : 0u;	/* the old rule's cuts were undone */
+	r.warm_holds = g.warm_holds;
+	r.thermal_events = g.thermal_events;
+	return r;
+}
+
+static void ramp_print(const char *name, const struct ramp_result *r)
+{
+	printf("plant367 %-9s peak %u mC (hot spot %u mC), first >= 87 C at %d ms, %u ms >= 87 C (longest %u ms), final %u MHz "
+	       "(first at %u ms, last change at %u ms), mean %u MHz (min 5-10), %u raises %u lowers, %u hot entries, %u warm "
+	       "holds, %u ramp holds\n",
+	       name, r->peak_mc, r->die_peak_mc, r->first_hot_ms == ~0u ? -1 : (int)r->first_hot_ms, r->hot_ms,
+	       r->longest_hot_ms, r->final_mhz, r->reach_ms, r->settle_ms, r->mean_mhz, r->raises, r->lowers,
+	       r->thermal_events, r->warm_holds, r->ramp_holds);
+}
+
+static void test_plant367(void)
+{
+	struct ramp_result old = plant367_run(0, 75700), now = plant367_run(1, 75700);
+	ramp_print("old rule:", &old);
+	ramp_print("ramp:", &now);
+	/* The old rule: 2000 MHz in three ticks, the hot spot past 87 C within 5 s and the reading at 87 C or more for
+	 * about 2 s without a break (the lab runner stops a session at 87 C held for three samples). The hot steps then
+	 * latch the cap at 1300 MHz: no reading falls under 82 C again. */
+	CHECK(old.first_hot_ms < 10000u && old.longest_hot_ms >= 1000u && old.die_peak_mc >= (unsigned int)BC250_DPM_HOT_MC);
+	CHECK(old.final_mhz == 1300u);
+	/* The ramp: the hot spot stays under 87 C, no reading reaches 87 C in the climb (the first 20 s), and the clock
+	 * settles at 1400 MHz, the highest level whose steady state is under 87 C. The sink is still under its steady
+	 * state at 1400 MHz when a reading under 85 C lets one more level through: 1500 MHz then drifts to 87 C on the
+	 * sink's 90 s scale, a reading touches 87.0 C for single ticks (sensor noise on a 86.6 C hot spot) and the
+	 * hot rule takes the level back at once. No rule that reads only the temperature of the tick sees that drift
+	 * coming. */
+	CHECK(now.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && now.peak_mc < (unsigned int)BC250_DPM_HOT_MC + 500u);
+	CHECK(now.first_hot_ms >= 20000u && now.longest_hot_ms <= 50u && now.thermal_events <= 3u);
+	CHECK(now.final_mhz == 1400u && now.mean_mhz == 1400u && now.reach_ms <= 15000u && now.settle_ms <= 120000u);
+	/* Every start from 50 C (cold) to 82 C. Cold starts reach 2000 MHz below the knee and meet the band on the sink's
+	 * slow drift, which the hot rule answers one level at a time: there the two rules behave the same. From 74 C the
+	 * old rule's jump puts the hot spot past 87 C; the ramp keeps it under for every start. Above 82 C the sink alone
+	 * (from the earlier load) puts the hot spot near the band at 1000 MHz, so no clock rule decides there. */
+	{
+		int start;
+		unsigned int old_hot = 0, worst = 0, slowest = 0;
+		for (start = 50000; start <= 82000; start += 1000) {
+			struct ramp_result a = plant367_run(0, start), b = plant367_run(1, start);
+			if (a.die_peak_mc >= (unsigned int)BC250_DPM_HOT_MC) old_hot++;
+			if (b.die_peak_mc > worst) worst = b.die_peak_mc;
+			CHECK(b.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && b.longest_hot_ms <= 50u);
+			CHECK(b.mean_mhz >= a.mean_mhz && b.final_mhz == 1400u);
+			if (start >= 74000) CHECK(a.die_peak_mc >= (unsigned int)BC250_DPM_HOT_MC);
+			if (start < BC250_DPM_RAMP_KNEE_MC - 1000) CHECK(a.die_peak_mc == b.die_peak_mc && a.mean_mhz == b.mean_mhz);
+			if (start >= BC250_DPM_RAMP_KNEE_MC + 1000 && b.reach_ms > slowest) slowest = b.reach_ms;
+		}
+		printf("plant367 starts 50-82 C: old rule hot spot >= 87 C in %u of 33, ramp peak hot spot %u mC, ramp reaches "
+		       "1400 MHz within %u ms from every start 1 C or more above the knee\n", old_hot, worst, slowest);
+		CHECK(slowest <= 60000u);	/* starts from 80 C wait at 1300 MHz in the warm zone until the hot sink cools */
+	}
+}
+
 /* The busy source: GRBM samples when there are enough, the submit accounting otherwise. */
 static void test_busy_source(void)
 {
@@ -1065,6 +1273,8 @@ int main(void)
 	test_reentry();
 	test_soft_release();
 	test_plant();
+	test_ramp();
+	test_plant367();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }
