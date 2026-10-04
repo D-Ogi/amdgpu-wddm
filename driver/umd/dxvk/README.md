@@ -265,10 +265,12 @@ A8 at 1 (the shared atlases DirectComposition creates, M14.1). The row's pixel s
 sets the LB7A pitch (width * bytes rounded up to 256) and must equal the engine
 image's texel size (A8 is A8_UNORM_KHR, or R8_UNORM where DXVK remaps it). A
 primary (a swap-chain buffer with a primary descriptor) may have any of these rows except
-A8. A BGRA8/RGBA8 primary keeps the descriptor's VidPn source; an RGB10A2 or RGBA16F
-primary names none (D3DDDI_ID_UNINITIALIZED), so DWM composes it and it never reaches
-SetVidPnSourceAddress, whose scan-out rows stay 8-bit. The Ascent's UE 4.26 borderless
-swap chain is such an RGB10A2 primary. Other layouts remain implementation work. Checks avoid row-footprint
+A8, and keeps the descriptor's VidPn source (dxgkrnl refused an RGB10A2 primary
+allocation with D3DDDI_ID_UNINITIALIZED, lab session 343). Admission as a primary is not
+permission to scan out: the kernel driver's SetVidPnSourceAddress takes only the 8-bit
+scan-out rows, and direct scan-out of RGB10A2/RGBA16F remains unsupported; this revision
+does not establish when the OS promotes such a buffer. The Ascent's UE 4.26 borderless
+swap chain is an RGB10A2 primary. Other layouts remain implementation work. Checks avoid row-footprint
 integer overflow. Failure destroys the image and releases any failed-bind memory
 wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
 Mock tests cover pitch mismatch, bind failure, success, teardown and oversized
