@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.202.1",
-  "kmd_abi": "0x000700CA",
+  "kmd_version": "0.7.203.1",
+  "kmd_abi": "0x000700CB",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 6dbfc532 (kmd202-bd065-blt-present)",
+    "kmd": "bc250-win a6464ef6 (kmd203-dpm-ramp)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
@@ -19,18 +19,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/bd065/build-kmd-c/package/bc250kmd.inf",
-      "sha256": "7BE392814F77F844578C32FE8679F8694DA5BE0E4329D64BA12E532D5B6C380E",
+      "source": "scratch/dpm-ramp/build-kmd/package/bc250kmd.inf",
+      "sha256": "59FA476BBC880394E4965B01C435DB0A27F86D4BA6A0DD82B6340041548CDEC2",
       "size": 8013,
-      "role": "KMD 0.7.202.1 INF (commit 6dbfc532, kmd202-bd065-blt-present on kmd201-dxgi-modes ef41aec3); the release re-stamps DriverVer and adds the Reboot directive"
+      "role": "KMD 0.7.203.1 INF (commit a6464ef6, kmd203-dpm-ramp on kmd202-bd065-blt-present 6dbfc532); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/bd065/build-kmd-c/package/bc250kmd.sys",
-      "sha256": "FAB407BC4EC02328D7EDCA67BA8E7C92DC201D28362F4ABA9FB38FA420231548",
+      "source": "scratch/dpm-ramp/build-kmd/package/bc250kmd.sys",
+      "sha256": "72F760179DB41DA672DE7EF0C772A712D2350C1BF8E0352D34F9E81A9F57DC55",
       "size": 482704,
-      "role": "KMD 0.7.202.1 (commit 6dbfc532, kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
+      "role": "KMD 0.7.203.1 (commit a6464ef6, kmd203-dpm-ramp: DPM raises one level per 1-4 s from 70 C, on kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
