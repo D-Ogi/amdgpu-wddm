@@ -28,7 +28,8 @@ enum class Outcome : unsigned {
     Merged,            // the same process again (the other shell): its API added, Starts unchanged
     SwitchOff,         // the user turned the list off (switch value 0)
     SwitchUnreadable,  // the switch exists but could not be read or has an unknown value: nothing written
-    Excluded,          // under the Windows directory, a service account, or a path that is not valid UTF-16
+    Excluded,          // under the Windows directory, one of our own tools, a service account, or a path that is not
+                       // valid UTF-16
     AppContainer,      // an AppContainer process: nothing written
     NoStore,           // no usable %LOCALAPPDATA% or module path
     Busy,              // another writer or a Clear held the lock longer than the wait
@@ -150,6 +151,15 @@ inline bool same_path(std::wstring_view a,std::wstring_view b) noexcept {
 inline bool under_directory(std::wstring_view path,std::wstring_view dir) noexcept {
     while(!dir.empty() && dir.back()==L'\\')dir.remove_suffix(1);
     return !dir.empty() && path.size()>dir.size()+1 && path[dir.size()]==L'\\' && same_path(path.substr(0,dir.size()),dir);
+}
+// This project's own programs (capability dumps, test clients, the KMD CLI, vulkaninfo of the bug report) create
+// devices for diagnosis; they are not the user's applications. Matched on the file name, without case.
+inline bool own_tool(std::wstring_view path) noexcept {
+    const size_t slash=path.find_last_of(L"\\/");
+    const std::wstring_view name=slash==std::wstring_view::npos?path:path.substr(slash+1);
+    auto starts=[&](std::wstring_view prefix){return name.size()>prefix.size() && same_path(name.substr(0,prefix.size()),prefix);};
+    const bool exe=name.size()>4 && same_path(name.substr(name.size()-4),L".exe");
+    return exe && (starts(L"amdgpu_wddm_") || starts(L"bc250") || starts(L"vulkaninfo"));
 }
 // The final path of an existing file or directory: symbolic links, junctions, short names and letter case resolved
 // as the file system stores them, without the \\?\ prefix. A path that cannot be opened stays as GetFullPathNameW
@@ -332,6 +342,7 @@ inline bool write_store(const std::wstring& dir,const std::string& text) {
 inline Outcome commit(const Inputs& in,uint32_t api) {
     if(in.exe.empty() || in.store_dir.empty())return Outcome::NoStore;
     if(!in.windows_dir.empty() && under_directory(in.exe,in.windows_dir))return Outcome::Excluded;
+    if(own_tool(in.exe))return Outcome::Excluded;
     std::string utf8;
     if(!detail::to_utf8(in.exe,utf8) || !detail::control_free(in.exe))return Outcome::Excluded;
     Switch s=read_switch(in.switch_root,in.switch_key);

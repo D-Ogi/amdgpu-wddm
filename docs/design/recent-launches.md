@@ -31,7 +31,10 @@ Not written (by design in version 1):
 - processes whose executable is below the system Windows directory (`GetSystemWindowsDirectoryW`, compared as a
   directory: `C:\Windows\x.exe` is below it, `C:\Windows2\x.exe`, `C:\Windows.old\x.exe` and
   `C:\WindowsApps\x.exe` are not). This keeps DWM, Explorer, Task Manager and other Windows parts out;
-- AppContainer processes, and processes that run as LocalSystem, LocalService or NetworkService;
+- this project's own programs, matched on the file name without case: `amdgpu_wddm_*.exe`, `bc250*.exe`,
+  `vulkaninfo*.exe` (capability dumps, test clients, the KMD CLI, the bug report's vulkaninfo);
+- AppContainer processes, and processes that run as LocalSystem, LocalService or NetworkService. Session 0 is
+  recorded (lab trials start their clients there);
 - an executable path that is not valid UTF-16 (a lone surrogate): it has no UTF-8 form.
 
 Cost on the creating thread: one atomic exchange and one `CreateThread` (0.06 ms median, 0.16 ms worst of 100 on the
@@ -116,7 +119,8 @@ profile; the application must say so and must not suggest separate settings.
 
 ## Writer protocol (one launch note)
 
-1. Skip unless the path is outside the Windows directory and has a UTF-8 form.
+1. Skip unless the path is outside the Windows directory, is not one of this project's own programs and has a
+   UTF-8 form.
 2. Read the switch. Off or unreadable: stop.
 3. Create the store directory if it is missing.
 4. Lock: open the lock file (`OPEN_ALWAYS`, share read, write and delete) and take an exclusive `LockFileEx` lock
@@ -212,6 +216,7 @@ case creates the AppContainer profile `amdgpu-wddm.recent-launch-test` and delet
 | duplicate basenames, letter case and `..` spellings, 8.3 names | `test_basenames` |
 | Japanese, Korean and emoji paths, a path over 300 characters, a lone surrogate | `test_unicode_long` |
 | Windows directory boundary, this process's own inputs | `test_windows_boundary` |
+| own programs excluded by file name only (prefix and `.exe`, any case) | `test_own_tools` |
 | one process through both shells counted once, also when both note at the same moment; pid reuse | `test_same_process` |
 | pruning at 64, a launch with an earlier clock kept | `test_prune` |
 | torn list replaced, newer version kept, unreadable list never replaced | `test_store_states` |

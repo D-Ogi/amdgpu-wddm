@@ -216,6 +216,22 @@ void test_windows_boundary() {
     CHECK(rl::gather(in,skip) && rl::same_path(in.exe,g_self) && !rl::under_directory(in.exe,in.windows_dir));
 }
 
+void test_own_tools() {
+    const std::wstring store=fresh(L"tools");
+    const std::wstring tools[]={L"C:\\Program Files\\amdgpu-wddm\\tools\\amdgpu_wddm_d3d12caps.exe",
+        L"C:\\BC250\\kmd197\\BC250KMD_CLI.EXE",L"C:\\x\\bc250d3d11bench.exe",L"C:\\x\\vulkaninfo.exe",
+        L"C:\\x\\VulkanInfoSDK.Exe",L"\\\\server\\share\\AMDGPU_WDDM_CONTROL.exe"};
+    uint32_t pid=80;
+    for(const auto& p:tools)CHECK(rl::commit(inputs(store,p,pid++),rl::ApiD3D12)==rl::Outcome::Excluded);
+    CHECK(!exists(store));
+    // Only the file name counts, and only the whole prefix with an .exe name.
+    const std::wstring apps[]={L"C:\\BC250\\games\\game.exe",L"C:\\amdgpu_wddm_\\game.exe",L"C:\\x\\mybc250.exe",
+        L"C:\\x\\bc25.exe",L"C:\\x\\amdgpu_wddm.exe",L"C:\\x\\bc250",L"C:\\x\\vulkan.exe"};
+    for(const auto& p:apps)CHECK(rl::commit(inputs(store,p,pid++),rl::ApiD3D12)==rl::Outcome::Recorded);
+    std::vector<rl::Entry> e;
+    CHECK(read_list(store,e) && e.size()==std::size(apps));
+}
+
 void test_same_process() {
     const std::wstring store=fresh(L"nested"),exe=L"C:\\Games\\nested.exe";
     // One process through both shells (a D3D12 game with D3D11 probe devices): one launch, both APIs.
@@ -590,6 +606,7 @@ int wmain(int argc,wchar_t** argv) {
     test_basenames();
     test_unicode_long();
     test_windows_boundary();
+    test_own_tools();
     test_same_process();
     test_prune();
     test_store_states();
