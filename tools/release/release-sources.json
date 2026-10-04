@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.199.1",
-  "kmd_abi": "0x000700C7",
+  "kmd_version": "0.7.200.1",
+  "kmd_abi": "0x000700C8",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 0aec4c58 (kmd-t11)",
+    "kmd": "bc250-win 5116c058 (kmd200-dpm-warm)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
     "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
@@ -18,18 +18,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/bd060/build-kmd-t11/package/bc250kmd.inf",
-      "sha256": "FAA74E55C23D6BAF5B579BCCE6679FED3BE7D34842B82F297A0EA3DD5AC5837F",
-      "size": 8013,
-      "role": "KMD 0.7.199.1 INF (commit 0aec4c58, kmd-t11: INF strings name the project); the release re-stamps DriverVer and adds the Reboot directive"
+      "source": "scratch/kmd200/build/kmd/package/bc250kmd.inf",
+      "sha256": "09C1E92213C91543BD59B8E2D102AB5688CC97CD7B20B38D357A6EC2CF444004",
+      "size": 7868,
+      "role": "KMD 0.7.200.1 INF (commit 5116c058, kmd200-dpm-warm on kmd-t11 0aec4c58); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/bd060/build-kmd-t11/package/bc250kmd.sys",
-      "sha256": "4862482EF5D8A4B08D0475D330B53A4D7454D841E4C78EAFECC6553E682C9F89",
+      "source": "scratch/kmd200/build/kmd/package/bc250kmd.sys",
+      "sha256": "5DD2502B27E74D48574EF1FD56D3D516E5B3D340A576A8F13D82A8CAA1B346C1",
       "size": 480144,
-      "role": "KMD 0.7.199.1 (commit 0aec4c58, kmd-t11: BD-060 allocation counters, INF strings); re-signed with the release certificate, code unchanged"
+      "role": "KMD 0.7.200.1 (commit 5116c058, kmd200-dpm-warm: no DPM raise from 85 C, on kmd-t11 0aec4c58); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",

@@ -28,14 +28,14 @@ pwsh -File tools\release\build-release.ps1 [-SetupApp <setup build folder>]   # 
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
-v0 ships the binaries as they run on the lab (tester.11: KMD 0.7.199.1 re-signed, code unchanged, INF DriverVer 0.7.199.100 so that it outranks every lab build of 0.7.199 and the bound package is identifiable, plus the INF `Reboot` directive; desktop on the GPU route, DwmForceCpu 0, gated by RequireKmdSwitches); a rebuild from
+v0 ships the binaries as they run on the lab (tester.11: KMD 0.7.200.1 re-signed, code unchanged, INF DriverVer 0.7.200.100 so that it outranks every lab build of 0.7.200 and the bound package is identifiable, plus the INF `Reboot` directive; desktop on the GPU route, DwmForceCpu 0, gated by RequireKmdSwitches); a rebuild from
 the exact commits with `/Brepro` is planned for v1. Install paths differ from the lab's: everything under
 `%ProgramFiles%\amdgpu-wddm`, except the firmware, which the KMD reads from the compiled-in `C:\BC250\firmware`.
 
 v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs`) instead of the hard-coded
 `C:\BC250\firmware`; reproducible rebuild of every component; the control application edits the D3D11 allowlist; the
-.sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.199.100 against the file's
-0.7.199.1). Done for tester.11 (KMD 0aec4c58 with the INF strings of 1fccb978): the adapter string is "BC-250 GPU (amdgpu-wddm)" (it was
+.sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.200.100 against the file's
+0.7.200.1). Done for tester.11 (KMD 5116c058 = 0aec4c58 + the DPM warm zone, with the INF strings of 1fccb978): the adapter string is "BC-250 GPU (amdgpu-wddm)" (it was
 "BC-250 GPU (bc250kmd, display-only, lab build)") and the INF Provider is "amdgpu-wddm" (it was "BC-250 lab (D-Ogi)").
 
 No device restart and no DWM restart under a running desktop (BD-060): WinUI pointer-input loss after the desktop

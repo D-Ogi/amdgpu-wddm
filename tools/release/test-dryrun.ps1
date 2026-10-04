@@ -112,7 +112,7 @@ Check ($r.text -match 'driver settings before the driver package: \d+ of \d+ val
 Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
 $common = [IO.File]::ReadAllText((Join-Path $Package 'installer\common.ps1'))
 Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-1-5-32-545:\(OI\)\(CI\)RX") -and ($common -match "'/reset', '/T'") -and ($common -match 'function Set-StateDirAccess \{\s+if \(\$script:DryRunMode\) \{ return \}')) 'the state folder (logs, verify results) gets administrators/SYSTEM full and users read, children reset; not in a dry run'
-Check ([string]$m.kmd_abi -eq '0x000700C7' -or [version]($m.kmd_build) -lt [version]'0.7.199.0') "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
+Check (([string]$m.kmd_abi -eq '0x000700C8' -and [version]($m.kmd_build) -ge [version]'0.7.200.0') -or ([string]$m.kmd_abi -eq '0x000700C7' -and [version]($m.kmd_build) -lt [version]'0.7.200.0')) "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 # BD-060: nothing in the installer stops or restarts DWM or the GPU under the running desktop; the driver package
 # changes the GPU at the restart (INF Reboot directive), and only uninstall moves it in place (documented there).
