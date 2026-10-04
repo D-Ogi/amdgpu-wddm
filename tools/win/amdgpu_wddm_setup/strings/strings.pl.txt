@@ -200,6 +200,8 @@ result.restart-still-pending.title|mt|9676613e|Windows nie został jeszcze uruch
 result.restart-still-pending.body|mt|e79d291f|Instalator będzie kontynuował po następnym ponownym uruchomieniu Windows.
 result.verify-before-restart.title|mt|93aab4b5|Uruchom ponownie Windows, aby zakończyć
 result.verify-before-restart.body|mt|ff335b2d|Sterownik zostanie sprawdzony po ponownym uruchomieniu Windows.
+result.install-unfinished.title|mt|905e1ac5|Instalacja nie jest jeszcze zakończona
+result.install-unfinished.body|mt|0e894d61|Uruchom instalator ponownie, aby dokończyć instalację. Sterownik zostanie sprawdzony potem.
 result.verified.title|mt|9756a569|Sterownik jest zainstalowany i działa
 result.verified.body|mt|5542d882|Wszystko gotowe. amdgpu-wddm Control jest w menu Start.
 result.verified-with-warnings.title|mt|c50059a2|Sterownik jest zainstalowany i działa, z uwagami

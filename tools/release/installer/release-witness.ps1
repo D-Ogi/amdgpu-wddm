@@ -31,6 +31,8 @@ function Get-BootIdentity {
         $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction Stop).BootId
         if ($null -ne $v) { $id = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
     } catch { }
+    # Host tests only, in a dry run: AMDGPU_WDDM_TEST_BOOT_ID=unreadable stands for a BootId that cannot be read.
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_BOOT_ID -eq 'unreadable') { $id = $null }
     $utc = $null
     try { $utc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o') } catch { }
     $script:BootIdentity = [ordered]@{ boot_id = $id; boot_utc = $utc }

@@ -200,6 +200,8 @@ result.restart-still-pending.title|mt|9676613e|Windows가 아직 다시 시작�
 result.restart-still-pending.body|mt|e79d291f|다음에 Windows를 다시 시작하면 설치 프로그램이 계속됩니다.
 result.verify-before-restart.title|mt|93aab4b5|마치려면 Windows를 다시 시작하세요
 result.verify-before-restart.body|mt|ff335b2d|드라이버는 Windows를 다시 시작한 후 확인됩니다.
+result.install-unfinished.title|mt|905e1ac5|설치가 아직 끝나지 않았습니다
+result.install-unfinished.body|mt|0e894d61|설치를 마치려면 설치 프로그램을 다시 실행하세요. 드라이버는 그 후에 확인됩니다.
 result.verified.title|mt|9756a569|드라이버가 설치되어 정상적으로 작동합니다
 result.verified.body|mt|5542d882|모든 준비가 끝났습니다. amdgpu-wddm Control은 [시작] 메뉴에 있습니다.
 result.verified-with-warnings.title|mt|c50059a2|드라이버가 설치되어 작동하지만 참고 사항이 있습니다

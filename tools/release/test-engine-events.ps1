@@ -193,18 +193,58 @@ $r = Invoke-Engine 'failed step' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTest
 Test-Stream $r 'failed step'
 Check (($r.code -eq 6) -and ($r.result.outcome -eq 'failed') -and ($r.result.message_id -eq 'result.step-failed') -and $r.result.detail) "failed: exit 6, result.step-failed, detail for the log only ($($r.result.detail))"
 
-'[G-STAGE] restart boundaries advance only in a new boot'
+'[G-STAGE] restart boundaries advance only with positive evidence of a new boot (R1): resume and explicit Verify'
 if ($null -ne $bootId) {
-    $st3 = [ordered]@{ schema = 1; phase = 'driver-pending-restart'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z'; restart_boot_id = $bootId }
-    $r = Invoke-Engine 'resume same boot' @('-DryRun', '-DryRunIgnoreBoard') -State $st3
-    Test-Stream $r 'resume same boot'
-    Check (($r.code -eq 7) -and ($r.result.outcome -eq 'restart-required') -and ($r.result.message_id -eq 'result.restart-still-pending') -and $r.result.restart.still_pending -and -not (Get-Events $r 'step').Count) 'resume in the boot that asked for the restart: restart still pending, nothing done'
-    $st3.restart_boot_id = $bootId + 1
-    $r = Invoke-Engine 'resume new boot' @('-DryRun', '-DryRunIgnoreBoard') -State $st3
-    Check (($r.code -eq 0) -and (@(Get-Events $r 'decision')[0].action -eq 'resume') -and ($r.result.outcome -eq 'completed')) 'resume in a new boot: phase 2 continues'
-    $st4 = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId }
-    $r = Invoke-Engine 'verify same boot' @('-DryRun', '-Verify') -State $st4
-    Check (($r.code -eq 7) -and ($r.result.message_id -eq 'result.verify-before-restart')) 'verify in the boot that asked for the restart: refused as restart pending'
+    $resume = @('-DryRun', '-DryRunIgnoreBoard'); $verify = @('-DryRun', '-Verify')
+    $unreadable = @{ AMDGPU_WDDM_TEST_BOOT_ID = 'unreadable' }
+    foreach ($c in @(
+            @{ name = 'resume, same boot'; phase = 'driver-pending-restart'; saved = $bootId; args = $resume; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'resume, no saved boot'; phase = 'driver-pending-restart'; saved = $null; args = $resume; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'resume, current BootId unreadable'; phase = 'driver-pending-restart'; saved = $bootId + 1; args = $resume; env = $unreadable; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'resume, new boot (positive control)'; phase = 'driver-pending-restart'; saved = $bootId + 1; args = $resume; code = 0; msg = 'result.dry-run-complete' }
+            @{ name = 'resume of testsigning-pending, same boot'; phase = 'testsigning-pending'; saved = $bootId; args = $resume; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'resume of testsigning-pending, no saved boot'; phase = 'testsigning-pending'; saved = $null; args = $resume; code = 7; msg = 'result.restart-still-pending' }
+            # Past the boundary, this PC (test signing not active) stops for the test-signing restart itself.
+            @{ name = 'resume of testsigning-pending, new boot (positive control)'; phase = 'testsigning-pending'; saved = $bootId + 1; args = $resume; code = 5; msg = 'result.testsigning-not-active' }
+            @{ name = 'Verify of testsigning-pending, same boot'; phase = 'testsigning-pending'; saved = $bootId; args = $verify; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'Verify of testsigning-pending, no saved boot'; phase = 'testsigning-pending'; saved = $null; args = $verify; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'Verify of testsigning-pending, new boot: unfinished'; phase = 'testsigning-pending'; saved = $bootId + 1; args = $verify; code = 2; msg = 'result.install-unfinished' }
+            @{ name = 'Verify of driver-pending-restart, same boot'; phase = 'driver-pending-restart'; saved = $bootId; args = $verify; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'Verify of driver-pending-restart, current BootId unreadable'; phase = 'driver-pending-restart'; saved = $bootId + 1; args = $verify; env = $unreadable; code = 7; msg = 'result.restart-still-pending' }
+            @{ name = 'Verify of driver-pending-restart, new boot: unfinished'; phase = 'driver-pending-restart'; saved = $bootId + 1; args = $verify; code = 2; msg = 'result.install-unfinished' }
+            @{ name = 'Verify of installed, same boot'; phase = 'installed'; saved = $bootId; args = $verify; code = 7; msg = 'result.verify-before-restart' }
+            @{ name = 'Verify of installed, no saved boot'; phase = 'installed'; saved = $null; args = $verify; code = 7; msg = 'result.verify-before-restart' }
+            @{ name = 'Verify of installed, current BootId unreadable'; phase = 'installed'; saved = $bootId + 1; args = $verify; env = $unreadable; code = 7; msg = 'result.verify-before-restart' }
+            @{ name = 'Verify of installed, new boot (positive control: the checks run)'; phase = 'installed'; saved = $bootId + 1; args = $verify; code = 3; msg = 'result.verify-failed' })) {
+        $st = [ordered]@{ schema = 1; phase = $c.phase; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2000-01-01T00:00:00.0000000Z' }
+        if ($null -ne $c.saved) { $st.restart_boot_id = $c.saved }
+        $env1 = $(if ($c.env) { $c.env } else { @{} })
+        $r = Invoke-Engine $c.name $c.args -State $st -Env $env1
+        Test-Stream $r $c.name
+        $ran = @(Get-Events $r 'stage' | Where-Object { $_.id -in 'verify', 'install', 'files' }).Count
+        $kept = [string](Get-Content -LiteralPath (Join-Path $r.state_dir 'state.json') -Raw | ConvertFrom-Json).phase
+        $ok = ($r.code -eq $c.code) -and ($r.result.message_id -eq $c.msg)
+        if ($c.code -eq 7) { $ok = $ok -and $r.result.restart.still_pending -and -not $ran -and -not (Get-Events $r 'step').Count -and ($kept -eq $c.phase) }
+        if ($c.code -eq 2) { $ok = $ok -and -not $ran -and -not (Get-Events $r 'step').Count -and ($kept -eq $c.phase) }
+        if ($c.code -in 0, 3) { $ok = $ok -and $ran }
+        Check $ok "$($c.name): exit $($r.code), $($r.result.message_id), phase kept $kept ($($r.result.detail))"
+    }
+} else { '  (skipped: BootId not readable on this PC)' }
+
+'[G-EVT] verification and its report use one manifest, the installed one (R5)'
+if ($null -ne $bootId) {
+    # An installed release B (another version and ABI) under a test install root; package A (this package) runs Verify.
+    $instB = Join-Path $work 'installed-b'
+    [void][IO.Directory]::CreateDirectory($instB)
+    $mB = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
+    $mB.version = '0.0.1.100-other.1'; $mB.name = 'amdgpu-wddm-tester-0.0.1.100-other.1'; $mB.kmd_abi = '0x000700AA'
+    [IO.File]::WriteAllText((Join-Path $instB 'manifest.json'), ($mB | ConvertTo-Json -Depth 8))
+    $shaB = (Get-FileHash -LiteralPath (Join-Path $instB 'manifest.json') -Algorithm SHA256).Hash
+    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $mB.version; install_root = $instB; updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
+    $r = Invoke-Engine 'verify of another installed release' @('-DryRun', '-Verify') -State $st
+    $rep = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
+    $vr = $(if ($rep.Count -eq 1) { Get-Content -LiteralPath $rep[0].FullName -Raw | ConvertFrom-Json })
+    Check (($r.code -eq 3) -and $vr -and ($vr.package_version -eq $mB.version) -and ($vr.release -eq $mB.name) -and ($vr.manifest_sha256 -eq $shaB) -and ($vr.manifest_source -eq 'install-root') -and ($vr.kmd_abi -eq '0x000700AA') -and ($r.text -match [regex]::Escape("verifies against $instB\manifest.json (install-root): $($mB.version)"))) "package $pkgVersion verifies installed $($mB.version): checks and report both name the installed manifest ($(if ($vr) { "$($vr.package_version), $($vr.manifest_source)" } else { 'no report' }))"
 } else { '  (skipped: BootId not readable on this PC)' }
 
 '[G-STAGE] deadline: the run stops at the first stop point after -DeadlineUtc (interfaces-setup.md section 10)'

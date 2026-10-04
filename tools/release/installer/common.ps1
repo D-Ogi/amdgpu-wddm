@@ -175,6 +175,22 @@ function Get-InstallAction {
     return [ordered]@{ action = 'repair'; message = "repairing $PackageVersion (phase $phase)" }
 }
 
+# GUI plan A2: the one decision whether the restart that a pending phase waits for has happened. Every pending phase
+# (test signing set, driver package waiting, installation complete) records the boot it was saved in
+# (restart_boot_id). It advances only on positive evidence of a new boot: that boot is known, the current BootId is
+# readable, and the two differ. Returns $null then (or when the phase is not pending); else why the restart is still
+# pending: 'same-boot', 'saved-unknown' (a state without restart_boot_id) or 'current-unknown' (BootId unreadable).
+$script:PendingPhases = @('testsigning-pending', 'driver-pending-restart', 'installed')
+function Get-PendingRestart($State, $Boot) {
+    if (-not $State -or [string]$State.phase -notin $script:PendingPhases) { return $null }
+    if (-not $Boot -or $null -eq $Boot.boot_id) { return 'current-unknown' }
+    $saved = $null
+    if ($State.PSObject.Properties['restart_boot_id'] -and $null -ne $State.restart_boot_id) { try { $saved = [int64]$State.restart_boot_id } catch { $saved = $null } }
+    if ($null -eq $saved) { return 'saved-unknown' }
+    if ($saved -eq [int64]$Boot.boot_id) { return 'same-boot' }
+    return $null
+}
+
 # The inputs of an install that phase 2 needs: the firmware folder (-FirmwareDir), the driver settings given on the
 # command line (-DpmMaxMHz, -CuMode) and the switches that select what is installed and how (-NoControlApp, -NoReboot,
 # -Force). The run after a restart that the installer asked for (test signing, or a driver package that waits for the

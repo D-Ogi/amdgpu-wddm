@@ -187,13 +187,16 @@ foreach ($c in $cases) {
 
 Check ($src -notmatch 'New-Item -Path [^\r\n]*-Force') 'install.ps1 never runs New-Item -Force on a registry key (it deletes the key''s values)'
 
-'verify before and after the restart (test state, phase installed)'
+'verify before and after the restart (test state, phase installed, the boot it was saved in)'
+$thisBoot = $null
+$v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction SilentlyContinue).BootId
+if ($null -ne $v) { $thisBoot = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
 foreach ($c in @(
-        @{ name = 'verify before the restart'; utc = [DateTime]::UtcNow.ToString('o'); code = 7; expect = 'Restart pending: the installation finished' }
-        @{ name = 'verify after the restart'; utc = '2000-01-01T00:00:00.0000000Z'; code = 3; expect = 'BC-250 GPU not found' })) {
+        @{ name = 'verify before the restart'; utc = [DateTime]::UtcNow.ToString('o'); boot = $thisBoot; code = 7; expect = 'has not been confirmed: this is still the boot in which it was asked for' }
+        @{ name = 'verify after the restart'; utc = '2000-01-01T00:00:00.0000000Z'; boot = $thisBoot + 1; code = 3; expect = 'BC-250 GPU not found' })) {
     $dir = Join-Path $WorkBase ('state-verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
     [void][IO.Directory]::CreateDirectory($dir)
-    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = $c.utc }
+    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = $c.utc; restart_boot_id = $c.boot }
     [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
     $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
     try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-Verify') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
@@ -267,7 +270,8 @@ foreach ($c in @(
     $dir = Join-Path $WorkBase ('state-resume-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + "-$n")
     [void][IO.Directory]::CreateDirectory($dir)
     $st = [ordered]@{ schema = 1; phase = 'driver-pending-restart'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z'
-        firmware_source_dir = $goodDir; command_line_parameters = [ordered]@{ DpmMaxMHz = 1200 }; install_switches = @('NoControlApp') }
+        firmware_source_dir = $goodDir; command_line_parameters = [ordered]@{ DpmMaxMHz = 1200 }; install_switches = @('NoControlApp')
+        restart_boot_id = $(if ($null -ne $thisBoot) { $thisBoot - 1 } else { 0 }) }   # the restart happened (R1: only a new boot continues)
     foreach ($k in $c.st.Keys) { $st[$k] = $c.st[$k] }
     [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json -Depth 4))
     $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir

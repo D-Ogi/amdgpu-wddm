@@ -358,6 +358,17 @@ foreach ($c in @(@{ name = 'JSON null'; text = 'null' }, @{ name = 'a number'; t
     Check ((-not $cv.ok) -and ($null -eq $cv.record) -and (@($cv.reasons | Where-Object { $_ -in 'compat.unknown-schema', 'compat.unreadable' }).Count -ge 1)) "$($c.name) as the record: refused ($(@($cv.reasons) -join ', '))"
 }
 
+'[G-STAGE] pending restarts: a phase advances only with positive evidence of a new boot (R1, Get-PendingRestart)'
+foreach ($ph in 'testsigning-pending', 'driver-pending-restart', 'installed') {
+    $st = [pscustomobject]@{ schema = 1; phase = $ph; restart_boot_id = 41 }
+    $noSaved = [pscustomobject]@{ schema = 1; phase = $ph }
+    Check ((Get-PendingRestart $st ([ordered]@{ boot_id = 41 })) -eq 'same-boot') "${ph}: the same boot keeps it pending"
+    Check ((Get-PendingRestart $noSaved ([ordered]@{ boot_id = 42 })) -eq 'saved-unknown') "${ph}: no saved boot keeps it pending"
+    Check ((Get-PendingRestart $st ([ordered]@{ boot_id = $null })) -eq 'current-unknown') "${ph}: an unreadable current BootId keeps it pending"
+    Check ($null -eq (Get-PendingRestart $st ([ordered]@{ boot_id = 42 }))) "${ph}: another boot lets it advance"
+}
+Check ($null -eq (Get-PendingRestart ([pscustomobject]@{ phase = 'verified'; restart_boot_id = 41 }) ([ordered]@{ boot_id = 41 }))) 'a phase that waits for nothing is never pending'
+
 '[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
 Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'
 $script:EngineJob = 'kill-on-close'
@@ -374,6 +385,7 @@ $c1 = Close-EngineChildren
 Check (($c1.closure -eq 'complete') -and ($c1.remaining -eq 0) -and ($c1.left_at_exit -ge 3) -and ($c1.ended -eq $c1.left_at_exit) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq 1) -and $k1.HasExited -and $k2.HasExited) "every child and grandchild ended, the job holds only this process ($($c1 | ConvertTo-Json -Compress))"
 $c2 = Close-EngineChildren
 Check (($c2.closure -eq 'complete') -and ($c2.left_at_exit -eq 0)) 'nothing left: complete with 0'
+
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
 'all checks passed'

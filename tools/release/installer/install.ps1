@@ -257,14 +257,35 @@ if ($Verify) { $action = [ordered]@{ action = 'verify'; message = $null } }
 if ($early) { Write-Info "installed: $(if ($installedVersion) { $installedVersion } else { 'unknown version' }), phase $($early.phase); package: $packageVersion; action: $($action.action)" }
 $script:EngineAction = $action.action
 $script:EnginePackageVersion = $packageVersion
-# A boundary advances only in a new boot (GUI plan A2): the run that continues after the driver package's restart
-# checks that Windows did restart since the restart was asked for. Nothing is changed when it did not.
-$restartBoot = $null
-if ($early -and $early.PSObject.Properties['restart_boot_id']) { $restartBoot = $early.restart_boot_id }
-if ($action.action -eq 'resume' -and $null -ne $restartBoot -and $null -ne (Get-BootIdentity).boot_id -and [int64]$restartBoot -eq [int64](Get-BootIdentity).boot_id) {
-    Write-Host 'The restart that the driver package asked for has not happened yet: restart the computer. The installer continues after you log on again.' -ForegroundColor Yellow
-    $script:EngineRestart = [ordered]@{ required = $true; reason_id = 'restart.driver-package'; still_pending = $true; continuation = $null }
-    Exit-Engine -Code 7 -Outcome 'restart-required' -MessageId 'result.restart-still-pending' -Detail "boot $restartBoot is still running"
+# A boundary advances only in a new boot (GUI plan A2, common.ps1 Get-PendingRestart), for the run that continues
+# after the test-signing or the driver package's restart and for every verification: a pending phase (test signing set, driver package
+# waiting, installation complete) needs positive evidence that Windows restarted since it was saved. A same or unknown
+# boot keeps the pending phase, changes nothing and ends with exit 7. The continuation after the test-signing restart
+# is a run of the same package at testsigning-pending; another package at that phase takes the installation over
+# (Set-InstallPackage below) and stops for the same restart itself.
+$continuesTestSigning = ($action.action -eq 'install') -and $early -and ([string]$early.phase -eq 'testsigning-pending') -and ([string]$early.package_version -eq $packageVersion)
+if ($early -and ($action.action -eq 'resume' -or $continuesTestSigning -or ($action.action -eq 'verify' -and -not ($DryRun -and -not $Verify)))) {
+    $pendingPhase = [string]$early.phase
+    $why = Get-PendingRestart $early (Get-BootIdentity)
+    if ($why) {
+        if ($why -eq 'saved-unknown' -and -not $script:DryRunMode -and $null -ne (Get-BootIdentity).boot_id) {
+            # A state saved by an engine that did not record the boot: this boot becomes the boundary, so the next start
+            # passes it. One restart more at worst, never a skipped one.
+            Set-StateValue $early 'restart_boot_id' (Get-BootIdentity).boot_id
+            Save-InstallState $early
+        }
+        $reason = switch ($pendingPhase) { 'testsigning-pending' { 'restart.test-signing' } 'driver-pending-restart' { 'restart.driver-package' } default { 'restart.complete' } }
+        $text = switch ($why) { 'same-boot' { 'this is still the boot in which it was asked for' } 'saved-unknown' { 'the state does not say in which boot it was asked for' } default { 'the current boot cannot be identified' } }
+        Write-Host "The restart that the installation waits for ($pendingPhase) has not been confirmed: $text. Restart the computer; the installer continues after you log on again." -ForegroundColor Yellow
+        $script:EngineRestart = [ordered]@{ required = $true; reason_id = $reason; still_pending = $true; continuation = $null }
+        Exit-Engine -Code 7 -Outcome 'restart-required' -MessageId $(if ($pendingPhase -eq 'installed') { 'result.verify-before-restart' } else { 'result.restart-still-pending' }) -Detail "phase $pendingPhase, restart not confirmed: $why"
+    }
+    # Verify checks a finished installation only: after the restart, an unfinished one continues with install, never
+    # by a verification that would overwrite its phase.
+    if ($action.action -eq 'verify' -and $pendingPhase -in @('new', 'testsigning-pending', 'testsigning-active', 'files-copied', 'driver-pending-restart', 'driver-installed', 'install-incomplete')) {
+        Write-Host "The installation is not finished (phase $pendingPhase): run install.cmd to finish it, then verify." -ForegroundColor Yellow
+        Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result.install-unfinished' -Detail "verify of an unfinished installation (phase $pendingPhase)"
+    }
 }
 # The run after a restart that the installer asked for starts from RunOnce without arguments: it takes the first
 # run's -FirmwareDir, driver settings and switches from the state (common.ps1, Get-InstallInputs). Driver settings
@@ -326,6 +347,8 @@ if (-not $state) { $state = [pscustomobject]@{ schema = 1; phase = 'new'; create
 }
 function Save-Phase([string]$Phase) {
     Set-StateValue $state 'phase' $Phase
+    # A pending phase records its boot: it advances only in another one (Get-PendingRestart).
+    if ($Phase -in $script:PendingPhases) { Set-StateValue $state 'restart_boot_id' (Get-BootIdentity).boot_id }
     Set-StateValue $state 'updated_utc' ([DateTime]::UtcNow.ToString('o'))
     Save-InstallState $state
 }
@@ -555,18 +578,8 @@ function Write-VerifyReport($Results) {
 }
 
 if ($script:VerifyOnly) {
-    # Phase 2 ended in this boot: the driver runs with the old settings until the restart, and the start-confirm
-    # task was registered for the next logon. Verifying now would only report the restart that is still due.
-    if ($state.phase -eq 'installed' -and $state.updated_utc) {
-        $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
-        $done = ([DateTime]::Parse([string]$state.updated_utc, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)).ToUniversalTime()
-        $sameBoot = $state.PSObject.Properties['restart_boot_id'] -and ($null -ne $state.restart_boot_id) -and ($null -ne (Get-BootIdentity).boot_id) -and ([int64]$state.restart_boot_id -eq [int64](Get-BootIdentity).boot_id)
-        if ($boot -lt $done -or $sameBoot) {
-            Write-Host "Restart pending: the installation finished at $($done.ToString('u')), after this start ($($boot.ToString('u'))). Restart the computer; verify runs by itself after the logon." -ForegroundColor Yellow
-            $script:EngineRestart = [ordered]@{ required = $true; reason_id = 'restart.complete'; still_pending = $true; continuation = $null }
-            Exit-Engine -Code 7 -Outcome 'restart-required' -MessageId 'result.verify-before-restart' -Detail "installed at $($done.ToString('o')), this boot started at $($boot.ToString('o'))"
-        }
-    }
+    # A verification in the boot that completed the installation was stopped above (Get-PendingRestart): the driver
+    # runs with the old settings until the restart.
     Enter-Stage 'verify' 'Verify'
     $r = Invoke-Verify
     $bad = @($r | Where-Object { -not $_.pass })

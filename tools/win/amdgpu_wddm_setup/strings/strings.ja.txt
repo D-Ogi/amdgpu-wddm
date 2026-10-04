@@ -200,6 +200,8 @@ result.restart-still-pending.title|mt|9676613e|Windows はまだ再起動して�
 result.restart-still-pending.body|mt|e79d291f|次に Windows を再起動すると、セットアップは続行します。
 result.verify-before-restart.title|mt|93aab4b5|完了するには Windows を再起動してください
 result.verify-before-restart.body|mt|ff335b2d|ドライバーは Windows の再起動後に確認されます。
+result.install-unfinished.title|mt|905e1ac5|インストールはまだ完了していません
+result.install-unfinished.body|mt|0e894d61|セットアップをもう一度実行してインストールを完了してください。ドライバーはその後に確認されます。
 result.verified.title|mt|9756a569|ドライバーはインストールされ、正常に動作しています
 result.verified.body|mt|5542d882|準備ができました。amdgpu-wddm Control は [スタート] メニューにあります。
 result.verified-with-warnings.title|mt|c50059a2|ドライバーはインストールされ動作していますが、注意事項があります

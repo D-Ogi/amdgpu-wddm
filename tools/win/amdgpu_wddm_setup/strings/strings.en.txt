@@ -202,6 +202,8 @@ result.restart-still-pending.title|src|-|Windows has not restarted yet
 result.restart-still-pending.body|src|-|Setup continues after the next restart of Windows.
 result.verify-before-restart.title|src|-|Restart Windows to finish
 result.verify-before-restart.body|src|-|The driver is checked after the restart of Windows.
+result.install-unfinished.title|src|-|The installation is not finished yet
+result.install-unfinished.body|src|-|Run Setup again to finish the installation. The driver is checked after that.
 result.verified.title|src|-|The driver is installed and works
 result.verified.body|src|-|Everything is ready. amdgpu-wddm Control is in the Start menu.
 result.verified-with-warnings.title|src|-|The driver is installed and works, with notes
