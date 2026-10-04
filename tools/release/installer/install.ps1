@@ -401,7 +401,7 @@ function Invoke-Verify {
     try {
     if (-not $script:DryRunMode) {
         # Files replaced while in use: the restart deletes their old copies; this catches any it could not.
-        $n = (Remove-OldCopies -Directory $InstallRoot -Recurse) + (Remove-OldCopies -Directory (Join-Path $env:windir 'System32') -Filter 'bc250umd.dll.old-*')
+        $n = (Remove-OldCopies -Directory $InstallRoot -Recurse) + (Remove-OldCopies -Directory (Join-Path $env:windir 'System32') -Filter 'bc250umd.dll.old-*') + (Remove-OldCopies -Directory (Join-Path $env:windir 'SysWOW64') -Filter 'bc250umd.dll.old-*')
         if ($n) { Write-Info "removed $n old copies of replaced files" }
     }
     $dev = @(Get-Bc250Device)
@@ -535,6 +535,15 @@ function Invoke-Verify {
     $vkOut = (Invoke-Native powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
     if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
     else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
+
+    # 32-bit processes (BD-064): the Wow registration, the router's Wow paths and x86 images in place. Registration
+    # only: no 32-bit device is created here.
+    $wowKey = Get-DeviceDriverKey -InstanceId $id
+    if (-not $wowKey) { Add-Result '32-bit D3D/Vulkan' $false 'no software key for the GPU' }
+    else {
+        $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $wowKey)
+        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9/10/11, no D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
+    }
     $script:VerifyComplete = $true
     return $results
     } catch {
@@ -816,8 +825,8 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
     foreach ($store in 'Root', 'TrustedPublisher') { Import-Certificate -FilePath $cer -CertStoreLocation "Cert:\LocalMachine\$store" | Out-Null }
 } | Out-Null
 
-# Files. Each payload directory goes to the same name under the install root.
-$dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'tools')
+# Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
+$dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
@@ -836,6 +845,8 @@ Invoke-Change "copy licenses\ and THIRD-PARTY.md -> $InstallRoot\licenses (the l
 # Facts about the computer before the install are recorded once and saved before the step that changes them.
 $stub = Join-Path $env:windir 'System32\bc250umd.dll'
 [void](Set-StateValueOnce $state 'stub_existed' (Test-Path -LiteralPath $stub))
+$stubWow = Join-Path $env:windir 'SysWOW64\bc250umd.dll'
+[void](Set-StateValueOnce $state 'stub_wow_existed' (Test-Path -LiteralPath $stubWow))
 $bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
 $fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
@@ -843,6 +854,10 @@ if (-not $script:DryRunMode) { Save-InstallState $state }
 Invoke-Change "copy payload\system32\bc250umd.dll -> $stub (the D3D9 slot of UserModeDriverName; same SHA256: kept; in use: replaced by rename)" {
     $r = Copy-FileSafe -Source (Join-Path $package 'payload\system32\bc250umd.dll') -Destination $stub
     Write-Info "$stub`: $r"
+} | Out-Null
+Invoke-Change "copy payload\syswow64\bc250umd.dll -> $stubWow (the D3D9 slot of UserModeDriverNameWow, 32-bit processes; same SHA256: kept; in use: replaced by rename)" {
+    $r = Copy-FileSafe -Source (Join-Path $package 'payload\syswow64\bc250umd.dll') -Destination $stubWow
+    Write-Info "$stubWow`: $r"
 } | Out-Null
 $fwAcl = $(if ($fwExisted) { 'its existing access rights are kept' } else { 'created writable by administrators only' })
 Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfish2_*.bin, LICENSE.amdgpu) from $fwStaging -> $($script:FirmwareInstallDir); $fwAcl; $bc250Dir itself is not changed" {
@@ -995,14 +1010,27 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
     New-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
+# The same for 32-bit processes (BD-064): D3D9/10/11 slots only (no x86 D3D12 UMD), the x86 Vulkan ICD.
+$umdWow = Get-WowUmdNames $InstallRoot
+$icdJsonWow = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
+Invoke-Change ("$classKey UserModeDriverNameWow = " + ($umdWow -join ' | ') + "; VulkanDriverNameWow = $icdJsonWow") {
+    New-ItemProperty -LiteralPath $classKey -Name UserModeDriverNameWow -Value ([string[]]$umdWow) -PropertyType MultiString -Force | Out-Null
+    New-ItemProperty -LiteralPath $classKey -Name VulkanDriverNameWow -Value ([string[]]@($icdJsonWow)) -PropertyType MultiString -Force | Out-Null
+} | Out-Null
+Invoke-Change "$($script:KhronosKeyWow) '$icdJsonWow' = 0 (32-bit system Vulkan ICD)" {
+    Initialize-RegistryKey $script:KhronosKeyWow
+    New-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -Value 0 -PropertyType DWord -Force | Out-Null
+} | Out-Null
+Set-StateValue $state 'khronos_wow_value' $icdJsonWow
 
 # Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 0 composes the desktop on the GPU route (zink);
 # 1 is the kill switch to the CPU route (tester.1 to tester.8 shipped 1 until BD-058 was fixed). RequireKmdSwitches 1
 # keeps the GPU route gated: when the KMD's effective interop switches are off, the router takes the CPU route by
 # itself. AppRouter Mode gpu-default: D3D10.1/D3D11 applications run on the GPU UMD, except Deny, the sign-in
 # processes and Windows components (blank or missing windows on the GPU UMD, BD-061; cause not established).
-Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll') })
-Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll') })
+# The *Wow paths are what the x86 router (32-bit processes) loads; the policy values are shared (BD-064).
+Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') })
+Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') })
 # Application profiles: the shipped ones by the same rule; a tester's own profiles are other keys and stay as they are.
 foreach ($app in ConvertTo-PairList $regDefaults.defaults.d3d12_applications) {
     $prevApp = $null

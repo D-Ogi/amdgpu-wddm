@@ -12,6 +12,7 @@
     "d3d11_shell": "bc250-win m14/dxgi-private-hints 7abf21de",
     "d3d11_engine": "dxvk fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49",
     "d3d11_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
+    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm 7ae6462f + x86 patch, engine dxvk ebeadc49, ICD mesa ae98c795 + x86 patch; no x86 D3D12",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "files": [
@@ -142,6 +143,78 @@
       "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
       "size": 131,
       "role": "Vulkan ICD manifest"
+    },
+    {
+      "component": "d3d9-stub-wow64",
+      "path": "payload/syswow64/bc250umd.dll",
+      "source": "scratch/wow64/artifact/stub/bc250umd.dll",
+      "sha256": "5114AE264CA2D3B6AA6762C9A69A160F7F5D1D8007A12C2B8AF78A39F9ED4123",
+      "size": 3584,
+      "role": "x86 UMD stub, D3D9 slot of UserModeDriverNameWow (driver/umd-stub, BD-064)"
+    },
+    {
+      "component": "desktop-umd-wow64",
+      "path": "payload/wow64/desktop/bc250d3d_router.dll",
+      "source": "scratch/wow64/artifact/router/bc250d3d_router.dll",
+      "sha256": "7D09B81ECD2B1BA976C10362FCD3638C9794E425EF35DC05A6E44C222B4FAD36",
+      "size": 130560,
+      "role": "x86 application router for 32-bit processes (amdgpu-wddm wow64/router-x86 on 631d25da: the Wow path values, the 64-bit policy keys read through KEY_WOW64_64KEY, plain export names; static CRT; BD-064)"
+    },
+    {
+      "component": "desktop-umd-wow64",
+      "path": "payload/wow64/desktop/bc250d3d.dll",
+      "source": "scratch/wow64/artifact/cpu/bc250d3d.dll",
+      "sha256": "81DC610BC4DF876DFE119C7BF027F2D08E46333C1F26823F20017D0D80D2FEE2",
+      "size": 56194048,
+      "role": "x86 CPU D3D11 UMD for 32-bit processes (mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c, unmodified, LLVM 23.1.2 x86; the router's fallback route; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.dll",
+      "sha256": "C1F8A29F4E9117608D13B6E0814F6915B19A49A9C1CFF20F1B27DE27086EC60C",
+      "size": 514048,
+      "role": "x86 GPU D3D11 shell for 32-bit processes (amdgpu-wddm 7ae6462f + the x86 export and test patch; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.config",
+      "sha256": "769C696299046173F590343F1495DAF2D2EC17625E857B2F7DC14852D527E748",
+      "size": 132,
+      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and ICD E1322557 (tools/build/write-umd-config.py; capabilities carried from the 64-bit record, not measured on x86)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_dxvk.dll",
+      "sha256": "0D4AE6590EAB3D0116CECFDD0DCB5C237CF2BFA8C6EE3BA3054F56E7843E281C",
+      "size": 4005888,
+      "role": "x86 GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49, unmodified; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_radv.dll",
+      "sha256": "E13225578D8931EA347F3CB7724ED0F863F2D21063D00B32A5392336CD6CCA45",
+      "size": 20134400,
+      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/draw-path ae98c795 + the x86 host-import and fallback-stub patch, static CRT; BD-064)"
+    },
+    {
+      "component": "vulkan-icd-wow64",
+      "path": "payload/wow64/vulkan/vulkan_radeon.dll",
+      "source": "scratch/wow64/artifact/radv/amdgpu_wddm_radv.dll",
+      "sha256": "E13225578D8931EA347F3CB7724ED0F863F2D21063D00B32A5392336CD6CCA45",
+      "size": 20134400,
+      "role": "x86 system Vulkan ICD for 32-bit processes (the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll; BD-064)"
+    },
+    {
+      "component": "vulkan-icd-wow64",
+      "path": "payload/wow64/vulkan/radeon_icd.json",
+      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "size": 131,
+      "role": "x86 Vulkan ICD manifest (the 64-bit manifest: library_path is relative to the manifest)"
     },
     {
       "component": "tool",

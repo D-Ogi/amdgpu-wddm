@@ -11,6 +11,8 @@ $script:DisplayClassGuid = '{4d36e968-e325-11ce-bfc1-08002be10318}'
 $script:SoftwareKey      = 'HKLM:\SOFTWARE\amdgpu-wddm'
 $script:ParametersKey    = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 $script:KhronosKey       = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+# The 32-bit Vulkan loader reads its drivers from the WOW64 view (BD-064); the installer runs as a 64-bit process.
+$script:KhronosKeyWow    = 'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers'
 $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce'
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
@@ -592,6 +594,52 @@ function Get-VcRuntimeMissing {
         if (-not (Test-Path -LiteralPath (Join-Path $env:windir "System32\$f"))) { $missing += $f }
     }
     return $missing
+}
+# BD-064: 32-bit processes. UserModeDriverNameWow mirrors the first three slots of UserModeDriverName (D3D9 stub, the
+# D3D10 and D3D11 routers) with the x86 builds; there is no x86 D3D12 UMD, so it has no fourth entry and a 32-bit
+# D3D12 application finds no driver. The x86 router reads the 64-bit policy keys and its own *Wow path values.
+# The x86 builds link the C runtime statically: no x86 Visual C++ runtime is needed.
+function Get-WowUmdNames([string]$InstallRoot) {
+    $router = Join-Path $InstallRoot 'wow64\desktop\bc250d3d_router.dll'
+    return @('bc250umd.dll', $router, $router)
+}
+function Get-WowFiles([string]$InstallRoot) {
+    return @((Join-Path $env:windir 'SysWOW64\bc250umd.dll')) + @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
+}
+# The machine field of a PE image: 0x14C x86, 0x8664 x64; $null when the file is missing or not a PE image.
+function Get-PeMachine([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $fs = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+    try {
+        $b = New-Object byte[] 4096
+        $n = $fs.Read($b, 0, $b.Length)
+        if ($n -lt 64 -or $b[0] -ne 0x4D -or $b[1] -ne 0x5A) { return $null }
+        $pe = [BitConverter]::ToInt32($b, 60)
+        if ($pe -lt 0 -or $pe + 6 -gt $n -or [BitConverter]::ToUInt32($b, $pe) -ne 0x4550) { return $null }
+        return [int][BitConverter]::ToUInt16($b, $pe + 4)
+    } finally { $fs.Dispose() }
+}
+# The 32-bit registration as verify checks it; returns the problems found (none: registered).
+function Test-WowRegistration {
+    param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey, [string]$KhronosKey = $script:KhronosKeyWow,
+        [string]$SoftwareKey = $script:SoftwareKey, [string[]]$Files = (Get-WowFiles $InstallRoot))
+    $problems = @()
+    $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
+    $want = Get-WowUmdNames $InstallRoot
+    if ((@($c.UserModeDriverNameWow) -join '|') -ne ($want -join '|')) { $problems += "UserModeDriverNameWow is '$(@($c.UserModeDriverNameWow) -join ' | ')'" }
+    $icd = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
+    if ((@($c.VulkanDriverNameWow) -join '|') -ne $icd) { $problems += "VulkanDriverNameWow is '$(@($c.VulkanDriverNameWow) -join ' | ')'" }
+    $k = Get-Item -LiteralPath $KhronosKey -ErrorAction SilentlyContinue
+    if (-not $k -or $k.GetValue($icd) -ne 0) { $problems += "$KhronosKey has no '$icd' = 0" }
+    $cpu = (Get-ItemProperty -LiteralPath "$SoftwareKey\DesktopRouter" -Name CpuUmdPathWow -ErrorAction SilentlyContinue).CpuUmdPathWow
+    if ($cpu -ne (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll')) { $problems += "DesktopRouter CpuUmdPathWow is '$cpu'" }
+    $gpu = (Get-ItemProperty -LiteralPath "$SoftwareKey\AppRouter" -Name GpuUmdPathWow -ErrorAction SilentlyContinue).GpuUmdPathWow
+    if ($gpu -ne (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll')) { $problems += "AppRouter GpuUmdPathWow is '$gpu'" }
+    foreach ($f in $Files) {
+        $m = Get-PeMachine $f
+        if ($null -eq $m) { $problems += "$f missing or not an image" } elseif ($m -ne 0x14C) { $problems += ('{0} is not x86 (machine 0x{1:X})' -f $f, $m) }
+    }
+    return $problems
 }
 function Get-DeviceDriverKey {
     # The device's software (class) key, e.g. HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-...}\0001

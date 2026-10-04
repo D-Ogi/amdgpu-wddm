@@ -20,6 +20,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`, run for real from folders with spaces and cmd metacharacters), the kept repair set (each set against its own manifest's firmware), the running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record and the job object's child closure. |
 | `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the deadline and the child-process closure (section 10), the footprint unchanged. |
 | `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
+| `test-wow64.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-064): every image under `payload\wow64` and `payload\syswow64` is x86 and every other payload image x64, the x86 entry points are exported undecorated, the `manifest.json` install paths, and verify's 32-bit registration check (`Test-WowRegistration`) against the scratch key `HKCU:\Software\amdgpu-wddm-installer-test-wow` and files under `-WorkRoot`, both removed at the end. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
 
 ```
@@ -68,8 +69,9 @@ Registry defaults: `installer/registry-defaults.json` is the one table. `install
 `build-release.ps1` copies its `defaults` object into `manifest.json`, where the control application's reset reads
 it. An upgrade writes a default only where the value is absent or still equal to what the previous installer wrote
 (`Release\AppliedDefaults`; `legacy_applied` for tester.1 to tester.7, which kept no record), so a tester's own
-settings stay. Installer-owned and always written: the paths into the install root (`CpuUmdPath`, `GpuUmdPath`), the
-graphics registration (`UserModeDriverName`, `VulkanDriverName`, the Khronos entry), `UnconfirmedStarts` and the
+settings stay. Installer-owned and always written: the paths into the install root (`CpuUmdPath`, `GpuUmdPath` and the
+x86 router's `CpuUmdPathWow`, `GpuUmdPathWow`), the graphics registration (`UserModeDriverName`, `VulkanDriverName`, the
+Khronos entry, and their 32-bit counterparts `UserModeDriverNameWow`, `VulkanDriverNameWow`, the WOW6432Node Khronos entry), `UnconfirmedStarts` and the
 `Release` key. When a default changes, edit `defaults` only; `legacy_applied` stays as tester.7 wrote it.
 
 install.ps1 exit codes: 0 done (or already installed and verified, or a restart asked for), 2 refused (preflight, or

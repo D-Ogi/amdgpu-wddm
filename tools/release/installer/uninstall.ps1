@@ -9,6 +9,11 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 $script:DryRunMode = [bool]$DryRun
+# Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
+if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
+    $script:StateDir = $env:AMDGPU_WDDM_TEST_STATE_DIR
+    $script:StatePath = Join-Path $script:StateDir 'state.json'
+}
 
 if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
     & (Join-Path $env:windir 'sysnative\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @PSBoundParameters
@@ -48,13 +53,15 @@ if ($dev.Count -eq 1) {
     $key = Get-DeviceDriverKey -InstanceId $dev[0].DeviceID
     $svc = Get-DeviceServiceName -InstanceId $dev[0].DeviceID
     if ($key -and $svc -eq $script:ServiceName) {
-        Invoke-Change "remove UserModeDriverName and VulkanDriverName from $key" {
-            foreach ($n in 'UserModeDriverName', 'VulkanDriverName') { Remove-ItemProperty -LiteralPath $key -Name $n -ErrorAction SilentlyContinue }
+        Invoke-Change "remove UserModeDriverName, UserModeDriverNameWow, VulkanDriverName and VulkanDriverNameWow from $key" {
+            foreach ($n in 'UserModeDriverName', 'UserModeDriverNameWow', 'VulkanDriverName', 'VulkanDriverNameWow') { Remove-ItemProperty -LiteralPath $key -Name $n -ErrorAction SilentlyContinue }
         } | Out-Null
     }
 }
 $icdJson = Join-Path $root 'vulkan\radeon_icd.json'
 Invoke-Change "remove '$icdJson' from $($script:KhronosKey)" { Remove-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -ErrorAction SilentlyContinue } | Out-Null
+$icdJsonWow = Join-Path $root 'wow64\vulkan\radeon_icd.json'
+Invoke-Change "remove '$icdJsonWow' from $($script:KhronosKeyWow)" { Remove-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -ErrorAction SilentlyContinue } | Out-Null
 Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile, release record)" { Remove-Item -LiteralPath $script:SoftwareKey -Recurse -Force -ErrorAction SilentlyContinue } | Out-Null
 
 # The GPU leaves the driver now, under the running desktop: pnputil has no documented way to defer the removal of a
@@ -76,13 +83,16 @@ Invoke-Change 'remove the bc250kmd service entry (sc.exe delete; finished at the
 
 Write-Step 'Files'
 Invoke-Change "remove $root" { Remove-PathOrSchedule $root } | Out-Null
-$stub = Join-Path $env:windir 'System32\bc250umd.dll'
-$stubExisted = $false
-if ($state -and $state.stub_existed) { $stubExisted = $true }
-if (-not $stubExisted) { Invoke-Change "remove $stub" { Remove-PathOrSchedule $stub } | Out-Null }
-else { Write-Info "$stub was there before the install: kept" }
-foreach ($o in @(Get-ChildItem -LiteralPath (Split-Path $stub) -File -Filter 'bc250umd.dll.old-*' -ErrorAction SilentlyContinue)) {
-    Invoke-Change "remove $($o.FullName) (old copy of a stub replaced while in use)" { Remove-PathOrSchedule $o.FullName } | Out-Null
+# The D3D9 stub in System32 and its x86 copy in SysWOW64 (BD-064), each kept when it was there before the install.
+foreach ($s in @(@{ dir = 'System32'; flag = 'stub_existed' }, @{ dir = 'SysWOW64'; flag = 'stub_wow_existed' })) {
+    $stub = Join-Path $env:windir "$($s.dir)\bc250umd.dll"
+    $stubExisted = $false
+    if ($state -and $state.($s.flag)) { $stubExisted = $true }
+    if (-not $stubExisted) { Invoke-Change "remove $stub" { Remove-PathOrSchedule $stub } | Out-Null }
+    else { Write-Info "$stub was there before the install: kept" }
+    foreach ($o in @(Get-ChildItem -LiteralPath (Split-Path $stub) -File -Filter 'bc250umd.dll.old-*' -ErrorAction SilentlyContinue)) {
+        Invoke-Change "remove $($o.FullName) (old copy of a stub replaced while in use)" { Remove-PathOrSchedule $o.FullName } | Out-Null
+    }
 }
 $fwExisted = $false
 if ($state -and $state.firmware_dir_existed) { $fwExisted = $true }

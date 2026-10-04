@@ -29,6 +29,8 @@ function Get-Footprint {
         bc250        = Test-Path -LiteralPath 'C:\BC250'
         programfiles = Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'amdgpu-wddm')
         stub         = Test-Path -LiteralPath (Join-Path $env:windir 'System32\bc250umd.dll')
+        stubwow      = Test-Path -LiteralPath (Join-Path $env:windir 'SysWOW64\bc250umd.dll')
+        khronoswow   = @((Get-Item -LiteralPath 'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers' -ErrorAction SilentlyContinue).Property | Where-Object { $_ -like '*amdgpu-wddm*' }).Count
         certs        = @(Get-ChildItem Cert:\LocalMachine\Root, Cert:\LocalMachine\TrustedPublisher | Where-Object { $_.Subject -like '*amdgpu-wddm*' }).Count
         bootopts     = [string](Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control' -Name SystemStartOptions).SystemStartOptions
     } | ConvertTo-Json -Compress
@@ -91,6 +93,16 @@ $rr.text
 Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-owned: exit $($rr.code)"
 
 Check ($r.text -match 'would: copy payload\\system32\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'stub copy is the safe replacement'
+# BD-064: 32-bit processes get the x86 builds: D3D9/10/11 slots (no x86 D3D12), the x86 Vulkan ICD, the router's Wow paths.
+Check ($r.text -match 'would: copy payload\\wow64 -> .+\\wow64 ') 'phase 2 installs the x86 builds (wow64)'
+Check ($r.text -match 'would: copy payload\\syswow64\\bc250umd\.dll -> .+\\SysWOW64\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'the x86 stub goes to SysWOW64 by the safe replacement'
+Check ($r.text -match 'would: .+ UserModeDriverNameWow = bc250umd\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json') 'UserModeDriverNameWow: stub and two x86 routers, no D3D12 slot; VulkanDriverNameWow'
+Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
+Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
+'32-bit registration (test-wow64.ps1 under 5.1, HKCU scratch key)'
+$rw = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-wow64.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase)
+$rw.text
+Check ($rw.code -eq 0) "x86 images, install paths, exports, verify's registration check: exit $($rw.code)"
 Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'
 Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+download from linux-firmware [0-9a-f]{40}: git\.kernel\.org, gitlab\.com reachable') 'preflight: both firmware download hosts reachable'
 Check ($r.text -match 'would: get the 9 GPU firmware files from linux-firmware [0-9a-f]{40} into ') 'phase 2 shows the firmware download'
@@ -373,7 +385,19 @@ $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun')
 $r.text
 Check ($r.code -eq 0) "uninstall -DryRun exit $($r.code)"
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run: no change, no elevation'
-
+'uninstall -DryRun over a test state (BD-064: the x86 parts go too)'
+$dir = Join-Path $WorkBase ('state-uninstall-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+[void][IO.Directory]::CreateDirectory($dir)
+$st = [ordered]@{ schema = 1; phase = 'verified'; package_version = [string]$m.version; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); stub_existed = $false; stub_wow_existed = $false; updated_utc = '2026-10-04T00:00:00Z' }
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun', '-Yes', '-KeepTestSigning') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check ($r.code -eq 0) "uninstall -DryRun with a state: exit $($r.code)"
+Check (($r.text -match 'would: remove .+\\System32\\bc250umd\.dll') -and ($r.text -match 'would: remove .+\\SysWOW64\\bc250umd\.dll')) 'both stubs removed (neither was there before the install)'
+Check ($r.text -match "would: remove '[^']+\\wow64\\vulkan\\radeon_icd\.json' from HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers") 'the WOW6432Node Khronos entry removed'
+Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
+if ($r.code -ne 0) { $r.text }
+Remove-Item -LiteralPath $dir -Recurse -Force
 $after = Get-Footprint
 Check ($before -eq $after) "system footprint unchanged: $after"
 if ($fail) { "$fail check(s) failed"; exit 1 }

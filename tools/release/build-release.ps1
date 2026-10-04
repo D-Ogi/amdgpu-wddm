@@ -205,6 +205,8 @@ function Get-InstallLocation([string]$PackagePath) {
     switch -Regex ($PackagePath) {
         '^payload/kmd/' { return "DriverStore (bc250kmd.inf)\$leaf" }
         '^payload/system32/' { return "%SystemRoot%\System32\$leaf" }
+        '^payload/syswow64/' { return "%SystemRoot%\SysWOW64\$leaf" }
+        '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
         '^payload/(\w+)/' { return "<InstallDir>\$($Matches[1])\$leaf" }
