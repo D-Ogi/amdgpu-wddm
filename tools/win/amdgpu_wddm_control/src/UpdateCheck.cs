@@ -12,10 +12,16 @@
 //   * Never a downgrade: only a release newer than the INSTALLED one is offered; with an unknown installed version
 //     the card says only which release is the newest.
 //   * Completeness: up to 3 pages of 100; an empty, malformed or capped result never says "up to date".
-//   * One request in flight; clicks during a check join it; Retry-After / X-RateLimit-Reset set the next allowed
-//     time; a 20 s bound on the whole check (late results are dropped); responses above 2 MB are refused.
-//   * The cache keeps the last attempt apart from the last success and the candidate's identity; a candidate is
+//   * One check in flight; clicks during a check join it; Retry-After / X-RateLimit-Reset set the next allowed
+//     time; responses above 2 MB are refused.
+//   * Time (927 R7): one absolute 20 s deadline per check, checked between pages and after every read of the body
+//     (a trickling answer cannot stretch it); at the deadline the request in flight is aborted and the check is
+//     recorded as failed. The gate stays closed until the worker has really ended, so a second check can never
+//     run beside a late one; its result is dropped.
+//   * The cache keeps the last attempt apart from the last success and the newest release seen; a candidate is
 //     compared with the installed release again on every read, so an upgrade never leaves a stale "available".
+//     "Up to date" and the installed release's date hold only for the installed release that check compared
+//     against (927 R8): a rollback, another install or an unreadable Release\Version voids them.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -71,7 +77,9 @@ namespace AmdgpuWddmControl
     {
         public UpdateOutcome Outcome;
         public ReleaseEntry Candidate;      // Available / NewestOnly
+        public ReleaseEntry Newest;         // the newest eligible release seen, newer than the installed one or not
         public ReleaseEntry Installed;      // the installed release when the answer lists it (its publication date)
+        public string CheckedInstalled;     // the installed release the decision compared against; null: unknown
         public int Seen;                    // eligible releases seen
         public DateTime? NextAllowedUtc;
         public string Detail;               // for the report and the log
@@ -80,8 +88,8 @@ namespace AmdgpuWddmControl
     // HKCU\Software\amdgpu-wddm\Control\Update (docs/gui/interfaces.md section 5).
     public sealed class UpdateCache
     {
-        public string LastAttemptUtc, LastAttemptOutcome, LastSuccessUtc, CandidateTag, CandidateVersion, CandidateUrl, CandidatePublishedUtc, NextAllowedUtc,
-            InstalledTag, InstalledPublishedUtc;
+        public string LastAttemptUtc, LastAttemptOutcome, LastSuccessUtc, CheckedInstalled, CandidateTag, CandidateVersion, CandidateUrl, CandidatePublishedUtc,
+            NextAllowedUtc, InstalledTag, InstalledPublishedUtc;
     }
 
     public static class UpdateCheck
@@ -136,7 +144,7 @@ namespace AmdgpuWddmControl
             var all = releases.ToList();
             var newest = all.OrderByDescending(r => r.Version).FirstOrDefault();
             var mine = ReleaseVersion.Parse(installed);
-            var res = new UpdateResult { Seen = all.Count };
+            var res = new UpdateResult { Seen = all.Count, Newest = newest, CheckedInstalled = mine == null ? null : mine.Text };
             res.Installed = mine == null ? null : all.FirstOrDefault(r => r.Version.CompareTo(mine) == 0);
             if (newest == null) { res.Outcome = UpdateOutcome.Failed; res.Detail = "no eligible release in the answer"; return res; }
             if (mine == null) { res.Outcome = UpdateOutcome.NewestOnly; res.Candidate = newest; res.Detail = "installed version unknown"; return res; }
@@ -178,27 +186,41 @@ namespace AmdgpuWddmControl
             return next == null || next.Value <= nowUtc;
         }
 
-        // The cache after an attempt: last attempt always; last success and the candidate only from a result.
+        // The cache after an attempt: last attempt always; last success, the installed release compared against, the
+        // newest release seen and the installed release's entry only from a result (each replaced as a whole, so a
+        // value of an older check never survives beside a newer one).
         public static UpdateCache Record(UpdateCache before, UpdateResult r, DateTime nowUtc)
         {
             var c = before ?? new UpdateCache();
             c = new UpdateCache
             {
-                LastAttemptUtc = Recovery.Stamp(nowUtc), LastAttemptOutcome = r.Outcome.ToString(), LastSuccessUtc = c.LastSuccessUtc,
+                LastAttemptUtc = Recovery.Stamp(nowUtc), LastAttemptOutcome = r.Outcome.ToString(), LastSuccessUtc = c.LastSuccessUtc, CheckedInstalled = c.CheckedInstalled,
                 CandidateTag = c.CandidateTag, CandidateVersion = c.CandidateVersion, CandidateUrl = c.CandidateUrl, CandidatePublishedUtc = c.CandidatePublishedUtc,
                 InstalledTag = c.InstalledTag, InstalledPublishedUtc = c.InstalledPublishedUtc,
                 NextAllowedUtc = Recovery.Stamp(r.NextAllowedUtc ?? (r.Outcome == UpdateOutcome.Failed ? nowUtc.Add(FailureBackoff) : (DateTime?)null)),
             };
             if (r.Outcome == UpdateOutcome.Available || r.Outcome == UpdateOutcome.NewestOnly || r.Outcome == UpdateOutcome.UpToDate || r.Outcome == UpdateOutcome.Incomplete)
             {
+                var newest = r.Newest ?? r.Candidate;
                 c.LastSuccessUtc = Recovery.Stamp(nowUtc);
-                c.CandidateTag = r.Candidate != null ? r.Candidate.Tag : null;
-                c.CandidateVersion = r.Candidate != null ? r.Candidate.Version.Text : null;
-                c.CandidateUrl = r.Candidate != null ? r.Candidate.Url : null;
-                c.CandidatePublishedUtc = r.Candidate != null ? r.Candidate.PublishedUtc : null;
-                if (r.Installed != null) { c.InstalledTag = r.Installed.Tag; c.InstalledPublishedUtc = r.Installed.PublishedUtc; }
+                c.CheckedInstalled = r.CheckedInstalled;
+                c.CandidateTag = newest != null ? newest.Tag : null;
+                c.CandidateVersion = newest != null ? newest.Version.Text : null;
+                c.CandidateUrl = newest != null ? newest.Url : null;
+                c.CandidatePublishedUtc = newest != null ? newest.PublishedUtc : null;
+                c.InstalledTag = r.Installed != null ? r.Installed.Tag : null;
+                c.InstalledPublishedUtc = r.Installed != null ? r.Installed.PublishedUtc : null;
             }
             return c;
+        }
+
+        // Whether the last successful check compared against the installed release read now (R8). An unreadable
+        // installed release never matches.
+        public static bool CheckedThisInstall(UpdateCache c, string installed)
+        {
+            var checkedOne = ReleaseVersion.Parse(c != null ? c.CheckedInstalled : null);
+            var mine = ReleaseVersion.Parse(installed);
+            return checkedOne != null && mine != null && checkedOne.CompareTo(mine) == 0;
         }
 
         // What the Driver card shows from the cache, compared with the installed release NOW (never a stored "current").
@@ -209,11 +231,11 @@ namespace AmdgpuWddmControl
             var lines = new List<string>();
             var candidate = ReleaseVersion.Parse(c.CandidateTag);
             var mine = ReleaseVersion.Parse(installed);
-            bool success = c.LastSuccessUtc != null;
+            bool success = c.LastSuccessUtc != null, latest = success && c.LastSuccessUtc == c.LastAttemptUtc, same = CheckedThisInstall(c, installed);
             if (candidate != null && mine != null && candidate.CompareTo(mine) > 0) lines.Add(Strings.T("upd.available", candidate.Text));
             else if (candidate != null && mine == null) lines.Add(Strings.T("upd.newest", candidate.Text));
-            else if (success && c.LastAttemptOutcome == "UpToDate" && c.LastSuccessUtc == c.LastAttemptUtc) lines.Add(Strings.T("upd.uptodate"));
-            else if (success && c.LastAttemptOutcome == "Incomplete" && c.LastSuccessUtc == c.LastAttemptUtc) lines.Add(Strings.T("upd.incomplete", PerPage * MaxPages));
+            else if (latest && same && c.LastAttemptOutcome == "UpToDate") lines.Add(Strings.T("upd.uptodate"));
+            else if (latest && same && c.LastAttemptOutcome == "Incomplete") lines.Add(Strings.T("upd.incomplete", PerPage * MaxPages));
             if (c.LastAttemptOutcome == "Failed") lines.Add(Strings.T("upd.failed"));
             if (c.LastAttemptOutcome == "RateLimited") lines.Add(Strings.T("upd.rate-limited", Local(c.NextAllowedUtc)));
             if (success && c.LastSuccessUtc != c.LastAttemptUtc) lines.Add(Strings.T("upd.last-success", Local(c.LastSuccessUtc)));
@@ -228,14 +250,15 @@ namespace AmdgpuWddmControl
             return t == null ? "-" : t.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         }
 
-        // The "Released" date of the INSTALLED release, known only when a check saw it (a separate label from the INF
-        // driver date); null otherwise.
+        // The "Released" date of the INSTALLED release, known only when the last successful check compared against this
+        // very install and saw it in the list (a separate label from the INF driver date); null otherwise.
         public static string InstalledReleased(UpdateCache c, string installed)
         {
             var tag = ReleaseVersion.Parse(c != null ? c.InstalledTag : null);
             var mine = ReleaseVersion.Parse(installed);
             var t = Recovery.Utc(c != null ? c.InstalledPublishedUtc : null);
-            return tag != null && mine != null && tag.CompareTo(mine) == 0 && t != null ? t.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+            return tag != null && mine != null && tag.CompareTo(mine) == 0 && CheckedThisInstall(c, installed) && t != null
+                ? t.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
         }
 
         public static bool IsCandidateNewer(UpdateCache c, string installed)
@@ -259,7 +282,8 @@ namespace AmdgpuWddmControl
                     Func<string, string> s = n => k.GetValue(n) as string;
                     return new UpdateCache
                     {
-                        LastAttemptUtc = s("LastAttemptUtc"), LastAttemptOutcome = s("LastAttemptOutcome"), LastSuccessUtc = s("LastSuccessUtc"), CandidateTag = s("CandidateTag"),
+                        LastAttemptUtc = s("LastAttemptUtc"), LastAttemptOutcome = s("LastAttemptOutcome"), LastSuccessUtc = s("LastSuccessUtc"),
+                        CheckedInstalled = s("CheckedInstalled"), CandidateTag = s("CandidateTag"),
                         CandidateVersion = s("CandidateVersion"), CandidateUrl = s("CandidateUrl"), CandidatePublishedUtc = s("CandidatePublishedUtc"), NextAllowedUtc = s("NextAllowedUtc"),
                         InstalledTag = s("InstalledTag"), InstalledPublishedUtc = s("InstalledPublishedUtc"),
                     };
@@ -284,82 +308,46 @@ namespace AmdgpuWddmControl
 
         // ---- the network ----------------------------------------------------------------------------------------------
 
-        static readonly object Gate = new object();
-        static Thread _running;
+        public static readonly TimeSpan Grace = TimeSpan.FromSeconds(2);
+        static readonly UpdateRunner Default = new UpdateRunner(new HttpReleaseTransport(), TimeSpan.FromSeconds(TotalSeconds), Grace,
+            r => SaveCache(Record(LoadCache(), r, DateTime.UtcNow)), r => { var f = Finished; if (f != null) f(r); });
         public static event Action<UpdateResult> Finished;
 
-        public static bool Running { get { lock (Gate) return _running != null; } }
+        public static bool Running { get { return Default.Running; } }
 
         // Starts a check unless one runs (a click during a check joins it). The result arrives through Finished, on a
-        // worker thread; the window marshals it and drops it when it has closed.
-        public static void Start(string installed)
-        {
-            lock (Gate)
-            {
-                if (_running != null) return;
-                _running = new Thread(() => Run(installed)) { IsBackground = true, Name = "update check" };
-                _running.Start();
-            }
-        }
+        // worker thread, once the gate has opened again; the window marshals it and drops it when it has closed.
+        public static void Start(string installed) { Default.Start(installed); }
 
-        static void Run(string installed)
-        {
-            UpdateResult r;
-            var box = new UpdateResult[1];
-            var worker = new Thread(() => { box[0] = Fetch(installed); }) { IsBackground = true };
-            worker.Start();
-            if (!worker.Join(TimeSpan.FromSeconds(TotalSeconds + 2))) { lock (Gate) _abort = true; r = new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "no answer within " + TotalSeconds + " s" }; }
-            else r = box[0] ?? new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "no result" };
-            var now = DateTime.UtcNow;
-            SaveCache(Record(LoadCache(), r, now));
-            lock (Gate) { _running = null; _abort = false; }
-            var f = Finished;
-            if (f != null) try { f(r); } catch (Exception) { }
-        }
+        public static UpdateResult TimedOut() { return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "the check took longer than its time bound" }; }
 
-        static volatile bool _abort;
-
-        static UpdateResult Fetch(string installed)
+        // One check over a transport: the pages, each started and read only before the run's deadline. Every failure is
+        // a result, never an exception.
+        public static UpdateResult Fetch(IReleaseTransport transport, CheckRun run, string installed)
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.SystemDefault;
-            var clock = Stopwatch.StartNew();
             var all = new List<ReleaseEntry>();
             bool complete = false;
             for (int page = 1; page <= MaxPages; page++)
             {
-                int left = TotalSeconds * 1000 - (int)clock.ElapsedMilliseconds;
-                if (left <= 0 || _abort) return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "the check took longer than " + TotalSeconds + " s" };
-                var request = (HttpWebRequest)WebRequest.Create(ApiUrl + "?per_page=" + PerPage + "&page=" + page);
-                request.Method = "GET";
-                request.UserAgent = "amdgpu-wddm-control/" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                request.Accept = "application/vnd.github+json";
-                request.Timeout = left; request.ReadWriteTimeout = left;
-                request.AllowAutoRedirect = false;
+                if (run.Over) return TimedOut();
                 string body;
                 try
                 {
-                    using (var response = (HttpWebResponse)request.GetResponse())
+                    using (var answer = transport.Get(ApiUrl + "?per_page=" + PerPage + "&page=" + page, run))
                     {
-                        if (response.StatusCode != HttpStatusCode.OK) return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "HTTP " + (int)response.StatusCode };
-                        body = ReadBounded(response);
+                        if (run.Over) return TimedOut();
+                        if (answer.Failure != null) return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = answer.Failure };
+                        if (answer.Status != 200)
+                        {
+                            var next = NextAllowed(answer.Header("Retry-After"), answer.Header("X-RateLimit-Reset"), answer.Header("X-RateLimit-Remaining"), DateTime.UtcNow);
+                            bool limited = (answer.Status == 403 || answer.Status == 429) && next != null;
+                            return new UpdateResult { Outcome = limited ? UpdateOutcome.RateLimited : UpdateOutcome.Failed, NextAllowedUtc = next, Detail = "HTTP " + answer.Status };
+                        }
+                        body = ReadBounded(answer.Body, run);
                         if (body == null) return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "the answer is larger than " + MaxBytes + " bytes" };
                     }
                 }
-                catch (WebException e)
-                {
-                    var http = e.Response as HttpWebResponse;
-                    if (http != null)
-                        using (http)
-                        {
-                            var next = NextAllowed(http.Headers["Retry-After"], http.Headers["X-RateLimit-Reset"], http.Headers["X-RateLimit-Remaining"], DateTime.UtcNow);
-                            int code = (int)http.StatusCode;
-                            if (code == 403 || code == 429)
-                                return new UpdateResult { Outcome = next != null ? UpdateOutcome.RateLimited : UpdateOutcome.Failed, NextAllowedUtc = next, Detail = "HTTP " + code };
-                            return new UpdateResult { Outcome = UpdateOutcome.Failed, NextAllowedUtc = next, Detail = "HTTP " + code };
-                        }
-                    return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = e.Status.ToString() };
-                }
-                catch (Exception e) { return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = e.GetType().Name }; }
+                catch (Exception e) { return run.Over ? TimedOut() : new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = e.GetType().Name }; }
                 var entries = ParsePage(body);
                 if (entries == null) return new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "the answer is not a list of releases" };
                 all.AddRange(entries);
@@ -375,18 +363,21 @@ namespace AmdgpuWddmControl
             catch (Exception) { return 0; }
         }
 
-        static string ReadBounded(HttpWebResponse response)
+        // The body up to MaxBytes (null above it). The deadline is checked after every read, so an answer that trickles
+        // in a byte at a time cannot outlive it; a read blocked past it is ended by the run's abort.
+        static string ReadBounded(Stream s, CheckRun run)
         {
-            using (var s = response.GetResponseStream())
             using (var m = new MemoryStream())
             {
                 var buffer = new byte[65536];
                 int n;
                 while ((n = s.Read(buffer, 0, buffer.Length)) > 0)
                 {
+                    if (run.Over) throw new TimeoutException();
                     m.Write(buffer, 0, n);
                     if (m.Length > MaxBytes) return null;
                 }
+                if (run.Over) throw new TimeoutException();
                 return Encoding.UTF8.GetString(m.ToArray());
             }
         }
@@ -398,6 +389,157 @@ namespace AmdgpuWddmControl
             if (url == null || !url.StartsWith("https://github.com/" + Owner + "/" + Repository + "/releases", StringComparison.Ordinal)) return false;
             try { using (Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })) { } return true; }
             catch (Exception) { return false; }
+        }
+    }
+
+    // The deadline and the abort of one check (927 R7). The deadline is absolute: it counts from the start of the run,
+    // never from the last byte read.
+    public sealed class CheckRun
+    {
+        readonly Stopwatch _clock = Stopwatch.StartNew();
+        readonly TimeSpan _budget;
+        readonly object _lock = new object();
+        Action _cancel;
+        bool _aborted;
+
+        public CheckRun(TimeSpan budget) { _budget = budget; }
+
+        public bool Over { get { lock (_lock) return _aborted || _clock.Elapsed >= _budget; } }
+        public bool Aborted { get { lock (_lock) return _aborted; } }
+        public int LeftMs { get { return (int)Math.Max(0, Math.Min(int.MaxValue, (_budget - _clock.Elapsed).TotalMilliseconds)); } }
+
+        // How to end the request in flight; run at once when the run was already aborted.
+        public void OnAbort(Action cancel)
+        {
+            bool now;
+            lock (_lock) { _cancel = cancel; now = _aborted; }
+            if (now && cancel != null) try { cancel(); } catch (Exception) { }
+        }
+
+        public void Abort()
+        {
+            Action cancel;
+            lock (_lock) { if (_aborted) return; _aborted = true; cancel = _cancel; }
+            if (cancel != null) try { cancel(); } catch (Exception) { }
+        }
+    }
+
+    // One GET of the release list. The tests inject their own; the app uses HttpReleaseTransport.
+    public interface IReleaseTransport
+    {
+        ReleaseAnswer Get(string url, CheckRun run);
+    }
+
+    public sealed class ReleaseAnswer : IDisposable
+    {
+        public string Failure;                          // no HTTP answer (the network's status)
+        public int Status;
+        public Func<string, string> Header = n => null;
+        public Stream Body;                             // only with Status 200
+        public IDisposable Owner;
+
+        public void Dispose()
+        {
+            if (Body != null) try { Body.Dispose(); } catch (Exception) { }
+            if (Owner != null) try { Owner.Dispose(); } catch (Exception) { }
+        }
+    }
+
+    public sealed class HttpReleaseTransport : IReleaseTransport
+    {
+        public ReleaseAnswer Get(string url, CheckRun run)
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.SystemDefault;
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            request.UserAgent = "amdgpu-wddm-control/" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            request.Accept = "application/vnd.github+json";
+            int left = Math.Max(1, run.LeftMs);
+            request.Timeout = left; request.ReadWriteTimeout = left;
+            request.AllowAutoRedirect = false;
+            run.OnAbort(request.Abort);
+            try { return Answer((HttpWebResponse)request.GetResponse(), true); }
+            catch (WebException e)
+            {
+                var http = e.Response as HttpWebResponse;
+                return http != null ? Answer(http, false) : new ReleaseAnswer { Failure = e.Status.ToString() };
+            }
+        }
+
+        static ReleaseAnswer Answer(HttpWebResponse response, bool ok)
+        {
+            var headers = response.Headers;
+            int status = (int)response.StatusCode;
+            return new ReleaseAnswer { Status = status, Header = n => headers[n], Body = ok && status == 200 ? response.GetResponseStream() : null, Owner = response };
+        }
+    }
+
+    // One check at a time (927 R7). A supervisor aborts the request at the deadline and records the timeout; the gate
+    // opens only when the worker has ended AND the result is recorded, and Finished fires once, at that moment. A
+    // worker's result after the deadline is dropped.
+    public sealed class UpdateRunner
+    {
+        readonly IReleaseTransport _transport;
+        readonly TimeSpan _budget, _grace;
+        readonly Action<UpdateResult> _record, _finished;
+        readonly object _gate = new object();
+        Job _busy;
+
+        sealed class Job { public CheckRun Run; public Thread Worker; public UpdateResult Result, Published; public int Holds = 2; }
+
+        public UpdateRunner(IReleaseTransport transport, TimeSpan budget, TimeSpan grace, Action<UpdateResult> record, Action<UpdateResult> finished)
+        {
+            _transport = transport; _budget = budget; _grace = grace; _record = record; _finished = finished;
+        }
+
+        public bool Running { get { lock (_gate) return _busy != null; } }
+
+        // false: a check holds the gate (the caller joins it).
+        public bool Start(string installed)
+        {
+            lock (_gate)
+            {
+                if (_busy != null) return false;
+                var job = new Job { Run = new CheckRun(_budget) };
+                job.Worker = new Thread(() => Work(job, installed)) { IsBackground = true, Name = "update check" };
+                _busy = job;
+                job.Worker.Start();
+                new Thread(() => Supervise(job)) { IsBackground = true, Name = "update check deadline" }.Start();
+                return true;
+            }
+        }
+
+        void Work(Job job, string installed)
+        {
+            try { job.Result = UpdateCheck.Fetch(_transport, job.Run, installed); }
+            catch (Exception e) { job.Result = new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = e.GetType().Name }; }
+            finally { Release(job); }
+        }
+
+        void Supervise(Job job)
+        {
+            UpdateResult r;
+            if (job.Worker.Join(_budget + _grace)) r = job.Result ?? new UpdateResult { Outcome = UpdateOutcome.Failed, Detail = "no result" };
+            else
+            {
+                job.Run.Abort();
+                job.Worker.Join(_grace);        // an aborted request ends at once; one that does not keeps the gate closed
+                r = UpdateCheck.TimedOut();
+            }
+            try { _record(r); } catch (Exception) { }
+            job.Published = r;
+            Release(job);
+        }
+
+        void Release(Job job)
+        {
+            bool last;
+            lock (_gate)
+            {
+                last = --job.Holds == 0;
+                if (last && _busy == job) _busy = null;
+            }
+            if (last && _finished != null) try { _finished(job.Published); } catch (Exception) { }
         }
     }
 }

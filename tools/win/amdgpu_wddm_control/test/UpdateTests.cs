@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using AmdgpuWddmControl;
 
 static partial class UnitTests
@@ -47,7 +48,7 @@ static partial class UnitTests
         Equal(UpdateOutcome.UpToDate, UpdateCheck.Decide(two, "0.7.199.100-tester.12", true).Outcome, "the newest installed, complete list: up to date");
         Equal(UpdateOutcome.Incomplete, UpdateCheck.Decide(two, "0.7.199.100-tester.12", false).Outcome, "a capped list never says up to date");
         r = UpdateCheck.Decide(two, "0.7.200.0-tester.1", true);
-        Check(r.Outcome == UpdateOutcome.UpToDate && r.Candidate == null, "never a downgrade: an older newest release is not offered");
+        Check(r.Outcome == UpdateOutcome.UpToDate && r.Candidate == null && r.Newest.Tag == "v0.7.199.100-tester.12", "never a downgrade: an older newest release is not offered");
         r = UpdateCheck.Decide(two, null, true);
         Check(r.Outcome == UpdateOutcome.NewestOnly && r.Candidate.Tag == "v0.7.199.100-tester.12", "unknown installed version: only the newest is named");
         Equal(UpdateOutcome.NewestOnly, UpdateCheck.Decide(two, "custom-build", true).Outcome, "an installed version outside the grammar is unknown");
@@ -81,14 +82,118 @@ static partial class UnitTests
         Equal("Not checked for updates yet.", UpdateCheck.CardText(null, "x", false), "never checked");
         Equal("2026-10-03", UpdateCheck.InstalledReleased(ok, "0.7.199.100-tester.11"), "Released date of the installed release after a check");
         Check(UpdateCheck.InstalledReleased(ok, "0.7.199.100-tester.12") == null, "Released date only for the release the check saw");
+        // R8: "up to date" and the Released date belong to the install the check compared against.
+        var current = UpdateCheck.Record(null, UpdateCheck.Decide(two, "0.7.199.100-tester.12", true), now);
+        Check(current.CheckedInstalled == "0.7.199.100-tester.12" && current.CandidateTag == "v0.7.199.100-tester.12" && current.InstalledTag == "v0.7.199.100-tester.12",
+            "R8: an up-to-date check records the install it compared against and the newest release seen");
+        Equal("2026-10-05", UpdateCheck.InstalledReleased(current, "0.7.199.100-tester.12"), "R8: the Released date of the checked install");
+        text = UpdateCheck.CardText(current, "0.7.199.100-tester.11", false);
+        Check(text.Contains("Update available: 0.7.199.100-tester.12") && !text.Contains("newest release."), "R8: after a rollback the newest seen is offered again, never \"up to date\": " + text);
+        Check(UpdateCheck.InstalledReleased(current, "0.7.199.100-tester.11") == null, "R8: no Released date after a rollback");
+        text = UpdateCheck.CardText(current, null, false);
+        Check(text.Contains("The newest release is 0.7.199.100-tester.12.") && !text.Contains("You have"), "R8: an unreadable installed release voids \"up to date\": " + text);
+        Check(UpdateCheck.InstalledReleased(current, null) == null && UpdateCheck.InstalledReleased(current, "garbage") == null, "R8: no Released date without a readable install");
+        text = UpdateCheck.CardText(current, "0.7.200.0-tester.1", false);
+        Check(!text.Contains("You have") && !text.Contains("Update available"), "R8: another (newer) install is not \"up to date\" until the next check: " + text);
+        var legacy = new UpdateCache { LastAttemptUtc = current.LastAttemptUtc, LastSuccessUtc = current.LastSuccessUtc, LastAttemptOutcome = "UpToDate", InstalledTag = "v0.7.199.100-tester.12",
+            InstalledPublishedUtc = "2026-10-05T00:00:00Z" };
+        Check(!UpdateCheck.CardText(legacy, "0.7.199.100-tester.12", false).Contains("You have") && UpdateCheck.InstalledReleased(legacy, "0.7.199.100-tester.12") == null,
+            "R8: a cache without CheckedInstalled never says up to date");
+        var unknown = UpdateCheck.Record(current, UpdateCheck.Decide(two, null, true), now.AddHours(1));
+        Check(unknown.CheckedInstalled == null && unknown.InstalledTag == null && UpdateCheck.InstalledReleased(unknown, "0.7.199.100-tester.12") == null,
+            "R8: a check with an unreadable install replaces the earlier install's identity");
+        var older = UpdateCheck.Record(current, UpdateCheck.Decide(UpdateCheck.ParsePage("[" + Release("v0.7.199.100-tester.11") + "]"), "0.7.199.100-tester.12", true), now.AddHours(1));
+        Check(older.CandidateTag == "v0.7.199.100-tester.11" && older.InstalledTag == null && older.CheckedInstalled == "0.7.199.100-tester.12",
+            "R8: the candidate is the newest seen by the last check, the installed entry only when that check listed it");
+
         Check(UpdateCheck.TagUrl("v1.2.3") == null && UpdateCheck.TagUrl("v0.7.199.100-tester.11") == "https://github.com/D-Ogi/amdgpu-wddm/releases/tag/v0.7.199.100-tester.11", "browser URLs only for tags of the grammar");
 
         // Static: one request in flight, SystemDefault TLS, bounded size and time, no redirects to elsewhere.
         var src = File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\UpdateCheck.cs"));
-        Check(src.Contains("if (_running != null) return;") && src.Contains("SecurityProtocolType.SystemDefault") && !src.Contains("SecurityProtocolType.Tls") &&
-            src.Contains("if (m.Length > MaxBytes) return null;") && src.Contains("AllowAutoRedirect = false") && src.Contains("worker.Join(TimeSpan.FromSeconds(TotalSeconds + 2))"),
-            "update check: one in flight, OS TLS, size and time bounds, no redirects");
+        Check(src.Contains("if (_busy != null) return false;") && src.Contains("SecurityProtocolType.SystemDefault") && !src.Contains("SecurityProtocolType.Tls") &&
+            src.Contains("if (m.Length > MaxBytes) return null;") && src.Contains("AllowAutoRedirect = false") && src.Contains("run.OnAbort(request.Abort);") &&
+            src.Contains("new HttpReleaseTransport(), TimeSpan.FromSeconds(TotalSeconds), Grace"),
+            "update check: one in flight, OS TLS, size bound, the request aborted at the 20 s deadline, no redirects");
+        UpdateRunnerTests();
         var info = File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\AssemblyInfo.cs"));
         Check(info.Contains("TargetFramework(\".NETFramework,Version=v4.8\""), "AssemblyInfo declares .NET Framework 4.8 (A5)");
+    }
+
+    // R7 with an injected transport: the absolute deadline against a trickling answer, and the gate kept closed while a
+    // timed-out worker is still alive.
+    sealed class FakeTransport : IReleaseTransport
+    {
+        public Func<string, CheckRun, ReleaseAnswer> OnGet;
+        public int Gets;
+        public ReleaseAnswer Get(string url, CheckRun run) { Interlocked.Increment(ref Gets); return OnGet(url, run); }
+    }
+
+    // A body that never ends: one byte every 20 ms, so no per-read timeout would ever fire.
+    sealed class TrickleStream : Stream
+    {
+        public override int Read(byte[] buffer, int offset, int count) { Thread.Sleep(20); buffer[offset] = (byte)' '; return 1; }
+        public override bool CanRead { get { return true; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return false; } }
+        public override long Length { get { throw new NotSupportedException(); } }
+        public override long Position { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
+        public override void Flush() { }
+        public override long Seek(long o, SeekOrigin s) { throw new NotSupportedException(); }
+        public override void SetLength(long v) { throw new NotSupportedException(); }
+        public override void Write(byte[] b, int o, int c) { throw new NotSupportedException(); }
+    }
+
+    static void UpdateRunnerTests()
+    {
+        var budget = TimeSpan.FromMilliseconds(400);
+        var grace = TimeSpan.FromMilliseconds(200);
+
+        // A trickling answer ends at the absolute deadline, by the worker's own check.
+        var trickle = new FakeTransport { OnGet = (u, run) => new ReleaseAnswer { Status = 200, Body = new TrickleStream() } };
+        var records = new List<UpdateResult>();
+        UpdateResult finished = null;
+        var done = new ManualResetEvent(false);
+        var runner = new UpdateRunner(trickle, budget, grace, r => { lock (records) records.Add(r); }, r => { finished = r; done.Set(); });
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Check(runner.Start("0.7.199.100-tester.11"), "R7: the first Start runs");
+        Check(done.WaitOne(10000), "R7: a trickling answer finishes");
+        clock.Stop();
+        Check(finished != null && finished.Outcome == UpdateOutcome.Failed && finished.Detail.Contains("longer than"), "R7: a trickling answer is a timeout: " + (finished != null ? finished.Detail : "-"));
+        Check(clock.Elapsed < budget + grace + TimeSpan.FromMilliseconds(400), "R7: the trickle cannot stretch the absolute deadline (" + (int)clock.ElapsedMilliseconds + " ms)");
+        Check(records.Count == 1 && !runner.Running, "R7: recorded once, the gate open after Finished");
+
+        // A request that ignores the abort: the timeout is recorded, the gate stays closed, a second Start joins.
+        var release = new ManualResetEvent(false);
+        var aborted = new ManualResetEvent(false);
+        var recorded = new ManualResetEvent(false);
+        var page = "[" + Release("v0.7.199.100-tester.11") + "]";
+        bool stuck = true;
+        var transport = new FakeTransport
+        {
+            OnGet = (u, run) =>
+            {
+                if (!stuck) return new ReleaseAnswer { Status = 200, Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(page)) };
+                run.OnAbort(() => aborted.Set());
+                release.WaitOne();
+                return new ReleaseAnswer { Status = 200, Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(page)) };
+            }
+        };
+        records.Clear();
+        int finishes = 0;
+        finished = null; done.Reset();
+        runner = new UpdateRunner(transport, budget, grace, r => { lock (records) records.Add(r); recorded.Set(); }, r => { finished = r; Interlocked.Increment(ref finishes); done.Set(); });
+        Check(runner.Start("0.7.199.100-tester.11"), "R7: a stuck check starts");
+        Check(recorded.WaitOne(10000), "R7: the stuck check is recorded at its deadline");
+        Check(aborted.WaitOne(0), "R7: the request in flight was aborted at the deadline");
+        Check(records.Count == 1 && records[0].Outcome == UpdateOutcome.Failed && records[0].Detail.Contains("longer than"), "R7: the deadline records a timeout");
+        Check(!runner.Start("0.7.199.100-tester.11") && runner.Running && transport.Gets == 1 && finishes == 0,
+            "R7: a second Start at the timeout joins: no second request while the old worker lives");
+        release.Set();
+        Check(done.WaitOne(10000), "R7: Finished fires when the old worker has ended");
+        Check(finishes == 1 && finished.Outcome == UpdateOutcome.Failed && !runner.Running && records.Count == 1,
+            "R7: the late answer is dropped (once Finished, the timeout, nothing recorded twice)");
+        stuck = false; done.Reset();
+        Check(runner.Start("0.7.199.100-tester.11") && transport.Gets == 2, "R7: after the worker ended a new check may start");
+        Check(done.WaitOne(10000) && finished.Outcome == UpdateOutcome.UpToDate, "R7: the new check runs to its result");
     }
 }
