@@ -16,9 +16,6 @@ static partial class UnitTests
     // "<case id> <field>" -> why this app differs, with the plan text it follows.
     static readonly Dictionary<string, string> Disputed = new Dictionary<string, string>
     {
-        { "VER-13 dates.release_date", "the Released label is the INSTALLED release's GitHub date (plan F-VER, WU-043); interfaces.md section 5 and " +
-            "review 927 R8 show it only while Release\\Version is readable and equals the release the check compared against, so a missing " +
-            "Release\\Version shows no Released date" },
     };
 
     sealed class OracleRun
