@@ -188,21 +188,40 @@ function Test-RunningReleaseWitness {
 # release; $StatePath is the installer's state.json (its mutation_* fields, docs/gui/interfaces.md section 2). The
 # written file gets Administrators as its owner when the writer is not SYSTEM (the reader trusts only those two); a
 # file whose owner cannot be set is removed again.
+# The whole sequence (state, manifest and driver readings, then the publication) runs under the installer's
+# engine.lock, the lock every changing installer run holds for its life (engine.ps1 Enter-EngineLock): no install
+# action can start between the readings and the publication. Verify holds the lock already (-LockHeld); the
+# start-confirm task takes it, waiting up to -LockWaitMs, and writes no witness while an installer runs. Right before
+# the publication the state is read once more: a record of an install action of this boot that appeared since (a
+# writer that ignored the lock) still gives no witness. -Reading and -BeforePublish are for host tests only.
 function Write-RunningReleaseWitness {
     param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][ValidateSet('verify', 'start-confirm')][string]$RecordedBy, $Boot, [string]$Path = $script:WitnessPath,
-        [string]$StatePath = (Join-Path $env:ProgramData 'amdgpu-wddm\installer\state.json'))
+        [string]$StatePath = (Join-Path $env:ProgramData 'amdgpu-wddm\installer\state.json'), [switch]$LockHeld, [int]$LockWaitMs = 3000,
+        $Reading, [scriptblock]$BeforePublish)
+    $lock = $null
     try {
+        if (-not $LockHeld) {
+            $lock = Open-InstallerLock -Directory (Split-Path $StatePath) -WaitMs $LockWaitMs
+            if (-not $lock) { return 'an installer run holds engine.lock: no witness until the next start' }
+        }
         $mp = Join-Path $InstallRoot 'manifest.json'
         if (-not (Test-Path -LiteralPath $mp)) { return "no manifest.json in $InstallRoot" }
-        $s = [IO.File]::OpenRead($mp)
-        try { $msha = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
-        $manifest = Get-Content -LiteralPath $mp -Raw | ConvertFrom-Json
+        $bytes = [IO.File]::ReadAllBytes($mp)
+        $msha = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($bytes)) -replace '-', '')
+        $manifest = (New-Object Text.UTF8Encoding $false).GetString($bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
         if (-not $Boot) { $Boot = Get-BootIdentity }
         $st = $null
         if ($StatePath -and (Test-Path -LiteralPath $StatePath)) { $st = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json }
-        $reading = Get-RunningKmdReading -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe')
-        $w = Get-RunningReleaseWitness -Manifest $manifest -ManifestSha256 $msha -Reading $reading -Boot $Boot -RecordedBy $RecordedBy -State $st
+        if (-not $Reading) { $Reading = Get-RunningKmdReading -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe') }
+        $w = Get-RunningReleaseWitness -Manifest $manifest -ManifestSha256 $msha -Reading $Reading -Boot $Boot -RecordedBy $RecordedBy -State $st
         if (-not $w.record) { return $w.reason }
+        if ($BeforePublish) { & $BeforePublish }
+        if ($StatePath -and (Test-Path -LiteralPath $StatePath)) {
+            $again = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+            if ($again -and $again.PSObject.Properties['mutation_boot_id'] -and $null -ne $again.mutation_boot_id -and [int64]$again.mutation_boot_id -eq [int64]$Boot.boot_id) {
+                return "an install action of this boot was recorded during the reading ($($again.mutation_utc)): no witness"
+            }
+        }
         [void][IO.Directory]::CreateDirectory((Split-Path $Path))
         $tmp = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
         [IO.File]::WriteAllText($tmp, ($w.record | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
@@ -211,6 +230,22 @@ function Write-RunningReleaseWitness {
         if ($why) { Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue; return "witness removed again: $why" }
         return $null
     } catch { return "witness not written: $($_.Exception.Message)" }
+    finally { if ($lock) { $lock.Dispose() } }
+}
+
+# The installer's engine.lock (engine.ps1 Enter-EngineLock opens it the same way), waited for up to $WaitMs; $null
+# when another process keeps it. The caller disposes the handle.
+function Open-InstallerLock([string]$Directory, [int]$WaitMs = 10000) {
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        try {
+            [void][IO.Directory]::CreateDirectory($Directory)
+            return (New-Object IO.FileStream -ArgumentList (Join-Path $Directory 'engine.lock'), ([IO.FileMode]::OpenOrCreate), ([IO.FileAccess]::ReadWrite), ([IO.FileShare]::None))
+        } catch [IO.IOException] {
+            if ($clock.ElapsedMilliseconds -ge $WaitMs) { return $null }
+            Start-Sleep -Milliseconds 250
+        }
+    }
 }
 
 # The owner the control application trusts: Administrators, or SYSTEM when SYSTEM wrote the file. $null when set.

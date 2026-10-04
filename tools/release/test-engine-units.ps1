@@ -231,6 +231,31 @@ $why = Write-RunningReleaseWitness -InstallRoot (Join-Path $work 'nowhere') -Rec
 Check (($why -match 'no manifest\.json') -and -not (Test-Path -LiteralPath $wpath)) 'no installed release: nothing written, no exception'
 Check ($script:WitnessPath -eq (Join-Path $env:ProgramData 'amdgpu-wddm\installer\running-release.json')) "the witness lives in the installer's state folder: $($script:WitnessPath)"
 
+'[G-VER writer] publication under the installer lock: no install action between the readings and the witness (R4)'
+# The writer reaches publication when it returns nothing, or (not elevated here) removes the file again because its
+# owner cannot be Administrators: both mean that it published.
+$wsDir = Join-Path $work 'witness-state'
+$wsPath = Join-Path $wsDir 'state.json'
+Write-Text $wsPath '{ "schema": 1, "phase": "verified" }'
+function Test-Published([string]$Why) { return ((-not $Why) -or ($Why -match 'witness removed again')) }
+$wp = Join-Path $work 'r4\running-release.json'
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'start-confirm' -Boot $boot -Path $wp -StatePath $wsPath -Reading $reading
+Check (Test-Published $why) "lock free: the start-confirm writer takes engine.lock and publishes ($(if ($why) { $why } else { 'written' }))"
+$held = Open-InstallerLock -Directory $wsDir -WaitMs 0
+$clock = [Diagnostics.Stopwatch]::StartNew()
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'start-confirm' -Boot $boot -Path (Join-Path $work 'r4\busy.json') -StatePath $wsPath -Reading $reading -LockWaitMs 600
+Check (($why -match 'holds engine\.lock') -and -not (Test-Path -LiteralPath (Join-Path $work 'r4\busy.json')) -and $clock.ElapsedMilliseconds -lt 5000) "an installer holds engine.lock: no witness after a bounded wait of $($clock.ElapsedMilliseconds) ms ($why)"
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'verify' -Boot $boot -Path (Join-Path $work 'r4\held.json') -StatePath $wsPath -Reading $reading -LockHeld
+Check (Test-Published $why) 'verify, which holds engine.lock itself (-LockHeld): no second acquisition, publishes'
+$held.Dispose()
+$script:blocked = $null
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'start-confirm' -Boot $boot -Path (Join-Path $work 'r4\race.json') -StatePath $wsPath -Reading $reading -BeforePublish { $script:blocked = (Open-InstallerLock -Directory $wsDir -WaitMs 0) }
+Check (($null -eq $script:blocked) -and (Test-Published $why)) 'an installer that starts between the readings and the publication cannot take engine.lock'
+if ($script:blocked) { $script:blocked.Dispose() }
+$why = Write-RunningReleaseWitness -InstallRoot $pkg -RecordedBy 'start-confirm' -Boot $boot -Path (Join-Path $work 'r4\mutated.json') -StatePath $wsPath -Reading $reading -BeforePublish {
+    Write-Text $wsPath (([ordered]@{ schema = 1; phase = 'files-copied'; mutation_boot_id = 41; mutation_utc = '2026-10-04T08:02:00.0000000Z' }) | ConvertTo-Json) }
+Check (($why -match 'recorded during the reading') -and -not (Test-Path -LiteralPath (Join-Path $work 'r4\mutated.json'))) "an install action of this boot recorded between the readings and the publication: no witness ($why)"
+
 '[engine] install action record in state.json (docs/gui/interfaces.md section 2): dry runs record nothing'
 $script:state = [pscustomobject]@{ schema = 1; phase = 'new' }
 $script:DryRunMode = $true

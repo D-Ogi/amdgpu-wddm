@@ -556,7 +556,7 @@ if ($script:VerifyOnly) {
     # The running-release witness of this boot (release-witness.ps1): written only when the loaded KMD image and the
     # driver's reply match this release; the control application reads it.
     if (-not $DryRun) {
-        $why = Write-RunningReleaseWitness -InstallRoot $InstallRoot -RecordedBy 'verify' -Boot (Get-BootIdentity) -StatePath $script:StatePath
+        $why = Write-RunningReleaseWitness -InstallRoot $InstallRoot -RecordedBy 'verify' -Boot (Get-BootIdentity) -StatePath $script:StatePath -LockHeld
         if ($why) { Write-Log "   running-release witness not written: $why" } else { Write-Log "   running-release witness written: $($script:WitnessPath)" }
         Write-EngineEvent 'witness' ([ordered]@{ written = (-not $why); reason = $why })
     }

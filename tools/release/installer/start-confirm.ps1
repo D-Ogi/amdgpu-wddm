@@ -206,7 +206,8 @@ $timer.Start()
 $timer.Dispose(); $form.Dispose()
 Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms)"
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
-# whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task.
+# whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
+# installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.
 try {
     . (Join-Path $here 'release-witness.ps1')
     $why = Write-RunningReleaseWitness -InstallRoot (Split-Path $here) -RecordedBy 'start-confirm'
