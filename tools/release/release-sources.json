@@ -98,10 +98,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_d3d11.dll",
-      "sha256": "7E9F1692157E79FEC9B0BC2E9F92E73BD4907D00ECBF4885E5B88ABC1B3F76A1",
-      "size": 598528,
-      "role": "GPU D3D11 shell (amdgpu-wddm m14/dxgi-private-hints 7abf21de: engine-private DXGI hints, static CRT; built against DXVK fork 0c187731; app-route-dp5)"
+      "source": "scratch/approuter-fix/d3d11-10bit/artifact/amdgpu_wddm_d3d11.dll",
+      "sha256": "A360BCBB7BE2D5885A0020F2B358ED25338EA4BC0EB6F6DD9CB1CC45C0334A45",
+      "size": 605696,
+      "role": "GPU D3D11 shell (amdgpu-wddm m14/d3d11-composed-primaries 7ae6462f = 7abf21de engine-private DXGI hints, static CRT + 3274b3d3 shared A8/FP16/RGB10A2 runtime surfaces + composed RGB10A2/RGBA16F primaries that keep their VidPn source + surface step diagnostics; built against DXVK fork 0c187731)"
     },
     {
       "component": "d3d11-umd",
