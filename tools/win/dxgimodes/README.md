@@ -19,13 +19,27 @@ The tool writes one fact on each line. The first word names the layer:
 |---|---|---|
 | `CCD` | `QueryDisplayConfig` | The desktop source mode. `pixelformat=4` is 32BPP. `5` is NONGDI. The desktop must stay at 4. |
 | `ADAPTER`, `OUTPUT` | DXGI | Adapter name and LUID. Output name, `GetDesc1` color space and bits per color. |
-| `KMT` | `D3DKMTGetDisplayModeList` | The modes that dxgkrnl collected from the miniport, with the `D3DDDIFORMAT` of each mode. |
+| `KMTA` | `D3DKMTEnumAdapters2`, `D3DKMTGetDisplayModeList` | The modes of each adapter and VidPN source, with the `D3DDDIFORMAT` of each mode. This layer needs no desktop session. |
+| `KMT` | `D3DKMTOpenAdapterFromGdiDisplayName`, `D3DKMTGetDisplayModeList` | The same list for each DXGI output. |
 | `DXGI` | `IDXGIOutput1::GetDisplayModeList1` | The count of modes for each DXGI format, with flags `0` and `DXGI_ENUM_MODES_SCALING`. |
+| `STAGE` | | The call that runs next. |
+| `CRASH` | | An unhandled exception: code, address, module, offset and the last stage. |
 | `SUMMARY` | | Outputs, empty lists of display formats, failed calls. |
 
 `B8G8R8X8_UNORM` is not a DXGI display format. It is a negative control: its count is 0 on all drivers.
-The exit code is 0 when all calls succeed, 1 when a call fails, and 2 for a bad argument. `--all` prints all
-modes. Without it, the tool prints the first 8 KMT modes and the first 3 modes of each DXGI list.
+
+Options:
+
+- `--all` prints all modes. Without it, the tool prints the first 8 KMT modes and the first 3 modes of each
+  DXGI list.
+- `--out FILE` writes each line to FILE too. Use it when a scheduled task runs the tool in the console session.
+- `--skip-ccd`, `--skip-kmt` and `--skip-dxgi` leave one layer out.
+
+The tool flushes each line at once, so a crash does not lose output. The exit code is 0 when all calls
+succeed, 1 when a call fails, 2 for a bad argument and 3 after a crash.
+
+An SSH shell runs in session 0, which has no desktop. There, DXGI can show no outputs and CCD can show no
+paths. The `KMTA` lines still show the miniport's modes.
 
 ## Build
 
