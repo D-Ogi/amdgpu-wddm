@@ -1021,9 +1021,14 @@ int main() {
         if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=S_OK || decodedDesc.Format!=c.format ||
             std::memcmp(&decodedSurface,&request.surface,sizeof(decodedSurface)) ||
             decodedDesc.BindFlags!=importedDesc.BindFlags || decodedDesc.Width!=c.width) std::abort();
+        // A primary of every swap-chain row: 8-bit keeps its VidPn source, RGB10A2 and RGBA16F name
+        // none (composed, never scanned out); A8 is no swap-chain format.
         atlasDesc.pPrimaryDesc=&primary;
-        const bool eightBit=c.format==DXGI_FORMAT_B8G8R8A8_UNORM;
-        if (convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc)!=(eightBit ? S_OK : E_NOTIMPL))
+        const bool atlasOnly=c.format==DXGI_FORMAT_A8_UNORM, eightBit=c.format==DXGI_FORMAT_B8G8R8A8_UNORM;
+        const HRESULT hr=convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc);
+        if (atlasOnly ? hr!=E_NOTIMPL :
+            hr!=S_OK || !request.primary || request.surface.Format!=c.d3dddi || request.surface.Pitch!=c.pitch ||
+            request.vidpn_source!=(eightBit ? 2u : UINT(D3DDDI_ID_UNINITIALIZED)) || request.texture.Access!=1u)
             std::abort();
         atlasDesc.pPrimaryDesc=nullptr;
     }

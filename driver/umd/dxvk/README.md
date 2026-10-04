@@ -263,8 +263,12 @@ format table (driver/contract/amdgpu_wddm_surface_format.h) enables for composit
 BGRA8/RGBA8 with their sRGB views and RGB10A2 at 4 bytes a pixel, RGBA16F at 8 and
 A8 at 1 (the shared atlases DirectComposition creates, M14.1). The row's pixel size
 sets the LB7A pitch (width * bytes rounded up to 256) and must equal the engine
-image's texel size (A8 is A8_UNORM_KHR, or R8_UNORM where DXVK remaps it); a
-primary stays BGRA8/RGBA8. Other layouts remain implementation work. Checks avoid row-footprint
+image's texel size (A8 is A8_UNORM_KHR, or R8_UNORM where DXVK remaps it). A
+primary (a swap-chain buffer with a primary descriptor) may have any of these rows except
+A8. A BGRA8/RGBA8 primary keeps the descriptor's VidPn source; an RGB10A2 or RGBA16F
+primary names none (D3DDDI_ID_UNINITIALIZED), so DWM composes it and it never reaches
+SetVidPnSourceAddress, whose scan-out rows stay 8-bit. The Ascent's UE 4.26 borderless
+swap chain is such an RGB10A2 primary. Other layouts remain implementation work. Checks avoid row-footprint
 integer overflow. Failure destroys the image and releases any failed-bind memory
 wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
 Mock tests cover pitch mismatch, bind failure, success, teardown and oversized

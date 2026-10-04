@@ -115,17 +115,20 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     if (d.Width>16384 || d.Height>16384) return E_INVALIDARG;
     // The storage formats the kernel driver and the compositor's UMD admit by the same table: BGRA8
     // and RGBA8 with their sRGB views, RGB10A2, RGBA16F, and A8 for the atlases DirectComposition
-    // shares (M14.1: Task Manager's 32x32 A8 render target). A primary (the buffer of a fullscreen
-    // swap chain) may be flipped to the display plane, which has carried 8-bit colour only; other
-    // formats there wait for that measurement.
+    // shares (M14.1: Task Manager's 32x32 A8 render target). A primary is the buffer of a flip-model
+    // or fullscreen swap chain; A8 is never one. The display plane has carried 8-bit colour only
+    // (the kernel driver's SetVidPnSourceAddress admits the SCANOUT_PRIMARY rows), so an RGB10A2 or
+    // RGBA16F primary names no VidPn source: a primary of no source, composed by DWM, the form the
+    // D3D12 shell gives every swap-chain buffer (M15.4). The Ascent's UE 4.26 borderless swap chain
+    // is RGB10A2 with a primary descriptor; refusing it removed the device at startup (339, 340).
     const auto *row=runtime_surface_format(d.Format);
-    if (!row || (input.pPrimaryDesc && row->dxgi!=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM &&
-        row->dxgi!=AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM)) return E_NOTIMPL;
+    if (!row || (input.pPrimaryDesc && row->dxgi==AMDGPU_WDDM_DXGI_A8_UNORM)) return E_NOTIMPL;
+    const bool eightBit=row->dxgi==AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM || row->dxgi==AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM;
     RuntimeSurfaceRequest r{};
     r.runtime_resource=runtimeHandle; r.primary=input.pPrimaryDesc!=nullptr;
     r.displayable=(input.MiscFlags&D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE)!=0;
     r.shared=(input.MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)!=0;
-    if (input.pPrimaryDesc) r.vidpn_source=input.pPrimaryDesc->VidPnSourceId;
+    if (input.pPrimaryDesc) r.vidpn_source=eightBit ? input.pPrimaryDesc->VidPnSourceId : D3DDDI_ID_UNINITIALIZED;
     const UINT pitch=runtime_surface_pitch(d.Width,row->bytes_per_pixel);
     const UINT64 bytes=(UINT64(pitch)*((d.Height+3)&~3u)+4095)&~UINT64(4095);
     r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,d.Width,d.Height,pitch,row->d3dddi,bytes};
