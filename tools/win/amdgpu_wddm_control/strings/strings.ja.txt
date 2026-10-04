@@ -65,3 +65,557 @@ upd.last-success|mt|cac0e0b4|最後に成功した確認: {0}。
 upd.never|mt|d413e103|まだ更新を確認していません。
 upd.checking|mt|8bcaee3c|更新を確認しています...
 upd.released|mt|48781b5a|リリース日: {0}
+
+# ---- graphics cores (CU mode, plan v7 section 7) ----
+# ---- driver card (WU-043) ----
+# ---- update check (A5) ----
+# ---- guide panel (plan v7 section 6): repeats or explains what the page says; never the only place of a message ----
+guide.title|mt-safe|5506739a|Nagi のヒント
+guide.title.plain|mt-safe|a4245a3c|ヒント
+guide.driver-not-running|mt|908881c2|グラフィックス ドライバーが動作していません。次に行うことは、ホームの状態カードに表示されています。
+guide.install-stopped|mt|74f99e5a|前回のインストールは完了しませんでした。通常は、ヘルプから修復すると解決します。
+guide.verification-failed|mt|a3750351|インストールされたドライバーはチェックに合格しませんでした。ヘルプから修復するか、サポート レポートを作成してください。
+guide.cu-unknown-after-40|mt|62d0fc7a|40 コアを選択した後、動作しているグラフィックス コアの数を読み取れません。Windows を再起動してください。このままの場合は、標準 (24) を選択してください。
+guide.start-at-risk|mt|89f6dab1|今回の起動はまだ確認されていません。画面が正常に動作したら、ホームで確認してください。
+guide.cu-fallback|mt|ba6d9d43|40 コアでの起動が確認されなかったため、今回の起動では 24 コアを使用します。グラフィックス ページで再び 40 を選択できます。
+guide.cu-confirm-failed|mt|210bc0ed|40 コアの確認ができませんでした。ホームでもう一度試すか、グラフィックス ページで標準 (24) を選択してください。
+guide.cu-not-saved|mt|3f220554|40 コアの確認を保存できませんでした。次回の起動で使用される設定は、グラフィックス ページに表示されます。
+guide.gpu-desktop-closed|mt|2be154cc|予期しないシャットダウンの後、デスクトップは安全で低速な方法を使用しています。高速な方法はホームから再びオンにできます。
+guide.desktop-replaced|mt|5c77c3e9|このセッションで Windows がデスクトップを再起動しました。Windows を再起動するまで、一部のアプリがマウスに反応しない場合があります。
+guide.pending-restart|mt|43402a6a|変更は保存されました。次回 Windows を再起動した後に有効になります。
+guide.work-in-progress|mt|5128c7cc|処理しています。1 分ほどかかる場合があります。
+guide.upgrade-done|mt|298dabef|更新プログラムがインストールされ、チェックされました。楽しんでください！
+guide.welcome|mt|99bfb2d9|こんにちは、Nagi です。ホームには PC の状態が表示されます。その他の項目はすべて左側のメニューにあります。
+guide.about|mt|dccc95f8|このドライバーは、このボードが大好きな人たちが作っています。アカウントも追跡もありません。
+guide.page-tip|mt|7b1fc953|設定の横にある ? を押すと、その設定の説明を読めます。
+guide.update-available|mt|9ba22dcf|新しいドライバー リリースが利用可能です。詳細はドライバー ページにあります。
+guide.all-good|mt|f523ac28|すべて問題ありません。プレイの準備ができました。
+guide.tip.settings|mt|d4c81f93|ここでの選択は、ドライバーを更新してもそのまま残ります。
+guide.tip.display|mt|fff5e425|モニターを変更した後にウィンドウが見えなくなっても、表示されている画面に自動的に戻ります。
+guide.tip.graphics|mt|69913a1e|このページの変更は、次回 Windows を再起動した後に適用されます。
+# ---- status card on Home (WU-007, WU-052, WU-061) ----
+status.title.problem|mt|4241fd03|確認が必要な項目があります
+status.title.attention|mt|2908a908|これを確認してください
+status.title.pending|mt|93aab4b5|完了するには Windows を再起動してください
+status.title.ok|mt-safe|6dbc080d|プレイの準備完了
+status.ok-detail|mt|a5875517|ドライバーは動作中で、対応が必要な項目はありません。
+status.not-installed|mt|20e303d1|この PC には amdgpu-wddm ドライバーがインストールされていません。
+status.not-installed.next|mt|663c2562|リリース ページにある amdgpu-wddm セットアップでインストールしてください。
+status.driver-not-running|mt|5818d3e1|グラフィックス ドライバーが動作していません。Windows は基本ディスプレイを使用しています。
+status.driver-not-running.next|mt|3588314e|Windows を再起動してください。このままの場合は、ヘルプを開いて「画面が暗いままになる、またはドライバーが起動しない」の手順に従ってください。
+status.install-stopped|mt|58f52a20|前回のインストールは完了前に停止しました。
+status.install-stopped.next|mt|4fae210b|ヘルプからドライバーを修復してください。
+status.verification-failed|mt|35993530|インストールされたドライバーはチェックに合格しませんでした。
+status.verification-failed.next|mt|d14c5893|ヘルプからドライバーを修復してください。それでも解決しない場合は、サポート レポートを作成してください。
+status.cu-unknown-after-40|mt|4ea30a7a|グラフィックス コアを 40 に選択した後、コアの数を読み取れません。
+status.cu-unknown-after-40.next|mt|bf63a099|Windows を再起動してください。このままの場合は、グラフィックス ページで標準 (24) を選択してください。
+status.start-at-risk|mt|e23a450a|今回のドライバーの起動はまだ確認されていません。起動が確認されないままだと、Windows は基本ディスプレイに切り替わります。
+status.start-at-risk.next|mt|f46634ca|画面が正常に動作している場合は、今回の起動を確認してください。
+status.cu-fallback|mt|c1cc5938|前回の 40 コアでの起動が確認されなかったため、今回の起動では 24 コアを使用します。
+status.cu-fallback.next|mt|877c98cd|グラフィックス ページで再びすべて (40) を選択できます。
+status.cu-confirm-failed|mt|6ba8c90a|40 コアの確認ができませんでした。
+status.cu-confirm-failed.next|mt|86628f5f|もう一度試すか、グラフィックス ページで標準 (24) を選択してください。確認されないままの場合、次回の起動では 24 コアに戻ります。
+status.cu-waiting|mt|2b65c0e8|40 個のグラフィックス コアがすべて動作していますが、まだ確認されていません。
+status.cu-waiting.next|mt|8d7cc5b3|画面が正常に動作している場合は、40 コアを確認してください。確認しないと、次回の起動では 24 コアに戻ります。
+status.cu-not-saved|mt|037918da|40 コアの確認を保存できませんでした。
+status.cu-not-saved.next|mt|6f88d8db|次回の起動で使用される設定は、グラフィックス ページに表示されます。
+status.gpu-desktop-closed|mt|28c255e8|予期しないシャットダウンの後、デスクトップは安全で低速な方法を使用しています。
+status.gpu-desktop-closed.next|mt|532da758|高速なデスクトップを再びオンにしてください。次回 Windows を再起動した後に適用されます。
+status.desktop-replaced|mt|9db01528|このセッションで Windows がデスクトップを再起動しました。Windows を再起動するまで、一部のアプリがマウス クリックに反応しない場合があります。
+status.desktop-replaced.next|mt|1cabfb01|作業内容を保存して、Windows を再起動してください。
+status.pending-restart|mt|4453aecf|Windows の再起動を待っています：{0}。
+status.pending-restart.next|mt|43680344|都合のよいときに Windows を再起動してください。
+status.pending-later|mt|42e2bbba|まだ Windows の再起動を待っています：{0}。
+status.pending-later.next|mt|e938b3bd|都合のよいときに Windows を再起動してください。それまでは何も変わりません。
+status.pending.driver|mt|b6bab5e5|インストールされたドライバーの更新
+status.pending.clock|mt|6b722aa5|クロックの設定
+status.pending.cores|mt|52792a19|グラフィックス コアの設定
+status.pending.desktop|mt|f3ffbde5|高速なデスクトップ
+status.work-in-progress|mt|dfc15eb7|要求を処理しています...
+status.upgrade-done|mt|2a1fb0de|{0} への更新がインストールされ、確認されました。
+status.update-available|mt|2d79e5cb|新しいドライバー リリースが利用可能です。
+status.action.restart|mt-safe|32c8ac84|Windows を再起動...
+status.action.confirm-start|mt-safe|e9d08826|今回の起動を確認
+status.action.reopen-gpu-path|mt|05dc8cea|高速なデスクトップを再びオンにする...
+status.action.cu-confirm|mt-safe|429c630b|40 コアを確認
+status.action.repair|mt-safe|c5ec5fc0|修復...
+status.action.graphics|mt-safe|4d922cbd|グラフィックスを開く
+status.action.driver|mt-safe|cd30abda|ドライバーを開く
+# ---- readings (WU-038, WU-041) ----
+perf.no-reading|mt-safe|713f2bdd|読み取り値なし
+perf.load|mt-safe|30c049fb|GPU 負荷
+perf.load.explain|mt|092492cf|直前のしばらくの間、グラフィックス チップがどの程度使用されていたかを示します。
+perf.temperature|mt-safe|f8c3af4b|GPU 温度
+perf.temperature.explain|mt|8b04f6a8|87 °C からドライバーはクロックを段階的に下げます。90 °C になると、チップの温度が下がるまで最も低いクロックを維持します。この保護は常にオンです。
+perf.clock|mt-safe|31605456|GPU クロック
+perf.clock.explain|mt|5a25c301|現在のグラフィックス チップの動作速度です。自動クロック速度では、負荷に合わせて変化します。
+perf.memory|mt-safe|34a62533|使用中のビデオ メモリ
+perf.memory.explain|mt|28bc56be|ゲームと Windows がグラフィックスに使用しているメモリです。
+perf.memory.value|mt-safe|eaf124e2|{1} GB 中 {0} GB
+perf.power|mt-safe|848e9656|電力
+perf.power.explain|mt|2fb99c60|ドライバーはまだ消費電力を読み取れません。これは今後対応予定です。
+perf.fan|mt-safe|e27be641|ファン
+perf.fan.explain|mt|a79a4ea7|ファンはボードが自動的に制御しています (BIOS のファン設定)。ドライバーはまだファンを読み取れません。
+# ---- shader caches (F-CACHE) ----
+cache.d3d12|mt-safe|f4642299|DirectX 12 シェーダー キャッシュ
+cache.d3d12.present|mt|15118fb9|使用中：{1} 個のプログラムで {0}。2 回目以降のゲームの起動が速くなります。
+cache.d3d12.empty|mt|2bed9aa6|空です。ゲームを初めて実行したときに作成されます。
+cache.unknown|mt|b7cdc0cc|まだ確認できません。
+cache.d3d11|mt-safe|4738ed96|DirectX 11 シェーダー キャッシュ
+cache.vulkan|mt-safe|eac8dfa1|Vulkan シェーダー キャッシュ
+cache.windows|mt-safe|f621abf7|Windows DirectX シェーダー キャッシュ
+cache.windows.text|mt|4525456f|Windows によって管理されます。Windows のディスク クリーンアップで消去できます。
+# ---- hints before a restart (WU-060) ----
+hint.game-running|mt|000b9f0f|現在 {0} が実行中です。
+hint.fullscreen|mt|dd00a6e6|現在、全画面表示のゲームまたはアプリが実行中です。
+hint.presentation|mt|90bd7120|Windows はプレゼンテーション モードです。
+hint.save-first|mt|fee7f6a8|続行する前に、ゲームのデータや作業内容を保存してください。
+# ---- per-game settings (WU-015, WU-028) ----
+game.group.rt|mt-safe|49d8697b|レイトレーシングのサポート
+game.group.rt.explain|mt|bf5cc535|ゲームのレイトレーシング効果をオンにできるようにします。
+game.group.rt.cost|mt|162366cb|一部のレイトレーシング効果が表示されなかったり、正しく表示されなかったりする場合があります。また、レイトレーシングをオンにするとゲームの動作が遅くなります。
+game.group.present|mt-safe|d16b6c3b|高速なフレーム表示
+game.group.present.explain|mt|7cd04fb0|完成したフレームを、より少ないコピーで画面に送ります。
+game.group.present.cost|mt|5ad3e854|メモリの使用量が少し増えます。画面がちらつく場合や黒いままの場合は、オフにしてください。
+game.group.cpu|mt|45883a65|フレームあたりのプロセッサ負荷を軽減
+game.group.cpu.explain|mt|61eb2481|ドライバーの処理をより多くのプロセッサ コアに分散します。プロセッサが性能を制限している場合、フレーム レートが向上することがあります。
+game.group.cpu.cost|mt|3f836d24|より多くのプロセッサ スレッドを使用します。ゲームがカクついたり終了したりする場合は、オフにしてください。
+game.group.diag|mt-safe|1a394bb7|診断用スイッチ
+game.group.diag.explain|mt|62e65139|安定性の修正をオフにします。開発者から依頼された場合にのみ使用してください。
+game.group.diag.cost|mt|9bd2b1e2|ゲームが不安定になる場合があります。
+game.origin.driver|mt-safe|95d5095e|ドライバーの既定値
+game.origin.recommended|mt-safe|3c243c3e|インストーラーの推奨
+game.origin.game|mt-safe|0d27941d|このゲーム用に設定
+game.state.partial|mt-safe|b2524367|一部オン (カスタム)
+# ---- confirmation dialogs (WU-053) ----
+plan.title.reopen-gpu-path|mt|b10076e7|高速なデスクトップを再びオンにする
+plan.title.desktop-gpu|mt-safe|b1b92ad5|グラフィックス チップでデスクトップを表示
+plan.title.desktop-cpu|mt-safe|85985462|安全な方法でデスクトップを表示
+plan.title.confirm-start|mt-safe|e9d08826|今回の起動を確認
+plan.title.enable-dpm|mt-safe|d66865b5|自動クロック速度
+plan.title.set-clocks|mt-safe|a6c47043|クロック速度
+plan.title.reset-defaults|mt|529f2f6e|グラフィックス設定を既定に戻す
+plan.title.undo|mt-safe|c1628643|最後の変更を元に戻す
+plan.title.cu-mode|mt-safe|3b1c283f|グラフィックス コア
+plan.title.cu-confirm|mt-safe|117b1c92|40 個のグラフィックス コアを確認
+plan.title.game-profile|mt-safe|fece8604|ゲームの設定
+plan.title.game-undo|mt-safe|a1fad77b|ゲームの変更を元に戻す
+plan.title.game-redo|mt-safe|144129fb|ゲームの変更をやり直す
+plan.title.other|mt-safe|873512a9|設定の変更
+plan.line.desktop-on|mt|106dee6b|高速なデスクトップがオンになります。
+plan.line.desktop-off|mt|fefc9d16|高速なデスクトップがオフになります。
+plan.line.clear-mark|mt|e5065dd9|予期しないシャットダウンによって残された記録が消去されます。
+plan.line.route-gpu|mt|1c9c9142|デスクトップはグラフィックス チップを使用します。
+plan.line.route-cpu|mt|a59306ef|デスクトップは安全な方法 (プロセッサ) を使用します。
+plan.line.auto-on|mt|9f6b672e|自動クロック速度：オン。
+plan.line.auto-off|mt|f5daa219|自動クロック速度：オフ (1000 MHz に固定)。
+plan.line.ceiling|mt|c01c44a8|最高クロック速度：{0} MHz。
+plan.line.ceiling-default|mt|6123b39c|最高クロック速度：1500 MHz (既定)。
+plan.line.other|mt|00229d42|以前のドライバー設定が復元されます。
+plan.line.cu-confirm|mt|68cc6ac8|次回以降の起動でも、40 コアすべてを使用し続けます。
+plan.line.confirm-start|mt|911bc92e|今回の起動は正常に動作していると記録されます。
+plan.game.set|mt|c064a67c|{0}：{1}。
+plan.game.remove|mt|bf4850f1|{0}：ドライバーの既定値に戻します。
+plan.game.none|mt-safe|cced93bb|設定なし
+plan.game.other|mt-safe|252d9e89|その他の設定
+plan.when.now|mt|2a2d2ad0|すぐに適用されます。
+plan.when.restart|mt|c005e77e|次回 Windows を再起動した後に適用されます。
+plan.when.game|mt|d21b858b|次回 {0} を起動したときに適用されます。
+plan.scope.game|mt|d76f166e|これらの設定は、この PC 上の {0} という名前のすべてのゲームで共有されます。
+plan.scope.games-kept|mt|cf20d5e4|ゲームごとの設定は保持されます。
+plan.scope.games-reset|mt|4d3df4af|ゲームごとの設定は、インストーラーの推奨設定に戻ります。
+plan.dark-screen|mt|7cc9b278|Windows の起動中、画面がしばらく暗いままになることがあります。
+plan.close-apps|mt|e5b8ccd6|Windows を再起動する前に、他のアプリで作業内容を保存してください。
+plan.cu-no-undo|mt|b2aae3bc|グラフィックス コアの部分は元に戻せません。元に戻すには、もう一方の設定を選択してください。
+plan.undo.yes|mt|c8f1c81e|これは後で元に戻せます。
+plan.undo.partly|mt|54d91bb7|グラフィックス コアの部分を除き、これは後で元に戻せます。
+plan.undo.no|mt|b545dd16|これは元に戻せません。
+plan.refuse.not-installed|mt|05ad8657|ドライバーがインストールされていないため、変更するものはありません。
+plan.refuse.not-running|mt|99675e61|現在ドライバーが動作していません。先に Windows を再起動してください。
+plan.refuse.already|mt|893691ef|変更するものはありません。すでにこの設定になっています。
+plan.refuse.nothing-to-undo|mt|9f3ece29|元に戻す変更はありません。
+plan.refuse.no-cu-waiting|mt|6f6ca6f0|確認を待っている 40 コアでの起動はありません。
+plan.refuse.confirm-later|mt|d0279b4f|今回の起動はまだ確認できません。画面が正常に動作している状態で 1 分ほど待ってから、もう一度お試しください。
+plan.refuse.other|mt|36c01058|現在これは実行できません。何も変更されていません。詳細はサポート レポートに記載されています。
+# ---- settings search (WU-009): the name, then common terms separated by | (translations add their own terms) ----
+search.graphics.clock-auto|mt-safe|d66865b5|自動クロック速度
+search.graphics.clock-auto.terms|mt|74d15b22|クロック|クロック速度|DPM|ブースト|周波数|速度|GPU クロック|自動
+search.graphics.clock-ceiling|mt-safe|a61bb638|最高クロック速度
+search.graphics.clock-ceiling.terms|mt|2c39cbca|最大クロック|MHz|上限|オーバークロック|OC|制限
+search.graphics.cores|mt-safe|3b1c283f|グラフィックス コア
+search.graphics.cores.terms|mt|d2fcccf3|CU|コンピュート ユニット|40 コア|24 コア|アンロック|解放|シェーダー コア|コア数
+search.graphics.reset|mt|529f2f6e|グラフィックス設定を既定に戻す
+search.graphics.reset.terms|mt|20d20bb8|リセット|既定|初期化|初期設定|デフォルト|工場出荷時
+search.games.rt|mt-safe|49d8697b|レイトレーシングのサポート
+search.games.rt.terms|mt|3abbb3ed|RT|レイトレ|レイトレーシング|光線追跡|DXR
+search.games.present|mt-safe|d16b6c3b|高速なフレーム表示
+search.games.present.terms|mt|e4d40585|表示|フレーム表示|プレゼント|コピー|遅延|レイテンシ
+search.games.cpu|mt|45883a65|フレームあたりのプロセッサ負荷を軽減
+search.games.cpu.terms|mt|776e6494|CPU|プロセッサ|スレッド|マルチスレッド|CPU ボトルネック|CPU 負荷
+search.games.undo|mt-safe|59e2951f|ゲームの変更を元に戻す
+search.games.undo.terms|mt|f63a6cb8|元に戻す|やり直し|やり直す|取り消し|戻す
+search.games.add|mt-safe|37b1384f|ゲームを追加
+search.games.add.terms|mt|94d2c8d7|追加|ゲーム|プログラム|exe|登録
+search.display.resolution|mt-safe|c12b3df8|解像度とリフレッシュ レート
+search.display.resolution.terms|mt|0e2e3e69|解像度|リフレッシュ レート|リフレッシュレート|Hz|1080p|モニター|ディスプレイ
+search.display.identify|mt-safe|3def2f6d|モニターの識別
+search.display.identify.terms|mt|6a71b05e|識別|どの画面|モニター番号|画面番号
+search.display.scale|mt|1cf201de|拡大縮小、レイアウト、向き
+search.display.scale.terms|mt|f73bb0e2|DPI|拡大縮小|ズーム|文字サイズ|テキストのサイズ|向き|回転|レイアウト|スケール
+search.perf.sensors|mt-safe|a8451874|温度と負荷
+search.perf.sensors.terms|mt|d3085e12|温度|使用率|負荷|センサー|VRAM|メモリ|電力|消費電力|ファン|ワット|W
+search.perf.cache|mt-safe|d7b57389|シェーダー キャッシュ
+search.perf.cache.terms|mt|6c23151c|キャッシュ|シェーダー|シェーダ|カクつき|スタッター|コンパイル
+search.driver.version|mt-safe|04cb4284|ドライバーのバージョン
+search.driver.version.terms|mt|63b1897d|バージョン|リリース|インストール済み|日付|版
+search.driver.update|mt-safe|f26f3275|更新プログラムの確認
+search.driver.update.terms|mt|8e944c4d|更新|アップデート|新しいバージョン|ダウンロード|アップグレード
+search.settings.language|mt-safe|a4fe6526|言語
+search.settings.language.terms|mt|fd2aa88a|言語|English|英語|Polski|ポーランド語|日本語|한국어|韓国語
+search.settings.update-start|mt|1795d304|アプリの起動時に更新を確認する
+search.settings.update-start.terms|mt|f9b8aeaa|更新|アップデート|自動|起動|起動時
+search.settings.recent|mt-safe|1584741a|起動したゲームを記憶する
+search.settings.recent.terms|mt|b9a70e98|履歴|最近|起動|プライバシー|消去|クリア
+search.settings.nagi|mt-safe|31c709aa|Nagi を表示
+search.settings.nagi.terms|mt|d1e1a96e|Nagi|ナギ|キャラクター|マスコット|ガイド|案内
+search.settings.tips|mt-safe|95766585|ヒントを自動的に表示
+search.settings.tips.terms|mt|34fa1b1d|ヒント|ティップス|ヘルプ|豆知識
+search.settings.animations|mt-safe|2962f3a5|アニメーションを減らす
+search.settings.animations.terms|mt|2e378347|アニメーション|動き|モーション|効果|エフェクト
+search.settings.support|mt-safe|57b9df00|サポート オプションを表示
+search.settings.support.terms|mt|bf7d08c9|サポート|技術|テクニカル|詳細|高度|診断
+search.settings.data|mt-safe|ee5ef73a|あなたのデータ
+search.settings.data.terms|mt|a17a07e3|プライバシー|データ|テレメトリ|ネットワーク|アップロード|送信
+search.help.repair|mt-safe|304cd933|ドライバーを修復
+search.help.repair.terms|mt|c5551081|修復|修正|直す|再インストール|壊れた|故障
+search.help.report|mt-safe|db2acddc|サポート レポートを作成
+search.help.report.terms|mt|6ce5ba51|レポート|バグ|不具合|サポート|ログ
+search.help.restart|mt-safe|1ef47f1f|Windows を再起動
+search.help.restart.terms|mt|7ad6427b|再起動|リブート|ドライバーの再起動|リセット
+search.help.guides|mt-safe|6ef2d14b|よくある問題のヘルプ
+search.help.guides.terms|mt|031dd644|黒い画面|ブラック スクリーン|ブラックアウト|クラッシュ|落ちる|遅い|カクつき|マウス|問題|ヘルプ|トラブル
+search.later.vsync|mt-safe|86146f8a|垂直同期 (VSync)
+search.later.vsync.terms|mt|352b1574|VSync|垂直同期|V-Sync|ティアリング
+search.later.fps|mt-safe|3217f73e|フレーム レート制限
+search.later.fps.terms|mt|226d00fd|FPS|FPS limit|フレーム制限|FPS 上限|フレーム レート|フレームレート|fps制限
+search.later.sharpen|mt-safe|65319812|画像のシャープ化
+search.later.sharpen.terms|mt|9e551a61|シャープ|シャープネス|鮮明|RIS|CAS
+search.later.aa|mt-safe|c77c3af2|アンチエイリアス
+search.later.aa.terms|mt|99479753|AA|MSAA|アンチエイリアス|アンチエイリアシング|ジャギー|ギザギザ
+search.later.af|mt-safe|527a4439|テクスチャ フィルタリング
+search.later.af.terms|mt|ef806f34|AF|異方性|異方性フィルタリング|フィルタリング|テクスチャ
+search.later.scaling|mt-safe|7f3a6f5d|画像のスケーリング
+search.later.scaling.terms|mt|485400f8|スケーリング|拡大|アップスケーリング|整数スケーリング|アスペクト比|縦横比|引き伸ばし
+search.later.mode|mt|90ed46c7|解像度とリフレッシュ レートを選択
+search.later.mode.terms|mt|6088b5a8|解像度の変更|リフレッシュ レートの設定|モード|表示モード|144 Hz
+search.later.hdr|mt-safe|60790181|HDR
+search.later.hdr.terms|mt|e0f32e0b|HDR|10 ビット|10bit|色深度|色|カラー
+search.later.vrr|mt-safe|2939546a|可変リフレッシュ レート
+search.later.vrr.terms|mt|685a6f1e|VRR|FreeSync|G-Sync|アダプティブ シンク|可変リフレッシュ
+search.later.power|mt-safe|fba85679|電力制限
+search.later.power.terms|mt|db72d2b0|電力制限|消費電力|ワット|TDP|パワー リミット
+search.later.fan|mt-safe|8c9a2877|ファン制御
+search.later.fan.terms|mt|f8a14c23|ファン|ファン カーブ|騒音|静音|冷却
+search.later.voltage|mt-safe|4e40d79f|電圧
+search.later.voltage.terms|mt|5cc069f4|電圧|低電圧化|アンダーボルト|mV
+search.later.fps-counter|mt-safe|8e4f7029|フレーム レートの表示
+search.later.fps-counter.terms|mt|40353cf6|FPS カウンター|フレーム時間|フレーム タイム|オーバーレイ|フレーム毎秒|FPS
+search.later.cache-clear|mt-safe|6b923412|シェーダー キャッシュを消去
+search.later.cache-clear.terms|mt|bd9dc929|キャッシュの消去|キャッシュの削除|キャッシュ クリア|削除
+# ---- window frame (WU-008, WU-011) ----
+ui.back|mt-safe|76900f1b|戻る
+ui.search|mt-safe|255b076d|設定の検索
+ui.search.results|mt-safe|e978b00d|検索結果
+ui.search.none|mt|4a80e7e4|設定が見つかりません。
+ui.language.current|mt-safe|45f00aed|現在の言語
+ui.nav.current|mt-safe|de2574e5|現在のページ
+ui.explain|mt|c68f3c5e|「{0}」は何をしますか？
+ui.explain.page|mt-safe|d2447d18|このページについて
+ui.explain.setting|mt-safe|3872b16d|この設定について
+ui.apply|mt-safe|31e392d1|適用
+ui.discard|mt-safe|f9bfa3dc|変更を破棄
+ui.cancel|mt-safe|19766ed6|キャンセル
+ui.continue|mt-safe|31fbef16|続行
+ui.expanded|mt-safe|ed077f3d|展開
+ui.collapsed|mt-safe|c21ead06|折りたたみ
+ui.ceiling.lower|mt|f7017502|最高クロック速度を下げる
+ui.ceiling.higher|mt|4d2c5410|最高クロック速度を上げる
+ui.unsaved.title|mt-safe|a710c2b9|保存されていない変更
+ui.unsaved.text|mt|31225aee|{0} ページで設定を変更しましたが、まだ適用していません。
+ui.unsaved.save|mt-safe|31e392d1|適用
+ui.unsaved.discard|mt-safe|eb1a70e3|破棄
+ui.unsaved.keep|mt-safe|e76fd2ad|編集を続ける
+ui.confirm.changes|mt|86a32a72|変更される内容：
+ui.confirm.admin|mt|04e01336|次に、Windows から管理者のアクセス許可を求められます。
+ui.restart.title|mt-safe|6fa4b426|Windows を再起動しますか？
+ui.restart.text|mt|57b7190e|変更は再起動後に有効になります。Windows は他のプログラムを終了するよう要求するため、先にそれらのプログラムで作業内容を保存してください。
+ui.restart.later|mt-safe|73b6e48a|後で
+ui.restart.now|mt-safe|09af1002|今すぐ再起動
+ui.later|mt|3ff09ef1|今後対応予定です。
+ui.later.short|mt-safe|91981460|今後対応予定
+ui.later.reason|mt|d5a9cf1d|ドライバーはまだこの機能に対応していません。今後のドライバー リリースで対応予定です。
+ui.later.title|mt-safe|e3b48f0b|今後対応予定
+nav.home|mt-safe|3a786953|ホーム
+nav.games|mt-safe|d9dae781|ゲーム
+nav.graphics|mt-safe|a874fca8|グラフィックス
+nav.display|mt-safe|34e108c0|ディスプレイ
+nav.performance|mt-safe|442aded8|パフォーマンス
+nav.driver|mt-safe|9fe4c68e|ドライバー
+nav.settings|mt-safe|74a883a0|設定
+nav.help|mt-safe|b79cac92|ヘルプ
+page.home.title|mt-safe|3a786953|ホーム
+page.home.intro|mt|05aa30e0|PC の現在の状態と、対応が必要な項目です。
+page.games.title|mt-safe|d9dae781|ゲーム
+page.games.intro|mt|7bac98dd|ゲームごとの設定です。次回そのゲームを起動したときに適用されます。
+page.graphics.title|mt-safe|a874fca8|グラフィックス
+page.graphics.intro|mt|e2b681e7|すべてのゲームに共通のクロック速度とグラフィックス コアです。変更は次回 Windows を再起動した後に適用されます。
+page.display.title|mt-safe|34e108c0|ディスプレイ
+page.display.intro|mt|799bfbb0|お使いのモニターと、現在の表示内容です。
+page.performance.title|mt-safe|442aded8|パフォーマンス
+page.performance.intro|mt|b072238e|グラフィックス チップのリアルタイムの読み取り値と、シェーダー キャッシュです。
+page.driver.title|mt-safe|9fe4c68e|ドライバー
+page.driver.intro|mt|9aba802f|インストールされているドライバー リリースとその更新です。
+page.settings.title|mt-safe|74a883a0|設定
+page.settings.intro|mt|0dfe016b|このアプリの動作です。これらの選択はあなただけのもので、ドライバーを更新しても残ります。
+page.help.title|mt-safe|b79cac92|ヘルプ
+page.help.intro|mt|ba52ab9c|よくある問題の解決手順、修復、サポート レポートです。
+# ---- results of actions (WU-061) ----
+action.working|mt|82f2bdf0|処理しています... Windows から管理者のアクセス許可を求められる場合があります。
+action.done|mt-safe|ed251864|完了しました。
+action.failed|mt|ee79203d|変更は行われませんでした。他にも何も変更されていません。理由は、ヘルプから作成するサポート レポートで確認できます。
+action.not-elevated|mt|d6a4391d|管理者のアクセス許可が与えられませんでした。何も変更されていません。
+action.cannot-read|mt|4f597aff|現在の設定を読み取れないため、何も変更されていません。
+action.restart-failed|mt|0783bdf8|Windows は再起動しませんでした。スタート メニューから再起動してください。
+# ---- Home (WU-007, WU-002) ----
+home.start.title|mt-safe|831d0f72|はじめに
+home.start.1|mt|19a22787|いつもどおりにゲームを起動してください。ドライバーは推奨設定を使用します。
+home.start.2|mt|c551f885|ゲームに問題がある場合は、ゲーム ページを開いてそのゲームの設定を確認してください。
+home.start.3|mt|fec0203b|ヘルプには、よくある問題の解決手順があります。
+home.start.dismiss|mt-safe|0a82387a|了解、非表示にする
+home.recent.title|mt-safe|6c30b7fc|最近のゲーム
+home.recent.none|mt|73f0a6d1|まだゲームはありません。起動したゲームがここに表示されます。
+home.recent.off|mt|965bacdf|起動したゲームの記憶はオフになっています (設定)。
+home.recent.settings|mt-safe|74a883a0|設定
+home.recent.all|mt-safe|cf2bf152|すべてのゲーム
+home.monitor.title|mt-safe|4c2e1df4|モニター
+home.monitor.open|mt-safe|f4983796|ディスプレイを開く
+home.driver.title|mt-safe|9fe4c68e|ドライバー
+home.graphics.title|mt-safe|a874fca8|グラフィックス
+# ---- Games (WU-012, WU-013, WU-015, WU-019, WU-020a, WU-028, WU-054) ----
+games.list.title|mt-safe|e9f433a5|お使いのゲーム
+games.filter|mt-safe|4342eecc|ゲームを検索
+games.sort.name|mt-safe|588a0823|名前で並べ替え
+games.sort.recent|mt-safe|0a98c5ff|最終プレイ日時で並べ替え
+games.show-hidden|mt-safe|13d39e6b|非表示のゲームを表示
+games.add|mt-safe|d6031d13|ゲームを追加...
+games.add.title|mt|6da9b3ee|ゲームのプログラム ファイルを選択
+games.add.filter|mt-safe|b6747064|プログラム
+games.add.invalid|mt|44a0074e|このファイル名はゲームの設定に使用できません。
+games.launched|mt|107a215c|最終プレイ：{0}
+games.has-settings|mt-safe|d9ad0a62|独自の設定あり
+games.no-settings|mt-safe|62ce296b|独自の設定なし
+games.hide|mt-safe|ac20a57b|非表示
+games.unhide|mt-safe|0df6f1ca|表示
+games.hide.note|mt|91405f21|ゲームを非表示にしても、この一覧から削除されるだけです。ファイル、セーブ データ、設定はそのまま残ります。
+games.empty|mt|0818ed91|まだゲームはありません。ゲームを一度起動するか、手動で追加してください。
+games.empty.off|mt|5cfe9fad|一覧にゲームがありません。起動したゲームの記憶はオフになっています (設定)。ゲームは手動で追加できます。
+games.select|mt|3c23c839|設定を表示するゲームを選択してください。
+games.unsaved|mt-safe|c4751a7a|保存されていない変更
+games.scope|mt|0ec70022|これらの設定は、この PC 上の {0} という名前のすべてのゲームに適用されます。
+games.running|mt|e20bd8e0|現在 {0} が実行中です。新しい設定は、次回起動したときに適用されます。
+games.changed|mt-safe|2df4fd0e|変更済み、未適用
+games.other-kept|mt|a17fc54d|そのまま保持されるその他の値：{0}
+games.hidden-kept|mt|ee0a72e7|このゲームにはサポート用の設定もあります。それらはそのまま残ります。
+games.when|mt|57ebe13e|設定は、次回 {0} を起動したときに適用されます。
+games.unsaved.count|mt|fc5aef28|{0} 個のゲームに保存されていない変更があります。適用すると保存されます。
+games.unsaved.none|mt|c9b0957f|変更内容は保存済みの設定と同じです。
+games.undo|mt-safe|1095dd19|最後の変更を元に戻す
+games.redo|mt-safe|74273989|やり直し
+games.reset.recommended|mt-safe|d7d3dc65|推奨設定を使用
+games.reset.none|mt-safe|cf06d86c|ドライバーの既定値を使用
+games.reset.note|mt|6002de1f|インストーラーはこのゲームの推奨設定を用意しています。「推奨設定を使用」を選ぶと、その設定に戻ります。
+# ---- Graphics (B5, WU-042, WU-055, section 7) ----
+graphics.clock.title|mt-safe|a6c47043|クロック速度
+graphics.clock.now|mt-safe|fe18013d|現在
+graphics.clock.after|mt-safe|1ccff8ba|次回の再起動後
+graphics.clock.fixed|mt-safe|8380e882|固定、低速で静か
+graphics.clock.auto-up-to|mt|13865cd2|自動、最大 {0} MHz
+graphics.clock-auto.default|mt|bb1da6bd|これがオフの場合、チップは固定の低速で動作します。発熱は減りますが、性能も下がります。
+graphics.clock-ceiling.check|mt-safe|3c16c1c1|最高クロック速度：
+graphics.clock-ceiling.default|mt|aa55aa8b|これがオフの場合、最高速度は {0} MHz です。自動クロック速度を使用している場合にのみ使われます。
+graphics.thermal|mt|14bc2f1d|熱保護は常にオンです。87 °C からドライバーは速度を下げ、90 °C になるとチップの温度が下がるまで最も低い速度を維持します。ファンはボードが制御します。
+graphics.cores.title|mt-safe|3b1c283f|グラフィックス コア
+graphics.cores.24|mt-safe|99b1c87b|標準 (24)
+graphics.cores.40|mt-safe|908ab6d1|すべて (40)
+graphics.not-installed|mt|17713c9c|ドライバーがインストールされていないため、ここで設定できるものはありません。
+graphics.unsaved|mt|fdb121dc|まだ適用されていない変更があります。
+graphics.saved|mt|75d79f0a|保存されていない変更はありません。
+graphics.reset.text|mt|e6fe86ec|クロック速度とグラフィックス コアを、リリースの設定に戻します。
+graphics.reset.keep-games|mt|4ef40ca5|各ゲームの設定を保持する
+graphics.reset.button|mt-safe|cf98ec90|既定に戻す...
+graphics.undo|mt-safe|766450ec|最後の変更を元に戻す...
+graphics.undo.none|mt|12d1c282|元に戻す変更はありません。
+graphics.undo.when|mt|a768bb2c|最後の変更は {0} に行われました。
+# ---- Display (WU-030, WU-031, WU-034) ----
+display.name|mt-safe|086503fb|モニター {0}
+display.name.main|mt-safe|a3111418|モニター {0} (メイン)
+display.resolution|mt-safe|d4055faf|解像度
+display.refresh|mt-safe|1c04ebff|リフレッシュ レート
+display.size|mt-safe|cae2c3d9|{0} x {1}
+display.mode|mt|f4307cf3|{0} x {1}、{2} Hz
+display.mode.no-rate|mt-safe|cae2c3d9|{0} x {1}
+display.mode-note|mt|2b5a8898|ここではこれらの値を確認できます。このアプリからの変更は今後対応予定です。
+display.identify|mt-safe|4786cd51|識別
+display.windows.title|mt-safe|a597577a|Windows のディスプレイ設定
+display.windows.text|mt|49237ecd|拡大縮小、レイアウト、向き、メイン モニターは Windows で設定します。
+display.windows.open|mt-safe|a8aa4f79|Windows のディスプレイ設定を開く
+# ---- Performance (WU-038, WU-041) ----
+perf.now.title|mt-safe|fe18013d|現在
+perf.now.note|mt|47358944|このページを開いている間、読み取り値は 2 秒ごとに更新されます。
+perf.cache.title|mt-safe|2c9cb386|シェーダー キャッシュ
+perf.cache.note|mt|e46f62f9|シェーダー キャッシュには準備済みのグラフィックス プログラムが保存されるため、次回からゲームの起動と読み込みが速くなります。
+# ---- Driver (WU-043, WU-046, WU-058) ----
+driver.card.title|mt-safe|242adbbf|インストールされているドライバー
+driver.updates.title|mt-safe|22e2bada|更新
+driver.updates.check|mt-safe|2937cffb|今すぐ確認
+driver.updates.open|mt-safe|9da2b089|リリース ページを開く
+driver.updates.releases|mt-safe|3b8c94fd|すべてのリリース
+driver.updates.privacy|mt|4813b1cb|確認では、公開されているリリース一覧を読み取ります。あなたや PC に関する情報は何も送信しません。
+driver.repair.title|mt-safe|1196b6c5|修復
+driver.repair.text|mt|e71e61c4|ドライバーが正しく動作しない場合は、ヘルプから修復してください。
+driver.repair.open|mt-safe|30dd758a|ヘルプを開く
+# ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
+settings.language.note|mt|3880569c|日本語と韓国語のテキストは、現在は機械翻訳です。
+settings.updates.title|mt-safe|22e2bada|更新
+settings.update-start.note|mt|ae77c8bd|確認は最大で 1 時間に 1 回です。許可なしに何かがダウンロードまたはインストールされることはありません。
+settings.recent.title|mt-safe|085fe856|ゲーム一覧
+settings.recent.note|mt|1416b04a|ドライバーは、ゲーム一覧のために、この PC で起動したゲームを記憶します。この PC の外には何も送信されません。
+settings.recent.clear|mt-safe|50da1a01|一覧を消去
+settings.recent.cleared|mt|c2c7e99b|一覧を消去しました。
+settings.recent.busy|mt|fd22dbb3|ゲームの起動中のため、現在は一覧を消去できません。しばらくしてからもう一度お試しください。
+settings.guide.title|mt-safe|8e02ab12|ヒントとガイド
+settings.guide.note|mt|529531e4|Nagi を表示しない場合、ヒントはテキストで表示されます。それ以外は何も変わりません。
+settings.animations.windows-off|mt|0962c940|Windows のアニメーションがオフのため、このアプリもアニメーションを表示しません。
+settings.support.title|mt-safe|be91940b|サポート
+settings.support.note|mt|97dadddd|開発者から依頼されたときのために、ヘルプに技術的な詳細と追加の操作を表示します。
+settings.data.1|mt|370b4dab|テレメトリもアカウントもありません。
+settings.data.2|mt|fa14b2f8|アプリがオンラインに接続するのは、更新の確認と、あなたが開始したダウンロードのときだけです。
+settings.data.3|mt|40bbfde4|サポート レポートは、あなた自身が送信するまでこの PC に保存されます。
+settings.data.4|mt|0d111524|ゲーム一覧はこの PC に保存されます。上でオフにしたり消去したりできます。
+settings.data.5|mt|7e6b4f23|このアプリでの選択は、あなたの Windows アカウントにのみ保存されます。
+# ---- Help (WU-058, WU-059, WU-063, WU-067) ----
+help.guides.title|mt-safe|6ef2d14b|よくある問題のヘルプ
+help.guide.dark|mt|1faa0159|画面が暗いままになる、またはドライバーが起動しない
+help.guide.dark.1|mt|8b1336e3|2 分間待ってください。更新後の最初の起動には時間がかかることがあります。
+help.guide.dark.2|mt|e0b50b70|スタート メニューから Windows を再起動するか、電源ボタンを 1 回押して待ってください。
+help.guide.dark.3|mt|9a456513|ホームに、デスクトップが安全な方法を使用していると表示されている場合は、高速なデスクトップを再びオンにして再起動してください。
+help.guide.dark.4|mt|ed93ddc9|それでも暗いままの場合は、ヘルプからドライバーを修復するか、Windows をセーフ モードで起動してそこで修復を実行してください。
+help.guide.slow|mt|bf7ad7f5|ゲームが遅い、またはカクつく
+help.guide.slow.1|mt|717d0dd0|グラフィックス ページで、自動クロック速度がオンになっていることを確認してください。
+help.guide.slow.2|mt|e0575748|パフォーマンス ページで温度を確認してください。87 °C を超えると、ドライバーはチップを保護するために速度を下げます。クーラーを掃除し、ケース内の通気を確保してください。
+help.guide.slow.3|mt|b4eb7514|新しいゲームの最初の数分間は、シェーダー キャッシュが作成される間にカクつくことがあります。これは自然に改善されます。
+help.guide.slow.4|mt|8f348ed6|ゲーム ページで、このゲームの「フレームあたりのプロセッサ負荷を軽減」を試してください。
+help.guide.crash|mt|9f0a6158|ゲームが終了する、フリーズする、または起動しない
+help.guide.crash.1|mt|c05b2fa3|ゲームをもう一度起動してください。再び終了する場合は、ゲーム ページでそのゲームの設定を開いてください。
+help.guide.crash.2|mt|e58faffe|このゲームにドライバーの既定値を使用して適用し、もう一度起動してください。
+help.guide.crash.3|mt|f39a416d|ゲームがレイトレーシングを使用している場合は、ゲーム自体のオプションでレイトレーシングをオフにしてください。
+help.guide.crash.4|mt|da93756f|それでも失敗する場合は、サポート レポートを作成して開発者に送信してください。
+help.guide.display|mt|1e7607a4|画面、マウス、モニターの動作がおかしい
+help.guide.display.1|mt|03b57c05|一部のアプリでマウス クリックが機能しない場合は、Windows を再起動してください。
+help.guide.display.2|mt|ca7058ff|モニターを変更した後にこのアプリのウィンドウが見えなくなった場合は、アプリをもう一度起動してください。表示されている画面に戻ります。
+help.guide.display.3|mt|d4b2d442|解像度、拡大縮小、レイアウトは、Windows のディスプレイ設定で変更してください。
+help.guide.display.4|mt|7a5f2a9b|更新後に画面の表示がおかしい場合は、グラフィックス ページで「既定に戻す」を使用して再起動してください。
+help.guide.safe|mt-safe|d2304dae|セーフ モードから修復
+help.guide.safe.1|mt|7f161492|Shift キーを押しながら、スタート メニューで「再起動」を選択します。
+help.guide.safe.2|mt|b12561b0|「トラブルシューティング」、「詳細オプション」、「スタートアップ設定」、「再起動」の順に選択し、4 キーを押してセーフ モードを選びます。
+help.guide.safe.3|mt|0fce9cbb|スタート メニューから「amdgpu-wddm Control (recovery)」を開き、「修復」を選択します。
+help.guide.safe.4|mt|bb202726|これらの手順はリリース ページにも記載されているため、別のデバイスで読むことができます。
+help.start.text|mt|75b035b9|ホームに「はじめに」カードを再び表示します。
+help.start.show|mt-safe|42892e31|再び表示
+help.repair.text|mt|07c5c040|修復では、この PC に保存されているコピーから同じドライバー リリースを再インストールします。設定はそのまま残ります。画面が一時的に暗くなることがあり、Windows の再起動が必要になる場合があります。
+help.repair.confirm|mt|d6e18be8|今すぐドライバーを修復しますか？先に他のプログラムで作業内容を保存してください。セットアップから管理者のアクセス許可を求められます。
+help.repair.started|mt|de691dd9|修復は別のウィンドウで開始されました。
+help.repair.failed|mt|5d64d67d|修復を開始できませんでした。
+help.repair.unavailable|mt|18d8e621|この PC では修復を利用できません。保存されているリリースのコピーが見つかりません。リリース ページからリリース パッケージをダウンロードし、そのセットアップを実行してください。
+help.restart.text|mt|3c64612a|グラフィックス ドライバーだけを再起動することはできません。代わりに Windows を再起動してください。それが安全な方法です。
+help.report.create|mt-safe|3cf7d83c|サポート レポートを作成...
+help.report.text|mt|3afd39fb|サポート レポートは、開発者が問題を見つけるのに役立ちます。デスクトップに保存される zip ファイルで、次の内容が含まれます：
+help.report.item.1|mt|4792c5d9|ドライバーのログと現在の状態 (クロック速度、温度、設定)
+help.report.item.2|mt|cd14373b|デスクトップと最近の起動の状態
+help.report.item.3|mt|b2dda27d|インストールされているドライバー ファイルとそのバージョン
+help.report.item.4|mt|8014d767|DirectX 診断とグラフィックスのチェック
+help.report.item.5|mt|79e75614|グラフィックス ドライバーに関する過去 24 時間の Windows イベント
+help.report.privacy|mt|bb8e792c|ユーザー名、コンピューター名、シリアル番号は削除されます。レポートが保存される前にすべてのファイルを確認でき、どこにも送信されません。
+help.report.dxdiag|mt|9661696b|DirectX 診断を含める (最大 2 分かかります)
+help.report.caps|mt|2425bb47|グラフィックスのチェックを含める
+help.report.collecting|mt|9edbbbce|収集しています... 数分かかることがあります。
+help.report.failed|mt|8c3a41ba|レポートを作成できませんでした。
+help.report.cancelled|mt|aa061bcb|キャンセルしました。何も保存されていません。
+help.report.saved|mt|73cd7e8c|保存しました：{0}
+help.report.not-saved|mt|b8cf4fba|レポートを保存できませんでした。
+help.report.preview|mt|c1a5c02a|サポート レポート：ファイルの確認
+help.report.where|mt|5f73de1a|レポートは {0} として保存されます。ファイルを選択すると、その内容を確認できます。
+help.report.files|mt-safe|d2dc06c5|レポートのファイル
+help.report.file|mt-safe|50009ce1|ファイル
+help.report.size|mt-safe|1af85190|サイズ
+help.report.contents|mt-safe|437aea62|内容
+help.report.save|mt-safe|c7ca9b29|レポートを保存
+help.about.title|mt-safe|4efca0d1|バージョン情報
+help.about.release|mt|1751ebfd|ドライバー リリース {0}
+help.about.text|mt|5e62f6df|ASRock BC-250 用のオープンソース ドライバーです。アカウントもテレメトリもありません。
+# ---- recovery view (WU-068) ----
+recovery.title|mt-safe|48f6a8d5|回復
+recovery.intro|mt|cf19b743|この画面は、ドライバーやアプリの他の部分が動作しない場合でも機能します。インストールされている内容を読み取るだけです。
+recovery.actions|mt-safe|f42148c5|実行できること
+# ---- explanations next to each page and setting (WU-064) ----
+help.page.home|mt|37fa8758|ホームには状態カードが 1 枚表示されます。すべての準備ができているかどうか、できていない場合は次に何をすればよいかを示します。その下には最近のゲームと簡単な概要があります。
+help.page.games|mt|ea40fa7a|ゲームごとに独自の設定を持つことができます。設定はプログラムのファイル名で保存され、ゲームの起動時に読み込まれます。
+help.page.graphics|mt|42618ee2|これらの設定はすべてのゲームに適用されます。ドライバーは Windows の起動時に設定を読み込むため、次回の再起動後に適用されます。
+help.page.display|mt|0d0b6ad7|このページには、各モニターの現在の表示内容が表示されます。解像度、拡大縮小、レイアウトは Windows で設定します。
+help.page.performance|mt|ef1ac3a4|グラフィックス チップのリアルタイムの読み取り値です。「読み取り値なし」は、ドライバーがまだその値を測定できないことを意味します。
+help.page.driver|mt|a2700547|インストールされているリリース、チェック済みかどうか、新しいリリースが利用可能かどうかを示します。
+help.page.settings|mt|b5b868fe|このアプリの動作に関する、あなた用の設定です。ここで何を変更してもドライバーは変わりません。
+help.page.help|mt|e5564803|解決手順、修復、再起動、サポート レポートです。
+help.setting.clock-auto|mt|584f89f3|チップは負荷に応じて速度を変えます。ゲームでは高速に、デスクトップでは低速で静かに動作します。これがオフの場合は、固定の低速で動作します。
+help.setting.clock-ceiling|mt|d5c0013b|自動クロックで使用できる最高速度です。高いほど速くなりますが、消費電力と発熱が増えます。
+help.setting.cores|mt|b7b0e331|標準では、販売時のボードと同じく 24 個のグラフィックス コアを使用します。すべてでは 40 コアを使用します。多くのゲームで速くなりますが、消費電力と発熱が増えます。40 コアで初めて起動した後、画面が正常に動作することをホームで確認してください。確認しないと、次回の起動では 24 コアに戻ります。
+help.setting.reset|mt|13409397|共通のグラフィックス設定をリリースの設定に戻します。各ゲームの設定を残すかどうかを選択できます。
+help.setting.rt|mt|87cd1543|ゲームのレイトレーシング効果をオンにできるようにします。一部の効果が表示されない場合があり、レイトレーシングを使用するとゲームの動作が遅くなります。
+help.setting.present|mt|70ad2029|完成したフレームを、より少ないコピーで画面に送ります。ゲームの動きが滑らかになることがあります。画面がちらつく場合や黒いままの場合は、オフにしてください。
+help.setting.cpu|mt|b2c75482|ドライバーの処理をより多くのプロセッサ コアに分散します。プロセッサがフレーム レートを制限している場合に効果があります。
+help.setting.diag|mt|f2712639|開発者によるテスト用のスイッチです。開発者から依頼された場合にのみ使用してください。
+help.setting.undo|mt|a64f5f62|このゲームの設定を、最後に変更する前の状態に戻します。「やり直し」を選ぶと変更が戻ります。
+help.setting.add|mt|c3f487f7|ゲームのプログラム ファイル (.exe) を選択すると、起動する前にそのゲーム独自の設定を作成できます。
+help.setting.resolution|mt|aa573835|各モニターのピクセル数とリフレッシュ レートです。Windows で設定します。
+help.setting.identify|mt|83ce03d0|モニターの番号を、そのモニター上に 3 秒間表示します。
+help.setting.scale|mt|dac4615e|テキストやアプリのサイズ、モニターの配置、向きは Windows で設定します。
+help.setting.sensors|mt|462f8d49|グラフィックス チップの負荷、温度、クロック速度、ビデオ メモリを 2 秒ごとに表示します。
+help.setting.cache|mt|b58e324f|シェーダー キャッシュには準備済みのグラフィックス プログラムが保存されるため、ゲームの起動と読み込みが速くなります。
+help.setting.version|mt|2ba29e3c|現在動作しているドライバー リリースと、インストールされているリリースです。更新後に Windows を再起動するまでは、両者が異なります。
+help.setting.update|mt|013323f7|公開されているリリース一覧で新しいリリースを確認します。許可なしに何かがダウンロードまたはインストールされることはありません。
+help.setting.language|mt|a3aafdb3|このアプリの言語です。選択した言語は、ドライバーを更新しても残ります。
+help.setting.update-start|mt|f3d2de1b|アプリを開いたときに新しいリリースを確認します。確認は最大で 1 時間に 1 回です。
+help.setting.recent|mt|15d43b5b|ドライバーは起動したゲームを記憶し、ゲーム ページに表示します。一覧はこの PC に保存されます。
+help.setting.nagi|mt|631f5a6d|アプリのガイドである Nagi をヒントの横に表示します。すべてのヒントは、Nagi を表示しなくてもテキストで読めます。
+help.setting.tips|mt|97283b45|開いているページに関するヒントを、操作しなくても自動的に表示します。
+help.setting.animations|mt|7d29cccb|このアプリ内の動く画像を停止します。
+help.setting.support|mt|a67e46b5|ヘルプに技術的な詳細と追加の操作を追加します。これらは英語で表示されます。
+help.setting.data|mt|c77e39d6|このアプリとドライバーが保存する内容と、オンラインに送信される内容です。
+help.setting.repair|mt|7bd6d691|この PC にあるコピーから、同じリリースを再インストールします。
+help.setting.report|mt|77f4acdf|開発者向けの情報を含む zip ファイルを作成します。送信するかどうかはあなたが決めます。
+help.setting.restart|mt|f4c0e8b6|Windows を再起動します。グラフィックス ドライバーだけを再起動することはできません。
+help.setting.guides|mt|e75ebef4|よくある問題の解決手順です。
+help.setting.vsync|mt|368cb9db|ゲームが新しいフレームを表示する前に、モニターを待つようにします。今後対応予定です。
+help.setting.fps|mt|0b744582|ゲームが 1 秒間に描画するフレーム数を制限します。今後対応予定です。
+help.setting.sharpen|mt|f351a4a8|画像をよりシャープに見せます。今後対応予定です。
+help.setting.aa|mt|2f6e7807|ギザギザした輪郭を滑らかにします。今後対応予定です。
+help.setting.af|mt|b1771bc6|斜めから見たテクスチャをよりシャープに見せます。今後対応予定です。
+help.setting.scaling|mt|fab3d8f8|低い解像度を画面にどのように表示するかを設定します。今後対応予定です。
+help.setting.mode|mt|16a81243|このアプリから解像度とリフレッシュ レートを選択します。今後対応予定です。
+help.setting.hdr|mt|af54494e|ハイ ダイナミック レンジ：明るい部分がより明るく、色がより豊かになります。今後対応予定です。
+help.setting.vrr|mt|4662d04f|モニターがゲームのフレーム レートに合わせて動作し、動きが滑らかになります。今後対応予定です。
+help.setting.power|mt|3659317e|チップが使用できる最大電力です。今後対応予定です。
+help.setting.fan|mt|bfae721d|ファンはボードのファームウェアが制御しています。このアプリからの制御は今後対応予定です。
+help.setting.voltage|mt|9c28b6e1|チップの電圧です。今後対応予定です。
+help.setting.fps-counter|mt|929ada50|フレーム レートを表示します。今後対応予定です。
+help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。

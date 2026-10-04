@@ -65,3 +65,557 @@ upd.last-success|mt|cac0e0b4|Ostatnie udane sprawdzenie: {0}.
 upd.never|mt|d413e103|Aktualizacje nie były jeszcze sprawdzane.
 upd.checking|mt|8bcaee3c|Sprawdzanie aktualizacji...
 upd.released|mt|48781b5a|Wydano: {0}
+
+# ---- graphics cores (CU mode, plan v7 section 7) ----
+# ---- driver card (WU-043) ----
+# ---- update check (A5) ----
+# ---- guide panel (plan v7 section 6): repeats or explains what the page says; never the only place of a message ----
+guide.title|mt-safe|5506739a|Wskazówka Nagi
+guide.title.plain|mt-safe|a4245a3c|Wskazówka
+guide.driver-not-running|mt|908881c2|Sterownik grafiki nie działa. Karta stanu na Stronie głównej podpowiada, co zrobić dalej.
+guide.install-stopped|mt|74f99e5a|Ostatnia instalacja nie została ukończona. Zwykle pomaga naprawa na stronie Pomoc.
+guide.verification-failed|mt|a3750351|Zainstalowany sterownik nie przeszedł kontroli. Napraw go na stronie Pomoc albo utwórz raport dla pomocy technicznej.
+guide.cu-unknown-after-40|mt|62d0fc7a|Nie mogę odczytać, ile rdzeni graficznych działa po wybraniu 40 rdzeni. Uruchom ponownie system Windows; jeśli to się nie zmieni, wybierz Standardowe (24).
+guide.start-at-risk|mt|89f6dab1|To uruchomienie nie jest jeszcze potwierdzone. Gdy ekran działa normalnie, potwierdź je na Stronie głównej.
+guide.cu-fallback|mt|ba6d9d43|Uruchomienie z 40 rdzeniami nie zostało potwierdzone, więc to uruchomienie używa 24 rdzeni. Możesz ponownie wybrać 40 na stronie Grafika.
+guide.cu-confirm-failed|mt|210bc0ed|Nie udało się potwierdzić 40 rdzeni. Spróbuj ponownie na Stronie głównej albo wybierz Standardowe (24) na stronie Grafika.
+guide.cu-not-saved|mt|3f220554|Nie udało się zapisać potwierdzenia 40 rdzeni. Strona Grafika pokazuje, czego użyje następne uruchomienie.
+guide.gpu-desktop-closed|mt|2be154cc|Po nieoczekiwanym wyłączeniu pulpit działa w bezpieczny, wolniejszy sposób. Szybszy pulpit możesz z powrotem włączyć na Stronie głównej.
+guide.desktop-replaced|mt|5c77c3e9|Windows ponownie uruchomił pulpit w tej sesji. Niektóre aplikacje mogą nie reagować na mysz, dopóki nie uruchomisz ponownie systemu Windows.
+guide.pending-restart|mt|43402a6a|Zmiany są zapisane. Zaczną działać po następnym ponownym uruchomieniu systemu Windows.
+guide.work-in-progress|mt|5128c7cc|Pracuję nad tym. To może potrwać minutę.
+guide.upgrade-done|mt|298dabef|Aktualizacja jest zainstalowana i sprawdzona. Miłej zabawy!
+guide.welcome|mt|99bfb2d9|Cześć, jestem Nagi. Strona główna pokazuje, co robi Twój komputer; wszystko inne znajdziesz w menu po lewej.
+guide.about|mt|dccc95f8|Ten sterownik tworzą ludzie, którzy bardzo lubią tę płytę. Bez konta, bez śledzenia.
+guide.page-tip|mt|7b1fc953|Naciśnij ? obok ustawienia, aby przeczytać, do czego służy.
+guide.update-available|mt|9ba22dcf|Jest dostępna nowsza wersja sterownika. Szczegóły znajdziesz na stronie Sterownik.
+guide.all-good|mt|f523ac28|Wszystko wygląda dobrze. Można grać.
+guide.tip.settings|mt|d4c81f93|Twoje wybory na tej stronie pozostają po aktualizacji sterownika.
+guide.tip.display|mt|fff5e425|Jeśli po zmianie monitora okno się zgubi, samo wróci na widoczny ekran.
+guide.tip.graphics|mt|69913a1e|Zmiany na tej stronie zaczną działać po następnym ponownym uruchomieniu systemu Windows.
+# ---- status card on Home (WU-007, WU-052, WU-061) ----
+status.title.problem|mt-safe|4241fd03|Coś wymaga Twojej uwagi
+status.title.attention|mt-safe|2908a908|Sprawdź to
+status.title.pending|mt|93aab4b5|Uruchom ponownie system Windows, aby dokończyć
+status.title.ok|mt-safe|6dbc080d|Gotowe do gry
+status.ok-detail|mt|a5875517|Sterownik działa i nic nie czeka na Twoją reakcję.
+status.not-installed|mt|20e303d1|Sterownik amdgpu-wddm nie jest zainstalowany na tym komputerze.
+status.not-installed.next|mt|663c2562|Zainstaluj go instalatorem amdgpu-wddm ze strony wydania.
+status.driver-not-running|mt|5818d3e1|Sterownik grafiki nie działa. Windows używa podstawowego trybu wyświetlania.
+status.driver-not-running.next|mt|3588314e|Uruchom ponownie system Windows. Jeśli to się nie zmieni, otwórz Pomoc i wykonaj kroki z „Ekran pozostaje czarny lub sterownik się nie uruchamia”.
+status.install-stopped|mt|58f52a20|Ostatnia instalacja została przerwana przed ukończeniem.
+status.install-stopped.next|mt|4fae210b|Napraw sterownik na stronie Pomoc.
+status.verification-failed|mt|35993530|Zainstalowany sterownik nie przeszedł kontroli.
+status.verification-failed.next|mt|d14c5893|Napraw sterownik na stronie Pomoc. Jeśli to nie pomoże, utwórz raport dla pomocy technicznej.
+status.cu-unknown-after-40|mt|4ea30a7a|Po wybraniu 40 rdzeni graficznych nie można odczytać liczby rdzeni.
+status.cu-unknown-after-40.next|mt|bf63a099|Uruchom ponownie system Windows. Jeśli to się nie zmieni, wybierz Standardowe (24) na stronie Grafika.
+status.start-at-risk|mt|e23a450a|To uruchomienie sterownika nie jest jeszcze potwierdzone. Jeśli kolejne uruchomienia pozostaną niepotwierdzone, Windows przełączy się na podstawowy tryb wyświetlania.
+status.start-at-risk.next|mt|f46634ca|Jeśli ekran działa normalnie, potwierdź to uruchomienie.
+status.cu-fallback|mt|c1cc5938|Ostatnie uruchomienie z 40 rdzeniami nie zostało potwierdzone, więc to uruchomienie używa 24 rdzeni.
+status.cu-fallback.next|mt|877c98cd|Możesz ponownie wybrać Wszystkie (40) na stronie Grafika.
+status.cu-confirm-failed|mt|6ba8c90a|Nie udało się potwierdzić 40 rdzeni.
+status.cu-confirm-failed.next|mt|86628f5f|Spróbuj ponownie albo wybierz Standardowe (24) na stronie Grafika. Jeśli potwierdzenie się nie uda, następne uruchomienie wróci do 24 rdzeni.
+status.cu-waiting|mt|2b65c0e8|Działa wszystkich 40 rdzeni graficznych, ale nie zostały jeszcze potwierdzone.
+status.cu-waiting.next|mt|8d7cc5b3|Jeśli ekran działa normalnie, potwierdź 40 rdzeni. Bez potwierdzenia następne uruchomienie wróci do 24 rdzeni.
+status.cu-not-saved|mt|037918da|Nie udało się zapisać potwierdzenia 40 rdzeni.
+status.cu-not-saved.next|mt|6f88d8db|Strona Grafika pokazuje, czego użyje następne uruchomienie.
+status.gpu-desktop-closed|mt|28c255e8|Po nieoczekiwanym wyłączeniu pulpit działa w bezpieczny i wolniejszy sposób.
+status.gpu-desktop-closed.next|mt|532da758|Włącz z powrotem szybszy pulpit. Zmiana zacznie działać po następnym ponownym uruchomieniu systemu Windows.
+status.desktop-replaced|mt|9db01528|Windows ponownie uruchomił pulpit w tej sesji. Niektóre aplikacje mogą nie reagować na kliknięcia myszą do czasu ponownego uruchomienia systemu Windows.
+status.desktop-replaced.next|mt|1cabfb01|Zapisz swoją pracę i uruchom ponownie system Windows.
+status.pending-restart|mt|4453aecf|Czeka na ponowne uruchomienie systemu Windows: {0}.
+status.pending-restart.next|mt|43680344|Uruchom ponownie system Windows, kiedy Ci pasuje.
+status.pending-later|mt|42e2bbba|Nadal czeka na ponowne uruchomienie systemu Windows: {0}.
+status.pending-later.next|mt|e938b3bd|Uruchom ponownie system Windows, kiedy Ci pasuje. Do tego czasu nic się nie zmieni.
+status.pending.driver|mt|b6bab5e5|zainstalowana aktualizacja sterownika
+status.pending.clock|mt|6b722aa5|ustawienia taktowania
+status.pending.cores|mt|52792a19|ustawienie rdzeni graficznych
+status.pending.desktop|mt|f3ffbde5|szybszy pulpit
+status.work-in-progress|mt|dfc15eb7|Trwa wykonywanie Twojego polecenia...
+status.upgrade-done|mt|2a1fb0de|Aktualizacja do wersji {0} jest zainstalowana i sprawdzona.
+status.update-available|mt|2d79e5cb|Jest dostępna nowsza wersja sterownika.
+status.action.restart|mt-safe|32c8ac84|Uruchom ponownie system Windows...
+status.action.confirm-start|mt-safe|e9d08826|Potwierdź to uruchomienie
+status.action.reopen-gpu-path|mt|05dc8cea|Włącz z powrotem szybszy pulpit...
+status.action.cu-confirm|mt-safe|429c630b|Potwierdź 40 rdzeni
+status.action.repair|mt-safe|c5ec5fc0|Napraw...
+status.action.graphics|mt-safe|4d922cbd|Otwórz stronę Grafika
+status.action.driver|mt-safe|cd30abda|Otwórz stronę Sterownik
+# ---- readings (WU-038, WU-041) ----
+perf.no-reading|mt-safe|713f2bdd|Brak odczytu
+perf.load|mt-safe|30c049fb|Obciążenie GPU
+perf.load.explain|mt|092492cf|Jak bardzo układ graficzny był zajęty w ostatnich chwilach.
+perf.temperature|mt-safe|f8c3af4b|Temperatura GPU
+perf.temperature.explain|mt|8b04f6a8|Od 87 °C sterownik stopniowo obniża taktowanie; przy 90 °C utrzymuje najniższe taktowanie, dopóki układ nie ostygnie. Ta ochrona jest zawsze włączona.
+perf.clock|mt-safe|31605456|Taktowanie GPU
+perf.clock.explain|mt|5a25c301|Jak szybko układ graficzny pracuje teraz. Przy automatycznym taktowaniu dostosowuje się do obciążenia.
+perf.memory|mt-safe|34a62533|Używana pamięć wideo
+perf.memory.explain|mt|28bc56be|Pamięć, której gry i Windows używają do grafiki.
+perf.memory.value|mt|eaf124e2|{0} GB z {1} GB
+perf.power|mt-safe|848e9656|Pobór mocy
+perf.power.explain|mt|2fb99c60|Sterownik nie potrafi jeszcze odczytać poboru mocy. Ta funkcja pojawi się później.
+perf.fan|mt-safe|e27be641|Wentylator
+perf.fan.explain|mt|a79a4ea7|Płyta sama steruje wentylatorem (ustawienie wentylatora w BIOS). Sterownik nie potrafi go jeszcze odczytać.
+# ---- shader caches (F-CACHE) ----
+cache.d3d12|mt-safe|f4642299|Pamięć podręczna shaderów DirectX 12
+cache.d3d12.present|mt|15118fb9|Zajęte: {0}, liczba programów: {1}. Dzięki temu kolejne uruchomienia gier są szybsze.
+cache.d3d12.empty|mt|2bed9aa6|Pusta. Gry wypełniają ją przy pierwszym uruchomieniu.
+cache.unknown|mt|b7cdc0cc|Nie można jeszcze sprawdzić.
+cache.d3d11|mt-safe|4738ed96|Pamięć podręczna shaderów DirectX 11
+cache.vulkan|mt-safe|eac8dfa1|Pamięć podręczna shaderów Vulkan
+cache.windows|mt-safe|f621abf7|Pamięć podręczna shaderów DirectX systemu Windows
+cache.windows.text|mt|4525456f|Zarządza nią Windows. Możesz ją wyczyścić narzędziem Oczyszczanie dysku systemu Windows.
+# ---- hints before a restart (WU-060) ----
+hint.game-running|mt|000b9f0f|Teraz działa: {0}.
+hint.fullscreen|mt|dd00a6e6|Działa teraz gra lub aplikacja na pełnym ekranie.
+hint.presentation|mt|90bd7120|Windows jest w trybie prezentacji.
+hint.save-first|mt|fee7f6a8|Zanim przejdziesz dalej, zapisz grę lub pracę.
+# ---- per-game settings (WU-015, WU-028) ----
+game.group.rt|mt-safe|49d8697b|Obsługa ray tracingu
+game.group.rt.explain|mt|bf5cc535|Pozwala grze włączyć efekty ray tracingu.
+game.group.rt.cost|mt|162366cb|Niektórych efektów ray tracingu może brakować lub mogą wyglądać źle, a z włączonym ray tracingiem gra działa wolniej.
+game.group.present|mt-safe|d16b6c3b|Szybsze dostarczanie klatek
+game.group.present.explain|mt|7cd04fb0|Wysyła gotowe klatki na ekran z mniejszą liczbą kopii.
+game.group.present.cost|mt|5ad3e854|Zużywa trochę więcej pamięci. Wyłącz to, jeśli obraz migocze lub pozostaje czarny.
+game.group.cpu|mt|45883a65|Mniej pracy procesora na klatkę
+game.group.cpu.explain|mt|61eb2481|Rozkłada pracę sterownika na więcej rdzeni procesora. Może to zwiększyć liczbę klatek na sekundę, gdy ograniczeniem jest procesor.
+game.group.cpu.cost|mt|3f836d24|Używa więcej wątków procesora. Wyłącz to, jeśli gra się przycina lub zamyka.
+game.group.diag|mt-safe|1a394bb7|Przełączniki diagnostyczne
+game.group.diag.explain|mt|62e65139|Wyłączają poprawki stabilności. Używaj ich tylko na prośbę twórców.
+game.group.diag.cost|mt|9bd2b1e2|Gra może działać niestabilnie.
+game.origin.driver|mt-safe|95d5095e|Ustawienie domyślne sterownika
+game.origin.recommended|mt-safe|3c243c3e|Zalecane przez instalator
+game.origin.game|mt-safe|0d27941d|Ustawione dla tej gry
+game.state.partial|mt-safe|b2524367|Częściowo włączone (niestandardowe)
+# ---- confirmation dialogs (WU-053) ----
+plan.title.reopen-gpu-path|mt-safe|b10076e7|Włącz z powrotem szybszy pulpit
+plan.title.desktop-gpu|mt-safe|b1b92ad5|Pulpit na układzie graficznym
+plan.title.desktop-cpu|mt-safe|85985462|Pulpit w bezpieczny sposób
+plan.title.confirm-start|mt-safe|e9d08826|Potwierdź to uruchomienie
+plan.title.enable-dpm|mt-safe|d66865b5|Automatyczne taktowanie
+plan.title.set-clocks|mt-safe|a6c47043|Taktowanie
+plan.title.reset-defaults|mt-safe|529f2f6e|Przywróć domyślne ustawienia grafiki
+plan.title.undo|mt-safe|c1628643|Cofnij ostatnią zmianę
+plan.title.cu-mode|mt-safe|3b1c283f|Rdzenie graficzne
+plan.title.cu-confirm|mt-safe|117b1c92|Potwierdź 40 rdzeni graficznych
+plan.title.game-profile|mt-safe|fece8604|Ustawienia gry
+plan.title.game-undo|mt-safe|a1fad77b|Cofnij zmianę ustawień gry
+plan.title.game-redo|mt-safe|144129fb|Ponów zmianę ustawień gry
+plan.title.other|mt-safe|873512a9|Zmień ustawienia
+plan.line.desktop-on|mt|106dee6b|Szybszy pulpit zostaje włączony.
+plan.line.desktop-off|mt|fefc9d16|Szybszy pulpit zostaje wyłączony.
+plan.line.clear-mark|mt|e5065dd9|Znacznik pozostawiony przez nieoczekiwane wyłączenie zostaje usunięty.
+plan.line.route-gpu|mt|1c9c9142|Pulpit używa układu graficznego.
+plan.line.route-cpu|mt|a59306ef|Pulpit działa w bezpieczny sposób (na procesorze).
+plan.line.auto-on|mt|9f6b672e|Automatyczne taktowanie: włączone.
+plan.line.auto-off|mt|f5daa219|Automatyczne taktowanie: wyłączone (stałe 1000 MHz).
+plan.line.ceiling|mt|c01c44a8|Najwyższe taktowanie: {0} MHz.
+plan.line.ceiling-default|mt|6123b39c|Najwyższe taktowanie: 1500 MHz (domyślne).
+plan.line.other|mt|00229d42|Zostaje przywrócone wcześniejsze ustawienie sterownika.
+plan.line.cu-confirm|mt|68cc6ac8|Kolejne uruchomienia zachowają wszystkie 40 rdzeni.
+plan.line.confirm-start|mt|911bc92e|To uruchomienie zostaje oznaczone jako działające.
+plan.game.set|mt|c064a67c|{0}: {1}.
+plan.game.remove|mt|bf4850f1|{0}: powrót do ustawień domyślnych sterownika.
+plan.game.none|mt|cced93bb|brak ustawień
+plan.game.other|mt|252d9e89|inne ustawienia
+plan.when.now|mt|2a2d2ad0|Zaczyna działać od razu.
+plan.when.restart|mt|c005e77e|Zacznie działać po następnym ponownym uruchomieniu systemu Windows.
+plan.when.game|mt|d21b858b|Zacznie działać przy następnym uruchomieniu gry {0}.
+plan.scope.game|mt|d76f166e|Te ustawienia dotyczą wszystkich gier o nazwie {0} na tym komputerze.
+plan.scope.games-kept|mt|cf20d5e4|Ustawienia poszczególnych gier zostają zachowane.
+plan.scope.games-reset|mt|4d3df4af|Ustawienia poszczególnych gier wracają do zaleceń instalatora.
+plan.dark-screen|mt|7cc9b278|Podczas uruchamiania systemu Windows ekran może przez chwilę pozostać czarny.
+plan.close-apps|mt|e5b8ccd6|Zanim uruchomisz ponownie system Windows, zapisz pracę w innych aplikacjach.
+plan.cu-no-undo|mt|b2aae3bc|Zmiany rdzeni graficznych nie można cofnąć; aby wrócić, wybierz drugie ustawienie.
+plan.undo.yes|mt|c8f1c81e|Możesz to później cofnąć.
+plan.undo.partly|mt|54d91bb7|Możesz to później cofnąć, z wyjątkiem zmiany rdzeni graficznych.
+plan.undo.no|mt|b545dd16|Tego nie można cofnąć.
+plan.refuse.not-installed|mt|05ad8657|Sterownik nie jest zainstalowany, więc nie ma czego zmieniać.
+plan.refuse.not-running|mt|99675e61|Sterownik teraz nie działa. Najpierw uruchom ponownie system Windows.
+plan.refuse.already|mt|893691ef|Nie ma nic do zmiany: to ustawienie jest już wybrane.
+plan.refuse.nothing-to-undo|mt|9f3ece29|Nie ma czego cofnąć.
+plan.refuse.no-cu-waiting|mt|6f6ca6f0|Żadne uruchomienie z 40 rdzeniami nie czeka na potwierdzenie.
+plan.refuse.confirm-later|mt|d0279b4f|Tego uruchomienia nie można jeszcze potwierdzić. Poczekaj minutę przy normalnie działającym ekranie, a potem spróbuj ponownie.
+plan.refuse.other|mt|36c01058|Nie można tego teraz zrobić. Niczego nie zmieniono. Szczegóły znajdziesz w raporcie dla pomocy technicznej.
+# ---- settings search (WU-009): the name, then common terms separated by | (translations add their own terms) ----
+search.graphics.clock-auto|mt-safe|d66865b5|Automatyczne taktowanie
+search.graphics.clock-auto.terms|mt|74d15b22|taktowanie|zegar|DPM|boost|częstotliwość|prędkość|szybkość|taktowanie GPU|zegar GPU
+search.graphics.clock-ceiling|mt-safe|a61bb638|Najwyższe taktowanie
+search.graphics.clock-ceiling.terms|mt|2c39cbca|maksymalne taktowanie|max taktowanie|MHz|limit|górna granica|podkręcanie|overclock|OC
+search.graphics.cores|mt-safe|3b1c283f|Rdzenie graficzne
+search.graphics.cores.terms|mt|d2fcccf3|CU|jednostki obliczeniowe|rdzenie|40 rdzeni|24 rdzenie|odblokuj|odblokowanie|rdzenie shaderów
+search.graphics.reset|mt-safe|529f2f6e|Przywróć domyślne ustawienia grafiki
+search.graphics.reset.terms|mt|20d20bb8|reset|resetuj|przywróć|domyślne|ustawienia domyślne|fabryczne
+search.games.rt|mt-safe|49d8697b|Obsługa ray tracingu
+search.games.rt.terms|mt|3abbb3ed|RT|ray tracing|raytracing|śledzenie promieni|DXR
+search.games.present|mt-safe|d16b6c3b|Szybsze dostarczanie klatek
+search.games.present.terms|mt|e4d40585|present|dostarczanie klatek|klatki|kopie|opóźnienie|input lag|latency
+search.games.cpu|mt|45883a65|Mniej pracy procesora na klatkę
+search.games.cpu.terms|mt|776e6494|CPU|procesor|wątki|wielowątkowość|ograniczenie procesora|CPU limited
+search.games.undo|mt-safe|59e2951f|Cofnij zmianę ustawień gry
+search.games.undo.terms|mt|f63a6cb8|cofnij|ponów|przywróć|cofnięcie
+search.games.add|mt-safe|37b1384f|Dodaj grę
+search.games.add.terms|mt|94d2c8d7|dodaj|gra|gry|program|exe
+search.display.resolution|mt-safe|c12b3df8|Rozdzielczość i częstotliwość odświeżania
+search.display.resolution.terms|mt|0e2e3e69|rozdzielczość|odświeżanie|częstotliwość|Hz|1080p|monitor|ekran
+search.display.identify|mt-safe|3def2f6d|Identyfikuj monitor
+search.display.identify.terms|mt|6a71b05e|identyfikuj|który ekran|który monitor|numer monitora
+search.display.scale|mt-safe|1cf201de|Skala, układ i orientacja
+search.display.scale.terms|mt|f73bb0e2|DPI|skala|skalowanie|powiększenie|rozmiar tekstu|orientacja|obrót|układ
+search.perf.sensors|mt-safe|a8451874|Temperatura i obciążenie
+search.perf.sensors.terms|mt|d3085e12|temperatura|temp|użycie|obciążenie|czujniki|VRAM|pamięć|moc|pobór mocy|wentylator|waty
+search.perf.cache|mt-safe|d7b57389|Pamięć podręczna shaderów
+search.perf.cache.terms|mt|6c23151c|cache|pamięć podręczna|shader|shadery|przycinanie|zacinanie|stutter|kompilacja
+search.driver.version|mt-safe|04cb4284|Wersja sterownika
+search.driver.version.terms|mt|63b1897d|wersja|wydanie|zainstalowany|data
+search.driver.update|mt-safe|f26f3275|Sprawdź aktualizacje
+search.driver.update.terms|mt|8e944c4d|aktualizacja|aktualizuj|nowa wersja|pobierz|pobieranie|uaktualnienie
+search.settings.language|mt-safe|a4fe6526|Język
+search.settings.language.terms|mt|fd2aa88a|język|English|angielski|Polski|日本語|한국어
+search.settings.update-start|mt|1795d304|Sprawdzaj aktualizacje przy uruchamianiu aplikacji
+search.settings.update-start.terms|mt|f9b8aeaa|aktualizacja|automatycznie|uruchamianie|start
+search.settings.recent|mt-safe|1584741a|Zapamiętuj uruchomione gry
+search.settings.recent.terms|mt|b9a70e98|historia|ostatnie|uruchomione|prywatność|wyczyść
+search.settings.nagi|mt-safe|31c709aa|Pokazuj Nagi
+search.settings.nagi.terms|mt|d1e1a96e|Nagi|postać|maskotka|przewodniczka|przewodnik
+search.settings.tips|mt-safe|95766585|Pokazuj wskazówki automatycznie
+search.settings.tips.terms|mt|34fa1b1d|wskazówki|porady|podpowiedzi|czy wiesz
+search.settings.animations|mt-safe|2962f3a5|Ogranicz animacje
+search.settings.animations.terms|mt|2e378347|animacja|animacje|ruch|efekty
+search.settings.support|mt-safe|57b9df00|Pokazuj opcje pomocy technicznej
+search.settings.support.terms|mt|bf7d08c9|pomoc techniczna|wsparcie|techniczne|zaawansowane|diagnostyka
+search.settings.data|mt-safe|ee5ef73a|Twoje dane
+search.settings.data.terms|mt|a17a07e3|prywatność|dane|telemetria|sieć|internet|wysyłanie
+search.help.repair|mt-safe|304cd933|Napraw sterownik
+search.help.repair.terms|mt|c5551081|napraw|naprawa|popraw|zainstaluj ponownie|reinstalacja|nie działa|zepsuty
+search.help.report|mt-safe|db2acddc|Utwórz raport dla pomocy technicznej
+search.help.report.terms|mt|6ce5ba51|raport|błąd|bug|pomoc techniczna|wsparcie|logi|dzienniki
+search.help.restart|mt-safe|1ef47f1f|Uruchom ponownie system Windows
+search.help.restart.terms|mt|7ad6427b|uruchom ponownie|ponowne uruchomienie|restart|reset|restart sterownika
+search.help.guides|mt-safe|6ef2d14b|Pomoc w typowych problemach
+search.help.guides.terms|mt|031dd644|czarny ekran|awaria|crash|wolno|przycinanie|mysz|problem|pomoc
+search.later.vsync|mt-safe|86146f8a|Synchronizacja pionowa (VSync)
+search.later.vsync.terms|mt|352b1574|VSync|V-Sync|synchronizacja pionowa|rozrywanie obrazu|tearing
+search.later.fps|mt-safe|3217f73e|Limit klatek na sekundę
+search.later.fps.terms|mt|226d00fd|FPS|limit FPS|FPS limit|ogranicznik klatek|frame limiter|klatki na sekundę|liczba klatek
+search.later.sharpen|mt-safe|65319812|Wyostrzanie obrazu
+search.later.sharpen.terms|mt|9e551a61|wyostrzanie|ostrość|RIS|CAS
+search.later.aa|mt-safe|c77c3af2|Wygładzanie krawędzi
+search.later.aa.terms|mt|99479753|AA|MSAA|antyaliasing|anti-aliasing|wygładzanie|ząbki|poszarpane krawędzie
+search.later.af|mt-safe|527a4439|Filtrowanie tekstur
+search.later.af.terms|mt|ef806f34|AF|anizotropowe|filtrowanie anizotropowe|filtrowanie|tekstury
+search.later.scaling|mt-safe|7f3a6f5d|Skalowanie obrazu
+search.later.scaling.terms|mt|485400f8|skalowanie|upscaling|skalowanie całkowite|integer scaling|proporcje|rozciąganie
+search.later.mode|mt-safe|90ed46c7|Wybierz rozdzielczość i częstotliwość odświeżania
+search.later.mode.terms|mt|6088b5a8|zmień rozdzielczość|ustaw odświeżanie|rozdzielczość|tryb|144 Hz
+search.later.hdr|mt-safe|60790181|HDR
+search.later.hdr.terms|mt|e0f32e0b|HDR|10-bit|10 bitów|głębia kolorów|kolor|kolory
+search.later.vrr|mt-safe|2939546a|Zmienna częstotliwość odświeżania
+search.later.vrr.terms|mt|685a6f1e|VRR|FreeSync|G-Sync|adaptive sync|adaptacyjna synchronizacja
+search.later.power|mt-safe|fba85679|Limit mocy
+search.later.power.terms|mt|db72d2b0|limit mocy|pobór mocy|moc|waty|TDP
+search.later.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
+search.later.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
+search.later.voltage|mt-safe|4e40d79f|Napięcie
+search.later.voltage.terms|mt|5cc069f4|napięcie|undervolt|undervolting|obniżenie napięcia|mV
+search.later.fps-counter|mt-safe|8e4f7029|Wyświetlanie liczby klatek
+search.later.fps-counter.terms|mt|40353cf6|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę
+search.later.cache-clear|mt-safe|6b923412|Wyczyść pamięć podręczną shaderów
+search.later.cache-clear.terms|mt|bd9dc929|wyczyść cache|usuń cache|wyczyść pamięć podręczną|usuń pamięć podręczną
+# ---- window frame (WU-008, WU-011) ----
+ui.back|mt-safe|76900f1b|Wstecz
+ui.search|mt-safe|255b076d|Znajdź ustawienie
+ui.search.results|mt-safe|e978b00d|Wyniki wyszukiwania
+ui.search.none|mt-safe|4a80e7e4|Nie znaleziono ustawienia.
+ui.language.current|mt-safe|45f00aed|Bieżący język
+ui.nav.current|mt-safe|de2574e5|Bieżąca strona
+ui.explain|mt|c68f3c5e|Do czego służy „{0}”?
+ui.explain.page|mt-safe|d2447d18|O tej stronie
+ui.explain.setting|mt-safe|3872b16d|O tym ustawieniu
+ui.apply|mt-safe|31e392d1|Zastosuj
+ui.discard|mt-safe|f9bfa3dc|Odrzuć zmiany
+ui.cancel|mt-safe|19766ed6|Anuluj
+ui.continue|mt-safe|31fbef16|Kontynuuj
+ui.expanded|mt|ed077f3d|Rozwinięte
+ui.collapsed|mt|c21ead06|Zwinięte
+ui.ceiling.lower|mt-safe|f7017502|Obniż najwyższe taktowanie
+ui.ceiling.higher|mt-safe|4d2c5410|Podnieś najwyższe taktowanie
+ui.unsaved.title|mt-safe|a710c2b9|Niezapisane zmiany
+ui.unsaved.text|mt|31225aee|Ustawienia na stronie {0} zostały zmienione, ale nie zastosowane.
+ui.unsaved.save|mt-safe|31e392d1|Zastosuj
+ui.unsaved.discard|mt-safe|eb1a70e3|Odrzuć
+ui.unsaved.keep|mt-safe|e76fd2ad|Kontynuuj edycję
+ui.confirm.changes|mt|86a32a72|Co się zmieni:
+ui.confirm.admin|mt|04e01336|Następnie Windows poprosi o uprawnienia administratora.
+ui.restart.title|mt-safe|6fa4b426|Uruchomić ponownie system Windows?
+ui.restart.text|mt|57b7190e|Zmiana zacznie działać po ponownym uruchomieniu. Windows poprosi inne programy o zamknięcie, więc najpierw zapisz w nich swoją pracę.
+ui.restart.later|mt-safe|73b6e48a|Później
+ui.restart.now|mt-safe|09af1002|Uruchom ponownie teraz
+ui.later|mt|3ff09ef1|Dostępne później.
+ui.later.short|mt|91981460|dostępne później
+ui.later.reason|mt|d5a9cf1d|Sterownik jeszcze tego nie potrafi. Ta funkcja pojawi się w jednej z kolejnych wersji sterownika.
+ui.later.title|mt-safe|e3b48f0b|Dostępne później
+nav.home|mt-safe|3a786953|Strona główna
+nav.games|mt-safe|d9dae781|Gry
+nav.graphics|mt-safe|a874fca8|Grafika
+nav.display|mt-safe|34e108c0|Ekran
+nav.performance|mt-safe|442aded8|Wydajność
+nav.driver|mt-safe|9fe4c68e|Sterownik
+nav.settings|mt-safe|74a883a0|Ustawienia
+nav.help|mt-safe|b79cac92|Pomoc
+page.home.title|mt-safe|3a786953|Strona główna
+page.home.intro|mt|05aa30e0|Co teraz robi Twój komputer i co wymaga Twojej uwagi.
+page.games.title|mt-safe|d9dae781|Gry
+page.games.intro|mt|7bac98dd|Ustawienia pojedynczej gry. Zaczynają działać przy następnym uruchomieniu gry.
+page.graphics.title|mt-safe|a874fca8|Grafika
+page.graphics.intro|mt|e2b681e7|Taktowanie i rdzenie graficzne dla wszystkich gier. Zmiany zaczną działać po następnym ponownym uruchomieniu systemu Windows.
+page.display.title|mt-safe|34e108c0|Ekran
+page.display.intro|mt|799bfbb0|Twoje monitory i to, co teraz wyświetlają.
+page.performance.title|mt-safe|442aded8|Wydajność
+page.performance.intro|mt|b072238e|Bieżące odczyty układu graficznego i pamięci podręczne shaderów.
+page.driver.title|mt-safe|9fe4c68e|Sterownik
+page.driver.intro|mt|9aba802f|Zainstalowana wersja sterownika i jej aktualizacje.
+page.settings.title|mt-safe|74a883a0|Ustawienia
+page.settings.intro|mt|0dfe016b|Jak działa ta aplikacja. Te wybory dotyczą tylko Ciebie i pozostają po aktualizacji sterownika.
+page.help.title|mt-safe|b79cac92|Pomoc
+page.help.intro|mt|ba52ab9c|Pomoc krok po kroku w typowych problemach, naprawa i raporty dla pomocy technicznej.
+# ---- results of actions (WU-061) ----
+action.working|mt|82f2bdf0|Trwa wykonywanie... Windows może poprosić o uprawnienia administratora.
+action.done|mt-safe|ed251864|Gotowe.
+action.failed|mt|ee79203d|Zmiana nie została wprowadzona. Nic innego nie zmieniono. Przyczynę pokaże raport dla pomocy technicznej utworzony na stronie Pomoc.
+action.not-elevated|mt|d6a4391d|Nie udzielono uprawnień administratora. Niczego nie zmieniono.
+action.cannot-read|mt|4f597aff|Nie można odczytać bieżących ustawień, więc niczego nie zmieniono.
+action.restart-failed|mt|0783bdf8|Windows nie uruchomił się ponownie. Uruchom go ponownie z menu Start.
+# ---- Home (WU-007, WU-002) ----
+home.start.title|mt-safe|831d0f72|Pierwsze kroki
+home.start.1|mt|19a22787|Uruchom grę jak zwykle. Sterownik używa zalecanych ustawień.
+home.start.2|mt|c551f885|Jeśli gra sprawia problemy, otwórz stronę Gry i sprawdź jej ustawienia.
+home.start.3|mt|fec0203b|Na stronie Pomoc znajdziesz instrukcje krok po kroku dotyczące typowych problemów.
+home.start.dismiss|mt-safe|0a82387a|Rozumiem, ukryj
+home.recent.title|mt-safe|6c30b7fc|Ostatnie gry
+home.recent.none|mt|73f0a6d1|Nie ma jeszcze gier. Uruchamiane gry pojawią się tutaj.
+home.recent.off|mt|965bacdf|Zapamiętywanie uruchomionych gier jest wyłączone (Ustawienia).
+home.recent.settings|mt-safe|74a883a0|Ustawienia
+home.recent.all|mt-safe|cf2bf152|Wszystkie gry
+home.monitor.title|mt-safe|4c2e1df4|Monitor
+home.monitor.open|mt-safe|f4983796|Otwórz stronę Ekran
+home.driver.title|mt-safe|9fe4c68e|Sterownik
+home.graphics.title|mt-safe|a874fca8|Grafika
+# ---- Games (WU-012, WU-013, WU-015, WU-019, WU-020a, WU-028, WU-054) ----
+games.list.title|mt-safe|e9f433a5|Twoje gry
+games.filter|mt-safe|4342eecc|Znajdź grę
+games.sort.name|mt-safe|588a0823|Sortuj według nazwy
+games.sort.recent|mt-safe|0a98c5ff|Sortuj od ostatnio granych
+games.show-hidden|mt-safe|13d39e6b|Pokaż ukryte gry
+games.add|mt-safe|d6031d13|Dodaj grę...
+games.add.title|mt-safe|6da9b3ee|Wybierz plik programu gry
+games.add.filter|mt-safe|b6747064|Programy
+games.add.invalid|mt|44a0074e|Tej nazwy pliku nie można użyć dla ustawień gry.
+games.launched|mt|107a215c|Ostatnio grano: {0}
+games.has-settings|mt-safe|d9ad0a62|Ma własne ustawienia
+games.no-settings|mt-safe|62ce296b|Brak własnych ustawień
+games.hide|mt-safe|ac20a57b|Ukryj
+games.unhide|mt-safe|0df6f1ca|Pokaż
+games.hide.note|mt|91405f21|Ukrycie gry usuwa ją tylko z tej listy. Jej pliki, zapisy i ustawienia pozostają.
+games.empty|mt|0818ed91|Nie ma jeszcze gier. Uruchom grę raz albo dodaj ją ręcznie.
+games.empty.off|mt|5cfe9fad|Lista gier jest pusta. Zapamiętywanie uruchomionych gier jest wyłączone (Ustawienia); grę możesz dodać ręcznie.
+games.select|mt|3c23c839|Wybierz grę, aby zobaczyć jej ustawienia.
+games.unsaved|mt|c4751a7a|niezapisane zmiany
+games.scope|mt|0ec70022|Te ustawienia dotyczą wszystkich gier o nazwie {0} na tym komputerze.
+games.running|mt|e20bd8e0|Teraz działa: {0}. Nowe ustawienia zaczną działać przy następnym uruchomieniu tej gry.
+games.changed|mt|2df4fd0e|Zmienione, jeszcze niezastosowane
+games.other-kept|mt|a17fc54d|Inne wartości pozostają bez zmian: {0}
+games.hidden-kept|mt|ee0a72e7|Ta gra ma też ustawienia pomocy technicznej. Pozostają bez zmian.
+games.when|mt|57ebe13e|Ustawienia zaczną działać przy następnym uruchomieniu gry {0}.
+games.unsaved.count|mt|fc5aef28|Niezapisane zmiany w grach: {0}. Przycisk Zastosuj je zapisze.
+games.unsaved.none|mt|c9b0957f|Twoje zmiany są zgodne z zapisanymi ustawieniami.
+games.undo|mt-safe|1095dd19|Cofnij ostatnią zmianę
+games.redo|mt-safe|74273989|Ponów
+games.reset.recommended|mt-safe|d7d3dc65|Użyj zalecanych ustawień
+games.reset.none|mt-safe|cf06d86c|Użyj ustawień domyślnych sterownika
+games.reset.note|mt|6002de1f|Instalator zaleca ustawienia dla tej gry. „Użyj zalecanych ustawień” przywraca te ustawienia.
+# ---- Graphics (B5, WU-042, WU-055, section 7) ----
+graphics.clock.title|mt-safe|a6c47043|Taktowanie
+graphics.clock.now|mt-safe|fe18013d|Teraz
+graphics.clock.after|mt-safe|1ccff8ba|Po następnym ponownym uruchomieniu
+graphics.clock.fixed|mt-safe|8380e882|Stałe, niskie i ciche
+graphics.clock.auto-up-to|mt|13865cd2|Automatyczne, do {0} MHz
+graphics.clock-auto.default|mt|bb1da6bd|Gdy ta opcja jest wyłączona, układ pracuje ze stałą, niską prędkością: mniej ciepła, mniejsza wydajność.
+graphics.clock-ceiling.check|mt-safe|3c16c1c1|Najwyższe taktowanie:
+graphics.clock-ceiling.default|mt|aa55aa8b|Gdy ta opcja jest wyłączona, najwyższe taktowanie wynosi {0} MHz. Jest używane tylko przy automatycznym taktowaniu.
+graphics.thermal|mt|14bc2f1d|Ochrona przed przegrzaniem jest zawsze włączona: od 87 °C sterownik obniża taktowanie, a przy 90 °C utrzymuje najniższe taktowanie, dopóki układ nie ostygnie. Wentylatorem steruje płyta.
+graphics.cores.title|mt-safe|3b1c283f|Rdzenie graficzne
+graphics.cores.24|mt-safe|99b1c87b|Standardowe (24)
+graphics.cores.40|mt-safe|908ab6d1|Wszystkie (40)
+graphics.not-installed|mt|17713c9c|Sterownik nie jest zainstalowany, więc nie ma tu nic do ustawienia.
+graphics.unsaved|mt|fdb121dc|Masz zmiany, które nie są jeszcze zastosowane.
+graphics.saved|mt|75d79f0a|Brak niezapisanych zmian.
+graphics.reset.text|mt|e6fe86ec|Przywraca taktowanie i rdzenie graficzne do ustawień tej wersji sterownika.
+graphics.reset.keep-games|mt|4ef40ca5|Zachowaj ustawienia poszczególnych gier
+graphics.reset.button|mt-safe|cf98ec90|Przywróć domyślne...
+graphics.undo|mt-safe|766450ec|Cofnij ostatnią zmianę...
+graphics.undo.none|mt|12d1c282|Nie ma zmiany do cofnięcia.
+graphics.undo.when|mt|a768bb2c|Ostatnia zmiana: {0}.
+# ---- Display (WU-030, WU-031, WU-034) ----
+display.name|mt-safe|086503fb|Monitor {0}
+display.name.main|mt-safe|a3111418|Monitor {0} (główny)
+display.resolution|mt-safe|d4055faf|Rozdzielczość
+display.refresh|mt-safe|1c04ebff|Częstotliwość odświeżania
+display.size|mt|cae2c3d9|{0} x {1}
+display.mode|mt|f4307cf3|{0} x {1}, {2} Hz
+display.mode.no-rate|mt|cae2c3d9|{0} x {1}
+display.mode-note|mt|2b5a8898|Te wartości możesz tu zobaczyć. Zmienianie ich w tej aplikacji pojawi się później.
+display.identify|mt-safe|4786cd51|Identyfikuj
+display.windows.title|mt-safe|a597577a|Ustawienia ekranu systemu Windows
+display.windows.text|mt|49237ecd|Skalę, układ, orientację i monitor główny ustawia się w systemie Windows.
+display.windows.open|mt-safe|a8aa4f79|Otwórz ustawienia ekranu systemu Windows
+# ---- Performance (WU-038, WU-041) ----
+perf.now.title|mt-safe|fe18013d|Teraz
+perf.now.note|mt|47358944|Odczyty odświeżają się co 2 sekundy, gdy ta strona jest otwarta.
+perf.cache.title|mt-safe|2c9cb386|Pamięci podręczne shaderów
+perf.cache.note|mt|e46f62f9|Pamięć podręczna shaderów przechowuje przygotowane programy graficzne, dzięki czemu przy kolejnym razie gry uruchamiają się i wczytują szybciej.
+# ---- Driver (WU-043, WU-046, WU-058) ----
+driver.card.title|mt-safe|242adbbf|Zainstalowany sterownik
+driver.updates.title|mt-safe|22e2bada|Aktualizacje
+driver.updates.check|mt-safe|2937cffb|Sprawdź teraz
+driver.updates.open|mt-safe|9da2b089|Otwórz stronę wydania
+driver.updates.releases|mt-safe|3b8c94fd|Wszystkie wydania
+driver.updates.privacy|mt|4813b1cb|Sprawdzanie odczytuje publiczną listę wydań. Nie wysyła żadnych informacji o Tobie ani o Twoim komputerze.
+driver.repair.title|mt-safe|1196b6c5|Naprawa
+driver.repair.text|mt|e71e61c4|Jeśli sterownik nie działa tak, jak powinien, napraw go na stronie Pomoc.
+driver.repair.open|mt-safe|30dd758a|Otwórz Pomoc
+# ---- Settings (WU-003, WU-046, WU-075, WU-076, WU-077) ----
+settings.language.note|mt|3880569c|Teksty japońskie i koreańskie są na razie tłumaczeniem maszynowym.
+settings.updates.title|mt-safe|22e2bada|Aktualizacje
+settings.update-start.note|mt|ae77c8bd|Najwyżej raz na godzinę. Bez Twojego udziału nic nie jest pobierane ani instalowane.
+settings.recent.title|mt-safe|085fe856|Lista gier
+settings.recent.note|mt|1416b04a|Sterownik zapamiętuje gry uruchamiane na tym komputerze na potrzeby listy na stronie Gry. Nic nie opuszcza tego komputera.
+settings.recent.clear|mt-safe|50da1a01|Wyczyść listę
+settings.recent.cleared|mt|c2c7e99b|Lista jest pusta.
+settings.recent.busy|mt|fd22dbb3|Nie udało się teraz wyczyścić listy, ponieważ uruchamia się gra. Spróbuj ponownie za chwilę.
+settings.guide.title|mt|8e02ab12|Wskazówki i przewodniczka
+settings.guide.note|mt|529531e4|Bez Nagi wskazówki są wyświetlane jako tekst. Nic innego się nie zmienia.
+settings.animations.windows-off|mt|0962c940|Animacje w systemie Windows są wyłączone, więc ta aplikacja też nie używa animacji.
+settings.support.title|mt-safe|be91940b|Pomoc techniczna
+settings.support.note|mt|97dadddd|Pokazuje szczegóły techniczne i dodatkowe akcje na stronie Pomoc, na wypadek gdyby poprosili o nie twórcy.
+settings.data.1|mt|370b4dab|Nie ma telemetrii ani konta.
+settings.data.2|mt|fa14b2f8|Aplikacja łączy się z internetem tylko w celu sprawdzenia aktualizacji i pobrań uruchomionych przez Ciebie.
+settings.data.3|mt|40bbfde4|Raporty dla pomocy technicznej pozostają na tym komputerze, dopóki ich nie wyślesz.
+settings.data.4|mt|0d111524|Lista gier pozostaje na tym komputerze. Możesz ją wyłączyć i wyczyścić powyżej.
+settings.data.5|mt|7e6b4f23|Twoje wybory w tej aplikacji są przechowywane tylko dla Twojego konta Windows.
+# ---- Help (WU-058, WU-059, WU-063, WU-067) ----
+help.guides.title|mt-safe|6ef2d14b|Pomoc w typowych problemach
+help.guide.dark|mt|1faa0159|Ekran pozostaje czarny lub sterownik się nie uruchamia
+help.guide.dark.1|mt|8b1336e3|Poczekaj dwie minuty. Pierwsze uruchomienie po aktualizacji może trwać dłużej.
+help.guide.dark.2|mt|e0b50b70|Uruchom ponownie system Windows z menu Start albo naciśnij raz przycisk zasilania i poczekaj.
+help.guide.dark.3|mt|9a456513|Jeśli Strona główna informuje, że pulpit działa w bezpieczny sposób, włącz z powrotem szybszy pulpit i uruchom ponownie komputer.
+help.guide.dark.4|mt|ed93ddc9|Jeśli ekran nadal jest czarny, napraw sterownik na stronie Pomoc albo uruchom system Windows w trybie awaryjnym i tam wykonaj naprawę.
+help.guide.slow|mt|bf7ad7f5|Gry działają wolno lub się przycinają
+help.guide.slow.1|mt|717d0dd0|Na stronie Grafika sprawdź, czy automatyczne taktowanie jest włączone.
+help.guide.slow.2|mt|e0575748|Na stronie Wydajność sprawdź temperaturę. Powyżej 87 °C sterownik spowalnia układ, aby go chronić: wyczyść chłodzenie i zapewnij obudowie dopływ powietrza.
+help.guide.slow.3|mt|b4eb7514|W nowej grze przez pierwsze minuty mogą występować przycięcia, gdy wypełnia się pamięć podręczna shaderów. To samo z czasem mija.
+help.guide.slow.4|mt|8f348ed6|Na stronie Gry wypróbuj dla tej gry opcję „Mniej pracy procesora na klatkę”.
+help.guide.crash|mt|9f0a6158|Gra się zamyka, zawiesza lub nie uruchamia
+help.guide.crash.1|mt|c05b2fa3|Uruchom grę ponownie. Jeśli znowu się zamknie, otwórz jej ustawienia na stronie Gry.
+help.guide.crash.2|mt|e58faffe|Użyj dla tej gry ustawień domyślnych sterownika, zastosuj je i uruchom grę ponownie.
+help.guide.crash.3|mt|f39a416d|Jeśli gra używa ray tracingu, wyłącz ray tracing w opcjach samej gry.
+help.guide.crash.4|mt|da93756f|Jeśli to nadal nie działa, utwórz raport dla pomocy technicznej i wyślij go twórcom.
+help.guide.display|mt|1e7607a4|Obraz, mysz lub monitor działają nieprawidłowo
+help.guide.display.1|mt|03b57c05|Jeśli kliknięcia myszą nie działają w niektórych aplikacjach, uruchom ponownie system Windows.
+help.guide.display.2|mt|ca7058ff|Jeśli okno tej aplikacji zgubi się po zmianie monitora, uruchom aplikację ponownie: pojawi się na widocznym ekranie.
+help.guide.display.3|mt|d4b2d442|Rozdzielczość, skalę i układ zmienisz w ustawieniach ekranu systemu Windows.
+help.guide.display.4|mt|7a5f2a9b|Jeśli po aktualizacji obraz jest nieprawidłowy, użyj opcji „Przywróć domyślne” na stronie Grafika i uruchom ponownie komputer.
+help.guide.safe|mt|d2304dae|Naprawa w trybie awaryjnym
+help.guide.safe.1|mt|7f161492|Przytrzymaj klawisz Shift i wybierz Uruchom ponownie w menu Start.
+help.guide.safe.2|mt|b12561b0|Wybierz Rozwiąż problemy, Opcje zaawansowane, Ustawienia uruchamiania, Uruchom ponownie, a następnie naciśnij 4, aby włączyć tryb awaryjny.
+help.guide.safe.3|mt|0fce9cbb|Otwórz „amdgpu-wddm Control (recovery)” z menu Start i wybierz Napraw.
+help.guide.safe.4|mt|bb202726|Te kroki są też na stronie wydania, więc możesz je przeczytać na innym urządzeniu.
+help.start.text|mt|75b035b9|Ponownie pokaż kartę „Pierwsze kroki” na Stronie głównej.
+help.start.show|mt-safe|42892e31|Pokaż ponownie
+help.repair.text|mt|07c5c040|Naprawa instaluje ponownie tę samą wersję sterownika z kopii przechowywanej na tym komputerze. Twoje ustawienia pozostają. Ekran może na chwilę zgasnąć, a Windows może wymagać ponownego uruchomienia.
+help.repair.confirm|mt|d6e18be8|Naprawić sterownik teraz? Najpierw zapisz pracę w innych programach. Instalator poprosi o uprawnienia administratora.
+help.repair.started|mt|de691dd9|Naprawa została uruchomiona w osobnym oknie.
+help.repair.failed|mt|5d64d67d|Nie udało się uruchomić naprawy.
+help.repair.unavailable|mt|18d8e621|Naprawa nie jest dostępna na tym komputerze: brakuje przechowywanej kopii wydania. Pobierz pakiet wydania ze strony wydania i uruchom jego instalator.
+help.restart.text|mt|3c64612a|Ponowne uruchomienie samego sterownika grafiki nie jest dostępne. Zamiast tego uruchom ponownie system Windows: to bezpieczny sposób.
+help.report.create|mt-safe|3cf7d83c|Utwórz raport dla pomocy technicznej...
+help.report.text|mt|3afd39fb|Raport dla pomocy technicznej pomaga twórcom znaleźć problem. Jest to plik zip na pulpicie, który zawiera:
+help.report.item.1|mt|4792c5d9|dziennik sterownika i jego bieżący stan (taktowanie, temperatura, ustawienia)
+help.report.item.2|mt|cd14373b|stan pulpitu i ostatnich uruchomień
+help.report.item.3|mt|b2dda27d|zainstalowane pliki sterownika wraz z ich wersjami
+help.report.item.4|mt|8014d767|diagnostykę DirectX i testy grafiki
+help.report.item.5|mt|79e75614|zdarzenia systemu Windows z ostatnich 24 godzin dotyczące sterownika grafiki
+help.report.privacy|mt|bb8e792c|Nazwa użytkownika, nazwa komputera i numery seryjne są usuwane. Przed zapisaniem raportu zobaczysz każdy plik, a nic nie jest nigdzie wysyłane.
+help.report.dxdiag|mt|9661696b|Dołącz diagnostykę DirectX (trwa do 2 minut)
+help.report.caps|mt|2425bb47|Dołącz testy grafiki
+help.report.collecting|mt|9edbbbce|Zbieranie danych... To może potrwać kilka minut.
+help.report.failed|mt|8c3a41ba|Nie udało się utworzyć raportu.
+help.report.cancelled|mt|aa061bcb|Anulowano. Nic nie zostało zapisane.
+help.report.saved|mt|73cd7e8c|Zapisano: {0}
+help.report.not-saved|mt|b8cf4fba|Nie udało się zapisać raportu.
+help.report.preview|mt|c1a5c02a|Raport dla pomocy technicznej: sprawdź pliki
+help.report.where|mt|5f73de1a|Raport zostanie zapisany jako {0}. Wybierz plik, aby zobaczyć jego zawartość.
+help.report.files|mt-safe|d2dc06c5|Pliki raportu
+help.report.file|mt-safe|50009ce1|Plik
+help.report.size|mt-safe|1af85190|Rozmiar
+help.report.contents|mt-safe|437aea62|Zawartość
+help.report.save|mt-safe|c7ca9b29|Zapisz raport
+help.about.title|mt-safe|4efca0d1|Informacje
+help.about.release|mt|1751ebfd|Wersja sterownika {0}
+help.about.text|mt|5e62f6df|Sterownik open source dla płyty ASRock BC-250. Bez konta, bez telemetrii.
+# ---- recovery view (WU-068) ----
+recovery.title|mt-safe|48f6a8d5|Odzyskiwanie
+recovery.intro|mt|cf19b743|Ten widok działa nawet wtedy, gdy sterownik lub reszta aplikacji nie działa. Tylko odczytuje, co jest zainstalowane.
+recovery.actions|mt-safe|f42148c5|Co możesz zrobić
+# ---- explanations next to each page and setting (WU-064) ----
+help.page.home|mt|37fa8758|Strona główna pokazuje jedną kartę stanu: czy wszystko jest gotowe, a jeśli nie, co zrobić dalej. Poniżej są ostatnie gry i krótkie podsumowanie.
+help.page.games|mt|ea40fa7a|Każda gra może mieć własne ustawienia. Są one przechowywane według nazwy pliku programu i odczytywane przy uruchomieniu gry.
+help.page.graphics|mt|42618ee2|Te ustawienia dotyczą wszystkich gier. Sterownik odczytuje je podczas uruchamiania systemu Windows, więc zaczynają działać po następnym ponownym uruchomieniu.
+help.page.display|mt|0d0b6ad7|Ta strona pokazuje, co teraz wyświetla każdy monitor. Rozdzielczość, skalę i układ ustawia system Windows.
+help.page.performance|mt|ef1ac3a4|Bieżące odczyty układu graficznego. „Brak odczytu” oznacza, że sterownik nie potrafi jeszcze zmierzyć tej wartości.
+help.page.driver|mt|a2700547|Zainstalowana wersja, informacja, czy została sprawdzona, i czy jest dostępna nowsza wersja.
+help.page.settings|mt|b5b868fe|Jak ta aplikacja działa dla Ciebie. Nic tutaj nie zmienia sterownika.
+help.page.help|mt|e5564803|Pomoc krok po kroku, naprawa, ponowne uruchomienie i raporty dla pomocy technicznej.
+help.setting.clock-auto|mt|584f89f3|Układ zmienia prędkość zależnie od obciążenia: szybko w grach, wolno i cicho na pulpicie. Gdy ta opcja jest wyłączona, pracuje ze stałą, niską prędkością.
+help.setting.clock-ceiling|mt|d5c0013b|Najwyższa prędkość, jakiej może używać automatyczne taktowanie. Wyższa oznacza większą wydajność, ale też większy pobór mocy i więcej ciepła.
+help.setting.cores|mt|b7b0e331|Standardowe to 24 rdzenie graficzne, jak w płycie w stanie sprzedaży. Wszystkie to 40 rdzeni: szybciej w wielu grach, ale większy pobór mocy i więcej ciepła. Po pierwszym uruchomieniu z 40 rdzeniami potwierdź na Stronie głównej, że ekran działa; bez potwierdzenia następne uruchomienie wróci do 24 rdzeni.
+help.setting.reset|mt|13409397|Przywraca wspólne ustawienia grafiki do ustawień tej wersji sterownika. Ty decydujesz, czy ustawienia poszczególnych gier pozostaną.
+help.setting.rt|mt|87cd1543|Pozwala grze włączyć efekty ray tracingu. Niektórych efektów może brakować, a ray tracing spowalnia gry.
+help.setting.present|mt|70ad2029|Wysyła gotowe klatki na ekran z mniejszą liczbą kopii. Gry mogą przez to działać płynniej. Wyłącz to, jeśli obraz migocze lub pozostaje czarny.
+help.setting.cpu|mt|b2c75482|Rozkłada pracę sterownika na więcej rdzeni procesora. Pomaga, gdy procesor ogranicza liczbę klatek na sekundę.
+help.setting.diag|mt|f2712639|Przełączniki do testów prowadzonych przez twórców. Używaj ich tylko na ich prośbę.
+help.setting.undo|mt|a64f5f62|Przywraca ustawienia tej gry sprzed ostatniej zmiany. Ponów przywraca Twoją zmianę.
+help.setting.add|mt|c3f487f7|Wybierz plik programu gry (.exe), aby nadać jej własne ustawienia, zanim ją uruchomisz.
+help.setting.resolution|mt|aa573835|Liczba pikseli i częstotliwość odświeżania każdego monitora. Ustawia je system Windows.
+help.setting.identify|mt|83ce03d0|Wyświetla numer monitora na tym monitorze przez 3 sekundy.
+help.setting.scale|mt|dac4615e|Windows ustawia rozmiar tekstu i aplikacji, układ monitorów i orientację.
+help.setting.sensors|mt|462f8d49|Obciążenie, temperatura, taktowanie i pamięć wideo układu graficznego, co 2 sekundy.
+help.setting.cache|mt|b58e324f|Pamięci podręczne shaderów przechowują przygotowane programy graficzne, dzięki czemu gry uruchamiają się i wczytują szybciej.
+help.setting.version|mt|2ba29e3c|Wersja sterownika, która działa teraz, i wersja, która jest zainstalowana. Różnią się do czasu ponownego uruchomienia systemu Windows po aktualizacji.
+help.setting.update|mt|013323f7|Sprawdza na publicznej liście wydań, czy jest nowsza wersja. Bez Twojego udziału nic nie jest pobierane ani instalowane.
+help.setting.language|mt|a3aafdb3|Język tej aplikacji. Twój wybór pozostaje po aktualizacji sterownika.
+help.setting.update-start|mt|f3d2de1b|Przy otwieraniu aplikacji sprawdza, czy jest nowsza wersja, najwyżej raz na godzinę.
+help.setting.recent|mt|15d43b5b|Sterownik zapamiętuje, które gry uruchamiasz, aby pojawiały się na stronie Gry. Lista pozostaje na tym komputerze.
+help.setting.nagi|mt|631f5a6d|Pokazuje Nagi, przewodniczkę po aplikacji, obok wskazówek. Każda wskazówka jest też dostępna jako tekst bez niej.
+help.setting.tips|mt|97283b45|Sama pokazuje wskazówkę dotyczącą otwartej strony, bez Twojej prośby.
+help.setting.animations|mt|7d29cccb|Wyłącza ruchome obrazy w tej aplikacji.
+help.setting.support|mt|a67e46b5|Dodaje szczegóły techniczne i dodatkowe akcje na stronie Pomoc. Są one w języku angielskim.
+help.setting.data|mt|c77e39d6|Co przechowują ta aplikacja i sterownik oraz co jest wysyłane do internetu.
+help.setting.repair|mt|7bd6d691|Instaluje ponownie tę samą wersję z kopii na tym komputerze.
+help.setting.report|mt|77f4acdf|Tworzy plik zip z informacjami dla twórców. Ty decydujesz, czy go wysłać.
+help.setting.restart|mt|f4c0e8b6|Uruchamia ponownie system Windows. Ponowne uruchomienie samego sterownika grafiki nie jest dostępne.
+help.setting.guides|mt|e75ebef4|Pomoc krok po kroku w typowych problemach.
+help.setting.vsync|mt|368cb9db|Sprawia, że gra czeka na monitor, zanim pokaże nową klatkę. Dostępne później.
+help.setting.fps|mt|0b744582|Ogranicza liczbę klatek rysowanych przez grę w każdej sekundzie. Dostępne później.
+help.setting.sharpen|mt|f351a4a8|Sprawia, że obraz wygląda ostrzej. Dostępne później.
+help.setting.aa|mt|2f6e7807|Wygładza poszarpane krawędzie. Dostępne później.
+help.setting.af|mt|b1771bc6|Sprawia, że tekstury widziane pod kątem wyglądają ostrzej. Dostępne później.
+help.setting.scaling|mt|fab3d8f8|Jak niższa rozdzielczość wypełnia ekran. Dostępne później.
+help.setting.mode|mt|16a81243|Wybór rozdzielczości i częstotliwości odświeżania w tej aplikacji. Dostępne później.
+help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Dostępne później.
+help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Dostępne później.
+help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Dostępne później.
+help.setting.fan|mt|bfae721d|Wentylatorem steruje oprogramowanie układowe płyty. Sterowanie z tej aplikacji pojawi się później.
+help.setting.voltage|mt|9c28b6e1|Napięcie układu. Dostępne później.
+help.setting.fps-counter|mt|929ada50|Pokazuje liczbę klatek na sekundę. Dostępne później.
+help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Dostępne później.
