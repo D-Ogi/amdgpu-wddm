@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Host tests of recent-launch.h, gate G-RG of the GUI plan: format, switch, duplicate basenames, Unicode and long
-// paths, the Windows directory boundary, the same process through both shells, pruning, simultaneous creates in
-// several processes, OFF + Clear in flight, prune/read races, the lock bound, an AppContainer child, the whole
-// note path and its timing. No driver is loaded: the tests drive the helper the shells compile in.
+// paths, the Windows directory boundary, the same process through both shells (also between notes of another
+// process), pruning, an oversized list of a later version, no memory with the temporary file open, simultaneous
+// creates in several processes, OFF + Clear in flight, prune/read races, the lock bound, an AppContainer child, the
+// whole note path and its timing. No driver is loaded: the tests drive the helper the shells compile in.
 //
 // Everything is written below the working directory (the build output) and below one test key
 // HKCU\Software\amdgpu-wddm-test\recent-launch-<pid>, removed at the end; the real switch is only read.
@@ -91,6 +92,17 @@ bool clear(const std::wstring& store,bool off) {
     DeleteFileW(ext(store+L'\\'+rl::kTempName).c_str());
     return a || e==ERROR_FILE_NOT_FOUND;
 }
+std::string file_bytes(const std::wstring& path) {
+    const HANDLE h=CreateFileW(ext(path).c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,0,nullptr);
+    if(h==INVALID_HANDLE_VALUE)return {};
+    LARGE_INTEGER size{};GetFileSizeEx(h,&size);
+    std::string text(size_t(size.QuadPart),'\0');DWORD n=0;
+    if(!text.empty() && (!ReadFile(h,text.data(),DWORD(text.size()),&n,nullptr) || n!=text.size()))text.clear();
+    CloseHandle(h);
+    return text;
+}
+// A child of this executable: its exit code, or 0 with the suspended process in out.
+int run_child(const wchar_t* cmdline,DWORD flags=0,STARTUPINFOEXW* si=nullptr,PROCESS_INFORMATION* out=nullptr);
 double ms_since(std::chrono::steady_clock::time_point t0) {
     return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();
 }
@@ -265,6 +277,42 @@ void test_same_process() {
     }
 }
 
+void test_interleaved_processes() {
+    // Two processes of one path overlap: A notes through one shell, B through the same one, then A through the
+    // other. Two launches, and the entry stays B's. Both API orders; in the second B's clock reads earlier than A's
+    // (a clock set back), so no timestamp decides it.
+    for(int order=0;order<2;++order){
+        const std::wstring store=fresh(order?L"interleave-11":L"interleave-12"),exe=L"C:\\Games\\interleave.exe";
+        const uint32_t first=order?rl::ApiD3D11:rl::ApiD3D12,second=order?rl::ApiD3D12:rl::ApiD3D11;
+        rl::Inputs a=inputs(store,exe,110+order*10),b=inputs(store,exe,111+order*10),c=inputs(store,exe,112+order*10);
+        if(order)b.start=a.start-1000;
+        std::vector<rl::Entry> e;
+        CHECK(rl::commit(a,first)==rl::Outcome::Recorded);
+        CHECK(rl::commit(b,first)==rl::Outcome::Recorded);
+        std::string before,after;bool missing=false;
+        CHECK(rl::read_store(store,before,missing));
+        CHECK(rl::commit(a,second)==rl::Outcome::Merged);
+        CHECK(rl::read_store(store,after,missing) && before==after); // B's entry untouched, nothing written
+        CHECK(read_list(store,e) && e.size()==1 && e[0].starts==2 && e[0].pid==b.pid && e[0].start==b.start &&
+              e[0].apis==first);
+        // B's other shell still adds its API to its own entry; a third process is a third launch.
+        CHECK(rl::commit(b,second)==rl::Outcome::Merged);
+        CHECK(read_list(store,e) && e.size()==1 && e[0].starts==2 && e[0].pid==b.pid && e[0].apis==(first|second));
+        CHECK(rl::commit(c,second)==rl::Outcome::Recorded);
+        CHECK(read_list(store,e) && e.size()==1 && e[0].starts==3 && e[0].pid==c.pid && e[0].apis==second);
+        // A's first shell again (a second device of the same module type) changes nothing either.
+        CHECK(rl::commit(a,first)==rl::Outcome::Merged);
+        CHECK(read_list(store,e) && e.size()==1 && e[0].starts==3 && e[0].pid==c.pid);
+    }
+    // A launch counted before a Clear does not come back through its other shell: the user cleared it.
+    const std::wstring store=fresh(L"interleave-clear"),exe=L"C:\\Games\\cleared.exe";
+    const rl::Inputs a=inputs(store,exe,130);
+    CHECK(rl::commit(a,rl::ApiD3D12)==rl::Outcome::Recorded);
+    CHECK(clear(store,false));
+    CHECK(rl::commit(a,rl::ApiD3D11)==rl::Outcome::Merged && !exists(store+L'\\'+rl::kStoreName));
+    CHECK(rl::commit(inputs(store,exe,131),rl::ApiD3D11)==rl::Outcome::Recorded);
+}
+
 void test_prune() {
     const std::wstring store=fresh(L"prune");
     for(uint32_t i=0;i<70;++i)
@@ -303,6 +351,37 @@ void test_store_states() {
     CHECK(rl::commit(inputs(store,exe,52),rl::ApiD3D12)==rl::Outcome::Failed);
     CloseHandle(excl);
     CHECK(rl::read_store(store,text,missing) && text=="amdgpu-wddm recent-launches 1\nend 0\n");
+    // A list of a later version larger than this version's limit stays byte for byte.
+    std::string big="amdgpu-wddm recent-launches 2\n";
+    big.resize(rl::kMaxStoreBytes+4096,'v');big.back()='\n';
+    put(big);
+    CHECK(rl::commit(inputs(store,exe,53),rl::ApiD3D12)==rl::Outcome::Failed);
+    CHECK(file_bytes(list)==big);
+    // A version 1 header on a file over the limit is a damaged list: replaced.
+    big.replace(0,rl::kHeader.size(),rl::kHeader);
+    put(big);
+    CHECK(rl::commit(inputs(store,exe,54),rl::ApiD3D12)==rl::Outcome::Recorded);
+    CHECK(read_list(store,e) && e.size()==1 && e[0].pid==54 && e[0].starts==1);
+}
+
+void test_allocation_failure() {
+    // No memory with the temporary file open: the exception reaches the worker's catch, the file is closed on the
+    // way, and the next note succeeds in this process and in another one while this one lives on.
+    const std::wstring store=fresh(L"nomemory"),exe=L"C:\\Games\\nomemory.exe";
+    delete_switch();
+    rl::Inputs in=inputs(store,exe,140);
+    in.after_temp_open=[](void*){throw std::bad_alloc();};
+    bool thrown=false;
+    try {rl::commit(in,rl::ApiD3D12);} catch(const std::bad_alloc&) {thrown=true;}
+    CHECK(thrown && !exists(store+L'\\'+rl::kStoreName));
+    in.after_temp_open=nullptr;
+    CHECK(rl::commit(in,rl::ApiD3D12)==rl::Outcome::Recorded); // the failed note left no launch mark either
+    const std::wstring other=L"C:\\Games\\nomemory-other.exe";
+    const std::wstring cmd=L"\""+g_self+L"\" child-commit \""+store+L"\" \""+g_switch_key+L"\" \""+other+L"\" "+
+        std::to_wstring(rl::ApiD3D11);
+    CHECK(run_child(cmd.c_str())==int(rl::Outcome::Recorded));
+    std::vector<rl::Entry> e;
+    CHECK(read_list(store,e) && e.size()==2 && find(e,exe) && find(e,other) && find(e,exe)->starts==1);
 }
 
 void test_off_clear_in_flight() {
@@ -414,7 +493,7 @@ void test_lock_bound() {
     CHECK(!exists(store+L'\\'+rl::kStoreName));
 }
 
-int run_child(const wchar_t* cmdline,DWORD flags=0,STARTUPINFOEXW* si=nullptr,PROCESS_INFORMATION* out=nullptr) {
+int run_child(const wchar_t* cmdline,DWORD flags,STARTUPINFOEXW* si,PROCESS_INFORMATION* out) {
     STARTUPINFOEXW plain{};plain.StartupInfo.cb=sizeof(plain.StartupInfo);
     std::wstring line=cmdline;
     PROCESS_INFORMATION pi{};
@@ -608,8 +687,10 @@ int wmain(int argc,wchar_t** argv) {
     test_windows_boundary();
     test_own_tools();
     test_same_process();
+    test_interleaved_processes();
     test_prune();
     test_store_states();
+    test_allocation_failure();
     test_off_clear_in_flight();
     test_prune_read_race();
     test_lock_bound();

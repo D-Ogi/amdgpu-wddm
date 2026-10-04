@@ -101,8 +101,8 @@ than 64 entries, more than 8 MiB) is not a list. The reader then shows no entrie
 be read; it never shows a part.
 
 A header with another version number (`amdgpu-wddm recent-launches 2`) belongs to a newer writer. A version 1
-writer leaves such a file unchanged; a version 1 reader shows no entries. A torn version 1 file is replaced by the
-next writer.
+writer leaves such a file unchanged, whatever its size; a version 1 reader shows no entries. A torn version 1 file
+is replaced by the next writer.
 
 ### Path identity
 
@@ -126,16 +126,22 @@ profile; the application must say so and must not suggest separate settings.
 4. Lock: open the lock file (`OPEN_ALWAYS`, share read, write and delete) and take an exclusive `LockFileEx` lock
    on byte 0, waiting at most 1000 ms. Then: drop the entry (`busy`). No device or game thread waits for this.
 5. Read the switch again. Off or unreadable: stop. This is what makes Off + Clear safe against writers in flight.
-6. Read the list. A list that exists but cannot be opened or read: stop, never replace it. A torn version 1 list
-   counts as empty. A list of a later version: stop.
-7. Apply: the same process (equal `start` and `pid`) adds its API bit and keeps `starts` (one process through both
-   shells is one launch); another process of the same path counts a start, sets `start`, `pid` and `apis` and
-   moves the entry to the front; a new path goes to the front with `starts` 1. Keep at most 64. Nothing changed:
-   stop without writing.
+6. Read the list. A list that exists but cannot be opened or read: stop, never replace it. A file over 8 MiB is
+   read only up to its first line. A list of a later version, of any size: stop. A torn version 1 list (also one
+   over 8 MiB) counts as empty.
+7. Apply. One process is one launch, whichever shell notes it first and whatever the clock says: the shell that
+   counts the launch keeps a launch mark open until the process ends, a named event
+   `Local\amdgpu-wddm-recent-launch-<start>-<pid>-<list>` (`<list>`: a hash of the store directory). With the
+   mark present, the process's own entry (equal `start` and `pid`) gets its API bit and keeps `starts`; when the
+   entry meanwhile shows a later process of the path, or the list was cleared, nothing is written. Without a mark:
+   another process of the same path counts a start, sets `start`, `pid` and `apis` and moves the entry to the
+   front; a new path goes to the front with `starts` 1. Keep at most 64. Nothing changed: stop without writing.
+   Where the event cannot be created, equal `start` and `pid` in the entry are the only check.
 8. Write the new list to the temporary file and rename it over the list in one step (`FileRenameInfoEx` with
    replace and POSIX semantics, `MoveFileExW` with replace where those are not offered). A reader sees the old
    list or the new one.
-9. Unlock and close. If the process ends while it holds the lock, the system releases it.
+9. Unlock and close. If the process ends while it holds the lock, the system releases it. Every handle is owned
+   from its open on, so a failure (no memory included) closes the temporary file and leaves no launch mark.
 
 ## Reader protocol (control application)
 
@@ -193,10 +199,10 @@ From `recent-launch-test.exe` (below), NVMe NTFS volume, Microsoft Defender real
 
 | Part | Median | Worst |
 |---|---|---|
-| creating thread (once flag and `CreateThread`) | 0.06 ms | 0.16 ms of 100 |
-| whole helper on the worker: inputs, both switch reads, lock, read, write, rename, against a full list of 64 long paths | 10.6 ms | 50 ms of 300 (95th percentile 16 ms) |
-| of which the inputs (token, environment, module and Windows paths, process times) | 0.23 ms | |
-| of which writing and renaming the list | 0.93 ms | |
+| creating thread (once flag, module reference, starting the worker) | 0.08 ms | 0.34 ms of 100 |
+| whole helper on the worker: inputs, both switch reads, lock, read, launch mark, write, rename, against a full list of 64 long paths | 13.0 ms | 24 ms of 300 (95th percentile 15 ms) |
+| of which the inputs (token, environment, module and Windows paths, process times) | 0.37 ms | |
+| of which writing and renaming the list | 1.26 ms | |
 
 Most of the worker's time is the first open of the list after a write (8.7 ms; a second open takes 0.04 ms), which
 matches a real-time scan of a modified file. On unit A the comparison of device creation time with the switch on
@@ -218,8 +224,10 @@ case creates the AppContainer profile `amdgpu-wddm.recent-launch-test` and delet
 | Windows directory boundary, this process's own inputs | `test_windows_boundary` |
 | own programs excluded by file name only (prefix and `.exe`, any case) | `test_own_tools` |
 | one process through both shells counted once, also when both note at the same moment; pid reuse | `test_same_process` |
+| process A, then B, then A's other shell, both API orders, B's clock earlier: two launches, the entry stays B's; a launch cleared between its two notes stays cleared | `test_interleaved_processes` |
 | pruning at 64, a launch with an earlier clock kept | `test_prune` |
-| torn list replaced, newer version kept, unreadable list never replaced | `test_store_states` |
+| torn list replaced, newer version kept (also over 8 MiB, byte for byte), unreadable list never replaced, a version 1 header over 8 MiB replaced | `test_store_states` |
+| no memory with the temporary file open: the next note succeeds in this process and in another one | `test_allocation_failure` |
 | Off + Clear while a writer is in flight (before and inside the lock), Clear alone in both orders | `test_off_clear_in_flight` |
 | prune/read race: 600 writes against three readers, one holding the file open | `test_prune_read_race` |
 | lock bound: busy after the wait, nothing written | `test_lock_bound` |

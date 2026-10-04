@@ -5,8 +5,9 @@
 //
 // The record is written only by the shells' adapter CreateDevice, after it succeeded: never by the hosted Vulkan
 // ICD below them, never in DllMain, on a submit or Present path, or on the thread that creates the device. The
-// calling thread pays for one atomic exchange and one CreateThread; everything else (switch, paths, lock, file)
-// runs on the worker. Every failure only loses this entry: the device never waits for it or sees it.
+// calling thread pays for one atomic exchange, a reference on the module and starting one thread; everything else
+// (switch, paths, lock, file) runs on the worker. Every failure only loses this entry: the device never waits for
+// it or sees it.
 #pragma once
 #include <windows.h>
 #include <algorithm>
@@ -14,6 +15,7 @@
 #include <charconv>
 #include <cstdint>
 #include <cstdio>
+#include <cwchar>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -82,10 +84,11 @@ struct Inputs {
     HKEY switch_root{HKEY_CURRENT_USER};
     const wchar_t* switch_key{kSwitchKey};
     DWORD lock_wait_ms{kLockWaitMs};
-    // Host tests only, null in the driver: called after the first switch read, and with the lock held before the
-    // second switch read.
+    // Host tests only, null in the driver: called after the first switch read, with the lock held before the
+    // second switch read, and with the temporary file open before it is written (to throw an allocation failure).
     void (*after_precheck)(void*){};
     void (*inside_lock)(void*){};
+    void (*after_temp_open)(void*){};
     void* hook_context{};
 };
 
@@ -130,6 +133,21 @@ inline std::wstring extended(const std::wstring& path) {
     if(has_prefix(path,L"\\\\"))return L"\\\\?\\UNC\\"+path.substr(2);
     return L"\\\\?\\"+path;
 }
+// Owns one handle (a file or an event; INVALID_HANDLE_VALUE counts as none) and closes it on every way out,
+// an exception included: a handle left open on the worker would stay open for the life of the game.
+class Handle {
+public:
+    explicit Handle(HANDLE h=nullptr) noexcept:h_(h==INVALID_HANDLE_VALUE?nullptr:h){}
+    Handle(const Handle&)=delete;
+    Handle& operator=(const Handle&)=delete;
+    ~Handle(){reset();}
+    explicit operator bool() const noexcept {return h_!=nullptr;}
+    HANDLE get() const noexcept {return h_;}
+    void reset() noexcept {if(h_){CloseHandle(h_);h_=nullptr;}}
+    HANDLE release() noexcept {const HANDLE h=h_;h_=nullptr;return h;}
+private:
+    HANDLE h_;
+};
 template<typename F> std::wstring grow(F&& fill) {
     std::wstring buffer(MAX_PATH,L'\0');
     for(;;){
@@ -167,12 +185,12 @@ inline bool own_tool(std::wstring_view path) noexcept {
 inline std::wstring normalize(const std::wstring& path) {
     if(path.empty())return {};
     const std::wstring ext=detail::extended(path);
-    const HANDLE file=CreateFileW(ext.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
-        nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr);
-    if(file!=INVALID_HANDLE_VALUE){
+    detail::Handle file(CreateFileW(ext.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+        nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr));
+    if(file){
         std::wstring final=detail::grow([&](wchar_t* p,DWORD n){
-            return GetFinalPathNameByHandleW(file,p,n,FILE_NAME_NORMALIZED|VOLUME_NAME_DOS);});
-        CloseHandle(file);
+            return GetFinalPathNameByHandleW(file.get(),p,n,FILE_NAME_NORMALIZED|VOLUME_NAME_DOS);});
+        file.reset();
         if(!final.empty())return detail::strip_prefix(std::move(final));
     }
     return detail::strip_prefix(detail::grow([&](wchar_t* p,DWORD n){return GetFullPathNameW(ext.c_str(),n,p,nullptr);}));
@@ -289,38 +307,44 @@ private:
     bool held_{};
 };
 
-// The whole list, or missing = true when there is none. A file larger than kMaxStoreBytes, which no writer of this
-// format produces, reads as empty text. False: the file exists but could not be read.
-inline bool read_store(const std::wstring& dir,std::string& text,bool& missing) {
+// The whole list, or missing = true when there is none. A file larger than kMaxStoreBytes is no list of this
+// version (64 entries of the longest paths stay below it); only its first bytes are read, with oversize = true, so
+// that the commit can still tell a later format version, which it keeps, from a damaged list. False: the file
+// exists but could not be read.
+inline bool read_store(const std::wstring& dir,std::string& text,bool& missing,bool* oversize=nullptr) {
     text.clear();missing=false;
-    const HANDLE file=CreateFileW(detail::extended(dir+L'\\'+kStoreName).c_str(),GENERIC_READ,
-        FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,nullptr);
-    if(file==INVALID_HANDLE_VALUE){
+    if(oversize)*oversize=false;
+    const std::wstring path=detail::extended(dir+L'\\'+kStoreName);
+    detail::Handle file(CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+        nullptr,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,nullptr));
+    if(!file){
         const DWORD e=GetLastError();
         missing=e==ERROR_FILE_NOT_FOUND || e==ERROR_PATH_NOT_FOUND;
         return missing;
     }
     LARGE_INTEGER size{};
-    bool ok=GetFileSizeEx(file,&size)!=FALSE;
-    if(ok && size.QuadPart<=kMaxStoreBytes){
-        text.resize(size_t(size.QuadPart));
-        DWORD done=0;
-        ok=text.empty() || (ReadFile(file,text.data(),DWORD(text.size()),&done,nullptr) && done==text.size());
-    }
-    CloseHandle(file);
-    return ok;
+    if(!GetFileSizeEx(file.get(),&size))return false;
+    const bool large=size.QuadPart>kMaxStoreBytes;
+    if(oversize)*oversize=large;
+    text.resize(large?64:size_t(size.QuadPart));
+    DWORD done=0;
+    return text.empty() || (ReadFile(file.get(),text.data(),DWORD(text.size()),&done,nullptr) && done==text.size());
 }
 // Writes the temporary file and renames it over the list in one step, so a reader sees the old or the new list,
 // never a part. POSIX semantics replace a list that a reader holds open (with FILE_SHARE_DELETE); MoveFileExW is
 // the fallback where the file system does not offer them.
-inline bool write_store(const std::wstring& dir,const std::string& text) {
+// The temporary file is opened without write sharing, so its handle is owned at once: one left open by an exception
+// would make every later writer, in any process, fail on it until this process ends.
+inline bool write_store(const std::wstring& dir,const std::string& text,void (*after_open)(void*)=nullptr,
+    void* hook_context=nullptr) {
     const std::wstring temp=detail::extended(dir+L'\\'+kTempName),store=detail::extended(dir+L'\\'+kStoreName);
     // Shared for reading: once renamed, readers open the new list while this handle is still being closed.
-    const HANDLE file=CreateFileW(temp.c_str(),GENERIC_WRITE|DELETE,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,
-        CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
-    if(file==INVALID_HANDLE_VALUE)return false;
+    detail::Handle file(CreateFileW(temp.c_str(),GENERIC_WRITE|DELETE,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,
+        CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr));
+    if(!file)return false;
+    if(after_open)after_open(hook_context);
     DWORD done=0;
-    bool ok=WriteFile(file,text.data(),DWORD(text.size()),&done,nullptr) && done==text.size();
+    bool ok=WriteFile(file.get(),text.data(),DWORD(text.size()),&done,nullptr) && done==text.size();
     bool renamed=false;
     if(ok){
         // The full path: kernelbase resolves a bare name against the working directory, not the file's own.
@@ -330,12 +354,33 @@ inline bool write_store(const std::wstring& dir,const std::string& text) {
         rename->Flags=FILE_RENAME_FLAG_REPLACE_IF_EXISTS|FILE_RENAME_FLAG_POSIX_SEMANTICS;
         rename->FileNameLength=DWORD(name.size()*sizeof(wchar_t));
         std::copy(name.begin(),name.end(),rename->FileName);
-        renamed=SetFileInformationByHandle(file,FileRenameInfoEx,rename,DWORD(info.size()))!=FALSE;
+        renamed=SetFileInformationByHandle(file.get(),FileRenameInfoEx,rename,DWORD(info.size()))!=FALSE;
     }
-    CloseHandle(file);
+    file.reset();
     if(ok && !renamed)ok=MoveFileExW(temp.c_str(),store.c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;
     if(!ok)DeleteFileW(temp.c_str());
     return ok;
+}
+
+// The process's launch mark for one list: a named event "Local\amdgpu-wddm-recent-launch-<start>-<pid>-<list>" that
+// the shell which counted the launch keeps open until the process ends. The other shell of the same process finds
+// it, even when a later process of the same path has taken the entry meanwhile, so one process is one launch
+// whatever the order of the notes and whatever the clock. counted = true: the mark existed. Null when the event
+// cannot be created; the entry's (start, pid) is then the only check.
+inline HANDLE launch_mark(const Inputs& in,bool& counted) {
+    counted=false;
+    std::wstring dir=in.store_dir;
+    LCMapStringEx(LOCALE_NAME_INVARIANT,LCMAP_UPPERCASE,dir.data(),int(dir.size()),dir.data(),int(dir.size()),
+        nullptr,nullptr,0); // in place, kernel32 only (no user32 in the shells)
+    uint64_t list=0xCBF29CE484222325ull; // FNV-1a of the list's directory, case folded
+    for(const wchar_t c:dir){list^=uint16_t(c);list*=0x100000001B3ull;}
+    wchar_t name[96];
+    std::swprintf(name,std::size(name),L"Local\\amdgpu-wddm-recent-launch-%016llX-%lu-%016llX",
+        static_cast<unsigned long long>(in.start),static_cast<unsigned long>(in.pid),static_cast<unsigned long long>(list));
+    SetLastError(ERROR_SUCCESS);
+    const HANDLE mark=CreateEventW(nullptr,TRUE,FALSE,name);
+    counted=mark && GetLastError()==ERROR_ALREADY_EXISTS;
+    return mark;
 }
 
 // One launch note: the bounded commit protocol of docs/design/recent-launches.md.
@@ -356,19 +401,27 @@ inline Outcome commit(const Inputs& in,uint32_t api) {
     // Rechecked under the lock: a Clear that turned the list off first finds no writer that saw it on.
     s=read_switch(in.switch_root,in.switch_key);
     if(s!=Switch::On)return s==Switch::Off?Outcome::SwitchOff:Outcome::SwitchUnreadable;
-    std::string text;bool missing=false;
+    std::string text;bool missing=false,oversize=false;
     std::vector<Entry> entries;
-    if(!read_store(in.store_dir,text,missing))return Outcome::Failed; // never replace a list it could not read
-    if(!missing && !parse(text,entries)){
+    if(!read_store(in.store_dir,text,missing,&oversize))return Outcome::Failed; // never replace a list it could not read
+    if(!missing && (oversize || !parse(text,entries))){
         entries.clear();
-        // A list of a later format version belongs to a newer writer: leave it. A torn one is replaced.
+        // A list of a later format version belongs to a newer writer, whatever its size: leave it. A torn one is
+        // replaced.
         if(text.substr(0,kHeaderPrefix.size())==kHeaderPrefix && text.substr(0,kHeader.size())!=kHeader)
             return Outcome::Failed;
     }
+    bool counted=false;
+    detail::Handle mark(launch_mark(in,counted));
     const auto old=std::find_if(entries.begin(),entries.end(),[&](const Entry& e){return same_path(e.path,in.exe);});
-    if(old!=entries.end() && old->start==in.start && old->pid==in.pid && (old->apis&api)==api)return Outcome::Merged;
+    const bool own=old!=entries.end() && old->start==in.start && old->pid==in.pid;
+    // Counted already, and the entry now shows a later process of the path or the list was cleared: nothing to add.
+    if(counted && !own)return Outcome::Merged;
+    if(own && (old->apis&api)==api)return Outcome::Merged;
     const Outcome o=apply(entries,in.exe,in.start,in.pid,api);
-    return serialize(entries,text) && write_store(in.store_dir,text)?o:Outcome::Failed;
+    if(!serialize(entries,text) || !write_store(in.store_dir,text,in.after_temp_open,in.hook_context))return Outcome::Failed;
+    if(!counted)mark.release(); // open until the process ends: its launch is in the list
+    return o;
 }
 
 inline bool app_container() noexcept {
