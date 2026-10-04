@@ -107,10 +107,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_d3d11.config",
-      "sha256": "FD848638B5DD2A5195DEFFAE30C0BDB6D64044F7D42A8566828A89A7B2131DCC",
+      "source": "scratch/m15/pso-cache/umd-config/config-72e1d192.bin",
+      "sha256": "4AEA1C550D42757F0489ECA274C5D4FE23AD599CD6AC237C8C7EC69CC932CA3F",
       "size": 132,
-      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD F9DCB33B (tools/build/write-umd-config.py; capabilities carried from fl12caps001, not re-measured on this pair)"
+      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD 72E1D192 (tools/build/write-umd-config.py; capabilities carried from FD848638, the record of F9DCB33B; only the ICD pin changes)"
     },
     {
       "component": "d3d11-umd",
@@ -179,10 +179,10 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.config",
-      "sha256": "769C696299046173F590343F1495DAF2D2EC17625E857B2F7DC14852D527E748",
+      "source": "scratch/m15/pso-cache/umd-config/config-x86-e03a79ca.bin",
+      "sha256": "388DA562248F5D4047B5EDC9EAD65CB321F50796280DB5CADDD4AC40F77B173B",
       "size": 132,
-      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and ICD E1322557 (tools/build/write-umd-config.py; capabilities carried from the 64-bit record, not measured on x86)"
+      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and ICD E03A79CA (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the ICD pin changes)"
     },
     {
       "component": "d3d11-umd-wow64",

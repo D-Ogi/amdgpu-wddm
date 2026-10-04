@@ -17,8 +17,8 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.204.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.204.100-tester.11',
+    [string]$DriverVer = '0.7.204.101',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.204.101-tester.11',
     [string]$KitVersion = '10.0.26100.0',
     [string]$SetupApp                            # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
 )
@@ -54,6 +54,19 @@ foreach ($f in $sources.files) {
     [void][IO.Directory]::CreateDirectory((Split-Path $dst))
     Copy-Item -LiteralPath $src -Destination $dst
     '  {0}  {1,-12} {2}' -f $h.Substring(0, 8), $f.component, $f.path
+}
+# The D3D11 shell refuses an engine or ICD whose SHA-256 differs from its caps record (adapter-config.h,
+# AdapterConfigRecord2: engine_sha256 at byte 68, icd_sha256 at byte 100) before it loads them. b15 shipped a new ICD
+# with the old record and every D3D11 device failed (ERROR_CRC): check each record against its siblings here.
+foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse -File -Filter 'amdgpu_wddm_d3d11.config') {
+    $raw = [IO.File]::ReadAllBytes($cfg.FullName)
+    if ($raw.Length -ne 132 -or [BitConverter]::ToUInt32($raw, 0) -ne 0x4334314D) { throw "$($cfg.FullName): not a 132-byte M14C caps record" }
+    foreach ($pin in @(@{ name = 'amdgpu_wddm_dxvk.dll'; at = 68 }, @{ name = 'amdgpu_wddm_radv.dll'; at = 100 })) {
+        $want = -join ($raw[$pin.at..($pin.at + 31)] | ForEach-Object { $_.ToString('X2') })
+        $have = (Get-FileHash -LiteralPath (Join-Path $cfg.DirectoryName $pin.name) -Algorithm SHA256).Hash
+        if ($want -ne $have) { throw "$($cfg.FullName) pins $($pin.name) $($want.Substring(0, 8)), the package has $($have.Substring(0, 8)): regenerate the record (tools/build/write-umd-config.py)" }
+    }
+    '  caps record {0} pins its engine and ICD' -f $cfg.FullName.Substring($pkg.Length + 1)
 }
 
 Write-Host 'installer and documents'
