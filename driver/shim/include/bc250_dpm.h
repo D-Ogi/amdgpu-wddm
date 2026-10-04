@@ -107,8 +107,8 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_STABLE = 5,		/* D3D12 SetStablePowerState: pinned to the floor */
 	BC250_DPM_THROTTLE_SMU = 6,		/* the governor stopped after SMU failures */
 	BC250_DPM_THROTTLE_FIXED = 7,		/* this start is fixed-lab */
-	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* 85 C (0.7.200): a raise refused, the level holds */
-	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 70-85 C (0.7.203): a raise cut to one level, or held for the interval */
+	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* WARM_MC (85 C in 0.7.200, 87 C from 0.7.204): a raise refused */
+	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 70 C to WARM_MC (0.7.203): a raise cut to one level, or held */
 	BC250_DPM_THROTTLE_COUNT
 };
 
@@ -119,19 +119,22 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
 #define BC250_DPM_DOWN_HOLD_MS		200u
 #define BC250_DPM_HOT_MC		BC250_CLOCK_HOT_MC	/* 87 C: one step down, no raise */
-/* The warm zone (0.7.200, owner after session 344: 1500 MHz held while Tctl rose 83.5 -> 85.3 C): from here up to
- * HOT_MC no raise of clock or voltage; the level holds, a lowering still happens. Two degrees under HOT_MC. */
-#define BC250_DPM_WARM_MC		(BC250_DPM_HOT_MC - 2000)
+/* The warm zone (0.7.200, owner after session 344: 1500 MHz held while Tctl rose 83.5 -> 85.3 C): from here up no
+ * raise of clock or voltage; the level holds, a lowering still happens. 85 C (HOT_MC - 2 C) in 0.7.200-203; at HOT_MC
+ * from 0.7.204 (owner, 2026-10-04: "próg na 87", the threshold at 87). The rule stays as a backstop at and above
+ * HOT_MC, where the hot cap already holds the clock at or below the running level, and the clock gate refuses a
+ * raise. Never above HOT_MC: the hot cap's step down and this rule's hold then cover the same readings. */
+#define BC250_DPM_WARM_MC		BC250_DPM_HOT_MC
 /* The thermal ramp (0.7.203, session 367): from RAMP_KNEE_MC up to WARM_MC a raise goes one level at most, and only
  * when the last raise is at least the ramp interval ago. The interval grows linearly from RAMP_MIN_MS at the knee to
  * RAMP_MAX_MS at WARM_MC (bc250_dpm_ramp_interval_ms). In session 367 the load raised 1000 -> 2000 MHz within one
  * telemetry interval at 75.7 C; at 2000 MHz / 1000 mV the hot spot gained some 12 C in 5 s and read 87.1 C, and the
- * 85 C warm zone could not act, because it looks only at the reading of the tick and the raise was already done. One
- * level (100 MHz, at most 20 mV) per interval lets each raise show in the reading before the next one: the hot spot's
- * fast time constant is about 3 s (session 367: some 12 C of a 15 C rise in 5 s), and from 80 C up the interval is
- * longer than that. Below the knee the load raises as before: the knee plus the fast rise of a jump to 2000 MHz (about
+ * 85 C warm zone of that KMD could not act, because it looks only at the reading of the tick and the raise was already
+ * done. One level (100 MHz, at most 20 mV) per interval lets each raise show in the reading before the next one: the
+ * hot spot's fast time constant is about 3 s (session 367: some 12 C of a 15 C rise in 5 s), and from about 81 C up
+ * the interval is longer than that (0.7.204: the interval runs to WARM_MC, now 87 C, so it is 3.5 s at 85 C). Below the knee the load raises as before: the knee plus the fast rise of a jump to 2000 MHz (about
  * 15 C) stays under 87 C. test_plant367 in dpm_test.c holds the evidence: on its plant the old rule puts the hot spot
- * past 87 C for every start from 74 C, the ramp for none up to 82 C, and both settle at the same clock from a cold
+ * past 87 C for every start from 74 C, the ramp for none up to 83 C, and both settle at the same clock from a cold
  * start. Fixed values, not in struct bc250_dpm_tune: the RUN_DPM_TUNE escape (ABI 2, 152 bytes) has no field for them,
  * and a new field is an ABI change. */
 #define BC250_DPM_RAMP_KNEE_MC		70000
@@ -163,7 +166,7 @@ enum bc250_dpm_busy_source { BC250_DPM_BUSY_SUBMIT = 0, BC250_DPM_BUSY_GRBM = 1 
 unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
 				     enum bc250_dpm_busy_source *source);
 /* The least time between two raises at a temperature (the thermal ramp, 0.7.203): 0 below RAMP_KNEE_MC, RAMP_MIN_MS at
- * the knee, linear up to RAMP_MAX_MS at WARM_MC and above (where the warm zone refuses every raise anyway). */
+ * the knee, linear up to RAMP_MAX_MS at WARM_MC (87 C from 0.7.204) and above, where no raise happens anyway. */
 unsigned int bc250_dpm_ramp_interval_ms(int temperature_mc);
 
 /* ---- runtime tuning (0.7.185) --------------------------------------------------------------- */

@@ -8,7 +8,7 @@
  * time. Raises happen at once, lowerings one step at a time after DOWN_HOLD_MS below DOWN on the
  * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
- * top and wins over everything but the floor; from WARM_MC (85 C) no raise happens at all, and from RAMP_KNEE_MC
+ * top and wins over everything but the floor; from WARM_MC (87 C since 0.7.204) no raise happens at all, and from RAMP_KNEE_MC
  * (70 C) a raise goes one level per ramp interval (0.7.203). The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
  * every limit. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
@@ -304,13 +304,14 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		else g->throttle = BC250_DPM_THROTTLE_MAX_SETTING;
 		target = limit;
 	}
-	/* The warm zone (WARM_MC up to HOT_MC, 0.7.200): no raise of clock or voltage, the level holds; a lowering, and the
-	 * paths above, act as below it. It comes last, so it bounds a raise from the load and from the runtime floor alike,
-	 * and it names the reason when it is what holds the level. The soft release keeps its own rule: with a delta under
-	 * 2 C its threshold lies inside this zone, and there it still raises the cap as before; the clock follows the
-	 * raised cap only once a reading is below WARM_MC. So a soft release never becomes a raise while warm, and the
-	 * cap's timing (cap_ms, soft_ms) is the same with or without this zone. */
-	if (in->temperature_mc >= BC250_DPM_WARM_MC && in->temperature_mc < BC250_DPM_HOT_MC && target > cur) {
+	/* The warm zone (from WARM_MC, 0.7.200; 87 C = HOT_MC since 0.7.204): no raise of clock or voltage, the level holds;
+	 * a lowering, and the paths above, act as below it. It comes last, so it bounds a raise from the load and from the
+	 * runtime floor alike, and it names the reason when it is what holds the level. From HOT_MC up the hot cap already
+	 * holds the target at or below the running level (a step down, or the clamp of a re-entry), so there the rule is a
+	 * backstop that never fires; before 0.7.204 it ended at HOT_MC. The soft release threshold (HOT_MC minus 0.5 to
+	 * 4.5 C) now always lies under WARM_MC, so a released cap is followed at the ramp's pace. The cap's timing (cap_ms,
+	 * soft_ms) does not depend on this zone. */
+	if (in->temperature_mc >= BC250_DPM_WARM_MC && target > cur) {
 		target = cur;
 		g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
 		g->warm_holds++;
