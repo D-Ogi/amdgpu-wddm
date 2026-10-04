@@ -24,7 +24,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once
-pwsh -File tools\release\build-release.ps1 [-ControlApp <dir> -ControlAppExe <exe>] [-SetupApp <setup build folder>]
+pwsh -File tools\release\build-release.ps1 [-SetupApp <setup build folder>]   # the control app comes from its release-sources.json rows
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 

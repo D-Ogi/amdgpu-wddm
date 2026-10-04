@@ -13,6 +13,7 @@
 # Gates: every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1. Nothing here opens a window: child processes
 # run with CreateNoWindow and redirected output.
+[CmdletBinding()]
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
