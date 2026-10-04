@@ -12,7 +12,8 @@ namespace AmdgpuWddmControl
         public RecoverySnapshot Snapshot;           // null: nothing could be read
         public DriverCardView Driver;               // null: not read
         public GuideCause? Work;                    // Installing, Repairing or CreatingReport while user-started work runs
-        public bool UpgradeDone, UpdateAvailable, CuConfirmFailed;
+        public string UpgradeDone;                  // the release that qualified (DriverCard.UpgradeLatch); null: none
+        public bool UpdateAvailable, CuConfirmFailed;
         public bool LaterRestart;                   // the user chose "Later" for a restart this session
     }
 
@@ -103,7 +104,7 @@ namespace AmdgpuWddmControl
             c.Pending.AddRange(PendingRestart(s, d));
             if (c.Pending.Count > 0) Item(c, GuideCause.PendingRestart, x.LaterRestart ? "pending-later" : "pending-restart", "pending", "restart", string.Join(", ", c.Pending));
             if (x.Work != null) Item(c, x.Work, "work-in-progress", "info");
-            if (x.UpgradeDone && d != null) Item(c, GuideCause.UpgradeDone, "upgrade-done", "ok", null, d.InstalledVersion);
+            if (x.UpgradeDone != null && d != null && DriverCard.UpgradeVerified(d) && string.Equals(d.InstalledVersion, x.UpgradeDone, StringComparison.Ordinal)) Item(c, GuideCause.UpgradeDone, "upgrade-done", "ok", null, d.InstalledVersion);
             if (x.UpdateAvailable) Item(c, GuideCause.UpdateAvailable, "update-available", "info", "page:driver");
 
             int rank = c.Causes.Any() ? Guide.Rank(c.Causes.Min()) : 8;

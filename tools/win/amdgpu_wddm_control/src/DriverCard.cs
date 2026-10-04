@@ -246,6 +246,15 @@ namespace AmdgpuWddmControl
             return UpgradeVerified(v) && lastSeenRelease != null && !string.Equals(lastSeenRelease, v.InstalledVersion, StringComparison.OrdinalIgnoreCase);
         }
 
+        // The verdict across refreshes (review 936 A1): the version that qualified, kept only while UpgradeVerified still
+        // holds for that same version. Lost witness, failed verification or another installed release clear it for good.
+        public static string UpgradeLatch(string latched, DriverCardView v, string lastSeenRelease)
+        {
+            if (v == null || !UpgradeVerified(v)) return null;
+            if (UpgradeDone(v, lastSeenRelease)) return v.InstalledVersion;
+            return string.Equals(latched, v.InstalledVersion, StringComparison.Ordinal) ? latched : null;
+        }
+
         // ---- parsing (pure) ----------------------------------------------------------------------------------------
 
         static IDictionary<string, object> Json(string text)

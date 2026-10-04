@@ -193,5 +193,37 @@ static partial class UnitTests
         Check(v.Running == RunningKind.Exact && v.Verification == VerifyKind.Verified && !DriverCard.UpgradeDone(v, "0.7.198.100-tester.10"), "R6 an exact witness naming an older package: no upgrade-done");
         f = Facts(); f.Phase = "installed";
         Check(!DriverCard.UpgradeDone(DriverCard.Decide(f), "0.7.198.100-tester.10"), "no upgrade-done while the restart is pending");
+        UpgradeLatchTests();
+    }
+
+    // 936 A1: consecutive refreshes as MainForm.RefreshAll runs them; the verdict holds only while its evidence does.
+    static void UpgradeLatchTests()
+    {
+        const string A = "0.7.198.100-tester.10", B = "0.7.199.100-tester.11";
+        Func<string, DriverCardView, bool> shown = (latch, d) => HomeStatus.Compute(new StatusInputs { Snapshot = WithDefaults(), Driver = d, UpgradeDone = latch })
+            .Items.Any(i => i.Cause == GuideCause.UpgradeDone);
+        Action<string, Action<DriverFacts>> refreshes = (what, second) =>
+        {
+            string seen = A, latch = null;
+            var d = DriverCard.Decide(Facts());
+            latch = DriverCard.UpgradeLatch(latch, d, seen);
+            if (DriverCard.UpgradeVerified(d)) seen = d.InstalledVersion;
+            Check(latch == B && shown(latch, d), "A1 " + what + ": B qualifies on the first refresh");
+            d = DriverCard.Decide(Facts());
+            Check(DriverCard.UpgradeLatch(latch, d, seen) == B, "A1 " + what + ": B unchanged keeps the verdict on the next refresh");
+            var f = Facts(); second(f); d = DriverCard.Decide(f);
+            latch = DriverCard.UpgradeLatch(latch, d, seen);
+            if (DriverCard.UpgradeVerified(d)) seen = d.InstalledVersion;
+            Check(latch == null && !shown(latch, d), "A1 " + what + ": the verdict is gone");
+            d = DriverCard.Decide(Facts());
+            Check(DriverCard.UpgradeLatch(latch, d, seen) == null, "A1 " + what + ": a cleared verdict does not come back for the release already seen");
+        };
+        refreshes("B, then the witness becomes unknown", f => f.Witness = null);
+        refreshes("B, then verification fails", f => { f.Reports[0].Passed = false; f.Reports[0].FailedCount = 1; });
+        refreshes("B, then C is pending", f => { f.InstalledVersion = "0.7.200.100-tester.12"; f.Phase = "installed"; f.StatePackageVersion = "0.7.200.100-tester.12"; });
+        // A stale latch handed to HomeStatus directly is not shown either.
+        var stale = Facts(); stale.Witness = null;
+        Check(!shown(B, DriverCard.Decide(stale)), "A1 HomeStatus shows upgrade-done only while UpgradeVerified holds for the latched release");
+        Check(!shown("0.7.198.100-tester.10", DriverCard.Decide(Facts())), "A1 HomeStatus: a latch of another release is not shown");
     }
 }

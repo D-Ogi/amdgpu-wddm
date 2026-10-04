@@ -32,7 +32,8 @@ namespace AmdgpuWddmControl
         StatusCard _status;
         GuideVerdict _verdict;
         GuideCause? _work;                      // the user-started work that runs (rank 4), null: none
-        bool _laterRestart, _cuConfirmFailed, _upgradeDone;
+        bool _laterRestart, _cuConfirmFailed;
+        string _upgradeDone;        // the release of the upgrade-done verdict while it still holds (936 A1)
         string _lastResult;                 // the plain result of the last action, shown on the page that ran it
         string _lastResultPage;
         bool _lastResultOk;
@@ -416,7 +417,7 @@ namespace AmdgpuWddmControl
             ReadDriverCard();
             _upd = UpdateCheck.LoadCache();
             ReadRecent();
-            if (_drv != null && DriverCard.UpgradeDone(_drv, _prefs.LastSeenRelease)) _upgradeDone = true;
+            _upgradeDone = DriverCard.UpgradeLatch(_upgradeDone, _drv, _prefs.LastSeenRelease);
             if (!_smoke && !ReadOnlyProbe && _drv != null && DriverCard.UpgradeVerified(_drv))
                 _prefs.LastSeenRelease = _drv.InstalledVersion;
             ComputeStatus();
