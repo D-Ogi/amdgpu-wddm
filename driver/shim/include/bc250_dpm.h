@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * BC-250 DPM: a load-driven GFX clock governor between the lab floor (1000 MHz / 820 mV) and at
- * most 2000 MHz, with thermal clamps and a boot guard. Not amdgpu: amdgpu does no DPM on this part
+ * most 2000 MHz, with thermal clamps and a boot guard. The thermal clamp alone may go under the lab
+ * floor, down to 800 MHz at the same 820 mV (0.7.205, owner decision 2026-10-05); the load never does.
+ * Not amdgpu: amdgpu does no DPM on this part
  * under load (facts M90), the community governors run in user space. docs/design/dpm.md in
  * bc250-win is the design; this header is the part without Windows in it, so the host test
  * (test/dpm_test.c) runs exactly what the miniport runs.
@@ -20,7 +22,7 @@
 
 #include "bc250_clock.h"
 
-#define BC250_DPM_MODE_FIXED	0u	/* the lab point, level 0, set once at start: today's behaviour */
+#define BC250_DPM_MODE_FIXED	0u	/* the lab point, BC250_DPM_FLOOR_LEVEL, set once at start: today's behaviour */
 #define BC250_DPM_MODE_DPM	1u
 /* Absent DpmMode means this. Fixed until the lab accepts DPM (docs/design/dpm.md, lab plan). */
 #define BC250_DPM_DEFAULT_MODE	BC250_DPM_MODE_FIXED
@@ -28,7 +30,15 @@
  * BC250_CLOCK_CEILING_MHZ, the hard ceiling; nothing goes above that. */
 #define BC250_DPM_DEFAULT_MAX_MHZ	1500u
 
-#define BC250_DPM_FLOOR_LEVEL	0u
+/* The lab floor, 1000 MHz: the level a fixed start runs at, the lowest the load may ask for, and where every
+ * rule that needs one clock this part is known to run puts it (a missing sensor, SetStablePowerState, the
+ * fixed mode, stop, power down, giving up, an unknown readback). Index 2 since 0.7.205, where the table
+ * gained two thermal-only points under it. */
+#define BC250_DPM_FLOOR_LEVEL	2u
+/* 800 MHz: the lowest level the thermal cap may reach (0.7.205, owner decision 2026-10-05, after RotTR scene
+ * 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy). The firmware has never
+ * run below 1000 MHz (facts M47), so the KMD may withdraw it for a start: bc250_dpm_subfloor_refused(). */
+#define BC250_DPM_THERMAL_FLOOR_LEVEL	0u
 #define BC250_DPM_TOP_LEVEL	(BC250_CLOCK_LEVELS - 1u)
 
 static __inline unsigned int bc250_dpm_level_mhz(unsigned int level)
@@ -101,7 +111,7 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_NONE = 0,
 	BC250_DPM_THROTTLE_THERMAL_SOFT = 1,	/* 87 C: stepped down, no raise */
-	BC250_DPM_THROTTLE_THERMAL_HARD = 2,	/* 90 C: at the floor */
+	BC250_DPM_THROTTLE_THERMAL_HARD = 2,	/* 90 C: at the thermal floor (800 MHz since 0.7.205) */
 	BC250_DPM_THROTTLE_SENSOR = 3,		/* no temperature reading: at the floor */
 	BC250_DPM_THROTTLE_MAX_SETTING = 4,	/* DpmMaxMHz */
 	BC250_DPM_THROTTLE_STABLE = 5,		/* D3D12 SetStablePowerState: pinned to the floor */
@@ -141,7 +151,9 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_RAMP_MIN_MS		1000u
 #define BC250_DPM_RAMP_MAX_MS		4000u
 #define BC250_DPM_HOT_STEP_MS		500u	/* the default hot step: at most one step down per this */
-#define BC250_DPM_CRITICAL_MC		90000	/* the floor at once */
+/* 90 C: the thermal floor at once (800 MHz since 0.7.205; the lab floor when a sub-floor transition was
+ * refused, bc250_dpm_subfloor_refused). A missing reading clamps to the lab floor and never raises the cap. */
+#define BC250_DPM_CRITICAL_MC		90000
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */
 /* The soft release (BD-055), off by default: below HOT_MC - delta for a whole step, the cap rises one level. Without
@@ -175,13 +187,15 @@ unsigned int bc250_dpm_ramp_interval_ms(int temperature_mc);
  * (BC250_ESCAPE_RUN_DPM_TUNE) while a DPM start runs, for A/B experiments. Never persisted: every start
  * begins with bc250_dpm_tune_default(). The floor is a level of the clock table the governor does not go
  * below on its own; it never beats the thermal cap, the critical rule, a missing sensor or
- * SetStablePowerState, and it never exceeds the start's ceiling (max_level, DpmMaxMHz). */
+ * SetStablePowerState, and it never exceeds the start's ceiling (max_level, DpmMaxMHz). It never goes under
+ * BC250_DPM_FLOOR_LEVEL either (0.7.205): the two thermal-only points below it belong to the thermal cap
+ * alone, and a runtime floor there would say nothing, because the load never asks for them. */
 struct bc250_dpm_tune {
 	unsigned int	up_permille;
 	unsigned int	target_permille;
 	unsigned int	down_permille;
 	unsigned int	down_hold_ms;
-	unsigned int	floor_level;		/* BC250_DPM_FLOOR_LEVEL: no runtime floor */
+	unsigned int	floor_level;		/* BC250_DPM_FLOOR_LEVEL: no runtime floor; never below it */
 	/* The thermal cap's timing (0.7.197, BD-055). Not the limits: HOT, RELEASE and CRITICAL stay fixed. */
 	unsigned int	hot_step_ms;		/* at most one thermal step down per this */
 	unsigned int	soft_delta_mc;		/* soft release below HOT_MC - this; 0: none */
@@ -206,7 +220,7 @@ enum bc250_dpm_tune_error {
 	BC250_DPM_TUNE_LOWERING = 3,		/* invariant 1: a one-step lowering could land at or above up */
 	BC250_DPM_TUNE_RAISE = 4,		/* invariant 2: a raise could land below down */
 	BC250_DPM_TUNE_HOLD = 5,		/* down_hold_ms outside MIN..MAX_HOLD_MS */
-	BC250_DPM_TUNE_FLOOR = 6,		/* the floor is not a table level at or below the start's ceiling */
+	BC250_DPM_TUNE_FLOOR = 6,		/* the floor is not a table level from the lab floor to the start's ceiling */
 	BC250_DPM_TUNE_THERMAL = 7,		/* hot step, soft delta or soft step outside its range */
 	BC250_DPM_TUNE_COUNT
 };
@@ -265,6 +279,8 @@ struct bc250_dpm_governor {
 	unsigned int	warm_holds;		/* steps in which the warm zone refused a raise (0.7.200) */
 	unsigned int	raise_ms;		/* since the last step that returned a raise, saturating (0.7.203) */
 	unsigned int	ramp_holds;		/* steps in which the thermal ramp cut or held a raise (0.7.203) */
+	int		subfloor_ok;		/* the thermal cap may use the points under the lab floor (0.7.205) */
+	unsigned int	subfloor_refusals;	/* bc250_dpm_subfloor_refused() calls of this start */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
@@ -274,10 +290,16 @@ enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const
  * (success) or leaves g->level as it was (failure). Never returns above min(max_level, thermal_cap). */
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in);
 void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level);
+/* The caller could not put the hardware at a level below BC250_DPM_FLOOR_LEVEL (the SMU refused it, the
+ * readback did not match). From here on, for the rest of this start, the thermal cap's lowest level is the
+ * lab floor again, and a cap already below it is raised to it. The firmware has never been seen below
+ * 1000 MHz (facts M47), so one refusal is enough: the governor does not try the same point again and again. */
+void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g);
 
 /* ---- the session marker ---------------------------------------------------------------------- */
 
-/* DpmSession is written (and flushed) when the governor first leaves the floor, and deleted after
+/* DpmSession is written (and flushed) when the governor first goes above the floor (a thermal-only level
+ * under it counts as "not above the floor": it is no risk to carry into the next start), and deleted after
  * SESSION_CLEAR_MS at the floor or at a clean stop. A start that finds it knows the previous one
  * ended above the floor without a stop: a bugcheck, a hang, a power cut at a high clock. */
 #define BC250_DPM_SESSION_CLEAR_MS	10000u
