@@ -18,8 +18,10 @@
 # the expected version, LastStage 50 (first VidPN commit). That keeps the PC out of Basic Display; the DPM request
 # stays unconfirmed and the next start runs at the floor clock (the log says so).
 #
-# The only file it writes is a short status log, %ProgramData%\amdgpu-wddm\start-confirm.log, cut to its last 200
-# lines at each run. -Probe prints one reading of everything and exits (read-only; verify uses it).
+# It writes a short status log, %ProgramData%\amdgpu-wddm\start-confirm.log, cut to its last 200 lines at each run, the
+# DWM baseline of the logon (dwm-session.ps1) and, at its end, the running-release witness of this boot when the loaded
+# KMD is the installed release's (release-witness.ps1, read by the control application). -Probe prints one reading of
+# everything and exits (read-only; verify uses it).
 param([int]$Seconds = 120, [switch]$Probe, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -203,4 +205,11 @@ $timer.Start()
 [void]$form.ShowDialog()
 $timer.Dispose(); $form.Dispose()
 Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms)"
+# The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
+# whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task.
+try {
+    . (Join-Path $here 'release-witness.ps1')
+    $why = Write-RunningReleaseWitness -InstallRoot (Split-Path $here) -RecordedBy 'start-confirm'
+    Write-StartConfirmLog $(if ($why) { "running-release witness: not written, $why" } else { "running-release witness: written, $($script:WitnessPath)" })
+} catch { Write-StartConfirmLog "running-release witness: $($_.Exception.Message)" }
 exit $script:exitCode

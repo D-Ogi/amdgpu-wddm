@@ -37,8 +37,10 @@ Invoke-Change "unregister the scheduled task '$($script:TaskName)'" {
     } catch { Write-Warn2 "scheduled task not removed ($($_.Exception.Message)); run uninstall.cmd again after a normal start" }
 } | Out-Null
 Invoke-Change "remove the RunOnce entry '$($script:RunOnceName)'" { Remove-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue } | Out-Null
-$lnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\amdgpu-wddm Control.lnk'
-Invoke-Change "remove the Start menu shortcut $lnk" { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue } | Out-Null
+foreach ($name in 'amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') {
+    $lnk = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$name"
+    Invoke-Change "remove the Start menu shortcut $lnk" { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue } | Out-Null
+}
 
 Write-Step 'Graphics registration and driver'
 $dev = @(Get-Bc250Device)
@@ -125,7 +127,9 @@ if ($off) {
 # The control application's backups and action log (%ProgramData%\amdgpu-wddm\control) belong to the tester: kept.
 $dataRoot = Split-Path $script:StateDir
 $controlData = Join-Path $dataRoot 'control'
-Invoke-Change "remove the installer state $($script:StateDir), $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
+# The installer state includes the kept repair sets (installer\packages) and the running-release witness: without it
+# the control application names no running release until a new install verifies one.
+Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
     Remove-PathOrSchedule $script:StateDir
     Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm.log') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
@@ -136,5 +140,9 @@ if ($DryRun) { Write-Host ''; Write-Host 'Dry run complete: nothing was changed.
 Write-Host ''
 Write-Host "Uninstall complete. Restart the computer to finish. Log: $($script:LogPath)" -ForegroundColor Green
 Write-Host 'Until the restart, some Windows 11 apps (the command bar of File Explorer, Task Manager) can ignore mouse clicks: the GPU changed to Microsoft Basic Display Adapter under the running desktop.' -ForegroundColor Yellow
-if (-not $NoReboot -and (Read-Confirmation -Question 'Restart now?' -Expect 'Y')) { Restart-Computer -Force }
+# A normal, planned restart (common.ps1, Request-PlannedRestart): programs are asked to close and may keep unsaved work.
+if (-not $NoReboot -and (Read-Confirmation -Question 'Restart now?' -Expect 'Y')) {
+    $why = Request-PlannedRestart
+    if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself" }
+}
 exit 0
