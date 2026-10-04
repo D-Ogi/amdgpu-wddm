@@ -199,9 +199,10 @@ function Invoke-Preflight {
         else { Add-Check 'GPU firmware' 'fail' "no download host answers ($($h.bad -join '; ')). The installer downloads the GPU firmware: connect this computer to the internet, or download the 9 files on another computer (INSTALL.md, section 'GPU firmware') and run install.cmd -FirmwareDir <folder>." 'firmware.unreachable' }
     }
 
-    if (Test-LabInstallPresent) {
-        if ($Force) { Add-Check 'existing installation' 'warn' 'a development-lab installation (C:\BC250\m1x) is present; -Force given' 'lab-install.forced' }
-        else { Add-Check 'existing installation' 'fail' 'a development-lab installation (C:\BC250\m1x) is present. The release installer does not change a lab machine.' 'lab-install.present' }
+    $lab = @(Get-LabInstallPaths)
+    if ($lab.Count) {
+        if ($Force) { Add-Check 'existing installation' 'warn' "a development-lab installation ($($lab -join ', ')) is present; -Force given" 'lab-install.forced' }
+        else { Add-Check 'existing installation' 'fail' "a development-lab installation ($($lab -join ', ')) is present. The release installer does not change a lab machine." 'lab-install.present' }
     }
     $st = Read-InstallState
     $script:State = $st

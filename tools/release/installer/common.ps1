@@ -654,13 +654,11 @@ function Get-DeviceServiceName {
     if ($p) { return [string]$p.Data }
     return $null
 }
-# A lab installation (the project's development unit) carries files under C:\BC250\m1x. The release installer does
-# not merge into one.
-function Test-LabInstallPresent {
-    foreach ($d in 'C:\BC250\m15', 'C:\BC250\m14', 'C:\BC250\m10') { if (Test-Path -LiteralPath $d) { return $true } }
-    return $false
+# A lab installation (the project's development unit) carries files under C:\BC250\m15, m14 or m10. The release
+# installer does not merge into one. The folders found are named in the check's detail (the support file).
+function Get-LabInstallPaths {
+    @('C:\BC250\m15', 'C:\BC250\m14', 'C:\BC250\m10' | Where-Object { Test-Path -LiteralPath $_ })
 }
-
 # Our driver packages in the driver store (pnputil /enum-drivers), by original name.
 function Get-OurDriverPackages {
     $out = (Invoke-Native pnputil.exe @('/enum-drivers')).text

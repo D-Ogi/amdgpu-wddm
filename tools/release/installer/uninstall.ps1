@@ -29,7 +29,8 @@ if ($state -and $state.install_root) { $root = $state.install_root }
 if (-not $root) { $root = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name InstallRoot -ErrorAction SilentlyContinue).InstallRoot }
 if (-not $root) { $root = Join-Path $env:ProgramFiles 'amdgpu-wddm' }
 Write-Info "install root: $root"
-if (Test-LabInstallPresent) { Write-Fail 'a development-lab installation (C:\BC250\m1x) is present: this uninstaller does not change a lab machine'; exit 2 }
+$lab = @(Get-LabInstallPaths)
+if ($lab.Count) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine"; exit 2 }
 if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) { Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0 }
 if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
 
