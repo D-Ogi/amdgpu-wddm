@@ -3,11 +3,15 @@
 #   powershell -NoProfile -File tools\release\test-engine-units.ps1 [-Installer <package>\installer] [-WorkRoot <dir>]
 # G-STAGE: the RunOnce command line (Format-CommandLine, parsed back through CommandLineToArgvW), the continuation
 # closure (staged once, checked, a changed copy repaired, a damaged source refused), the continuation command of the
-# setup window and of the command line, and the kept repair set (active + previous, older removed, firmware completed).
-# Witness writer (G-VER, writer side): the record binds the loaded image, the reply and the boot; the reader's rule.
+# setup window and of the command line (run for real from folders with spaces and &, ^, %, ( ), !, ;), and the kept
+# repair set (active + previous, older removed, firmware completed, each set against its own manifest's firmware).
+# Witness writer (G-VER, writer side): the record binds the loaded image, the reply and the boot; the reader's rule;
+# publication under engine.lock with a bounded wait, and no witness when an install action appears during the reading.
 # Compatibility record (C7, used by G-RB from Ph 3): a compliant record verifies; the tester.10 shape (no Reboot
-# directive), a missing or unknown record, another firmware set, an incomplete firmware folder and another engine
-# contract are refused. The engine lock: one mutating engine at a time.
+# directive), a missing or unknown record, null, scalar, array or empty records, another firmware set, an incomplete
+# firmware folder and another engine contract are refused. The engine lock: one mutating engine at a time; a first
+# change whose record cannot be saved does not run. Pending restarts (Get-PendingRestart). Child closure from the
+# job's own count (this process joins a kill-on-close job in the last section).
 # Everything is written under -WorkRoot; nothing in the registry, no driver, no restart.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$WorkRoot = (Join-Path (Split-Path (Split-Path $Installer)) 'test-tmp'))
 $ErrorActionPreference = 'Stop'
@@ -354,6 +358,22 @@ foreach ($c in @(@{ name = 'JSON null'; text = 'null' }, @{ name = 'a number'; t
     Check ((-not $cv.ok) -and ($null -eq $cv.record) -and (@($cv.reasons | Where-Object { $_ -in 'compat.unknown-schema', 'compat.unreadable' }).Count -ge 1)) "$($c.name) as the record: refused ($(@($cv.reasons) -join ', '))"
 }
 
+'[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
+Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'
+$script:EngineJob = 'kill-on-close'
+$c0 = Close-EngineChildren
+Check (($c0.closure -eq 'unknown') -and ($null -eq $c0.left_at_exit) -and ($null -eq $c0.remaining)) "a job that cannot be read: closure unknown, no counts ($($c0 | ConvertTo-Json -Compress))"
+$why = [AmdgpuWddmEngine.Job]::Enter()
+Check ((-not $why) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq 1) -and (@([AmdgpuWddmEngine.Job]::Processes()) -contains [int64]$PID)) "this process in its kill-on-close job, alone ($why)"
+$cmd = Join-Path $env:windir 'System32\cmd.exe'
+$k1 = Start-Process -FilePath $cmd -ArgumentList '/d', '/c', 'ping -n 60 127.0.0.1 >nul' -WindowStyle Hidden -PassThru
+# A child that starts its grandchild only later, after the first listing of the job.
+$k2 = Start-Process -FilePath $cmd -ArgumentList '/d', '/c', 'ping -n 2 127.0.0.1 >nul & ping -n 60 127.0.0.1 >nul' -WindowStyle Hidden -PassThru
+Start-Sleep -Milliseconds 500
+$c1 = Close-EngineChildren
+Check (($c1.closure -eq 'complete') -and ($c1.remaining -eq 0) -and ($c1.left_at_exit -ge 3) -and ($c1.ended -eq $c1.left_at_exit) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq 1) -and $k1.HasExited -and $k2.HasExited) "every child and grandchild ended, the job holds only this process ($($c1 | ConvertTo-Json -Compress))"
+$c2 = Close-EngineChildren
+Check (($c2.closure -eq 'complete') -and ($c2.left_at_exit -eq 0)) 'nothing left: complete with 0'
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
 'all checks passed'

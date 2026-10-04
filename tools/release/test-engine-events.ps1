@@ -212,7 +212,7 @@ $past = [DateTime]::UtcNow.AddMinutes(-1).ToString('o')
 $r = Invoke-Engine 'deadline passed' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-DeadlineUtc', $past)
 Test-Stream $r 'deadline passed'
 Check (($r.code -eq 8) -and ($r.result.outcome -eq 'cancelled') -and ($r.result.message_id -eq 'result.deadline') -and -not $r.result.mutated -and ($r.result.stop.by -eq 'deadline') -and ($r.result.stop.where -eq 'stage:preflight') -and -not (Get-Events $r 'step').Count) "deadline passed: exit 8, result.deadline at $($r.result.stop.where), nothing changed, no step"
-Check ((@(Get-Events $r 'start')[0].job -eq 'kill-on-close') -and ($r.result.children.job -eq 'kill-on-close') -and ($r.result.children.left_at_exit -eq 0)) "the run's own job object: $($r.result.children.job), $($r.result.children.left_at_exit) process(es) left at its end"
+Check ((@(Get-Events $r 'start')[0].job -eq 'kill-on-close') -and ($r.result.children.job -eq 'kill-on-close') -and ($r.result.children.left_at_exit -eq 0) -and ($r.result.children.closure -eq 'complete')) "the run's own job object: $($r.result.children.job), $($r.result.children.left_at_exit) process(es) left at its end"
 $r = Invoke-Engine 'deadline unreadable' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-DeadlineUtc', 'soon')
 Check (($r.code -eq 8) -and ($r.result.message_id -eq 'result.deadline') -and ($r.result.deadline_utc -match '^unreadable')) 'an unreadable deadline counts as passed: stopped before any change'
 $future = [DateTime]::UtcNow.AddMinutes(10).ToString('o')
@@ -260,11 +260,21 @@ if ($FirmwareDir) {
     }
 } else { '  (prepare-offline cases skipped: no -FirmwareDir)' }
 
+'[G-STAGE] a changing setup-window run without its job object refuses before any change'
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # Not elevated here: had the refusal failed, the run would stop at needs-admin, never reach a change.
+    $r = Invoke-Engine 'no job, real run' @('-AcceptTestSigning') -Env @{ AMDGPU_WDDM_TEST_NO_JOB = '1' }
+    Test-Stream $r 'no job, real run'
+    Check (($r.code -eq 2) -and ($r.result.message_id -eq 'result.preflight-error') -and ($r.result.detail -match 'cannot contain its child processes') -and -not $r.result.mutated -and -not (Get-Events $r 'step').Count -and (@(Get-Events $r 'start')[0].job -match '^none')) "no job: refused before any change ($($r.result.detail))"
+    $r = Invoke-Engine 'no job, plan' @('-Plan', '-DryRunIgnoreBoard') -Env @{ AMDGPU_WDDM_TEST_NO_JOB = '1' }
+    Check (($r.code -eq 0) -and ($r.result.outcome -eq 'planned') -and ($r.result.children.closure -eq 'unknown')) 'no job, a plan (changes nothing): runs, closure recorded as unknown'
+} else { '  (skipped: this shell is elevated; the refusal test runs only where a failed refusal cannot reach a change)' }
+
 '[G-STAGE] child closure: every process the engine started ends with it'
 $env:AMDGPU_WDDM_TEST_CHILD_SECONDS = '120'
 try { $r = Invoke-Engine 'children at the end' @('-Plan', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_CHILD_SECONDS }
 $tc = @(Get-Events $r 'test-child')
-Check (($r.code -eq 0) -and $tc.Count -and ($r.result.children.left_at_exit -ge 2) -and ($r.result.children.ended -eq $r.result.children.left_at_exit) -and -not (Get-Process -Id ([int]$tc[0].pid) -ErrorAction SilentlyContinue) -and @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$([int]$tc[0].pid)").Count -eq 0) "normal end: the engine ended its $($r.result.children.left_at_exit) left-over child process(es) (cmd.exe and its ping) and recorded them"
+Check (($r.code -eq 0) -and $tc.Count -and ($r.result.children.left_at_exit -ge 2) -and ($r.result.children.ended -eq $r.result.children.left_at_exit) -and ($r.result.children.closure -eq 'complete') -and ($r.result.children.remaining -eq 0) -and -not (Get-Process -Id ([int]$tc[0].pid) -ErrorAction SilentlyContinue) -and @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$([int]$tc[0].pid)").Count -eq 0) "normal end: the engine ended its $($r.result.children.left_at_exit) left-over child process(es) (cmd.exe and its ping) and recorded them"
 # The caller terminates the engine while its child and grandchild run: Windows ends both with the job.
 $kdir = Join-Path $work 'kill'
 [void][IO.Directory]::CreateDirectory($kdir)

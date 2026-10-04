@@ -214,17 +214,34 @@ public static class Job {
         handle = job;
         return null;
     }
-    // The ids of the processes in the job now (this process included); empty without a job.
+    // The ids of the processes in the job now (this process included); null when the job cannot be read (no job, or
+    // the query fails), never an empty list for an unknown answer. The buffer grows until the whole list fits.
     public static long[] Processes() {
-        if (handle == IntPtr.Zero) return new long[0];
-        int n = 1024, size = 8 + n * IntPtr.Size, got;
+        if (handle == IntPtr.Zero) return null;
+        for (int n = 64; n <= 65536; n *= 4) {
+            int size = 8 + n * IntPtr.Size, got;
+            IntPtr buf = Marshal.AllocHGlobal(size);
+            try {
+                bool ok = QueryInformationJobObject(handle, 3, buf, size, out got);   // JobObjectBasicProcessIdList
+                int assigned = Marshal.ReadInt32(buf, 0), count = Marshal.ReadInt32(buf, 4);
+                if (!ok && Marshal.GetLastWin32Error() != 234) return null;          // 234: ERROR_MORE_DATA
+                if (!ok || count < assigned) continue;
+                var r = new long[count];
+                for (int i = 0; i < count; i++) r[i] = Marshal.ReadIntPtr(buf, 8 + i * IntPtr.Size).ToInt64();
+                return r;
+            } finally { Marshal.FreeHGlobal(buf); }
+        }
+        return null;
+    }
+    // The number of processes alive in the job (this process included), from the job's own accounting: a process
+    // leaves the count when it has ended, whatever its id. -1 when the job cannot be read.
+    public static int ActiveProcesses() {
+        if (handle == IntPtr.Zero) return -1;
+        int size = 48, got;                    // JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, exactly 48 bytes
         IntPtr buf = Marshal.AllocHGlobal(size);
         try {
-            if (!QueryInformationJobObject(handle, 3, buf, size, out got)) return new long[0];   // JobObjectBasicProcessIdList
-            int count = Marshal.ReadInt32(buf, 4);
-            var r = new long[count];
-            for (int i = 0; i < count; i++) r[i] = Marshal.ReadIntPtr(buf, 8 + i * IntPtr.Size).ToInt64();
-            return r;
+            if (!QueryInformationJobObject(handle, 1, buf, size, out got)) return -1;
+            return Marshal.ReadInt32(buf, 40);   // ActiveProcesses: after 4 LARGE_INTEGERs, TotalPageFaultCount, TotalProcesses
         } finally { Marshal.FreeHGlobal(buf); }
     }
     [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
@@ -249,24 +266,36 @@ public static class Job {
 '@
 }
 function Enter-EngineJob {
-    $why = [AmdgpuWddmEngine.Job]::Enter()
+    # Host tests only: AMDGPU_WDDM_TEST_NO_JOB makes the job fail, so that the refusal of a changing run can be shown.
+    $why = $(if ($env:AMDGPU_WDDM_TEST_NO_JOB) { 'test: no job object' } else { [AmdgpuWddmEngine.Job]::Enter() })
     if ($why) { $script:EngineJob = "none: $why"; Write-Log "   no job object for the engine's children: $why" } else { $script:EngineJob = 'kill-on-close' }
 }
 # At the end of a run: every process the engine started and that still runs is ended now (the job would end it with the
-# engine anyway). Returns the result's 'children' record.
+# engine anyway). The job's own count of live processes decides: a process leaves it only when it has ended, so a
+# child started after a listing, or an id reused by another program, cannot make the count wrong. Each round lists the
+# members and ends each one that is still in the job (EndMember: one handle for the membership check and the end),
+# until only the engine is left or 5 s have passed. Returns the result's 'children' record:
+#   closure 'complete' (only the engine is left), 'incomplete' (processes still alive after 5 s) or 'unknown' (the job
+#   could not be read). left_at_exit counts the processes besides the engine at the first reading, ended the ones gone
+#   since; remaining is what is still alive (null when unknown). The kill-on-close job ends the rest with the engine.
 function Close-EngineChildren {
-    if ($script:EngineJob -ne 'kill-on-close') { return [ordered]@{ job = $script:EngineJob; left_at_exit = $null; ended = $null } }
-    $left = @([AmdgpuWddmEngine.Job]::Processes() | Where-Object { $_ -ne $PID })
-    foreach ($p in $left) { [void][AmdgpuWddmEngine.Job]::EndMember($p) }
-    # A process counts as ended when it is gone (one may end by itself, or with its parent, before its own turn).
-    $running = $left
-    for ($i = 0; $i -lt 50 -and $running.Count; $i++) {
-        $running = @($left | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })
-        if ($running.Count) { Start-Sleep -Milliseconds 100 }
+    if ($script:EngineJob -ne 'kill-on-close') { return [ordered]@{ job = $script:EngineJob; closure = 'unknown'; left_at_exit = $null; ended = $null; remaining = $null } }
+    $first = [AmdgpuWddmEngine.Job]::ActiveProcesses()
+    if ($first -lt 1) { return [ordered]@{ job = 'kill-on-close'; closure = 'unknown'; left_at_exit = $null; ended = $null; remaining = $null } }
+    $left = $first - 1
+    $active = $first
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    while ($active -gt 1 -and $clock.ElapsedMilliseconds -lt 5000) {
+        $ids = [AmdgpuWddmEngine.Job]::Processes()
+        if ($null -ne $ids) { foreach ($p in $ids) { if ($p -ne $PID) { [void][AmdgpuWddmEngine.Job]::EndMember($p) } } }
+        Start-Sleep -Milliseconds 100
+        $active = [AmdgpuWddmEngine.Job]::ActiveProcesses()
+        if ($active -lt 1) { break }
     }
-    $ended = $left.Count - $running.Count
-    if ($left.Count) { Write-Log "   ended $ended of $($left.Count) child process(es) still running at the end of the run: $($left -join ', ')" }
-    return [ordered]@{ job = 'kill-on-close'; left_at_exit = $left.Count; ended = $ended }
+    if ($active -lt 1) { $closure = 'unknown'; $remaining = $null } elseif ($active -eq 1) { $closure = 'complete'; $remaining = 0 } else { $closure = 'incomplete'; $remaining = $active - 1 }
+    $ended = $(if ($null -ne $remaining) { [Math]::Max(0, $left - $remaining) } else { $null })
+    if ($left -or $closure -ne 'complete') { Write-Log "   child processes at the end of the run: $left; closure $closure$(if ($null -ne $remaining) { ", $remaining still alive" })" }
+    return [ordered]@{ job = 'kill-on-close'; closure = $closure; left_at_exit = $left; ended = $ended; remaining = $remaining }
 }
 
 # Host tests only (AMDGPU_WDDM_TEST_CHILD_SECONDS, honoured in a dry run or a plan): a cmd.exe that waits on ping, a

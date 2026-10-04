@@ -80,6 +80,14 @@ if ($FirmwareDir) {
     $PSBoundParameters['FirmwareDir'] = $FirmwareDir
 }
 $script:HoldWindow = [bool]$HoldWindow
+# A setup-window run that may change the system needs its kill-on-close job (interfaces-setup.md section 10): without
+# it nothing bounds the processes it starts, so it refuses before anything else. A plan, a dry run and verify change
+# nothing that needs it.
+if ($script:GuiMode -and -not $DryRun -and -not $Verify -and $script:EngineJob -ne 'kill-on-close') {
+    Write-EngineEvent 'start' ([ordered]@{ mode = $script:EngineMode; gui = $true; dry_run = $false; package = $package; contract = $script:EngineContract; phase = $null; deadline_utc = $script:EngineDeadlineText; job = $script:EngineJob })
+    Write-Host "No job object for the installer's child processes ($($script:EngineJob)). Nothing was changed." -ForegroundColor Red
+    Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result.preflight-error' -Detail "the engine cannot contain its child processes ($($script:EngineJob)); a changing run refuses before any change"
+}
 if (-not $DryRun -and -not (Test-IsAdmin)) {
     # The setup window runs elevated and starts the engine from there; it never hands a run to another window.
     if ($script:GuiMode) { Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result.needs-admin' -Detail 'the engine runs without administrator rights' }
