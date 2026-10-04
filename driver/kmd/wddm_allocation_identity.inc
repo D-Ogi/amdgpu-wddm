@@ -1,3 +1,5 @@
+#include "present_snapshot.h"
+
 // The allocation an opened object was bound to, or NULL once it is gone. The
 // stored pointer is a value: it is looked up in the object index first and the
 // object is read only if it is indexed, is an allocation and carries the serial
@@ -79,30 +81,49 @@ static void WddmBindHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO
 // without invalidating metadata consumed by the command builder. VidMm still
 // owns residency and in-flight command lifetime, independently of this snapshot.
 // Both handles and both bindings are values until the object index returns them.
+// Allocations is written only on success. Refusal, Side and Seen are optional
+// diagnostics written on every return: the first failing check, its side (0
+// source, 1 destination, 2 the pair) and the opened descriptors read so far
+// (zero for a side not reached). Seen is a copy taken under the lock too.
 static BOOLEAN WddmSnapshotPresentAllocations(BC250_WDDM* Wddm, HANDLE OwnerDevice,
-    const HANDLE Handles[2], BC250_WDDM_ALLOCATION_PRIVATE Allocations[2])
+    const HANDLE Handles[2], BC250_WDDM_ALLOCATION_PRIVATE Allocations[2],
+    BC250_SNAPSHOT_REFUSAL* Refusal, UINT* Side, BC250_WDDM_ALLOCATION_PRIVATE Seen[2])
 {
     BC250_WDDM_OBJECT* backing[2]={NULL,NULL};
     BC250_WDDM_ALLOCATION_PRIVATE snapshots[2];
+    BC250_SNAPSHOT_REFUSAL why=Bc250SnapshotStopping;
     BOOLEAN valid=FALSE;
     KIRQL irql;
-    UINT i;
+    UINT i=2;
+    RtlZeroMemory(snapshots,sizeof(snapshots));
     KeAcquireSpinLock(&Wddm->Lock,&irql);
     if (Wddm->Stopping) goto done;
     for (i=0;i<2;i++) {
         BC250_WDDM_OBJECT* opened=(BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&Wddm->ObjectIndex,Handles[i]);
-        if (!opened || opened->Magic!=BC250_WDDM_MAGIC_OPENED ||
-            opened->OwnerDevice!=OwnerDevice || opened->UmdAlloc || !opened->BackingAllocation) goto done;
-        backing[i]=WddmBackingAllocationLocked(Wddm,opened);
-        if (!backing[i] || backing[i]->UmdAlloc ||
-            RtlCompareMemory(&backing[i]->Allocation,&opened->Allocation,sizeof(opened->Allocation))!=sizeof(opened->Allocation)) goto done;
+        why=Bc250SnapshotNotOpened;
+        if (!opened || opened->Magic!=BC250_WDDM_MAGIC_OPENED) goto done;
         snapshots[i]=opened->Allocation;
+        why=opened->OwnerDevice!=OwnerDevice ? Bc250SnapshotOtherOwner :
+            opened->UmdAlloc ? Bc250SnapshotUmdOpened :
+            !opened->BackingAllocation ? Bc250SnapshotUnbound : Bc250SnapshotAdmitted;
+        if (why!=Bc250SnapshotAdmitted) goto done;
+        backing[i]=WddmBackingAllocationLocked(Wddm,opened);
+        why=!backing[i] ? Bc250SnapshotBackingGone :
+            backing[i]->UmdAlloc ? Bc250SnapshotUmdBacking :
+            RtlCompareMemory(&backing[i]->Allocation,&opened->Allocation,sizeof(opened->Allocation))!=sizeof(opened->Allocation) ?
+                Bc250SnapshotDescriptor : Bc250SnapshotAdmitted;
+        if (why!=Bc250SnapshotAdmitted) goto done;
     }
     // Two imports of one allocation are not a supported non-overlapping blit.
-    if (backing[0]==backing[1] || snapshots[0].Format!=snapshots[1].Format) goto done;
+    why=backing[0]==backing[1] ? Bc250SnapshotSameBacking :
+        snapshots[0].Format!=snapshots[1].Format ? Bc250SnapshotFormat : Bc250SnapshotAdmitted;
+    if (why!=Bc250SnapshotAdmitted) goto done;
     Allocations[0]=snapshots[0];Allocations[1]=snapshots[1];
     valid=TRUE;
 done:
     KeReleaseSpinLock(&Wddm->Lock,irql);
+    if (Refusal) *Refusal=why;
+    if (Side) *Side=i;
+    if (Seen) { Seen[0]=snapshots[0];Seen[1]=snapshots[1]; }
     return valid;
 }

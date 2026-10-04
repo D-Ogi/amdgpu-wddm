@@ -161,6 +161,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "gdi_admission.h"
 #include "surface_resource_private.h"
 #include "present_range.h"
+#include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
@@ -212,6 +213,7 @@ typedef struct _BC250_WDDM_OBJECT {
 } BC250_WDDM_OBJECT;
 
 #define BC250_PRESENT_OBSERVATIONS 16
+#define BC250_GPU_PRESENT_REFUSAL_LOGS 16     // detailed lines for the first snapshot refusals of a start
 // One writer per slot; immutable after Published. Handles are values only.
 // Retained per adapter start, independently of the rolling GuardLog.
 typedef struct _BC250_PRESENT_OBSERVATION {
@@ -434,6 +436,7 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
     volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
     volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
+    volatile LONG64 GpuPresentSnapshotRefusals[Bc250SnapshotRefusalCount]; // BD-065, by first failing check
     volatile LONG64 PresentObservationCalls;
     BC250_PRESENT_OBSERVATION PresentObservations[BC250_PRESENT_OBSERVATIONS];
     volatile LONG64 DriverCapsInteropReturned[2]; // successful replies, not registry state
@@ -2072,6 +2075,19 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[1],0,0),
         InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[2],0,0),
         InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[3],0,0));
+    // BD-065: the "handle" errors above, split by the snapshot's first failing check.
+    GuardLog("wddm: GPU Present snapshot refused stopping%lld unopened%lld owner%lld umdopen%lld unbound%lld "
+        "gone%lld umdbacking%lld descriptor%lld same%lld format%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotStopping],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotNotOpened],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotOtherOwner],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotUmdOpened],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotUnbound],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotBackingGone],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotUmdBacking],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotDescriptor],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotSameBacking],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotFormat],0,0));
     GuardLog("wddm summary: blit gate %s, %ld blits, %ld skips, %ld sources translated contiguous", Wddm->BlitGate ? "open" : "closed",
              Wddm->Blits, Wddm->BlitSkips, Wddm->BlitTranslations);
     // 2026-09-22 (ADR 0011 consequences, facts M100): where the copy actually landed. BlitsToFlip should be
@@ -5768,8 +5784,27 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
         if (info->PhysicalAdapterIndex) return status;
         handles[i]=info->hDeviceSpecificAllocation;
     }
-    if (!WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,handles,allocations))
-        return STATUS_INVALID_HANDLE;
+    {
+        BC250_SNAPSHOT_REFUSAL why;
+        BC250_WDDM_ALLOCATION_PRIVATE seen[2];
+        UINT side;
+        LONG64 refusal;
+        if (!WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,handles,allocations,&why,&side,seen)) {
+            // BD-065: the status stays INVALID_HANDLE for every reason, as before. A format mismatch is
+            // documented as CANNOTCOLORCONVERT, after which the runtime stops the application; a dropped
+            // frame is kept until that change of status has been measured on the lab.
+            if ((UINT)why<Bc250SnapshotRefusalCount)
+                InterlockedIncrement64(&wddm->GpuPresentSnapshotRefusals[why]);
+            // Slot 0 (Admitted) is never a reason: it counts all refusals and bounds the log.
+            refusal=InterlockedIncrement64(&wddm->GpuPresentSnapshotRefusals[Bc250SnapshotAdmitted]);
+            if (refusal<=BC250_GPU_PRESENT_REFUSAL_LOGS)
+                GuardLog("wddm: GPU Present refused%lld reason%u side%u ctx%p owner%p src%p fmt%u %ux%u pitch%u dst%p fmt%u %ux%u pitch%u",
+                    refusal,(UINT)why,side,(void*)Context,(void*)Context->OwnerDevice,
+                    handles[0],seen[0].Format,seen[0].Width,seen[0].Height,seen[0].Pitch,
+                    handles[1],seen[1].Format,seen[1].Width,seen[1].Height,seen[1].Pitch);
+            return STATUS_INVALID_HANDLE;
+        }
+    }
     for (i=0;i<2;i++) {
         const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
             (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
@@ -5853,7 +5888,7 @@ static void WddmObservePresent(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT
         o->ListValid=TRUE;
         if (!o->PhysicalAdapter[0] && !o->PhysicalAdapter[1])
             o->SnapshotValid=WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,
-                o->Handles,o->Allocations);
+                o->Handles,o->Allocations,NULL,NULL,NULL);
     }
     InterlockedExchange(&o->Published,1);
 }
