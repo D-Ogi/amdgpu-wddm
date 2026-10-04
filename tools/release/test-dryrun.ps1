@@ -198,6 +198,14 @@ foreach ($c in @(
     Check ($r.code -eq $c.code) "$($c.name): exit $($r.code) (expected $($c.code))"
     Check ($r.text -match $c.expect) "$($c.name): '$($c.expect)'"
     Check ($r.text -notmatch 'waiting for the start-confirm task') "$($c.name): no wait for the task"
+    $reports = @(Get-ChildItem -LiteralPath (Join-Path $dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
+    if ($c.code -eq 3) {
+        # A failed verify writes a matching failed report: identity of one package and a non-empty result list.
+        $vr = $(if ($reports.Count -eq 1) { Get-Content -LiteralPath $reports[0].FullName -Raw | ConvertFrom-Json })
+        Check (($null -ne $vr) -and ($vr.schema -eq 'amdgpu-wddm.verify-report/1') -and ($vr.outcome -eq 'failed') -and ($vr.package_version -eq $pkgVersion) -and ($vr.release -eq $m.name) -and ($vr.manifest_sha256 -match '^[0-9A-F]{64}$') -and (@($vr.results).Count -ge 1) -and (@($vr.results | Where-Object { $_.pass -eq $false }).Count -ge 1) -and ($vr.failed -ge 1)) "$($c.name): one failed verify report bound to $pkgVersion with its failing result"
+    } else {
+        Check ($reports.Count -eq 0) "$($c.name): no verify report (no check ran)"
+    }
     if ($r.code -ne $c.code) { $r.text }
     Remove-Item -LiteralPath $dir -Recurse -Force
 }

@@ -1,7 +1,8 @@
 # The engine's contract with the setup window (docs/gui/interfaces-setup.md): events, the terminal result, cancel at
 # safe points, one mutating engine at a time, the boot identity and the record of the newest install action (the
-# state.json fields that void an older running-release witness, docs/gui/interfaces.md section 2). Dot-sourced after common.ps1 by install.ps1 and prepare-offline.ps1; the start-confirm task dot-sources only
-# the witness part (release-witness.ps1). Windows PowerShell 5.1 syntax only.
+# state.json fields that void an older running-release witness, docs/gui/interfaces.md section 2). Dot-sourced after
+# common.ps1, together with release-witness.ps1 (the boot identity), by install.ps1 and prepare-offline.ps1; the
+# start-confirm task dot-sources only release-witness.ps1. Windows PowerShell 5.1 syntax only.
 #
 # The command-line installer behaves as before: without -EventsFile and -ResultFile nothing here writes a file, and
 # without -Gui nothing here changes how the installer asks. With -Gui the engine never prompts, never elevates itself
@@ -72,20 +73,7 @@ function Write-FileAtomic([string]$Path, [string]$Text) {
     if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp, $Path, [NullString]::Value) } else { [IO.File]::Move($tmp, $Path) }
 }
 
-# The boot: KUSER_SHARED_DATA.BootId as Windows stores it (the control application's BD-060 observer reads the same
-# value) and the boot time. Read once per run.
-function Get-BootIdentity {
-    if ($script:EngineBoot) { return $script:EngineBoot }
-    $id = $null
-    try {
-        $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction Stop).BootId
-        if ($null -ne $v) { $id = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
-    } catch { }
-    $utc = $null
-    try { $utc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o') } catch { }
-    $script:EngineBoot = [ordered]@{ boot_id = $id; boot_utc = $utc }
-    return $script:EngineBoot
-}
+# The boot (boot_id, boot_utc) comes from Get-BootIdentity in release-witness.ps1, the one place that defines it.
 
 # ---- the record of the newest install action ----------------------------------------------------------------------
 # state.json mutation_boot_id and mutation_utc (docs/gui/interfaces.md section 2): the boot and the start time of the

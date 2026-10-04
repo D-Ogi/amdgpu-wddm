@@ -325,6 +325,7 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
 }
 
 # ---- phase 3: verify -------------------------------------------------------------------------------------------
+$script:VerifyComplete = $false
 function Invoke-Verify {
     Write-Step 'Verify'
     $results = New-Object System.Collections.ArrayList
@@ -345,6 +346,10 @@ function Invoke-Verify {
         Write-Host ('   [info] {0,-20} {1}' -f $Name, $Detail)
         Write-Log ('   verify {0}: info {1}' -f $Name, $Detail)
     }
+    # Every verify run ends with its report (Write-VerifyReport), also when a check throws or the GPU is missing: the
+    # control application counts a verification only from a report with a non-empty result list for the installed
+    # package, never from the phase label.
+    try {
     if (-not $script:DryRunMode) {
         # Files replaced while in use: the restart deletes their old copies; this catches any it could not.
         $n = (Remove-OldCopies -Directory $InstallRoot -Recurse) + (Remove-OldCopies -Directory (Join-Path $env:windir 'System32') -Filter 'bc250umd.dll.old-*')
@@ -480,10 +485,49 @@ function Invoke-Verify {
     $vkOut = (Invoke-Native powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
     if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
     else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
-
-    $report = [ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); package_version = $(if ($script:Manifest) { $script:Manifest.version } else { $null }); results = $results }
-    [IO.File]::WriteAllText((Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.json')), ($report | ConvertTo-Json -Depth 5))
+    $script:VerifyComplete = $true
     return $results
+    } catch {
+        Add-Result 'verify' $false "verify stopped: $($_.Exception.Message)"
+        throw
+    } finally { Write-VerifyReport $results }
+}
+
+# The verify report, %ProgramData%\amdgpu-wddm\installer\verify\verify-<utc>.json (docs/gui/interfaces-setup.md
+# section 9): bound to one installed package by release, version and the SHA256 of <install root>\manifest.json, with
+# the boot and a non-empty result list (results[].check, .pass, .detail). outcome 'failed' when any result fails, the
+# list is empty or the run stopped before its last check. Written through a temporary file; never throws.
+function Write-VerifyReport($Results) {
+    try {
+        $list = @($Results)
+        $mp = Join-Path $InstallRoot 'manifest.json'
+        $source = 'install-root'
+        if (-not (Test-Path -LiteralPath $mp)) { $mp = Join-Path $package 'manifest.json'; $source = 'package' }
+        $mf = $null; $msha = $null
+        if (Test-Path -LiteralPath $mp) { $mf = Get-Content -LiteralPath $mp -Raw | ConvertFrom-Json; $msha = Get-Sha256 $mp }
+        $failed = @($list | Where-Object { -not $_.pass }).Count
+        $complete = [bool]$script:VerifyComplete
+        $report = [ordered]@{
+            schema = 'amdgpu-wddm.verify-report/1'
+            utc = [DateTime]::UtcNow.ToString('o')
+            invocation = $script:EngineInvocationId
+            boot_id = (Get-BootIdentity).boot_id
+            dry_run = [bool]$script:DryRunMode
+            release = $(if ($mf) { [string]$mf.name } else { $null })
+            package_version = $(if ($mf) { [string]$mf.version } else { $null })
+            manifest_sha256 = $msha
+            manifest_source = $source
+            kmd_abi = $(if ($mf) { [string]$mf.kmd_abi } else { $null })
+            install_root = $InstallRoot
+            outcome = $(if ($failed -eq 0 -and $list.Count -gt 0 -and $complete) { 'passed' } else { 'failed' })
+            complete = $complete
+            passed = ($list.Count - $failed)
+            failed = $failed
+            results = $list
+        }
+        $vdir = Join-Path $script:StateDir 'verify'
+        Write-FileAtomic (Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json')) ($report | ConvertTo-Json -Depth 5)
+    } catch { Write-Log "   verify report not written: $($_.Exception.Message)" }
 }
 
 if ($script:VerifyOnly) {
@@ -506,7 +550,7 @@ if ($script:VerifyOnly) {
     # The running-release witness of this boot (release-witness.ps1): written only when the loaded KMD image and the
     # driver's reply match this release; the control application reads it.
     if (-not $DryRun) {
-        $why = Write-RunningReleaseWitness -InstallRoot $InstallRoot -RecordedBy 'verify' -Boot (Get-BootIdentity)
+        $why = Write-RunningReleaseWitness -InstallRoot $InstallRoot -RecordedBy 'verify' -Boot (Get-BootIdentity) -StatePath $script:StatePath
         if ($why) { Write-Log "   running-release witness not written: $why" } else { Write-Log "   running-release witness written: $($script:WitnessPath)" }
         Write-EngineEvent 'witness' ([ordered]@{ written = (-not $why); reason = $why })
     }

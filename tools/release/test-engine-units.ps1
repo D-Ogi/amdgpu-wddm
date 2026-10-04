@@ -147,24 +147,47 @@ Check (($imp.summary.added -eq 1) -and ($imp.summary.updated -eq 1) -and ($imp.s
 '[G-VER writer] running-release witness (docs/gui/interfaces.md section 1): loaded image, reply and boot bound; the reader''s rule'
 $boot = [ordered]@{ boot_id = 41; boot_utc = '2026-10-04T08:00:00.0000000Z' }
 $sysSha = [string]$m.components[0].sha256
-$reading = [ordered]@{ image = [ordered]@{ module = '\SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_x\bc250kmd.sys'; path = 'C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_x\bc250kmd.sys'; sha256 = $sysSha }; reply_version = '0x000700C7' }
-$w = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 'ABC' -Reading $reading -Boot $boot -RecordedBy 'verify' -Utc '2026-10-04T08:01:00.0000000Z'
+$msha = 'AB' * 32
+$reading = [ordered]@{ image = [ordered]@{ module = '\SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_x\bc250kmd.sys'; path = 'C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_x\bc250kmd.sys'; sha256 = $sysSha
+        created_utc = '2026-10-03T20:00:00.0000000Z'; written_utc = '2026-10-03T19:00:00.0000000Z' }; reply_version = '0x000700C7' }
+$w = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $reading -Boot $boot -RecordedBy 'verify' -Utc '2026-10-04T08:01:00.0000000Z'
 $json = $w.record | ConvertTo-Json -Depth 4
 $back = $json | ConvertFrom-Json
 $keys = @('schema', 'boot_id', 'recorded_utc', 'recorded_by', 'release', 'version', 'manifest_sha256', 'kmd_image_sha256', 'kmd_build', 'kmd_abi')
-Check ((@($keys | Where-Object { $null -eq $back.$_ }).Count -eq 0) -and ($back.schema -eq 1) -and ($json -match '"schema":\s*1,') -and ($json -match '"boot_id":\s*41,') -and ($back.recorded_by -eq 'verify') -and ($back.version -eq $m.version) -and ($back.release -eq $m.name) -and ($back.kmd_image_sha256 -eq $sysSha) -and ($back.kmd_abi -eq '0x000700C7')) 'matching image and reply: a witness with every field of section 1 (schema and boot_id as numbers)'
+Check ((@($keys | Where-Object { $null -eq $back.$_ -or [string]$back.$_ -eq '' }).Count -eq 0) -and ($back.schema -eq 1) -and ($json -match '"schema":\s*1,') -and ($json -match '"boot_id":\s*41,') -and ($back.recorded_by -eq 'verify') -and ($back.version -eq $m.version) -and ($back.release -eq $m.name) -and ($back.kmd_image_sha256 -eq $sysSha) -and ($back.kmd_abi -eq '0x000700C7') -and ($back.manifest_sha256 -eq $msha) -and ($back.kmd_build -match '^\d+\.\d+\.\d+\.\d+$')) 'matching image and reply: a witness with every field of section 1, none empty (schema and boot_id as numbers, kmd_build four parts)'
 foreach ($c in @(
         @{ name = 'another image'; edit = { param($r) $r.image.sha256 = ('F' * 64) }; want = 'has SHA256' }
         @{ name = 'another reply'; edit = { param($r) $r.reply_version = '0x000700C6' }; want = 'replies 0x000700C6' }
         @{ name = 'no reply'; edit = { param($r) $r.reply_version = $null }; want = 'no driver reply' }
-        @{ name = 'not loaded'; edit = { param($r) $r.image = $null }; want = 'no bc250kmd.sys among the loaded drivers' })) {
-    $rd = [ordered]@{ image = $(if ($reading.image) { [ordered]@{ module = $reading.image.module; path = $reading.image.path; sha256 = $reading.image.sha256 } }); reply_version = $reading.reply_version }
+        @{ name = 'not loaded'; edit = { param($r) $r.image = $null }; want = 'no bc250kmd.sys among the loaded drivers' }
+        @{ name = 'image file written after the boot started'; edit = { param($r) $r.image.written_utc = '2026-10-04T08:00:30.0000000Z' }; want = 'replaced after this boot started' }
+        @{ name = 'image file created after the boot started'; edit = { param($r) $r.image.created_utc = '2026-10-04T08:00:30.0000000Z' }; want = 'replaced after this boot started' }
+        @{ name = 'image times unreadable'; edit = { param($r) $r.image.created_utc = $null }; want = 'times of the loaded image' })) {
+    $rd = [ordered]@{ image = $(if ($reading.image) { [ordered]@{ module = $reading.image.module; path = $reading.image.path; sha256 = $reading.image.sha256; created_utc = $reading.image.created_utc; written_utc = $reading.image.written_utc } }); reply_version = $reading.reply_version }
     & $c.edit $rd
-    $w2 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 'ABC' -Reading $rd -Boot $boot -RecordedBy 'verify'
+    $w2 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $rd -Boot $boot -RecordedBy 'verify'
     Check ((-not $w2.record) -and ($w2.reason -match [regex]::Escape($c.want))) "$($c.name): no witness ($($w2.reason))"
 }
-$w3 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 'ABC' -Reading $reading -Boot ([ordered]@{ boot_id = $null; boot_utc = $null }) -RecordedBy 'verify'
+$w3 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $reading -Boot ([ordered]@{ boot_id = $null; boot_utc = $null }) -RecordedBy 'verify'
 Check (-not $w3.record) 'unknown boot: no witness'
+$w4 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $reading -Boot $boot -RecordedBy 'start-confirm' -State ([pscustomobject]@{ mutation_boot_id = 41; mutation_utc = '2026-10-04T08:00:40.0000000Z' })
+Check ((-not $w4.record) -and ($w4.reason -match 'install action ran in this boot')) "an install action in this boot: no witness until the next start ($($w4.reason))"
+$w5 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $reading -Boot $boot -RecordedBy 'start-confirm' -State ([pscustomobject]@{ mutation_boot_id = 40; mutation_utc = '2026-10-03T21:00:00.0000000Z' })
+Check ([bool]$w5.record) 'an install action of an earlier boot: the witness is written'
+$w6 = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 'ABC' -Reading $reading -Boot $boot -RecordedBy 'verify'
+Check ((-not $w6.record) -and ($w6.reason -match 'no SHA256')) 'a manifest hash that is not 64 hex digits: no witness'
+foreach ($c in @(@{ f = 'kmd_build'; v = '0.7.199'; want = 'four-part' }, @{ f = 'kmd_abi'; v = '7'; want = '8 hex digits' }, @{ f = 'name'; v = ''; want = 'no release' })) {
+    $m2 = $m | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $m2.($c.f) = $c.v
+    $w7 = Get-RunningReleaseWitness -Manifest $m2 -ManifestSha256 $msha -Reading $reading -Boot $boot -RecordedBy 'verify'
+    Check ((-not $w7.record) -and ($w7.reason -match $c.want)) "manifest $($c.f) '$($c.v)': no witness ($($w7.reason))"
+}
+$opath = Join-Path $work 'owner-test.json'
+[IO.File]::WriteAllText($opath, '{}')
+$why = Set-AdminOwner $opath
+$own = (Get-Acl -LiteralPath $opath).GetOwner([Security.Principal.SecurityIdentifier]).Value
+Check ((-not $why -and $own -in 'S-1-5-32-544', 'S-1-5-18') -or ($why -and -not (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)))) "owner of a written record: Administrators or SYSTEM ($(if ($own -in 'S-1-5-32-544', 'S-1-5-18') { $own } else { 'not elevated here: the owner stays this user, and the writer reports it' }))"
+Remove-Item -LiteralPath $opath -Force -ErrorAction SilentlyContinue
 $wit = $back
 Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State $null).valid) 'reader: witness of this boot, no install action: valid'
 Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot ([ordered]@{ boot_id = 42 }) -Reply '0x000700C7').valid) 'reader: witness of an earlier boot: ignored'

@@ -17,6 +17,25 @@
 
 $script:WitnessSchema = 1
 $script:WitnessPath = Join-Path $env:ProgramData 'amdgpu-wddm\installer\running-release.json'
+$script:BootIdentity = $null
+
+# The boot, defined here and nowhere else (the engine, verify, the start-confirm task and the witness all use it):
+# boot_id is HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters\BootId, the
+# REG_DWORD that Windows increments at every boot, read as an unsigned 32-bit number (the control application reads the
+# same value the same way); boot_utc is Win32_OperatingSystem.LastBootUpTime in UTC. Read once per process; a part
+# that cannot be read is $null.
+function Get-BootIdentity {
+    if ($script:BootIdentity) { return $script:BootIdentity }
+    $id = $null
+    try {
+        $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction Stop).BootId
+        if ($null -ne $v) { $id = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
+    } catch { }
+    $utc = $null
+    try { $utc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o') } catch { }
+    $script:BootIdentity = [ordered]@{ boot_id = $id; boot_utc = $utc }
+    return $script:BootIdentity
+}
 
 if (-not ('AmdgpuWddmWitness.Drivers' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -67,12 +86,14 @@ function Get-RunningKmdReading([string]$Cli, [string]$ImageName = 'bc250kmd.sys'
         $mod = @([AmdgpuWddmWitness.Drivers]::Loaded() | Where-Object { ([IO.Path]::GetFileName($_)) -ieq $ImageName }) | Select-Object -First 1
         if ($mod) {
             $path = ConvertTo-Win32DriverPath $mod
-            $sha = $null
+            $sha = $null; $created = $null; $written = $null
             if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) {
                 $s = [IO.File]::OpenRead($path)
                 try { $sha = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
+                $fi = New-Object IO.FileInfo $path
+                $created = $fi.CreationTimeUtc.ToString('o'); $written = $fi.LastWriteTimeUtc.ToString('o')
             }
-            $image = [ordered]@{ module = $mod; path = $path; sha256 = $sha }
+            $image = [ordered]@{ module = $mod; path = $path; sha256 = $sha; created_utc = $created; written_utc = $written }
         }
     } catch { }
     $reply = $null
@@ -88,17 +109,39 @@ function Get-RunningKmdReading([string]$Cli, [string]$ImageName = 'bc250kmd.sys'
 # Pure: the witness record for one reading, or the reason why there is none. $Manifest is the installed release's
 # manifest.json, $ManifestSha256 the SHA256 of that file. The fields of section 1 first; boot_utc, kmd_image_path,
 # reply_version and driver_ver are for the support report only.
+# Every field of section 1 is always written, never empty: a reading or a manifest that cannot fill one gives no
+# witness. The loaded image is the file at the path of the bc250kmd.sys module that Windows lists as loaded; that file
+# is the image of this boot only while nothing replaced it after the boot started, so there is no witness when the
+# file was created or written after boot_utc, or when $State records an install action in this boot.
 function Get-RunningReleaseWitness {
-    param($Manifest, [string]$ManifestSha256, $Reading, $Boot, [ValidateSet('verify', 'start-confirm')][string]$RecordedBy, [string]$Utc = ([DateTime]::UtcNow.ToString('o')))
-    if (-not $Manifest) { return [pscustomobject]@{ record = $null; reason = 'no release manifest in the install root' } }
-    if (-not $Boot -or $null -eq $Boot.boot_id) { return [pscustomobject]@{ record = $null; reason = 'the boot cannot be identified (BootId unreadable)' } }
+    param($Manifest, [string]$ManifestSha256, $Reading, $Boot, [ValidateSet('verify', 'start-confirm')][string]$RecordedBy, [string]$Utc = ([DateTime]::UtcNow.ToString('o')), $State)
+    function No([string]$Why) { return [pscustomobject]@{ record = $null; reason = $Why } }
+    function Get-Utc([string]$T) {
+        $d = [DateTime]::MinValue
+        if ($T -and [DateTime]::TryParse($T, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AdjustToUniversal, AssumeUniversal', [ref]$d)) { return $d }
+        return $null
+    }
+    if (-not $Manifest) { return No 'no release manifest in the install root' }
+    if ($ManifestSha256 -notmatch '^[0-9A-Fa-f]{64}$') { return No 'the installed manifest.json has no SHA256' }
+    if (-not [string]$Manifest.name -or -not [string]$Manifest.version) { return No 'the manifest names no release or version' }
+    if ([string]$Manifest.kmd_build -notmatch '^\d+\.\d+\.\d+\.\d+$') { return No "the manifest's kmd_build '$($Manifest.kmd_build)' is not a four-part build" }
+    if ([string]$Manifest.kmd_abi -notmatch '^0x[0-9A-Fa-f]{8}$') { return No "the manifest's kmd_abi '$($Manifest.kmd_abi)' is not 0x followed by 8 hex digits" }
+    if (-not $Boot -or $null -eq $Boot.boot_id) { return No 'the boot cannot be identified (BootId unreadable)' }
+    $bootUtc = Get-Utc ([string]$Boot.boot_utc)
+    if ($null -eq $bootUtc) { return No 'the start time of this boot cannot be read' }
+    if ($State -and $State.PSObject.Properties['mutation_boot_id'] -and $null -ne $State.mutation_boot_id -and [int64]$State.mutation_boot_id -eq [int64]$Boot.boot_id) {
+        return No "an install action ran in this boot ($($State.mutation_utc)): the loaded image may differ from the files; the next start writes the witness"
+    }
     $comp = @($Manifest.components | Where-Object { $_ -and $_.package_path -eq 'payload/kmd/bc250kmd.sys' }) | Select-Object -First 1
-    if (-not $comp -or -not $comp.sha256) { return [pscustomobject]@{ record = $null; reason = 'the manifest names no KMD image hash' } }
-    if (-not $Reading -or -not $Reading.image) { return [pscustomobject]@{ record = $null; reason = 'no bc250kmd.sys among the loaded drivers' } }
-    if (-not $Reading.image.sha256) { return [pscustomobject]@{ record = $null; reason = "the loaded image $($Reading.image.module) cannot be read" } }
-    if ($Reading.image.sha256 -ne ([string]$comp.sha256).ToUpperInvariant()) { return [pscustomobject]@{ record = $null; reason = "the loaded image $($Reading.image.path) has SHA256 $($Reading.image.sha256), release $($Manifest.version) has $($comp.sha256)" } }
-    if (-not $Reading.reply_version) { return [pscustomobject]@{ record = $null; reason = 'no driver reply (bc250kmd_cli info)' } }
-    if ($Reading.reply_version -ne ([string]$Manifest.kmd_abi)) { return [pscustomobject]@{ record = $null; reason = "the driver replies $($Reading.reply_version), release $($Manifest.version) has kmd_abi $($Manifest.kmd_abi)" } }
+    if (-not $comp -or -not $comp.sha256) { return No 'the manifest names no KMD image hash' }
+    if (-not $Reading -or -not $Reading.image) { return No 'no bc250kmd.sys among the loaded drivers' }
+    if (-not $Reading.image.sha256) { return No "the loaded image $($Reading.image.module) cannot be read" }
+    $created = Get-Utc ([string]$Reading.image.created_utc); $written = Get-Utc ([string]$Reading.image.written_utc)
+    if ($null -eq $created -or $null -eq $written) { return No "the times of the loaded image $($Reading.image.path) cannot be read" }
+    if ($created -gt $bootUtc -or $written -gt $bootUtc) { return No "the loaded image $($Reading.image.path) was replaced after this boot started (created $($Reading.image.created_utc), written $($Reading.image.written_utc), boot $($Boot.boot_utc))" }
+    if ($Reading.image.sha256 -ne ([string]$comp.sha256).ToUpperInvariant()) { return No "the loaded image $($Reading.image.path) has SHA256 $($Reading.image.sha256), release $($Manifest.version) has $($comp.sha256)" }
+    if (-not $Reading.reply_version) { return No 'no driver reply (bc250kmd_cli info)' }
+    if ($Reading.reply_version -ne ([string]$Manifest.kmd_abi)) { return No "the driver replies $($Reading.reply_version), release $($Manifest.version) has kmd_abi $($Manifest.kmd_abi)" }
     $rec = [ordered]@{
         schema = $script:WitnessSchema
         boot_id = [int64]$Boot.boot_id
@@ -106,7 +149,7 @@ function Get-RunningReleaseWitness {
         recorded_by = $RecordedBy
         release = [string]$Manifest.name
         version = [string]$Manifest.version
-        manifest_sha256 = $ManifestSha256
+        manifest_sha256 = $ManifestSha256.ToUpperInvariant()
         kmd_image_sha256 = $Reading.image.sha256
         kmd_build = [string]$Manifest.kmd_build
         kmd_abi = [string]$Manifest.kmd_abi
@@ -141,27 +184,47 @@ function Test-RunningReleaseWitness {
 
 # Reads the running KMD and writes the witness for the release installed in $InstallRoot. Returns the reason when
 # nothing was written. Never throws.
+# manifest_sha256 is the SHA256 of exactly one file, <install root>\manifest.json, the manifest of the installed
+# release; $StatePath is the installer's state.json (its mutation_* fields, docs/gui/interfaces.md section 2). The
+# written file gets Administrators as its owner when the writer is not SYSTEM (the reader trusts only those two); a
+# file whose owner cannot be set is removed again.
 function Write-RunningReleaseWitness {
-    param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][ValidateSet('verify', 'start-confirm')][string]$RecordedBy, $Boot, [string]$Path = $script:WitnessPath)
+    param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][ValidateSet('verify', 'start-confirm')][string]$RecordedBy, $Boot, [string]$Path = $script:WitnessPath,
+        [string]$StatePath = (Join-Path $env:ProgramData 'amdgpu-wddm\installer\state.json'))
     try {
         $mp = Join-Path $InstallRoot 'manifest.json'
         if (-not (Test-Path -LiteralPath $mp)) { return "no manifest.json in $InstallRoot" }
         $s = [IO.File]::OpenRead($mp)
         try { $msha = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
         $manifest = Get-Content -LiteralPath $mp -Raw | ConvertFrom-Json
-        if (-not $Boot) {
-            $id = $null
-            $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction SilentlyContinue).BootId
-            if ($null -ne $v) { $id = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
-            $Boot = [ordered]@{ boot_id = $id; boot_utc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o') }
-        }
+        if (-not $Boot) { $Boot = Get-BootIdentity }
+        $st = $null
+        if ($StatePath -and (Test-Path -LiteralPath $StatePath)) { $st = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json }
         $reading = Get-RunningKmdReading -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe')
-        $w = Get-RunningReleaseWitness -Manifest $manifest -ManifestSha256 $msha -Reading $reading -Boot $Boot -RecordedBy $RecordedBy
+        $w = Get-RunningReleaseWitness -Manifest $manifest -ManifestSha256 $msha -Reading $reading -Boot $Boot -RecordedBy $RecordedBy -State $st
         if (-not $w.record) { return $w.reason }
         [void][IO.Directory]::CreateDirectory((Split-Path $Path))
         $tmp = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
         [IO.File]::WriteAllText($tmp, ($w.record | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
         if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp, $Path, [NullString]::Value) } else { [IO.File]::Move($tmp, $Path) }
+        $why = Set-AdminOwner $Path
+        if ($why) { Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue; return "witness removed again: $why" }
         return $null
     } catch { return "witness not written: $($_.Exception.Message)" }
+}
+
+# The owner the control application trusts: Administrators, or SYSTEM when SYSTEM wrote the file. $null when set.
+function Set-AdminOwner([string]$Path) {
+    try {
+        $admins = New-Object Security.Principal.SecurityIdentifier ([Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+        $system = New-Object Security.Principal.SecurityIdentifier ([Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+        $acl = Get-Acl -LiteralPath $Path
+        $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier])
+        if ($owner -eq $admins -or $owner -eq $system) { return $null }
+        $acl.SetOwner($admins)
+        Set-Acl -LiteralPath $Path -AclObject $acl
+        $owner = (Get-Acl -LiteralPath $Path).GetOwner([Security.Principal.SecurityIdentifier])
+        if ($owner -eq $admins) { return $null }
+        return 'the owner stays another account, not Administrators'
+    } catch { return "the owner cannot be set: $($_.Exception.Message)" }
 }

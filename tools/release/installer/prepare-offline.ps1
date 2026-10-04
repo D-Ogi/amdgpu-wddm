@@ -24,6 +24,7 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 . (Join-Path $here 'engine.ps1')
+. (Join-Path $here 'release-witness.ps1')
 $script:OfflineSetSchema = 'amdgpu-wddm.offline-set/1'
 $script:OfflineSetFile = 'offline-set.json'
 $script:Partial = $null
