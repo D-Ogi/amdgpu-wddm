@@ -35,7 +35,7 @@ enum class Outcome : unsigned {
     AppContainer,      // an AppContainer process: nothing written
     NoStore,           // no usable %LOCALAPPDATA% or module path
     Busy,              // another writer or a Clear held the lock longer than the wait
-    Failed,            // an I/O error, a list of a newer format version, or no memory
+    Failed,            // an I/O error, a list of a newer format version, no launch mark, or no memory
 };
 inline const char* outcome_name(Outcome o) noexcept {
     switch(o){
@@ -365,10 +365,8 @@ inline bool write_store(const std::wstring& dir,const std::string& text,void (*a
 // The process's launch mark for one list: a named event "Local\amdgpu-wddm-recent-launch-<start>-<pid>-<list>" that
 // the shell which counted the launch keeps open until the process ends. The other shell of the same process finds
 // it, even when a later process of the same path has taken the entry meanwhile, so one process is one launch
-// whatever the order of the notes and whatever the clock. counted = true: the mark existed. Null when the event
-// cannot be created; the entry's (start, pid) is then the only check.
-inline HANDLE launch_mark(const Inputs& in,bool& counted) {
-    counted=false;
+// whatever the order of the notes and whatever the clock.
+inline std::wstring launch_mark_name(const Inputs& in) {
     std::wstring dir=in.store_dir;
     LCMapStringEx(LOCALE_NAME_INVARIANT,LCMAP_UPPERCASE,dir.data(),int(dir.size()),dir.data(),int(dir.size()),
         nullptr,nullptr,0); // in place, kernel32 only (no user32 in the shells)
@@ -377,8 +375,15 @@ inline HANDLE launch_mark(const Inputs& in,bool& counted) {
     wchar_t name[96];
     std::swprintf(name,std::size(name),L"Local\\amdgpu-wddm-recent-launch-%016llX-%lu-%016llX",
         static_cast<unsigned long long>(in.start),static_cast<unsigned long>(in.pid),static_cast<unsigned long long>(list));
+    return name;
+}
+// counted = true: the mark existed. Null when the event cannot be created (no memory, or another object type or an
+// event without full access under the name): then nothing tells whether the other shell counted this process.
+inline HANDLE launch_mark(const Inputs& in,bool& counted) {
+    counted=false;
+    const std::wstring name=launch_mark_name(in);
     SetLastError(ERROR_SUCCESS);
-    const HANDLE mark=CreateEventW(nullptr,TRUE,FALSE,name);
+    const HANDLE mark=CreateEventW(nullptr,TRUE,FALSE,name.c_str());
     counted=mark && GetLastError()==ERROR_ALREADY_EXISTS;
     return mark;
 }
@@ -413,6 +418,8 @@ inline Outcome commit(const Inputs& in,uint32_t api) {
     }
     bool counted=false;
     detail::Handle mark(launch_mark(in,counted));
+    // Without a mark a note could count this process twice or bring back a cleared launch: lose this note instead.
+    if(!mark)return Outcome::Failed;
     const auto old=std::find_if(entries.begin(),entries.end(),[&](const Entry& e){return same_path(e.path,in.exe);});
     const bool own=old!=entries.end() && old->start==in.start && old->pid==in.pid;
     // Counted already, and the entry now shows a later process of the path or the list was cleared: nothing to add.

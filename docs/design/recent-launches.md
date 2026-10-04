@@ -127,16 +127,17 @@ profile; the application must say so and must not suggest separate settings.
    on byte 0, waiting at most 1000 ms. Then: drop the entry (`busy`). No device or game thread waits for this.
 5. Read the switch again. Off or unreadable: stop. This is what makes Off + Clear safe against writers in flight.
 6. Read the list. A list that exists but cannot be opened or read: stop, never replace it. A file over 8 MiB is
-   read only up to its first line. A list of a later version, of any size: stop. A torn version 1 list (also one
-   over 8 MiB) counts as empty.
+   read only up to its fixed first 64 bytes, which hold the header line. A list of a later version, of any
+   size: stop. A torn version 1 list (also one over 8 MiB) counts as empty.
 7. Apply. One process is one launch, whichever shell notes it first and whatever the clock says: the shell that
    counts the launch keeps a launch mark open until the process ends, a named event
-   `Local\amdgpu-wddm-recent-launch-<start>-<pid>-<list>` (`<list>`: a hash of the store directory). With the
-   mark present, the process's own entry (equal `start` and `pid`) gets its API bit and keeps `starts`; when the
-   entry meanwhile shows a later process of the path, or the list was cleared, nothing is written. Without a mark:
-   another process of the same path counts a start, sets `start`, `pid` and `apis` and moves the entry to the
-   front; a new path goes to the front with `starts` 1. Keep at most 64. Nothing changed: stop without writing.
-   Where the event cannot be created, equal `start` and `pid` in the entry are the only check.
+   `Local\amdgpu-wddm-recent-launch-<start>-<pid>-<list>` (`<list>`: a hash of the store directory). If the event
+   cannot be created (another object or an event without full access holds the name, or no memory): stop, this
+   note is lost (`failed`). With the mark already present, the process's own entry (equal `start` and `pid`) gets
+   its API bit and keeps `starts`; when the entry meanwhile shows a later process of the path, or the list was
+   cleared, nothing is written. With a new mark: another process of the same path counts a start, sets `start`,
+   `pid` and `apis` and moves the entry to the front; a new path goes to the front with `starts` 1. Keep at most
+   64. Nothing changed: stop without writing.
 8. Write the new list to the temporary file and rename it over the list in one step (`FileRenameInfoEx` with
    replace and POSIX semantics, `MoveFileExW` with replace where those are not offered). A reader sees the old
    list or the new one.
@@ -225,6 +226,7 @@ case creates the AppContainer profile `amdgpu-wddm.recent-launch-test` and delet
 | own programs excluded by file name only (prefix and `.exe`, any case) | `test_own_tools` |
 | one process through both shells counted once, also when both note at the same moment; pid reuse | `test_same_process` |
 | process A, then B, then A's other shell, both API orders, B's clock earlier: two launches, the entry stays B's; a launch cleared between its two notes stays cleared | `test_interleaved_processes` |
+| no launch mark (a mutex holds its name): A's notes fail with the list byte for byte, around B and around a Clear; A counts once when a mark can be made | `test_launch_mark_failure` |
 | pruning at 64, a launch with an earlier clock kept | `test_prune` |
 | torn list replaced, newer version kept (also over 8 MiB, byte for byte), unreadable list never replaced, a version 1 header over 8 MiB replaced | `test_store_states` |
 | no memory with the temporary file open: the next note succeeds in this process and in another one | `test_allocation_failure` |

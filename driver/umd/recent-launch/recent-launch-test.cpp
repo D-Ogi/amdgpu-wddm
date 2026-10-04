@@ -313,6 +313,37 @@ void test_interleaved_processes() {
     CHECK(rl::commit(inputs(store,exe,131),rl::ApiD3D11)==rl::Outcome::Recorded);
 }
 
+void test_launch_mark_failure() {
+    // A's mark cannot be created: a mutex holds its name, so CreateEventW fails (ERROR_INVALID_HANDLE). Every note
+    // of A is lost, the list stays byte for byte, and A is never counted twice nor brought back after a Clear.
+    const std::wstring store=fresh(L"mark-failure"),exe=L"C:\\Games\\unmarked.exe",other=L"C:\\Games\\other.exe";
+    const rl::Inputs a=inputs(store,exe,150),b=inputs(store,exe,151);
+    CHECK(rl::commit(inputs(store,other,149),rl::ApiD3D12)==rl::Outcome::Recorded);
+    HANDLE squat=CreateMutexW(nullptr,FALSE,rl::launch_mark_name(a).c_str());
+    CHECK(squat!=nullptr);
+    bool counted=true;
+    const HANDLE probe=rl::launch_mark(a,counted);
+    CHECK(probe==nullptr && GetLastError()==ERROR_INVALID_HANDLE && !counted);
+    const std::wstring list=store+L'\\'+rl::kStoreName;
+    std::string before=file_bytes(list);
+    CHECK(!before.empty());
+    CHECK(rl::commit(a,rl::ApiD3D12)==rl::Outcome::Failed && file_bytes(list)==before);   // A's first shell
+    CHECK(rl::commit(b,rl::ApiD3D12)==rl::Outcome::Recorded);                            // B
+    before=file_bytes(list);
+    CHECK(rl::commit(a,rl::ApiD3D11)==rl::Outcome::Failed && file_bytes(list)==before);   // A's other shell
+    std::vector<rl::Entry> e;
+    CHECK(read_list(store,e) && e.size()==2 && find(e,exe) && find(e,exe)->starts==1 && find(e,exe)->pid==b.pid &&
+          find(e,exe)->apis==rl::ApiD3D12);
+    // Clear between A's notes, A's first note lost: the list stays cleared.
+    CHECK(clear(store,false));
+    CHECK(rl::commit(a,rl::ApiD3D12)==rl::Outcome::Failed && !exists(list));
+    CloseHandle(squat);
+    // Once a mark can be created, A's next note counts A once, and its other shell only merges.
+    CHECK(rl::commit(a,rl::ApiD3D11)==rl::Outcome::Recorded);
+    CHECK(rl::commit(a,rl::ApiD3D12)==rl::Outcome::Merged);
+    CHECK(read_list(store,e) && e.size()==1 && e[0].starts==1 && e[0].pid==a.pid && e[0].apis==3);
+}
+
 void test_prune() {
     const std::wstring store=fresh(L"prune");
     for(uint32_t i=0;i<70;++i)
@@ -688,6 +719,7 @@ int wmain(int argc,wchar_t** argv) {
     test_own_tools();
     test_same_process();
     test_interleaved_processes();
+    test_launch_mark_failure();
     test_prune();
     test_store_states();
     test_allocation_failure();
