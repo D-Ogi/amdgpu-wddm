@@ -107,6 +107,7 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_STABLE = 5,		/* D3D12 SetStablePowerState: pinned to the floor */
 	BC250_DPM_THROTTLE_SMU = 6,		/* the governor stopped after SMU failures */
 	BC250_DPM_THROTTLE_FIXED = 7,		/* this start is fixed-lab */
+	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* 85 C (0.7.200): a raise refused, the level holds */
 	BC250_DPM_THROTTLE_COUNT
 };
 
@@ -117,6 +118,9 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
 #define BC250_DPM_DOWN_HOLD_MS		200u
 #define BC250_DPM_HOT_MC		BC250_CLOCK_HOT_MC	/* 87 C: one step down, no raise */
+/* The warm zone (0.7.200, owner after session 344: 1500 MHz held while Tctl rose 83.5 -> 85.3 C): from here up to
+ * HOT_MC no raise of clock or voltage; the level holds, a lowering still happens. Two degrees under HOT_MC. */
+#define BC250_DPM_WARM_MC		(BC250_DPM_HOT_MC - 2000)
 #define BC250_DPM_HOT_STEP_MS		500u	/* the default hot step: at most one step down per this */
 #define BC250_DPM_CRITICAL_MC		90000	/* the floor at once */
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
@@ -236,6 +240,7 @@ struct bc250_dpm_governor {
 	unsigned int	raises, lowers, thermal_events;
 	struct bc250_dpm_tune tune;		/* the thresholds and floor in force; bc250_dpm_set_tune changes them */
 	unsigned int	floor_ticks;		/* steps in which the runtime floor lifted the request above want */
+	unsigned int	warm_holds;		/* steps in which the warm zone refused a raise (0.7.200) */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
