@@ -267,7 +267,8 @@ before it starts any process (`start` event `job`). Every process it starts afte
 probes, `powershell.exe` children, their own children) is in the job and cannot break away. The engine holds the only
 handle, not inheritable: when the engine process ends for any reason, also when the caller terminates it, Windows
 closes the handle and ends every process still in the job. At a normal end `Exit-Engine` ends any child still running
-and records `children` = `{ "job": "kill-on-close", "left_at_exit": n, "ended": n }` in the result. Work that a
+(only a process that is still in the job at that moment, so a reused process id is never touched; the installer
+scripts contain no `Stop-Process`, BD-060) and records `children` = `{ "job": "kill-on-close", "left_at_exit": n, "ended": n }` in the result. Work that a
 Windows service does for the engine (the PnP service's driver installation in `drvinst.exe`, WMI providers) is not
 the engine's child and is not in the job; Windows bounds it itself. When the job cannot be created, `job` is
 `none: <reason>` and only the caller's own job (if any) bounds the children.

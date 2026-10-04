@@ -207,6 +207,23 @@ public static class Job {
             return r;
         } finally { Marshal.FreeHGlobal(buf); }
     }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint code);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentProcessId();
+    // Ends one process only while it is still in this job and is not this process: a process id that was reused by
+    // another program after the child ended (DWM, a service) is never touched. True when the process was told to end.
+    public static bool EndMember(long pid) {
+        if (handle == IntPtr.Zero || pid == GetCurrentProcessId()) return false;
+        IntPtr p = OpenProcess(0x1001, false, (uint)pid);   // PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION
+        if (p == IntPtr.Zero) return false;
+        try {
+            bool member;
+            if (!IsProcessInJob(p, handle, out member) || !member) return false;
+            return TerminateProcess(p, 1);
+        } finally { CloseHandle(p); }
+    }
 }
 }
 '@
@@ -220,7 +237,7 @@ function Enter-EngineJob {
 function Close-EngineChildren {
     if ($script:EngineJob -ne 'kill-on-close') { return [ordered]@{ job = $script:EngineJob; left_at_exit = $null; ended = $null } }
     $left = @([AmdgpuWddmEngine.Job]::Processes() | Where-Object { $_ -ne $PID })
-    foreach ($p in $left) { Stop-Process -Id ([int]$p) -Force -ErrorAction SilentlyContinue }
+    foreach ($p in $left) { [void][AmdgpuWddmEngine.Job]::EndMember($p) }
     # A process counts as ended when it is gone (one may end by itself, or with its parent, before its own turn).
     $running = $left
     for ($i = 0; $i -lt 50 -and $running.Count; $i++) {
