@@ -19,8 +19,11 @@ namespace AmdgpuWddmSetup
         const uint PlannedReason = 0x80000000 | 0x00040000 | 0x00000004;
         const uint TOKEN_ADJUST_PRIVILEGES = 0x20, TOKEN_QUERY = 0x8, SE_PRIVILEGE_ENABLED = 0x2;
 
-        [StructLayout(LayoutKind.Sequential)]
-        struct TokenPrivileges { public uint Count; public long Luid; public uint Attributes; }
+        // TOKEN_PRIVILEGES with one LUID_AND_ATTRIBUTES (winnt.h): both structures are 4-byte packed, so the LUID sits
+        // at offset 4 and its attributes at 12, 16 bytes in all. Without Pack = 4 the long's alignment moves them to 8
+        // and 16 and AdjustTokenPrivileges reads another privilege. The host gate checks size and offsets.
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        public struct TokenPrivileges { public uint Count; public long Luid; public uint Attributes; }
 
         [DllImport("advapi32.dll", SetLastError = true)]
         static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);

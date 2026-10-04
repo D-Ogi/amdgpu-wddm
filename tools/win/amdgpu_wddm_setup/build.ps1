@@ -7,7 +7,8 @@
 # Gates, in order, each stops the build:
 #   1. unit tests (test/UnitTests.cs): G-STR and G-NOINT over the tables, the engine contract against
 #      tools/release/installer (every check id, stage and message id has words), the event model and result binding
-#      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting;
+#      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting, and the
+#      native TOKEN_PRIVILEGES layout of the planned restart;
 #   2. the compile with warnings as errors, and the .NET 4.8 target in the image;
 #   3. --smoke-engine against a scripted fake engine (test/fake-engine.ps1): plan, noise, cancel, stale result, crash
 #      without a result, restart, refusal; the screen in four languages without internals; the support file without
@@ -38,7 +39,7 @@ $pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs'
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'test\UnitTests.cs')
+    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 & "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { Write-Host "  $_" }
 if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }

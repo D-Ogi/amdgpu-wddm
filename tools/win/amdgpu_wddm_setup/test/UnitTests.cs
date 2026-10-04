@@ -39,6 +39,7 @@ static class UnitTests
             Guide();
             Arguments();
             Quoting();
+            NativeLayout();
         }
         catch (Exception e) { _failed++; Console.WriteLine("FAIL exception: " + e); }
         Console.WriteLine(_passed + " passed, " + _failed + " failed");
@@ -299,5 +300,16 @@ static class UnitTests
         for (int i = 1; i < n; i++) back.Add(Marshal.PtrToStringUni(Marshal.ReadIntPtr(p, i * IntPtr.Size)));
         LocalFree(p);
         Check(back.SequenceEqual(args), "quoting: CommandLineToArgvW reads back every argument (" + string.Join(" | ", back) + ")");
+    }
+
+    // TOKEN_PRIVILEGES with one LUID_AND_ATTRIBUTES as winnt.h lays it out (SDK 10.0.26100): PrivilegeCount at 0, the
+    // LUID at 4, its Attributes at 12, 16 bytes. The planned restart enables SeShutdownPrivilege through it.
+    static void NativeLayout()
+    {
+        var t = typeof(Native.TokenPrivileges);
+        Equal(16, Marshal.SizeOf(t), "TOKEN_PRIVILEGES size");
+        Equal(0, (int)Marshal.OffsetOf(t, "Count"), "TOKEN_PRIVILEGES PrivilegeCount offset");
+        Equal(4, (int)Marshal.OffsetOf(t, "Luid"), "TOKEN_PRIVILEGES Privileges[0].Luid offset");
+        Equal(12, (int)Marshal.OffsetOf(t, "Attributes"), "TOKEN_PRIVILEGES Privileges[0].Attributes offset");
     }
 }
