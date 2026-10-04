@@ -8,7 +8,8 @@
  * time. Raises happen at once, lowerings one step at a time after DOWN_HOLD_MS below DOWN on the
  * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
- * top and wins over everything but the floor; from WARM_MC (85 C) no raise happens at all. The thresholds and a runtime floor can change at run
+ * top and wins over everything but the floor; from WARM_MC (85 C) no raise happens at all, and from RAMP_KNEE_MC
+ * (70 C) a raise goes one level per ramp interval (0.7.203). The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
  * every limit. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
  */
@@ -39,6 +40,14 @@ static unsigned int raise_level(unsigned int cur, unsigned int busy, unsigned in
 	unsigned int want = ceil_level(bc250_dpm_level_mhz(cur) * busy / target_permille);
 	if (want <= cur && cur < BC250_DPM_TOP_LEVEL) want = cur + 1u;
 	return want;
+}
+
+unsigned int bc250_dpm_ramp_interval_ms(int temperature_mc)
+{
+	if (temperature_mc < BC250_DPM_RAMP_KNEE_MC) return 0u;
+	if (temperature_mc >= BC250_DPM_WARM_MC) return BC250_DPM_RAMP_MAX_MS;
+	return BC250_DPM_RAMP_MIN_MS + (unsigned int)((unsigned long long)(BC250_DPM_RAMP_MAX_MS - BC250_DPM_RAMP_MIN_MS) *
+		(unsigned int)(temperature_mc - BC250_DPM_RAMP_KNEE_MC) / (unsigned int)(BC250_DPM_WARM_MC - BC250_DPM_RAMP_KNEE_MC));
 }
 
 unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
@@ -159,6 +168,7 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->thermal_cap = g->max_level;
 	g->level = BC250_DPM_FLOOR_LEVEL;
 	g->cap_ms = BC250_DPM_CAP_MS_MAX;	/* no change yet: the first hot tick steps at once */
+	g->raise_ms = BC250_DPM_CAP_MS_MAX;	/* no raise yet: the first one is not held */
 	bc250_dpm_tune_default(&g->tune);
 }
 
@@ -186,6 +196,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	 * bound (a step down or a raise; the hot entry's clamp to the running clock lowers nothing and does not count):
 	 * the spacing of a re-entry's step is measured from it. */
 	g->cap_ms = g->cap_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->cap_ms + dt;
+	g->raise_ms = g->raise_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->raise_ms + dt;
 	if (!in->temperature_valid || in->temperature_mc >= BC250_DPM_CRITICAL_MC) {
 		if (g->thermal_cap != BC250_DPM_FLOOR_LEVEL || !g->hot) g->thermal_events++;
 		if (g->thermal_cap != BC250_DPM_FLOOR_LEVEL) g->cap_ms = 0;
@@ -304,6 +315,20 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
 		g->warm_holds++;
 	}
+	/* The thermal ramp (RAMP_KNEE_MC up to WARM_MC, 0.7.203): a raise goes one level at most, and only a ramp interval
+	 * after the last raise. Like the warm zone it bounds every raise (load, runtime floor, the clock following a released
+	 * cap) and lowers nothing. A step that returned a raise starts the interval again, also when the caller's
+	 * transaction then failed: the retry waits, which is the safe side. Below the knee raise_ms still counts, so a raise
+	 * at 74.9 C spaces the next one at 75 C. A stalled tick counts as MAX_DT_MS, as everywhere. */
+	if (target > cur && in->temperature_mc >= BC250_DPM_RAMP_KNEE_MC) {
+		unsigned int ramp = g->raise_ms >= bc250_dpm_ramp_interval_ms(in->temperature_mc) ? cur + 1u : cur;
+		if (target > ramp) {
+			target = ramp;
+			g->throttle = BC250_DPM_THROTTLE_THERMAL_RAMP;
+			g->ramp_holds++;
+		}
+	}
+	if (target > cur) g->raise_ms = 0;
 	return target;
 }
 

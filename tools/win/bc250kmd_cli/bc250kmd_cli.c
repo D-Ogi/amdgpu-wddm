@@ -1484,7 +1484,7 @@ static int Journal(const WCHAR *fromText)
 static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
                                            "registry", "no-smu", "not-run", "smu-error" };
 static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-hard", "sensor", "max-setting",
-                                             "stable", "smu", "fixed", "thermal-warm" };
+                                             "stable", "smu", "fixed", "thermal-warm", "thermal-ramp" };
 
 static int DpmQuery(BC250_ESCAPE_DPM *d, unsigned long op, unsigned long long generation)
 {

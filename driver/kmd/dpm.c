@@ -42,7 +42,7 @@
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
 
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 160);
-C_ASSERT(BC250_DPM_THROTTLE_COUNT == 9);
+C_ASSERT(BC250_DPM_THROTTLE_COUNT == 10);
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 152);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_SIZE);
 C_ASSERT(BC250_DPM_TUNE_COUNT == 8);
@@ -50,7 +50,8 @@ C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAP
          FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 
 static const char* const g_Throttle[BC250_DPM_THROTTLE_COUNT] = {
-    "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed", "thermal-warm"
+    "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed", "thermal-warm",
+    "thermal-ramp"
 };
 
 static void DpmLock(BC250_DPM_STATE* S)
@@ -247,6 +248,7 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.FloorTicks = g->floor_ticks;
     snap.SoftReleases = g->soft_releases;
     snap.WarmHolds = g->warm_holds;
+    snap.RampHolds = g->ramp_holds;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
@@ -295,14 +297,14 @@ static void DpmLogLine(const char* What, const BC250_DPM_SNAP* P)
 {
     LONG t = P->TemperatureMc;
     GuardLog("dpm: %s %s %lu MHz/%lu mV (SMU %lu MHz VID %lu) %ld.%01ld C busy %lu.%lu%% avg %lu.%lu%% "
-             "want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu warm %lu errors %lu resyncs %lu, busy from %s "
+             "want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu warm %lu ramp %lu errors %lu resyncs %lu, busy from %s "
              "(%lu samples), submit %lu.%lu%%, sdma %lu.%lu%%",
              What, P->Mode == BC250_DPM_MODE_DPM ? "dpm" : "fixed", P->CurrentMHz, P->CurrentMv,
              P->ObservedMHz, P->ObservedVid, t / 1000, (t < 0 ? -t : t) % 1000 / 100,
              P->BusyPermille / 10, P->BusyPermille % 10, P->BusyAvgPermille / 10, P->BusyAvgPermille % 10,
              P->WantMHz, P->CapMHz, P->MaxMHz,
              P->Throttle < BC250_DPM_THROTTLE_COUNT ? g_Throttle[P->Throttle] : "?",
-             P->Raises, P->Lowers, P->ThermalEvents, P->WarmHolds, P->Errors, P->Resyncs,
+             P->Raises, P->Lowers, P->ThermalEvents, P->WarmHolds, P->RampHolds, P->Errors, P->Resyncs,
              P->BusySource == BC250_DPM_BUSY_GRBM ? "grbm" : "submit", P->HwSamples,
              P->SubmitBusyPermille / 10, P->SubmitBusyPermille % 10, P->SdmaBusyPermille / 10, P->SdmaBusyPermille % 10);
 }
