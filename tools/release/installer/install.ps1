@@ -29,6 +29,7 @@ param(
     [string]$EventsFile,                    # events, one JSON object per line (appended)
     [string]$ResultFile,                    # the terminal result (written once, at the end)
     [string]$DeadlineUtc,                   # ISO 8601 UTC: stop at the first stop point after this time (interfaces-setup.md 10)
+    [switch]$HoldWindow,                    # the RunOnce continuation: keep the console open at the end (no install.cmd pause)
     [switch]$Verify,
     [switch]$Force,                         # install even over a development-lab installation (not supported)
     [switch]$NoReboot,                      # never restart; tell the tester to do it
@@ -78,6 +79,7 @@ if ($FirmwareDir) {
     $FirmwareDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FirmwareDir)
     $PSBoundParameters['FirmwareDir'] = $FirmwareDir
 }
+$script:HoldWindow = [bool]$HoldWindow
 if (-not $DryRun -and -not (Test-IsAdmin)) {
     # The setup window runs elevated and starts the engine from there; it never hands a run to another window.
     if ($script:GuiMode) { Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result.needs-admin' -Detail 'the engine runs without administrator rights' }

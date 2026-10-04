@@ -129,10 +129,10 @@ $steps = @(Get-Events $r 'step')
 Check (($steps.Count -ge 15) -and -not @($steps | Where-Object { -not $_.dry_run }).Count) "$($steps.Count) step events, each marked dry run"
 $rr = @(Get-Events $r 'restart-required')
 Check (($rr.Count -eq $(if ($tsActive) { 1 } else { 2 })) -and ($rr[-1].reason_id -eq 'restart.complete') -and ($r.result.restart.required) -and ($r.result.restart.reason_id -eq 'restart.complete')) "restart handed to the window: $(@($rr | ForEach-Object { $_.reason_id }) -join ', ')"
-Check (($r.result.restart.continuation.kind -eq 'verify') -and ($r.result.restart.continuation.command -match 'verify\.cmd')) "continuation after the last restart: $($r.result.restart.continuation.command)"
+Check (($r.result.restart.continuation.kind -eq 'verify') -and ($r.result.restart.continuation.command -match 'powershell\.exe.* -File .*installer\\install\.ps1"? -HoldWindow -Verify$')) "continuation after the last restart: $($r.result.restart.continuation.command)"
 if (-not $tsActive) {
     $first = $rr[0]
-    Check (($first.reason_id -eq 'restart.test-signing') -and ($first.continuation.kind -eq 'continue') -and ($first.continuation.command -match [regex]::Escape("amdgpu-wddm\installer\packages\$pkgVersion\install.cmd"))) "continuation after the test-signing restart runs from the closure: $($first.continuation.command)"
+    Check (($first.reason_id -eq 'restart.test-signing') -and ($first.continuation.kind -eq 'continue') -and ($first.continuation.command -match [regex]::Escape("amdgpu-wddm\installer\packages\$pkgVersion\installer\install.ps1"))) "continuation after the test-signing restart runs from the closure: $($first.continuation.command)"
 }
 Check ($r.text -notmatch 'Restart now\?|would ask: Restart') 'the engine never asks for the restart'
 Check (-not (Get-Events $r 'install-action').Count) 'a dry run records no install action'

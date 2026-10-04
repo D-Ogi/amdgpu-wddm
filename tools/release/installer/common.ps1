@@ -730,10 +730,13 @@ public static class Restart {
 # A command line for RunOnce (GUI plan A1): the program in quotes on its own, then each argument, quoted when it holds
 # a space or is empty. Nothing is joined into one quoted string.
 function Format-CommandLine([Parameter(Mandatory)][string]$Exe, [string[]]$Arguments = @()) {
+    if ($Exe -match '"') { throw "a RunOnce program path may not contain a quote: $Exe" }
     $parts = @('"' + $Exe + '"')
     foreach ($a in @($Arguments)) {
         if ($a -match '"') { throw "a RunOnce argument may not contain a quote: $a" }
-        if ($a -eq '' -or $a -match '\s') { $parts += ('"' + $a + '"') } else { $parts += $a }
+        # Anything but plain letters, digits and path punctuation is quoted (spaces, &, ^, %, (, ), ...); inside quotes
+        # a trailing backslash would escape the closing quote, so trailing backslashes are doubled.
+        if ($a -eq '' -or $a -match '[^A-Za-z0-9_.:\\/=,+-]') { $parts += ('"' + ($a -replace '(\\+)$', '$1$1') + '"') } else { $parts += $a }
     }
     return ($parts -join ' ')
 }
@@ -812,14 +815,20 @@ function Save-ContinuationClosure {
 }
 # The command that RunOnce runs at the next logon. kind 'continue': the installer of the closure; kind 'verify': the
 # installed verify.cmd. A run of the setup window continues in the setup window of the closure, which starts the engine.
+# The command line path starts Windows PowerShell directly, never cmd.exe: a folder name with &, ^, %, ( or ) cannot
+# split the command, because no command interpreter reads it. The argument contract (RunOnce, docs/gui/
+# interfaces-setup.md section 1): powershell.exe -NoProfile -ExecutionPolicy Bypass -File <dir>\installer\install.ps1
+# -HoldWindow [-Verify], each part quoted by Format-CommandLine and read back by CommandLineToArgvW. -HoldWindow keeps
+# the console open at the end, as the pause of install.cmd and verify.cmd does.
 function Get-ContinuationCommand {
     param([ValidateSet('continue', 'verify')][string]$Kind, [string]$Closure, [string]$InstallRoot, [bool]$Gui)
-    $cmd = Join-Path $env:windir 'System32\cmd.exe'
     if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeRelative))) {
         return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeRelative); arguments = @('--continue') }
     }
-    if ($Kind -eq 'verify') { return [pscustomobject]@{ exe = $cmd; arguments = @('/d', '/c', (Join-Path $InstallRoot 'verify.cmd')) } }
-    return [pscustomobject]@{ exe = $cmd; arguments = @('/d', '/c', (Join-Path $Closure 'install.cmd')) }
+    $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $common = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File')
+    if ($Kind -eq 'verify') { return [pscustomobject]@{ exe = $ps; arguments = @($common + @((Join-Path $InstallRoot 'installer\install.ps1'), '-HoldWindow', '-Verify')) } }
+    return [pscustomobject]@{ exe = $ps; arguments = @($common + @((Join-Path $Closure 'installer\install.ps1'), '-HoldWindow')) }
 }
 function Read-RepairSetIndex {
     $p = Join-Path (Get-PackagesDir) 'index.json'

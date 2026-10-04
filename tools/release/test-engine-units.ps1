@@ -69,14 +69,16 @@ public static string[] Split(string cmd) {
 '@
 }
 foreach ($c in @(
-        @{ exe = 'C:\Windows\System32\cmd.exe'; args = @('/d', '/c', 'C:\ProgramData\amdgpu-wddm\installer\packages\0.7.199.100-tester.12\install.cmd') }
+        @{ exe = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'; args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\ProgramData\amdgpu-wddm\installer\packages\0.7.199.100-tester.12\installer\install.ps1', '-HoldWindow') }
         @{ exe = 'C:\Program Data\x y\setup\amdgpu_wddm_setup.exe'; args = @('--continue') }
-        @{ exe = 'C:\a\setup.exe'; args = @('--package', 'D:\my folder\pkg', '') })) {
+        @{ exe = 'C:\a\setup.exe'; args = @('--package', 'D:\my folder\pkg', '') }
+        @{ exe = 'C:\AMD&GPU\setup.exe'; args = @('-File', 'C:\AMD&GPU\installer\install.ps1', 'C:\a (x)\b^c%PATH%!d', 'C:\trailing space\', 'C:\x&y\\') })) {
     $line = Format-CommandLine $c.exe $c.args
     $back = [EngineUnits.Argv]::Split($line)
     $want = @($c.exe) + @($c.args)
     Check ((($back -join '|') -eq ($want -join '|')) -and ($line.StartsWith('"' + $c.exe + '" '))) "round trip: $line"
 }
+Check ((Format-CommandLine 'C:\x.exe' @('C:\AMD&GPU\a.ps1')) -eq '"C:\x.exe" "C:\AMD&GPU\a.ps1"') 'an argument with & is quoted'
 $threw = $false; try { [void](Format-CommandLine 'C:\a.exe' @('x"y')) } catch { $threw = $true }
 Check $threw 'an argument with a quote is refused'
 
@@ -107,18 +109,41 @@ Write-Text (Join-Path $badFw 'fw_a.bin') 'other'
 $threw = $null; try { [void](Save-ContinuationClosure -PackageRoot $pkg -Manifest $m -FirmwareDir $badFw -Destination (Join-Path $work 'closure-badfw')) } catch { $threw = $_.Exception.Message }
 Check ($threw -match 'firmware') "a firmware folder with a changed or missing file is refused: $threw"
 
-'[G-STAGE] continuation command: the setup window of the closure, else the closure''s install.cmd; verify from the install root'
+'[G-STAGE] continuation command: the setup window of the closure, else Windows PowerShell with the closure''s install.ps1; verify from the install root'
+$psExe = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $true
-Check (($c.exe -like '*\cmd.exe') -and ((@($c.arguments) -join ' ') -eq "/d /c $closure\install.cmd")) 'GUI run, closure without a setup window: the closure''s install.cmd'
+Check (($c.exe -eq $psExe) -and ((@($c.arguments) -join ' ') -eq "-NoProfile -ExecutionPolicy Bypass -File $closure\installer\install.ps1 -HoldWindow")) 'GUI run, closure without a setup window: Windows PowerShell runs the closure''s install.ps1 directly (no cmd.exe)'
 Write-Text (Join-Path $closure $script:SetupExeRelative) 'exe'
 $c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $true
 Check (($c.exe -eq (Join-Path $closure $script:SetupExeRelative)) -and ((@($c.arguments) -join ' ') -eq '--continue')) 'GUI run: the closure''s setup window with --continue'
 $c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false
-Check ((@($c.arguments) -join ' ') -eq "/d /c $closure\install.cmd") 'command-line run: the closure''s install.cmd, never the original folder'
+Check ((@($c.arguments) -join ' ') -eq "-NoProfile -ExecutionPolicy Bypass -File $closure\installer\install.ps1 -HoldWindow") 'command-line run: the closure''s install.ps1, never the original folder'
 $c = Get-ContinuationCommand -Kind verify -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false
 $line = Format-CommandLine $c.exe $c.arguments
-Check (([EngineUnits.Argv]::Split($line)[3]) -eq 'C:\Program Files\amdgpu-wddm\verify.cmd') "verify: $line"
+$argv = [EngineUnits.Argv]::Split($line)
+Check (($argv[0] -eq $psExe) -and ($argv[5] -eq 'C:\Program Files\amdgpu-wddm\installer\install.ps1') -and (($argv[6..7] -join ' ') -eq '-HoldWindow -Verify')) "verify: $line"
 Remove-Item -LiteralPath (Join-Path $closure 'setup') -Recurse -Force
+
+'[G-STAGE] RunOnce continuation run for real from folders with spaces and command metacharacters (R7)'
+# The RunOnce line is started as Windows starts it (program, then the tail as one string); a stub install.ps1 records
+# the path and the switches it received. No console window: CreateNoWindow.
+foreach ($name in 'AMD&GPU', 'a b (x) 100%PATH%^!y', 'semi;colon,comma=eq') {
+    $root = Join-Path $work "runonce\$name"
+    Write-Text (Join-Path $root 'installer\install.ps1') "param([switch]`$HoldWindow, [switch]`$Verify)`r`n[IO.File]::WriteAllText((Join-Path `$PSScriptRoot 'ran.json'), ([ordered]@{ path = `$PSCommandPath; hold = [bool]`$HoldWindow; verify = [bool]`$Verify } | ConvertTo-Json))`r`n"
+    foreach ($kind in 'continue', 'verify') {
+        $ran = Join-Path $root 'installer\ran.json'
+        Remove-Item -LiteralPath $ran -Force -ErrorAction SilentlyContinue
+        $c = Get-ContinuationCommand -Kind $kind -Closure $root -InstallRoot $root -Gui $false
+        $line = Format-CommandLine $c.exe $c.arguments
+        $tail = $line.Substring($c.exe.Length + 3)
+        $psi = New-Object Diagnostics.ProcessStartInfo -ArgumentList $c.exe, $tail
+        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+        $p = [Diagnostics.Process]::Start($psi)
+        [void]$p.WaitForExit(60000)
+        $got = $(if (Test-Path -LiteralPath $ran) { Get-Content -LiteralPath $ran -Raw | ConvertFrom-Json })
+        Check ($got -and ($got.path -eq (Join-Path $root 'installer\install.ps1')) -and $got.hold -and ($got.verify -eq ($kind -eq 'verify'))) "${kind} from '$name': the script ran with its own path and switches ($line)"
+    }
+}
 
 '[G-STAGE] kept repair set: active + previous, older removed, firmware completed from the installed files'
 $pk = Get-PackagesDir

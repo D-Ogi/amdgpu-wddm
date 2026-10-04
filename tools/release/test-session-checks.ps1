@@ -83,7 +83,7 @@ Check (-not (Get-DriverPackageOutcome 5).ok) 'any other exit code fails'
 Check (@(3010, 0, 259 | ForEach-Object { (Get-DriverPackageOutcome $_).PSObject.Properties.Name } | Where-Object { $_ -notin @('ok', 'deferred', 'text') }).Count -eq 0) 'no outcome claims what the device did (no in-place field)'
 Check (-not (Get-Command Test-StaleInteropMarker -ErrorAction SilentlyContinue)) 'the BD-059 session marker stays under KMD ownership: no installer function judges or removes it'
 
-'install inputs across the argument-free continuation (RunOnce runs install.cmd without arguments)'
+'install inputs across the argument-free continuation (the RunOnce continuation passes no install inputs)'
 # The state as the next run reads it: saved as JSON, read back.
 function Step-State($State, [string]$Phase) { Set-StateValue $State 'phase' $Phase; return ($State | ConvertTo-Json -Depth 6 | ConvertFrom-Json) }
 function Format-Inputs($In) { return "fw=$($In.firmware_dir) params=$((@($In.parameters.Keys | Sort-Object) | ForEach-Object { "$_=$($In.parameters[$_])" }) -join ',') switches=$(@($In.switches) -join ',')" }

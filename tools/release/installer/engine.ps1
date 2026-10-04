@@ -33,6 +33,7 @@ $script:EngineDeadlineText = $null
 $script:EngineStop     = $null          # the result's 'stop' record when a stop point ended the run
 $script:EngineJob      = 'none'         # 'kill-on-close' once the engine runs in its own job object
 $script:OnStop         = $null          # clean-up before a stop point ends the run (prepare-offline: its .partial folder)
+$script:HoldWindow     = $false         # install.ps1 -HoldWindow: wait for Enter before the console closes
 
 function Initialize-Engine {
     param([bool]$Gui, [string]$InvocationId, [string]$EventsFile, [string]$ResultFile, [string]$Mode = 'run', [string]$DeadlineUtc)
@@ -303,5 +304,10 @@ function Exit-Engine {
     }
     Write-Log "   engine result: $Outcome (exit $Code$(if ($MessageId) { ", $MessageId" }))"
     if ($script:EngineLock) { try { $script:EngineLock.Dispose() } catch { } }
+    # -HoldWindow (the RunOnce continuation of the command line): the console stays open until the tester has read it,
+    # as the pause of install.cmd does. Never in a setup-window run and never without a console that can answer.
+    if ($script:HoldWindow -and -not $script:GuiMode -and $Code -ne 10 -and [Environment]::UserInteractive) {
+        try { [void](Read-Host 'Press Enter to close this window') } catch { }
+    }
     exit $Code
 }

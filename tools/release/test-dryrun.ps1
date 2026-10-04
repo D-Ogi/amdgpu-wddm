@@ -17,6 +17,8 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# One RunOnce argument as common.ps1 Format-CommandLine writes it (quoted unless plain path characters).
+function Format-RunOnceArg([string]$A) { if ($A -match '[^A-Za-z0-9_.:\\/=,+-]') { return '"' + $A + '"' } else { return $A } }
 function Get-Footprint {
     [ordered]@{
         programdata  = @(Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'amdgpu-wddm') -Recurse -Force -ErrorAction SilentlyContinue).Count
@@ -174,7 +176,7 @@ foreach ($c in $cases) {
     if ($c.phase2) {
         Check (($r.text -match 'would: copy payload\\tools') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -match 'Dry run complete')) "$($c.name): phase 2 runs again"
         Check ($r.text -notmatch 'would: bcdedit /set') "$($c.name): phase 1 (test signing) is not repeated"
-        Check ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*verify\.cmd") "$($c.name): RunOnce verify armed again"
+        Check ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*powershell\.exe`" -NoProfile -ExecutionPolicy Bypass -File `"[^`"]*\\installer\\install\.ps1`" -HoldWindow -Verify") "$($c.name): RunOnce verify armed again (Windows PowerShell, no cmd.exe)"
         Check ($r.text -match 'would: .*\\Release: Version') "$($c.name): Release\Version rewritten"
     } else {
         Check ($r.text -notmatch 'would: copy payload|would: pnputil') "$($c.name): nothing is installed"
@@ -300,7 +302,7 @@ foreach ($c in @(
     Check (($r.text -match "this package \($([regex]::Escape($pkgVersion))\) takes over the unfinished installation of 0\.7\.198\.100-tester\.10 \(phase $($c.phase)\)") -and ($r.text -match "options of this install, kept until it completes: -FirmwareDir $([regex]::Escape($goodDir)) -NoControlApp") -and ($r.text -notmatch 'tester10-fw')) "takeover at $($c.phase): the state names this package with its own options"
     if ($c.phase -eq 'testsigning-pending') {
         # The run after the restart is this package's, from its continuation closure (GUI plan A1), not the folder it started from.
-        $closureCmd = [regex]::Escape('cmd.exe" /d /c ' + (Join-Path $dir "packages\$pkgVersion\install.cmd"))
+        $closureCmd = [regex]::Escape('powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ' + (Format-RunOnceArg (Join-Path $dir "packages\$pkgVersion\installer\install.ps1")) + ' -HoldWindow')
         Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*$closureCmd") -and ($r.text -match "would: stage the continuation closure: every file of this package and the firmware folder $([regex]::Escape($goodDir))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s, from its closure'
     } else {
         Check (($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit /set')) 'takeover at testsigning-active: phase 2 runs, test signing is not set again'
