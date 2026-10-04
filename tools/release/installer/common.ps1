@@ -21,6 +21,13 @@ $script:DryRunMode       = $false
 $script:LogPath          = $null
 $script:CurrentStep      = '(before the first change)'
 $script:ScheduleOldCopies = $true                              # host tests set $false: no MoveFileEx on the test PC
+$script:GuiMode          = $false                              # engine.ps1: the setup window drives this run
+$script:Mutated          = $false                              # an Invoke-Change action ran (a change to the system)
+$script:OnFirstChange    = $null                               # engine.ps1: runs once, before the first change
+$script:OnChange         = $null                               # engine.ps1: one event per change (the description)
+$script:OnMutation       = $null                               # engine.ps1: each later change of a real run
+# Host tests only: no network at all (G-OFF). Every download and host probe fails as if the PC were offline.
+$script:NetworkBlocked   = [bool]$env:AMDGPU_WDDM_TEST_NO_NETWORK
 
 function Write-Step([string]$Text)  { Write-Host ''; Write-Host "== $Text" -ForegroundColor Cyan; Write-Log "== $Text" }
 function Write-Info([string]$Text)  { Write-Host "   $Text"; Write-Log "   $Text" }
@@ -35,7 +42,12 @@ function Write-Log([string]$Text) {
 function Invoke-Change {
     param([Parameter(Mandatory)][string]$Description, [Parameter(Mandatory)][scriptblock]$Action)
     $script:CurrentStep = $Description
+    if ($script:OnChange) { & $script:OnChange $Description }
     if ($script:DryRunMode) { Write-Host "   [dry run] would: $Description" -ForegroundColor DarkYellow; return $null }
+    if (-not $script:Mutated) {
+        if ($script:OnFirstChange) { & $script:OnFirstChange }
+        $script:Mutated = $true
+    } elseif ($script:OnMutation) { & $script:OnMutation }
     Write-Info "doing: $Description"
     return (& $Action)
 }
@@ -92,10 +104,12 @@ function Test-IsAdmin {
     return (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Asks the tester. -Answer (unattended) wins; a dry run never asks and answers 'no'.
+# Asks the tester. -Answer (unattended) wins; a dry run never asks and answers as the expected answer; a run that the
+# setup window drives never asks either (it has no console): what was not given on its command line is not consented.
 function Read-Confirmation {
     param([Parameter(Mandatory)][string]$Question, [string]$Expect = 'YES', [string]$Answer)
     if ($Answer) { Write-Info "$Question -> $Answer (from the command line)"; return ($Answer -ceq $Expect) }
+    if ($script:GuiMode) { Write-Info "$Question -> not given by the setup window: no"; return $false }
     # A dry run shows the path a YES takes, so it answers YES without asking.
     if ($script:DryRunMode) { Write-Host "   [dry run] would ask: $Question (type $Expect); continuing as if answered $Expect" -ForegroundColor DarkYellow; return $true }
     $reply = Read-Host "   $Question Type $Expect to continue"
@@ -448,12 +462,13 @@ function Test-FirmwareHosts {
         $ok = @(); $bad = @()
         foreach ($u in Get-FirmwareUrls $Firmware $small) {
             $name = ([Uri]$u).Host
+            if ($script:NetworkBlocked) { $bad += "$name network unavailable (test)"; continue }
             try {
                 $r = Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec $TimeoutSec -UserAgent $script:DownloadUserAgent
                 if ([int]$r.StatusCode -eq 200) { $ok += $name } else { $bad += "$name HTTP $([int]$r.StatusCode)" }
             } catch { $bad += "$name $($_.Exception.Message)" }
         }
-        if ($ok.Count -or $round -eq $Rounds) { break }
+        if ($ok.Count -or $round -eq $Rounds -or $script:NetworkBlocked) { break }
         Start-Sleep -Seconds 10
     }
     return @{ ok = $ok; bad = $bad }
@@ -487,6 +502,7 @@ function Get-FirmwareStaged {
                 foreach ($u in Get-FirmwareUrls $Firmware $f) {
                     $name = ([Uri]$u).Host
                     for ($i = 1; $i -le $Tries; $i++) {
+                        if ($script:NetworkBlocked) { $why += "$name`: network unavailable (test)"; break }
                         try { Invoke-WebRequest -Uri $u -OutFile $dst -UseBasicParsing -TimeoutSec $TimeoutSec -UserAgent $script:DownloadUserAgent }
                         catch { $why += "$name try $i`: $($_.Exception.Message)"; continue }
                         $h = Get-Sha256 $dst
@@ -670,4 +686,201 @@ function Remove-PathOrSchedule([string]$Path) {
         }
     }
     if ($pending) { Write-Info "$pending file(s) in use: removal scheduled for the next restart" }
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# A normal restart of Windows (ExitWindowsEx EWX_REBOOT with a planned reason, never EWX_FORCE): programs are asked to
+# close and can keep unsaved work. The command-line installer calls it after the tester typed Y; a run that the setup
+# window drives never restarts (the window asks the user and calls the same API). Returns $null when Windows accepted
+# the request, otherwise the reason.
+function Request-PlannedRestart {
+    if (-not ('AmdgpuWddmInstaller.Restart' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace AmdgpuWddmInstaller {
+public static class Restart {
+    [StructLayout(LayoutKind.Sequential, Pack = 4)] struct TokenPrivilege { public uint Count; public long Luid; public uint Attributes; }
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool LookupPrivilegeValue(string system, string name, out long luid);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TokenPrivilege state, uint length, IntPtr previous, IntPtr returnLength);
+    [DllImport("user32.dll", SetLastError = true)] static extern bool ExitWindowsEx(uint flags, uint reason);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    // EWX_REBOOT without EWX_FORCE; SHTDN_REASON_FLAG_PLANNED | MAJOR_APPLICATION | MINOR_RECONFIG.
+    public static string Request() {
+        IntPtr token;
+        if (!OpenProcessToken(GetCurrentProcess(), 0x28, out token)) return "OpenProcessToken error " + Marshal.GetLastWin32Error();
+        try {
+            var p = new TokenPrivilege { Count = 1, Attributes = 2 };
+            if (!LookupPrivilegeValue(null, "SeShutdownPrivilege", out p.Luid)) return "LookupPrivilegeValue error " + Marshal.GetLastWin32Error();
+            if (!AdjustTokenPrivileges(token, false, ref p, 0, IntPtr.Zero, IntPtr.Zero)) return "AdjustTokenPrivileges error " + Marshal.GetLastWin32Error();
+            int e = Marshal.GetLastWin32Error();
+            if (e != 0) return "this account may not restart Windows (error " + e + ")";
+        } finally { CloseHandle(token); }
+        return ExitWindowsEx(0x2, 0x80000000u | 0x00040000u | 0x00000004u) ? null : "ExitWindowsEx error " + Marshal.GetLastWin32Error();
+    }
+}
+}
+'@
+    }
+    return [AmdgpuWddmInstaller.Restart]::Request()
+}
+
+# A command line for RunOnce (GUI plan A1): the program in quotes on its own, then each argument, quoted when it holds
+# a space or is empty. Nothing is joined into one quoted string.
+function Format-CommandLine([Parameter(Mandatory)][string]$Exe, [string[]]$Arguments = @()) {
+    $parts = @('"' + $Exe + '"')
+    foreach ($a in @($Arguments)) {
+        if ($a -match '"') { throw "a RunOnce argument may not contain a quote: $a" }
+        if ($a -eq '' -or $a -match '\s') { $parts += ('"' + $a + '"') } else { $parts += $a }
+    }
+    return ($parts -join ' ')
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# The continuation closure and the kept repair set (GUI plan A1, WU-051, WU-058). Before the first restart that the
+# installer asks for, the whole package (every file manifest.json lists, and manifest.json) is copied into
+# %ProgramData%\amdgpu-wddm\installer\packages\<version> and each SHA256 is checked there; with -FirmwareDir the 9
+# firmware files go into its firmware\ folder, also checked. The run after the restart starts from there, so the
+# downloaded folder, a USB stick or a temporary extraction may be gone by then. The state folder is writable by
+# administrators only (Set-StateDirAccess). When phase 2 completes, the closure of the installed package becomes the
+# active repair set (firmware included, also after a download) and the one before it is kept as the previous set;
+# older sets are removed. A prepared offline folder (prepare-offline.ps1) has the same layout.
+$script:SetupExeRelative = 'setup\amdgpu_wddm_setup.exe'
+$script:RepairIndexSchema = 'amdgpu-wddm.repair-sets/1'
+function Get-PackagesDir { return (Join-Path $script:StateDir 'packages') }
+function Get-ClosureDir([string]$Version) { return (Join-Path (Get-PackagesDir) $Version) }
+function Test-SamePath([string]$A, [string]$B) {
+    if (-not $A -or -not $B) { return $false }
+    return ([IO.Path]::GetFullPath($A).TrimEnd('\') -ieq [IO.Path]::GetFullPath($B).TrimEnd('\'))
+}
+# <package>\firmware of a prepared folder or a repair set, $null when there is none. Its contents are the preflight's
+# business: a folder with a missing or changed file is refused before any change.
+function Get-PackageFirmwareDir([string]$PackageRoot) {
+    $d = Join-Path $PackageRoot 'firmware'
+    if (Test-Path -LiteralPath $d -PathType Container) { return $d }
+    return $null
+}
+# The problems of a firmware folder against the manifest's pin: one text per missing or changed file.
+function Test-FirmwareFolder($Firmware, [string]$Dir) {
+    $bad = @()
+    foreach ($f in @($Firmware.files)) {
+        $p = Join-Path $Dir $f.name
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "$($f.name) missing" }
+        elseif ((Get-Sha256 $p) -ne ([string]$f.sha256).ToUpperInvariant()) { $bad += "$($f.name) has another SHA256" }
+    }
+    return , $bad
+}
+# Copies the firmware files into <closure>\firmware (from a folder, or from a list of checked files) and checks each
+# SHA256 there. Throws on a missing or changed file.
+function Save-ClosureFirmware {
+    param([Parameter(Mandatory)]$Firmware, [Parameter(Mandatory)][string]$Closure, [string]$FromDir, [string[]]$FromFiles = @())
+    $dst = Join-Path $Closure 'firmware'
+    if (-not ($FromDir -and (Test-SamePath $FromDir $dst))) {
+        foreach ($f in @($Firmware.files)) {
+            $src = $null
+            if ($FromDir) { $src = Join-Path $FromDir $f.name }
+            else { $src = @($FromFiles | Where-Object { (Split-Path $_ -Leaf) -ieq $f.name }) | Select-Object -First 1 }
+            if (-not $src -or -not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "firmware: $($f.name) is not available for $dst" }
+            [void](Copy-FileSafe -Source $src -Destination (Join-Path $dst $f.name))
+        }
+    }
+    $bad = Test-FirmwareFolder $Firmware $dst
+    if ($bad.Count) { throw "firmware in ${dst}: $($bad -join '; ')" }
+    return $dst
+}
+# Copies the package into the closure (or only checks it when this run starts from there) and returns the closure.
+function Save-ContinuationClosure {
+    param([Parameter(Mandatory)][string]$PackageRoot, [Parameter(Mandatory)]$Manifest, [string]$FirmwareDir, [string]$Destination)
+    if (-not $Destination) { $Destination = Get-ClosureDir ([string]$Manifest.version) }
+    $src = [IO.Path]::GetFullPath($PackageRoot).TrimEnd('\')
+    $dst = [IO.Path]::GetFullPath($Destination).TrimEnd('\')
+    if (-not (Test-SamePath $src $dst)) {
+        foreach ($f in @($Manifest.files)) {
+            $rel = ([string]$f.path) -replace '/', '\'
+            [void](Copy-FileSafe -Source (Join-Path $src $rel) -Destination (Join-Path $dst $rel))
+        }
+        [void](Copy-FileSafe -Source (Join-Path $src 'manifest.json') -Destination (Join-Path $dst 'manifest.json'))
+    }
+    if ((Get-Sha256 (Join-Path $dst 'manifest.json')) -ne (Get-Sha256 (Join-Path $src 'manifest.json'))) { throw "continuation closure ${dst}: manifest.json is not this package's" }
+    $check = Test-PackageManifest -PackageRoot $dst
+    if (-not $check.ok) { throw "continuation closure ${dst}: $($check.detail)" }
+    if ($FirmwareDir) { [void](Save-ClosureFirmware -Firmware $Manifest.firmware -Closure $dst -FromDir $FirmwareDir) }
+    Write-Info "continuation closure $dst`: $(@($Manifest.files).Count) files checked$(if ($FirmwareDir) { ', firmware checked' })"
+    return $dst
+}
+# The command that RunOnce runs at the next logon. kind 'continue': the installer of the closure; kind 'verify': the
+# installed verify.cmd. A run of the setup window continues in the setup window of the closure, which starts the engine.
+function Get-ContinuationCommand {
+    param([ValidateSet('continue', 'verify')][string]$Kind, [string]$Closure, [string]$InstallRoot, [bool]$Gui)
+    $cmd = Join-Path $env:windir 'System32\cmd.exe'
+    if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeRelative))) {
+        return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeRelative); arguments = @('--continue') }
+    }
+    if ($Kind -eq 'verify') { return [pscustomobject]@{ exe = $cmd; arguments = @('/d', '/c', (Join-Path $InstallRoot 'verify.cmd')) } }
+    return [pscustomobject]@{ exe = $cmd; arguments = @('/d', '/c', (Join-Path $Closure 'install.cmd')) }
+}
+function Read-RepairSetIndex {
+    $p = Join-Path (Get-PackagesDir) 'index.json'
+    if (-not (Test-Path -LiteralPath $p)) { return $null }
+    try { $j = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json; if ($j.schema -eq $script:RepairIndexSchema) { return $j } } catch { }
+    return $null
+}
+# Pure: which sets stay. The new active set and the set that was active before it (when it is another version and
+# still present); every other version is removed.
+function Get-RepairSetPlan {
+    param($Index, [string]$ActiveVersion, [string[]]$Present = @())
+    $prev = $null
+    if ($Index -and $Index.active -and [string]$Index.active.version -ne $ActiveVersion) { $prev = [string]$Index.active.version }
+    elseif ($Index -and $Index.previous -and [string]$Index.previous.version -ne $ActiveVersion) { $prev = [string]$Index.previous.version }
+    if ($prev -and ($Present -notcontains $prev)) { $prev = $null }
+    $keep = @($ActiveVersion) + @($(if ($prev) { $prev }))
+    return [pscustomobject]@{ active = $ActiveVersion; previous = $prev; remove = @($Present | Where-Object { $keep -notcontains $_ }) }
+}
+# After phase 2: the closure becomes the active repair set, with the firmware that phase 2 installed. Returns the index.
+function Complete-RepairSet {
+    param([Parameter(Mandatory)]$Manifest, [Parameter(Mandatory)][string]$Closure, [string[]]$FirmwareFiles = @())
+    $bad = Test-FirmwareFolder $Manifest.firmware (Join-Path $Closure 'firmware')
+    if ($bad.Count) { [void](Save-ClosureFirmware -Firmware $Manifest.firmware -Closure $Closure -FromFiles $FirmwareFiles) }
+    $dir = Get-PackagesDir
+    $present = @(Get-ChildItem -LiteralPath $dir -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+    $plan = Get-RepairSetPlan (Read-RepairSetIndex) ([string]$Manifest.version) $present
+    foreach ($v in @($plan.remove)) { Remove-PathOrSchedule (Join-Path $dir $v) }
+    $entry = {
+        param([string]$Version)
+        if (-not $Version) { return $null }
+        $d = Join-Path $dir $Version
+        $m = Join-Path $d 'manifest.json'
+        return [ordered]@{ version = $Version; dir = $d; manifest_sha256 = $(if (Test-Path -LiteralPath $m) { Get-Sha256 $m } else { $null })
+            firmware_complete = ((Test-FirmwareFolder $Manifest.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeRelative)) }
+    }
+    $index = [ordered]@{ schema = $script:RepairIndexSchema; updated_utc = [DateTime]::UtcNow.ToString('o'); active = (& $entry $plan.active); previous = (& $entry $plan.previous) }
+    [IO.File]::WriteAllText((Join-Path $dir 'index.json'), ($index | ConvertTo-Json -Depth 4))
+    Write-Info "repair set: $($plan.active) active$(if ($plan.previous) { ", $($plan.previous) kept as the previous set" })$(if (@($plan.remove).Count) { "; removed $(@($plan.remove) -join ', ')" })"
+    return $index
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# What an install does to the settings (WU-006, WU-044): the registry-default plan of every group, as rows the setup
+# window shows before any change. Installer-owned values (paths, counters, the Release record) are not settings and
+# are left out. A tester's own profiles and per-user preferences are never in the table and never touched.
+function Get-PreviousAppliedDefaults($RegistryDefaults, [string]$Record) {
+    $applied = $null
+    if ($Record) { try { $applied = $Record | ConvertFrom-Json } catch { $applied = $null } }
+    if ($applied) { return [pscustomobject]@{ applied = $applied; source = 'Release\AppliedDefaults' } }
+    return [pscustomobject]@{ applied = $RegistryDefaults.legacy_applied; source = 'the defaults of tester.1 to tester.7 (no record)' }
+}
+# Pure: rows from the plans. $Groups: a list of @{ group = <name>; plan = <Get-RegistryDefaultPlan result> }.
+function Get-SettingsImpact($Groups) {
+    $rows = New-Object System.Collections.ArrayList
+    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0 }
+    foreach ($g in @($Groups)) {
+        foreach ($e in @($g.plan)) {
+            if ($e.decision -eq 'installer' -or $e.decision -eq 'restored') { continue }
+            switch ($e.decision) { 'kept' { $sum.kept++ } 'update' { $sum.updated++ } 'set' { $sum.added++ } 'same' { $sum.unchanged++ } 'command' { $sum.command++ } }
+            [void]$rows.Add([ordered]@{ group = $g.group; name = $e.name; decision = $e.decision; current = $e.current; value = $e.value; default = $e.default; present = [bool]$e.present })
+        }
+    }
+    return [pscustomobject]@{ rows = $rows.ToArray(); summary = $sum }
 }

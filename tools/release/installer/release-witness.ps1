@@ -1,0 +1,167 @@
+# The running-release witness (GUI plan F-VER and G-VER; format: docs/gui/interfaces.md section 1): a record that the
+# driver started in THIS boot is the KMD of one named release package. Written by install.ps1's verify step and by the
+# start-confirm task, which runs from <install root>\tools; read by the control application. Windows PowerShell 5.1
+# syntax only.
+#
+# A driver reply carries the KMD identity (BC250_KMD_VERSION), not a release: repackaging can change the release and
+# the INF version and leave the reply as it is. So the witness binds three things that are read now, never inferred:
+#   * the KMD image that Windows loaded (the bc250kmd.sys module in the list of loaded drivers) has the SHA256 that the
+#     release's manifest records for payload/kmd/bc250kmd.sys (that hash also fixes the manifest's kmd_build);
+#   * the KMD's reply version (bc250kmd_cli info) equals the manifest's kmd_abi;
+#   * the boot (BootId, the value the control application's BD-060 observer reads) and the time of the reading.
+# Nothing else makes a witness: not Release\Version, not the newest release with a matching reply. When any part
+# cannot be read or does not match, nothing is written and the reason goes to the caller's log. The reader rejects a
+# witness of another boot and one that is older than an install action of the same boot (state.json mutation_*).
+# The file lives in the installer's state folder, which only administrators and SYSTEM can write (Set-StateDirAccess);
+# the reader also requires such an owner.
+
+$script:WitnessSchema = 1
+$script:WitnessPath = Join-Path $env:ProgramData 'amdgpu-wddm\installer\running-release.json'
+
+if (-not ('AmdgpuWddmWitness.Drivers' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+namespace AmdgpuWddmWitness {
+public static class Drivers {
+    [DllImport("psapi.dll", SetLastError = true)]
+    static extern bool EnumDeviceDrivers([Out] IntPtr[] bases, int cb, out int needed);
+    [DllImport("psapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern int GetDeviceDriverFileNameW(IntPtr imageBase, StringBuilder name, int size);
+    // The file names of the loaded kernel modules as Windows reports them (\SystemRoot\..., \??\C:\...).
+    public static string[] Loaded() {
+        int needed;
+        EnumDeviceDrivers(null, 0, out needed);
+        if (needed <= 0) return new string[0];
+        var bases = new IntPtr[needed / IntPtr.Size + 16];
+        if (!EnumDeviceDrivers(bases, bases.Length * IntPtr.Size, out needed)) return new string[0];
+        var r = new List<string>();
+        for (int i = 0; i < Math.Min(bases.Length, needed / IntPtr.Size); i++) {
+            if (bases[i] == IntPtr.Zero) continue;
+            var sb = new StringBuilder(1024);
+            if (GetDeviceDriverFileNameW(bases[i], sb, sb.Capacity) > 0) r.Add(sb.ToString());
+        }
+        return r.ToArray();
+    }
+}
+}
+'@
+}
+
+# A kernel module name as a Win32 path.
+function ConvertTo-Win32DriverPath([string]$Name) {
+    if (-not $Name) { return $null }
+    $p = $Name
+    if ($p -match '^\\SystemRoot\\(.*)$') { $p = Join-Path $env:windir $Matches[1] }
+    elseif ($p -match '^\\\?\?\\(.*)$') { $p = $Matches[1] }
+    elseif ($p -match '^\\Windows\\(.*)$') { $p = Join-Path $env:windir $Matches[1] }
+    return $p
+}
+
+# What the started KMD is: the loaded image (path, SHA256) and the reply version. A missing part is $null.
+function Get-RunningKmdReading([string]$Cli, [string]$ImageName = 'bc250kmd.sys') {
+    $image = $null
+    try {
+        $mod = @([AmdgpuWddmWitness.Drivers]::Loaded() | Where-Object { ([IO.Path]::GetFileName($_)) -ieq $ImageName }) | Select-Object -First 1
+        if ($mod) {
+            $path = ConvertTo-Win32DriverPath $mod
+            $sha = $null
+            if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+                $s = [IO.File]::OpenRead($path)
+                try { $sha = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
+            }
+            $image = [ordered]@{ module = $mod; path = $path; sha256 = $sha }
+        }
+    } catch { }
+    $reply = $null
+    if ($Cli -and (Test-Path -LiteralPath $Cli)) {
+        $old = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $text = (& $Cli 'info' 2>&1 | ForEach-Object { [string]$_ }) -join "`n"; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $old }
+        if ($code -eq 0 -and $text -match '(?m)^version\s+(0x[0-9A-Fa-f]{8})') { $reply = $Matches[1].ToUpperInvariant() -replace '^0X', '0x' }
+    }
+    return [ordered]@{ image = $image; reply_version = $reply }
+}
+
+# Pure: the witness record for one reading, or the reason why there is none. $Manifest is the installed release's
+# manifest.json, $ManifestSha256 the SHA256 of that file. The fields of section 1 first; boot_utc, kmd_image_path,
+# reply_version and driver_ver are for the support report only.
+function Get-RunningReleaseWitness {
+    param($Manifest, [string]$ManifestSha256, $Reading, $Boot, [ValidateSet('verify', 'start-confirm')][string]$RecordedBy, [string]$Utc = ([DateTime]::UtcNow.ToString('o')))
+    if (-not $Manifest) { return [pscustomobject]@{ record = $null; reason = 'no release manifest in the install root' } }
+    if (-not $Boot -or $null -eq $Boot.boot_id) { return [pscustomobject]@{ record = $null; reason = 'the boot cannot be identified (BootId unreadable)' } }
+    $comp = @($Manifest.components | Where-Object { $_ -and $_.package_path -eq 'payload/kmd/bc250kmd.sys' }) | Select-Object -First 1
+    if (-not $comp -or -not $comp.sha256) { return [pscustomobject]@{ record = $null; reason = 'the manifest names no KMD image hash' } }
+    if (-not $Reading -or -not $Reading.image) { return [pscustomobject]@{ record = $null; reason = 'no bc250kmd.sys among the loaded drivers' } }
+    if (-not $Reading.image.sha256) { return [pscustomobject]@{ record = $null; reason = "the loaded image $($Reading.image.module) cannot be read" } }
+    if ($Reading.image.sha256 -ne ([string]$comp.sha256).ToUpperInvariant()) { return [pscustomobject]@{ record = $null; reason = "the loaded image $($Reading.image.path) has SHA256 $($Reading.image.sha256), release $($Manifest.version) has $($comp.sha256)" } }
+    if (-not $Reading.reply_version) { return [pscustomobject]@{ record = $null; reason = 'no driver reply (bc250kmd_cli info)' } }
+    if ($Reading.reply_version -ne ([string]$Manifest.kmd_abi)) { return [pscustomobject]@{ record = $null; reason = "the driver replies $($Reading.reply_version), release $($Manifest.version) has kmd_abi $($Manifest.kmd_abi)" } }
+    $rec = [ordered]@{
+        schema = $script:WitnessSchema
+        boot_id = [int64]$Boot.boot_id
+        recorded_utc = $Utc
+        recorded_by = $RecordedBy
+        release = [string]$Manifest.name
+        version = [string]$Manifest.version
+        manifest_sha256 = $ManifestSha256
+        kmd_image_sha256 = $Reading.image.sha256
+        kmd_build = [string]$Manifest.kmd_build
+        kmd_abi = [string]$Manifest.kmd_abi
+        boot_utc = $Boot.boot_utc
+        kmd_image_path = $Reading.image.path
+        reply_version = $Reading.reply_version
+        driver_ver = [string]$Manifest.kmd_version
+    }
+    return [pscustomobject]@{ record = $rec; reason = $null }
+}
+
+# Pure: does a witness name what runs in this boot? The reader's rule of section 1 (the control application's
+# DriverCard.WitnessProblem implements the same); $Reply is the driver's reply version, $State the installer state.
+function Test-RunningReleaseWitness {
+    param($Witness, $Boot, [string]$Reply, $State)
+    function Get-Utc([string]$T) {
+        $d = [DateTime]::MinValue
+        if ($T -and [DateTime]::TryParse($T, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AdjustToUniversal, AssumeUniversal', [ref]$d)) { return $d }
+        return $null
+    }
+    if (-not $Witness -or [string]$Witness.schema -ne [string]$script:WitnessSchema -or $Witness.recorded_by -notin 'verify', 'start-confirm') { return [pscustomobject]@{ valid = $false; reason = 'no witness' } }
+    if (-not $Boot -or $null -eq $Boot.boot_id -or [int64]$Witness.boot_id -ne [int64]$Boot.boot_id) { return [pscustomobject]@{ valid = $false; reason = 'the witness is of another boot' } }
+    if (-not $Reply -or [string]$Witness.kmd_abi -ne $Reply) { return [pscustomobject]@{ valid = $false; reason = "the witness names kmd_abi $($Witness.kmd_abi), the driver replies $Reply" } }
+    $w = Get-Utc ([string]$Witness.recorded_utc)
+    if ($null -eq $w) { return [pscustomobject]@{ valid = $false; reason = 'the witness has no valid time' } }
+    if ($State -and $State.PSObject.Properties['mutation_boot_id'] -and $null -ne $State.mutation_boot_id -and [int64]$State.mutation_boot_id -eq [int64]$Boot.boot_id) {
+        $t = Get-Utc ([string]$State.mutation_utc)
+        if ($null -eq $t -or $t -gt $w) { return [pscustomobject]@{ valid = $false; reason = "an install action at $($State.mutation_utc) came after the witness in this boot" } }
+    }
+    return [pscustomobject]@{ valid = $true; reason = $null }
+}
+
+# Reads the running KMD and writes the witness for the release installed in $InstallRoot. Returns the reason when
+# nothing was written. Never throws.
+function Write-RunningReleaseWitness {
+    param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][ValidateSet('verify', 'start-confirm')][string]$RecordedBy, $Boot, [string]$Path = $script:WitnessPath)
+    try {
+        $mp = Join-Path $InstallRoot 'manifest.json'
+        if (-not (Test-Path -LiteralPath $mp)) { return "no manifest.json in $InstallRoot" }
+        $s = [IO.File]::OpenRead($mp)
+        try { $msha = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
+        $manifest = Get-Content -LiteralPath $mp -Raw | ConvertFrom-Json
+        if (-not $Boot) {
+            $id = $null
+            $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction SilentlyContinue).BootId
+            if ($null -ne $v) { $id = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
+            $Boot = [ordered]@{ boot_id = $id; boot_utc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o') }
+        }
+        $reading = Get-RunningKmdReading -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe')
+        $w = Get-RunningReleaseWitness -Manifest $manifest -ManifestSha256 $msha -Reading $reading -Boot $Boot -RecordedBy $RecordedBy
+        if (-not $w.record) { return $w.reason }
+        [void][IO.Directory]::CreateDirectory((Split-Path $Path))
+        $tmp = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
+        [IO.File]::WriteAllText($tmp, ($w.record | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
+        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($tmp, $Path, [NullString]::Value) } else { [IO.File]::Move($tmp, $Path) }
+        return $null
+    } catch { return "witness not written: $($_.Exception.Message)" }
+}
