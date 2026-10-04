@@ -423,7 +423,9 @@ static void IdentityTests()
     }
     CHECK(ClassifyComponent(nullptr, win.c_str()) == Component::Unknown, "null image is not Unknown");
     CHECK(ClassifyComponent(cmdExe.c_str(), nullptr) == Component::Unknown, "null Windows directory is not Unknown");
-    RemoveDirectoryW(junction.c_str()); // removes the junction only, never its target
+    // Removes the junction only, never its target. A failure would leave a link into the Windows directory behind.
+    if (!RemoveDirectoryW(junction.c_str()) && GetFileAttributesW(junction.c_str()) != INVALID_FILE_ATTRIBUTES)
+        CHECK(false, "junction %ls not removed, error %lu", junction.c_str(), GetLastError());
 }
 
 // ---------------------------------------------------------------- scenarios
