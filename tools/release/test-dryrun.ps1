@@ -75,7 +75,7 @@ Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\license
 Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
 $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
 Check ($r.text -match "DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); CpuUmdPath=") "desktop route DwmForceCpu $dwm from the defaults table"
-Check ($r.text -match 'AppRouter: Mode=allowlist \(new\); Allow=\[dxdiag\.exe\] \(new\)') 'D3D11 allowlist from the defaults table'
+Check ($r.text -match 'AppRouter: Mode=gpu-default \(new\); Allow=\[dxdiag\.exe\] \(new\)') 'D3D11 gpu-default from the defaults table'
 $tbl = Get-Content -LiteralPath (Join-Path $Package 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
 Check (($m.defaults | ConvertTo-Json -Depth 6 -Compress) -eq ($tbl.defaults | ConvertTo-Json -Depth 6 -Compress)) 'manifest.json defaults = installer\registry-defaults.json defaults (one table)'
 Check (@('EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz' | Where-Object { $null -eq $m.defaults.parameters.$_ }).Count -eq 0 -and $null -ne $m.defaults.desktop_router.DwmForceCpu) 'manifest defaults carry the five values the control application resets'

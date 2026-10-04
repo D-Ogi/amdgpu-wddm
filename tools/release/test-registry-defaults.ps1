@@ -49,7 +49,10 @@ $plan = Get-RegistryDefaultPlan -Defaults $next.app_router -Previous $legacy.app
 Check ((Get-Decision $plan 'Allow').decision -eq 'kept') 'Allow with the tester''s game.exe kept'
 $d = Get-Decision $plan 'Deny'
 Check (($d.decision -eq 'update') -and (@($d.value).Count -eq 2)) "Deny as tester.7 wrote it -> the new list: $($d.decision)"
-Check ((Get-Decision $plan 'Mode').decision -eq 'same') 'Mode unchanged'
+$d = Get-Decision $plan 'Mode'
+Check (($d.decision -eq 'update') -and ($d.value -eq 'gpu-default') -and $d.write) "Mode allowlist as tester.1 to tester.11 wrote it -> gpu-default: $($d.decision)"
+$plan = Get-RegistryDefaultPlan -Defaults $next.app_router -Previous $legacy.app_router -Current @{ Mode = 'cpu' }
+Check ((Get-Decision $plan 'Mode').decision -eq 'kept') 'Mode cpu (the tester''s kill switch) kept'
 $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.app_router -Previous $legacy.app_router -Current @{ Allow = [string[]]@('DXDIAG.EXE') }
 Check ((Get-Decision $plan 'Allow').decision -eq 'same') 'Allow compares without case'
 

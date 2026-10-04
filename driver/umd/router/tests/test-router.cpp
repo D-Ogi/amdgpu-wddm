@@ -107,6 +107,50 @@ static void PolicyTests()
         CHECK(d.route == c.route && d.reason == c.reason, "app exe=%ls mode=%d e102=%d gpu=%d got %s",
               c.exe ? c.exe : L"(null)", (int)c.mode, c.e102, c.gpu, AppReasonName(d.reason));
     }
+
+    // Windows components (gpu-default only; Allow overrides; Deny and the protected list still win).
+    const wchar_t allowDx[] = L"dxdiag.exe\0";
+    struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool component; AppRoute route; AppReason reason; };
+    const CompCase comp[] = {
+        {L"notepad.exe", Gd, allowDx, nullptr, true, AppRoute::Cpu, AppReason::WindowsComponent},
+        {L"dxdiag.exe", Gd, allowDx, nullptr, true, AppRoute::Gpu, AppReason::Default},
+        {L"game.exe", Gd, allowDx, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"witcher3.exe", Gd, allowDx, deny, false, AppRoute::Cpu, AppReason::Denied},
+        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", true, AppRoute::Cpu, AppReason::Denied},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, true, AppRoute::Cpu, AppReason::Protected},
+        {L"notepad.exe", Al, allowDx, nullptr, true, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"dxdiag.exe", Al, allowDx, nullptr, true, AppRoute::Gpu, AppReason::Allowed},
+    };
+    for (const CompCase &c : comp) {
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component});
+        CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%d got %s",
+              c.exe, (int)c.mode, c.component, AppReasonName(d.reason));
+    }
+    struct PathCase { const wchar_t *image, *windows; bool component; };
+    const PathCase paths[] = {
+        {L"C:\\Windows\\System32\\notepad.exe", L"C:\\Windows", true},
+        {L"c:\\windows\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartMenuExperienceHost.exe", L"C:\\Windows\\", true},
+        {L"C:\\Windows\\explorer.exe", L"C:\\Windows", true},
+        {L"C:\\Windows2\\game.exe", L"C:\\Windows", false},
+        {L"C:\\Windows.old\\game.exe", L"C:\\Windows", false},
+        {L"C:\\WindowsGames\\game.exe", L"C:\\Windows", false},
+        {L"C:\\Program Files\\WindowsApps\\Microsoft.WindowsNotepad_11.2507.26.0_x64__8wekyb3d8bbwe\\Notepad\\Notepad.exe", L"C:\\Windows", true},
+        {L"C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe\\CalculatorApp.exe", L"C:\\Windows", true},
+        {L"C:\\Program Files\\WindowsApps\\MicrosoftWindows.Client.CBS_1000.0_x64__cw5n1h2txyewy\\x.exe", L"C:\\Windows", true},
+        {L"D:\\WindowsApps\\Microsoft.Foo_1.0_x64__8wekyb3d8bbwe\\foo.exe", L"C:\\Windows", true},
+        {L"C:\\Program Files\\WindowsApps\\BethesdaSoftworks.Game_1.0_x64__3275kfvn8vcwc\\game.exe", L"C:\\Windows", false},
+        {L"C:\\XboxGames\\Game\\Content\\game.exe", L"C:\\Windows", false},
+        {L"D:\\SteamLibrary\\steamapps\\common\\Factorio\\bin\\x64\\factorio.exe", L"C:\\Windows", false},
+        {L"C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe", L"C:\\Windows", false},
+        {L"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", L"C:\\Windows", false},
+        {L"C:\\Games\\MicrosoftWindowsApps\\game.exe", L"C:\\Windows", false},
+        {L"C:\\Windows\\notepad.exe", L"", false},
+        {L"", L"C:\\Windows", false},
+        {nullptr, L"C:\\Windows", false},
+    };
+    for (const PathCase &p : paths)
+        CHECK(IsWindowsComponentPath(p.image, p.windows) == p.component, "IsWindowsComponentPath(%ls, %ls) != %d",
+              p.image ? p.image : L"(null)", p.windows, p.component);
     struct ModeCase { const wchar_t *text; AppMode mode; };
     const ModeCase modes[] = {
         {L"cpu", AppMode::Cpu}, {L"CPU", AppMode::Cpu}, {L"allowlist", AppMode::Allowlist}, {L"AllowList", AppMode::Allowlist},

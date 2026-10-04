@@ -30,7 +30,7 @@
       "RequireKmdSwitches": 1
     },
     "app_router": {
-      "Mode": "allowlist",
+      "Mode": "gpu-default",
       "Allow": ["dxdiag.exe"],
       "Deny": ["witcher3.exe"]
     },

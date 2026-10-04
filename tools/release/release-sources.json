@@ -63,10 +63,10 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/m15/app-route/build-router/bc250d3d_router.dll",
-      "sha256": "674AD261640B1A3A79150E41F39C2B8962F3AB7747E3E725C8C2F3E42FFCAED0",
-      "size": 21504,
-      "role": "desktop/application router (amdgpu-wddm 6bbcf4f6, driver/umd/router)"
+      "source": "scratch/approuter-fix/build-router-06a0975b/bc250d3d_router.dll",
+      "sha256": "F65C0E0419B4BE6D82212A269086E96FBFD649243847A3B0017A78646A19F3B8",
+      "size": 22016,
+      "role": "desktop/application router (amdgpu-wddm 06a0975b, driver/umd/router: gpu-default keeps Windows components on the CPU UMD)"
     },
     {
       "component": "desktop-umd",

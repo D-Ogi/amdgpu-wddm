@@ -7,7 +7,11 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   the kill switch `DwmForceCpu` or when the KMD's GPU DWM interop switches are off;
 - every other process goes to the application GPU UMD (the DXVK-based shell `amdgpu_wddm_d3d11.dll`,
   `driver/umd/dxvk`) or to the CPU UMD, by the `AppRouter` policy (`cpu`, `allowlist`, `gpu-default`, with `Allow`
-  and `Deny` lists). The sign-in and consent processes always stay on the CPU UMD;
+  and `Deny` lists). The sign-in and consent processes always stay on the CPU UMD. In `gpu-default` mode (the
+  installer's default since 2026-10-04) Windows components - images below the Windows directory and Microsoft's
+  packaged apps under `WindowsApps\Microsoft*` - also stay on the CPU UMD unless `Allow` names them: their WinUI/XAML
+  content is composed through DirectComposition, which the application GPU UMD does not support yet (Notepad loops
+  on `OpenAdapter` without a window, Calculator and Task Manager show blank content; lab, 2026-10-04);
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
 
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's
