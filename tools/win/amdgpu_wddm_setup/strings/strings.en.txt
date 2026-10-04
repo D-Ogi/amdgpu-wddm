@@ -1,0 +1,266 @@
+# English source strings of amdgpu-wddm Setup. Format and rules: src/Strings.cs (the control app's format).
+# Translations carry the first 8 hex digits of SHA-256 over the English text they were made from; changing a text here
+# makes them stale (the build fails until each language gets a new translation; strings/stamp.ps1 stamps new ones).
+
+# ---- frame ----
+ui.close|src|-|Close
+ui.back|src|-|Back
+ui.cancel|src|-|Cancel
+ui.choose-folder|src|-|Choose folder...
+ui.language|src|-|Language: {0}
+rail.welcome|src|-|Welcome
+rail.check|src|-|Check
+rail.plan|src|-|Review
+rail.install|src|-|Install
+rail.finish|src|-|Finish
+rail.folder|src|-|Folder
+rail.prepare|src|-|Prepare
+rail.current|src|-|current step
+elevation.declined|src|-|Setup needs administrator permission to install or repair the driver. Nothing was changed. Start setup again and choose Yes when Windows asks.
+
+# ---- welcome ----
+welcome.title|src|-|Install the graphics driver for the ASRock BC-250
+welcome.body|src|-|Setup installs the graphics driver and amdgpu-wddm Control. It checks this PC first and shows everything it will change before it changes anything.
+welcome.repair.title|src|-|Repair the graphics driver
+welcome.repair.body|src|-|Setup installs the same version again, from the copy kept on this PC. Your settings are kept.
+welcome.dry-run|src|-|Test run: setup goes through every step but changes nothing.
+welcome.version|src|-|Version {0}
+welcome.source.title|src|-|Where the files come from
+welcome.source.package|src|-|The files of this setup
+welcome.source.kept|src|-|The copy kept on this PC
+welcome.source.prepared|src|-|A folder prepared for a PC without internet
+welcome.prepared.path|src|-|Prepared folder
+welcome.prepared.choose|src|-|Choose the prepared folder.
+welcome.prepared.ok|src|-|Prepared folder with version {0}. No internet is needed.
+welcome.prepare-link|src|-|Prepare a folder for a PC without internet...
+welcome.check|src|-|Check this PC
+folder.missing|src|-|This folder does not exist.
+folder.not-prepared|src|-|This is not a prepared folder. Choose the folder that setup prepared, or prepare one first.
+folder.unknown|src|-|This folder was prepared by another version of setup and cannot be used. Prepare it again.
+folder.incomplete|src|-|This prepared folder is incomplete. Prepare it again.
+
+# ---- checking ----
+checking.title|src|-|Checking this PC
+checking.body|src|-|This takes a few seconds. Nothing is changed.
+checking.list|src|-|Checks
+checking.waiting|src|-|Starting the checks...
+
+# ---- checks (one per check of the installer) ----
+check.other|src|-|Another check (details in the support file).
+check.package.ok|src|-|The setup files are complete.
+check.package.damaged|src|-|The setup files are damaged or incomplete.
+check.admin.ok|src|-|Setup runs with administrator permission.
+check.admin.dry-run|src|-|Setup runs without administrator permission, so some settings could not be read.
+check.admin.missing|src|-|Setup needs administrator permission.
+check.windows.ok|src|-|This Windows version is supported.
+check.windows.not-x64|src|-|This Windows is not 64-bit. The driver needs 64-bit Windows 11.
+check.windows.too-old|src|-|This Windows version is too old. The driver needs Windows 11.
+check.gpu.ok|src|-|The graphics chip of the ASRock BC-250 was found.
+check.gpu.missing|src|-|No ASRock BC-250 graphics chip was found. This driver works only on the BC-250.
+check.gpu.several|src|-|More than one BC-250 graphics chip was found. Only one is supported.
+check.gpu.ignored|src|-|No BC-250 graphics chip was found; this test run continues anyway.
+check.secureboot.off|src|-|Secure Boot is off.
+check.secureboot.on|src|-|Secure Boot is on. Turn it off in the PC's firmware settings before you install.
+check.secureboot.unknown|src|-|Setup could not read whether Secure Boot is on.
+check.testsigning.active|src|-|Windows test mode is on.
+check.testsigning.inactive|src|-|Windows test mode is off. Setup turns it on after you agree.
+check.bitlocker.ok|src|-|BitLocker needs no attention.
+check.bitlocker.on|src|-|BitLocker is on. Setup asks how to handle it before any change.
+check.bitlocker.unknown|src|-|Setup could not read the BitLocker state. If BitLocker is on, have your recovery key ready.
+check.hvci.off|src|-|Memory integrity is off.
+check.hvci.on|src|-|Memory integrity is on. If the driver does not start, turn it off in Windows Security (Core isolation).
+check.vcruntime.ok|src|-|The Microsoft Visual C++ runtime is installed.
+check.vcruntime.missing|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is missing. Install it from Microsoft, then start setup again.
+check.space.ok|src|-|There is enough free disk space.
+check.space.low|src|-|There is not enough free space on drive C:. Setup needs 2 GB.
+check.firmware.download-ok|src|-|The GPU firmware can be downloaded.
+check.firmware.unreachable|src|-|The GPU firmware cannot be downloaded. Connect this PC to the internet, or use a prepared folder.
+check.firmware.folder-ok|src|-|The GPU firmware files in the folder are complete.
+check.firmware.folder-bad|src|-|Some GPU firmware files in the folder are missing or different.
+check.firmware.no-list|src|-|The setup files do not say which GPU firmware is needed. Download the release again.
+check.lab-install.present|src|-|This PC has a development installation of the driver. Setup does not change it.
+check.lab-install.forced|src|-|This PC has a development installation of the driver; setup continues because you asked it to.
+check.state.ok|src|-|An earlier installation of amdgpu-wddm was found.
+check.existing.no-state|src|-|The driver is installed without setup's records. Uninstall it first, then start setup again.
+check.prepare.destination-inside|src|-|The folder is inside the setup files. Choose a folder elsewhere.
+check.prepare.destination-file|src|-|A file has this name. Choose a folder.
+check.prepare.destination-not-empty|src|-|The folder is not empty. Choose an empty folder or a folder prepared earlier.
+
+# ---- plan ----
+plan.install.title|src|-|Ready to install version {0}
+plan.upgrade.title|src|-|Ready to update from version {0} to {1}
+plan.repair.title|src|-|Ready to repair version {0}
+plan.resume.title|src|-|Ready to finish installing version {0}
+plan.already.title|src|-|Version {0} is already installed and checked
+plan.already.body|src|-|Nothing needs to be done. Choose Repair to install the same version again.
+plan.verify.title|src|-|Version {0} is installed and waits for a restart
+plan.verify.body|src|-|After the restart of Windows, setup checks that the driver works.
+plan.repair-again|src|-|Repair
+plan.checks.title|src|-|Checks
+plan.checks.ok|src|-|All checks passed.
+plan.what.title|src|-|What happens
+plan.restarts.0|src|-|No restart of Windows is needed.
+plan.restarts.1|src|-|Windows restarts once. After you log on again, setup continues by itself.
+plan.restarts.2|src|-|Windows restarts twice. After each logon, setup continues by itself.
+plan.restarts.choice|src|-|Setup asks before each restart, so you can save your work first.
+plan.firmware.download|src|-|The GPU firmware is downloaded from the official Linux firmware archive and checked.
+plan.firmware.folder|src|-|The GPU firmware comes from the folder you chose and is checked.
+plan.firmware.package-folder|src|-|The GPU firmware comes from the prepared folder. No internet is needed.
+plan.notes.title|src|-|What is new in this version
+plan.notes.english|src|-|These notes are in English.
+plan.notes.none|src|-|This version has no release notes.
+plan.settings.title|src|-|Your settings
+plan.settings.summary|src|-|{0} kept, {1} new, {2} changed to a new recommended value, {3} unchanged.
+plan.settings.none|src|-|Setup could not list the settings it changes. Nothing is changed before you continue.
+plan.settings.note|src|-|Settings you changed yourself are kept.
+plan.go.install|src|-|Install
+plan.go.upgrade|src|-|Update
+plan.go.repair|src|-|Repair
+plan.go.resume|src|-|Continue
+settings.clock-limit|src|-|Graphics clock limit: {0} MHz
+settings.auto-clock.on|src|-|Automatic graphics clock: on
+settings.auto-clock.off|src|-|Automatic graphics clock: off
+settings.cores|src|-|Graphics cores: {0}
+settings.desktop.gpu|src|-|Desktop drawn by the graphics chip
+settings.desktop.cpu|src|-|Desktop drawn by the processor (safe mode)
+settings.game|src|-|Recommended settings for {0}
+settings.other|src|-|{0} other driver settings, {1} of them new or changed
+settings.decision.set|src|-|new
+settings.decision.same|src|-|unchanged
+settings.decision.update|src|-|new recommended value
+settings.decision.kept|src|-|your value is kept
+settings.decision.command|src|-|as you chose for this installation
+
+# ---- consents ----
+consent.title|src|-|Before setup starts
+consent.test-signing|src|-|Turn on Windows test mode
+consent.test-signing.note|src|-|The driver is signed with a test certificate, so Windows must run in test mode. "Test Mode" then shows in a corner of the desktop.
+consent.bitlocker|src|-|BitLocker protects drive C:. Changing the start options makes Windows ask for the recovery key at the next start.
+consent.bitlocker.have-key|src|-|I have the recovery key
+consent.bitlocker.suspend|src|-|Pause BitLocker for the next two restarts (it turns on again by itself)
+
+# ---- working ----
+working.title|src|-|Installing
+working.repair.title|src|-|Repairing
+working.continue.title|src|-|Continuing the installation
+working.prepare.title|src|-|Preparing the folder
+working.body|src|-|Please wait. Keep the PC on.
+working.prepare.body|src|-|Setup copies its files and the GPU firmware and checks each one.
+working.stages|src|-|Steps
+working.cancel.available|src|-|You can still cancel. Nothing has been changed yet.
+working.cancel.unavailable|src|-|Cancel is not possible now: setup must finish this part first.
+working.cancel.requested|src|-|Stopping at the next safe point...
+working.close-blocked|src|-|Setup is working. The window can be closed when this part has finished.
+stage.other|src|-|Another step
+stage.preflight|src|-|Checks
+stage.test-signing|src|-|Windows test mode
+stage.install|src|-|Preparing the installation
+stage.firmware|src|-|GPU firmware
+stage.files|src|-|Driver files
+stage.driver|src|-|Graphics driver
+stage.settings|src|-|Settings
+stage.finish|src|-|Finishing
+stage.verify|src|-|Checking the driver
+stage.prepare-check|src|-|Setup files and folder
+stage.copy|src|-|Copying the files
+
+# ---- restart ----
+restart.now|src|-|Restart now
+restart.later|src|-|Later
+restart.save-work|src|-|Save your work first. Windows asks open programs to close; it does not force them.
+restart.later.done|src|-|Setup continues by itself after the next restart of Windows. You can close this window.
+restart.failed|src|-|Windows did not start the restart. Restart the PC from the Start menu.
+
+# ---- results ----
+result.none.title|src|-|Setup stopped unexpectedly
+result.none.body|src|-|Setup did not report how it ended.
+result.other.title|src|-|Setup ended
+result.other.body|src|-|The support file has the details.
+result.planned.title|src|-|Ready
+result.planned.body|src|-|Setup has checked this PC.
+result.needs-consent.title|src|-|Your agreement is needed
+result.needs-consent.body|src|-|Setup needs your agreement before it continues.
+result.dry-run-complete.title|src|-|Test run finished
+result.dry-run-complete.body|src|-|Setup went through every step and changed nothing.
+result.dry-run-verify.title|src|-|Test run finished
+result.dry-run-verify.body|src|-|This version waits for a restart. After the restart, a real run checks the driver.
+result.already.title|src|-|This version is already installed and checked
+result.already.body|src|-|Nothing needs to be done. Choose Repair to install it again.
+result.restart-test-signing.title|src|-|Restart Windows to continue
+result.restart-test-signing.body|src|-|Windows test mode turns on with the restart. After you log on again, setup continues by itself.
+result.restart-driver.title|src|-|Restart Windows to continue
+result.restart-driver.body|src|-|The driver is installed and starts with the restart. After you log on again, setup continues by itself.
+result.installed-restart.title|src|-|Restart Windows to finish
+result.installed-restart.body|src|-|Everything is installed. After the restart, setup checks that the driver works.
+result.testsigning-not-active.title|src|-|Windows test mode is not on yet
+result.testsigning-not-active.body|src|-|Windows did not turn on test mode at the last start. Restart Windows once more. If this message comes back, check that Secure Boot is off.
+result.testsigning-secureboot.title|src|-|Secure Boot blocks Windows test mode
+result.testsigning-secureboot.body|src|-|Turn off Secure Boot in the PC's firmware settings, then start setup again. The installation guide shows how.
+result.restart-still-pending.title|src|-|Windows has not restarted yet
+result.restart-still-pending.body|src|-|Setup continues after the next restart of Windows.
+result.verify-before-restart.title|src|-|Restart Windows to finish
+result.verify-before-restart.body|src|-|The driver is checked after the restart of Windows.
+result.verified.title|src|-|The driver is installed and works
+result.verified.body|src|-|Everything is ready. amdgpu-wddm Control is in the Start menu.
+result.verified-with-warnings.title|src|-|The driver is installed and works, with notes
+result.verified-with-warnings.body|src|-|Everything is ready. Some checks had notes; the support file has the details.
+result.preflight-refused.title|src|-|Setup cannot install on this PC now
+result.preflight-refused.body|src|-|These checks did not pass. Fix them, then start setup again.
+result.preflight-error.title|src|-|Setup could not check this PC
+result.preflight-error.body|src|-|Try again. If it happens again, save the support file and report the problem.
+result.needs-admin.title|src|-|Setup needs administrator permission
+result.needs-admin.body|src|-|Start setup again and choose Yes when Windows asks.
+result.package-damaged.title|src|-|The setup files are damaged
+result.package-damaged.body|src|-|Download the release again, unpack it and start setup from the new folder.
+result.firmware-folder-bad.title|src|-|The GPU firmware files are not complete
+result.firmware-folder-bad.body|src|-|Some firmware files in the folder are missing or different. Prepare the folder again, or let setup download the files.
+result.firmware-unreachable.title|src|-|The GPU firmware cannot be downloaded
+result.firmware-unreachable.body|src|-|Check the internet connection and try again, or use a folder prepared on another PC.
+result.prepare-destination.title|src|-|This folder cannot be used
+result.prepare-destination.body|src|-|Choose an empty folder, or a folder prepared earlier, outside the setup files.
+result.busy.title|src|-|Setup is already running
+result.busy.body|src|-|Another setup or repair is running on this PC. Wait until it ends, then try again.
+result.verify-failed.title|src|-|The driver does not work as expected
+result.verify-failed.body|src|-|Setup checked the driver after the restart and found a problem. Repair it, or save the support file and report the problem.
+result.step-failed.title|src|-|Setup stopped before it finished
+result.step-failed.body|src|-|One step did not complete.
+result.cancelled.title|src|-|Setup was cancelled
+result.cancelled.body|src|-|Setup stopped at a safe point.
+result.cancelled-after-changes.title|src|-|Setup was cancelled
+result.cancelled-after-changes.body|src|-|Setup stopped at a safe point after it had started to change this PC.
+result.offline-prepared.title|src|-|The folder is ready
+result.offline-prepared.body|src|-|Copy the folder to the PC without internet and start setup from it. Choose "A folder prepared for a PC without internet" there.
+result.failed-checks|src|-|Checks that did not pass
+result.nothing-changed|src|-|Nothing was changed.
+result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in amdgpu-wddm Control.
+result.changes-unknown|src|-|Setup cannot tell whether anything was changed. Start setup again; it continues where it can.
+result.support|src|-|The support file has the details for a problem report. Nothing is sent automatically.
+result.support.saved|src|-|Saved: {0}
+result.support.failed|src|-|The support file could not be saved. Choose another place.
+result.save-support|src|-|Save support file...
+result.retry|src|-|Try again
+result.repair|src|-|Repair
+
+# ---- prepare a folder for a PC without internet ----
+prepare.title|src|-|Prepare a folder for a PC without internet
+prepare.body|src|-|Setup copies its files and the GPU firmware into a folder. Copy that folder to the PC without internet and start setup there.
+prepare.destination|src|-|Folder to prepare
+prepare.destination.hint|src|-|Choose an empty folder, or a folder prepared earlier (it is replaced).
+prepare.firmware.title|src|-|GPU firmware
+prepare.use-firmware|src|-|I already have the GPU firmware files in a folder
+prepare.firmware.folder|src|-|Firmware folder
+prepare.firmware.download-note|src|-|Without a folder, setup downloads the firmware, so this PC needs internet now.
+prepare.firmware.folder-note|src|-|Setup checks every firmware file against the list in this release.
+prepare.go|src|-|Prepare
+
+# ---- guide panel (plan v7 section 6; text only, the panel repeats what the screen says) ----
+guide.title|src|-|Nagi's tip
+guide.title.plain|src|-|Tip
+guide.welcome|src|-|Nothing changes until you press Install. Setup shows every change first.
+guide.prepare|src|-|A prepared folder works on any BC-250 without internet, also for a later repair.
+guide.page-tip|src|-|Settings you changed in amdgpu-wddm Control are kept when you update.
+guide.work-in-progress|src|-|I am working on it. This can take a few minutes.
+guide.pending-restart|src|-|Your changes are saved. Setup continues after the next restart of Windows.
+guide.install-stopped|src|-|Setup did not finish. The page says what to do next.
+guide.verification-failed|src|-|The driver did not pass its checks. A repair usually helps.
+guide.upgrade-done|src|-|Done! The driver is installed and checked. Have fun!

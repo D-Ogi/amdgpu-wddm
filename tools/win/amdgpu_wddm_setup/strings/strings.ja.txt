@@ -1,0 +1,264 @@
+# Japanese strings of amdgpu-wddm Setup. Machine translation (mt / mt-safe) until the Ph 2 native review. Format: src/Strings.cs.
+
+# ---- frame ----
+ui.close|mt-safe|7d9eb7ac|閉じる
+ui.back|mt-safe|76900f1b|戻る
+ui.cancel|mt-safe|19766ed6|キャンセル
+ui.choose-folder|mt-safe|826c7dcd|フォルダーを選択...
+ui.language|mt-safe|a6567634|言語: {0}
+rail.welcome|mt-safe|0e2226b5|ようこそ
+rail.check|mt-safe|9d60841e|確認
+rail.plan|mt-safe|aff0766a|内容の確認
+rail.install|mt-safe|569ca49f|インストール
+rail.finish|mt-safe|a6c7a84b|完了
+rail.folder|mt-safe|74ccd433|フォルダー
+rail.prepare|mt-safe|ee820467|準備
+rail.current|mt-safe|3d59ee1e|現在の手順
+elevation.declined|mt|0a586e33|ドライバーのインストールまたは修復には管理者のアクセス許可が必要です。何も変更されていません。セットアップをもう一度起動し、Windows の確認で [はい] を選んでください。
+
+# ---- welcome ----
+welcome.title|mt|f6dd913f|ASRock BC-250 用グラフィックス ドライバーのインストール
+welcome.body|mt|e4fa6ee2|セットアップはグラフィックス ドライバーと amdgpu-wddm Control をインストールします。最初にこの PC を確認し、何かを変更する前に変更内容をすべて表示します。
+welcome.repair.title|mt|a29b2205|グラフィックス ドライバーの修復
+welcome.repair.body|mt|25153ac9|この PC に保存されているコピーから、同じバージョンをもう一度インストールします。設定はそのまま残ります。
+welcome.dry-run|mt|42af2b21|テスト実行: すべての手順を通りますが、何も変更しません。
+welcome.version|mt-safe|9699394c|バージョン {0}
+welcome.source.title|mt|1623a97a|ファイルの入手元
+welcome.source.package|mt|61e09644|このセットアップのファイル
+welcome.source.kept|mt|9ea897ba|この PC に保存されているコピー
+welcome.source.prepared|mt|1c2cec8d|インターネットのない PC 用に準備したフォルダー
+welcome.prepared.path|mt-safe|a79aab12|準備したフォルダー
+welcome.prepared.choose|mt|40e8823f|準備したフォルダーを選んでください。
+welcome.prepared.ok|mt|6203a8e5|バージョン {0} を含む準備済みフォルダーです。インターネットは不要です。
+welcome.prepare-link|mt|5868e4fc|インターネットのない PC 用のフォルダーを準備...
+welcome.check|mt-safe|7c97d062|この PC を確認
+folder.missing|mt|219fdbbd|このフォルダーは存在しません。
+folder.not-prepared|mt|c9f12282|準備済みのフォルダーではありません。セットアップが準備したフォルダーを選ぶか、先に準備してください。
+folder.unknown|mt|6c91a6f6|このフォルダーは別のバージョンのセットアップで準備されたため使用できません。もう一度準備してください。
+folder.incomplete|mt|73bc7acc|この準備済みフォルダーは不完全です。もう一度準備してください。
+
+# ---- checking ----
+checking.title|mt-safe|cae3765d|この PC を確認しています
+checking.body|mt|3402b2d2|数秒かかります。何も変更されません。
+checking.list|mt-safe|de07d072|確認項目
+checking.waiting|mt|db75f750|確認を開始しています...
+
+# ---- checks ----
+check.other|mt|6b757578|その他の確認 (詳細はサポート ファイルにあります)。
+check.package.ok|mt|3a077fcf|セットアップ ファイルはすべてそろっています。
+check.package.damaged|mt|8eaa1e54|セットアップ ファイルが壊れているか、不足しています。
+check.admin.ok|mt|a3e85529|セットアップは管理者のアクセス許可で実行されています。
+check.admin.dry-run|mt|83161cfe|セットアップが管理者のアクセス許可なしで実行されているため、一部の設定を読み取れませんでした。
+check.admin.missing|mt|3da431e1|セットアップには管理者のアクセス許可が必要です。
+check.windows.ok|mt|7d1c4fbb|この Windows のバージョンはサポートされています。
+check.windows.not-x64|mt|1c9550cb|この Windows は 64 ビット版ではありません。ドライバーには 64 ビット版 Windows 11 が必要です。
+check.windows.too-old|mt|b44ce700|この Windows のバージョンは古すぎます。ドライバーには Windows 11 が必要です。
+check.gpu.ok|mt|f61b25ac|ASRock BC-250 のグラフィックス チップが見つかりました。
+check.gpu.missing|mt|7ac6bcb8|ASRock BC-250 のグラフィックス チップが見つかりません。このドライバーは BC-250 専用です。
+check.gpu.several|mt|57bff6a6|BC-250 のグラフィックス チップが複数見つかりました。サポートされるのは 1 つだけです。
+check.gpu.ignored|mt|cced4549|BC-250 のグラフィックス チップが見つかりませんが、このテスト実行は続行します。
+check.secureboot.off|mt|a107f361|セキュア ブートはオフです。
+check.secureboot.on|mt|1a594fe8|セキュア ブートがオンです。インストールの前に PC のファームウェア設定でオフにしてください。
+check.secureboot.unknown|mt|349a2c6d|セキュア ブートがオンかどうかを読み取れませんでした。
+check.testsigning.active|mt|f6138193|Windows のテスト モードはオンです。
+check.testsigning.inactive|mt|3e61e840|Windows のテスト モードはオフです。同意をいただいた後でセットアップがオンにします。
+check.bitlocker.ok|mt|f6019261|BitLocker について対応は不要です。
+check.bitlocker.on|mt|94912a08|BitLocker がオンです。何かを変更する前に、扱い方をお尋ねします。
+check.bitlocker.unknown|mt|74c5d56a|BitLocker の状態を読み取れませんでした。BitLocker がオンの場合は、回復キーを用意してください。
+check.hvci.off|mt|c5375084|メモリ整合性はオフです。
+check.hvci.on|mt|038dce93|メモリ整合性がオンです。ドライバーが起動しない場合は、Windows セキュリティ (コア分離) でオフにしてください。
+check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ ランタイムはインストールされています。
+check.vcruntime.missing|mt|f9d91507|Microsoft Visual C++ 2015-2022 ランタイム (x64) がありません。Microsoft からインストールしてから、セットアップをもう一度起動してください。
+check.space.ok|mt|fc218428|ディスクの空き容量は十分です。
+check.space.low|mt|e473eee3|ドライブ C: の空き容量が不足しています。2 GB 必要です。
+check.firmware.download-ok|mt|11f01474|GPU ファームウェアをダウンロードできます。
+check.firmware.unreachable|mt|2126305d|GPU ファームウェアをダウンロードできません。この PC をインターネットに接続するか、準備済みのフォルダーを使ってください。
+check.firmware.folder-ok|mt|1703f1b6|フォルダー内の GPU ファームウェア ファイルはすべてそろっています。
+check.firmware.folder-bad|mt|e11eec4f|フォルダー内の GPU ファームウェア ファイルの一部が見つからないか、内容が異なります。
+check.firmware.no-list|mt|de36633a|必要な GPU ファームウェアがセットアップ ファイルに記載されていません。リリースをもう一度ダウンロードしてください。
+check.lab-install.present|mt|c4ebe135|この PC には開発用のドライバーがインストールされています。セットアップはそれを変更しません。
+check.lab-install.forced|mt|711bb1d9|この PC には開発用のドライバーがインストールされていますが、指示により続行します。
+check.state.ok|mt|63bdb478|以前の amdgpu-wddm のインストールが見つかりました。
+check.existing.no-state|mt|a46215ab|ドライバーがセットアップの記録なしでインストールされています。先にアンインストールしてから、セットアップをもう一度起動してください。
+check.prepare.destination-inside|mt|08b96974|フォルダーがセットアップ ファイルの中にあります。別の場所のフォルダーを選んでください。
+check.prepare.destination-file|mt|3d875a78|この名前のファイルがあります。フォルダーを選んでください。
+check.prepare.destination-not-empty|mt|5a6961d7|フォルダーが空ではありません。空のフォルダーか、以前に準備したフォルダーを選んでください。
+
+# ---- plan ----
+plan.install.title|mt|6dd7ca20|バージョン {0} をインストールする準備ができました
+plan.upgrade.title|mt|8222a9d0|バージョン {0} から {1} に更新する準備ができました
+plan.repair.title|mt|2dbf2997|バージョン {0} を修復する準備ができました
+plan.resume.title|mt|f105505d|バージョン {0} のインストールを完了する準備ができました
+plan.already.title|mt|92b25209|バージョン {0} はインストール済みで、確認も完了しています
+plan.already.body|mt|9ea445c4|必要な作業はありません。同じバージョンをもう一度インストールするには [修復] を選んでください。
+plan.verify.title|mt|e593d4b9|バージョン {0} はインストール済みで、再起動を待っています
+plan.verify.body|mt|1deb5208|Windows の再起動後、セットアップがドライバーの動作を確認します。
+plan.repair-again|mt-safe|1196b6c5|修復
+plan.checks.title|mt-safe|de07d072|確認項目
+plan.checks.ok|mt|eb2f3d98|すべての確認に合格しました。
+plan.what.title|mt-safe|70fbb54b|これから行うこと
+plan.restarts.0|mt|b0a2c82a|Windows の再起動は不要です。
+plan.restarts.1|mt|2ae11afb|Windows が 1 回再起動します。もう一度サインインすると、セットアップは自動的に続行します。
+plan.restarts.2|mt|efc32bc9|Windows が 2 回再起動します。サインインするたびに、セットアップは自動的に続行します。
+plan.restarts.choice|mt|7df5fea3|再起動の前には毎回確認するので、先に作業を保存できます。
+plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
+plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
+plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。
+plan.notes.title|mt|3a048d0b|このバージョンの新機能
+plan.notes.english|mt|e9981e5c|このリリース ノートは英語です。
+plan.notes.none|mt|e9bf28c9|このバージョンにはリリース ノートがありません。
+plan.settings.title|mt-safe|7760b023|設定
+plan.settings.summary|mt|e3ba042c|保持 {0}、新規 {1}、新しい推奨値に変更 {2}、変更なし {3}。
+plan.settings.none|mt|5fa2509b|変更する設定を一覧にできませんでした。続行するまで何も変更されません。
+plan.settings.note|mt|d7133201|ご自分で変更した設定はそのまま残ります。
+plan.go.install|mt-safe|569ca49f|インストール
+plan.go.upgrade|mt-safe|c1c1009d|更新
+plan.go.repair|mt-safe|1196b6c5|修復
+plan.go.resume|mt-safe|31fbef16|続行
+settings.clock-limit|mt|9d16b4b1|グラフィックス クロックの上限: {0} MHz
+settings.auto-clock.on|mt|499702fd|グラフィックス クロックの自動調整: オン
+settings.auto-clock.off|mt|3df7a04f|グラフィックス クロックの自動調整: オフ
+settings.cores|mt|36cd7560|グラフィックス コア: {0}
+settings.desktop.gpu|mt|7befc32c|デスクトップをグラフィックス チップで描画
+settings.desktop.cpu|mt|0fcc82b2|デスクトップをプロセッサで描画 (セーフ モード)
+settings.game|mt|f203abf1|{0} の推奨設定
+settings.other|mt|b4abd830|その他のドライバー設定 {0} 件 (うち新規または変更 {1} 件)
+settings.decision.set|mt-safe|11507a0e|新規
+settings.decision.same|mt-safe|aaa8d3c8|変更なし
+settings.decision.update|mt|bae122db|新しい推奨値
+settings.decision.kept|mt|b4865f1f|現在の値を保持
+settings.decision.command|mt|898239d8|このインストールで選んだとおり
+
+# ---- consents ----
+consent.title|mt-safe|34a195af|開始する前に
+consent.test-signing|mt|71d16537|Windows のテスト モードをオンにする
+consent.test-signing.note|mt|bebc2e37|ドライバーはテスト証明書で署名されているため、Windows をテスト モードで実行する必要があります。デスクトップの隅に「テスト モード」と表示されます。
+consent.bitlocker|mt|628faadf|BitLocker がドライブ C: を保護しています。起動オプションを変更すると、次回の起動時に回復キーを求められます。
+consent.bitlocker.have-key|mt|081b65b7|回復キーを持っています
+consent.bitlocker.suspend|mt|dcf26b02|次の 2 回の再起動の間 BitLocker を一時停止する (自動的に再開します)
+
+# ---- working ----
+working.title|mt-safe|8749b169|インストールしています
+working.repair.title|mt-safe|e2c5201c|修復しています
+working.continue.title|mt|d0432a88|インストールを続行しています
+working.prepare.title|mt|28edcf49|フォルダーを準備しています
+working.body|mt|dccb0ab7|しばらくお待ちください。PC の電源を切らないでください。
+working.prepare.body|mt|aa356215|セットアップのファイルと GPU ファームウェアをコピーし、1 つずつ確認しています。
+working.stages|mt-safe|1de3df70|手順
+working.cancel.available|mt|0031d59c|まだキャンセルできます。まだ何も変更されていません。
+working.cancel.unavailable|mt|42461b9b|現在はキャンセルできません。この部分を先に完了する必要があります。
+working.cancel.requested|mt|3caf86ac|次の安全な時点で停止しています...
+working.close-blocked|mt|10e529bd|セットアップが作業中です。この部分が完了するとウィンドウを閉じられます。
+stage.other|mt-safe|80de8143|その他の手順
+stage.preflight|mt-safe|de07d072|確認
+stage.test-signing|mt-safe|61d7aae4|Windows のテスト モード
+stage.install|mt|c9fb4313|インストールの準備
+stage.firmware|mt-safe|46d4dd63|GPU ファームウェア
+stage.files|mt-safe|3ffd2d35|ドライバー ファイル
+stage.driver|mt-safe|fc465aa6|グラフィックス ドライバー
+stage.settings|mt-safe|74a883a0|設定
+stage.finish|mt-safe|0052205c|仕上げ
+stage.verify|mt|11d4d5ab|ドライバーの確認
+stage.prepare-check|mt|0f35d10d|セットアップ ファイルとフォルダー
+stage.copy|mt-safe|ff9e3c81|ファイルのコピー
+
+# ---- restart ----
+restart.now|mt-safe|09af1002|今すぐ再起動
+restart.later|mt-safe|73b6e48a|後で
+restart.save-work|mt|16909f23|先に作業を保存してください。Windows は開いているプログラムに終了を求めますが、強制はしません。
+restart.later.done|mt|a38787ae|次に Windows を再起動すると、セットアップは自動的に続行します。このウィンドウは閉じてかまいません。
+restart.failed|mt|56d3b9cd|Windows が再起動を開始しませんでした。[スタート] メニューから PC を再起動してください。
+
+# ---- results ----
+result.none.title|mt|58c58ece|セットアップが予期せず停止しました
+result.none.body|mt|8ae282a1|セットアップは終了の状況を報告しませんでした。
+result.other.title|mt-safe|493698ce|セットアップが終了しました
+result.other.body|mt|3cf8a086|詳細はサポート ファイルにあります。
+result.planned.title|mt-safe|5fa7aac5|準備完了
+result.planned.body|mt|d714c256|セットアップがこの PC を確認しました。
+result.needs-consent.title|mt|b2f19443|同意が必要です
+result.needs-consent.body|mt|ecacb024|続行する前に、あなたの同意が必要です。
+result.dry-run-complete.title|mt|f54c1b03|テスト実行が完了しました
+result.dry-run-complete.body|mt|9ea5d7b2|すべての手順を通り、何も変更しませんでした。
+result.dry-run-verify.title|mt|f54c1b03|テスト実行が完了しました
+result.dry-run-verify.body|mt|d1555a0f|このバージョンは再起動を待っています。再起動後、実際の実行でドライバーを確認します。
+result.already.title|mt|eb0999fb|このバージョンはインストール済みで、確認も完了しています
+result.already.body|mt|886b4b43|必要な作業はありません。もう一度インストールするには [修復] を選んでください。
+result.restart-test-signing.title|mt|14fc8bc7|続行するには Windows を再起動してください
+result.restart-test-signing.body|mt|2258d814|再起動すると Windows のテスト モードがオンになります。もう一度サインインすると、セットアップは自動的に続行します。
+result.restart-driver.title|mt|14fc8bc7|続行するには Windows を再起動してください
+result.restart-driver.body|mt|de5ef092|ドライバーはインストールされ、再起動時に開始されます。もう一度サインインすると、セットアップは自動的に続行します。
+result.installed-restart.title|mt|93aab4b5|完了するには Windows を再起動してください
+result.installed-restart.body|mt|42a56d9a|すべてインストールされました。再起動後、セットアップがドライバーの動作を確認します。
+result.testsigning-not-active.title|mt|7fcee967|Windows のテスト モードがまだオンになっていません
+result.testsigning-not-active.body|mt|3213b661|前回の起動時に Windows がテスト モードをオンにしませんでした。もう一度 Windows を再起動してください。このメッセージが再び表示される場合は、セキュア ブートがオフになっているか確認してください。
+result.testsigning-secureboot.title|mt|e160b4ae|セキュア ブートが Windows のテスト モードを妨げています
+result.testsigning-secureboot.body|mt|79f331ae|PC のファームウェア設定でセキュア ブートをオフにしてから、セットアップをもう一度起動してください。手順はインストール ガイドにあります。
+result.restart-still-pending.title|mt|9676613e|Windows はまだ再起動していません
+result.restart-still-pending.body|mt|e79d291f|次に Windows を再起動すると、セットアップは続行します。
+result.verify-before-restart.title|mt|93aab4b5|完了するには Windows を再起動してください
+result.verify-before-restart.body|mt|ff335b2d|ドライバーは Windows の再起動後に確認されます。
+result.verified.title|mt|9756a569|ドライバーはインストールされ、正常に動作しています
+result.verified.body|mt|5542d882|準備ができました。amdgpu-wddm Control は [スタート] メニューにあります。
+result.verified-with-warnings.title|mt|c50059a2|ドライバーはインストールされ動作していますが、注意事項があります
+result.verified-with-warnings.body|mt|687cef5d|準備ができました。一部の確認に注意事項があります。詳細はサポート ファイルにあります。
+result.preflight-refused.title|mt|6a7ab8d2|現在この PC にはインストールできません
+result.preflight-refused.body|mt|435efe20|次の確認に合格しませんでした。問題を解決してから、セットアップをもう一度起動してください。
+result.preflight-error.title|mt|7f549710|この PC を確認できませんでした
+result.preflight-error.body|mt|0cdc865d|もう一度お試しください。再び発生する場合は、サポート ファイルを保存して問題を報告してください。
+result.needs-admin.title|mt|a7547d5e|管理者のアクセス許可が必要です
+result.needs-admin.body|mt|c300742e|セットアップをもう一度起動し、Windows の確認で [はい] を選んでください。
+result.package-damaged.title|mt|9605d07e|セットアップ ファイルが壊れています
+result.package-damaged.body|mt|3b352587|リリースをもう一度ダウンロードして展開し、新しいフォルダーからセットアップを起動してください。
+result.firmware-folder-bad.title|mt|7a0ca40b|GPU ファームウェア ファイルがそろっていません
+result.firmware-folder-bad.body|mt|8e7f3bf0|フォルダー内のファームウェア ファイルの一部が見つからないか、内容が異なります。フォルダーをもう一度準備するか、セットアップにダウンロードさせてください。
+result.firmware-unreachable.title|mt|9a30fe38|GPU ファームウェアをダウンロードできません
+result.firmware-unreachable.body|mt|f36a7aec|インターネット接続を確認してもう一度お試しいただくか、別の PC で準備したフォルダーを使ってください。
+result.prepare-destination.title|mt|80d7e19c|このフォルダーは使用できません
+result.prepare-destination.body|mt|537024c6|セットアップ ファイルの外にある、空のフォルダーか以前に準備したフォルダーを選んでください。
+result.busy.title|mt|2a14eee7|セットアップはすでに実行中です
+result.busy.body|mt|f31e735e|この PC で別のセットアップまたは修復が実行中です。終了するまで待ってから、もう一度お試しください。
+result.verify-failed.title|mt|dd7e4790|ドライバーが正常に動作していません
+result.verify-failed.body|mt|ffe45976|再起動後にドライバーを確認したところ、問題が見つかりました。修復するか、サポート ファイルを保存して問題を報告してください。
+result.step-failed.title|mt|aac11030|セットアップが完了前に停止しました
+result.step-failed.body|mt|bda9b715|1 つの手順が完了しませんでした。
+result.cancelled.title|mt|5efba629|セットアップはキャンセルされました
+result.cancelled.body|mt|60ecbf18|セットアップは安全な時点で停止しました。
+result.cancelled-after-changes.title|mt|5efba629|セットアップはキャンセルされました
+result.cancelled-after-changes.body|mt|7e3e0e36|この PC の変更を始めた後、セットアップは安全な時点で停止しました。
+result.offline-prepared.title|mt-safe|58c76c43|フォルダーの準備ができました
+result.offline-prepared.body|mt|2a59d535|このフォルダーをインターネットのない PC にコピーし、そこからセットアップを起動してください。その際「インターネットのない PC 用に準備したフォルダー」を選んでください。
+result.failed-checks|mt|ecefee18|合格しなかった確認
+result.nothing-changed|mt|54ca5460|何も変更されていません。
+result.changes-made|mt|8e3dd6e8|セットアップが停止する前に一部の変更が行われ、その変更はそのまま残っています。完了するにはセットアップをもう一度起動するか、amdgpu-wddm Control の [修復] を使ってください。
+result.changes-unknown|mt|88bf7384|何かが変更されたかどうかを判断できません。セットアップをもう一度起動してください。可能なところから続行します。
+result.support|mt|3e9e40b3|サポート ファイルには問題の報告に必要な詳細が含まれます。自動的に送信されることはありません。
+result.support.saved|mt-safe|73cd7e8c|保存しました: {0}
+result.support.failed|mt|d2f9f531|サポート ファイルを保存できませんでした。別の場所を選んでください。
+result.save-support|mt|884d47cb|サポート ファイルを保存...
+result.retry|mt-safe|d8b8392e|再試行
+result.repair|mt-safe|1196b6c5|修復
+
+# ---- prepare ----
+prepare.title|mt|27a6234d|インターネットのない PC 用のフォルダーを準備
+prepare.body|mt|7cd7fbff|セットアップのファイルと GPU ファームウェアをフォルダーにコピーします。そのフォルダーをインターネットのない PC にコピーし、そこでセットアップを起動してください。
+prepare.destination|mt-safe|7788ee99|準備するフォルダー
+prepare.destination.hint|mt|d7d3d807|空のフォルダーか、以前に準備したフォルダー (置き換えられます) を選んでください。
+prepare.firmware.title|mt-safe|46d4dd63|GPU ファームウェア
+prepare.use-firmware|mt|d8e7a9bd|GPU ファームウェア ファイルはすでにフォルダーにあります
+prepare.firmware.folder|mt-safe|5c1a3bc9|ファームウェアのフォルダー
+prepare.firmware.download-note|mt|6ec53a34|フォルダーがない場合はファームウェアをダウンロードするため、この PC は今インターネットに接続している必要があります。
+prepare.firmware.folder-note|mt|bb8b6a97|すべてのファームウェア ファイルを、このリリースの一覧と照合して確認します。
+prepare.go|mt-safe|ee820467|準備
+
+# ---- guide panel ----
+guide.title|mt-safe|5506739a|ナギのヒント
+guide.title.plain|mt-safe|a4245a3c|ヒント
+guide.welcome|mt|65339917|[インストール] を押すまで何も変わりません。変更はすべて先に表示されます。
+guide.prepare|mt|9ee5d83f|準備したフォルダーは、インターネットのないどの BC-250 でも使えます。後の修復にも使えます。
+guide.page-tip|mt|70da7524|amdgpu-wddm Control で変更した設定は、更新後もそのまま残ります。
+guide.work-in-progress|mt|f3e8ef82|作業中です。数分かかることがあります。
+guide.pending-restart|mt|d31250df|変更は保存されました。次に Windows を再起動すると、セットアップは続行します。
+guide.install-stopped|mt|47319a31|セットアップは完了しませんでした。次に行うことは画面に表示されています。
+guide.verification-failed|mt|1abe91c5|ドライバーが確認に合格しませんでした。たいていは修復で直ります。
+guide.upgrade-done|mt|7ed192a1|完了です! ドライバーはインストールされ、確認も済みました。楽しんでください!
