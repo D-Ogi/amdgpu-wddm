@@ -35,7 +35,13 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C9u       // revision 201 (INF 0.7.201.1, on 200): the full table offers
+#define BC250_KMD_VERSION 0x000700CAu       // revision 202 (INF 0.7.202.1, on 201): BD-065 diagnostics.
+                                            // A GPU Present whose allocation snapshot is refused is
+                                            // counted by the first failing check (owner, unbound,
+                                            // BC2A, format, ...) and the first 16 are logged with both
+                                            // descriptors. Behaviour and status codes unchanged. No
+                                            // escape struct changed.
+                                            // 201 (INF 0.7.201.1, on 200): the full table offers
                                             // VidPN source modes in A8B8G8R8, A2B10G10R10 and
                                             // A16B16G16R16F beside A8R8G8B8 (display_modes.h), so DXGI
                                             // can list modes for those formats (3DMark, session

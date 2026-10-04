@@ -37,6 +37,7 @@ static void KeAcquireSpinLock(int* lock,KIRQL* old) { (void)lock;REQUIRE(!locked
 static void KeReleaseSpinLock(int* lock,KIRQL old) { (void)lock;REQUIRE(locked);locked=0;level=old;if(onUnlock)onUnlock(); }
 static int InterlockedIncrement(int* p) { return ++*p; }
 static size_t RtlCompareMemory(const void* a,const void* b,size_t n) { REQUIRE(locked);return memcmp(a,b,n)?0:n; }
+#define RtlZeroMemory(p,n) memset((p),0,(n))
 static void GuardLog(const char* format,...) { (void)format;++logs; }
 static void* get(const DXGKARGCB_GETHANDLEDATA* q) { REQUIRE(!locked && level==0);REQUIRE(q->Type==1);++gets;return NULL; }
 static void* acquire(const DXGKARGCB_GETHANDLEDATA* q,HANDLE* release) { REQUIRE(!locked && level<=1);REQUIRE(q->Type==1 && q->Flags.Value==0);++acquires;*release=token;if(onAcquire)onAcquire();return data; }
@@ -77,14 +78,25 @@ static void reset(void) {
  info.hAllocation=&a;data=&a;token=&b;onAcquire=onRelease=onUnlock=NULL;level=0;locked=acquires=releases=gets=logs=0;
 }
 static void bind(void) { WddmBindHandleIdentity(&dev,&info,&o,1);REQUIRE(!locked); }
-static BOOLEAN snapshot(BC250_WDDM_ALLOCATION_PRIVATE out[2]) { HANDLE h[2]={&o,&p};return WddmSnapshotPresentAllocations(&w,&dev,h,out); }
+// BD-065 diagnostics of the last snapshot: first failing check, its side and the descriptors seen.
+static BC250_SNAPSHOT_REFUSAL why;
+static UINT side;
+static BC250_WDDM_ALLOCATION_PRIVATE seen[2];
+static BOOLEAN snapshot(BC250_WDDM_ALLOCATION_PRIVATE out[2]) {
+ HANDLE h[2]={&o,&p};
+ why=(BC250_SNAPSHOT_REFUSAL)-1;side=99;memset(seen,0x5a,sizeof(seen));
+ return WddmSnapshotPresentAllocations(&w,&dev,h,out,&why,&side,seen);
+}
 static BOOLEAN refused(void) {
  BC250_WDDM_ALLOCATION_PRIVATE out[2],before[2];
  memset(out,0x5a,sizeof(out));memcpy(before,out,sizeof(out));
- if (snapshot(out)) return FALSE;
+ if (snapshot(out)) { REQUIRE(why==Bc250SnapshotAdmitted && side==2);return FALSE; }
  REQUIRE(!memcmp(out,before,sizeof(out)) && !locked);
+ REQUIRE(why>Bc250SnapshotAdmitted && why<Bc250SnapshotRefusalCount && side<=2);
  return TRUE;
 }
+// Refused for exactly this reason on this side.
+static BOOLEAN refusedFor(BC250_SNAPSHOT_REFUSAL reason,UINT at) { return refused() && why==reason && side==at; }
 int main(void) {
  BC250_WDDM_ALLOCATION_PRIVATE out[2],before[2];
  unsigned variant;
@@ -137,17 +149,29 @@ int main(void) {
    default:h[1]=&b;break;            // an allocation where an opened object belongs
   }
   memset(out,0x5a,sizeof(out));memcpy(before,out,sizeof(out));
-  REQUIRE(!WddmSnapshotPresentAllocations(&w,&dev,h,out));
+  REQUIRE(!WddmSnapshotPresentAllocations(&w,&dev,h,out,NULL,NULL,NULL));
   REQUIRE(!memcmp(out,before,sizeof(out)) && !locked);
  }
- reset();back(&o,&a);back(&p,&a);REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);p.OwnerDevice=NULL;REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);b.Allocation.Width++;REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);o.UmdAlloc=1;REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);b.UmdAlloc=1;REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);unlinkA();REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);w.Stopping=1;REQUIRE(refused());
- reset();back(&o,&a);back(&p,&b);b.Allocation.Format=p.Allocation.Format=22;REQUIRE(refused());
+ reset();back(&o,&a);back(&p,&a);REQUIRE(refusedFor(Bc250SnapshotSameBacking,2));
+ reset();back(&o,&a);back(&p,&b);p.OwnerDevice=NULL;REQUIRE(refusedFor(Bc250SnapshotOtherOwner,1));
+ reset();back(&o,&a);back(&p,&b);b.Allocation.Width++;REQUIRE(refusedFor(Bc250SnapshotDescriptor,1));
+ reset();back(&o,&a);back(&p,&b);o.UmdAlloc=1;REQUIRE(refusedFor(Bc250SnapshotUmdOpened,0));
+ reset();back(&o,&a);back(&p,&b);b.UmdAlloc=1;REQUIRE(refusedFor(Bc250SnapshotUmdBacking,1));
+ reset();back(&o,&a);back(&p,&b);unlinkA();REQUIRE(refusedFor(Bc250SnapshotBackingGone,0));
+ reset();back(&o,&a);back(&p,&b);w.Stopping=1;REQUIRE(refusedFor(Bc250SnapshotStopping,2));
+ REQUIRE(seen[0].Width==0 && seen[1].Format==0);
+ reset();back(&o,&a);back(&p,&b);b.Allocation.Format=p.Allocation.Format=22;REQUIRE(refusedFor(Bc250SnapshotFormat,2));
+ // BD-065 shape: an RGBA (A8B8G8R8 32) source into a BGRA (A8R8G8B8 21) redirection surface.
+ // The refusal names both formats; both descriptors are the opened ones, copied under the lock.
+ reset();back(&o,&a);back(&p,&b);a.Allocation.Format=o.Allocation.Format=32;
+ REQUIRE(refusedFor(Bc250SnapshotFormat,2));
+ REQUIRE(seen[0].Format==32 && seen[1].Format==21 && seen[0].Width==64 && seen[1].Pitch==256);
+ reset();back(&p,&b);REQUIRE(refusedFor(Bc250SnapshotUnbound,0));
+ reset();back(&o,&a);REQUIRE(refusedFor(Bc250SnapshotUnbound,1));
+ REQUIRE(seen[0].Format==21 && seen[1].Format==21);
+ reset();back(&o,&a);back(&p,&b);destroy(&p);REQUIRE(refusedFor(Bc250SnapshotNotOpened,1));
+ REQUIRE(seen[0].Width==64 && seen[1].Width==0);
+ reset();back(&o,&a);back(&p,&b);REQUIRE(snapshot(out) && why==Bc250SnapshotAdmitted && side==2);
  // Free and reuse: the pool hands the destroyed allocation's address to a new
  // allocation with identical geometry. Only the serial tells them apart; the
  // free did not touch the opened object (no scan), and the binding is refused.
