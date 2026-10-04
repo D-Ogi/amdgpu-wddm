@@ -11,14 +11,22 @@
 # confirmation rule), the DLL and app compiles with warnings as errors, a smoke run of the exe with --smoke (no
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
-# and --smoke-render at 96, 120 and 144 DPI (every page drawn to a PNG, no window; no two controls may overlap).
+# the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF), and
+# the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 8 pages at 96, 120, 144 and 192 DPI in the four
+# languages, at text scale 150 %, with Nagi shown and hidden, and a language switch at run time; every page is drawn to
+# PNG without a window and checked for overlap, overflow, internals in the text and accessible names.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
+#
+# -NagiArt <dir>: embeds the guide character (plan v7 section 6) from the owner's art directory as resources
+# nagi.<expression>@128.png and @256.png (the map is Guide.ArtFile). The art is never committed; without -NagiArt the
+# guide panel is text only, which is also what "Show Nagi" unchecked (the default) shows.
 
 param(
     [Parameter(Mandatory)][string]$Kits,
     [Parameter(Mandatory)][string]$Out,
     [string]$KitVersion = '10.0.26100.0',
     [string]$StartConfirmCore,
+    [string]$NagiArt,
     [switch]$NoSmoke
 )
 
@@ -37,7 +45,9 @@ New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll', 'System.Management.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
-$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
+    'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
@@ -76,6 +86,19 @@ Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
 
 # 3. The application, with the string tables embedded.
 $resources = @(Get-ChildItem "$here\strings\strings.*.txt" | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+if ($NagiArt) {
+    $guide = Get-Content (Join-Path $here 'src\Guide.cs') -Raw
+    $map = [regex]::Matches($guide, '\{ "(?<expr>\d\d-[a-z-]+)", "(?<file>[a-z-]+)" \}')
+    if ($map.Count -ne 9) { throw "Guide.ArtFile: $($map.Count) expressions found, 9 expected" }
+    foreach ($m in $map) {
+        foreach ($size in 128, 256) {
+            $file = Join-Path $NagiArt "$($m.Groups['file'].Value)@$size.png"
+            if (-not (Test-Path $file)) { throw "-NagiArt: $file missing" }
+            $resources += "/resource:$file,nagi.$($m.Groups['expr'].Value)@$size.png"
+        }
+    }
+    Write-Host "  guide art: 9 expressions x 2 sizes embedded from -NagiArt"
+}
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources (Get-ChildItem "$here\src\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
@@ -257,16 +280,42 @@ namespace BuildGate { public static class Wts {
 }
 
 if (-not $NoSmoke) {
-    foreach ($scale in '1', '1.25', '1.5') {
-        $dir = Join-Path $obj "render-$scale"
-        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-render', "`"$dir`"", $scale -PassThru -WindowStyle Hidden
-        if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "render at $scale did not exit within 60 s" }
-        $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
-        if ($p.ExitCode -ne 0) { throw "render at scale $scale (exit $($p.ExitCode)): $layout" }
-    }
-    Write-Host "  render: 5 pages at 96, 120 and 144 DPI, no overlapping controls ($obj\render-*)"
-}
+    # The recovery view never loads bc250control.dll (WU-068); a hidden window costs nothing (G-PERF).
+    $file = Join-Path $obj 'smoke-recovery.txt'
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-recovery', "`"$file`"" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'recovery smoke did not exit within 60 s' }
+    if ($p.ExitCode -ne 0) { throw "recovery smoke (exit $($p.ExitCode)): $(Get-Content $file -Raw -ErrorAction SilentlyContinue)" }
+    Write-Host "  recovery view: built, bc250control.dll not loaded"
+    $file = Join-Path $obj 'smoke-perf.txt'
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-perf', "`"$file`"" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'perf smoke did not exit within 60 s' }
+    $perf = Get-Content $file -Raw -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0) { throw "perf smoke (exit $($p.ExitCode)): $perf" }
+    Write-Host "  hidden window: $((($perf -split "`r?`n") | Where-Object { $_ }) -join ', ')"
 
+    # G-RENDER matrix: this PC's state and the recorded fixture (warnings, games, the CU section).
+    $fixture = Join-Path $here 'test\snapshot-bd059.json'
+    $runs = @()
+    foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+        foreach ($scale in '1', '1.25', '1.5', '2') { $runs += , @("$lang-$scale", $scale, '--lang', $lang, '--fixture', "`"$fixture`"") }
+    }
+    $runs += , @('en-1-pc', '1')
+    $runs += , @('pl-1-text150', '1', '--lang', 'pl', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
+    $runs += , @('ja-1.5-text150', '1.5', '--lang', 'ja', '--text-scale', '1.5', '--fixture', "`"$fixture`"")
+    $runs += , @('en-1-nagi', '1', '--nagi', '--fixture', "`"$fixture`"")
+    $runs += , @('ko-2-nagi', '2', '--lang', 'ko', '--nagi', '--fixture', "`"$fixture`"")
+    $runs += , @('en-1-switch-ja', '1', '--switch-to', 'ja', '--fixture', "`"$fixture`"")
+    $runs += , @('ja-1-switch-pl', '1', '--lang', 'ja', '--switch-to', 'pl', '--fixture', "`"$fixture`"")
+    $failed = @()
+    foreach ($r in $runs) {
+        $dir = Join-Path $obj "render\$($r[0])"
+        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList (@('--smoke-render', "`"$dir`"") + $r[1..($r.Count - 1)]) -PassThru -WindowStyle Hidden
+        if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "render $($r[0]) did not exit within 120 s" }
+        if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
+    }
+    if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
+    Write-Host "  render: $($runs.Count) runs (8 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on/off, language switch): no findings ($obj\render)"
+}
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
 }

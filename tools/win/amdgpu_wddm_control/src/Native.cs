@@ -76,7 +76,9 @@ namespace AmdgpuWddmControl
 
         // AMDGPU_WDDM_CONTROL_NO_DLL=1: every driver read answers as if bc250control.dll were missing (the build's
         // check of the recovery view and of the pages without the DLL).
-        static bool DllBlocked { get { return Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_NO_DLL") == "1"; } }
+        // Blocked: the recovery view (--recovery), which must work when the DLL or the driver cannot.
+        public static bool Blocked;
+        static bool DllBlocked { get { return Blocked || Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_NO_DLL") == "1"; } }
 
         static KmdResult<T> Call<T>(int size, Func<byte[], int> request, Func<byte[], T> parse) where T : class
         {

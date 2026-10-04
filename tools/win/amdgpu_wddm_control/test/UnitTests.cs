@@ -1020,6 +1020,7 @@ static partial class UnitTests
         PlanAdditions(args[0]);
         DriverCardTests();
         UpdateTests(args[0]);
+        GuiTests(args[0]);
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");
         return _failed == 0 ? 0 : 1;
