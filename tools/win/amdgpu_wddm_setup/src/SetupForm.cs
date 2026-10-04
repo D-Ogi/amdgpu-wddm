@@ -158,8 +158,6 @@ namespace AmdgpuWddmSetup
             logo.AccessibleName = "";
             var brand = Ui.Label("amdgpu-wddm Setup", Theme.Brand, Theme.Text);
             brand.Location = new Point(Theme.S(56), Theme.S(16));
-            _header.Controls.Add(logo);
-            _header.Controls.Add(brand);
             var langs = Ui.Row();
             langs.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             foreach (var l in new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } })
@@ -174,7 +172,10 @@ namespace AmdgpuWddmSetup
                 b.Tag = "lang";
                 langs.Controls.Add(b);
             }
+            // The language row comes before the brand label in the parent: after it, Windows named the row after it.
+            _header.Controls.Add(logo);
             _header.Controls.Add(langs);
+            _header.Controls.Add(brand);
             langs.PerformLayout();
             langs.Location = new Point(Theme.S(DesignWidth) - langs.PreferredSize.Width - Theme.S(14), (Theme.S(60) - langs.PreferredSize.Height) / 2);
         }
@@ -251,8 +252,9 @@ namespace AmdgpuWddmSetup
             _buttons.Controls.Clear();
             AcceptButton = null;
             CancelButton = null;
-            // The space above and below the screen is made of spacers, not panel padding: the scroll range of a
-            // FlowLayoutPanel does not cover its top padding, which left the end of a long plan out of reach.
+            // The space above the screen is a spacer, not panel padding: the scroll range of a FlowLayoutPanel does not
+            // cover its top padding, which left the end of a long plan out of reach. The spacer is the first control,
+            // so no label comes before it.
             _content.Controls.Add(Spacer(22));
             switch (screen)
             {
@@ -264,7 +266,10 @@ namespace AmdgpuWddmSetup
                 case Screen.Result: BuildResult(); break;
                 case Screen.Prepare: BuildPrepare(); break;
             }
-            _content.Controls.Add(Spacer(12));
+            // The space below the screen is the last control's bottom margin: a spacer panel after a label took the
+            // label's text as its name for a screen reader.
+            var lastControl = _content.Controls[_content.Controls.Count - 1];
+            lastControl.Margin = new Padding(lastControl.Margin.Left, lastControl.Margin.Top, lastControl.Margin.Right, Math.Max(lastControl.Margin.Bottom, Theme.S(12)));
             BuildRail();
             UpdateGuide();
             AssignTabOrder();
@@ -527,10 +532,9 @@ namespace AmdgpuWddmSetup
                     pause.Checked = _bitLocker == "Suspend";
                     key.CheckedChanged += (s, e) => { if (key.Checked) _bitLocker = "HaveKey"; if (go != null) go.Enabled = ConsentsComplete(consents); };
                     pause.CheckedChanged += (s, e) => { if (pause.Checked) _bitLocker = "Suspend"; if (go != null) go.Enabled = ConsentsComplete(consents); };
-                    var group = Ui.Stack(cc.Inner);
-                    group.Controls.Add(key);
-                    group.Controls.Add(pause);
-                    cc.Add(group);
+                    // Directly in the card (the only option buttons there), not in a bare panel after the label above.
+                    cc.Add(key);
+                    cc.Add(pause);
                 }
             }
 
@@ -895,9 +899,9 @@ namespace AmdgpuWddmSetup
             foreach (Control k in c.Controls) Number(k, ref m);
         }
 
-        // Layout panels have no accessible name. Without an explicit one, Windows names a window after the label next to
-        // it, so a screen reader read the rail step, the body text and the card titles a second and third time as panes.
-        // An empty AccessibleName keeps the name blank (WinForms uses any non-null value as it is).
+        // Layout panels have no accessible name in WinForms. This does not stop Windows' window proxy, which names an
+        // unnamed window after the nearest label before it in its parent: the layout itself keeps bare panels away from
+        // labels (G-A11Y checks it). The empty name keeps WinForms from offering a name of its own.
         static void Unnamed(Control c)
         {
             foreach (Control k in c.Controls)
@@ -983,8 +987,16 @@ namespace AmdgpuWddmSetup
                 bool inGroup = c is RadioButton && c.Parent.Controls.OfType<RadioButton>().Any(o => o.TabStop || o.Checked);
                 if (!c.TabStop && !inGroup) problems.Add(Current + ": " + Describe(c) + " is not reachable with Tab");
             }
-            // A layout panel without its own name takes the name of a label next to it: the text is read again.
-            foreach (var p in Panels(this).Where(p => p.AccessibleName == null)) problems.Add(Current + ": " + Describe(p) + " has no explicit accessible name (it repeats a label)");
+            // A layout panel without a name of its own takes, from Windows' window proxy, the text of the nearest label
+            // before it in its parent (an empty AccessibleName counts as no name; gui-L4-b13 trials): the text is read
+            // again. So a bare panel never follows a label in the same parent; a panel after a label needs a real name.
+            foreach (var p in Panels(this))
+            {
+                if (p.AccessibleName == null) problems.Add(Current + ": " + Describe(p) + " has no explicit accessible name");
+                if (!string.IsNullOrEmpty(p.AccessibleName)) continue;
+                var label = p.Parent.Controls.Cast<Control>().TakeWhile(k => k != p).OfType<Label>().LastOrDefault();
+                if (label != null) problems.Add(Current + ": a bare " + Describe(p) + " in " + Describe(p.Parent) + " follows the label \"" + label.Text + "\" and takes its text as its name");
+            }
             var order = reachable.Select(TabPath).ToList();
             if (order.Distinct().Count() != order.Count) problems.Add(Current + ": two controls share a tab position");
             bool working = Current == Screen.Working || Current == Screen.Checking;

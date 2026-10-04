@@ -188,11 +188,16 @@ namespace AmdgpuWddmSetup
         }
     }
 
-    // A titled block of a page; Inner is the width its content may use.
+    // A titled block of a page; Inner is the width its content may use. The title is drawn by the card and is the
+    // card's accessible name (a group), not a label: Windows names an unnamed window after the nearest label before it
+    // in its parent, so a title label made every bare row of the card a second copy of the title for a screen reader.
     sealed class CardPanel : Panel
     {
         public readonly FlowLayoutPanel Body;
         public readonly int Inner;
+        readonly string _title;
+        readonly Rectangle _titleBox;
+        const TextFormatFlags TitleFlags = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top;
 
         public CardPanel(string title, int width, Color? back = null)
         {
@@ -200,10 +205,28 @@ namespace AmdgpuWddmSetup
             Margin = Theme.Pad(0, 0, 0, 14);
             MinimumSize = new Size(width, 0); MaximumSize = new Size(width, 0);
             Inner = width - Padding.Horizontal;
+            _title = title;
+            if (title != null)
+            {
+                // The space a title label had: its 3 px margins above and below and its wrapped height.
+                var h = TextRenderer.MeasureText(title, Theme.CardTitle, new Size(Inner, int.MaxValue), TitleFlags).Height;
+                _titleBox = new Rectangle(Padding.Left, Padding.Top + Theme.S(3), Inner, h);
+                Padding = new Padding(Padding.Left, _titleBox.Bottom + Theme.S(3), Padding.Right, Padding.Bottom);
+                AccessibleName = title;
+                AccessibleRole = AccessibleRole.Grouping;
+                SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            }
             Body = Ui.Stack(Inner);
             Body.Dock = DockStyle.Fill;
-            if (title != null) Body.Controls.Add(Ui.Label(title, Theme.CardTitle, null, Inner));
             Controls.Add(Body);
+        }
+
+        public string Title { get { return _title; } }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (_title != null) TextRenderer.DrawText(e.Graphics, _title, Theme.CardTitle, _titleBox, Theme.Text, TitleFlags);
         }
 
         public T Add<T>(T c) where T : Control { Body.Controls.Add(c); return c; }
