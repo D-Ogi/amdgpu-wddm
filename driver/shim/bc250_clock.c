@@ -1,7 +1,8 @@
 /* PROVENANCE: AMD MIT clock commit body, Linux v6.18 cyan_skillfish_ppt.c.
  * Shim deviations: per-call/per-device settings instead of Linux's global;
  * owner callbacks instead of smu_cmn, the operating-point table of bc250_clock.h
- * (1000-2000 MHz, 820-1000 mV, docs/design/dpm.md), a temperature gate on raises,
+ * (800-2000 MHz, 820-1000 mV, docs/design/dpm.md; the two points under 1000 MHz are thermal-only and
+ * bypass the import's own 1000 MHz bound, see subfloor_commit), a temperature gate on raises,
  * explicit MHz/VID readback (re-read while a raise ramps) and voltage-up staging before AMD commit. */
 #include <stddef.h>
 #include <string.h>
@@ -46,17 +47,20 @@ static int smu_cmn_send_smc_msg(struct smu_context *smu,unsigned int msg,unsigne
 #undef cyan_skillfish_user_settings
 #undef cyan_skillfish_sclk_default
 
-// The table of bc250_clock.h: mV = the anchors' line at that clock, rounded up; vid = its encoding.
-// driver/shim/test/dpm_test.c recomputes every row from the three anchors.
+// The table of bc250_clock.h: from the lab floor up, mV = the anchors' line at that clock, rounded up;
+// vid = its encoding. driver/shim/test/dpm_test.c recomputes every row from the three anchors.
+// The two thermal-only rows below the floor (0.7.205) keep the floor's 820 mV / VID 116: a lower clock at
+// the same voltage, no undervolt and no extrapolation under the lowest anchor.
 const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS]={
+    {800,820,116},{900,820,116},
     {1000,820,116},{1100,840,113},{1200,860,110},{1300,880,107},{1400,899,104},{1500,919,100},
     {1600,935,98},{1700,952,95},{1800,968,93},{1900,984,90},{2000,1000,88}
 };
 unsigned int bc250_clock_min_mv(unsigned int mhz)
 {
-    if(mhz<BC250_CLOCK_FLOOR_MHZ || mhz>BC250_CLOCK_CEILING_MHZ || (mhz-BC250_CLOCK_FLOOR_MHZ)%BC250_CLOCK_STEP_MHZ)
+    if(mhz<BC250_CLOCK_MIN_MHZ || mhz>BC250_CLOCK_CEILING_MHZ || (mhz-BC250_CLOCK_MIN_MHZ)%BC250_CLOCK_STEP_MHZ)
         return 0;
-    return bc250_clock_points[(mhz-BC250_CLOCK_FLOOR_MHZ)/BC250_CLOCK_STEP_MHZ].mv;
+    return bc250_clock_points[(mhz-BC250_CLOCK_MIN_MHZ)/BC250_CLOCK_STEP_MHZ].mv;
 }
 int bc250_clock_point_allowed(unsigned int mhz,unsigned int mv)
 {
@@ -80,6 +84,18 @@ int bc250_clock_message_allowed(unsigned int message)
     }
 }
 
+// The imported commit refuses a clock below CYAN_SKILLFISH_SCLK_MIN (1000 MHz, the firmware's own lowest
+// SCLK level: facts M47, and amdgpu's own overdrive bound). The two thermal-only points under the lab floor
+// (0.7.205, owner decision 2026-10-05) therefore go out from here, as the two messages the imported
+// PP_OD_COMMIT_DPM_TABLE sends for a forced voltage, in its order and with its VID encoding, and nothing
+// else. The import stays as extracted; this is the one deviation, and it covers only mhz < SCLK_MIN.
+static int subfloor_commit(struct smu_context *smu,unsigned int mhz,unsigned int mv)
+{
+    int status=smu_cmn_send_smc_msg_with_param(smu,PPSMC_MSG_RequestGfxclk,mhz,NULL);
+    if(status)return status;
+    return smu_cmn_send_smc_msg_with_param(smu,PPSMC_MSG_ForceGfxVid,bc250_clock_vid(mv),NULL);
+}
+
 // A readback between the clock the transaction found and the one it requested, the request itself excluded.
 static int on_the_way(unsigned int observed,unsigned int from,unsigned int to)
 {
@@ -89,24 +105,28 @@ static int on_the_way(unsigned int observed,unsigned int from,unsigned int to)
 int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
                         unsigned int mv,struct bc250_clock_report *report)
 {
-    struct smu_context smu={0};long input[3];int status;
+    struct smu_context smu={0};long input[3];int status;int subfloor;
     if(!report)return BC250_CLOCK_INVALID;
     memset(report,0,sizeof(*report));report->status=BC250_CLOCK_INVALID;
     report->requested_mhz=mhz;report->requested_mv=mv;
-    // The table is narrower than AMD's range (1000-2000 MHz, 700-1129 mV), never wider.
+    // The table is narrower than AMD's range (700-1129 mV, 2000 MHz), never wider; its two thermal-only
+    // points are the one place where it goes under AMD's 1000 MHz (subfloor_commit above).
     if(!io || !io->begin || !io->end || !io->temperature || !io->message ||
-       mhz<CYAN_SKILLFISH_SCLK_MIN || mhz>CYAN_SKILLFISH_SCLK_MAX ||
+       mhz<BC250_CLOCK_MIN_MHZ || mhz>CYAN_SKILLFISH_SCLK_MAX ||
        mv<CYAN_SKILLFISH_VDDC_MIN || mv>CYAN_SKILLFISH_VDDC_MAX ||
        !bc250_clock_point_allowed(mhz,mv))return report->status;
+    subfloor=mhz<CYAN_SKILLFISH_SCLK_MIN;
     report->expected_vid=bc250_clock_vid(mv); // same encoded readback as AMD commit
     status=io->begin(io->context);
     if(status){report->status=status;return status;}
     smu.io=io;smu.report=report;
     status=io->temperature(io->context,&report->temperature_mc);
     if(status)goto done;
-    input[0]=0;input[1]=(long)mhz;input[2]=(long)mv;
-    status=cyan_skillfish_od_edit_dpm_table(&smu,PP_OD_EDIT_VDDC_CURVE,input,3);
-    if(status)goto done;
+    if(!subfloor) {
+        input[0]=0;input[1]=(long)mhz;input[2]=(long)mv;
+        status=cyan_skillfish_od_edit_dpm_table(&smu,PP_OD_EDIT_VDDC_CURVE,input,3);
+        if(status)goto done;
+    }
     status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxFrequency,&report->initial_mhz);
     if(status)goto done;
     status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxVid,&report->initial_vid);
@@ -116,8 +136,15 @@ int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
     }
     // Hot: only a transition that raises neither clock nor voltage (lower VID = higher voltage).
     // Before any request, so a refused raise leaves the operating point as it was.
+    // The one exception (0.7.205): a request up to the lab floor that does not raise the voltage. From the two
+    // thermal-only points the hardware can now sit below 1000 MHz, and the floor must be reachable from there at
+    // any temperature: the fixed start and resume request (SmuPrepareClock, 1000 MHz / 820 mV), the stop and
+    // power-down applies and the resync all go to that one point, and failing them while hot would fail the
+    // device start or the D0 transition outright. The invariant: the part can always be brought back to the
+    // single point it is known to run at. Every request above the floor keeps the gate as it was.
     if(report->temperature_mc>=BC250_CLOCK_HOT_MC &&
-       (mhz>report->initial_mhz || report->expected_vid<report->initial_vid)) {
+       (mhz>report->initial_mhz || report->expected_vid<report->initial_vid) &&
+       !(mhz<=BC250_CLOCK_FLOOR_MHZ && report->expected_vid>=report->initial_vid)) {
         status=BC250_CLOCK_TOO_HOT;goto done;
     }
     // WDDM adaptation around the unchanged AMD frequency-first commit: lower
@@ -133,7 +160,8 @@ int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
         if(report->staged_vid!=report->expected_vid) {status=BC250_CLOCK_MISMATCH;goto done;}
         report->voltage_staged=1;
     }
-    status=cyan_skillfish_od_edit_dpm_table(&smu,PP_OD_COMMIT_DPM_TABLE,NULL,0);
+    status=subfloor?subfloor_commit(&smu,mhz,mv)
+                   :cyan_skillfish_od_edit_dpm_table(&smu,PP_OD_COMMIT_DPM_TABLE,NULL,0);
     if(status)goto done;
     status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxFrequency,&report->observed_mhz);
     if(status)goto done;

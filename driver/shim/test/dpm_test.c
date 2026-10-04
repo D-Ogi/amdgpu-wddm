@@ -13,7 +13,19 @@
 static int checks, failures;
 #define CHECK(x) do { checks++; if (!(x)) { failures++; printf("FAIL line %d: %s\n", __LINE__, #x); } } while (0)
 
+/* A level counted from the lab floor, which is where the load lives: L(0) is 1000 MHz, L(10) the 2000 MHz
+ * ceiling, and the two thermal-only points of 0.7.205 are L(-1) (900 MHz) and L(-2) == 0 (800 MHz,
+ * BC250_DPM_THERMAL_FLOOR_LEVEL). Up to 0.7.204 the lab floor was index 0 and these tests wrote the index
+ * itself; L() keeps every expectation below written in the same numbers. */
+#define L(n) ((unsigned int)((int)BC250_DPM_FLOOR_LEVEL + (n)))
+
 /* ---- the table ---------------------------------------------------------------------------------- */
+
+/* The table's shape since 0.7.205: 13 levels, 800 MHz first, the lab floor at index 2, the thermal floor at 0.
+ * A constant CHECK would trip C4127 under /WX, so these fail the build instead. */
+typedef char dpm_table_is_13_levels[(BC250_CLOCK_LEVELS == 13u && BC250_DPM_TOP_LEVEL == 12u &&
+				     BC250_DPM_THERMAL_FLOOR_LEVEL == 0u && BC250_DPM_FLOOR_LEVEL == 2u &&
+				     BC250_CLOCK_MIN_MHZ == 800u && BC250_CLOCK_FLOOR_MHZ == 1000u) ? 1 : -1];
 
 /* The anchors of bc250_clock.h, in microvolts: the table's mV is this line rounded up to a whole mV. */
 static unsigned int anchor_uv(unsigned int mhz)
@@ -27,19 +39,27 @@ static void test_table(void)
 	unsigned int i, mhz;
 	for (i = 0; i < BC250_CLOCK_LEVELS; i++) {
 		const struct bc250_clock_point *p = &bc250_clock_points[i];
-		unsigned int want_mv = (anchor_uv(p->mhz) + 999u) / 1000u;
-		CHECK(p->mhz == BC250_CLOCK_FLOOR_MHZ + i * BC250_CLOCK_STEP_MHZ);
+		/* From the lab floor up, the anchors' line rounded up. The two thermal-only points below it
+		 * (0.7.205) keep the floor's own voltage: a lower clock at 820 mV, and no extrapolation of the
+		 * line under its lowest anchor. */
+		unsigned int want_mv = i < BC250_DPM_FLOOR_LEVEL ? BC250_CLOCK_FLOOR_MV
+								: (anchor_uv(p->mhz) + 999u) / 1000u;
+		CHECK(p->mhz == BC250_CLOCK_MIN_MHZ + i * BC250_CLOCK_STEP_MHZ);
 		CHECK(p->mv == want_mv);
 		CHECK(p->vid == bc250_clock_vid(p->mv));
 		/* Truncating encoding: the voltage the VID stands for is never below the table's. */
 		CHECK(bc250_clock_vid_uv(p->vid) >= p->mv * 1000u);
 		CHECK(bc250_clock_vid_uv(p->vid) < p->mv * 1000u + 6250u);
 		CHECK(p->mv >= BC250_CLOCK_FLOOR_MV && p->mv <= BC250_CLOCK_CEILING_MV);
-		/* AMD's overdrive range (cyan_skillfish_ppt.c) contains every point. */
-		CHECK(p->mhz >= 1000u && p->mhz <= 2000u && p->mv >= 700u && p->mv <= 1129u);
-		if (i) {
+		/* AMD's overdrive voltage range (cyan_skillfish_ppt.c) contains every point; its clock range starts
+		 * at the lab floor, which the two thermal-only points are below on purpose. */
+		CHECK(p->mhz >= BC250_CLOCK_MIN_MHZ && p->mhz <= 2000u && p->mv >= 700u && p->mv <= 1129u);
+		if (i > BC250_DPM_FLOOR_LEVEL) {
 			CHECK(p->mv > bc250_clock_points[i - 1].mv);
 			CHECK(p->vid < bc250_clock_points[i - 1].vid);
+		} else if (i) {
+			/* 800, 900 and 1000 MHz share 820 mV and VID 116. */
+			CHECK(p->mv == bc250_clock_points[i - 1].mv && p->vid == bc250_clock_points[i - 1].vid);
 		}
 		CHECK(bc250_dpm_level_of(p->mhz) == (int)i);
 		CHECK(bc250_dpm_level_mhz(i) == p->mhz && bc250_dpm_level_mv(i) == p->mv);
@@ -49,13 +69,25 @@ static void test_table(void)
 		CHECK(!bc250_clock_point_allowed(p->mhz, p->mv - 1u));
 		CHECK(!bc250_clock_point_allowed(p->mhz, BC250_CLOCK_CEILING_MV + 1u));
 	}
+	/* The shape of the table is checked at compile time (dpm_table_is_13_levels below). */
+	CHECK(bc250_dpm_level_mhz(BC250_DPM_THERMAL_FLOOR_LEVEL) == 800u);
+	CHECK(bc250_dpm_level_mv(BC250_DPM_THERMAL_FLOOR_LEVEL) == BC250_CLOCK_FLOOR_MV);
+	CHECK(bc250_dpm_level_mhz(BC250_DPM_FLOOR_LEVEL) == BC250_CLOCK_FLOOR_MHZ);
+	CHECK(bc250_dpm_level_mv(BC250_DPM_FLOOR_LEVEL) == BC250_CLOCK_FLOOR_MV);
+	CHECK(bc250_dpm_level_of(800) == 0 && bc250_dpm_level_of(900) == 1 && bc250_dpm_level_of(1000) == 2);
+	/* Nothing below 800 MHz, and no undervolt at the thermal-only points. */
+	CHECK(bc250_clock_min_mv(800) == 820u && bc250_clock_min_mv(900) == 820u);
+	CHECK(bc250_clock_min_mv(700) == 0u && bc250_dpm_level_of(700) == -1);
+	CHECK(!bc250_clock_point_allowed(700, 820u) && !bc250_clock_point_allowed(800, 819u));
 	/* The measured anchors, by value: lab point VID 116 (facts M22), ceiling 1000 mV = VID 88. */
-	CHECK(bc250_clock_points[0].mhz == 1000u && bc250_clock_points[0].mv == 820u && bc250_clock_points[0].vid == 116u);
-	CHECK(bc250_clock_points[5].mhz == 1500u && bc250_clock_vid_uv(bc250_clock_points[5].vid) >= 918750u);
-	CHECK(bc250_clock_points[10].mhz == 2000u && bc250_clock_points[10].mv == 1000u && bc250_clock_points[10].vid == 88u);
+	CHECK(bc250_clock_points[L(0)].mhz == 1000u && bc250_clock_points[L(0)].mv == 820u &&
+	      bc250_clock_points[L(0)].vid == 116u);
+	CHECK(bc250_clock_points[L(5)].mhz == 1500u && bc250_clock_vid_uv(bc250_clock_points[L(5)].vid) >= 918750u);
+	CHECK(bc250_clock_points[L(10)].mhz == 2000u && bc250_clock_points[L(10)].mv == 1000u &&
+	      bc250_clock_points[L(10)].vid == 88u);
 	CHECK(bc250_clock_vid(918u) == 101u && bc250_clock_vid_uv(101u) == 918750u);
 	for (mhz = 0; mhz <= 2600u; mhz += 25u) {
-		int on = mhz >= 1000u && mhz <= 2000u && mhz % 100u == 0;
+		int on = mhz >= BC250_CLOCK_MIN_MHZ && mhz <= 2000u && mhz % 100u == 0;
 		CHECK((bc250_clock_min_mv(mhz) != 0) == on);
 		CHECK((bc250_dpm_level_of(mhz) >= 0) == on);
 		if (!on) CHECK(!bc250_clock_point_allowed(mhz, 950u));
@@ -104,7 +136,7 @@ static void test_decide(void)
 	r = req();
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.requested == BC250_DPM_MODE_FIXED);   /* BC250_DPM_DEFAULT_MODE, pinned until lab acceptance */
-	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_NOT_REQUESTED && d.max_level == 0);
+	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_NOT_REQUESTED && d.max_level == L(0));
 	CHECK(!d.force_fixed && !d.mark_pending && !d.clear_pending && !d.clear_session && !d.encoded);
 
 	/* Fixed with stale marks: both go, nothing else is written. */
@@ -116,7 +148,7 @@ static void test_decide(void)
 	r = req(); r.mode_present = 1; r.mode = 1;
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_DPM && d.reason == BC250_DPM_REASON_NONE);
-	CHECK(d.max_mhz == BC250_DPM_DEFAULT_MAX_MHZ && d.max_mhz == 1500u && d.max_level == 5u && d.encoded == 0xD00005DCu);
+	CHECK(d.max_mhz == BC250_DPM_DEFAULT_MAX_MHZ && d.max_mhz == 1500u && d.max_level == L(5) && d.encoded == 0xD00005DCu);
 	CHECK(d.mark_pending && !d.confirmed && !d.force_fixed);
 	/* A confirmation of the default covers the default only. */
 	r.confirmed_present = 1; r.confirmed = bc250_dpm_encode(1500);
@@ -126,7 +158,7 @@ static void test_decide(void)
 	/* The override up to the hard ceiling: 2000. */
 	r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 2000;
 	bc250_dpm_decide(&r, &d);
-	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.max_level == 10u && d.encoded == 0xD00007D0u);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.max_level == L(10) && d.encoded == 0xD00007D0u);
 	CHECK(d.mark_pending && !d.confirmed && !d.force_fixed);
 
 	/* Confirmed earlier with the same request: no mark. */
@@ -141,10 +173,10 @@ static void test_decide(void)
 	/* The ceiling override: grid-rounded down, range-checked. */
 	r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 1650;
 	bc250_dpm_decide(&r, &d);
-	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 1600u && d.max_level == 6u && d.encoded == bc250_dpm_encode(1600));
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 1600u && d.max_level == L(6) && d.encoded == bc250_dpm_encode(1600));
 	r.max_mhz = 1000;
 	bc250_dpm_decide(&r, &d);
-	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_level == 0);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_level == L(0));
 	r.max_mhz = 999;
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_INVALID_SETTING && !d.force_fixed && !d.mark_pending);
@@ -166,7 +198,7 @@ static void test_decide(void)
 	r.confirmed_present = 1; r.confirmed = bc250_dpm_encode(2000);
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_UNCONFIRMED && d.force_fixed);
-	CHECK(!d.mark_pending && d.max_level == 0);
+	CHECK(!d.mark_pending && d.max_level == L(0));
 
 	/* The guard: an earlier start ended above the floor, even a confirmed one. */
 	r = req(); r.mode_present = 1; r.mode = 1; r.session_present = 1;
@@ -217,54 +249,54 @@ static void test_load_steps(void)
 	unsigned int i, level = 0;
 
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(g.level == 0 && g.thermal_cap == 10u && g.max_level == 10u);
+	CHECK(g.level == L(0) && g.thermal_cap == BC250_DPM_TOP_LEVEL && g.max_level == BC250_DPM_TOP_LEVEL);
 	/* Idle stays at the floor. */
-	for (i = 0; i < 100; i++) CHECK(run(&g, 0, 60, 25) == 0);
+	for (i = 0; i < 100; i++) CHECK(run(&g, 0, 60, 25) == L(0));
 	CHECK(g.raises == 0 && g.lowers == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* Saturated: 1000 -> 1300 (1250 needed) -> 1700 (1625) -> 2000 (2125, top). Three ticks. */
-	CHECK(run(&g, 1000, 60, 25) == 3);
-	CHECK(run(&g, 1000, 60, 25) == 7);
-	CHECK(run(&g, 1000, 60, 25) == 10);
-	CHECK(run(&g, 1000, 60, 25) == 10);
+	CHECK(run(&g, 1000, 60, 25) == L(3));
+	CHECK(run(&g, 1000, 60, 25) == L(7));
+	CHECK(run(&g, 1000, 60, 25) == L(10));
+	CHECK(run(&g, 1000, 60, 25) == L(10));
 	CHECK(g.raises == 3);
 
 	/* The band holds: 650..899 at 2000 MHz neither raises nor lowers. */
-	for (i = 0; i < 200; i++) CHECK(run(&g, 650 + (i * 7) % 250, 60, 25) == 10);
+	for (i = 0; i < 200; i++) CHECK(run(&g, 650 + (i * 7) % 250, 60, 25) == L(10));
 
 	/* 90 % at 1500 MHz: demand 1687 -> 1700. The observed game at 1000 MHz (91.5 %, ETW): 1144 -> 1200. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
-	CHECK(run(&g, 900, 60, 25) == 7);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	CHECK(run(&g, 900, 60, 25) == L(7));
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run(&g, 915, 60, 25) == 2);
+	CHECK(run(&g, 915, 60, 25) == L(2));
 	/* Just under UP: no raise. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 4; g.avg_permille = 899;
-	CHECK(run(&g, 899, 60, 25) == 4);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(4); g.avg_permille = 899;
+	CHECK(run(&g, 899, 60, 25) == L(4));
 
 	/* Down: only after DOWN_HOLD_MS with the average below DOWN, one step at a time. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
-	for (i = 0; i < 7; i++) CHECK(run(&g, 0, 60, 25) == 10);   /* average falls, hold accumulates */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	for (i = 0; i < 7; i++) CHECK(run(&g, 0, 60, 25) == L(10));   /* average falls, hold accumulates */
 	level = run(&g, 0, 60, 25);
-	CHECK(level == 9);
+	CHECK(level == L(9));
 	/* From the top to the floor at idle: ten steps, each after a full hold. */
-	for (i = 0; i < 400 && level; i++) level = run(&g, 0, 60, 25);
-	CHECK(level == 0 && g.lowers == 10);
+	for (i = 0; i < 400 && level > L(0); i++) level = run(&g, 0, 60, 25);
+	CHECK(level == L(0) && g.lowers == 10);
 	CHECK(i >= 9u * (BC250_DPM_DOWN_HOLD_MS / 25u) - 1u);
 
 	/* A single idle tick in a busy stream does not lower (the average, not the tick, decides). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 8;
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(8);
 	for (i = 0; i < 40; i++) run(&g, 850, 60, 25);
-	CHECK(run(&g, 0, 60, 25) == 8);
-	CHECK(run(&g, 850, 60, 25) == 8);
+	CHECK(run(&g, 0, 60, 25) == L(8));
+	CHECK(run(&g, 850, 60, 25) == L(8));
 
 	/* A long tick (resume, stall) counts as MAX_DT_MS, not as minutes of hold. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 6; g.avg_permille = 0;
-	CHECK(run(&g, 0, 60, 3600000u) == 5);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(6); g.avg_permille = 0;
+	CHECK(run(&g, 0, 60, 3600000u) == L(5));
 	CHECK(g.down_ms == 0);
 
 	/* Busy above 1000 permille is clamped, not trusted. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run(&g, 5000, 60, 25) == 3);
+	CHECK(run(&g, 5000, 60, 25) == L(3));
 }
 
 /* A workload that needs a fixed amount of work per second: busy = demand / clock, saturated at 1. The
@@ -289,7 +321,7 @@ static void test_no_oscillation(void)
 			unsigned int mhz = bc250_dpm_level_mhz(level);
 			unsigned int busy = demand >= mhz ? 1000u : demand * 1000u / mhz;
 			if (level < BC250_DPM_TOP_LEVEL) CHECK(busy < BC250_DPM_UP_PERMILLE);
-			if (level > 0) CHECK(busy >= BC250_DPM_DOWN_PERMILLE - 1u);
+			if (level > L(0)) CHECK(busy >= BC250_DPM_DOWN_PERMILLE - 1u);
 		}
 	}
 }
@@ -319,64 +351,71 @@ static void test_thermal(void)
 	/* The limits themselves are checked at compile time (dpm_hot_is_87c and the two after it). */
 
 	/* Under full load at the top, 85 C (the old limit) and 86.999 C do nothing thermal. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
-	CHECK(run(&g, 1000, 85, 25) == 10);
-	CHECK(run_mc(&g, 1000, 86999, 25) == 10);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.thermal_events == 0 && g.thermal_cap == 10 && g.warm_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	CHECK(run(&g, 1000, 85, 25) == L(10));
+	CHECK(run_mc(&g, 1000, 86999, 25) == L(10));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.thermal_events == 0 && g.thermal_cap == L(10) && g.warm_holds == 0);
 	/* 87 C at the top: one step down at once, under full load. */
-	CHECK(run_mc(&g, 1000, 87000, 25) == 9);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1 && g.thermal_cap == 9);
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(9));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1 && g.thermal_cap == L(9));
 	/* Still hot: another step every HOT_STEP_MS, none in between. */
-	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 88, 25) == 9);
-	CHECK(run(&g, 1000, 88, 25) == 8);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 88, 25) == L(9));
+	CHECK(run(&g, 1000, 88, 25) == L(8));
 	CHECK(g.thermal_events == 1);
 	/* 82..86.999: the cap holds, no raise, the reason stays thermal. Both edges, then the middle. */
-	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 86999, 25) == 8);
-	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == 8);
-	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 84, 25) == 8);
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 86999, 25) == L(8));
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == L(8));
+	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 84, 25) == L(8));
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_events == 1);
 	/* Below 82 (81.999 is enough): one level per RELEASE_STEP_MS, back to the top. The last level at 65 C, under the
 	 * thermal ramp's knee (test_ramp covers the clock that follows a released cap above it). */
-	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == 8);
-	CHECK(run_mc(&g, 1000, 81999, 25) == 9);
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == L(8));
+	CHECK(run_mc(&g, 1000, 81999, 25) == L(9));
 	for (i = 0; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 65, 25);
-	CHECK(level == 10 && g.thermal_cap == 10);
+	CHECK(level == L(10) && g.thermal_cap == L(10));
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* A new episode after a cool spell clamps at once again, at exactly the limit: the spell has held the cap for
 	 * a hot step since its last raise (0.7.197: a re-entry inside the hot step does not step, test_reentry). */
-	for (i = 0; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 65, 25) == 10);
-	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.thermal_events == 2);
+	for (i = 0; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 65, 25) == L(10));
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(9) && g.thermal_events == 2);
 
-	/* 90 C: the floor at once, whatever the load; recovery goes through release, step by step. 89.999 C is
-	 * hot, not critical. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
-	CHECK(run_mc(&g, 1000, 89999, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
-	CHECK(run(&g, 1000, 90, 25) == 0);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD && g.thermal_cap == 0);
-	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 88, 25) == 0);    /* hot, not critical: cap stays 0 */
-	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == 0);    /* not yet below release */
+	/* 90 C: the thermal floor at once (800 MHz since 0.7.205), whatever the load; recovery goes through
+	 * release, step by step. 89.999 C is hot, not critical. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	CHECK(run_mc(&g, 1000, 89999, 25) == L(9) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(run(&g, 1000, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD && g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	/* Hot, not critical: the cap is at the bottom already and does not underflow. */
+	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 88, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 82000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 70, 25);
-	CHECK(level == 10);
+	CHECK(level == L(10));
 
-	/* 87 C at the floor: nothing to lower, no underflow, no raise. */
+	/* 87 C at the lab floor: the hot step goes under it, one level per hot step, down to 800 MHz and no
+	 * further (0.7.205; before it the cap stopped at 1000 MHz). */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run_mc(&g, 1000, 87000, 25) == 0 && g.thermal_cap == 0);
-	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 89, 25) == 0);
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(-1) && g.thermal_cap == L(-1));
+	CHECK(bc250_dpm_level_mhz(L(-1)) == 900u && bc250_dpm_level_mv(L(-1)) == 820u);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 89, 25) == L(-1));
+	CHECK(run(&g, 1000, 89, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(bc250_dpm_level_mhz(BC250_DPM_THERMAL_FLOOR_LEVEL) == 800u);
+	for (i = 0; i < 100; i++) CHECK(run(&g, 1000, 89, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(g.want == L(0));		/* the load never asks below the lab floor */
 
 	/* No reading is treated as critical. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 7;
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(7);
 	in = tick(1000, 60, 25); in.temperature_valid = 0;
 	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
-	CHECK(level == 0 && g.throttle == BC250_DPM_THROTTLE_SENSOR);
+	CHECK(level == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 
 	/* Thermal wins over a max setting, the max setting over the load. */
-	bc250_dpm_init(&g, 6);
+	bc250_dpm_init(&g, L(6));
 	for (i = 0; i < 10; i++) level = run(&g, 1000, 60, 25);
-	CHECK(level == 6 && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
-	CHECK(run(&g, 1000, 87, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(level == L(6) && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
+	CHECK(run(&g, 1000, 87, 25) == L(5) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 1000, 70, 25);
-	CHECK(level == 6 && g.thermal_cap == 6);   /* the cap is released only up to the setting */
+	CHECK(level == L(6) && g.thermal_cap == L(6));   /* the cap is released only up to the setting */
 }
 
 static void test_stable_and_failure(void)
@@ -385,20 +424,20 @@ static void test_stable_and_failure(void)
 	struct bc250_dpm_input in;
 	unsigned int level;
 
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 9;
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(9);
 	g.stable = 1;
-	CHECK(run(&g, 1000, 60, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_STABLE);
-	CHECK(run(&g, 1000, 60, 25) == 0);
+	CHECK(run(&g, 1000, 60, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_STABLE);
+	CHECK(run(&g, 1000, 60, 25) == L(0));
 	g.stable = 0;
-	CHECK(run(&g, 1000, 60, 25) == 3);
+	CHECK(run(&g, 1000, 60, 25) == L(3));
 
 	/* A failed apply: the caller does not commit, the governor asks again from where it is. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 	in = tick(1000, 60, 25);
 	level = bc250_dpm_step(&g, &in);
-	CHECK(level == 3 && g.level == 0);
+	CHECK(level == L(3) && g.level == L(0));
 	level = bc250_dpm_step(&g, &in);
-	CHECK(level == 3 && g.level == 0 && g.raises == 0);
+	CHECK(level == L(3) && g.level == L(0) && g.raises == 0);
 }
 
 static void test_session(void)
@@ -406,23 +445,33 @@ static void test_session(void)
 	struct bc250_dpm_session s;
 	unsigned int i;
 	memset(&s, 0, sizeof(s));
-	CHECK(bc250_dpm_session_step(&s, 0, 25) == BC250_DPM_SESSION_NONE);
-	CHECK(bc250_dpm_session_step(&s, 3, 0) == BC250_DPM_SESSION_SET);
+	CHECK(bc250_dpm_session_step(&s, L(0), 25) == BC250_DPM_SESSION_NONE);
+	CHECK(bc250_dpm_session_step(&s, L(3), 0) == BC250_DPM_SESSION_SET);
 	/* Until the caller has made it durable, it keeps asking. */
-	CHECK(bc250_dpm_session_step(&s, 3, 25) == BC250_DPM_SESSION_SET);
+	CHECK(bc250_dpm_session_step(&s, L(3), 25) == BC250_DPM_SESSION_SET);
 	s.marked = 1;
-	CHECK(bc250_dpm_session_step(&s, 5, 25) == BC250_DPM_SESSION_NONE);
+	CHECK(bc250_dpm_session_step(&s, L(5), 25) == BC250_DPM_SESSION_NONE);
 	/* At the floor: cleared only after SESSION_CLEAR_MS in a row. */
-	for (i = 1; i < BC250_DPM_SESSION_CLEAR_MS / 25u; i++) CHECK(bc250_dpm_session_step(&s, 0, 25) == BC250_DPM_SESSION_NONE);
-	CHECK(bc250_dpm_session_step(&s, 0, 25) == BC250_DPM_SESSION_CLEAR);
+	for (i = 1; i < BC250_DPM_SESSION_CLEAR_MS / 25u; i++) CHECK(bc250_dpm_session_step(&s, L(0), 25) == BC250_DPM_SESSION_NONE);
+	CHECK(bc250_dpm_session_step(&s, L(0), 25) == BC250_DPM_SESSION_CLEAR);
 	/* A raise in between restarts the count. */
 	memset(&s, 0, sizeof(s)); s.marked = 1;
-	for (i = 0; i < 300; i++) bc250_dpm_session_step(&s, 0, 25);
-	CHECK(bc250_dpm_session_step(&s, 1, 25) == BC250_DPM_SESSION_NONE && s.floor_ms == 0);
-	for (i = 1; i < BC250_DPM_SESSION_CLEAR_MS / 25u; i++) CHECK(bc250_dpm_session_step(&s, 0, 25) == BC250_DPM_SESSION_NONE);
+	for (i = 0; i < 300; i++) bc250_dpm_session_step(&s, L(0), 25);
+	CHECK(bc250_dpm_session_step(&s, L(1), 25) == BC250_DPM_SESSION_NONE && s.floor_ms == 0);
+	for (i = 1; i < BC250_DPM_SESSION_CLEAR_MS / 25u; i++) CHECK(bc250_dpm_session_step(&s, L(0), 25) == BC250_DPM_SESSION_NONE);
 	/* A stalled tick does not clear it in one go. */
 	memset(&s, 0, sizeof(s)); s.marked = 1;
-	CHECK(bc250_dpm_session_step(&s, 0, 60000u) == BC250_DPM_SESSION_NONE);
+	CHECK(bc250_dpm_session_step(&s, L(0), 60000u) == BC250_DPM_SESSION_NONE);
+	/* The thermal-only levels under the lab floor (0.7.205) are not "above the floor": a start that ends at
+	 * 900 or 800 MHz is no reason to make the next one fixed, so nothing is marked and a marker still clears. */
+	memset(&s, 0, sizeof(s));
+	CHECK(bc250_dpm_session_step(&s, L(-1), 25) == BC250_DPM_SESSION_NONE);
+	CHECK(bc250_dpm_session_step(&s, BC250_DPM_THERMAL_FLOOR_LEVEL, 25) == BC250_DPM_SESSION_NONE);
+	CHECK(!s.marked);
+	s.marked = 1; s.floor_ms = 0;
+	for (i = 1; i < BC250_DPM_SESSION_CLEAR_MS / 25u; i++)
+		CHECK(bc250_dpm_session_step(&s, (i & 1u) ? L(-1) : BC250_DPM_THERMAL_FLOOR_LEVEL, 25) == BC250_DPM_SESSION_NONE);
+	CHECK(bc250_dpm_session_step(&s, L(-1), 25) == BC250_DPM_SESSION_CLEAR);
 }
 
 /* ---- runtime tuning (0.7.185) ------------------------------------------------------------------- */
@@ -453,7 +502,7 @@ static struct bc250_dpm_tune tune(unsigned int up, unsigned int target, unsigned
 static int ref_lowering(const struct bc250_dpm_tune *t)
 {
 	unsigned int l;
-	for (l = 1; l < BC250_CLOCK_LEVELS; l++)
+	for (l = BC250_DPM_FLOOR_LEVEL + 1u; l < BC250_CLOCK_LEVELS; l++)
 		if ((t->down_permille + 1u) * bc250_clock_points[l].mhz > t->up_permille * bc250_clock_points[l - 1].mhz)
 			return 0;
 	return 1;
@@ -462,14 +511,14 @@ static int ref_lowering(const struct bc250_dpm_tune *t)
 static int ref_raise(const struct bc250_dpm_tune *t)
 {
 	unsigned int l, busy;
-	for (l = 0; l < BC250_DPM_TOP_LEVEL; l++)
+	for (l = BC250_DPM_FLOOR_LEVEL; l < BC250_DPM_TOP_LEVEL; l++)
 		for (busy = t->up_permille; busy <= 1000u; busy++) {
 			struct bc250_dpm_governor g;
 			struct bc250_dpm_input in;
 			unsigned int next;
 			bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 			g.tune = *t;
-			g.tune.floor_level = 0;
+			g.tune.floor_level = L(0);
 			g.level = l;
 			in.busy_permille = busy; in.temperature_mc = 60000; in.temperature_valid = 1; in.dt_ms = 25;
 			next = bc250_dpm_step(&g, &in);
@@ -487,81 +536,81 @@ static void test_tune_check(void)
 
 	bc250_dpm_tune_default(&d);
 	CHECK(d.up_permille == 900u && d.target_permille == 800u && d.down_permille == 650u && d.down_hold_ms == 200u &&
-	      d.floor_level == 0u);
+	      d.floor_level == L(0));
 	CHECK(d.hot_step_ms == 500u && d.soft_delta_mc == 0u && d.soft_step_ms == 3000u);
 	CHECK(bc250_dpm_tune_check(&d, BC250_DPM_TOP_LEVEL) == BC250_DPM_TUNE_OK);
-	CHECK(bc250_dpm_tune_check(&d, 0) == BC250_DPM_TUNE_OK);        /* a fixed-lab ceiling: no runtime floor is fine */
+	CHECK(bc250_dpm_tune_check(&d, L(0)) == BC250_DPM_TUNE_OK);        /* a fixed-lab ceiling: no runtime floor is fine */
 	CHECK(ref_lowering(&d) == 1 && ref_raise(&d) == 1);
-	bc250_dpm_init(&g, 7);
+	bc250_dpm_init(&g, L(7));
 	CHECK(memcmp(&g.tune, &d, sizeof(d)) == 0 && g.floor_ticks == 0);
 
 	/* Ranges. */
-	t = tune(1001, 800, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RANGE);
-	t = tune(900, 800, 99, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RANGE);
-	t = tune(900, 0, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RANGE);
-	t = tune(1000, 999, 100, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = tune(1001, 800, 650, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_RANGE);
+	t = tune(900, 800, 99, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_RANGE);
+	t = tune(900, 0, 650, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_RANGE);
+	t = tune(1000, 999, 100, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	/* Order: down < target < up, strictly. */
-	t = tune(900, 650, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_ORDER);
-	t = tune(900, 900, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_ORDER);
-	t = tune(600, 800, 650, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_ORDER);
+	t = tune(900, 650, 650, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ORDER);
+	t = tune(900, 900, 650, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ORDER);
+	t = tune(600, 800, 650, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ORDER);
 	/* Invariant 1 at its exact edge for up 900: 11 x 818 = 8998 <= 9000 admits down 817, 11 x 819 = 9009 does not
 	 * admit 818. (target 899 keeps invariant 2 out of the way.) */
-	t = tune(900, 899, 817, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = tune(900, 899, 818, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_LOWERING);
+	t = tune(900, 899, 817, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = tune(900, 899, 818, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_LOWERING);
 	/* The strict form without the +1 would admit 818 (dpm_strict_form_admits_818): at 1100 MHz a load that reads
 	 * 818 permille (the work of 899.8 to 900.9 permille at 1000 MHz) can hold the average at 817, one under it, and
 	 * lower; at 1000 MHz the same work reads 899 or 900, and 900 is up. */
 	/* Invariant 2: a target just above down lets a raise land below down. */
-	t = tune(370, 336, 335, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RAISE);
+	t = tune(370, 336, 335, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_RAISE);
 	CHECK(ref_lowering(&t) == 1 && ref_raise(&t) == 0);
 	/* The A/B tune of the 0.7.185 lab plan. */
-	t = tune(750, 650, 500, 200, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
+	t = tune(750, 650, 500, 200, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	/* The hold. */
-	t = tune(900, 800, 650, 99, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_HOLD);
-	t = tune(900, 800, 650, 100, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = tune(900, 800, 650, 5000, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = tune(900, 800, 650, 5001, 0); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_HOLD);
+	t = tune(900, 800, 650, 99, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_HOLD);
+	t = tune(900, 800, 650, 100, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = tune(900, 800, 650, 5000, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = tune(900, 800, 650, 5001, L(0)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_HOLD);
 	/* The floor: a level at or below the start's ceiling. */
-	t = tune(900, 800, 650, 200, 10); CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	CHECK(bc250_dpm_tune_check(&t, 9) == BC250_DPM_TUNE_FLOOR);
-	CHECK(bc250_dpm_tune_check(&t, 0) == BC250_DPM_TUNE_FLOOR);
-	t = tune(900, 800, 650, 200, 11); CHECK(bc250_dpm_tune_check(&t, 99) == BC250_DPM_TUNE_FLOOR);
-	t = tune(900, 800, 650, 200, 6); CHECK(bc250_dpm_tune_check(&t, 6) == BC250_DPM_TUNE_OK);
+	t = tune(900, 800, 650, 200, L(10)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	CHECK(bc250_dpm_tune_check(&t, L(9)) == BC250_DPM_TUNE_FLOOR);
+	CHECK(bc250_dpm_tune_check(&t, L(0)) == BC250_DPM_TUNE_FLOOR);
+	t = tune(900, 800, 650, 200, L(11)); CHECK(bc250_dpm_tune_check(&t, L(99)) == BC250_DPM_TUNE_FLOOR);
+	t = tune(900, 800, 650, 200, L(6)); CHECK(bc250_dpm_tune_check(&t, L(6)) == BC250_DPM_TUNE_OK);
 	/* The thermal timing (0.7.197): each field at both edges and one past each, the soft delta's 0 (off) admitted. */
-	t = d; t.hot_step_ms = 249; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.hot_step_ms = 250; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.hot_step_ms = 10000; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.hot_step_ms = 10001; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.hot_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.soft_delta_mc = 1; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_delta_mc = 499; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_delta_mc = 500; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.soft_delta_mc = 4500; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.soft_delta_mc = 4501; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_delta_mc = 0x80000000u; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_step_ms = 1999; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_step_ms = 2000; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.soft_step_ms = 30000; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_OK);
-	t = d; t.soft_step_ms = 30001; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.hot_step_ms = 249; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.hot_step_ms = 250; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.hot_step_ms = 10000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.hot_step_ms = 10001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.hot_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 1; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 499; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 4500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 4501; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 0x80000000u; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_step_ms = 1999; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_step_ms = 2000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_step_ms = 30000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_step_ms = 30001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	/* The soft step is checked while the release is off, so that turning it on later is the delta alone. */
-	t = d; t.soft_delta_mc = 0; t.soft_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_THERMAL);
+	t = d; t.soft_delta_mc = 0; t.soft_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	/* The soft threshold stays strictly inside RELEASE..HOT at both edges of the delta (compile time below). */
 
 	/* set_tune: a refused tune leaves the governor's as it was, an admitted one replaces it. */
-	bc250_dpm_init(&g, 6);
-	t = tune(750, 650, 500, 300, 7);
+	bc250_dpm_init(&g, L(6));
+	t = tune(750, 650, 500, 300, L(7));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && memcmp(&g.tune, &d, sizeof(d)) == 0);
-	t.floor_level = 6;
+	t.floor_level = L(6);
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK && memcmp(&g.tune, &t, sizeof(t)) == 0);
 
 	/* The check against the references: invariant 1 on a fine grid, invariant 2 (and 1) on a coarser one. */
 	for (up = 110; up <= 1000; up += 7)
 		for (down = 100; down < up; down++) {
-			t = tune(up, up - 1u, down, 200, 0);
+			t = tune(up, up - 1u, down, 200, L(0));
 			if (down + 1u >= up) continue;
 			{
-				enum bc250_dpm_tune_error e = bc250_dpm_tune_check(&t, 10);
+				enum bc250_dpm_tune_error e = bc250_dpm_tune_check(&t, L(10));
 				CHECK((e != BC250_DPM_TUNE_LOWERING) == ref_lowering(&t));
 				compared++;
 			}
@@ -571,8 +620,8 @@ static void test_tune_check(void)
 			for (target = down + 1u; target < up; target += 40) {
 				enum bc250_dpm_tune_error e;
 				int r1, r2;
-				t = tune(up, target, down, 200, 0);
-				e = bc250_dpm_tune_check(&t, 10);
+				t = tune(up, target, down, 200, L(0));
+				e = bc250_dpm_tune_check(&t, L(10));
 				r1 = ref_lowering(&t);
 				r2 = r1 ? ref_raise(&t) : 1;
 				CHECK(r2 >= 0);
@@ -613,8 +662,8 @@ static void test_tune_no_oscillation(void)
 	for (up = 150; up <= 1000; up += 50)
 		for (down = 100; down < up; down += 50)
 			for (target = down + 10u; target < up; target += 50) {
-				t = tune(up, target, down, 200, 0);
-				if (bc250_dpm_tune_check(&t, 10) != BC250_DPM_TUNE_OK) continue;
+				t = tune(up, target, down, 200, L(0));
+				if (bc250_dpm_tune_check(&t, L(10)) != BC250_DPM_TUNE_OK) continue;
 				admitted++;
 				for (h = 0; h < sizeof(holds) / sizeof(holds[0]); h++) {
 					t.down_hold_ms = holds[h];
@@ -624,24 +673,24 @@ static void test_tune_no_oscillation(void)
 						mhz = bc250_dpm_level_mhz(settled);
 						busy = demand >= mhz ? 1000u : demand * 1000u / mhz;
 						if (settled < BC250_DPM_TOP_LEVEL) CHECK(busy < t.up_permille);
-						if (settled > 0) CHECK(busy + 2u >= t.down_permille);
+						if (settled > L(0)) CHECK(busy + 2u >= t.down_permille);
 					}
 				}
 			}
 	CHECK(admitted > 40u);
 
 	/* The lab plan's tune, densely. */
-	t = tune(750, 650, 500, 200, 0);
+	t = tune(750, 650, 500, 200, L(0));
 	for (demand = 100; demand <= 2400; demand += 10) CHECK(sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled) == 0);
 
 	/* Negative control: tunes that keep invariant 1 but break invariant 2 do cycle. The check refuses them. */
-	t = tune(370, 336, 335, 200, 0);
-	CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RAISE);
+	t = tune(370, 336, 335, 200, L(0));
+	CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_RAISE);
 	for (demand = 300; demand <= 450; demand += 5) if (sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled)) seen_cycle++;
 	CHECK(seen_cycle > 0);
 	seen_cycle = 0;
-	t = tune(200, 181, 180, 100, 0);
-	CHECK(bc250_dpm_tune_check(&t, 10) == BC250_DPM_TUNE_RAISE);
+	t = tune(200, 181, 180, 100, L(0));
+	CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_RAISE);
 	for (demand = 180; demand <= 260; demand += 5) if (sweep_changes(&t, BC250_DPM_TOP_LEVEL, demand, &settled)) seen_cycle++;
 	CHECK(seen_cycle > 0);
 }
@@ -656,82 +705,82 @@ static void test_floor(void)
 
 	/* Floor 2000 at idle: the first tick goes there, want stays the load's (the floor). */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	t = tune(900, 800, 650, 200, 10);
+	t = tune(900, 800, 650, 200, L(10));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
-	CHECK(run(&g, 0, 60, 25) == 10);
-	CHECK(g.want == 0 && g.throttle == BC250_DPM_THROTTLE_NONE && g.floor_ticks == 1 && g.raises == 1);
-	for (i = 0; i < 400; i++) CHECK(run(&g, 0, 60, 25) == 10);
+	CHECK(run(&g, 0, 60, 25) == L(10));
+	CHECK(g.want == L(0) && g.throttle == BC250_DPM_THROTTLE_NONE && g.floor_ticks == 1 && g.raises == 1);
+	for (i = 0; i < 400; i++) CHECK(run(&g, 0, 60, 25) == L(10));
 	CHECK(g.lowers == 0 && g.floor_ticks > 1);
 	/* Full load at the floor: nothing to raise, nothing lifted. */
 	i = g.floor_ticks;
-	CHECK(run(&g, 1000, 60, 25) == 10 && g.floor_ticks == i);
+	CHECK(run(&g, 1000, 60, 25) == L(10) && g.floor_ticks == i);
 
 	/* Thermal soft beats the floor: one step at 87 C, another every HOT_STEP_MS, back only below 82 C. */
-	CHECK(run_mc(&g, 0, 87000, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
-	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 0, 88, 25) == 9);
-	CHECK(run(&g, 0, 88, 25) == 8);
-	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 0, 82000, 25) == 8);
+	CHECK(run_mc(&g, 0, 87000, 25) == L(9) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 0, 88, 25) == L(9));
+	CHECK(run(&g, 0, 88, 25) == L(8));
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 0, 82000, 25) == L(8));
 	for (i = 0; i < 4 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
-	CHECK(level == 10 && g.throttle == BC250_DPM_THROTTLE_NONE);
-	/* Critical: the floor of the table at once, whatever the runtime floor. */
-	CHECK(run(&g, 0, 90, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD);
+	CHECK(level == L(10) && g.throttle == BC250_DPM_THROTTLE_NONE);
+	/* Critical: the thermal floor at once, whatever the runtime floor. */
+	CHECK(run(&g, 0, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL && g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD);
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
-	CHECK(level == 10);
-	/* No sensor: the table's floor. */
+	CHECK(level == L(10));
+	/* No sensor: the lab floor, not the thermal floor (nothing is known about the temperature). */
 	in = tick(0, 60, 25); in.temperature_valid = 0;
 	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
-	CHECK(level == 0 && g.throttle == BC250_DPM_THROTTLE_SENSOR);
+	CHECK(level == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
-	CHECK(level == 10);
+	CHECK(level == L(10));
 	/* SetStablePowerState pins the table's floor over the runtime floor. */
 	g.stable = 1;
-	CHECK(run(&g, 0, 60, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_STABLE);
+	CHECK(run(&g, 0, 60, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_STABLE);
 	g.stable = 0;
-	CHECK(run(&g, 0, 60, 25) == 10);
+	CHECK(run(&g, 0, 60, 25) == L(10));
 
 	/* Floor off: from 2000 at idle one step per hold, as before 0.7.185 (the hold counted from here). */
-	t.floor_level = 0;
+	t.floor_level = L(0);
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	g.down_ms = 0;
-	for (i = 0; i < 7; i++) CHECK(run(&g, 0, 60, 25) == 10);
-	CHECK(run(&g, 0, 60, 25) == 9);
-	for (i = 0; i < 400 && level; i++) level = run(&g, 0, 60, 25);
-	CHECK(level == 0);
+	for (i = 0; i < 7; i++) CHECK(run(&g, 0, 60, 25) == L(10));
+	CHECK(run(&g, 0, 60, 25) == L(9));
+	for (i = 0; i < 400 && level > L(0); i++) level = run(&g, 0, 60, 25);
+	CHECK(level == L(0));
 
 	/* A floor in the middle: the load still raises above it, lowerings stop at it. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	t = tune(900, 800, 650, 200, 5);
+	t = tune(900, 800, 650, 200, L(5));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
-	CHECK(run(&g, 0, 60, 25) == 5);
-	CHECK(run(&g, 1000, 60, 25) == 9);     /* 1500 x 1000 / 800 = 1875 -> 1900 */
+	CHECK(run(&g, 0, 60, 25) == L(5));
+	CHECK(run(&g, 1000, 60, 25) == L(9));     /* 1500 x 1000 / 800 = 1875 -> 1900 */
 	for (i = 0; i < 400; i++) level = run(&g, 0, 60, 25);
-	CHECK(level == 5 && g.want <= 5);
+	CHECK(level == L(5) && g.want <= L(5));
 
 	/* The max setting: a floor above it is refused; one written past the check is clamped, never above the ceiling. */
-	bc250_dpm_init(&g, 6);
-	t = tune(900, 800, 650, 200, 10);
-	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == 0);
-	t.floor_level = 6;
+	bc250_dpm_init(&g, L(6));
+	t = tune(900, 800, 650, 200, L(10));
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == L(0));
+	t.floor_level = L(6);
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
-	CHECK(run(&g, 0, 60, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_NONE);
-	CHECK(run(&g, 1000, 60, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
-	g.tune.floor_level = 10;
+	CHECK(run(&g, 0, 60, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_NONE);
+	CHECK(run(&g, 1000, 60, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
+	g.tune.floor_level = L(10);
 	/* The limit alone would also hold it at 6, but name MAX_SETTING; the clamp keeps the floor a floor. */
-	for (i = 0; i < 50; i++) CHECK(run(&g, 0, 60, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_NONE);
+	for (i = 0; i < 50; i++) CHECK(run(&g, 0, 60, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_NONE);
 	/* Thermal soft with the floor at the ceiling: below both. */
-	CHECK(run(&g, 0, 87, 25) == 5 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(run(&g, 0, 87, 25) == L(5) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 
 	/* Tuned thresholds act: up 750 raises where 900 would not; down 500 holds where 650 would lower. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run(&g, 800, 60, 25) == 0);
-	t = tune(750, 650, 500, 200, 0);
+	CHECK(run(&g, 800, 60, 25) == L(0));
+	t = tune(750, 650, 500, 200, L(0));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
-	CHECK(run(&g, 800, 60, 25) == 3);      /* 1000 x 800 / 650 = 1230 -> 1300 */
-	for (i = 0; i < 100; i++) CHECK(run(&g, 600, 60, 25) == 3);
-	t = tune(900, 800, 650, 200, 0);
+	CHECK(run(&g, 800, 60, 25) == L(3));      /* 1000 x 800 / 650 = 1230 -> 1300 */
+	for (i = 0; i < 100; i++) CHECK(run(&g, 600, 60, 25) == L(3));
+	t = tune(900, 800, 650, 200, L(0));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	for (i = 0; i < 100; i++) level = run(&g, 600, 60, 25);
-	CHECK(level < 3);
+	CHECK(level < L(3));
 }
 
 /* ---- the warm zone (0.7.200; at 87 C from 0.7.204) ------------------------------------------------ */
@@ -747,65 +796,65 @@ static void test_warm(void)
 	unsigned int i, level;
 
 	/* Full load at 1500 MHz at 85.0 C and 86.999 C: the raise goes, one level (the ramp), no warm hold, no hot entry. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
-	CHECK(run_mc(&g, 1000, 85000, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 0);
-	CHECK(g.want == 9 && g.raises == 1);		/* want stays the load's own answer */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
-	CHECK(run_mc(&g, 1000, 86999, 25) == 6 && g.warm_holds == 0 && g.thermal_events == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	CHECK(run_mc(&g, 1000, 85000, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 0);
+	CHECK(g.want == L(9) && g.raises == 1);		/* want stays the load's own answer */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	CHECK(run_mc(&g, 1000, 86999, 25) == L(6) && g.warm_holds == 0 && g.thermal_events == 0);
 	/* Held at 86 C, the clock climbs one level per ramp interval (3.82 s at 86 C) up to the top, no thermal event. */
 	for (i = 0; i < 20000u / 25u; i++) level = run_mc(&g, 1000, 86000, 25);
-	CHECK(level == 10 && g.warm_holds == 0 && g.thermal_events == 0 && g.raises == 5);
+	CHECK(level == L(10) && g.warm_holds == 0 && g.thermal_events == 0 && g.raises == 5);
 
 	/* 87 C is HOT: one step down at once, as before; the warm rule counts nothing, the cap holds the level. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
-	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
-	CHECK(g.thermal_events == 1 && g.thermal_cap == 9 && g.warm_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(9) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(g.thermal_events == 1 && g.thermal_cap == L(9) && g.warm_holds == 0);
 	/* Still at 87 C or more: one more level per hot step, never a raise. */
-	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 87000, 25) == 9);
-	CHECK(run_mc(&g, 1000, 88000, 25) == 8);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 87000, 25) == L(9));
+	CHECK(run_mc(&g, 1000, 88000, 25) == L(8));
 	for (i = 0; i < 2000u / 25u; i++) level = run_mc(&g, 1000, 87500, 25);
-	CHECK(level == 4 && g.raises == 0 && g.warm_holds == 0);
+	CHECK(level == L(4) && g.raises == 0 && g.warm_holds == 0);
 	/* Back under 87 C, above 82 C: the cap holds (no release above 82 C), and so does the clock. */
-	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 86000, 25) == 4);
-	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_cap == 4);
+	for (i = 0; i < 100; i++) CHECK(run_mc(&g, 1000, 86000, 25) == L(4));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.thermal_cap == L(4));
 	/* The release below 82 C is unchanged: one level per RELEASE_STEP_MS; the clock follows at the ramp's pace. */
-	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == 4);
-	CHECK(run_mc(&g, 1000, 81999, 25) == 5 && g.thermal_cap == 5);
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 81999, 25) == L(4));
+	CHECK(run_mc(&g, 1000, 81999, 25) == L(5) && g.thermal_cap == L(5));
 
 	/* The backstop: the load lowered the clock under the hot cap inside a hot episode, then asks again at 87.5 C. The cap
 	 * would allow it; the warm rule holds the level (before 0.7.204 the step asked for it and the clock gate refused it,
 	 * "refused by the clock gate" in the driver log). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 10;
-	CHECK(run_mc(&g, 1000, 87000, 25) == 9 && g.thermal_cap == 9);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(9) && g.thermal_cap == L(9));
 	g.avg_permille = 0;
-	for (i = 1; i < BC250_DPM_DOWN_HOLD_MS / 25u; i++) CHECK(run_mc(&g, 0, 87500, 25) == 9);
-	CHECK(run_mc(&g, 0, 87500, 25) == 8 && g.thermal_cap == 9);
-	CHECK(run_mc(&g, 1000, 87500, 25) == 8 && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
+	for (i = 1; i < BC250_DPM_DOWN_HOLD_MS / 25u; i++) CHECK(run_mc(&g, 0, 87500, 25) == L(9));
+	CHECK(run_mc(&g, 0, 87500, 25) == L(8) && g.thermal_cap == L(9));
+	CHECK(run_mc(&g, 1000, 87500, 25) == L(8) && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
 
 	/* A lowering still happens at 85-86.999 C, after the same hold as at 60 C, one step at a time. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 8;
-	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 85000, 25) == 8);
-	CHECK(run_mc(&g, 0, 86999, 25) == 7 && g.lowers == 1 && g.warm_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(8);
+	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 85000, 25) == L(8));
+	CHECK(run_mc(&g, 0, 86999, 25) == L(7) && g.lowers == 1 && g.warm_holds == 0);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* The runtime floor is a raise too: one level at 86.5 C, none at 87 C (the hot cap). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 3;
-	t = tune(900, 800, 650, 200, 10);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(3);
+	t = tune(900, 800, 650, 200, L(10));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
-	CHECK(run_mc(&g, 0, 86500, 25) == 4 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 0);
-	CHECK(run_mc(&g, 0, 87000, 25) == 3 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
-	CHECK(run_mc(&g, 0, 60000, 25) == 3);	/* one tick under 82 C releases nothing */
+	CHECK(run_mc(&g, 0, 86500, 25) == L(4) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 0);
+	CHECK(run_mc(&g, 0, 87000, 25) == L(3) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	CHECK(run_mc(&g, 0, 60000, 25) == L(3));	/* one tick under 82 C releases nothing */
 
 	/* At the max setting there is nothing to refuse: the setting names the reason. */
-	bc250_dpm_init(&g, 6); g.level = 6;
-	CHECK(run_mc(&g, 1000, 86000, 25) == 6 && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING && g.warm_holds == 0);
+	bc250_dpm_init(&g, L(6)); g.level = L(6);
+	CHECK(run_mc(&g, 1000, 86000, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING && g.warm_holds == 0);
 
 	/* SetStablePowerState and a missing sensor go to the floor, never a hold. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5; g.stable = 1;
-	CHECK(run_mc(&g, 1000, 87000, 25) == 0 && g.throttle == BC250_DPM_THROTTLE_STABLE && g.warm_holds == 0);
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.stable = 1;
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_STABLE && g.warm_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
 	in = tick(1000, 0, 25); in.temperature_mc = 87000; in.temperature_valid = 0;
-	CHECK(bc250_dpm_step(&g, &in) == 0 && g.throttle == BC250_DPM_THROTTLE_SENSOR && g.warm_holds == 0);
+	CHECK(bc250_dpm_step(&g, &in) == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR && g.warm_holds == 0);
 }
 
 /* ---- the thermal timing (0.7.197, BD-055) ------------------------------------------------------- */
@@ -846,30 +895,31 @@ static void test_reentry(void)
 		}
 		/* The first entry (t = 0) steps at once, no change since the start; then one per hot step until the last
 		 * tick (t = 7975 ms), bounded by the floor ten levels down. */
-		CHECK(changes == (7975u / steps[s] + 1u < 10u ? 7975u / steps[s] + 1u : 10u));
+		/* ... bounded by the thermal floor, BC250_DPM_TOP_LEVEL levels down (ten up to 0.7.204). */
+		CHECK(changes == (7975u / steps[s] + 1u < BC250_DPM_TOP_LEVEL ? 7975u / steps[s] + 1u : BC250_DPM_TOP_LEVEL));
 		CHECK(min_gap >= steps[s]);
 		CHECK(level == g.thermal_cap && g.thermal_events == 8000u / 25u / 2u);
 	}
 
 	/* A steady 87 C: the same spacing, from the entry. */
 	init_thermal(&g, 2000, 0, BC250_DPM_SOFT_STEP_MS);
-	CHECK(run(&g, 1000, 87, 25) == 9);
-	for (i = 1; i < 2000u / 25u; i++) CHECK(run(&g, 1000, 87, 25) == 9);
-	CHECK(run(&g, 1000, 87, 25) == 8);
+	CHECK(run(&g, 1000, 87, 25) == L(9));
+	for (i = 1; i < 2000u / 25u; i++) CHECK(run(&g, 1000, 87, 25) == L(9));
+	CHECK(run(&g, 1000, 87, 25) == L(8));
 
 	/* A re-entry after a short cool spell inside the hot step: the cap is clamped to the running clock (nothing
 	 * lowered, no raise), and the step follows a hot step after the last change, not after the entry. */
 	init_thermal(&g, 2000, 0, BC250_DPM_SOFT_STEP_MS);
-	CHECK(run(&g, 1000, 87, 25) == 9);                              /* t = 0: step */
-	for (i = 0; i < 1000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);   /* out for 1 s */
-	CHECK(run(&g, 1000, 87, 25) == 9 && g.thermal_cap == 9 && g.thermal_events == 2);
-	for (i = 1; i < 1000u / 25u - 1u; i++) CHECK(run(&g, 1000, 87, 25) == 9);
-	CHECK(run(&g, 1000, 87, 25) == 8);                              /* 2 s after the first step */
+	CHECK(run(&g, 1000, 87, 25) == L(9));                              /* t = 0: step */
+	for (i = 0; i < 1000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == L(9));   /* out for 1 s */
+	CHECK(run(&g, 1000, 87, 25) == L(9) && g.thermal_cap == L(9) && g.thermal_events == 2);
+	for (i = 1; i < 1000u / 25u - 1u; i++) CHECK(run(&g, 1000, 87, 25) == L(9));
+	CHECK(run(&g, 1000, 87, 25) == L(8));                              /* 2 s after the first step */
 
 	/* The clamp to the running clock: a load below the cap is not raised past the clock it ran at on entry. */
 	init_thermal(&g, 2000, 0, BC250_DPM_SOFT_STEP_MS);
-	g.level = 6; g.cap_ms = 100;                                    /* a raise 100 ms ago */
-	CHECK(run(&g, 1000, 87, 25) == 6 && g.thermal_cap == 6);       /* full load asks more; the clamp holds 6 */
+	g.level = L(6); g.cap_ms = 100;                                    /* a raise 100 ms ago */
+	CHECK(run(&g, 1000, 87, 25) == L(6) && g.thermal_cap == L(6));       /* full load asks more; the clamp holds 6 */
 }
 
 static void test_soft_release(void)
@@ -879,82 +929,83 @@ static void test_soft_release(void)
 
 	/* Off by default: anywhere in 82..86.999 the cap holds, as before. */
 	init_thermal(&g, 500, 0, 3000);
-	CHECK(run(&g, 1000, 87, 25) == 9);
-	for (i = 0; i < 60000u / 25u; i++) CHECK(run_mc(&g, 1000, 82500, 25) == 9);
+	CHECK(run(&g, 1000, 87, 25) == L(9));
+	for (i = 0; i < 60000u / 25u; i++) CHECK(run_mc(&g, 1000, 82500, 25) == L(9));
 	CHECK(g.soft_releases == 0);
 
 	/* Delta 1.5 C (85.5 C), step 3 s: held below for a whole step without a break, one level. */
 	init_thermal(&g, 500, 1500, 3000);
-	CHECK(run(&g, 1000, 87, 25) == 9);
-	for (i = 1; i < 3000u / 25u; i++) CHECK(run_mc(&g, 1000, 85499, 25) == 9);
+	CHECK(run(&g, 1000, 87, 25) == L(9));
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run_mc(&g, 1000, 85499, 25) == L(9));
 	/* 85.499 C is under the warm zone (87 C from 0.7.204; 85 C before, where only the cap rose): the clock follows the
 	 * cap at once, one level, the first raise since the start. */
-	CHECK(run_mc(&g, 1000, 85499, 25) == 10 && g.soft_releases == 1 && g.thermal_cap == 10);
+	CHECK(run_mc(&g, 1000, 85499, 25) == L(10) && g.soft_releases == 1 && g.thermal_cap == L(10));
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.warm_holds == 0);
 	/* At the threshold itself: no raise. */
 	init_thermal(&g, 500, 1500, 3000);
-	CHECK(run(&g, 1000, 87, 25) == 9);
-	for (i = 0; i < 30000u / 25u; i++) CHECK(run_mc(&g, 1000, 85500, 25) == 9);
+	CHECK(run(&g, 1000, 87, 25) == L(9));
+	for (i = 0; i < 30000u / 25u; i++) CHECK(run_mc(&g, 1000, 85500, 25) == L(9));
 	CHECK(g.soft_releases == 0 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	/* A break restarts the hold: one tick at 85.6 C just before the step. */
 	init_thermal(&g, 500, 1500, 3000);
-	CHECK(run(&g, 1000, 87, 25) == 9);
-	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);
-	CHECK(run_mc(&g, 1000, 85600, 25) == 9);
-	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 9);
-	CHECK(run(&g, 1000, 85, 25) == 10 && g.soft_releases == 1 && g.thermal_cap == 10);
+	CHECK(run(&g, 1000, 87, 25) == L(9));
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == L(9));
+	CHECK(run_mc(&g, 1000, 85600, 25) == L(9));
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == L(9));
+	CHECK(run(&g, 1000, 85, 25) == L(10) && g.soft_releases == 1 && g.thermal_cap == L(10));
 	/* A hot tick restarts it too, and it steps (cap_ms is past the hot step). */
 	init_thermal(&g, 500, 1500, 3000);
-	g.thermal_cap = 8; g.level = 8;
-	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 8);
-	CHECK(run(&g, 1000, 87, 25) == 7 && g.soft_releases == 0);
-	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == 7);
-	CHECK(run(&g, 1000, 85, 25) == 8 && g.soft_releases == 1 && g.thermal_cap == 8);
+	g.thermal_cap = L(8); g.level = L(8);
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == L(8));
+	CHECK(run(&g, 1000, 87, 25) == L(7) && g.soft_releases == 0);
+	for (i = 1; i < 3000u / 25u; i++) CHECK(run(&g, 1000, 85, 25) == L(7));
+	CHECK(run(&g, 1000, 85, 25) == L(8) && g.soft_releases == 1 && g.thermal_cap == L(8));
 	/* The soft path climbs one level per step, all the way up; below 82 C the fast path (1 s) takes over. Since 0.7.203
 	 * the clock follows the cap one level per ramp interval (3.47 s at 84 C, 2.94 s at 81 C from 0.7.204): the cap is at
 	 * the top after 18 s (6 s), the clock a few seconds later. */
 	init_thermal(&g, 500, 1500, 3000);
-	g.thermal_cap = 4; g.level = 4;
+	g.thermal_cap = L(4); g.level = L(4);
 	for (i = 0; i < 6u * 3000u / 25u; i++) level = run(&g, 1000, 84, 25);
-	CHECK(level < 10 && g.thermal_cap == 10 && g.soft_releases == 6);
+	CHECK(level < L(10) && g.thermal_cap == L(10) && g.soft_releases == 6);
 	for (i = 0; i < 8000u / 25u; i++) level = run(&g, 1000, 84, 25);
-	CHECK(level == 10);
-	g.thermal_cap = 4; g.level = 4; g.soft_ms = 0;
+	CHECK(level == L(10));
+	g.thermal_cap = L(4); g.level = L(4); g.soft_ms = 0;
 	for (i = 0; i < 6u * 1000u / 25u; i++) level = run(&g, 1000, 81, 25);
-	CHECK(g.thermal_cap == 10 && level < 10);
+	CHECK(g.thermal_cap == L(10) && level < L(10));
 	for (i = 0; i < 12000u / 25u; i++) level = run(&g, 1000, 81, 25);
-	CHECK(level == 10 && g.soft_releases == 6);
+	CHECK(level == L(10) && g.soft_releases == 6);
 	/* The widest delta (82.5 C) and the narrowest (86.5 C). Both thresholds lie under the warm zone (87 C, 0.7.204): the
 	 * clock follows the raised cap. */
 	init_thermal(&g, 500, 4500, 2000);
-	g.thermal_cap = 8; g.level = 8;
+	g.thermal_cap = L(8); g.level = L(8);
 	for (i = 0; i < 2000u / 25u; i++) level = run_mc(&g, 1000, 82499, 25);
-	CHECK(level == 9);
+	CHECK(level == L(9));
 	init_thermal(&g, 500, 500, 2000);
-	g.thermal_cap = 8; g.level = 8;
+	g.thermal_cap = L(8); g.level = L(8);
 	for (i = 0; i < 2000u / 25u; i++) level = run_mc(&g, 1000, 86499, 25);
-	CHECK(level == 9 && g.thermal_cap == 9 && g.soft_releases == 1 && g.warm_holds == 0);
+	CHECK(level == L(9) && g.thermal_cap == L(9) && g.soft_releases == 1 && g.warm_holds == 0);
 	/* Critical goes to the floor; the soft release brings it back, a level per step, never past the setting. The clock
 	 * follows each raised cap within a ramp interval (3.65 s at 85 C). */
-	bc250_dpm_init(&g, 6);
+	bc250_dpm_init(&g, L(6));
 	{
 		struct bc250_dpm_tune t;
 		bc250_dpm_tune_default(&t); t.soft_delta_mc = 1500;
 		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	}
-	CHECK(run(&g, 1000, 90, 25) == 0);
+	CHECK(run(&g, 1000, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	for (i = 0; i < 20u * 3000u / 25u; i++) level = run(&g, 1000, 85, 25);
-	CHECK(level == 6 && g.thermal_cap == 6 && g.soft_releases == 6 && g.raises == 6 && g.warm_holds == 0);
+	/* Eight levels back since 0.7.205 (critical goes to 800 MHz, two under the lab floor), six before it. */
+	CHECK(level == L(6) && g.thermal_cap == L(6) && g.soft_releases == 8 && g.raises == 8 && g.warm_holds == 0);
 	/* A missing sensor resets the hold as critical does. */
 	init_thermal(&g, 500, 1500, 3000);
-	g.thermal_cap = 8; g.level = 8;
+	g.thermal_cap = L(8); g.level = L(8);
 	for (i = 1; i < 3000u / 25u; i++) run(&g, 1000, 85, 25);
 	{
 		struct bc250_dpm_input in = tick(1000, 60, 25);
 		in.temperature_valid = 0;
 		level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
 	}
-	CHECK(level == 0 && g.soft_ms == 0 && g.soft_releases == 0);
+	CHECK(level == L(0) && g.soft_ms == 0 && g.soft_releases == 0);
 }
 
 /* A synthetic plant: the hot spot is a fast node (3 s, 20 C of the full-power rise) over a heat sink (60 s, 29.5 C)
@@ -1064,55 +1115,55 @@ static void test_ramp(void)
 
 	/* Below the knee the load raises as before: 1000 -> 1300 -> 1700 -> 2000 in three ticks at 69.999 C. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run_mc(&g, 1000, 69999, 25) == 3 && run_mc(&g, 1000, 69999, 25) == 7 && run_mc(&g, 1000, 69999, 25) == 10);
+	CHECK(run_mc(&g, 1000, 69999, 25) == L(3) && run_mc(&g, 1000, 69999, 25) == L(7) && run_mc(&g, 1000, 69999, 25) == L(10));
 	CHECK(g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* At the knee: the first raise (none before) goes one level, the next waits a full interval. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run_mc(&g, 1000, 70000, 25) == 1 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.ramp_holds == 1);
-	CHECK(g.want == 3);					/* want stays the load's own answer */
-	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == 1);
+	CHECK(run_mc(&g, 1000, 70000, 25) == L(1) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.ramp_holds == 1);
+	CHECK(g.want == L(3));					/* want stays the load's own answer */
+	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == L(1));
 	CHECK(g.ramp_holds == BC250_DPM_RAMP_MIN_MS / 25u && g.raises == 1);
-	CHECK(run_mc(&g, 1000, 70000, 25) == 2 && g.raises == 2);
+	CHECK(run_mc(&g, 1000, 70000, 25) == L(2) && g.raises == 2);
 	/* At 84.9 C the interval is 3629 ms: 145 ticks hold (3625 ms), the 146th raises. */
-	for (i = 1; i < bc250_dpm_ramp_interval_ms(84900) / 25u; i++) CHECK(run_mc(&g, 1000, 84900, 25) == 2);
-	CHECK(run_mc(&g, 1000, 84900, 25) == 2);
-	CHECK(run_mc(&g, 1000, 84900, 25) == 3 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+	for (i = 1; i < bc250_dpm_ramp_interval_ms(84900) / 25u; i++) CHECK(run_mc(&g, 1000, 84900, 25) == L(2));
+	CHECK(run_mc(&g, 1000, 84900, 25) == L(2));
+	CHECK(run_mc(&g, 1000, 84900, 25) == L(3) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
 	/* A raise of one level is no hold: the load asks 2000 at 1900 MHz, the ramp lets it through. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 9;
-	CHECK(run_mc(&g, 915, 80000, 25) == 10 && g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(9);
+	CHECK(run_mc(&g, 915, 80000, 25) == L(10) && g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* A raise below the knee starts the interval too: a reading at 70 C 25 ms later waits for the rest of it. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run_mc(&g, 1000, 69000, 25) == 3);
-	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == 3);
-	CHECK(run_mc(&g, 1000, 70000, 25) == 4);
+	CHECK(run_mc(&g, 1000, 69000, 25) == L(3));
+	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == L(3));
+	CHECK(run_mc(&g, 1000, 70000, 25) == L(4));
 
 	/* Lowering is never held: idle at 80 C steps down after the usual hold. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 8; g.raise_ms = 0;
-	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 80000, 25) == 8);
-	CHECK(run_mc(&g, 0, 80000, 25) == 7 && g.ramp_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(8); g.raise_ms = 0;
+	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 80000, 25) == L(8));
+	CHECK(run_mc(&g, 0, 80000, 25) == L(7) && g.ramp_holds == 0);
 
 	/* The hot band (and the warm zone with it, 87 C from 0.7.204) names its own reason; the ramp adds no hold there. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = 5;
-	CHECK(run_mc(&g, 1000, 87000, 25) == 4 && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.ramp_holds == 0);
-	CHECK(run_mc(&g, 1000, 87000, 25) == 4 && g.ramp_holds == 0 && g.warm_holds == 0);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(4) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.ramp_holds == 0);
+	CHECK(run_mc(&g, 1000, 87000, 25) == L(4) && g.ramp_holds == 0 && g.warm_holds == 0);
 
 	/* The runtime floor is a raise too: one level per interval above the knee. */
 	{
-		struct bc250_dpm_tune t = tune(900, 800, 650, 200, 10);
+		struct bc250_dpm_tune t = tune(900, 800, 650, 200, L(10));
 		bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
-		CHECK(run_mc(&g, 0, 78000, 25) == 1 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
-		CHECK(run_mc(&g, 0, 60000, 25) == 10);	/* below the knee: at once */
+		CHECK(run_mc(&g, 0, 78000, 25) == L(1) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+		CHECK(run_mc(&g, 0, 60000, 25) == L(10));	/* below the knee: at once */
 	}
 
 	/* A stalled tick counts as MAX_DT_MS, so one stall does not open a raise. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
-	CHECK(run_mc(&g, 1000, 84000, 25) == 1);
-	CHECK(run_mc(&g, 1000, 84000, 3600000u) == 1);
+	CHECK(run_mc(&g, 1000, 84000, 25) == L(1));
+	CHECK(run_mc(&g, 1000, 84000, 3600000u) == L(1));
 	for (i = 0; i < 400; i++) level = run_mc(&g, 1000, 84000, 25);
-	CHECK(level == 4);	/* 1 s of the stall + 10 s at a 3.47 s interval: three more raises */
+	CHECK(level == L(4));	/* 1 s of the stall + 10 s at a 3.47 s interval: three more raises */
 }
 
 /* Session 367 on a plant: the governor at 1000 MHz with the hot spot at 75.7 C after an earlier load (the sink still
@@ -1251,6 +1302,133 @@ static void test_plant367(void)
 	}
 }
 
+/* ---- the thermal sub-floor (0.7.205, owner decision 2026-10-05) --------------------------------- */
+
+/* Two levels below the lab floor, and no more (a constant CHECK would trip C4127 under /WX). */
+typedef char dpm_subfloor_is_two_levels[(L(-2) == BC250_DPM_THERMAL_FLOOR_LEVEL) ? 1 : -1];
+
+/* RotTR scene 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy, so the
+ * thermal cap gained two levels below the lab floor: 900 and 800 MHz, both at the floor's own 820 mV. The
+ * load never asks for them, SetStablePowerState and a missing sensor stay at the lab floor, and the KMD can
+ * withdraw them for a start (bc250_dpm_subfloor_refused) because the firmware has never been seen there
+ * (facts M47). Nie ma dymu bez ognia - there is no smoke without fire; here we would rather have neither. */
+static void test_subfloor(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_input in;
+	struct bc250_dpm_tune t;
+	unsigned int i, level, temp, busy;
+
+	/* The two points themselves: a lower clock at the floor's voltage, no undervolt. */
+	CHECK(bc250_dpm_level_mhz(L(-1)) == 900u && bc250_dpm_level_mhz(L(-2)) == 800u);
+	CHECK(bc250_dpm_level_mv(L(-1)) == bc250_dpm_level_mv(L(0)));
+	CHECK(bc250_dpm_level_mv(L(-2)) == bc250_dpm_level_mv(L(0)));
+
+	/* A sustained 88 C at the lab floor under full load: the hot entry steps to 900 MHz at once, the next hot
+	 * step to 800 MHz, and there it stays (no underflow, however long it lasts). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(g.level == L(0) && g.subfloor_ok);
+	CHECK(run_mc(&g, 1000, 88000, 25) == L(-1) && g.thermal_cap == L(-1) && g.thermal_events == 1);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 88000, 25) == L(-1));
+	CHECK(run_mc(&g, 1000, 88000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	for (i = 0; i < 2000u; i++) CHECK(run_mc(&g, 1000, 88000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL && g.thermal_events == 1 && g.lowers == 2);
+	/* The load's own answer stays at the lab floor: the telemetry shows what holds the clock, not a demand
+	 * nobody made. */
+	CHECK(g.want == L(0));
+
+	/* The release comes back the same way: one level per RELEASE_STEP_MS, 800 -> 900 -> 1000 -> up. Below the
+	 * ramp's knee, so that the clock follows the cap at once (above it the ramp spaces the raises, test_ramp). */
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++)
+		CHECK(run_mc(&g, 0, 60000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(run_mc(&g, 0, 60000, 25) == L(-1) && g.thermal_cap == L(-1));
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 0, 60000, 25) == L(-1));
+	CHECK(run_mc(&g, 0, 60000, 25) == L(0) && g.thermal_cap == L(0));
+	for (i = 0; i < 20u * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run_mc(&g, 0, 60000, 25);
+	CHECK(level == L(0) && g.thermal_cap == BC250_DPM_TOP_LEVEL);	/* idle: the cap is free, the load is not */
+
+	/* 90 C: 800 MHz at once, from anywhere. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	CHECK(run(&g, 1000, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL && g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD);
+	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
+
+	/* The load never goes below the lab floor, at any temperature and any busy share: only the cap does, and
+	 * what the step returns is below the floor only while the cap is. */
+	for (temp = 40000; temp <= 95000; temp += 500)
+		for (busy = 0; busy <= 1000u; busy += 100u) {
+			bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+			for (i = 0; i < 400u; i++) {
+				level = run_mc(&g, busy, (int)temp, 25);
+				CHECK(g.want >= L(0));
+				CHECK(level >= L(0) || g.thermal_cap < L(0));
+				CHECK(level >= BC250_DPM_THERMAL_FLOOR_LEVEL);
+			}
+			/* Under the hot threshold nothing drops below the lab floor. */
+			if (temp < (unsigned int)BC250_DPM_HOT_MC) CHECK(g.level >= L(0));
+		}
+
+	/* A missing sensor and SetStablePowerState ask for the lab floor, but the missing-sensor rule is a clamp and
+	 * never a raise: blind, the driver owns the point this part is known to run at, and a cap already below the
+	 * floor stays where it is. The reading the KMD leaves in the tick when SmuReadTemperature fails is the last
+	 * good one, so a bare "go to the floor" would let one blind tick discard both hot steps and walk the clock
+	 * back up through the warm zone (the release below RELEASE_MC is the only way up). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 90000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	in = tick(1000, 60, 25); in.temperature_valid = 0;
+	for (i = 0; i < 400u; i++) {
+		level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+		CHECK(level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
+		CHECK(g.throttle == BC250_DPM_THROTTLE_SENSOR);
+	}
+	/* From the floor or above it the rule is the lowering it has always been (0.7.204 behaviour). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.thermal_cap = L(5);
+	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+	CHECK(level == L(0) && g.thermal_cap == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
+	/* Only the release brings a sub-floor cap back up, and it does so one level at a time. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 90000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	for (i = 0; i < 4u; i++) { level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level); }
+	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++)
+		CHECK(run_mc(&g, 1000, 60000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(run_mc(&g, 1000, 60000, 25) == L(-1) && g.thermal_cap == L(-1));
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.stable = 1;
+	CHECK(run_mc(&g, 1000, 88000, 25) == L(-1));		/* the cap is lower than the floor it asks for */
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
+	g.stable = 0;
+	for (i = 0; i < 20u * BC250_DPM_RELEASE_STEP_MS / 25u; i++) run_mc(&g, 0, 60000, 25);
+	g.stable = 1;
+	CHECK(run_mc(&g, 1000, 60000, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_STABLE);
+
+	/* A runtime floor is never admitted below the lab floor (the points below it are the cap's). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	t = tune(900, 800, 650, 200, L(-1));
+	CHECK(bc250_dpm_tune_check(&t, BC250_DPM_TOP_LEVEL) == BC250_DPM_TUNE_FLOOR);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == L(0));
+	t.floor_level = BC250_DPM_THERMAL_FLOOR_LEVEL;
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == L(0));
+	t.floor_level = L(0);
+	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+
+	/* The refusal: the KMD could not put the hardware at a sub-floor point. From then on the cap stops at the
+	 * lab floor for the rest of the start, whatever the temperature, and a cap already below it is raised. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 88000, 25) == L(-1) && g.thermal_cap == L(-1));
+	bc250_dpm_subfloor_refused(&g);
+	CHECK(!g.subfloor_ok && g.subfloor_refusals == 1 && g.thermal_cap == L(0));
+	g.level = L(0);					/* the KMD applied the lab floor instead */
+	for (i = 0; i < 4000u; i++) {
+		level = run_mc(&g, 1000, (i & 1u) ? 88000 : 91000, 25);
+		CHECK(level == L(0) && g.thermal_cap == L(0));
+	}
+	/* And a refusal before any hot tick keeps the whole start at or above the lab floor. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	bc250_dpm_subfloor_refused(&g);
+	CHECK(g.thermal_cap == BC250_DPM_TOP_LEVEL);		/* nothing to raise: the cap was not below the floor */
+	for (i = 0; i < 4000u; i++) CHECK(run_mc(&g, 1000, 89000, 25) >= L(0));
+	CHECK(g.thermal_cap == L(0) && g.level == L(0));
+}
+
 /* The busy source: GRBM samples when there are enough, the submit accounting otherwise. */
 static void test_busy_source(void)
 {
@@ -1298,6 +1476,7 @@ int main(void)
 	test_plant();
 	test_ramp();
 	test_plant367();
+	test_subfloor();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }
