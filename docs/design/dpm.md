@@ -103,32 +103,40 @@ level every hot step (500 ms by default) while it stays hot. At 90 C, or with an
 floor. Below 82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its
 readbacks, so a stale decision cannot raise either; lowering is always allowed.
 
-From 0.7.200 a warm zone starts 2 C below the hot threshold (`BC250_DPM_WARM_MC`, 85 C). The rules are:
+From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 C). The owner set this threshold on
+2026-10-04 ("próg na 87": the threshold at 87). From 0.7.200 to 0.7.203 the warm zone started at 85 C. The rules are:
 
-- At 85 C or more and below 87 C, the governor does not raise the clock or the voltage. The level stays where it is.
-  This applies to a raise from the load and to a raise from the runtime floor.
-- In the warm zone, a lowering from the load occurs as below 85 C.
+- At 87 C or more, the governor does not raise the clock or the voltage. This applies to a raise from the load and to
+  a raise from the runtime floor.
+- At 87 C or more, the hot cap lowers the clock one level per hot step. The warm zone does not change this.
+- At 87 C or more, the hot cap usually holds the clock at or below its level. The warm rule is then a backstop. It
+  stops a raise in one case: the load lowered the clock below the hot cap during a hot episode, and then the load asks
+  for more at 87 C or more. Before 0.7.204 the governor asked for this raise, and the clock gate refused it. The driver
+  log then showed `refused by the clock gate`.
+- Below 87 C, a raise occurs. Above 70 C the thermal ramp (below) controls the size and the time of the raise.
 - The warm zone does not change the thermal cap. The hot step, the critical rule, the release below 82 C and the soft
-  release operate as before.
-- With a soft-release delta less than 2 C, the soft threshold is in the warm zone. There, the soft release can
-  increase the cap. The clock goes up to the new cap only when a reading is below 85 C.
-- Below 85 C, the governor operates as before 0.7.200.
+  release operate as before. Each soft-release threshold (82.5 C to 86.5 C) is below the warm zone, so the clock
+  follows a released cap at the pace of the ramp.
 
 When the warm zone stops a raise, the throttle reason is `thermal-warm` (8). The counter `warm` in the driver log
-lines counts the governor ticks with a stopped raise. The owner asked for this zone after session 344 (The Ascent,
-menu, no frame cap). In that session the governor kept 1500 MHz / 919 mV while Tctl increased from 83.5 C to 85.3 C,
-because no rule stopped a raise between 82 C and 87 C. `test_warm` in `dpm_test.c` covers the edges (84.999,
-85.000, 86.999 and 87.000 C). The plant model gives the same results with and without the zone.
+lines counts the governor ticks with a stopped raise. From 0.7.204 this counter stays at zero or near zero. The owner
+asked for the first warm zone after session 344 (The Ascent, menu, no frame cap). In that session the governor kept
+1500 MHz / 919 mV while Tctl increased from 83.5 C to 85.3 C, because no rule stopped a raise between 82 C and 87 C.
+`test_warm` in `dpm_test.c` covers the edges (85.000, 86.999 and 87.000 C, the hot steps, the backstop). A compile-time
+check in `dpm_test.c` makes sure that the warm zone is 87 C, is not above the hot threshold, and is above the release
+threshold, the ramp knee and each soft-release threshold.
 
 From 0.7.203 a thermal ramp starts at 70 C (`BC250_DPM_RAMP_KNEE_MC`). The rules are:
 
-- At 70 C or more and below 85 C, a raise goes up one level (100 MHz) at most.
+- At 70 C or more and below the warm zone (87 C), a raise goes up one level (100 MHz) at most.
 - A raise occurs only when the last raise is at least the ramp interval ago. The interval is 1000 ms at 70 C. It
-  increases linearly to 4000 ms at 85 C (`bc250_dpm_ramp_interval_ms`). At 80 C it is 3000 ms. At 84 C it is 3800 ms.
+  increases linearly to 4000 ms at the warm zone (`bc250_dpm_ramp_interval_ms`). From 0.7.204 the warm zone is 87 C.
+  Thus the interval is 2764 ms at 80 C, 3470 ms at 84 C, 3647 ms at 85 C and 3823 ms at 86 C. In 0.7.203 the interval
+  went up to 4000 ms at 85 C.
 - Each raise starts the interval again. This includes a raise below 70 C and a raise whose SMU transaction failed.
 - The ramp applies to a raise from the load, to a raise from the runtime floor and to a clock that follows a released
   cap.
-- The ramp does not change a lowering, the thermal cap, the warm zone or the limits (85, 87, 82 and 90 C).
+- The ramp does not change a lowering, the thermal cap, the warm zone or the limits (87, 82 and 90 C).
 - Below 70 C, the governor operates as before 0.7.203.
 
 The ramp values are constants. The `RUN_DPM_TUNE` escape (ABI 2) has no field for them, and a new field is an ABI
@@ -140,37 +148,55 @@ driver log lines counts these governor ticks. `want` in the telemetry stays the 
 The reason is session 367 (KMD 0.7.202.1, `DpmMaxMHz` 2000). The governor was at 1000 MHz, and Tctl was 75.7 C after
 an earlier load. A load spike (busy 93 %) raised the clock to 2000 MHz / 1000 mV in three ticks. The hot spot then
 increased by approximately 12 C in 5 s. Tctl was 87.1 C approximately 9 s after the last idle telemetry line. The
-warm zone did not stop this, because it examines only the reading of the current tick. At that tick the raise was
-complete. The hot rule then lowered the clock from 1900 MHz to 1500 MHz in 1.6 s. The lab runner stopped the session,
-because Tctl stayed at 87 C for three samples.
+warm zone (then at 85 C) did not stop this, because it examines only the reading of the current tick. At that tick
+the raise was complete. The hot rule then lowered the clock from 1900 MHz to 1500 MHz in 1.6 s. The lab runner
+stopped the session, because Tctl stayed at 87 C for three samples.
 
 The hot spot has a fast time constant of approximately 3 s. With one level per interval, the reading shows the effect
-of each raise before the next raise. From 80 C the interval is longer than this time constant. A jump to 2000 MHz adds
-approximately 15 C. Thus a jump from below 70 C stays below 87 C.
+of each raise before the next raise. From approximately 81 C the interval is longer than this time constant. A jump to
+2000 MHz adds approximately 15 C. Thus a jump from below 70 C stays below 87 C.
 
-`test_ramp` in `dpm_test.c` covers the edges (69.999 and 70.000 C, 84.9 C, a stalled tick, the floor, the warm zone).
+`test_ramp` in `dpm_test.c` covers the edges (69.999 and 70.000 C, 84.9 C, a stalled tick, the floor, the hot band).
 `test_plant367` runs session 367 on a two-node plant. The plant constants come from the lab: 12 C in 5 s at 2000 MHz,
 and a steady state of 82.8 C at 1300 MHz and 86.0 C at 1400 MHz. Sessions 361-365 held 1300-1400 MHz at 84-86 C with
-the 1500 MHz ceiling. The test compares the rule before 0.7.203 with the ramp:
+the 1500 MHz ceiling. The sensor reading has +-0.4 C of noise. The test also takes a sample every 1 s, as the lab
+runner does, at each of the 40 phases of the 25 ms tick. A runner stop is three samples in a row at 87 C or more. The
+test compares the governor without the ramp, with the ramp and the 85 C warm zone (0.7.203), and with the ramp and the
+87 C warm zone (0.7.204):
 
-| Start 75.7 C, ceiling 2000 MHz, ten minutes | Before 0.7.203 | Ramp |
-|---|---|---|
-| Hot spot peak (model) | 87.5 C | 86.6 C |
-| Highest reading (with +-0.4 C noise) | 87.9 C | 87.0 C |
-| First reading at 87 C or more | 4.3 s | 29.1 s |
-| Longest time at 87 C or more without a break | 1950 ms | 25 ms (one tick) |
-| Clock at the end | 1300 MHz (cap latched) | 1400 MHz |
-| First time at the end clock | - | 9.1 s |
-| Last level change | 7.4 s | 54.7 s |
+| Start 75.7 C, ceiling 2000 MHz, ten minutes | No ramp (87 C zone) | 0.7.203 | 0.7.204 |
+|---|---|---|---|
+| Hot spot peak (model) | 87.5 C | 86.6 C | 86.7 C |
+| Highest reading | 87.9 C | 87.0 C | 87.0 C |
+| First reading at 87 C or more | 4.3 s | 29.2 s | 21.5 s |
+| Longest time at 87 C or more without a break | 1950 ms | 25 ms | 25 ms |
+| Longest run of 1 s samples at 87 C or more | 3 | 1 | 1 |
+| Runner stops (phases of 40) | 18 | 0 | 0 |
+| Clock at the end | 1300 MHz (cap latched) | 1400 MHz | 1400 MHz |
+| First time at the end clock | - | 9.1 s | 8.4 s |
+| Last level change | 7.4 s | 54.7 s | 55.1 s |
 
 With the ramp, the clock goes to 1500 MHz once while the sink is below its steady state at 1400 MHz. The sink
-increases with a time constant of 90 s. Two single-tick readings at 87.0 C then occur, and the hot rule lowers the
-clock one level at once. A rule that reads only the temperature of the current tick cannot see this slow increase.
+increases with a time constant of 90 s. Single-tick readings at 87.0 C then occur, and the hot rule lowers the clock one
+level at once. A rule that reads only the temperature of the current tick cannot see this slow increase. With the warm
+zone at 87 C, the hot rule (not the warm zone) stops the climb.
 
-The test also runs starts from 50 C to 82 C. Before 0.7.203, the hot spot goes above 87 C for each start from 74 C
-(9 of 33 starts). With the ramp, the hot spot stays below 87 C for all starts (peak 86.7 C). From a cold start the two
-rules give the same result: the clock gets to 2000 MHz below 70 C, and the hot rule lowers it on the slow increase of
-the sink. The plant constants are not measurements of the full thermal system. The lab must confirm the result.
+The test also runs starts from 50 C to 83 C (34 starts):
+
+| Starts 50-83 C | No ramp (87 C zone) | 0.7.203 | 0.7.204 |
+|---|---|---|---|
+| Starts with the hot spot at 87 C or more | 10 (from 74 C) | 0 | 0 |
+| Starts with a runner stop | 9 (from 75 C) | 0 | 0 |
+| Highest hot spot peak with the ramp | - | 86.7 C | 86.99 C |
+| Longest run of readings at 87 C or more | - | 50 ms | 125 ms |
+| Longest run of 1 s samples at 87 C or more | - | 2 | 2 |
+| Starts that end at 1300 MHz (the others at 1400 MHz) | - | 1 (83 C) | 5 (79-83 C) |
+
+With the warm zone at 87 C, starts from 79 C end at 1300 MHz. The sink is hot from the earlier load. The clock goes to
+1500 MHz, the hot rule lowers the cap, and the cap rises again only below 82 C. From a cold start all three give the
+same result: the clock gets to 2000 MHz below 70 C, and the hot rule lowers it on the slow increase of the sink. At a
+start of 84 C, the sink alone puts the hot spot above 87 C at 1000 MHz, so no clock rule can prevent a stop there. The
+plant constants are not measurements of the full thermal system. The lab must confirm the result.
 
 From 0.7.197 (BD-055) the drop on entering the hot band is at once only when the cap last moved at least a hot step
 ago. Before, every upward crossing of 87 C stepped, so a reading hovering at the limit walked the clock down at the
@@ -180,7 +206,7 @@ runtime value (250-10000 ms), and so is an optional soft release, off by default
 (500-4500 mC, so the threshold stays strictly between 82 and 87 C) for a whole soft step (2000-30000 ms) without a
 break, the cap rises one level. Without it the cap holds anywhere in 82-87 C, so under a sustained load one excursion
 past 87 C cost levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500-1600 MHz, frozen at
-85.6-86.2 C). The thresholds themselves (85, 87, 82, 90 C) are not tunable. `dpm_test.c` covers the rule edge by edge
+85.6-86.2 C). The thresholds themselves (87, 82 and 90 C, the warm zone and the ramp knee) are not tunable. `dpm_test.c` covers the rule edge by edge
 and runs a synthetic two-node plant (fast hot spot over a slow sink, scene changes, sensor noise) with the legacy
 timing, each change alone and both: the legacy rule latches one level down for the rest of the run; a 2 s hot step
 with a 1.5 C / 3 s soft release recovers between heavy scenes with no cap changes closer than 2 s and no reading
@@ -239,7 +265,7 @@ start, without a restart and without the registry:
   cycle. A refused tune names the reason and leaves the values as they were.
 - The floor lifts only what the load asks for. The thermal cap (87 C, released below 82 C), the critical rule (90 C),
   a missing sensor and SetStablePowerState all still win: each brings the clock below the floor. From 0.7.200 the
-  warm zone (85 C to 87 C) also stops a raise to the floor. The clock stays at its level until a reading is below 85 C.
+  warm zone (85 C to 87 C, from 0.7.204 at 87 C or more) also stops a raise to the floor.
   From 0.7.203, at 70 C or more, the clock goes up to the floor one level per ramp interval. `want` in the
   telemetry stays the load's own answer, so a floored run still shows what the governor would have chosen.
 - Every change is a line in the driver log with old and new values, e.g. `dpm: tune (floor): up 900->900 target
