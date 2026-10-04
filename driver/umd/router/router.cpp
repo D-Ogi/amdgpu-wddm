@@ -58,6 +58,7 @@
 #include <cstdio>
 #include <cwchar>
 #include "router-policy.h"
+#include "router-identity.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -374,8 +375,8 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     const bool entry_10_2 = !strcmp(entry, "OpenAdapter10_2");
     wchar_t windows[PathChars];
     const UINT wn = GetSystemWindowsDirectoryW(windows, PathChars);
-    if (!wn || wn >= PathChars) windows[0] = 0;
-    const bool component = IsWindowsComponentPath(image, windows);
+    if (!wn || wn >= PathChars) windows[0] = 0; // ClassifyComponent: Unknown, which keeps gpu-default on the CPU UMD
+    const Component component = ClassifyComponent(image, windows);
     const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component});
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {

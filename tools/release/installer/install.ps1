@@ -715,7 +715,7 @@ Set-StateValue $state 'khronos_value' $icdJson
 # 1 is the kill switch to the CPU route (tester.1 to tester.8 shipped 1 until BD-058 was fixed). RequireKmdSwitches 1
 # keeps the GPU route gated: when the KMD's effective interop switches are off, the router takes the CPU route by
 # itself. AppRouter Mode gpu-default: D3D10.1/D3D11 applications run on the GPU UMD, except Deny, the sign-in
-# processes and Windows components (their DirectComposition content is not supported on the GPU UMD yet).
+# processes and Windows components (blank or missing windows on the GPU UMD, BD-061; cause not established).
 Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll') })
 Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll') })
 # Application profiles: the shipped ones by the same rule; a tester's own profiles are other keys and stay as they are.
