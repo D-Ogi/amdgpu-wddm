@@ -35,7 +35,12 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C7u       // revision 199 (INF 0.7.199.1, on 198): the standard-allocation
+#define BC250_KMD_VERSION 0x000700C8u       // revision 200 (INF 0.7.200.1, on 199): the DPM governor
+                                            // refuses a raise of clock or voltage from 85 C up to the
+                                            // 87 C hot limit (BC250_DPM_WARM_MC, session 344); the dpm
+                                            // log lines count the refused steps ("warm N"), throttle 8
+                                            // is thermal-warm. No escape struct changed.
+                                            // 199 (INF 0.7.199.1, on 198): the standard-allocation
                                             // size query leaves the public Pitch alone, the fill publishes it
                                             // (d3dkmddi.md:32953); the wddm summary counts standard
                                             // allocation requests and answers by kind and GDI type, LB7A
