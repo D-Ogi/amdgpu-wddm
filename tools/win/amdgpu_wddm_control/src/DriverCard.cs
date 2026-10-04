@@ -257,6 +257,12 @@ namespace AmdgpuWddmControl
 
         // ---- parsing (pure) ----------------------------------------------------------------------------------------
 
+        // Release\Version and InstallDir (interfaces.md section 2): a REG_SZ string only; any other kind is "" (unknown).
+        public static string SzOnly(RegistryValueKind kind, object value)
+        {
+            return kind == RegistryValueKind.String && value is string ? (string)value : "";
+        }
+
         static IDictionary<string, object> Json(string text)
         {
             try { return new JavaScriptSerializer { MaxJsonLength = 4 << 20 }.DeserializeObject(text ?? "") as IDictionary<string, object>; }

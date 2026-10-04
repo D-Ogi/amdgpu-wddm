@@ -125,6 +125,12 @@ static partial class UnitTests
         v = DriverCard.Decide(f);
         Check(v.InstalledText == "Installed version: not known." && v.Verification == VerifyKind.Unknown && v.InstalledVersion == null, "497.7 Release\\Version missing");
         Check(v.ReportText.Contains("installer state verified for 0.7.199.100-tester.11"), "497.7 the state's package version goes to the report only");
+        // 936: Release\Version and InstallDir are REG_SZ only; any other kind is unknown.
+        Equal("0.7.199.100-tester.11", DriverCard.SzOnly(Microsoft.Win32.RegistryValueKind.String, "0.7.199.100-tester.11"), "Release\\Version REG_SZ is read");
+        Equal("", DriverCard.SzOnly(Microsoft.Win32.RegistryValueKind.ExpandString, "0.7.199.100-tester.11"), "Release\\Version REG_EXPAND_SZ is unknown");
+        Equal("", DriverCard.SzOnly(Microsoft.Win32.RegistryValueKind.MultiString, new[] { "0.7.199.100-tester.11" }), "Release\\Version REG_MULTI_SZ is unknown");
+        Equal("", DriverCard.SzOnly(Microsoft.Win32.RegistryValueKind.DWord, 199), "Release\\Version REG_DWORD is unknown");
+        Equal("", DriverCard.SzOnly(Microsoft.Win32.RegistryValueKind.Binary, new byte[] { 0x30 }), "Release\\Version REG_BINARY is unknown");
         f = Facts(); f.StatePackageVersion = "0.7.200.100-tester.12"; f.Phase = "installed";
         Check(!DriverCard.Decide(f).InstalledPending, "a phase of another package does not mark the installed one pending");
         f = Facts(); f.Phase = "install-incomplete";

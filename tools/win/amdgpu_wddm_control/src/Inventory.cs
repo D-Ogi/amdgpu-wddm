@@ -43,11 +43,19 @@ namespace AmdgpuWddmControl
             try
             {
                 using (var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\amdgpu-wddm\Release"))
-                    if (k != null) { s.ReleaseVersion = Convert.ToString(k.GetValue("Version") ?? ""); s.ReleaseDir = Convert.ToString(k.GetValue("InstallDir") ?? ""); }
+                    if (k != null) { s.ReleaseVersion = Sz(k, "Version"); s.ReleaseDir = Sz(k, "InstallDir"); }
             }
             catch (Exception e) { s.Notes.Add("release key: " + e.Message); }
             foreach (var c in s.Components) Describe(c, hashes);
             return s;
+        }
+
+        // A REG_SZ value only (interfaces.md section 2): missing, another kind or unreadable is "" (unknown).
+        static string Sz(RegistryKey k, string name)
+        {
+            RegistryValueKind kind;
+            try { kind = k.GetValueKind(name); } catch (Exception) { return ""; }
+            return DriverCard.SzOnly(kind, k.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
         }
 
         static void ReadDisplayKey(InventoryState s)
