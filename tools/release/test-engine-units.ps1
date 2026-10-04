@@ -244,6 +244,20 @@ Check (($null -ne $saved.mutation_boot_id) -and ($saved.mutation_boot_id -eq (Ge
 Start-Sleep -Milliseconds 20
 Set-MutationRecord
 Check (([string]$script:state.mutation_utc -gt $t0) -and ([string](Get-Content -LiteralPath $script:StatePath -Raw | ConvertFrom-Json).mutation_utc -eq $t0)) 'a later change moves the time on in memory; the next save of the state writes it'
+# R3: the first change of a run cannot be made when its record cannot be saved (state.json not writable).
+$script:state = [pscustomobject]@{ schema = 1; phase = 'testsigning-active' }
+$script:Mutated = $false; $script:EngineMutationSeen = $false
+$script:OnFirstChange = { Set-MutationRecord -Save }; $script:OnMutation = { Set-MutationRecord }
+$realSave = ${function:Save-InstallState}
+Set-Item -Path function:Save-InstallState -Value { param($State) throw 'test: state.json is read-only' }
+$script:actionRan = $false; $err = $null
+try { [void](Invoke-Change 'a test change' { $script:actionRan = $true }) } catch { $err = $_.Exception.Message }
+Set-Item -Path function:Save-InstallState -Value $realSave
+Check ((-not $script:actionRan) -and ($err -match 'could not be recorded') -and (-not $script:Mutated) -and (-not $script:EngineMutationSeen)) "the record cannot be saved: the change does not run, the run claims no change ($err)"
+$script:actionRan = $false
+[void](Invoke-Change 'a test change' { $script:actionRan = $true })
+Check ($script:actionRan -and $script:Mutated -and (Get-Content -LiteralPath $script:StatePath -Raw | ConvertFrom-Json).mutation_boot_id -eq (Get-BootIdentity).boot_id) 'with the record saved, the same change runs'
+$script:Mutated = $false; $script:EngineMutationSeen = $false; $script:OnFirstChange = $null; $script:OnMutation = $null
 $script:state = $null
 
 '[engine] one mutating engine at a time'

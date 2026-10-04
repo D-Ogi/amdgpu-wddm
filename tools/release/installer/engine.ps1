@@ -103,10 +103,12 @@ function Set-MutationRecord {
     $first = -not $script:EngineMutationSeen
     Set-StateValue $script:state 'mutation_boot_id' $boot.boot_id
     Set-StateValue $script:state 'mutation_utc' ([DateTime]::UtcNow.ToString('o'))
-    $script:EngineMutationSeen = $true
     if ($Save) {
-        try { Save-InstallState $script:state } catch { Write-Warn2 "install action not recorded in $($script:StatePath): $($_.Exception.Message)" }
+        # The record is the boundary that voids an older witness: no record, no change. The throw reaches the step's
+        # trap before Invoke-Change runs the action, so the run ends as failed with nothing changed.
+        try { Save-InstallState $script:state } catch { throw "the install action could not be recorded in $($script:StatePath) before the first change, so nothing was changed: $($_.Exception.Message)" }
     }
+    $script:EngineMutationSeen = $true
     if ($first) { Write-EngineEvent 'install-action' ([ordered]@{ action = $script:EngineAction; boot_id = $boot.boot_id }) }
 }
 
