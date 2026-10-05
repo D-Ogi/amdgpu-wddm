@@ -10,6 +10,7 @@
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
 //   bc250kmd_cli dpm [n [ms]]         the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
+//                                     the header also names the idle state: its point, window and counters (0.7.206)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
@@ -1484,18 +1485,27 @@ static int Journal(const WCHAR *fromText)
 static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
                                            "registry", "no-smu", "not-run", "smu-error" };
 static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-hard", "sensor", "max-setting",
-                                             "stable", "smu", "fixed", "thermal-warm", "thermal-ramp" };
+                                             "stable", "smu", "fixed", "thermal-warm", "thermal-ramp", "idle" };
+
+static unsigned long g_DpmAbi = BC250_DPM_ABI;   // BC250_DPM_ABI_1 after a driver refused ABI 2 (0.7.206)
 
 static int DpmQuery(BC250_ESCAPE_DPM *d, unsigned long op, unsigned long long generation)
 {
     NTSTATUS status;
-    memset(d, 0, sizeof(*d));
-    d->Magic = BC250_ESCAPE_MAGIC;
-    d->Command = BC250_ESCAPE_RUN_DPM;
-    d->AbiVersion = BC250_DPM_ABI;
-    d->Op = op;
-    d->ExpectedGeneration = generation;
-    if (SendEscapeFlags(BC250_DEFAULT_HWID, d, sizeof(*d), 1, &status)) return 1;
+    unsigned size;
+    for (;;) {
+        memset(d, 0, sizeof(*d));
+        size = g_DpmAbi == BC250_DPM_ABI ? (unsigned)sizeof(*d) : BC250_DPM_ABI1_SIZE;
+        d->Magic = BC250_ESCAPE_MAGIC;
+        d->Command = BC250_ESCAPE_RUN_DPM;
+        d->AbiVersion = g_DpmAbi;
+        d->Op = op;
+        d->ExpectedGeneration = generation;
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, d, size, 1, &status)) return 1;
+        if (status != (NTSTATUS)0xC000000Dl || g_DpmAbi != BC250_DPM_ABI) break;
+        // STATUS_INVALID_PARAMETER for 192 bytes: a driver before 0.7.206, which takes ABI 1 alone.
+        g_DpmAbi = BC250_DPM_ABI_1;
+    }
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
     return 0;
 }
@@ -1519,6 +1529,24 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
            (d->Flags & BC250_DPM_FLAG_SESSION) ? " session" : "",
            d->Raises, d->Lowers, d->ThermalEvents, d->Errors,
            (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0, d->SdmaBusyPermille / 10.0);
+}
+
+// The idle state, once under the header (0.7.206): the point in force, the window the GPU must be quiet for,
+// and what the state did so far. A driver before 0.7.206 answers RUN_DPM ABI 1 and has no idle state.
+static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
+{
+    if (d->AbiVersion != BC250_DPM_ABI) {
+        printf("idle: n/a (a driver before 0x000700CE answers RUN_DPM ABI 1)\n");
+        return;
+    }
+    if (d->IdleMHz == 0) {
+        printf("idle: off (DpmIdleMHz 0, a refused setting, or a point the firmware refused; %lu refusals)\n",
+               d->IdleRefusals);
+        return;
+    }
+    printf("idle: %lu MHz%s after %lu ms under %lu permille busy; entries %lu exits %lu refusals %lu, "
+           "%llu ms at the point\n", d->IdleMHz, (d->Flags & BC250_DPM_FLAG_IDLE) ? " (now)" : "",
+           d->IdleHoldMs, d->IdleBusyPermille, d->IdleEntries, d->IdleExits, d->IdleRefusals, d->IdleMs);
 }
 
 // ---- dpm tune / dpm floor: the governor's thresholds and a runtime floor (BC250_ESCAPE_RUN_DPM_TUNE, 0.7.185.1) ----
@@ -1786,6 +1814,7 @@ static int Dpm(int argc, WCHAR **argv)
                 TunePrintState(&t);
             } else printf("; tune n/a (driver before 0x000700B9)");
             printf("\n");
+            DpmPrintIdle(&d);
         }
         DpmPrint(&d);
     }

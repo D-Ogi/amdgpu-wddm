@@ -9,7 +9,8 @@
  * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
  * top and wins over everything, the lab floor included: since 0.7.205 it alone may go under it, to 900 or
- * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). From WARM_MC (87 C since 0.7.204) no raise happens at all, and from RAMP_KNEE_MC
+ * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). Since 0.7.206 the idle state goes lower
+ * still, to 500 MHz, but only while the GPU has no work at all. From WARM_MC (87 C since 0.7.204) no raise happens at all, and from RAMP_KNEE_MC
  * (70 C) a raise goes one level per ramp interval (0.7.203). The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
  * every limit. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
@@ -25,11 +26,17 @@ int bc250_dpm_level_of(unsigned int mhz)
 	return (int)((mhz - BC250_CLOCK_MIN_MHZ) / BC250_CLOCK_STEP_MHZ);
 }
 
-/* The lowest level at or above a clock, over the whole table (the thermal-only points included). */
+/* Saturating sum, for the millisecond and permille-millisecond counters. */
+static unsigned int add_ms(unsigned int a, unsigned int b)
+{
+	return a > BC250_DPM_CAP_MS_MAX - b ? BC250_DPM_CAP_MS_MAX : a + b;
+}
+
+/* The lowest level at or above a clock, over the whole table (the points under the lab floor included). */
 static unsigned int ceil_level(unsigned int mhz)
 {
 	unsigned int level;
-	if (mhz <= BC250_CLOCK_MIN_MHZ) return BC250_DPM_THERMAL_FLOOR_LEVEL;
+	if (mhz <= BC250_CLOCK_MIN_MHZ) return BC250_DPM_IDLE_LEVEL;
 	level = (mhz - BC250_CLOCK_MIN_MHZ + BC250_CLOCK_STEP_MHZ - 1u) / BC250_CLOCK_STEP_MHZ;
 	return level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : level;
 }
@@ -183,7 +190,59 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->cap_ms = BC250_DPM_CAP_MS_MAX;	/* no change yet: the first hot tick steps at once */
 	g->raise_ms = BC250_DPM_CAP_MS_MAX;	/* no raise yet: the first one is not held */
 	g->subfloor_ok = 1;			/* until the hardware refuses a point under the lab floor */
+	/* The idle state is off until a caller configures it (bc250_dpm_idle_config), so a governor built here
+	 * and stepped behaves exactly as 0.7.205. The values below are only what the state would run with. */
+	g->idle_level = BC250_DPM_IDLE_LEVEL;
+	g->idle_hold_ms = BC250_DPM_IDLE_HOLD_MS;
+	g->idle_busy_permille = BC250_DPM_IDLE_BUSY_PERMILLE;
 	bc250_dpm_tune_default(&g->tune);
+}
+
+enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, unsigned int idle_mhz,
+						unsigned int hold_ms, unsigned int busy_permille)
+{
+	int level = idle_mhz ? bc250_dpm_level_of(idle_mhz) : -1;
+
+	g->idle_on = 0;
+	g->idle = 0;
+	g->idle_ms = 0;
+	g->idle_acc = 0;
+	if (!idle_mhz) return BC250_DPM_IDLE_OK;			/* the state is off, as asked */
+	if (level < 0 || (unsigned int)level >= BC250_DPM_FLOOR_LEVEL) return BC250_DPM_IDLE_CLOCK;
+	if (hold_ms < BC250_DPM_IDLE_MIN_HOLD_MS || hold_ms > BC250_DPM_IDLE_MAX_HOLD_MS)
+		return BC250_DPM_IDLE_HOLD;
+	if (busy_permille > BC250_DPM_IDLE_MAX_BUSY_PERMILLE) return BC250_DPM_IDLE_BUSY;
+	g->idle_level = (unsigned int)level;
+	g->idle_hold_ms = hold_ms;
+	g->idle_busy_permille = busy_permille;
+	g->idle_on = 1;
+	return BC250_DPM_IDLE_OK;
+}
+
+void bc250_dpm_idle_refused(struct bc250_dpm_governor *g)
+{
+	g->idle_refusals++;
+	g->idle = 0;
+	g->idle_ms = 0;
+	g->idle_acc = 0;
+	/* One step up the fallback: the idle point, then the thermal floor, then nothing. */
+	if (g->idle_level < BC250_DPM_THERMAL_FLOOR_LEVEL) g->idle_level = BC250_DPM_THERMAL_FLOOR_LEVEL;
+	else g->idle_on = 0;
+}
+
+void bc250_dpm_idle_leave(struct bc250_dpm_governor *g)
+{
+	if (g->idle) g->idle_exits++;
+	g->idle = 0;
+	g->idle_ms = 0;
+	g->idle_acc = 0;
+}
+
+unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g)
+{
+	/* The thermal sub-floor and the idle state stand or fall together below the lab floor: a point the
+	 * firmware refused for one of them is refused for the other (bc250_dpm_subfloor_refused). */
+	return g->idle_on && g->subfloor_ok ? bc250_dpm_level_mhz(g->idle_level) : 0u;
 }
 
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g)
@@ -194,6 +253,11 @@ void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g)
 		g->thermal_cap = BC250_DPM_FLOOR_LEVEL;
 		g->cap_ms = 0;
 	}
+	/* Nothing under the lab floor works on this part, so the idle state goes with the sub-floor (0.7.206);
+	 * bc250_dpm_idle_mhz then reads 0 and the step below never asks for the point again. */
+	g->idle = 0;
+	g->idle_ms = 0;
+	g->idle_acc = 0;
 }
 
 enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t)
@@ -201,6 +265,58 @@ enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const
 	enum bc250_dpm_tune_error e = bc250_dpm_tune_check(t, g->max_level);
 	if (e == BC250_DPM_TUNE_OK) g->tune = *t;
 	return e;
+}
+
+/* One tick of the idle state (0.7.206). Returns 1 while the clock belongs at the idle point.
+ *
+ * Entry needs a quiet window: no work outstanding on the ring at any tick of it, and a mean busy share
+ * under idle_busy_permille over the whole hold time. The mean, not a strict zero, because the desktop on
+ * the GPU wakes for a cursor or a frame now and then: one active GRBM sample in a 3 s window at the
+ * 1 ms sample rate is 0.3 permille, and the default admits 2. A window whose mean is too high starts
+ * again, so a busy GPU never enters, and the worst case from "the GPU went quiet" to the idle point is
+ * two hold times (the burst lands at the end of a window that then has to run again).
+ *
+ * Exit is immediate: work on the ring, or a busy share above the same threshold, in one tick. The clock
+ * is back at the lab floor after the governor's detection (one tick, BC250_DPM_TICK_MS = 25 ms nominally,
+ * up to BC250_DPM_MAX_DT_MS when the thread was starved) plus the SMU transaction the caller runs.
+ *
+ * The state does not run at all while another rule owns the clock: a runtime floor (an operator asked for
+ * a clock), SetStablePowerState (a profiler asked for one steady clock), a temperature at or above HOT_MC
+ * or a hot episode (the thermal cap is stepping and must not be undercut by a state with its own timing),
+ * and no reading at all (blind, the driver holds the one point this part is known to run at). */
+static int idle_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in, unsigned int busy,
+		     unsigned int dt)
+{
+	int allowed = g->idle_on && g->subfloor_ok && !g->stable && !g->hot &&
+		      g->idle_level < BC250_DPM_FLOOR_LEVEL &&
+		      g->tune.floor_level == BC250_DPM_FLOOR_LEVEL &&
+		      in->temperature_valid && in->temperature_mc < BC250_DPM_HOT_MC;
+	int quiet = !in->ring_busy && busy <= g->idle_busy_permille;
+
+	if (!allowed || in->ring_busy || (g->idle && !quiet)) {
+		if (g->idle) {
+			g->idle = 0;
+			g->idle_exits++;
+		}
+		g->idle_ms = 0;
+		g->idle_acc = 0;
+		return 0;
+	}
+	if (g->idle) {
+		g->idle_total_ms = add_ms(g->idle_total_ms, dt);
+		return 1;
+	}
+	g->idle_ms = add_ms(g->idle_ms, dt);
+	g->idle_acc = add_ms(g->idle_acc, busy * dt);
+	if (g->idle_ms < g->idle_hold_ms) return 0;
+	if ((unsigned long long)g->idle_acc <= (unsigned long long)g->idle_busy_permille * g->idle_ms) {
+		g->idle = 1;
+		g->idle_entries++;
+		g->idle_total_ms = add_ms(g->idle_total_ms, dt);
+	}
+	g->idle_ms = 0;		/* entered, or the window was too busy: either way it starts again */
+	g->idle_acc = 0;
+	return g->idle;
 }
 
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
@@ -348,32 +464,57 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		else g->throttle = BC250_DPM_THROTTLE_MAX_SETTING;
 		target = limit;
 	}
-	/* The warm zone (from WARM_MC, 0.7.200; 87 C = HOT_MC since 0.7.204): no raise of clock or voltage, the level holds;
-	 * a lowering, and the paths above, act as below it. It comes last, so it bounds a raise from the load and from the
-	 * runtime floor alike, and it names the reason when it is what holds the level. From HOT_MC up the hot cap already
-	 * holds the target at or below the running level (a step down, or the clamp of a re-entry), so there the rule is a
-	 * backstop that never fires; before 0.7.204 it ended at HOT_MC. The soft release threshold (HOT_MC minus 0.5 to
-	 * 4.5 C) now always lies under WARM_MC, so a released cap is followed at the ramp's pace. The cap's timing (cap_ms,
-	 * soft_ms) does not depend on this zone. */
-	if (in->temperature_mc >= BC250_DPM_WARM_MC && target > cur) {
-		target = cur;
-		g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
-		g->warm_holds++;
-	}
-	/* The thermal ramp (RAMP_KNEE_MC up to WARM_MC, 0.7.203): a raise goes one level at most, and only a ramp interval
-	 * after the last raise. Like the warm zone it bounds every raise (load, runtime floor, the clock following a released
-	 * cap) and lowers nothing. A step that returned a raise starts the interval again, also when the caller's
-	 * transaction then failed: the retry waits, which is the safe side. Below the knee raise_ms still counts, so a raise
-	 * at 74.9 C spaces the next one at 75 C. A stalled tick counts as MAX_DT_MS, as everywhere. */
-	if (target > cur && in->temperature_mc >= BC250_DPM_RAMP_KNEE_MC) {
-		unsigned int ramp = g->raise_ms >= bc250_dpm_ramp_interval_ms(in->temperature_mc) ? cur + 1u : cur;
-		if (target > ramp) {
-			target = ramp;
-			g->throttle = BC250_DPM_THROTTLE_THERMAL_RAMP;
-			g->ramp_holds++;
+	/* The idle state (0.7.206, owner decision 2026-10-05: 500 MHz while the lab does not work). It is a
+	 * lowering below the lab floor, so it comes after the limits and replaces the warm zone and the ramp,
+	 * which bound raises only. Three outcomes:
+	 *   in idle          the target is the idle point, whatever the load wanted
+	 *   leaving idle     at least the lab floor (bounded by the limits), this tick, not one level at a time
+	 *   neither          the warm zone and the ramp as before
+	 * The exit is not bounded by the warm zone or the ramp on purpose: 500 -> 1000 MHz raises no voltage
+	 * (both points are 820 mV) and the lab floor is the one operating point this part is known to run at,
+	 * so the rules that keep a hot part from gaining voltage have nothing to refuse here. */
+	if (idle_step(g, in, busy, dt)) {
+		target = g->idle_level;
+		g->throttle = BC250_DPM_THROTTLE_IDLE;
+	} else if (cur < BC250_DPM_THERMAL_FLOOR_LEVEL) {
+		/* The hardware sits at an idle-only point (500 to 700 MHz) and the state is over: the lab floor,
+		 * or the limits when they are lower (a critical reading caps at 800 MHz). The governor goes on
+		 * from there at the next tick, where cur is the floor and every rule reads as it always did. */
+		target = BC250_DPM_FLOOR_LEVEL < limit ? BC250_DPM_FLOOR_LEVEL : limit;
+		if (target < g->want && g->throttle == BC250_DPM_THROTTLE_NONE)
+			g->throttle = BC250_DPM_THROTTLE_IDLE;
+	} else {
+		/* The warm zone (from WARM_MC, 0.7.200; 87 C = HOT_MC since 0.7.204): no raise of clock or voltage, the level holds;
+		 * a lowering, and the paths above, act as below it. It comes last, so it bounds a raise from the load and from the
+		 * runtime floor alike, and it names the reason when it is what holds the level. From HOT_MC up the hot cap already
+		 * holds the target at or below the running level (a step down, or the clamp of a re-entry), so there the rule is a
+		 * backstop that never fires; before 0.7.204 it ended at HOT_MC. The soft release threshold (HOT_MC minus 0.5 to
+		 * 4.5 C) now always lies under WARM_MC, so a released cap is followed at the ramp's pace. The cap's timing (cap_ms,
+		 * soft_ms) does not depend on this zone. */
+		if (in->temperature_mc >= BC250_DPM_WARM_MC && target > cur) {
+			target = cur;
+			g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
+			g->warm_holds++;
+		}
+		/* The thermal ramp (RAMP_KNEE_MC up to WARM_MC, 0.7.203): a raise goes one level at most, and only a ramp interval
+		 * after the last raise. Like the warm zone it bounds every raise (load, runtime floor, the clock following a released
+		 * cap) and lowers nothing. A step that returned a raise starts the interval again, also when the caller's
+		 * transaction then failed: the retry waits, which is the safe side. Below the knee raise_ms still counts, so a raise
+		 * at 74.9 C spaces the next one at 75 C. A stalled tick counts as MAX_DT_MS, as everywhere. */
+		if (target > cur && in->temperature_mc >= BC250_DPM_RAMP_KNEE_MC) {
+			unsigned int ramp = g->raise_ms >= bc250_dpm_ramp_interval_ms(in->temperature_mc) ? cur + 1u : cur;
+			if (target > ramp) {
+				target = ramp;
+				g->throttle = BC250_DPM_THROTTLE_THERMAL_RAMP;
+				g->ramp_holds++;
+			}
 		}
 	}
-	if (target > cur) g->raise_ms = 0;
+	/* A return from an idle-only point to the lab floor does not start the ramp's interval again: it adds no
+	 * voltage, and treating it as a raise would make the first real raise after every idle episode wait a
+	 * ramp interval above the knee. */
+	if (target > cur && !(cur < BC250_DPM_THERMAL_FLOOR_LEVEL && target <= BC250_DPM_FLOOR_LEVEL))
+		g->raise_ms = 0;
 	return target;
 }
 

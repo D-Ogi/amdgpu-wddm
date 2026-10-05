@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /*
  * BC-250 DPM: a load-driven GFX clock governor between the lab floor (1000 MHz / 820 mV) and at
- * most 2000 MHz, with thermal clamps and a boot guard. The thermal clamp alone may go under the lab
- * floor, down to 800 MHz at the same 820 mV (0.7.205, owner decision 2026-10-05); the load never does.
+ * most 2000 MHz, with thermal clamps and a boot guard. The load never goes under the lab floor. Two
+ * other rules do, both at the floor's own 820 mV: the thermal clamp, down to 800 MHz (0.7.205, owner
+ * decision 2026-10-05), and the idle state, 500 MHz while the GPU has no work (0.7.206, owner decision
+ * 2026-10-05).
  * Not amdgpu: amdgpu does no DPM on this part
  * under load (facts M90), the community governors run in user space. docs/design/dpm.md in
  * bc250-win is the design; this header is the part without Windows in it, so the host test
@@ -15,6 +17,7 @@
  *   bc250_dpm_tune_check()    the thresholds and floor an administrator may set at run time (0.7.185)
  *   bc250_dpm_session_step()  the "running above the floor" marker that turns a crash at a high
  *                             clock into a fixed-lab next start
+ * The idle state (0.7.206) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on.
  * The operating points themselves are bc250_clock.h's table; a level is an index into it.
  */
 #ifndef BC250_DPM_H
@@ -32,13 +35,17 @@
 
 /* The lab floor, 1000 MHz: the level a fixed start runs at, the lowest the load may ask for, and where every
  * rule that needs one clock this part is known to run puts it (a missing sensor, SetStablePowerState, the
- * fixed mode, stop, power down, giving up, an unknown readback). Index 2 since 0.7.205, where the table
- * gained two thermal-only points under it. */
-#define BC250_DPM_FLOOR_LEVEL	2u
+ * fixed mode, stop, power down, giving up, an unknown readback). Index 5 since 0.7.206, where the table
+ * reaches down to 500 MHz (index 2 in 0.7.205, with 900 and 800 MHz under it). */
+#define BC250_DPM_FLOOR_LEVEL	5u
 /* 800 MHz: the lowest level the thermal cap may reach (0.7.205, owner decision 2026-10-05, after RotTR scene
  * 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy). The firmware has never
  * run below 1000 MHz (facts M47), so the KMD may withdraw it for a start: bc250_dpm_subfloor_refused(). */
-#define BC250_DPM_THERMAL_FLOOR_LEVEL	0u
+#define BC250_DPM_THERMAL_FLOOR_LEVEL	3u
+/* 500 MHz: the idle point (0.7.206). Only the idle state goes there, and only while the GPU has no work; the
+ * levels between it and the thermal floor (700 and 600 MHz) exist to keep the 100 MHz grid whole and no rule
+ * selects them. The KMD may withdraw the point for a start: bc250_dpm_idle_refused(). */
+#define BC250_DPM_IDLE_LEVEL	0u
 #define BC250_DPM_TOP_LEVEL	(BC250_CLOCK_LEVELS - 1u)
 
 static __inline unsigned int bc250_dpm_level_mhz(unsigned int level)
@@ -119,6 +126,7 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_FIXED = 7,		/* this start is fixed-lab */
 	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* WARM_MC (85 C in 0.7.200, 87 C from 0.7.204): a raise refused */
 	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 70 C to WARM_MC (0.7.203): a raise cut to one level, or held */
+	BC250_DPM_THROTTLE_IDLE = 10,		/* the idle state holds the clock at the idle point, or is being left (0.7.206) */
 	BC250_DPM_THROTTLE_COUNT
 };
 
@@ -161,6 +169,20 @@ enum bc250_dpm_throttle {
  * levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500..1600 MHz, frozen at 85.6-86.2 C). */
 #define BC250_DPM_SOFT_DELTA_MC		0u	/* 0: no soft release */
 #define BC250_DPM_SOFT_STEP_MS		3000u
+/* The idle state (0.7.206, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
+ * 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). While the GPU has no work the
+ * governor holds the idle point, below the lab floor, at the floor's own 820 mV. The three settings are the
+ * KMD's registry values DpmIdleMHz, DpmIdleHoldMs and DpmIdleBusyPermille (driver/kmd/dpm.c), checked and
+ * taken by bc250_dpm_idle_config(); they are not part of struct bc250_dpm_tune, so the RUN_DPM_TUNE escape
+ * and its ABI do not change. DpmIdleMHz 0 turns the whole state off, which is exactly 0.7.205 behaviour. */
+#define BC250_DPM_IDLE_MHZ		500u	/* absent DpmIdleMHz: the idle point, 0 for no idle state */
+/* The GPU must have had no work for this long before the clock goes to the idle point. The desktop on the
+ * GPU (DWM) gives short bursts, so the rule is the busy share over the whole window, not a strict zero. */
+#define BC250_DPM_IDLE_HOLD_MS		3000u
+#define BC250_DPM_IDLE_BUSY_PERMILLE	2u	/* the window's mean busy share must stay under this */
+#define BC250_DPM_IDLE_MIN_HOLD_MS	250u	/* ten governor ticks */
+#define BC250_DPM_IDLE_MAX_HOLD_MS	60000u
+#define BC250_DPM_IDLE_MAX_BUSY_PERMILLE 100u	/* 10 %: anything higher is not an idle GPU */
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
 #define BC250_DPM_CAP_MS_MAX		0x7FFFFFFFu	/* where the time since the last cap change saturates */
 
@@ -188,8 +210,9 @@ unsigned int bc250_dpm_ramp_interval_ms(int temperature_mc);
  * begins with bc250_dpm_tune_default(). The floor is a level of the clock table the governor does not go
  * below on its own; it never beats the thermal cap, the critical rule, a missing sensor or
  * SetStablePowerState, and it never exceeds the start's ceiling (max_level, DpmMaxMHz). It never goes under
- * BC250_DPM_FLOOR_LEVEL either (0.7.205): the two thermal-only points below it belong to the thermal cap
- * alone, and a runtime floor there would say nothing, because the load never asks for them. */
+ * BC250_DPM_FLOOR_LEVEL either (0.7.205): the points below it belong to the thermal cap and the idle state
+ * alone, and a runtime floor there would say nothing, because the load never asks for them. A runtime floor
+ * also turns the idle state off while it is set (0.7.206): the operator asked for a clock, not for 500 MHz. */
 struct bc250_dpm_tune {
 	unsigned int	up_permille;
 	unsigned int	target_permille;
@@ -258,6 +281,10 @@ struct bc250_dpm_input {
 	int		temperature_mc;
 	int		temperature_valid;
 	unsigned int	dt_ms;			/* since the previous tick */
+	/* Work outstanding on the GFX ring at this tick (the KMD's GfxSubmitBusy): submitted and not yet
+	 * retired, whatever the hardware's busy samples say. The idle state alone reads it (0.7.206): a
+	 * submission waiting on a fence keeps the clock at the lab floor. Zero is "the ring is empty". */
+	int		ring_busy;
 };
 
 struct bc250_dpm_governor {
@@ -281,6 +308,15 @@ struct bc250_dpm_governor {
 	unsigned int	ramp_holds;		/* steps in which the thermal ramp cut or held a raise (0.7.203) */
 	int		subfloor_ok;		/* the thermal cap may use the points under the lab floor (0.7.205) */
 	unsigned int	subfloor_refusals;	/* bc250_dpm_subfloor_refused() calls of this start */
+	/* The idle state (0.7.206). idle_on is the setting of this start, idle the state now. */
+	int		idle_on, idle;
+	unsigned int	idle_level;		/* the point idle holds; raised to the thermal floor after a refusal */
+	unsigned int	idle_hold_ms;		/* the window the GPU must be quiet for */
+	unsigned int	idle_busy_permille;	/* the window's admitted mean busy share, and the exit threshold */
+	unsigned int	idle_ms;		/* the candidate window so far, 0 while in idle */
+	unsigned int	idle_acc;		/* busy permille x ms over that window, saturating */
+	unsigned int	idle_entries, idle_exits, idle_refusals;
+	unsigned int	idle_total_ms;		/* time held at the idle point, saturating */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
@@ -295,6 +331,33 @@ void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level);
  * lab floor again, and a cap already below it is raised to it. The firmware has never been seen below
  * 1000 MHz (facts M47), so one refusal is enough: the governor does not try the same point again and again. */
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g);
+
+/* ---- the idle state (0.7.206) ----------------------------------------------------------------- */
+
+/* Why an idle setting was refused; the KMD logs it and runs without the idle state. */
+enum bc250_dpm_idle_error {
+	BC250_DPM_IDLE_OK = 0,
+	BC250_DPM_IDLE_CLOCK = 1,	/* DpmIdleMHz is not a table clock below the lab floor */
+	BC250_DPM_IDLE_HOLD = 2,	/* DpmIdleHoldMs outside MIN..MAX_HOLD_MS */
+	BC250_DPM_IDLE_BUSY = 3,	/* DpmIdleBusyPermille above MAX_BUSY_PERMILLE */
+	BC250_DPM_IDLE_ERROR_COUNT
+};
+/* The start's idle setting, after bc250_dpm_init (which leaves the state off, so a caller that does not
+ * configure it keeps 0.7.205 behaviour exactly). idle_mhz 0 turns it off and is not an error; any other
+ * value must be a clock of the table below BC250_CLOCK_FLOOR_MHZ. A refused setting leaves the state off.
+ * Not a run-time operation: the KMD calls it once per start, before the governor thread exists. */
+enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, unsigned int idle_mhz,
+						unsigned int hold_ms, unsigned int busy_permille);
+/* The caller could not put the hardware at the idle point (the SMU refused it, the readback did not match).
+ * The idle point falls back one step at a time, as the owner asked: 500 MHz, then the thermal floor
+ * (800 MHz), then off, which is the lab floor. One refusal is enough for each step: the firmware has never
+ * been seen below 1000 MHz (facts M47), so the governor does not try the same point every tick. */
+void bc250_dpm_idle_refused(struct bc250_dpm_governor *g);
+/* The idle point in force, 0 when the idle state is off for this start (the escape and the log print it). */
+unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g);
+/* The caller took the hardware off the idle point outside a governing tick (a stop, a power transition). It
+ * counts as an exit, and the next entry needs a whole quiet window again. The setting itself stays. */
+void bc250_dpm_idle_leave(struct bc250_dpm_governor *g);
 
 /* ---- the session marker ---------------------------------------------------------------------- */
 

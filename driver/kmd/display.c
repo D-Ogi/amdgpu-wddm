@@ -340,8 +340,9 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     }
     // DPM: the governor's published snapshot, software state as well (dpm.c).
     if (data->Command == BC250_ESCAPE_RUN_DPM) {
-        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM)) return STATUS_INVALID_PARAMETER;
-        DpmRequest(device,(BC250_ESCAPE_DPM*)data,CallerIsAdmin(),Escape->Flags.Value);
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM) &&
+            Escape->PrivateDriverDataSize != BC250_DPM_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
+        DpmRequest(device,(BC250_ESCAPE_DPM*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
     // DPM runtime tuning (0.7.185): thresholds and floor the governor thread takes at its next tick; software state,
