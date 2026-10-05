@@ -1778,8 +1778,15 @@ int RunCompare(const Options& o)
         cfg.meanBitRate = o.bitrate;
         cfg.rateControl = RateControl::Cbr;
         cfg.deblocking = o.deblock;
+        // The test's own device (mfthost.h): the transform creates one on the BC-250 adapter alone.
+        ComPtr<ID3D11Device> device;
+        HRESULT hr = CreateTestDevice(&device);
+        if (FAILED(hr)) {
+            SayHr("CreateTestDevice", hr);
+            return 2;
+        }
         Encoder enc;
-        HRESULT hr = enc.Initialize(nullptr, cfg);
+        hr = enc.Initialize(device.Get(), cfg);
         if (FAILED(hr)) {
             SayHr("Encoder::Initialize", hr);
             return 2;

@@ -86,7 +86,11 @@ inbox decoder.
 ## Measured on the development PC, 2026-10-05
 
 These numbers come from an **NVIDIA GeForce RTX 4090**, not from BC-250 silicon: this machine has no
-BC-250 in it, and `gpu_pipeline.cpp` falls back to the first adapter when `1002:13FE` is absent.
+BC-250 in it, and the host test hands the transform a device of that adapter (`CreateTestDevice` in
+`tests/mfthost.h`). The transform itself takes the BC-250 adapter alone: `gpu_pipeline.cpp` answers
+`DXGI_ERROR_NOT_FOUND` when `1002:13FE` is absent, so a client that asked Media Foundation for a
+hardware encoder goes back to the encoder of Windows. An earlier version took the first adapter
+instead, which gave such a client a software encode on this transform.
 Nothing in this component has yet run on unit A's GPU. The lab plan that closes that gap is
 [experiments/E52](../../../experiments/E52-m15-11-encoder-mft-lab/README.md).
 
@@ -139,8 +143,9 @@ SDK 10.0.26100.0. Two clean builds into two empty directories gave those three h
 - Throughput on unit A is unknown and is the real risk: 4.03 to 4.14 ms of GPU per 720p picture on a
   4090, against the 24 or 40 compute units of the BC-250 (the CU mode of `docs/design/cu-mode.md`)
   inside a 300 W board that is also rendering.
-- The driver package does not register the transform yet. `INSTALL.md` has the exact keys. The KMD
-  INF has no MFT section.
+- The release installer registers the transform from release 0.7.207.100-tester.12 (route A of
+  `INSTALL.md`, written by `tools/release/installer/mft-h264.ps1`). The KMD INF still has no MFT
+  section, so a driver package installed by `pnputil` alone registers nothing.
 - Whether a per-adapter registration shape exists for a display driver package is not settled.
   `INSTALL.md` records what the enumeration does on the development PC with a machine-wide
   registration, and withdraws the earlier `MFT0` claim.

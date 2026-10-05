@@ -3,7 +3,10 @@
 //
 // Everything runs as compute on the device the client gave us through IMFDXGIDeviceManager, which on
 // unit A is our own driver's device, so the dispatches below execute on the BC-250 GPU. When no device
-// manager is set the encoder creates its own device and prefers the BC-250 adapter if present.
+// manager is set the encoder creates its own device on the BC-250 adapter (1002:13FE) and on no other
+// adapter: it answers DXGI_ERROR_NOT_FOUND when that adapter is absent, so a client that asked Media
+// Foundation for a hardware encoder goes back to the encoder of Windows instead of to a software
+// encode on this transform.
 
 #pragma once
 #include <d3d11.h>

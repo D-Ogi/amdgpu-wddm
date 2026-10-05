@@ -19,6 +19,7 @@
 #include "gen/vs_fullscreen.h"
 #include "gen/ps_testpattern.h"
 #include <mfapi.h>
+#include <dxgi.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -89,6 +90,42 @@ double PlanePsnr(const uint8_t* a, const uint8_t* b, size_t count)
     }
     const double mse = static_cast<double>(sum) / static_cast<double>(count);
     return 10.0 * log10(255.0 * 255.0 / mse);
+}
+
+// ---------------------------------------------------------------- the test's own device
+
+HRESULT CreateTestDevice(ID3D11Device** device)
+{
+    if (device == nullptr) {
+        return E_POINTER;
+    }
+    *device = nullptr;
+    ComPtr<IDXGIFactory> factory;
+    HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory));
+    if (FAILED(hr)) {
+        return hr;
+    }
+    ComPtr<IDXGIAdapter> chosen;
+    for (UINT i = 0;; ++i) {
+        ComPtr<IDXGIAdapter> a;
+        if (factory->EnumAdapters(i, &a) != S_OK) {
+            break;
+        }
+        DXGI_ADAPTER_DESC ad = {};
+        a->GetDesc(&ad);
+        if (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) {
+            chosen = static_cast<ComPtr<IDXGIAdapter>&&>(a);
+            break;
+        }
+        if (!chosen) {
+            chosen = static_cast<ComPtr<IDXGIAdapter>&&>(a);
+        }
+    }
+    const D3D_FEATURE_LEVEL want[] = { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
+    D3D_FEATURE_LEVEL got = D3D_FEATURE_LEVEL_11_0;
+    return D3D11CreateDevice(chosen.Get(),
+                             chosen ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
+                             nullptr, 0, want, 2, D3D11_SDK_VERSION, device, &got, nullptr);
 }
 
 // ---------------------------------------------------------------- the drawn source
@@ -790,6 +827,45 @@ void SelfTestFrameSizes()
     }
 }
 
+// The transform encodes on the BC-250 and on no other adapter. This case needs no GPU and no device:
+// it only runs where DXGI has no 1002:13FE adapter, and there GpuEncoder::Initialize without a device
+// must refuse. A machine that has the BC-250 would have to create a device to answer, so the case
+// says so and stops.
+void SelfTestAdapterChoice()
+{
+    printf("adapter choice\n");
+    ComPtr<IDXGIFactory> factory;
+    if (FAILED(CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory)))) {
+        printf("  no DXGI on this machine: not checked\n");
+        return;
+    }
+    bool haveBc250 = false;
+    for (UINT i = 0;; ++i) {
+        ComPtr<IDXGIAdapter> a;
+        if (factory->EnumAdapters(i, &a) != S_OK) {
+            break;
+        }
+        DXGI_ADAPTER_DESC ad = {};
+        a->GetDesc(&ad);
+        if (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) {
+            haveBc250 = true;
+        }
+    }
+    if (haveBc250) {
+        printf("  the BC-250 is in this machine: the refusal case needs a machine without it\n");
+        return;
+    }
+    GpuEncoder gpu;
+    const HRESULT hr = gpu.Initialize(nullptr, 640, 480);
+    if (hr != DXGI_ERROR_NOT_FOUND) {
+        Fail("GpuEncoder::Initialize(nullptr) returned 0x%08lX on a machine without a BC-250, "
+             "expected DXGI_ERROR_NOT_FOUND", static_cast<unsigned long>(hr));
+        gpu.Shutdown();
+        return;
+    }
+    printf("  no BC-250 in this machine: the transform refuses to pick another adapter\n");
+}
+
 } // namespace
 
 int RunSelfTest()
@@ -800,6 +876,7 @@ int RunSelfTest()
     SelfTestEmulationPrevention();
     SelfTestParameterSets();
     SelfTestFrameSizes();
+    SelfTestAdapterChoice();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
     return (g_failures == 0) ? 0 : 1;
 }
@@ -978,8 +1055,16 @@ int RunEncode(const Options& o)
     cfg.qpMax = o.qp;
     cfg.deblocking = o.deblock;
 
+    // The test's own device, as a Media Foundation client gives one: the transform itself takes the
+    // BC-250 adapter only (gpu_pipeline.cpp), and this test also runs on a development PC.
+    ComPtr<ID3D11Device> device;
+    HRESULT hr = CreateTestDevice(&device);
+    if (FAILED(hr)) {
+        printf("  CreateTestDevice failed 0x%08lX\n", static_cast<unsigned long>(hr));
+        return 2;
+    }
     Encoder enc;
-    HRESULT hr = enc.Initialize(nullptr, cfg);
+    hr = enc.Initialize(device.Get(), cfg);
     if (FAILED(hr)) {
         printf("  Encoder::Initialize failed 0x%08lX\n", static_cast<unsigned long>(hr));
         return 2;

@@ -38,6 +38,12 @@ struct Options {
 
 double NowMs();
 
+// The device the GPU stages of this test encode on. The shipped transform creates a device on the
+// BC-250 adapter and on no other one (gpu_pipeline.cpp), so a test run on a development PC has to
+// bring its own device, exactly as a Media Foundation client does through IMFDXGIDeviceManager.
+// Prefers 1002:13FE and takes the first hardware adapter when the BC-250 is not in the computer.
+HRESULT CreateTestDevice(ID3D11Device** device);
+
 // A picture in I420, visible size, tightly packed. The deterministic CPU twin of testpattern.hlsl:
 // not pixel identical to it (the shader works in float and in BGR), but the same kind of content.
 struct Picture {

@@ -226,7 +226,20 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     m_padH = m_heightMb * 16u;
 
     if (device != nullptr) {
+        // The client's own device. The client chose that adapter and owns the frames it gives us, so
+        // this path takes the device as it is. The adapter is only recorded, and the transform
+        // publishes it as MFT_ENUM_ADAPTER_LUID (mft_h264.cpp).
         m_device.CopyFrom(device);
+        ComPtr<IDXGIDevice> dxgi;
+        ComPtr<IDXGIAdapter> from;
+        DXGI_ADAPTER_DESC ad = {};
+        if (SUCCEEDED(m_device->QueryInterface(__uuidof(IDXGIDevice),
+                                               reinterpret_cast<void**>(&dxgi))) &&
+            SUCCEEDED(dxgi->GetAdapter(&from)) && SUCCEEDED(from->GetDesc(&ad))) {
+            MftTrace("client device on adapter %04X:%04X%s\n",
+                     ad.VendorId, ad.DeviceId,
+                     (ad.VendorId == 0x1002 && ad.DeviceId == 0x13FE) ? "" : " (not the BC-250)");
+        }
     } else {
         ComPtr<IDXGIFactory> factory;
         HRESULT hr = CreateDXGIFactory(__uuidof(IDXGIFactory),
@@ -246,14 +259,23 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
                 chosen = static_cast<ComPtr<IDXGIAdapter>&&>(a);
                 break;
             }
-            if (!chosen) {
-                chosen = static_cast<ComPtr<IDXGIAdapter>&&>(a);
-            }
+        }
+        // The BC-250 and nothing else. This transform registers itself as a hardware encoder of
+        // vendor 1002 (mft_register.cpp, MFT_ENUM_FLAG_HARDWARE), and the registration stays on the
+        // computer while the driver is not started: the boot-loop guard can leave the GPU on
+        // Microsoft Basic Display Adapter for a boot. An earlier version took the first adapter
+        // instead, so the transform then created a device on that adapter - WARP, in the case above -
+        // and Media Foundation gave a client that asks for a hardware encoder a software encode that
+        // is slower than the encoder of Windows. A failure here is the answer that sends the client
+        // back to the encoder it would have taken by itself. A test on a computer that has no BC-250
+        // creates its own device and hands it over (tests/mfthost.h, CreateTestDevice).
+        if (!chosen) {
+            MftTrace("no 1002:13FE adapter: the transform does not encode on another GPU\n");
+            return DXGI_ERROR_NOT_FOUND;
         }
         const D3D_FEATURE_LEVEL want[] = { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
         D3D_FEATURE_LEVEL got = D3D_FEATURE_LEVEL_11_0;
-        hr = D3D11CreateDevice(chosen.Get(),
-                               chosen ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
+        hr = D3D11CreateDevice(chosen.Get(), D3D_DRIVER_TYPE_UNKNOWN,
                                nullptr, 0, want, 2, D3D11_SDK_VERSION, &m_device, &got, nullptr);
         if (FAILED(hr)) {
             return hr;
