@@ -59,12 +59,15 @@ static __inline int Bc250SourceModeAdmitted(int Composed, unsigned long Format)
 }
 
 // The Stride of a source mode of Format: the firmware's pitch scaled from 4 bytes a pixel to the row's size, so
-// the padding of the inherited plane is kept. 0 when the format is unknown or the pitch does not divide or fit.
+// the padding of the inherited plane is kept. 0 when the format is no source mode of the table, or when the
+// pitch does not divide or fit. The size bound is the same one Bc250SourceModeFormats applies, and it is here
+// as well as there: the two answers must agree for every format, or a caller that asks for a stride before it
+// asks for the format gets a row size for a mode the plane cannot show instead of the 0 that means "no mode".
 static __inline unsigned long Bc250SourceModeStride(unsigned long Format, unsigned long PostPitch)
 {
     const AMDGPU_WDDM_SURFACE_FORMAT* row = amdgpu_wddm_surface_format_by_d3dddi((unsigned int)Format);
     unsigned long pixels;
-    if (!row || !row->bytes_per_pixel || PostPitch == 0 || (PostPitch & 3ul)) return 0;
+    if (!row || row->bytes_per_pixel < 4 || PostPitch == 0 || (PostPitch & 3ul)) return 0;
     pixels = PostPitch / 4ul;
     if (pixels > 0xfffffffful / row->bytes_per_pixel) return 0;
     return pixels * row->bytes_per_pixel;

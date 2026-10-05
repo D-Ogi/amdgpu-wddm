@@ -93,7 +93,17 @@ int main(void)
     CHECK(Bc250SourceModeStride(FMT_A8R8G8B8, 0) == 0);
     CHECK(Bc250SourceModeStride(FMT_A8R8G8B8, 7681) == 0);
     CHECK(Bc250SourceModeStride(FMT_A2R10G10B10, 7680) == 0);
-    CHECK(Bc250SourceModeStride(FMT_A8, 7680) == 1920);   /* a stride nothing asks for: A8 is not a source mode */
+    /* A8 is the one row the size bound alone keeps out of the mode list, so it is the one row whose stride could
+     * disagree with the offer. It must not: a stride of a format the plane cannot show is a row size a caller
+     * would take for a mode. The stride answers for X8R8G8B8 and X8B8G8R8, which are 4-byte rows with no DXGI
+     * display format, and that is the offer's own reason for leaving them out, not a size. */
+    CHECK(Bc250SourceModeStride(FMT_A8, 7680) == 0);
+    CHECK(Bc250SourceModeStride(FMT_A8, 256) == 0);
+    for (i = 0; i < 256; ++i) {
+        const AMDGPU_WDDM_SURFACE_FORMAT* row = amdgpu_wddm_surface_format_by_d3dddi((unsigned int)i);
+        if (Bc250SourceModeStride(i, 7680) != 0) CHECK(row != 0 && row->bytes_per_pixel >= 4);
+        if (row != 0 && row->bytes_per_pixel < 4) CHECK(Bc250SourceModeStride(i, 7680) == 0);
+    }
     CHECK(Bc250SourceModeStride(FMT_A16B16G16R16F, 0xfffffffcul) == 0);
     CHECK(Bc250SourceModeStride(FMT_A16B16G16R16F, 0x7ffffffcul) == 0xfffffff8ul);
 
