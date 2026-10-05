@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "id": "factorio",
+  "title": "Factorio",
+  "app_id": 427520,
+  "api": "d3d11",
+  "apis": {
+    "d3d11": {
+      "selection": "DirectX 11 is Factorio's Windows renderer (the graphics backend setting was removed in 2.0.68; --force-opengl is the only other choice)",
+      "arguments": "",
+      "router": "allow",
+      "witness": {"module": "amdgpu_wddm_d3d11.dll", "sha256": "release"}
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "Factorio",
+    "launch_entry": "1: bin/x64/Factorio.exe (64-bit Windows, default; entry 2 is the 32-bit build; appinfo cache of 2026-09-30)",
+    "arguments": "",
+    "require_state_flags": 4,
+    "wait_seconds": 90,
+    "eula": ""
+  },
+  "executable": {"directory": "bin\\x64", "image": "Factorio.exe", "direct_arguments": ""},
+  "processes": {
+    "main": "Factorio",
+    "launch_chain": ["Factorio"],
+    "renderers": ["Factorio"],
+    "end_at_cleanup": ["Factorio", "cdb"],
+    "survivors": ["Factorio", "cdb"],
+    "writers": ["Factorio", "cdb"],
+    "counters": ["Factorio"],
+    "etw": ["Factorio"]
+  },
+  "router_images": ["Factorio.exe"],
+  "readiness": {"mode": "generic", "control_after_window_seconds": 10, "min_jobs": 50},
+  "modules": ["d3d11.dll", "dxgi.dll", "d3d12.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll",
+              "amdgpu_wddm_radv.dll", "bc250d3d.dll", "bc250umd.dll", "vulkan-1.dll", "opengl32.dll", "msvcp140.dll"],
+  "settings": {
+    "policy": "record",
+    "directory": "%APPDATA%\\Factorio\\config",
+    "files": ["config.ini"]
+  },
+  "saves": "",
+  "events_filter": "Factorio|amdgpu_wddm|bc250d3d|d3d11|dxgi",
+  "app_profile": {
+    "image": "",
+    "experiment": "",
+    "proposal": "not applicable: a D3D11 game never loads the D3D12 shell, so HKLM\\SOFTWARE\\amdgpu-wddm\\D3D12\\Applications has no effect on it."
+  },
+  "app_router": {
+    "required": "Factorio.exe on the Allow list in Mode allowlist (HKLM\\SOFTWARE\\amdgpu-wddm\\AppRouter); otherwise the router keeps it on the CPU UMD and the session refuses before the launch",
+    "check": "python scratch/m15/app-route/approute.py status --no-mappers",
+    "add": "python scratch/m15/app-route/approute.py policy allowlist --allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe,Factorio.exe",
+    "remove": "python scratch/m15/app-route/approute.py policy allowlist --allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe",
+    "kill_switch": "python scratch/m15/app-route/approute.py policy cpu",
+    "rules": "--allow replaces the whole list: name every current entry (the four of STATE.md since 04:47Z; check first). The router decides at the process's OpenAdapter, so the policy is set before the session and removed after the game has ended."
+  },
+  "session": {"default_seconds": 900, "entry": "run-game.sh N factorio [SECONDS]"},
+  "notes": [
+    "The main menu shows a live simulation in the background (Factorio Friday Facts 362): a rendered scene with no input at all.",
+    "A new game: the menu entry New game (FFF-330 shows it under Single player; the label is read by OCR), whose screen lists freeplay first (FFF-330); a save is written only when the player saves or by autosave.",
+    "User data: %APPDATA%\\Factorio with config\\config.ini, the logs factorio-*.log and crash dumps factorio-dump-*.dmp (wiki, Application directory); config.ini is only recorded, never written."
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "id": "poi",
+  "title": "Poi",
+  "app_id": 401810,
+  "api": "d3d11",
+  "apis": {
+    "d3d12": {
+      "selection": "game default, no switch (owner 2026-10-04); -force-d3d12 would force it",
+      "arguments": "",
+      "router": "unchecked",
+      "witness": {
+        "module": "amdgpu_wddm_d3d12.dll",
+        "sha256": "staged"
+      }
+    },
+    "d3d11": {
+      "selection": "game default, no switch (owner 2026-10-04); -force-d3d11 would force it",
+      "arguments": "",
+      "router": "allow",
+      "witness": {
+        "module": "amdgpu_wddm_d3d11.dll",
+        "sha256": "release"
+      }
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "Poi",
+    "launch_entry": "Poi.exe (installed 2026-10-04)",
+    "arguments": "",
+    "require_state_flags": 4,
+    "wait_seconds": 90,
+    "eula": ""
+  },
+  "executable": {
+    "directory": "",
+    "image": "Poi.exe",
+    "direct_arguments": ""
+  },
+  "processes": {
+    "main": "Poi",
+    "launch_chain": [
+      "Poi"
+    ],
+    "renderers": [
+      "Poi"
+    ],
+    "end_at_cleanup": [
+      "Poi",
+      "UnityCrashHandler64",
+      "cdb"
+    ],
+    "survivors": [
+      "Poi",
+      "UnityCrashHandler64",
+      "cdb"
+    ],
+    "writers": [
+      "Poi",
+      "cdb"
+    ],
+    "counters": [
+      "Poi"
+    ],
+    "etw": [
+      "Poi"
+    ]
+  },
+  "router_images": [
+    "Poi.exe"
+  ],
+  "readiness": {
+    "mode": "generic",
+    "control_after_window_seconds": 10,
+    "min_jobs": 50
+  },
+  "modules": [
+    "d3d11.dll",
+    "dxgi.dll",
+    "d3d12.dll",
+    "d3d12core.dll",
+    "bc250d3d_router.dll",
+    "amdgpu_wddm_d3d11.dll",
+    "amdgpu_wddm_d3d12.dll",
+    "amdgpu_wddm_dxvk.dll",
+    "amdgpu_wddm_vkd3d.dll",
+    "amdgpu_wddm_radv.dll",
+    "bc250d3d.dll",
+    "bc250umd.dll",
+    "vulkan-1.dll",
+    "unityplayer.dll"
+  ],
+  "settings": {
+    "policy": "untouched"
+  },
+  "saves": "",
+  "events_filter": "Poi|amdgpu_wddm|bc250d3d|d3d11|d3d12|dxgi|Unity",
+  "app_profile": {
+    "image": "",
+    "experiment": "",
+    "proposal": "none: first sessions without D3D12 experiments"
+  },
+  "session": {
+    "default_seconds": 600,
+    "entry": "run-game.sh N poi [SECONDS]"
+  },
+  "notes": [
+    "Unity 5 era single executable (no UnityPlayer.dll); store lists DX10/DX12",
+    "Unity writes Player.log under %USERPROFILE%\\AppData\\LocalLow\\<company>\\<product>."
+  ]
+}

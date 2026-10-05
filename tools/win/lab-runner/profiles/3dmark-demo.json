@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "id": "3dmark-demo",
+  "title": "3DMark Demo",
+  "app_id": 231350,
+  "api": "d3d12",
+  "apis": {
+    "d3d12": {
+      "selection": "Time Spy (DirectX 12, feature level 11_0) is chosen in the 3DMark UI: Benchmarks screen, Time Spy, Run [D: 3DMark Technical Guide; UL support 44002126269, 44002126270]",
+      "arguments": "",
+      "router": "unchecked",
+      "witness": {
+        "module": "amdgpu_wddm_d3d12.dll",
+        "sha256": "staged"
+      }
+    },
+    "d3d11": {
+      "selection": "Fire Strike (DirectX 11) chosen in the UI [D: Technical Guide]. Its workload image is not documented (community: 3DMarkICFWorkload.exe); allowlist that image, not 3DMark.exe, once a session has shown its name",
+      "arguments": "",
+      "router": "unchecked",
+      "witness": {
+        "module": "amdgpu_wddm_d3d11.dll",
+        "sha256": "release"
+      }
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "3DMark Demo",
+    "launch_entry": "0: bin/x64/3DMark.exe, working directory bin/x64, no arguments (appinfo cache of 2026-09-30)",
+    "arguments": "",
+    "require_state_flags": 4,
+    "wait_seconds": 90,
+    "eula": ""
+  },
+  "executable": {
+    "directory": "bin\\x64",
+    "image": "3DMark.exe",
+    "direct_arguments": ""
+  },
+  "processes": {
+    "main": "3DMark",
+    "launch_chain": [
+      "3DMark*"
+    ],
+    "renderers": [
+      "3DMark*"
+    ],
+    "end_at_cleanup": [
+      "3DMark*",
+      "cdb",
+      "javaw"
+    ],
+    "survivors": [
+      "3DMark*",
+      "cdb",
+      "javaw"
+    ],
+    "writers": [
+      "3DMark*",
+      "cdb"
+    ],
+    "counters": [
+      "3DMark",
+      "3DMarkTimeSpy"
+    ],
+    "etw": [
+      "3DMark*"
+    ]
+  },
+  "router_images": [
+    "3DMark.exe",
+    "slinfo.exe"
+  ],
+  "readiness": {
+    "mode": "generic",
+    "control_after_window_seconds": 10,
+    "min_jobs": 50
+  },
+  "modules": [
+    "d3d12.dll",
+    "d3d12core.dll",
+    "dxgi.dll",
+    "d3d11.dll",
+    "amdgpu_wddm_d3d12.dll",
+    "amdgpu_wddm_vkd3d.dll",
+    "amdgpu_wddm_radv.dll",
+    "bc250d3d.dll",
+    "bc250d3d_router.dll",
+    "amdgpu_wddm_d3d11.dll",
+    "amdgpu_wddm_dxvk.dll",
+    "bc250umd.dll",
+    "vulkan-1.dll",
+    "msvcp140.dll"
+  ],
+  "settings": {
+    "policy": "untouched"
+  },
+  "saves": "",
+  "events_filter": "3DMark|SystemInfo|amdgpu_wddm|d3d12|dxgi",
+  "app_profile": {
+    "image": "",
+    "experiment": "",
+    "proposal": "none for the first session: the driver defaults on a fixed workload give the reference score. A later A/B would register the Witcher 3 set for the Time Spy workload image once a session has shown that image's name (community: 3DMarkTimeSpy.exe)."
+  },
+  "session": {
+    "default_seconds": 900,
+    "entry": "run-game.sh N 3dmark-demo [SECONDS]"
+  },
+  "online": "Owner consent of 2026-10-01 (about 18:17Z): the Demo may validate and publish its results online and SystemInfo may upload hardware details and the running-process list. UL says Basic Edition and Demo results are validated online and published and the result cannot be hidden (UL support 44001788186, 44002126271).",
+  "notes": [
+    "Workload process names (3DMarkTimeSpy.exe and others under dlc\\) are community knowledge, not UL documentation: the runner matches 3DMark* and records every module it sees.",
+    "UL: do not touch the mouse or keyboard and do not change the window focus while a test runs; Esc cancels the test.",
+    "SystemInfo scans the system before a run (up to 90 s) and may ask for an update.",
+    "Steam first start (app info of 2026-09-30): no Steam EULA; an install script (extended/installscript installscript.vdf) runs elevated at the first start, without a prompt since the lab's UAC auto-elevation of 2026-10-01T21:36Z (DRY_RUN=lab gate uac elevation).",
+    "281: on the CPU UMD (FL 10.0) the UI and SystemInfo refused Time Spy ('You need a DirectX 11 compatible GPU', empty Rendering device list) and read no VRAM (no HardwareInformation values in the driver key): 282+ put 3DMark.exe and slinfo.exe on the router allowlist (GPU UMD root app-route-pf, witness 7E9F1692).",
+    "282: 281's closure left 3DMark's bin\\x64\\jre\\bin\\javaw.exe running and Steam refused the next launch ('Game already running'); javaw is ended at cleanup now (the Futuremark SystemInfo service FMSISvc.exe is resident by design and stays).",
+    "2026-10-04: d3d12 router unchecked: package default route (gpu-default), no allowlist change (owner: default options)."
+  ]
+}
