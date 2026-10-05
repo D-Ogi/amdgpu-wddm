@@ -1,0 +1,41 @@
+{
+    "batch":  "list-rt-k97",
+    "attempt":  1,
+    "start_utc":  "2026-10-01T16:44:48.293Z",
+    "remaining_before":  140,
+    "route":  "direct",
+    "icd_sha256":  "2A13235DB7B66B9C8DDE550CECBAFCD930AA0748F8C23252020A4EA0C4DA1729",
+    "bound_s":  170,
+    "host":  "BC250-A",
+    "icd_cfg":  "absent",
+    "tctl_start":  67.1,
+    "arguments":  [
+                      "--deqp-caselist-file=C:\\BC250\\cts\\results\\rt-k97-base\\list-rt-k97\\attempt-01.caselist.txt",
+                      "--deqp-log-filename=C:\\BC250\\cts\\results\\rt-k97-base\\list-rt-k97\\attempt-01.qpa",
+                      "--deqp-archive-dir=C:\\BC250\\cts\\bin",
+                      "--deqp-log-images=disable",
+                      "--deqp-log-shader-sources=disable",
+                      "--deqp-shadercache=disable",
+                      "--deqp-watchdog=enable",
+                      "--deqp-crashhandler=enable",
+                      "--deqp-terminate-on-device-lost=enable",
+                      "--deqp-vk-library-path=C:\\BC250\\cts\\results\\rt-k97-base\\icd-2A13235D\\cts-direct.dll"
+                  ],
+    "pid":  7580,
+    "tctl_last":  67.1,
+    "exit_code":  0,
+    "killed":  null,
+    "icd_witness":  true,
+    "modules":  [
+                    "C:\\BC250\\cts\\results\\rt-k97-base\\icd-2A13235D\\cts-direct.dll",
+                    "C:\\BC250\\cts\\results\\rt-k97-base\\icd-2A13235D\\amdgpu_wddm_radv.dll"
+                ],
+    "deqp_seconds":  28,
+    "device_name":  "AMD BC-250 (RADV GFX1013)",
+    "cases_begun":  137,
+    "session_ended":  true,
+    "end_utc":  "2026-10-01T16:45:13.849Z",
+    "elapsed_s":  28.3,
+    "stop_reason":  null,
+    "exit":  1
+}
