@@ -2,6 +2,7 @@
 #define BC250_GDI_PRIVATE_H
 #include "dcn_translate.h"
 #include "surface_format.h"
+#include "surface_resource_private.h"
 
 // Windows ABI: 32-bit unsigned long, 64-bit unsigned long long.
 #define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
@@ -60,6 +61,44 @@ static __inline void WddmGdiScanoutPolicy(BC250_GDI_ALLOCATION_POLICY* Policy)
     Policy->CpuVisible=0;
     Policy->Cached=0;
     Policy->AccessedPhysically=1;
+}
+
+// M15.14 increment 2: whether the display core can read a surface this policy placed. Aperture is
+// system memory through the GART, which the display core does not read at all; AccessedPhysically is
+// what asks VidMm for the contiguous physical pages the plane is programmed with. The compositor's own
+// primaries satisfy this without asking for scan-out - a type-0 LB7A surface with no shared bit is
+// already Aperture 0, AccessedPhysically 1 - and a client's shared swap-chain buffer satisfies it only
+// once the SCANOUT bit has moved it out of the aperture.
+static __inline int WddmGdiScannable(const BC250_GDI_ALLOCATION_POLICY* Policy)
+{
+    return Policy && !Policy->Aperture && Policy->AccessedPhysically;
+}
+
+// The placement of a type-0 surface as a function of its own E26R record, in one derivation: the
+// kernel driver's CreateAllocation calls it to place the allocation, and the compositor's user-mode
+// driver calls it to decide whether the display core could read that allocation, so an answer given in
+// user mode and the placement given in kernel mode cannot disagree. Type 0 only, because
+// ApertureOffered never enters a type-0 policy (gdi_admission.h, Bc250Lb7aAdmit) and a standard GDI
+// surface is never a scan-out candidate. 0 means the record was refused; the caller must then refuse
+// the allocation rather than place it.
+static __inline int WddmGdiRecordPolicy(const void* Record, unsigned int Bytes,
+                                        BC250_GDI_ALLOCATION_POLICY* Policy)
+{
+    int shared = 0, cached = 0;
+    if (!Bc250SurfaceResourcePolicy(Record, Bytes, &shared, &cached)) return 0;
+    if (!WddmGdiAllocationPolicy(0, shared, cached, Policy)) return 0;
+    if (Bc250SurfaceResourceScanout(Record, Bytes)) WddmGdiScanoutPolicy(Policy);
+    return 1;
+}
+
+// The four placement bits as one word, for a log line that must fit the driver's 160-byte log text:
+// bit 0 CpuVisible, bit 1 Aperture, bit 2 Cached, bit 3 AccessedPhysically, bit 4 scannable.
+static __inline unsigned long WddmGdiPolicyBits(const BC250_GDI_ALLOCATION_POLICY* Policy)
+{
+    if (!Policy) return 0ul;
+    return (Policy->CpuVisible ? 1ul : 0ul) | (Policy->Aperture ? 2ul : 0ul) |
+           (Policy->Cached ? 4ul : 0ul) | (Policy->AccessedPhysically ? 8ul : 0ul) |
+           (WddmGdiScannable(Policy) ? 16ul : 0ul);
 }
 
 static __inline int WddmGdiPrivate(const void* Data, unsigned int Bytes, unsigned long* Type)
