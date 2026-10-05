@@ -96,9 +96,16 @@ int main() {
     check(admitted_create_failure(S_OK) == S_OK && admitted_create_failure(S_FALSE) == S_FALSE,
           "admitted failure: a success is passed through");
     check(admitted_create_failure(E_OUTOFMEMORY) == E_OUTOFMEMORY &&
-              admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED) == DXGI_ERROR_DEVICE_REMOVED &&
               admitted_create_failure(engine_ddi::kDriverDeviceRemoved) == engine_ddi::kDriverDeviceRemoved,
-          "admitted failure: out of memory and a lost device are passed through");
+          "admitted failure: out of memory and D3DDDIERR_DEVICEREMOVED are passed through");
+    // The two names of a lost device are not interchangeable here. DXGI_ERROR_DEVICE_REMOVED is what the API
+    // shows the application and what create_heap_and_resource answers for a lost context (and heap-import for
+    // VK_ERROR_DEVICE_LOST), but it is not in the AllowOutOfMemory list, so reporting it from a create slot is
+    // the BD-075 signature over again, with DRIVER_INTERNAL_ERROR hiding the real reason.
+    check(admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED) == engine_ddi::kDriverDeviceRemoved &&
+              admitted_create_failure(DXGI_ERROR_DEVICE_RESET) == engine_ddi::kDriverDeviceRemoved &&
+              admitted_create_failure(DXGI_ERROR_DEVICE_HUNG) == engine_ddi::kDriverDeviceRemoved,
+          "admitted failure: the DXGI device codes become D3DDDIERR_DEVICEREMOVED");
     check(admitted_create_failure(E_NOTIMPL) == E_OUTOFMEMORY &&
               admitted_create_failure(E_INVALIDARG) == E_OUTOFMEMORY &&
               admitted_create_failure(E_UNEXPECTED) == E_OUTOFMEMORY &&

@@ -23,6 +23,24 @@ template<> struct EntryFailureValue<D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS> 
         return D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED;
     }
 };
+// The failures a slot of the AllowOutOfMemory category may report (windows-driver-docs display
+// handling-errors.md): E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED, nothing else. The runtime treats every other
+// code as a critical driver failure and removes the application's device with DXGI_ERROR_DRIVER_INTERNAL_ERROR
+// (BD-075). A thunk refusal is a failure of that slot as much as one the slot itself decided - the runtime cannot
+// tell them apart - so the bindings that opt in (CoreBinding::allow_out_of_memory) clamp E_INVALIDARG for an
+// unresolvable handle, E_UNEXPECTED for a scope that could not be entered or a missing original, and E_FAIL for
+// an exception. Policy::failure still sees the real code, and so does the diagnostic line the refusal writes.
+// A lost device keeps the one name the runtime admits: DXGI_ERROR_DEVICE_REMOVED/RESET/HUNG are the names the API
+// shows the application, not codes this category admits, so they become D3DDDIERR_DEVICEREMOVED here.
+// engine_ddi::admitted_create_failure is the same rule inside the engine module; native-tables.cpp
+// static_asserts that the two agree, so neither can drift.
+inline constexpr HRESULT kDdiDriverDeviceRemoved=static_cast<HRESULT>(0x88760870);  // D3DDDIERR_DEVICEREMOVED
+constexpr HRESULT ddi_admitted_create_failure(HRESULT hr) noexcept {
+    if(SUCCEEDED(hr) || hr==E_OUTOFMEMORY || hr==kDdiDriverDeviceRemoved) return hr;
+    if(hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG)
+        return kDdiDriverDeviceRemoved;
+    return E_OUTOFMEMORY;
+}
 // Policy supplies resolve(first DDI handle) noexcept -> Owner*, Scope(Owner&)
 // noexcept with entered(), and failure(Owner*, HRESULT) noexcept. Scope holds
 // both runtime callback authority and hosted GIPA authority. It must restore
@@ -92,10 +110,23 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
         if constexpr(std::is_same_v<R,HRESULT>) return hr;
         else if constexpr(!std::is_void_v<R>) return EntryFailureValue<R>::value();
     }
+    // What this thunk reports for a refusal of its own. A binding of the AllowOutOfMemory category
+    // (Binding::allow_out_of_memory, ddi_admitted_create_failure above) admits only two codes, so the thunk's
+    // E_INVALIDARG, E_UNEXPECTED and E_FAIL are clamped before they reach the runtime; every other binding
+    // reports what it decided. The record given to Policy::failure is always the real code.
+    static constexpr bool clamps_failure() noexcept {
+        if constexpr(std::is_same_v<R,HRESULT> && requires {Binding::allow_out_of_memory;})
+            return Binding::allow_out_of_memory;
+        else return false;
+    }
+    static HRESULT admitted(HRESULT hr) noexcept {
+        if constexpr(clamps_failure()) return ddi_admitted_create_failure(hr);
+        else return hr;
+    }
     template<class Owner> static R denied(Owner* owner,HRESULT hr) noexcept {
         static_assert(noexcept(Policy::failure(owner,hr)),"failure must not throw");
         Policy::failure(owner,hr);
-        return failure_value(hr);
+        return failure_value(admitted(hr));
     }
     // Optional fast path, for a binding that opts in (static constexpr bool fast) under a policy that offers
     // one: Policy::fast_binding(Owner&) noexcept returns the owner's precomputed binding, or null for the full
@@ -125,7 +156,7 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
             static_assert(noexcept(Policy::fast_denied(owner,binding_name(),hr)),"fast_denied must not throw");
             Policy::fast_denied(owner,binding_name(),hr);
         }
-        return failure_value(hr);
+        return failure_value(admitted(hr));
     }
     static R APIENTRY call(A... args) noexcept {
         if constexpr(fast_path()) {
@@ -433,6 +464,14 @@ template<class Policy> class DdiEntryTables final {
             ddi_same_name(Name::name(),"pfnCreateUnorderedAccessView") ||
             ddi_same_name(Name::name(),"pfnCreateRenderTargetView") ||
             ddi_same_name(Name::name(),"pfnCreateDepthStencilView");
+        // The AllowOutOfMemory category (ddi_admitted_create_failure): these two slots refuse a shared resource,
+        // and the thunk's own refusals must not cost the application its device either (BD-075). The other
+        // creation slots of this table belong in the same category and are not listed yet: each needs the audit
+        // that docs/d3d12-shared-resources.md records as open, because a slot whose failures the runtime already
+        // sees as E_OUTOFMEMORY gains nothing, while one that reports E_INVALIDARG for a bad argument would stop
+        // saying so to the debug layer. Adding a name here is cheap; removing a diagnosis is not.
+        static constexpr bool allow_out_of_memory=ddi_same_name(Name::name(),"pfnCreateHeapAndResource") ||
+            ddi_same_name(Name::name(),"pfnOpenHeapAndResource");
         static auto original() noexcept {
             using Fn=std::remove_reference_t<decltype(core_.*Member)>;
             return core_ready_.load(std::memory_order_acquire)?core_.*Member:Fn{};

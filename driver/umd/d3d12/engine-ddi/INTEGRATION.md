@@ -315,13 +315,28 @@ other failure as critical, which costs the application its device and sets the r
 reason `0x887A0020`). That the D3D12 runtime follows the same rule as D3D10/11 stays an INFERENCE from that
 document plus those two measurements.
 
-`engine_ddi::admitted_create_failure` (engine-ddi.h) is therefore the last step of `pfnCreateHeapAndResource`
-and `pfnOpenHeapAndResource`: whatever the refusal decided inside the driver, the slot reports `E_OUTOFMEMORY`,
-and the `log_refusal` line of the same call carries the real HRESULT, the heap and resource description and, for
-a refusal the shell took, the admission check that took it (`heap-import.h`, `ImportReport::refusal`). The shell
-applies the same step to its own wrapper of `pfnCreateHeapAndResource` (`native-tables.cpp`), because the owner
-scope around that slot can refuse as well. Other create slots are not covered yet; the shared-resource plan in
-`docs/d3d12-shared-resources.md` names the audit.
+`engine_ddi::admitted_create_failure` (engine-ddi.h) is therefore the last step of this module's
+`pfnCreateHeapAndResource` and `pfnOpenHeapAndResource`: whatever the refusal decided inside the driver, the slot
+reports `E_OUTOFMEMORY`, and the `log_refusal` line of the same call carries the real HRESULT, the heap and
+resource description and, for a refusal the shell took, the admission check that took it (`heap-import.h`,
+`ImportReport::refusal`). A lost device is the one other admitted answer, and it leaves under the name the runtime
+admits: the clamp turns `DXGI_ERROR_DEVICE_REMOVED`, `_RESET` and `_HUNG` - the names the API shows the
+application, which this module uses for a lost context and for `VK_ERROR_DEVICE_LOST` - into
+`D3DDDIERR_DEVICEREMOVED`.
+
+Two more layers sit above this one and refuse on their own, so each clamps its own refusals:
+
+- the shell's wrapper of `pfnCreateHeapAndResource` (`native-tables.cpp`), because the owner scope around that
+  slot can refuse as well;
+- the DDI thunk (`ddi-entry.h`), which is what the runtime actually calls. It answers `E_INVALIDARG` for a device
+  handle that resolves to nothing, `E_UNEXPECTED` for a scope it could not enter (engine teardown, a nested entry)
+  or a missing original, and `E_FAIL` for an exception that is not `bad_alloc` - all of them refusals of a create
+  DDI as far as the runtime can tell. `CoreBinding::allow_out_of_memory` names the two slots of this category, and
+  `native12::ddi_admitted_create_failure` is the same rule; `native-tables.cpp` `static_assert`s that the two
+  copies answer alike.
+
+Other create slots are not covered yet; the shared-resource plan in `docs/d3d12-shared-resources.md` names the
+audit.
 
 ## Device
 

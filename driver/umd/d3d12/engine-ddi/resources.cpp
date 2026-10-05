@@ -622,15 +622,23 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
         }
     }
     if (FAILED(hr)) {
+        // A create DDI may only report E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED (engine-ddi.h,
+        // admitted_create_failure): the refusal below is the driver's answer, not a reason for the runtime to
+        // remove the application's device. BD-075. Both codes are on the one line, because a refused create is
+        // now survivable: an application may probe by creating and tolerating failure, and the debugger channel
+        // costs a raised-and-swallowed exception per line.
+        const HRESULT admitted = admitted_create_failure(hr);
         // The call's shape (which of heap only, committed, placed or reserved) and both descriptions: which
         // shape the runtime uses for which API call is otherwise unlogged (engine-ddi.h).
         const D3D12DDIARG_CREATEHEAP_0001 h = heap_desc ? *heap_desc : D3D12DDIARG_CREATEHEAP_0001{};
         const D3D12DDIARG_CREATERESOURCE_0088* r = res_desc;
-        log_refusal("CreateHeapAndResource: %08lx; heap description %s (%llu bytes, alignment %llu, flags 0x%x, "
+        log_refusal("CreateHeapAndResource: %08lx reported as %08lx; heap description %s (%llu bytes, "
+                    "alignment %llu, flags 0x%x, "
                     "pool %u, cpu page %u), heap handle %s; resource description %s (type %u, %llux%u, depth %u, "
                     "mips %u, format %u, samples %u, layout %u, flags 0x%x, castable %u), base resource %s, "
                     "offset %llu",
-                    static_cast<unsigned long>(hr), heap_desc ? "given" : "none",
+                    static_cast<unsigned long>(hr), static_cast<unsigned long>(admitted),
+                    heap_desc ? "given" : "none",
                     static_cast<unsigned long long>(h.ByteSize), static_cast<unsigned long long>(h.Alignment),
                     static_cast<unsigned>(h.Flags), static_cast<unsigned>(h.MemoryPool),
                     static_cast<unsigned>(h.CPUPageProperty), hheap.pDrvPrivate ? "given" : "none",
@@ -642,12 +650,6 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
                     r ? r->NumCastableFormats : 0u,
                     r && r->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate ? "given" : "none",
                     r ? static_cast<unsigned long long>(r->ReuseBufferGPUVA.BaseAddress.UMD.Offset) : 0ull);
-        // A create DDI may only report E_OUTOFMEMORY (engine-ddi.h, admitted_create_failure): the refusal above
-        // is the driver's answer, not a reason for the runtime to remove the application's device. BD-075.
-        const HRESULT admitted = admitted_create_failure(hr);
-        if (admitted != hr)
-            log_refusal("CreateHeapAndResource: %08lx reported to the runtime as %08lx, so that the device stays",
-                        static_cast<unsigned long>(hr), static_cast<unsigned long>(admitted));
         return admitted;
     }
     return hr;

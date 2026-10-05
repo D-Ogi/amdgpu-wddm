@@ -29,6 +29,21 @@ other failure as a critical driver failure, removes the device, and sets the rem
 D60. A refusal reports `E_OUTOFMEMORY`, and the `log_refusal` line of the same call keeps the real HRESULT.
 The device stays alive.
 
+Three layers can refuse one create, and the runtime cannot tell them apart, so each clamps what it decides:
+
+| Layer | Refuses with | Clamp |
+|---|---|---|
+| the DDI thunk the runtime calls (`ddi-entry.h`) | `E_INVALIDARG` for a handle that resolves to nothing, `E_UNEXPECTED` for a scope it could not enter or a missing original, `E_FAIL` for an exception | `native12::ddi_admitted_create_failure`, for the bindings that opt in (`CoreBinding::allow_out_of_memory`) |
+| the shell's wrapper of D60 (`native-tables.cpp`) | `E_UNEXPECTED`, and whatever the owner scope decides | `engine_ddi::admitted_create_failure` |
+| the slots themselves (`engine-ddi/resources.cpp`) | the heap-import refusal, `E_INVALIDARG`, `E_NOTIMPL` | `engine_ddi::admitted_create_failure` |
+
+A lost device is the one other admitted answer, and only under the name the runtime admits. Both clamps turn
+`DXGI_ERROR_DEVICE_REMOVED`, `_RESET` and `_HUNG` into `D3DDDIERR_DEVICEREMOVED`: the DXGI codes are what the
+API shows the application, not what the AllowOutOfMemory list admits, and the driver reaches them on live paths
+(`create_heap_and_resource` for a context already lost, `heap-import.cpp` for `VK_ERROR_DEVICE_LOST`). Reporting
+one of them from a create slot would remove the device again, with `DRIVER_INTERNAL_ERROR` over the real reason -
+the BD-075 signature itself. `native-tables.cpp` holds the two clamps to the same answer with `static_assert`s.
+
 ## The reported compatibility tier
 
 `D3D12_FEATURE_DATA_D3D12_OPTIONS4::SharedResourceCompatibilityTier` cannot be made truthful from this driver.
@@ -141,7 +156,18 @@ the resource path works.
   nothing on the deployed path reads them today.
 - `admitted_create_failure` covers the heap and resource create and open slots. The other create slots of the
   core table still report whatever they decide. An audit of all of them belongs in its own change, with the
-  host tests that pin each slot's admitted failures.
+  host tests that pin each slot's admitted failures. The audit is not a formality: a slot that reports
+  `E_INVALIDARG` for a malformed argument tells the debug layer something true, and clamping it to
+  `E_OUTOFMEMORY` would take that away. Each slot needs the question asked once: which of its failures can the
+  runtime survive, and which of them is a lie if it is called out of memory.
+- A clamped refusal is quiet. It used to be unmissable - the device went away and the reason said
+  `DRIVER_INTERNAL_ERROR` - and now it is one line on a channel that a game trial does not read
+  (`AMDGPU_WDDM_LOG` unset, no debugger, no DBWIN listener), while the application reads `E_OUTOFMEMORY` as "out
+  of video memory" and may quietly drop settings. The driver has no always-on counter surface of its own for a
+  trial to read, so a count of clamped refusals per device belongs with the overlay's graphics row or
+  `bc250kmd_cli`, in the change that gives the UMD that surface. Until then the trial that must see them passes
+  `-Trace` (`AMDGPU_WDDM_LOG` plus `AMDGPU_WDDM_DDI_TRACE`), and `tools/win/capture-share` records the debugger
+  channel of both of its processes without any switch.
 - `check_resource_allocation_info` ignores `D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_DETERMINISTIC`. It answers a
   vendor-swizzled layout for a request that asks for a reproducible one. This is adjacent to sharing, because
   a deterministic layout is what a second driver would need for a tiled shared texture.

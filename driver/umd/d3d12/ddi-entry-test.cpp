@@ -547,13 +547,36 @@ int main() {
     resource.Layout=D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE;
     assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_NOTIMPL);
     assert(ObservedPolicy::heap_observations==3 && !ObservedPolicy::row_pitch);
+    // AllowOutOfMemory (CoreBinding::allow_out_of_memory, BD-075): the two heap-and-resource slots are the only
+    // ones whose own refusals the thunk clamps, because the runtime removes the application's device for any
+    // other code out of a creation function. What the slot itself returns is its own answer and is never
+    // rewritten (E_NOTIMPL above); only a refusal the thunk decided is. Policy::failure keeps the real code.
     b.allowed=false;
-    assert(observed_core.pfnCreateHeapAndResource(hb,&heap,{},{},&resource,nullptr,{},{})==E_UNEXPECTED);b.allowed=true;
-    assert(observed_core.pfnCreateHeapAndResource({},&heap,{},{},&resource,nullptr,{},{})==E_INVALIDARG);
+    assert(observed_core.pfnCreateHeapAndResource(hb,&heap,{},{},&resource,nullptr,{},{})==E_OUTOFMEMORY);
+    assert(b.last_error.load()==E_UNEXPECTED);b.allowed=true;
+    assert(observed_core.pfnCreateHeapAndResource({},&heap,{},{},&resource,nullptr,{},{})==E_OUTOFMEMORY);
     heap_throwing=1;
     assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_OUTOFMEMORY);
+    assert(a.last_error.load()==E_OUTOFMEMORY);
     heap_throwing=2;
-    assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_FAIL);heap_throwing=0;
+    assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_OUTOFMEMORY);
+    assert(a.last_error.load()==E_FAIL);heap_throwing=0;
+    // The second slot of the category, and a lost device under the one name the runtime admits.
+    D3D12DDIARG_OPENHEAP_0003 open{};
+    b.allowed=false;
+    assert(observed_core.pfnOpenHeapAndResource(hb,&open,{},{},{},{})==E_OUTOFMEMORY);
+    assert(b.last_error.load()==E_UNEXPECTED);b.allowed=true;
+    assert(observed_core.pfnOpenHeapAndResource({},&open,{},{},{},{})==E_OUTOFMEMORY);
+    assert(native12::ddi_admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED)==native12::kDdiDriverDeviceRemoved);
+    assert(native12::ddi_admitted_create_failure(E_OUTOFMEMORY)==E_OUTOFMEMORY);
+    assert(native12::ddi_admitted_create_failure(S_FALSE)==S_FALSE);
+    // An HRESULT slot outside the category reports the thunk's refusal unchanged: the opt-in is per binding, and
+    // the remaining creation slots are an audit still open (docs/d3d12-shared-resources.md), not a silent rule.
+    const D3D12DDIARG_CREATECOMMANDQUEUE_0050 queue_args{};
+    assert(observed_core.pfnCreateCommandQueue({},&queue_args,{},{})==E_INVALIDARG);
+    b.allowed=false;
+    assert(observed_core.pfnCreateCommandQueue(hb,&queue_args,{},{})==E_UNEXPECTED);
+    assert(b.last_error.load()==E_UNEXPECTED);b.allowed=true;
     assert(ObservedPolicy::heap_observations==3 && !current && a.entered==a.left && b.entered==b.left);
 
     // Recording fast path: under a policy with FastScope, the recording slots of an admitted owner run in
