@@ -37,10 +37,19 @@ MSVC comes from vswhere. The SDK 10.0.26100 headers and libraries come from the 
 `/W4 /WX /O2 /MT /EHsc /std:c++17` with `INTERACTIVE_CONFORMANCE` and `INTERACTIVE_FEATURE_LEVEL_12_1`. Temporary
 files stay in the workspace, never on the system drive.
 
+`-Out` is optional. Its default is `<BC250_ROOT>\scratch\build\amdgpu_wddm_conformance`. The workspace root comes
+from `BC250_ROOT`, and else from `-Kits`, which points at `<BC250_ROOT>\toolchain\nuget`. The script never guesses
+the root from its own place in the file system, because a build from a git worktree sits somewhere else.
+
 The script first compiles the shaders with the SDK's dxc 1.8.2502.11 into `gen\*.h`. That compiler is
-deterministic, so a rebuild with the same SDK writes the same bytes as the tracked headers. Three gates run after
-the link: `--help` exits 0, `--invalid` exits 2 and `--selftest` exits 0. The previous exe stays under `retained\`
-by its hash.
+deterministic, so a rebuild with the same SDK writes the same bytes as the tracked headers. The script
+normalizes the line endings of each header after the compiler, because dxc writes CRLF and `.gitattributes`
+checks the headers out with LF. A build therefore leaves no tracked file reported as modified. It writes the record
+`gen\dxc.txt` only when the record changed, and only when the dxc path starts with the workspace root. A build with
+a dxc outside that root keeps the tracked record and prints a warning, so no absolute toolchain path of one machine
+reaches the repository. The gate `conformance-shaders` of `tools\quality\quick.ps1` checks the same thing without a
+build. Three gates run after the link: `--help` exits 0, `--invalid` exits 2 and `--selftest` exits 0. The previous
+exe stays under `retained\` by its hash.
 
 `-TestRefuseSignature` builds a host arm that treats the `DISPATCH_RAYS` command signature as refused, as the
 D3D12 shell refuses it today. The arm gets its own output directory. It checks the client's report of that path,
