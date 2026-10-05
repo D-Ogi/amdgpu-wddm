@@ -274,7 +274,10 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.SoftReleases = g->soft_releases;
     snap.WarmHolds = g->warm_holds;
     snap.RampHolds = g->ramp_holds;
-    snap.IdleMHz = bc250_dpm_idle_mhz(g);
+    // The idle point only while this start governs the clock: a fixed-lab start never configures the state, and
+    // a start that gave up after SMU failures no longer steps the governor, so neither may name a point that
+    // nothing would apply (0.7.206, review). The flag below follows the same rule.
+    snap.IdleMHz = governing ? bc250_dpm_idle_mhz(g) : 0;
     snap.IdleHoldMs = g->idle_hold_ms;
     snap.IdleBusyPermille = g->idle_busy_permille;
     snap.IdleEntries = g->idle_entries;
