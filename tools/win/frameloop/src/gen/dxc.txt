@@ -1,0 +1,6 @@
+dxc P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\bin\10.0.26100.0\x64\dxc.exe
+dxc version dxcompiler.dll: 1.8 - 1.8.2502.11 (239921522); dxil.dll: 1.8(1.8.2502.11)
+dxc sha256 EF3B6B3BA1727B4825CEEDBAAB6A854EAA34061DF31F27D9EAFBCE544DF54AA2
+dxc -nologo -T cs_6_0 -E cs_main -Vn g_spin_cs -Fh gen\spin_cs.h shaders\spin.hlsl
+dxc -nologo -T vs_6_0 -E vs_main -Vn g_present_vs -Fh gen\present_vs.h shaders\present.hlsl
+dxc -nologo -T ps_6_0 -E ps_main -Vn g_present_ps -Fh gen\present_ps.h shaders\present.hlsl
