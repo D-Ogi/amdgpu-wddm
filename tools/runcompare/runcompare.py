@@ -657,15 +657,28 @@ class Run(object):
 
     @property
     def objects_summary(self):
-        """The driver's own count, written into the log at the stop."""
+        """The driver's own count, written into the log at the stop.
+
+        One line up to KMD 0.7.206, two from 0.7.207 on: the nine counters at their widest did
+        not fit the 160-byte log line, so the allocation pair moved to a second line of the same
+        name (BD-070). The pairs are collected from every line that carries them, and the live
+        object count from the line that ends in "N alive", so both shapes read the same.
+        """
+        pairs, alive = {}, None
         for entry in self.ring.sequence():
             if entry.kind != "summary":
                 continue
-            m = re.search(r"objects created/destroyed: (.+?), (\d+) alive", entry.text)
-            if m:
-                pairs = re.findall(r"(\w+) (\d+)/(\d+)", m.group(1))
-                return {what: (int(a), int(b)) for what, a, b in pairs}, int(m.group(2))
-        return None, None
+            m = re.search(r"objects created/destroyed: (.+)$", entry.text)
+            if not m:
+                continue
+            body = m.group(1)
+            tail = re.search(r", (\d+) alive$", body)
+            if tail:
+                alive = int(tail.group(1))
+                body = body[:tail.start()]
+            pairs.update({what: (int(a), int(b))
+                          for what, a, b in re.findall(r"(\w+) (\d+)/(\d+)", body)})
+        return (pairs or None), alive
 
     @property
     def summary_ddi_calls(self):

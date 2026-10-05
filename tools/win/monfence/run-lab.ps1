@@ -98,11 +98,23 @@ function Get-Kinds([string[]]$Lines) {
     return $k
 }
 
+# One line a row up to KMD 0.7.206, two from 0.7.207 on: the three 64-bit counters did not fit the
+# driver's 160-character log line and the snoop mismatch fell off the end of it (BD-070). Both lines
+# name the level and the segment, so a row is put together again from either shape.
 function Get-Coherence([string[]]$Lines) {
     $c = @{}
     foreach ($l in $Lines) {
-        if ($l -match 'vidmm summary: PTE encoding level (\d+) segment (\d+) coherent (-?\d+) noncoherent (-?\d+) snoop mismatches (-?\d+)') {
-            $c["level $($Matches[1]) segment $($Matches[2])"] = @([int64]$Matches[3], [int64]$Matches[4], [int64]$Matches[5])
+        $key = $null
+        if ($l -match 'vidmm summary: PTE encoding level (\d+) segment (\d+) coherent (-?\d+) noncoherent (-?\d+)( snoop mismatches (-?\d+))?') {
+            $key = "level $($Matches[1]) segment $($Matches[2])"
+            if (-not $c.ContainsKey($key)) { $c[$key] = @(0, 0, 0) }
+            $mismatch = if ($Matches[6]) { [int64]$Matches[6] } else { $c[$key][2] }
+            $c[$key] = @([int64]$Matches[3], [int64]$Matches[4], $mismatch)
+        }
+        elseif ($l -match 'vidmm summary: PTE encoding level (\d+) segment (\d+) snoop mismatches (-?\d+)') {
+            $key = "level $($Matches[1]) segment $($Matches[2])"
+            if (-not $c.ContainsKey($key)) { $c[$key] = @(0, 0, 0) }
+            $c[$key] = @($c[$key][0], $c[$key][1], [int64]$Matches[3])
         }
     }
     return $c
