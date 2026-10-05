@@ -7,6 +7,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "dcn_translate.h"
 #include "gdi_private.h"    /* the LB7A blob and its GDI trailer, as wddm.c includes them: never a copy here */
+#include "gdi_admission.h"  /* the request, the answer and the per-adapter counters of the DDI, likewise */
 typedef unsigned long ULONG,*PULONG;
 typedef unsigned int UINT;
 typedef unsigned long long ULONGLONG;
@@ -72,7 +73,7 @@ typedef struct {
  STANDARD_DATA *pCreateSharedPrimarySurfaceData,*pCreateShadowSurfaceData,*pCreateStagingSurfaceData,*pCreateGdiSurfaceData;
  PVOID pAllocationPrivateDriverData,pResourcePrivateDriverData;
 } DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA;
-typedef struct {volatile LONG GdiSurfaceTypesLogged;} BC250_WDDM;
+typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdAlloc;} BC250_WDDM;
 #define D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE 1
 #define D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE 2
 #define D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE 3
@@ -102,7 +103,7 @@ static void GdiChecks(void){
  static_assert(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32 && sizeof(BC250_GDI_PRIVATE)==48,"LB7A v1 prefix and GDI trailer");
  for(i=0;i<4;i++)for(j=0;j<2;j++){
   STANDARD_DATA data={0};BC250_GDI_PRIVATE gdi;ULONG pitch=0,t=0;ULONGLONG size=0;
-  ULONG format=types[i]==4 ? BC250_FORMAT_A8 : D3DDDIFMT_A8R8G8B8;
+  ULONG format=types[i]==4 ? AMDGPU_WDDM_D3DDDI_A8 : D3DDDIFMT_A8R8G8B8;
   memset(&gdi,0xcc,sizeof(gdi));
   data.Width=sizes[j][0];data.Height=sizes[j][1];data.Format=format;data.Type=types[i];
   CHECK(WddmGdiLayout(data.Width,data.Height,types[i],types[i]==4 ? 1 : 4,&pitch,&size));
@@ -123,7 +124,7 @@ static void GdiChecks(void){
   data.Flags.Value=0;data.Type=0;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
   data.Type=5;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER); /* existing system memory */
   data.Type=4;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER); /* a lookup table is A8 only */
-  data.Type=1;data.Format=BC250_FORMAT_A8;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
+  data.Type=1;data.Format=AMDGPU_WDDM_D3DDDI_A8;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
   data.Type=2;data.Format=0;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
  }
 }

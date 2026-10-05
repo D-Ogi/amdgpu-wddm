@@ -42,8 +42,8 @@ static NTSTATUS LogEscape(BC250_DEVICE*d,const DXGKARG_ESCAPE*e,BOOLEAN summary)
 static NTSTATUS PagingJournalEscape(const BC250_DEVICE*d,const DXGKARG_ESCAPE*e){(void)d;(void)e;journals++;return STATUS_SUCCESS;}
 static void StartHealthRequest(BC250_DEVICE*d,BC250_ESCAPE_START_HEALTH*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
 static void CuModeRequest(BC250_DEVICE*d,BC250_ESCAPE_CU_MODE*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
-static void DpmRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
-static void DpmTuneRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_TUNE*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
+static void DpmRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
+static void DpmTuneRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_TUNE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void InteropRequest(BC250_DEVICE*d,BC250_ESCAPE_INTEROP*p,ULONG f){(void)d;(void)p;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
