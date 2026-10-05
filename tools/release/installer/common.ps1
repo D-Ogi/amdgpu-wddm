@@ -312,7 +312,11 @@ function Get-RegistryDefaultPlan {
             $now = $null; if ($After.ContainsKey($e.name)) { $now = $After[$e.name] }
             $differs = (-not $After.ContainsKey($e.name)) -or -not (Test-RegistryValueSame $now $e.value)
             $e | Add-Member -NotePropertyName rewrite -NotePropertyValue ((-not $e.write) -and $differs)
-            if ($differs) { $e.write = $true }
+            # The writes come from $After alone: a value the key already holds is not written again. Without this, a
+            # default of this release that the previous installer never wrote (so it is absent from $Current) stayed a
+            # 'set' with a write at every judgement from the same snapshot. Format-RegistryPlan reads the decision, not
+            # this flag, so the plan the tester reads does not change.
+            $e.write = $differs
         }
     }
     return , $plan.ToArray()
