@@ -286,10 +286,12 @@ pwsh driver\kmd\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget -Out <BC250_ROOT>\s
   libraries from the NuGet kits (`-KitVersion 10.0.26100.0`). The fast quality gates in `tools/quality` run
   first and a kernel stack-budget check (`tools/win/stackbudget.py`) runs last.
 - **Log line width.** The gate `guardlog-width` measures every `GuardLog` format against the 159 characters a
-  log line holds (`BC250_LOG_TEXT`, 160 bytes with the terminator) and fails on a new format over it. Run it
-  alone with `python tools/quality/guardlog_width.py`; `--list-over` prints the over-width formats as baseline
-  lines. `tools/quality/guardlog_width_baseline.txt` is the ratchet of the formats that were already too long,
-  and `driver/kmd/README.md` says why a truncated line costs evidence.
+  log line holds (`BC250_LOG_TEXT`, 160 bytes with the terminator) and fails on a new format over it. It reads
+  the `.c`, `.inc` and `.h` files directly under `driver/kmd`. Run it alone with
+  `python tools/quality/guardlog_width.py`. `--list-over` prints the over-width formats as baseline lines, and
+  `--prune` removes the baseline lines that no longer apply and tightens the widths of the lines that stay.
+  `tools/quality/guardlog_width_baseline.txt` is the ratchet of the formats that were already too long, and
+  `driver/kmd/README.md` says why a truncated line costs evidence.
 - **Output.** `<Out>\package\{bc250kmd.sys, bc250kmd.inf, bc250kmd.cat, bc250-lab-test.cer}`. `-UmdStub` adds
   a second package with the stub UMD from `driver/umd-stub/build.ps1`; the script header explains both.
 - **Signing.** A self-signed code-signing certificate `CN=BC-250 lab test signing` in `Cert:\CurrentUser\My`,

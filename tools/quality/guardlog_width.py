@@ -16,6 +16,10 @@ joined as the compiler joins them. The count is a worst case: a %s that always h
 counter that never passes four digits prints shorter. A line that only the worst case puts over
 the limit belongs in the baseline, not in a split.
 
+The gate reads the driver's own translation units and the files they include by text: *.c, *.inc
+and *.h directly under <root>. The host tests in driver/kmd/test stub GuardLog and write to no log
+ring, so they stay out.
+
 The baseline is a ratchet. It names every format that was already over the limit when this gate
 landed, by file and format text (not by line number, so an edit somewhere else in the file does
 not move it), with the width it had. The gate fails when
@@ -23,7 +27,9 @@ not move it), with the width it had. The gate fails when
   - a baselined format gets wider.
 It passes, and prints a note to remove the baseline line, when a baselined format shrinks under
 the limit or is no longer in the sources. Nothing adds a baseline line by itself: --list-over
-prints the lines for a human to review, and --prune only removes stale ones.
+prints the lines for a human to review, and --prune only removes stale ones. --prune also writes
+the width each kept format has now, so a format that got shorter cannot grow back to its old
+allowance. It refuses to touch the file while the gate fails.
 """
 import argparse
 import pathlib
@@ -31,6 +37,10 @@ import re
 import sys
 
 LIMIT = 159                     # BC250_LOG_TEXT 160 bytes, the terminator included
+
+# wddm.c includes wddm_allocation_identity.inc, which holds a GuardLog call of its own, and a
+# header could hold one too. A suffix left out here is a format the gate cannot see.
+SUFFIXES = ('.c', '.inc', '.h')
 
 WIDTH = [(r'%%', 1), (r'%[-+ #0]*\d*(?:ll|I64)[dixXu]', 20), (r'%[-+ #0]*\d*l?[di]', 11),
          (r'%[-+ #0]*\d*l?u', 10), (r'%[-+ #0]*\d*l?[xX]', 8), (r'%[-+ #0]*\d*p', 16),
@@ -60,10 +70,16 @@ def width(fmt):
     return total
 
 
+def sources(root):
+    """The files directly under <root> whose text the gate reads, sorted by name."""
+    return sorted(p for p in pathlib.Path(root).iterdir()
+                  if p.is_file() and p.suffix in SUFFIXES)
+
+
 def formats(root):
-    """[(file name, format text, width)] for every GuardLog call in <root>/*.c, sorted."""
+    """[(file name, format text, width)] for every GuardLog call under <root>, sorted."""
     out = {}
-    for path in sorted(pathlib.Path(root).glob('*.c')):
+    for path in sources(root):
         text = path.read_text(encoding='utf-8', errors='replace')
         for m in CALL.finditer(text):
             fmt = ''.join(PIECE.findall(m.group(1))).replace('\\n', '').replace('\\"', '"')
@@ -133,7 +149,8 @@ def main(argv=None):
     p.add_argument('--list-over', action='store_true',
                    help='print the over-width formats as baseline lines and exit')
     p.add_argument('--prune', action='store_true',
-                   help='remove the baseline lines the notes ask for, then exit')
+                   help='remove the baseline lines the notes ask for, tighten the widths of the '
+                        'lines that stay, then exit')
     a = p.parse_args(argv)
 
     found = formats(a.kmd)
@@ -147,14 +164,32 @@ def main(argv=None):
     failures, notes, report = check(a.kmd, baseline, a.limit)
 
     if a.prune:
-        keep = {(f, t) for f, t, w in found if w > a.limit}
         path = pathlib.Path(a.baseline)
-        kept = [t for t in path.read_text(encoding='utf-8').splitlines()
-                if not t.strip() or t.lstrip().startswith('#')
-                or tuple(t.split('\t')[1:3]) in keep]
+        if failures:
+            # A prune writes the widths it measures now. With a failure in the sources that would
+            # hand the offending format an allowance, which is the one thing a ratchet must not do.
+            print('guardlog-width: the gate fails, so nothing was pruned. %d format(s) over the '
+                  'limit outside %s:' % (len(failures), path))
+            print('\n'.join('FAIL: ' + t for t in failures))
+            return 1
+        keep = {(f, t): w for f, t, w in found if w > a.limit}
+        kept, written = [], 0
+        for text in path.read_text(encoding='utf-8').splitlines():
+            if not text.strip() or text.lstrip().startswith('#'):
+                kept.append(text)
+                continue
+            parts = text.split('\t')
+            key = (parts[1], parts[2]) if len(parts) == 3 else None
+            if key not in keep:
+                continue
+            # The width the format has now, not the width it had: a format that got shorter must
+            # not keep room to grow back to its old length.
+            kept.append(line(key[0], key[1], keep[key]))
+            written += 1
         # LF, as .gitattributes asks for this file, so that a prune is not also a line-ending diff.
         path.write_text('\n'.join(kept) + '\n', encoding='utf-8', newline='\n')
-        print('guardlog-width: %d baseline lines kept in %s' % (len(keep), path))
+        print('guardlog-width: %d baseline line(s) written to %s, %d removed'
+              % (written, path, len(baseline) - written))
         return 0
 
     text = ['guardlog-width: %d GuardLog formats in %s, limit %d characters, %d baselined'
