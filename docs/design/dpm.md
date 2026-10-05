@@ -32,7 +32,8 @@ The level index is the column number from the left: 0 is 500 MHz (`BC250_DPM_IDL
 table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 
 - 800 and 900 MHz are thermal-only, added in 0.7.205 (see "Below the lab floor"). The load never asks for them.
-- 500 MHz is the idle point, added in 0.7.206 (see "The idle state"). Only the idle state asks for it.
+- 500 MHz is the idle point, added in 0.7.206 (see "The idle state"). Only the idle state asks for it. It lies
+  below the thermal cap's own bottom, so no thermal rule chooses it and the cap never holds a load there.
 - 600 and 700 MHz keep the 100 MHz grid whole, so that a level stays `(MHz - 500) / 100`. No rule of the governor
   selects them. An administrator reaches them with `DpmIdleMHz` or with the clock escape.
 - 1000/820: the lab point, run for weeks. 1500/919: the firmware's own point (M22), one VID above its 918.75.
@@ -108,8 +109,11 @@ and the governor rightly stays low. SMU metrics are not an alternative: amdgpu r
 part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
 
 Same sensor as temp.py (M23). At 87 C or more the cap drops to one level under the current clock, then one more
-level every hot step (500 ms by default) while it stays hot. At 90 C the cap is the lowest level of the table
-(800 MHz from 0.7.205, 1000 MHz before it); with an invalid sensor read it is the lab floor, 1000 MHz, and never
+level every hot step (500 ms by default) while it stays hot. The step starts at the lab floor when the clock is
+below it, because the idle point of 0.7.206 is not a load level: the cap's own bottom is the thermal floor, and a
+cap at 500 MHz would hold a loaded GPU there until the release. At 90 C the cap is the thermal floor, 800 MHz
+(`BC250_DPM_THERMAL_FLOOR_LEVEL`, 1000 MHz before 0.7.205), which is the lowest level the cap uses and not the
+lowest level of the table. With an invalid sensor read it is the lab floor, 1000 MHz, and never
 higher than the cap already in force (0.7.205: the rule is a clamp, so one blind tick cannot undo a thermal step).
 Below 82 C the cap rises one level per second. The clock gate also refuses any raise at 87 C after its readbacks, so a
 stale decision cannot raise either, with one exception named below; lowering is always allowed.
@@ -179,43 +183,79 @@ Entry needs a quiet window:
 1. The GFX ring must hold no work. The KMD reads `GfxSubmitBusy` at every tick and passes it as
    `bc250_dpm_input.ring_busy`. A tick with work outstanding starts the window again, even when the hardware
    samples read zero. A submission that waits on a fence is work.
-2. The mean busy share over the whole window must stay under `DpmIdleBusyPermille` (2 permille by default).
+2. The mean busy share over the whole window must stay under `DpmIdleBusyPermille` (2 permille by default). The
+   share of a tick is the higher of the two hardware shares: GRBM `GUI_ACTIVE` for the graphics engine, and
+   `SDMA0_STATUS_REG.IDLE` for the paging node (`bc250_dpm_input.sdma_permille`, 0.7.206). The paging node needs
+   its own signal because the GFX ring is empty for the whole of an eviction or an upload, so neither of the
+   first two signals sees one. The load governor keeps the GFX-only share it always had.
 3. The window must last `DpmIdleHoldMs` (3000 ms by default) without a break.
 
 The rule is a mean and not a strict zero, because the desktop on the GPU wakes for single frames. One active
 GRBM sample of the 1 ms sampler inside a 3 s window is 0.33 permille, which the default admits. A window whose mean
 is too high starts again, so the worst case from a quiet GPU to the idle point is two hold times.
 
-Exit is immediate. The first tick that sees work on the ring, or a busy share above the same threshold, leaves the
-state and asks for the lab floor in that tick. The governor then runs from the lab floor at the next tick, so a
-load that wants more than 1000 MHz reaches its level one tick later. The warm zone and the thermal ramp do not bound
-this return: 500 MHz and 1000 MHz carry the same 820 mV, so the return adds no voltage, and 1000 MHz is the one
-point this part is known to run at. The return does not start the ramp's interval again either. Worst-case exit
-latency is one governor tick plus one SMU transaction: the tick is `BC250_DPM_TICK_MS` (25 ms) nominally and at most
-`BC250_DPM_MAX_DT_MS` (1000 ms) when the thread was starved, and the transaction sends two messages and reads the
-clock and the VID back (`bc250_clock.c`, up to 50 settle reads of 1 ms on a raise). The first work of a burst
-therefore runs at 500 MHz for about 25 to 30 ms. The GPU reaches the clock the load asks for after one more tick.
+Two rules end an episode, and the fast one is the ring. Work outstanding on the GFX ring, or activity on the
+paging node, leaves the state in that tick and asks for the lab floor. Every submission of this driver shows
+there, so this is the exit that game and desktop work takes. A tick whose own busy share reaches
+`BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille, half the tick) leaves as well, for work that the ring accounting
+cannot see. Below that share the trailing window decides: the same window length and the same admitted mean as
+the entry, so work that keeps the GPU busier than the admitted mean leaves within one hold time.
+
+The two thresholds differ on purpose. The entry admits a mean of 2 permille because a static desktop wakes for
+single frames, but one such frame is 40 permille of its own 25 ms tick - one active GRBM sample of the 25 a tick
+holds, twenty times the admitted mean. Up to the review of 0.7.206 the exit compared a tick's own share with the
+entry threshold, so the state left at the very frame the mean rule tolerates on entry. On the policy itself,
+a desktop that woke once per second gave 15 entries and 15 exits a minute and held the point for a quarter of the
+time. `test_idle` now holds a minute of that pattern at three wake rates and asks for one entry and no exit.
+
+The warm zone and the thermal ramp do not bound the return: every point below the lab floor carries 820 mV, so
+the return adds no voltage, and 1000 MHz is the one point this part is known to run at. The return does not start
+the ramp's interval again either. The condition for both is "the state held this clock", not "the clock is below
+the thermal floor": the idle point can be the thermal floor itself (a configured `DpmIdleMHz`, or the fallback
+after a refusal), and the thermal cap can hold the clock at the same level, where the ramp's bound must stay. A
+clock below the cap's own bottom belongs to no cap, so the floor goes in there in one tick as well - an
+administrator's own request, or a point the cap lost, does not walk back up through 600 and 700 MHz.
+
+The governor then runs from the lab floor at the next tick, so a load that wants more than 1000 MHz reaches its
+level one tick later. Exit latency is one governor tick plus one SMU transaction: the tick is `BC250_DPM_TICK_MS`
+(25 ms) and the transaction sends two messages, which measured in single milliseconds for the sub-floor points, so
+the first work of a burst runs some 25 to 35 ms at the idle point. Neither figure is a bound. The governor runs on
+an ordinary system thread, it waits a relative 25 ms after each tick, `DpmPause` holds its lock across a power
+transition, and a raise re-reads the clock up to `BC250_CLOCK_SETTLE_READS` (50) times with
+`BC250_CLOCK_SETTLE_US` (1000 us) between the reads. `BC250_DPM_MAX_DT_MS` is the clamp the policy puts on
+`dt_ms` and says nothing about the real period. Nothing has measured the latency on the hardware yet. The lab
+plan measures it.
 
 Other rules keep the state out. The state does not run at all while any of these holds:
 
+- The start does not govern the clock: fixed-lab, a DPM request the guard refused, or no SMU owner. `DpmStart`
+  then does not configure the state at all, and the log, the escape and `bc250kmd_cli dpm` all read "off"
+  (0.7.206, review). The state could not act in such a start, because `bc250_dpm_step` never runs.
 - A runtime floor is set (`dpm floor`). The operator asked for a clock.
 - `SetStablePowerState(TRUE)`. A profiler asked for one steady clock.
 - The reading is 87 C or more, or the governor is inside a hot episode. The thermal cap owns the clock there.
 - There is no temperature reading. Blind, the driver holds the lab floor.
 - A thermal limit, the critical rule (90 C) or the maximum setting is lower than the idle point. These bound the
-  clock from above, so they win while the state is out. An exit while the part is critical goes to 800 MHz.
+  clock from above, so they win while the state is out, and they bound the idle point itself: a cap that holds a
+  hot part at 800 MHz wins over a configured 900 MHz point. An exit while the part is critical goes to 800 MHz.
 
 A start that holds the idle point is not "above the floor": `DpmSession` is not written for it, and `DpmStop` and
 `DpmPause` apply the lab floor from it, which the clock gate admits at any temperature (the exception named above
 covers every request up to 1000 MHz that does not raise the voltage).
 
 The firmware has never been seen below 1000 MHz (M47, M15), so the KMD treats a refusal as an answer, as it does
-for the thermal sub-floor. When a transition to the idle point fails, `driver/kmd/dpm.c` logs one line
-(`dpm: idle point refused: 500 MHz 0x...`), calls `bc250_dpm_idle_refused()`, applies 1000 MHz instead, and does not
-count the failure towards the SMU give-up limit. The idle point then falls back one step: 500 MHz, then 800 MHz
-(`BC250_DPM_THERMAL_FLOOR_LEVEL`), then off, which is the lab floor. A refused point is never asked for twice. A
-refused thermal sub-floor (`bc250_dpm_subfloor_refused`) turns the idle state off as well, because both use the same
-two messages below 1000 MHz.
+for the thermal sub-floor. When a transition to the idle point fails, `driver/kmd/dpm.c` calls
+`bc250_dpm_idle_refused()`, logs one line (`dpm: idle point refused: 500 MHz 0x...`) with the point that remains
+and the refusal count, applies 1000 MHz instead, and does not count the failure towards the SMU give-up limit.
+The idle point then falls back one step: 500 MHz, then 800 MHz (`BC250_DPM_THERMAL_FLOOR_LEVEL`), then off, which
+is the lab floor. A refused point is never asked for twice.
+
+`DpmApply` picks the refusal path by the governor's own state, `S->Gov.idle && Level == S->Gov.idle_level`, and
+not by the level alone (0.7.206, review). After the first fallback the idle point *is* the thermal floor, so a
+refusal of that point has to count as the second idle refusal and not as a sub-floor one. A refused point at or
+above the thermal floor is also the thermal cap's own lowest point, asked for with the same two messages, so
+`bc250_dpm_idle_refused()` calls `bc250_dpm_subfloor_refused()` for it: after that no rule asks for a point below
+the lab floor again. A refused thermal sub-floor turns the idle state off as well, for the same reason.
 
 Settings: `DpmIdleMHz` (0 turns the state off, which is 0.7.205 behaviour exactly), `DpmIdleHoldMs` and
 `DpmIdleBusyPermille`. The KMD reads all three once per start and gives them to `bc250_dpm_idle_config()`, which
@@ -224,9 +264,14 @@ refuses a clock that is not a table point below 1000 MHz, a hold outside 250 to 
 part of `struct bc250_dpm_tune`, so `RUN_DPM_TUNE` and its ABI do not change.
 
 `test_idle` in `dpm_test.c` covers the setting's checks, the entry after the hold, the mean rule in both directions,
-the ring input, the immediate exit, the exit at 86 C and at 90 C, the runtime floor, `SetStablePowerState`, the
-thermal and blind rules, both refusal steps, and a start with `DpmIdleMHz` 0, which keeps 0.7.205 behaviour.
-`clock_test.c` covers the transactions to and from 500 MHz, including the admitted 500 -> 1000 MHz raise at 95 C.
+the ring and paging inputs, the exit share and the trailing window, a minute of a waking desktop at three wake
+rates, the exit at 86 C and at 90 C, the exit from an 800 MHz idle point (configured and after a refusal) against
+the cap's own ramp from the same level, a hot entry while the clock is at the idle point, a cap that holds the
+part below a configured idle point, the runtime floor, `SetStablePowerState`, the thermal and blind rules, both
+refusal steps with the sub-floor they withdraw, and a start with `DpmIdleMHz` 0, which keeps 0.7.205 behaviour.
+Every tick of the test also checks that the thermal cap stays at or above its own bottom, so a cap at the idle
+point fails the gate. `clock_test.c` covers the transactions to and from 500 MHz, including the admitted
+500 -> 1000 MHz raise at 95 C.
 
 From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 C). The owner set this threshold on
 2026-10-04 ("próg na 87": the threshold at 87). From 0.7.200 to 0.7.203 the warm zone started at 85 C. The rules are:
@@ -349,9 +394,9 @@ every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
 | `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
-| `DpmIdleMHz` | the idle point (0.7.206): a table clock from 500 to 900 MHz, or 0 for no idle state; absent = 500 (`BC250_DPM_IDLE_MHZ`) |
+| `DpmIdleMHz` | the idle point (0.7.206): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
-| `DpmIdleBusyPermille` | the mean busy share the hold window still admits; absent = 2, at most 100 |
+| `DpmIdleBusyPermille` | the mean busy share the hold window still admits; absent = 2, at most 100. The exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500), which no setting changes |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
 | `DpmLastMode`, `DpmLastReason` | what the last start chose and why |
