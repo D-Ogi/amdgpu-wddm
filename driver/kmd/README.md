@@ -272,6 +272,18 @@ lists for each format. Use it to measure the change. To turn step 2 off, set the
 `OfferComposedSourceModes` to 0 under the service's `Parameters` key and restart the adapter. The INF does
 not write this value, and the default is 1.
 
+## Scan-out admission (M15.14, 0.7.207.1)
+
+`SetVidPnSourceAddress` may program the plane with an application's own swap-chain buffer when the
+buffer's creator asked for scan-out and described it. The rule is `scanout_admit.h`, the design note is
+`docs/design/scanout-admission.md`, and the gates are `scanout-admit` and `vidpn-flip`.
+
+To turn it off, set the REG_DWORD `EnableScanoutAdmit` to 0 under the service's `Parameters` key and
+restart the adapter. A candidate that asks for scan-out is then refused with the status `gated`, every
+other candidate keeps the checks it had in 0.7.205.1, and the start behaves as that revision did. The
+INF does not write this value, and the default is 1. The flip gates `EnableMmio`, `EnableDcnWrite` and
+`EnableVidPnFlip` are a different thing: they remove every hardware flip, DWM's own primary included.
+
 ## Build
 
 ```powershell

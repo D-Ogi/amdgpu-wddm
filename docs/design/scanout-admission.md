@@ -25,7 +25,7 @@ flips (facts M97).
 The clause is replaced by one function, `Bc250ScanoutAdmit`. It takes a candidate - provenance, intent,
 geometry, pitch, format, size, segment and address - and returns one of nine statuses. The statuses are
 counted per adapter start and printed by `LOG_SUMMARY`, so a trial that sees no scan-out says which
-clause refused it.
+clause refused it. A tenth status, `gated`, belongs to the switch below and not to the rule.
 
 A surface is a candidate only if its creator asked for scan-out and described it. There are two ways to
 ask, one per allocation path:
@@ -78,6 +78,24 @@ AccessedPhysically", `wddm.c`), which is why it walks every page. The scan-out p
 flag is the contract. The four values, for every type-0 shape a shell can produce, are
 `Aperture=0, CpuVisible=0, Cached=0, AccessedPhysically=1`, and the `gdi-admission` gate asserts them.
 
+## The switch
+
+`EnableScanoutAdmit`, a `REG_DWORD` under the service's `Parameters` key, read once at `WddmStart`.
+Absent or 1: the rule above decides. 0: a candidate that asks for scan-out is refused with the status
+`gated`, and every other candidate keeps the four checks it had in 0.7.205.1, so the start behaves as
+that revision did. The INF does not write the value, as it does not write `OfferComposedSourceModes`,
+and `WddmStart` logs which way it read.
+
+The switch exists for the release train, not for the feature: b18 carries three driver changes in one
+revision and one lab session validates them together, so a failure must be attributable to one of them
+without a rebuild (`scratch/train/TRAIN-b18.md` rule 4). It is not the whole lever for this wagon. No
+shipped shell asks for scan-out unless the operator sets `AMDGPU_WDDM_D3D12_EXPERIMENT`
+(`scanout-flip-1920x1200`), so the user-mode variable turns the path off for an application while this
+value turns it off for the driver, including for anything that asks without being told to.
+
+The flip gates of `driver/kmd/mmio.c` - `EnableMmio`, `EnableDcnWrite`, `EnableVidPnFlip` - are not this
+switch. They remove every hardware flip, DWM's own primary included.
+
 ## The surface's lifetime
 
 Before M15.14 the only programmable surface was dxgkrnl's own shared primary, whose lifetime dxgkrnl
@@ -90,6 +108,16 @@ and marks the primary as needing a restore so the next flip counts as a change. 
 crashed game leaves HUBP0 scanning VRAM that VidMm is free to hand to the next allocation, with no way
 back short of a reboot. The `vidpn-flip` gate drives both branches: the recorded allocation and any
 other one.
+
+The record is taken **before** the plane is programmed, and that order is the whole point of it. The
+write to HUBP0 is what makes the new buffer the one the display core reads, so a record published after
+that write leaves a window in which `DestroyAllocation` compares the buffer it is about to free against
+the previous flip's object, misses, and frees a buffer the plane is reading. The other order costs
+nothing: a record taken for a buffer the plane has not reached yet only restores the firmware surface
+early, and the flip that follows undoes that. A programming sequence that fails puts the previous
+object back, unless a destroy has taken the record away meanwhile, because that destroy then owns the
+restore. The `vidpn-flip` gate drives the interleaving itself: its `DcnFlipSourceAddress` runs a destroy
+of the buffer being programmed, at the moment the plane becomes that buffer's.
 
 ## What a refusal does, and what it does not
 
@@ -117,6 +145,9 @@ and `EnableVidPnFlip` are separate registry switches - this DDI still succeeds a
 a counter that moved there would report the increment's headline result on a machine where no address
 ever reached HUBP0. `scanout_requests` counts candidates whose creator had asked for scan-out, so it
 separates "user mode never asked" from "the kernel driver refused".
+
+`admit_gated` counts the candidates the switch above refused, so a run with no scan-out flip tells a
+closed switch from a rule that said no.
 
 `admit_ok` is not a client-specific number: every `SetVidPnSourceAddress` with an allocation is counted
 by its status, and the compositor's own primary is admitted `ok` at the refresh rate. Over a one-minute

@@ -47,6 +47,7 @@ typedef struct {
     volatile LONG Flips, FlipsAboveDispatch, VSyncReports;
     volatile LONG ScanoutFlips, ScanoutRequests, ScanoutAdmits[BC250_SCANOUT_STATUSES], ScanoutNotes, ScanoutTeardowns;
     volatile LONGLONG ScanoutObject;
+    BOOLEAN ScanoutAdmitGate;       /* EnableScanoutAdmit, absent = on (WddmStart) */
     int VSyncEnabled;
     unsigned VSyncTargetId;
 } BC250_WDDM;
@@ -92,6 +93,10 @@ static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE *d){(void)d;++restores;return
 static ULONG programmed_pitch;
 static unsigned checks,failures,hardware,arms,reports;
 static int irq,pending,inject_update,nested_writer,inject_fallback_update;
+/* The one interleaving the lifetime tie exists for: dxgkrnl frees the buffer of a flip that is still inside
+ * SetVidPnSourceAddress, with the plane already written. Set this to the allocation handle the destroy carries,
+ * and DcnFlipSourceAddress runs that destroy at the moment the plane becomes the new buffer's. */
+static HANDLE inject_destroy;
 static NTSTATUS hardware_result;
 static LONGLONG programmed,displayed,reported;
 #define CHECK(x) do { ++checks; if(!(x)){++failures;printf("FAIL line %d: %s\n",__LINE__,#x);} } while(0)
@@ -129,6 +134,13 @@ static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pit
         other.PrimaryAddress.QuadPart=99;
         CHECK(Bc250WddmSetVidPnSourceAddress(d,&other)==STATUS_DEVICE_BUSY);
     }
+    if(inject_destroy){
+        DXGKARG_DESTROYALLOCATION destroy={0};
+        HANDLE list[1];
+        list[0]=inject_destroy;inject_destroy=0;
+        destroy.NumAllocations=1;destroy.pAllocationList=list;
+        CHECK(Bc250WddmDestroyAllocation(d,&destroy)==STATUS_SUCCESS);
+    }
     if(NT_SUCCESS(hardware_result)){programmed=(LONGLONG)address;programmed_pitch=pitch;}
     return hardware_result;
 }
@@ -165,7 +177,7 @@ int main(void)
         PHYSICAL_ADDRESS sample={-1};
         unsigned before;
         d.Post.Width=1366;d.Post.Height=768;d.Post.Pitch=5632;w.PrimaryPitch=5632;
-        d.Wddm=&w;d.VidPnFlipEnabled=1;w.VSyncEnabled=1;
+        d.Wddm=&w;d.VidPnFlipEnabled=1;w.VSyncEnabled=1;w.ScanoutAdmitGate=TRUE;
         w.PrimaryAddress.QuadPart=10;w.PrimarySegment=1;
         request.PrimaryAddress.QuadPart=20;request.PrimarySegment=2;
         healthSequence=healthCompletions=0;
@@ -354,6 +366,60 @@ int main(void)
                     w.PrimaryNeedsRestore=FALSE;list[0]=&umd;restores=0;freed=0;
                     CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
                     CHECK(restores==0 && freed==1 && !w.PrimaryNeedsRestore && w.ScanoutObject==0);
+                    // The interleaving the tie exists for: dxgkrnl frees the buffer of a flip that is still
+                    // inside SetVidPnSourceAddress, after the plane has been written with it. The record must
+                    // already name that buffer here, or the destroy misses, frees it, and leaves HUBP0 reading
+                    // VRAM that VidMm may hand to somebody else. The record is 0 at this point, so a record
+                    // published after the programming would make this the unrecoverable case.
+                    {
+                        LONG teardowns=w.ScanoutTeardowns;
+                        LONGLONG scanned;
+                        request.hAllocation=&good;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+                        request.PrimaryAddress.QuadPart=0xE000;
+                        hardware_result=STATUS_SUCCESS;freed=journaled=restores=0;
+                        inject_destroy=&good;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(!inject_destroy && restores==1 && freed==1 && journaled==1);
+                        CHECK(w.ScanoutTeardowns==teardowns+1 && w.ScanoutObject==0);
+                        // A programming sequence that fails gave the plane no address it keeps, so the record
+                        // goes back to the object the previous flip left there.
+                        w.PrimaryNeedsRestore=FALSE;request.PrimaryAddress.QuadPart=0xC000;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        scanned=w.ScanoutObject;
+                        CHECK(scanned==(LONGLONG)(ULONG_PTR)&good);
+                        request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0xF000;
+                        hardware_result=STATUS_IO_TIMEOUT;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT);
+                        CHECK(w.ScanoutObject==scanned);
+                        hardware_result=STATUS_SUCCESS;
+                        // The operator's switch (EnableScanoutAdmit 0): a candidate that asks for scan-out is
+                        // refused and named, dxgkrnl's own primary still reaches the hardware, and no record is
+                        // taken. That is 0.7.205.1 behaviour, reachable without a rebuild.
+                        {
+                            LONG gated=w.ScanoutAdmits[BC250_SCANOUT_GATED],gatedFlips=w.ScanoutFlips;
+                            unsigned written=hardware;
+                            w.ScanoutAdmitGate=FALSE;
+                            request.hAllocation=&good;request.PrimaryAddress.QuadPart=0xD000;
+                            CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                            CHECK(w.ScanoutAdmits[BC250_SCANOUT_GATED]==gated+1);
+                            CHECK(w.ScanoutFlips==gatedFlips && hardware==written && w.ScanoutObject==scanned);
+                            request.hAllocation=&allocation;request.PrimarySegment=2;
+                            request.PrimaryAddress.QuadPart=0x50;
+                            CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                            CHECK(hardware==written+1 && w.ScanoutFlips==gatedFlips && w.ScanoutObject==0);
+                            w.ScanoutAdmitGate=TRUE;
+                        }
+                        CHECK(!strcmp(Bc250ScanoutStatusText(BC250_SCANOUT_GATED),"gated"));
+                        // Give the record back, so what follows starts from the compositor's own primary.
+                        request.hAllocation=&good;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+                        request.PrimaryAddress.QuadPart=0xC000;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutObject==scanned);
+                        list[0]=&good;freed=journaled=restores=0;
+                        CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
+                        CHECK(restores==1 && w.ScanoutObject==0);
+                        w.PrimaryNeedsRestore=FALSE;
+                    }
                     w.PrimaryPitch=5632;w.PrimaryAddress.QuadPart=0x4000;
                 }
                 request.hAllocation=NULL;request.PrimarySegment=3;

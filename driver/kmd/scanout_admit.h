@@ -46,7 +46,8 @@
 #define BC250_SCANOUT_SIZE 6            // the rows do not fit in the allocation
 #define BC250_SCANOUT_SEGMENT 7         // not resident in the segment whose descriptor says DirectFlip
 #define BC250_SCANOUT_ALIGNMENT 8       // the address is not 4 KiB aligned
-#define BC250_SCANOUT_STATUSES 9
+#define BC250_SCANOUT_GATED 9           // the operator closed the EnableScanoutAdmit gate for this start
+#define BC250_SCANOUT_STATUSES 10
 
 typedef struct _BC250_SCANOUT_CANDIDATE {
     int UmdAlloc;                       // the object came in as a BC2A blob
@@ -96,8 +97,13 @@ static __inline int Bc250ScanoutAdmit(const BC250_SCANOUT_CANDIDATE* Candidate,
     return BC250_SCANOUT_ADMIT_OK;
 }
 
+// BC250_SCANOUT_GATED is the one status this header does not decide: wddm.c answers it for a requesting
+// candidate before it asks, because the gate is a start-time registry value and not a property of the
+// surface. It has a status of its own all the same, so that the counters and the refusal line say "the
+// operator turned this off" instead of naming a clause that never ran.
 static const char* const g_Bc250ScanoutStatusNames[BC250_SCANOUT_STATUSES] = {
-    "ok", "no-allocation", "not-requested", "format", "geometry", "pitch", "size", "segment", "alignment" };
+    "ok", "no-allocation", "not-requested", "format", "geometry", "pitch", "size", "segment", "alignment",
+    "gated" };
 
 static __inline const char* Bc250ScanoutStatusText(int Status)
 {

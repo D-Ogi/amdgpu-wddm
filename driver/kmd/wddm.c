@@ -480,6 +480,12 @@ typedef struct _BC250_WDDM {
     volatile LONG ScanoutAdmits[BC250_SCANOUT_STATUSES];
     volatile LONG ScanoutNotes;                 // guard-log budget of the scan-out flip lines, its own
     volatile LONG ScanoutTeardowns;             // and of the teardown lines, which a flip must not crowd out
+    // The operator's switch for M15.14, read once at WddmStart (EnableScanoutAdmit, absent = on). Closed, a
+    // candidate that asks for scan-out is refused with BC250_SCANOUT_GATED and every other candidate keeps the
+    // four checks it had in 0.7.205.1, so this start behaves as that revision did. It exists because the b18
+    // train carries three changes at once and a lab failure must be attributable to one of them without a
+    // rebuild (scratch/train/TRAIN-b18.md rule 4).
+    BOOLEAN ScanoutAdmitGate;
     // The application allocation the plane is reading, as a value, never dereferenced: DestroyAllocation
     // compares the handle it is about to free against it and restores the firmware surface on a match,
     // because nothing else ties an application swap-chain buffer's lifetime to the video present source.
@@ -2049,13 +2055,13 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
     GuardLog("wddm summary: scan-out flips %ld of %ld requested candidates; admission ok/no-alloc/not-requested %ld/%ld/%ld, "
-             "format/geometry/pitch/size/segment/alignment %ld/%ld/%ld/%ld/%ld/%ld",
+             "format/geometry/pitch/size/segment/alignment/gated %ld/%ld/%ld/%ld/%ld/%ld/%ld",
              Wddm->ScanoutFlips, Wddm->ScanoutRequests,
              Wddm->ScanoutAdmits[BC250_SCANOUT_ADMIT_OK], Wddm->ScanoutAdmits[BC250_SCANOUT_NO_ALLOCATION],
              Wddm->ScanoutAdmits[BC250_SCANOUT_NOT_REQUESTED], Wddm->ScanoutAdmits[BC250_SCANOUT_FORMAT],
              Wddm->ScanoutAdmits[BC250_SCANOUT_GEOMETRY], Wddm->ScanoutAdmits[BC250_SCANOUT_PITCH],
              Wddm->ScanoutAdmits[BC250_SCANOUT_SIZE], Wddm->ScanoutAdmits[BC250_SCANOUT_SEGMENT],
-             Wddm->ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]);
+             Wddm->ScanoutAdmits[BC250_SCANOUT_ALIGNMENT], Wddm->ScanoutAdmits[BC250_SCANOUT_GATED]);
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
@@ -2295,6 +2301,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // 0.7.181; closed for this start after an unclean boot, an invalid value or a registry failure (interop.c).
     InteropStart(Device, &wddm->GpuPresentGate, &wddm->CddDwmInterop);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
+    // M15.14, read once for this start: with the value at 0 no application surface is scanned out and the
+    // driver answers SetVidPnSourceAddress as 0.7.205.1 did. Absent = on, like OfferComposedSourceModes; the
+    // INF writes neither. Logged, because a lab run that sees no scan-out flip must be able to tell a closed
+    // switch from a refusal.
+    wddm->ScanoutAdmitGate = (GuardReadSetting(L"EnableScanoutAdmit", 1) != 0);
+    GuardLog("wddm: scan-out admission %s", wddm->ScanoutAdmitGate ? "on" : "off (0.7.205.1 behaviour)");
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
     // ADR 0008 stage D (docs/design/paging-node.md). Read once, like EnableGpuSubmit's own read in gfx.c: node 1's
@@ -6170,7 +6182,9 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             // assumed, and a board that broke it refuses scan-out rather than programming a plane at a
             // misaligned address. Checked before the predicate, so that a refusal still leaves the
             // transaction's pitch and bytes exactly as they were.
-            if (allocation && allocation->ScanoutRequested &&
+            if (allocation && allocation->ScanoutRequested && !wddm->ScanoutAdmitGate)
+                admit=BC250_SCANOUT_GATED;      // the operator's switch: 0.7.205.1 behaviour for this start
+            else if (allocation && allocation->ScanoutRequested &&
                 ((device->VramMcBase | (ULONGLONG)device->VramPhysical.QuadPart) & 0xFFFull))
                 admit=BC250_SCANOUT_ALIGNMENT;
             else
@@ -6203,9 +6217,22 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                   pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch;
         if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
         if (NT_SUCCESS(status) && changed && device->VidPnFlipEnabled) {
+            // The teardown record is taken before the plane is programmed, not after. The write to HUBP0 is
+            // what makes this allocation the one the display core reads; a record published after it leaves a
+            // window in which DestroyAllocation compares the buffer it is about to free against the previous
+            // flip's object, misses, and frees a buffer the plane is reading, with no DcnRestorePostDisplay
+            // and no way back on a part with no GPU reset (facts M53). The other order costs nothing: a
+            // record taken for a buffer the plane has not reached yet only restores the firmware surface
+            // early, which the next flip undoes.
+            LONG64 previous=InterlockedExchange64(&wddm->ScanoutObject,(LONG64)(ULONG_PTR)scanoutObject);
             status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,bytes,
                                        scanout?&physical:NULL);
             written=NT_SUCCESS(status);
+            // A failed programming sequence gave the plane no address it keeps, so the record goes back to the
+            // object the previous flip left there - unless a destroy has taken the record away meanwhile, in
+            // which case that destroy owns the restore and the record must stay empty.
+            if (!written)
+                InterlockedCompareExchange64(&wddm->ScanoutObject,previous,(LONG64)(ULONG_PTR)scanoutObject);
         }
         if (NT_SUCCESS(status))
         {
@@ -6232,8 +6259,11 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                                  (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,physical,pitch,bytes);
                 }
                 // The teardown record follows the plane: an application surface while one is being
-                // scanned out, nothing while the compositor's own primary is.
-                InterlockedExchange64(&wddm->ScanoutObject,written?(LONG64)(ULONG_PTR)scanoutObject:(LONG64)0);
+                // scanned out, nothing while the compositor's own primary is. A flip the hardware was
+                // written with took the record above, before it programmed; what is left here is the flip
+                // the hardware never saw, which happens with the flip gate closed (EnableVidPnFlip) and
+                // must leave no record of a plane that was given no address.
+                if (!written) InterlockedExchange64(&wddm->ScanoutObject,(LONG64)0);
                 if (device->VidPnFlipEnabled)
                     InterlockedExchange(&wddm->PrimaryProgrammedSequence,(LONG)(generation+2u));
             }

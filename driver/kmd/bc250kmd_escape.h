@@ -54,6 +54,12 @@
                                             // also places the allocation in the local segment. The new
                                             // counters ride the existing LOG_SUMMARY ring, so no
                                             // escape struct and no escape ABI changed for this change.
+                                            // The admitted buffer is recorded before the plane is
+                                            // programmed, so that DestroyAllocation restores the
+                                            // firmware surface for the buffer the plane really holds.
+                                            // EnableScanoutAdmit 0 (absent = on, the INF writes no
+                                            // value) refuses every requesting candidate with the
+                                            // status "gated" and leaves this start as 0.7.205.1 was.
                                             //
                                             // (b) An idle GPU runs at
                                             // 500 MHz (owner decision 2026-10-05: "jak lab nie pracuje,
