@@ -15,16 +15,16 @@
     "kmd": "bc250-win 8433a001 (kmd207-train, the one b18 train driver)",
     "d3d12_shell": "bc250-win m15/d3d12-iflip 694e6bac",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/upstream-2026-10-05 4e9a98e9, with dxil-spirv d2d82332",
-    "d3d12_icd": "mesa fork amdgpu-wddm/upstream-2026-10-05 7b17e614",
+    "d3d12_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
     "d3d11_shell": "bc250-win m14/d3d11-iflip f93521ec",
     "d3d11_engine": "dxvk fork amdgpu-wddm/upstream-2026-10-05 5611118e",
-    "d3d11_icd": "mesa fork amdgpu-wddm/upstream-2026-10-05 7b17e614",
-    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm f93521ec + x86 patch 02560EAD, engine dxvk 5611118e, ICD mesa 7b17e614 + x86 patch 9C645734; no x86 D3D12",
+    "d3d11_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
+    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm f93521ec + x86 patch 02560EAD, engine dxvk 5611118e, ICD mesa 091ad563 + x86 patch 9C645734; no x86 D3D12",
     "mft_h264": "bc250-win 70b6f838 (m15/video-encode-mft), the H.264 encoder transform",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "public_commits": {
-    "note": "Built commit -> commit on a public branch, for every pair that differs. b18 has no such pair: each commit this release was built from is published at its own hash (D-Ogi/amdgpu-wddm kmd207-train 8433a001, m15/d3d12-iflip 694e6bac, m14/d3d11-iflip f93521ec, m15/video-encode-mft 70b6f838; the three engine forks on branch amdgpu-wddm/upstream-2026-10-05). The b17 pairs were 2e61d1fe -> 6c8c31c9, 36745de5 -> 7b8347ba, 7294c09d -> af01d499 and dd30a44d -> 9a6f26d2."
+    "note": "Built commit -> commit on a public branch, for every pair that differs. b18 has no such pair: each commit this release was built from is published at its own hash (D-Ogi/amdgpu-wddm kmd207-train 8433a001, m15/d3d12-iflip 694e6bac, m14/d3d11-iflip f93521ec, m15/video-encode-mft 70b6f838; D-Ogi/dxvk, D-Ogi/vkd3d-proton and D-Ogi/dxil-spirv on branch amdgpu-wddm/upstream-2026-10-05; D-Ogi/mesa-amdgpu-wddm 091ad563 on branch amdgpu-wddm/disk-cache-single-file, the ICD b17 shipped). The b17 pairs were 2e61d1fe -> 6c8c31c9, 36745de5 -> 7b8347ba, 7294c09d -> af01d499 and dd30a44d -> 9a6f26d2."
   },
   "files": [
     {
@@ -70,10 +70,10 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/forksync/build-mesa-amdgpu-wddm/artifact-x64/amdgpu_wddm_radv.dll",
-      "sha256": "013DA4B03090AC688585791EC6B2A8B5342FB6BB96D89147DE0773E672939554",
-      "size": 22391808,
-      "role": "D3D12 ICD (mesa fork amdgpu-wddm/upstream-2026-10-05 7b17e614: 207 upstream commits merged into the b17 single-file disk cache 091ad563, the d3d10umd frontend kept)"
+      "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
+      "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
+      "size": 22361600,
+      "role": "D3D12 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563: MESA_DISK_CACHE_SINGLE_FILE=1 keeps the shader disk cache, one writer thread)"
     },
     {
       "component": "desktop-umd",
@@ -118,10 +118,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b18/config-013da4b0.bin",
-      "sha256": "61B1583F0EDE0FE4BB3ADF258258F781B1F823295DEBE5EED6B7FDA143434659",
+      "source": "scratch/train/b18r1/config-72e1d192.bin",
+      "sha256": "11CEE59F11DEFA4158A75EE3FB16284716ADD8932B178922220751B7CC981862",
       "size": 132,
-      "role": "GPU D3D11 caps record for engine C242BA6A and ICD 013DA4B0 (tools/build/write-umd-config.py; capabilities carried from FD848638, the record of F9DCB33B; only the engine and ICD pins change)"
+      "role": "GPU D3D11 caps record for engine C242BA6A and ICD 72E1D192 (tools/build/write-umd-config.py; capabilities carried from FD848638, the record of F9DCB33B; only the engine pin changes against b17)"
     },
     {
       "component": "d3d11-umd",
@@ -134,10 +134,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/forksync/build-mesa-amdgpu-wddm/artifact-x64/amdgpu_wddm_radv.dll",
-      "sha256": "013DA4B03090AC688585791EC6B2A8B5342FB6BB96D89147DE0773E672939554",
-      "size": 22391808,
-      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/upstream-2026-10-05 7b17e614, static CRT): the same build as payload/d3d12/amdgpu_wddm_radv.dll, so a process using D3D11 and D3D12 loads one RADV build"
+      "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
+      "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
+      "size": 22361600,
+      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563, static CRT): the same build as payload/d3d12/amdgpu_wddm_radv.dll, so a process using D3D11 and D3D12 loads one RADV build"
     },
     {
       "component": "vulkan-icd",
@@ -190,10 +190,10 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b18/config-x86-999d2534.bin",
-      "sha256": "589CF7FC2560DCB7E2051F17CBF32BED8C65B7D296F41B86ACAACDF92E03FE73",
+      "source": "scratch/train/b18r1/config-x86-e03a79ca.bin",
+      "sha256": "CA0584F396D6B285244AD38025F626579908DECD7ED04E4923409BE3E1E9FCEE",
       "size": 132,
-      "role": "x86 GPU D3D11 caps record for the x86 engine A42ADB6E and ICD 999D2534 (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the engine and ICD pins change)"
+      "role": "x86 GPU D3D11 caps record for the x86 engine A42ADB6E and ICD E03A79CA (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the engine pin changes against b17)"
     },
     {
       "component": "d3d11-umd-wow64",
@@ -206,17 +206,17 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/forksync/build-mesa-amdgpu-wddm/artifact-x86/amdgpu_wddm_radv.dll",
-      "sha256": "999D25349580E7FFCC865B672CB7C23E9308AFE74AD39F39E9A6D8731D5EEAF4",
-      "size": 20156928,
-      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/upstream-2026-10-05 7b17e614 + the x86 host-import and fallback-stub patch 9C645734, static CRT; BD-064)"
+      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
+      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
+      "size": 20133888,
+      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563 + the x86 host-import and fallback-stub patch 9C645734, static CRT; BD-064)"
     },
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/forksync/build-mesa-amdgpu-wddm/artifact-x86/amdgpu_wddm_radv.dll",
-      "sha256": "999D25349580E7FFCC865B672CB7C23E9308AFE74AD39F39E9A6D8731D5EEAF4",
-      "size": 20156928,
+      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
+      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
+      "size": 20133888,
       "role": "x86 system Vulkan ICD for 32-bit processes (the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll; BD-064)"
     },
     {
@@ -306,7 +306,7 @@
       "source": "docs/testing/licenses/Mesa-license.rst",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "docs/license.rst",
-      "ref": "7b17e614b3980fc4beeb8e6444f5bf0fae04d4cf",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
       "sha256": "0D1A0472ECC81830E75C20D59B0EA02841E3DB21255E0EBAD97AB682C54D6615"
     },
     {
@@ -314,7 +314,7 @@
       "source": "docs/testing/licenses/Mesa-MIT.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/MIT",
-      "ref": "7b17e614b3980fc4beeb8e6444f5bf0fae04d4cf",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
       "sha256": "323C587D0CCF10E376F8BF9A7F31FB4CA6078105194B42E0B1E0EE2BC9BDE71F"
     },
     {
@@ -322,7 +322,7 @@
       "source": "docs/testing/licenses/Mesa-BSL-1.0.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/BSL-1.0",
-      "ref": "7b17e614b3980fc4beeb8e6444f5bf0fae04d4cf",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
       "sha256": "9B9FEA7520A816107FCAC2598B7C0155222F16BC430E989706B22F4367F1DF7D"
     },
     {
@@ -330,7 +330,7 @@
       "source": "docs/testing/licenses/Mesa-SGI-B-2.0.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/SGI-B-2.0",
-      "ref": "7b17e614b3980fc4beeb8e6444f5bf0fae04d4cf",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
       "sha256": "686BF035A1FD22076416FD3B90370AC67771E884BF57F55693D51F8CE7C710A7"
     },
     {
@@ -338,7 +338,7 @@
       "source": "docs/testing/licenses/Mesa-Apache-2.0.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/Apache-2.0",
-      "ref": "7b17e614b3980fc4beeb8e6444f5bf0fae04d4cf",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
       "sha256": "7E4D3FBA250D15E9E0AFA380D4B611828FA2560CC8FDEBE95BCF2F01A487DE12"
     },
     {
