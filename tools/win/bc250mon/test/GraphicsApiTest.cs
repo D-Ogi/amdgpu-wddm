@@ -41,7 +41,10 @@ static class GraphicsApiTest
         r = C("d3d11.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll");
         Check(One(r, "D3D11") == "our D3D11 shell and engine loaded, no ICD yet", "D3D11 without the ICD");
         r = C("d3d11.dll", "bc250d3d_router.dll", "bc250d3d.dll");
-        Check(One(r, "D3D11") == "CPU (llvmpipe, desktop route)" && r[0].Level == Level.Warn, "D3D11 on llvmpipe");
+        Check(One(r, "D3D11") == "CPU (llvmpipe, app route)" && r[0].Level == Level.Warn, "D3D11 on llvmpipe, app route");
+        // The same CPU UMD without the router is not the application decision (an injected or hosted load).
+        r = C("d3d11.dll", "bc250d3d.dll");
+        Check(One(r, "D3D11") == "CPU (llvmpipe)", "the llvmpipe row names no route without the router");
         r = C("d3d11.dll", "bc250d3d_router.dll", "bc250d3d_zink.dll", "amdgpu_wddm_radv.dll");
         Check(One(r, "D3D11") == "GPU (zink, desktop route)", "D3D11 on zink");
         r = C("d3d11.dll", "bc250d3d_router.dll", "bc250d3d_zink.dll");
@@ -63,7 +66,13 @@ static class GraphicsApiTest
         Check(One(r, "Vulkan") == "none of our ICDs loaded" && One(r, "D3D11").StartsWith("GPU"), "our ICD is not a Vulkan claim");
         r = C("d3d10_1.dll");
         Check(r.Count == 1 && r[0].Api == "D3D10", "D3D10 alone");
-        Check(C("opengl32.dll").Single().Api == "OpenGL" && C("opengl32.dll", "d3d11.dll").All(a => a.Api != "OpenGL"), "OpenGL only without D3D");
+        // Most OpenGL engines map d3d11.dll or dxgi.dll for the display, so a D3D row must not hide the GL row.
+        // Only a row that claims one of our GPU paths does: there the D3D path draws and opengl32 is Microsoft's.
+        Check(C("opengl32.dll").Single().Api == "OpenGL", "OpenGL alone");
+        Check(One(C("opengl32.dll", "d3d11.dll"), "OpenGL") == "no OpenGL ICD in this package",
+              "OpenGL is reported next to a D3D runtime that makes no claim");
+        Check(C("opengl32.dll", "d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv.dll")
+              .All(a => a.Api != "OpenGL"), "no OpenGL row next to one of our GPU paths");
         Check(C("kernel32.dll", "dxgi.dll").Count == 0, "DXGI alone is no API");
 
         // 32-bit processes: the x86 payload has the D3D11 and desktop routes under the same file names, and no
@@ -85,6 +94,13 @@ static class GraphicsApiTest
         r = GraphicsApiProvider.Classify(new[] { "d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv.dll" },
                      false, new[] { "d3d12.dll" });
         Check(One(r, "D3D12") == GraphicsApiProvider.SideLoaded, "a side-loaded d3d12.dll outranks our modules");
+        // The merged D3D11+10 row covers two runtimes: either of them, side-loaded, is a replacement.
+        r = GraphicsApiProvider.Classify(new[] { "d3d11.dll", "d3d10.dll", "amdgpu_wddm_d3d11.dll",
+                     "amdgpu_wddm_dxvk.dll", "amdgpu_wddm_radv.dll" }, false, new[] { "d3d10.dll" });
+        Check(One(r, "D3D11+10") == GraphicsApiProvider.SideLoaded, "a side-loaded d3d10.dll in the merged row");
+        r = GraphicsApiProvider.Classify(new[] { "d3d11.dll", "d3d10core.dll" }, false, new[] { "d3d10core.dll" });
+        Check(One(r, "D3D11") == GraphicsApiProvider.SideLoaded, "a side-loaded d3d10core.dll (DXVK layout)");
+        Check(GraphicsApiProvider.IsRuntime("d3d10core.dll"), "d3d10core.dll is a system runtime name");
         Check(GraphicsApiProvider.IsRuntime("d3d11.dll") && GraphicsApiProvider.IsRuntime("dxgi.dll")
               && !GraphicsApiProvider.IsRuntime("amdgpu_wddm_d3d11.dll") && !GraphicsApiProvider.IsRuntime("vulkan-1.dll"),
               "runtime names that must come from the Windows directory");
@@ -94,6 +110,24 @@ static class GraphicsApiTest
               && !GraphicsApiProvider.IsSystemImage(null), "system image paths");
 
         Check(GraphicsApiProvider.IsExcluded("dwm") && GraphicsApiProvider.IsExcluded("SteamWebHelper") && !GraphicsApiProvider.IsExcluded("witcher3"), "exclusions");
+
+        // D3D12 has no implicit WARP fallback: a failed engine or ICD load leaves the shell mapped and nothing
+        // else, so an incomplete stack may be grey only while the device can still be starting.
+        var stalling = new GraphicsApiProvider.AppReport { Pid = 70, Name = "game.exe", Apis = C("d3d12.dll", "amdgpu_wddm_d3d12.dll") };
+        string stalledKey = GraphicsApiProvider.IncompleteKey(stalling);
+        Check(stalledKey.Length > 0 && GraphicsApiProvider.IncompleteKey(
+                  new GraphicsApiProvider.AppReport { Apis = C("d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv.dll") }).Length == 0,
+              "a complete stack has no incomplete state");
+        GraphicsApiProvider.Escalate(stalling, TimeSpan.FromSeconds(4));
+        Check(One(stalling.Apis, "D3D12") == "our D3D12 shell loaded, no engine yet" && stalling.Apis[0].Level == Level.Info,
+              "inside the grace period a starting device stays grey");
+        GraphicsApiProvider.Escalate(stalling, GraphicsApiProvider.StalledAfter);
+        Check(One(stalling.Apis, "D3D12") == "our D3D12 shell loaded, engine never loaded (load failed)"
+              && stalling.Apis[0].Level == Level.Warn, "a persisting incomplete stack is a failed load");
+        Check(GraphicsApiProvider.IncompleteKey(stalling).Length == 0, "an escalated row is not escalated twice");
+        var noIcd = new GraphicsApiProvider.AppReport { Apis = C("d3d11.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll") };
+        GraphicsApiProvider.Escalate(noIcd, TimeSpan.FromMinutes(1));
+        Check(One(noIcd.Apis, "D3D11") == "our D3D11 shell and engine loaded, ICD never loaded (load failed)", "a missing ICD escalates too");
 
         var apps = new List<GraphicsApiProvider.AppReport>
         {
@@ -106,6 +140,15 @@ static class GraphicsApiTest
         var shown = GraphicsApiProvider.Select(apps);
         Check(shown.Count == 3 && shown[0].Pid == 50 && shown[1].Pid == 40 && shown[2].Pid == 20, "order: foreground, ours, rest; max 3");
         Check(shown.All(a => a.Pid != 30), "no API, not shown");
+        // A process we may not open says nothing about 3D; it must never take the slot of a classified app.
+        var crowded = new List<GraphicsApiProvider.AppReport>
+        {
+            new GraphicsApiProvider.AppReport { Pid = 11, Name = "guard1.exe", AccessDenied = true },
+            new GraphicsApiProvider.AppReport { Pid = 12, Name = "guard2.exe", AccessDenied = true },
+            new GraphicsApiProvider.AppReport { Pid = 13, Name = "guard3.exe", AccessDenied = true },
+            new GraphicsApiProvider.AppReport { Pid = 99, Name = "game.exe", Apis = C("d3d11.dll") },
+        };
+        Check(GraphicsApiProvider.Select(crowded)[0].Pid == 99, "the classified app outranks unreadable processes");
 
         var panel = new Panel();
         GraphicsApiProvider.AddRows(panel, new[] { apps[2], apps[4] });

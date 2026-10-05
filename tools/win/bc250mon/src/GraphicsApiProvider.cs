@@ -2,8 +2,9 @@
 // of image files mapped into the application's own process (the runtime and the UMD it loaded), not the registry.
 // Cheap by design (a 300 ms game stall came from a KMD escape poll, see README): no KMD escape, no remote thread,
 // no loader lock. Module handles come from EnumProcessModulesEx (ReadProcessMemory of the loader list, the target
-// keeps running) and names from GetMappedFileName (one query per module); names are re-read only when the module
-// count changes or the cached list is 30 s old.
+// keeps running) and names from GetMappedFileName (one query per module); names are re-read only when the set of
+// module handles changes or the cached list is 30 s old. The scan has an off switch (graphics-api.pause) and a
+// per-process one (graphics-api.skip), so a measured session can remove its cost without a rebuild.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -50,7 +51,7 @@ namespace Bc250Mon
         // so the application no longer goes through the installed Windows driver and a UMD module in the
         // process proves nothing about its path. ReplacedRuntimes names the ones found outside \Windows\.
         static readonly HashSet<string> Runtimes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        { "d3d12.dll", "d3d11.dll", "d3d10.dll", "d3d10_1.dll", "d3d9.dll", "dxgi.dll" };
+        { "d3d12.dll", "d3d11.dll", "d3d10.dll", "d3d10_1.dll", "d3d10core.dll", "d3d9.dll", "dxgi.dll" };
         public static bool IsRuntime(string moduleFileName) { return Runtimes.Contains(moduleFileName ?? ""); }
         public const string SideLoaded = "replacement DLL next to the app, not the system runtime";
 
@@ -68,8 +69,9 @@ namespace Bc250Mon
         // A GPU claim needs the whole user-mode stack of one render path: the shell the runtime opened, the
         // engine that shell loads and the ICD the engine draws with. Each shell loads its engine and ICD by
         // name in one step (driver/umd/dxvk/umd-entry.cpp, driver/umd/d3d12/adapter-caps.cpp), so a shell on
-        // its own is a device still being created - or a load that failed, and then the runtime falls back to
-        // WARP and d3d10warp.dll is mapped as well, which the WARP row reports.
+        // its own is a device still being created - or a load that failed. D3D11 then usually falls back to
+        // WARP, which the WARP row reports, but D3D12 has no implicit fallback: the shell stays mapped and
+        // nothing else appears. Escalate() therefore turns an incomplete stack amber once it has persisted.
         public static List<ApiPath> Classify(ICollection<string> modules, bool wow64 = false,
                                              ICollection<string> replacedRuntimes = null)
         {
@@ -97,13 +99,21 @@ namespace Bc250Mon
                 string api = d3d11 ? (d3d10 ? "D3D11+10" : "D3D11") : "D3D10";
                 bool zink = has("bc250d3d_zink.dll");
                 bool shell = has("amdgpu_wddm_d3d11.dll"), engine = has("amdgpu_wddm_dxvk.dll");
-                if (replaced(d3d11 ? "d3d11.dll" : has("d3d10.dll") ? "d3d10.dll" : "d3d10_1.dll"))
+                // Every runtime that contributed to this row has to be tested: one side-loaded runtime next to
+                // the application is enough, whichever of the two the row merged.
+                if (replaced("d3d11.dll") || replaced("d3d10.dll") || replaced("d3d10_1.dll") || replaced("d3d10core.dll"))
                     result.Add(Foreign(api, SideLoaded));
                 else
                 {
                     if (shell && engine && icd) result.Add(Gpu(api, "GPU (amdgpu-wddm DXVK + RADV)"));
                     else if (zink && icd) result.Add(Gpu(api, "GPU (zink, desktop route)"));
-                    else if (has("bc250d3d.dll")) result.Add(Cpu(api, "CPU (llvmpipe, desktop route)"));
+                    // bc250d3d.dll is the CPU UMD of both router decisions (driver/umd/router/router-policy.h).
+                    // dwm is excluded from this panel, so a process that reaches here took the application
+                    // decision (AppRouter Mode/Deny), not the desktop one. A HostedClients entry on the
+                    // desktop CPU route maps the same two files and cannot be told apart from the modules.
+                    else if (has("bc250d3d.dll"))
+                        result.Add(Cpu(api, has("bc250d3d_router.dll") ? "CPU (llvmpipe, app route)"
+                                                                       : "CPU (llvmpipe)"));
                     else if (has("d3d11on12.dll")) result.Add(Idle(api, "via D3D11On12 (D3D12 path)"));
                     else if (warp) result.Add(Cpu(api, "CPU (WARP)"));
                     else if (shell) result.Add(Idle(api, engine ? "our D3D11 shell and engine loaded, no ICD yet"
@@ -122,20 +132,50 @@ namespace Bc250Mon
                 // load directly, it is not reached through the Vulkan loader and says nothing about vulkan-1.
                 result.Add(has("vulkan_radeon.dll") ? Gpu("Vulkan", "GPU (RADV ICD)")
                     : has("vulkan_lvp.dll") ? Cpu("Vulkan", "CPU (lavapipe)") : Idle("Vulkan", "none of our ICDs loaded"));
-            if (has("opengl32.dll") && result.Count == 0)
+            // An OpenGL application maps d3d11.dll or dxgi.dll too (SDL, GLFW and most GL engines do, for the
+            // display and the adapter list), so the absence of a Direct3D runtime is no condition for this row.
+            // It is suppressed only when a row already claims one of our GPU paths: there the D3D path is what
+            // draws, and opengl32.dll in it is Microsoft's software GL that nothing in this package serves.
+            if (has("opengl32.dll") && !result.Any(p => p.Level == Level.Good))
                 result.Add(Cpu("OpenGL", "no OpenGL ICD in this package"));
             return result;
+        }
+
+        // How long an incomplete user-mode stack (shell without engine, or without ICD) may stay grey as a
+        // device still being created. After this it is a failed LoadLibrary that nothing else reports: D3D12
+        // has no implicit WARP fallback, so the shell stays mapped for the life of the process.
+        public static readonly TimeSpan StalledAfter = TimeSpan.FromSeconds(10);
+        public static bool IsIncomplete(ApiPath p) { return p.Level == Level.Info && p.Path.EndsWith(" yet"); }
+        // The incomplete rows of one report, as a key: a change of state restarts the grace period.
+        public static string IncompleteKey(AppReport app)
+        {
+            return string.Join("|", app.Apis.Where(IsIncomplete).Select(p => p.Api + " " + p.Path));
+        }
+        // Rewrites the rows of `app` in place once its incomplete state is older than StalledAfter.
+        public static void Escalate(AppReport app, TimeSpan age)
+        {
+            if (age < StalledAfter) return;
+            foreach (var p in app.Apis.Where(IsIncomplete).ToList())
+            {
+                p.Path = p.Path.Replace("no engine yet", "engine never loaded")
+                               .Replace("no ICD yet", "ICD never loaded")
+                               .Replace("no backend yet", "backend never loaded") + " (load failed)";
+                p.Level = Level.Warn;
+            }
         }
         static ApiPath Gpu(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Good }; }
         static ApiPath Cpu(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Warn }; }
         static ApiPath Foreign(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Warn }; }
         static ApiPath Idle(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Info }; }
 
-        // The foreground process first, then processes that run on our GPU path, then the rest, by PID.
+        // The foreground process first, then the processes whose API is known (a process we may not open tells
+        // us nothing about 3D and must never take the slot of an application we did classify), then the ones
+        // on our GPU path, then the rest, by PID.
         public static List<AppReport> Select(IEnumerable<AppReport> apps)
         {
             return apps.Where(a => a.AccessDenied || a.Apis.Count > 0)
-                       .OrderByDescending(a => a.Foreground).ThenByDescending(a => a.Ours).ThenBy(a => a.Pid)
+                       .OrderByDescending(a => a.Foreground).ThenBy(a => a.AccessDenied)
+                       .ThenByDescending(a => a.Ours).ThenBy(a => a.Pid)
                        .Take(MaxApps).ToList();
         }
 
@@ -155,21 +195,82 @@ namespace Bc250Mon
         sealed class Cached
         {
             public long CreateTime;
-            public int ModuleCount;
+            public long ModuleKey;
             public DateTime ScannedUtc;
             public AppReport Report;
         }
+        // One module load plus one unload between polls leaves the module count unchanged while the set the
+        // classification reads has changed (a failed device creation maps d3d10warp.dll exactly like that),
+        // so the cache is keyed on the handles themselves. The sweep they save costs about 2 ms.
+        static long ModuleKey(IntPtr[] modules)
+        {
+            long key = modules.Length;
+            foreach (var m in modules) key = key * 1000003 + (long)m;
+            return key;
+        }
+
+        sealed class Incomplete { public string Key; public DateTime SinceUtc; }
         readonly Dictionary<int, Cached> _cache = new Dictionary<int, Cached>();
+        readonly Dictionary<int, Incomplete> _incomplete = new Dictionary<int, Incomplete>();
         string _lastLogged;
         int _self;
         uint _session;
 
+        // Opt-out, as GraphicsPipelineProvider has one for its KMD summary poll: the marker file stops the
+        // process scan of the next poll (so a measured session can remove this provider's cost without a
+        // rebuild), the name file excludes single process names (a title whose anti-tamper check dislikes a
+        // repeated handle on it). Both are read on every poll; neither has to exist.
+        public const string PauseFileName = "graphics-api.pause", SkipFileName = "graphics-api.skip";
+        readonly string _pausePath, _skipPath;
+        List<AppReport> _lastShown = new List<AppReport>();
+        DateTime _lastShownUtc;
+        HashSet<string> _skip = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        DateTime _skipWrite;
+
+        public GraphicsApiProvider(string dataDir)
+        {
+            _pausePath = Path.Combine(dataDir, PauseFileName);
+            _skipPath = Path.Combine(dataDir, SkipFileName);
+        }
+
         public string Name { get { return "apps"; } }
         public TimeSpan Period { get { return TimeSpan.FromSeconds(3); } }
+
+        // Process base names (with or without .exe, one per line, # comments) that are never opened.
+        void LoadSkipList()
+        {
+            try
+            {
+                DateTime write = File.Exists(_skipPath) ? File.GetLastWriteTimeUtc(_skipPath) : default(DateTime);
+                if (write == _skipWrite) return;
+                _skipWrite = write;
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (write != default(DateTime))
+                    foreach (string raw in File.ReadAllLines(_skipPath))
+                    {
+                        string line = raw.Trim();
+                        if (line.Length == 0 || line.StartsWith("#")) continue;
+                        names.Add(Path.GetFileNameWithoutExtension(line));
+                    }
+                _skip = names;
+            }
+            catch { }
+        }
 
         public void Poll(State state)
         {
             var panel = new Panel { Name = Name, Title = "Active 3D app", Order = 11 };
+            bool paused;
+            try { paused = File.Exists(_pausePath); } catch { paused = false; }
+            if (paused)
+            {
+                if (_lastShown.Count > 0) AddRows(panel, _lastShown);
+                panel.Rows.Add(new Row("Sampled", _lastShownUtc == default(DateTime) ? "paused; no sample yet"
+                    : "paused; sample " + _lastShownUtc.ToLocalTime().ToString("HH:mm:ss"), Level.Warn));
+                state.SetPanel(panel);
+                return;
+            }
+            LoadSkipList();
             if (_self == 0) using (var me = Process.GetCurrentProcess()) { _self = me.Id; _session = (uint)me.SessionId; }
             int self = _self;
             uint session = _session;
@@ -189,8 +290,21 @@ namespace Bc250Mon
                 reports.Add(report);
             }
             foreach (int gone in _cache.Keys.Where(k => !pids.Contains(k)).ToList()) _cache.Remove(gone);
+            foreach (int gone in _incomplete.Keys.Where(k => !pids.Contains(k)).ToList()) _incomplete.Remove(gone);
+            // A shell without its engine or ICD is grey only while it can still be a device being created.
+            foreach (var a in reports)
+            {
+                string key = IncompleteKey(a);
+                if (key.Length == 0) { _incomplete.Remove(a.Pid); continue; }
+                Incomplete inc;
+                if (!_incomplete.TryGetValue(a.Pid, out inc) || inc.Key != key)
+                    _incomplete[a.Pid] = inc = new Incomplete { Key = key, SinceUtc = DateTime.UtcNow };
+                Escalate(a, DateTime.UtcNow - inc.SinceUtc);
+            }
             var shown = Select(reports);
             AddRows(panel, shown);
+            _lastShown = shown;
+            _lastShownUtc = DateTime.UtcNow;
             panel.Rows.Add(new Row("Sampled", DateTime.Now.ToString("HH:mm:ss") + " (loaded modules, 3 s poll)"));
             state.SetPanel(panel);
 
@@ -206,26 +320,28 @@ namespace Bc250Mon
         // Returns null when the process is gone or excluded. A process we may not read gives AccessDenied.
         AppReport Inspect(int pid)
         {
+            // The name comes from a query-limited-information handle first. PROCESS_VM_READ plus a loader-list
+            // read is what a memory scanner does, and an anti-tamper check in a game may react to it, so the
+            // excluded and skipped processes (dwm, explorer, the shells, the skip file) are never opened that way.
+            string name;
+            IntPtr probe = OpenProcess(ProcessQueryLimitedInformation, false, pid);
+            if (probe == IntPtr.Zero) return null;
+            try { name = ImageName(probe); } finally { CloseHandle(probe); }
+            string bare = Path.GetFileNameWithoutExtension(name);
+            if (IsExcluded(bare) || _skip.Contains(bare)) return null;
+
             IntPtr h = OpenProcess(ProcessQueryInformation | ProcessVmRead, false, pid);
             if (h == IntPtr.Zero)
-            {
-                int error = Marshal.GetLastWin32Error();
-                if (error != 5) return null;
-                h = OpenProcess(ProcessQueryLimitedInformation, false, pid);
-                if (h == IntPtr.Zero) return null;
-                try { string denied = ImageName(h); return IsExcluded(Path.GetFileNameWithoutExtension(denied)) ? null : new AppReport { Pid = pid, Name = denied, AccessDenied = true }; }
-                finally { CloseHandle(h); }
-            }
+                return Marshal.GetLastWin32Error() == 5
+                    ? new AppReport { Pid = pid, Name = name, AccessDenied = true } : null;
             try
             {
-                string name = ImageName(h);
-                if (IsExcluded(Path.GetFileNameWithoutExtension(name))) return null;
                 long create, exit, kernel, user;
                 if (!GetProcessTimes(h, out create, out exit, out kernel, out user)) return null;
                 IntPtr[] modules = Modules(h);
                 Cached c;
                 bool fresh = _cache.TryGetValue(pid, out c) && c.CreateTime == create && modules != null
-                    && c.ModuleCount == modules.Length && DateTime.UtcNow - c.ScannedUtc < TimeSpan.FromSeconds(30);
+                    && c.ModuleKey == ModuleKey(modules) && DateTime.UtcNow - c.ScannedUtc < TimeSpan.FromSeconds(30);
                 if (fresh) return c.Report;
                 // A process still starting can refuse the list (ERROR_PARTIAL_COPY): keep the last answer.
                 if (modules == null) return c != null && c.CreateTime == create ? c.Report : null;
@@ -243,7 +359,7 @@ namespace Bc250Mon
                     if (IsRuntime(file) && !IsSystemImage(mapped)) replaced.Add(file);
                 }
                 report.Apis = Classify(names, report.Wow64, replaced);
-                _cache[pid] = new Cached { CreateTime = create, ModuleCount = modules.Length, ScannedUtc = DateTime.UtcNow, Report = report };
+                _cache[pid] = new Cached { CreateTime = create, ModuleKey = ModuleKey(modules), ScannedUtc = DateTime.UtcNow, Report = report };
                 return report;
             }
             finally { CloseHandle(h); }
