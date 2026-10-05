@@ -7,12 +7,13 @@
 #
 # The gate fails when a format outside this file is over the limit, and when a format in it gets
 # wider. It passes with a note when one shrinks under the limit or leaves the sources, and the note
-# asks for its line to be removed (--prune removes those lines and nothing else).
+# asks for its line to be removed. --prune removes those lines, writes the width every kept format
+# has now, and adds nothing.
 #
 # Every width here is a worst case, not what the lab prints: a %s counts as 32 characters and a
 # %ld as 11, so a format whose string is always "open", or whose counters stay in four digits, is
 # well inside the line. The five lines that really did lose numbers on the lab are not in this
-# file; they were split in 0.7.208. Shortening what is left is work for another day, and until
+# file. They were split in 0.7.208. Shortening what is left is work for another day, and until
 # then the ratchet holds.
 #
 # To regenerate the list after a split: python tools/quality/guardlog_width.py --list-over
