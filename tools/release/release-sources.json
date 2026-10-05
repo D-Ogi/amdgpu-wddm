@@ -15,6 +15,13 @@
     "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm 7ae6462f + x86 patch, engine dxvk ebeadc49, ICD mesa 091ad563 + x86 patch 9C645734; no x86 D3D12",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
+  "public_commits": {
+    "note": "Two commit messages were reworded before publication (2026-10-05); trees are identical. Built commit -> commit on D-Ogi/amdgpu-wddm main.",
+    "2e61d1fe": "6c8c31c9",
+    "36745de5": "7b8347ba",
+    "7294c09d": "af01d499",
+    "dd30a44d": "9a6f26d2"
+  },
   "files": [
     {
       "component": "kmd",
