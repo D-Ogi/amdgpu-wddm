@@ -111,6 +111,15 @@ namespace Bc250Mon
         // LOG_SUMMARY subprocess on the next poll. An already running call is
         // allowed to finish. Keep the last counters visibly marked as cached.
         // Typed start health and native clocks run in separate unchanged providers.
+        //
+        // "log summary only" reads the summary's own lines, not the whole ring. Its
+        // LOG_SUMMARY escape is a Level Two call, which idles the GPU under a running
+        // game; every page after it must go without adapter synchronization. The
+        // CLI's last line counts both kinds, and more than one Level Two escape per
+        // poll, or no count at all, is shown as a warning (BD-054: a CLI from before
+        // 0.7.184.1 at CliPath sent all 16 pages as Level Two, 280-420 ms per poll).
+        internal const string SummaryArgs = "log summary only";
+        static readonly Regex EscapeCounts = new Regex(@"escapes: (\d+) without adapter synchronization, (\d+) with HardwareAccess");
         internal void AddKernelSummary(Panel panel)
         {
             bool paused = File.Exists(_summaryPausePath);
@@ -118,11 +127,12 @@ namespace Bc250Mon
             int exit = output == null ? -1 : 0;
             if (!paused)
             {
-                exit = KmdInfoProvider.Run(KmdInfoProvider.CliPath, "log summary", 5000, out output, out error);
+                exit = KmdInfoProvider.Run(KmdInfoProvider.CliPath, SummaryArgs, 5000, out output, out error);
                 if (exit == 0)
                 {
                     _lastSummaryOutput = output;
                     _lastSummaryUtc = DateTime.UtcNow;
+                    AddEscapeCheck(panel, output);
                 }
             }
             else panel.Rows.Add(new Row("KMD counters", output == null ? "paused; no cached snapshot" :
@@ -145,7 +155,20 @@ namespace Bc250Mon
                 panel.Rows.Add(new Row("GPU compute", g.Success ? g.Groups[2].Value + "/" + g.Groups[1].Value + " fences completed" : "not reported"));
                 panel.Rows.Add(new Row("Paging", p.Success ? "SDMA " + p.Groups[2].Value + "/" + p.Groups[1].Value : "hardware path not reported"));
             }
-            else if (!paused) panel.Rows.Add(new Row("KMD live", "summary unavailable", Level.Warn));
+            // Exit 2 is the CLI's bad usage: one that does not know "only" yet.
+            else if (!paused) panel.Rows.Add(new Row("KMD live", exit == 2 ?
+                "summary unavailable: " + KmdInfoProvider.CliPath + " predates \"" + SummaryArgs + "\"" :
+                "summary unavailable", Level.Warn));
+        }
+        static void AddEscapeCheck(Panel panel, string output)
+        {
+            var m = EscapeCounts.Match(output ?? "");
+            if (!m.Success)
+                panel.Rows.Add(new Row("KMD poll", "no escape counts: the CLI predates them; its log pages may idle the GPU", Level.Warn));
+            else if (m.Groups[2].Value != "1")
+                panel.Rows.Add(new Row("KMD poll", m.Groups[2].Value + " Level Two escapes per poll, expected 1 (the summary)", Level.Warn));
+            else
+                panel.Rows.Add(new Row("KMD poll", "1 Level Two escape, " + m.Groups[1].Value + " without adapter synchronization", Level.Good));
         }
         static string Last(string text, string pattern)
         {
