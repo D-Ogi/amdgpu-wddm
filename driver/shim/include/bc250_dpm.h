@@ -183,6 +183,16 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_IDLE_MIN_HOLD_MS	250u	/* ten governor ticks */
 #define BC250_DPM_IDLE_MAX_HOLD_MS	60000u
 #define BC250_DPM_IDLE_MAX_BUSY_PERMILLE 100u	/* 10 %: anything higher is not an idle GPU */
+/* The share at which one tick of its own leaves the state. It is not the entry threshold on purpose. Entry
+ * admits a mean of 2 permille because a static desktop wakes for single frames, and one such frame is
+ * 1000 / BC250_DPM_TICK_MS = 40 permille of its own tick (one active GRBM sample of the 25 a 25 ms tick holds),
+ * twenty times that mean. Comparing a tick's own share with the entry threshold therefore left the state at the
+ * very frame the mean rule was written to tolerate: on the policy itself, one wake per second gave 15 entries and
+ * 15 exits a minute and held the point for a quarter of the time. A tick at or above half its own wall time is
+ * work no desktop frame reaches, and work on either ring leaves the state in that tick anyway (ring_busy), so
+ * this threshold only has to catch heavy work that the ring accounting cannot see. Anything under it that lasts
+ * leaves through the window rule: a whole window whose mean is above the admitted share. */
+#define BC250_DPM_IDLE_EXIT_PERMILLE	500u
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
 #define BC250_DPM_CAP_MS_MAX		0x7FFFFFFFu	/* where the time since the last cap change saturates */
 
@@ -285,6 +295,12 @@ struct bc250_dpm_input {
 	 * retired, whatever the hardware's busy samples say. The idle state alone reads it (0.7.206): a
 	 * submission waiting on a fence keeps the clock at the lab floor. Zero is "the ring is empty". */
 	int		ring_busy;
+	/* The paging node's busy share over this tick, from the same hardware samples as busy_permille
+	 * (SDMA0_STATUS_REG.IDLE), 0 for a tick with too few samples. The idle state alone reads it (0.7.206):
+	 * busy_permille is GRBM GUI_ACTIVE and ring_busy is the GFX ring, so both are blind to a transfer on the
+	 * paging queue, and without this field an eviction or an upload with the GFX ring empty would run at the
+	 * idle point and nothing would end the state. The load governor keeps its GFX-only accounting. */
+	unsigned int	sdma_permille;
 };
 
 struct bc250_dpm_governor {
@@ -313,7 +329,7 @@ struct bc250_dpm_governor {
 	unsigned int	idle_level;		/* the point idle holds; raised to the thermal floor after a refusal */
 	unsigned int	idle_hold_ms;		/* the window the GPU must be quiet for */
 	unsigned int	idle_busy_permille;	/* the window's admitted mean busy share, and the exit threshold */
-	unsigned int	idle_ms;		/* the candidate window so far, 0 while in idle */
+	unsigned int	idle_ms;		/* the window so far: the candidate one before entry, the trailing one in idle */
 	unsigned int	idle_acc;		/* busy permille x ms over that window, saturating */
 	unsigned int	idle_entries, idle_exits, idle_refusals;
 	unsigned int	idle_total_ms;		/* time held at the idle point, saturating */
@@ -351,7 +367,9 @@ enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, un
 /* The caller could not put the hardware at the idle point (the SMU refused it, the readback did not match).
  * The idle point falls back one step at a time, as the owner asked: 500 MHz, then the thermal floor
  * (800 MHz), then off, which is the lab floor. One refusal is enough for each step: the firmware has never
- * been seen below 1000 MHz (facts M47), so the governor does not try the same point every tick. */
+ * been seen below 1000 MHz (facts M47), so the governor does not try the same point every tick. A refusal of a
+ * point at or above the thermal floor is the thermal cap's answer as well - the same clock, the same two
+ * messages - so it calls bc250_dpm_subfloor_refused() and nothing under the lab floor is asked for again. */
 void bc250_dpm_idle_refused(struct bc250_dpm_governor *g);
 /* The idle point in force, 0 when the idle state is off for this start (the escape and the log print it). */
 unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g);

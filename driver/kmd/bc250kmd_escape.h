@@ -45,12 +45,14 @@
                                             // index 5 = 1000 MHz (BC250_DPM_FLOOR_LEVEL). 700 and
                                             // 600 MHz keep the 100 MHz grid whole and no rule selects
                                             // them. The governor holds the idle point after
-                                            // DpmIdleHoldMs (3000) with the busy share under
-                                            // DpmIdleBusyPermille (2) and no work on the ring, and
+                                            // DpmIdleHoldMs (3000) with the mean busy share of the
+                                            // graphics engine and the paging node under
+                                            // DpmIdleBusyPermille (2) and no work on the GFX ring, and
                                             // leaves it for the lab floor at the first tick with work
                                             // again; DpmIdleMHz 0 turns the whole state off. A thermal
                                             // limit, a runtime floor, SetStablePowerState, a missing
-                                            // sensor and a hot part all keep the state out. A refused
+                                            // sensor and a hot part all keep the state out, and a start
+                                            // that does not govern never configures it. A refused
                                             // idle point falls back to 800 MHz, then off, like the
                                             // sub-floor, and does not count towards the SMU give-up
                                             // limit. RUN_DPM is ABI 2 (192 bytes) and appends the

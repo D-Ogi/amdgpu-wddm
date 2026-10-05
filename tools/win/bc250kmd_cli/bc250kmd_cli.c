@@ -1540,8 +1540,13 @@ static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
         return;
     }
     if (d->IdleMHz == 0) {
-        printf("idle: off (DpmIdleMHz 0, a refused setting, or a point the firmware refused; %lu refusals)\n",
-               d->IdleRefusals);
+        // A start that does not govern never configures the state (the driver says so in its log), so name that
+        // first: without it a fixed-lab start reads as a setting the owner has to look for.
+        if (!(d->Flags & BC250_DPM_FLAG_GOVERNING))
+            printf("idle: off (this start does not govern the clock)\n");
+        else
+            printf("idle: off (DpmIdleMHz 0, a refused setting, or a point the firmware refused; %lu refusals)\n",
+                   d->IdleRefusals);
         return;
     }
     printf("idle: %lu MHz%s after %lu ms under %lu permille busy; entries %lu exits %lu refusals %lu, "

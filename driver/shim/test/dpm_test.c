@@ -228,7 +228,17 @@ static struct bc250_dpm_input tick(unsigned int busy, int temp_c, unsigned int d
 	in.temperature_valid = 1;
 	in.dt_ms = dt;
 	in.ring_busy = 0;		/* the ring is empty: only the idle state of 0.7.206 reads this */
+	in.sdma_permille = 0;		/* the paging node is idle: the idle state alone reads this too */
 	return in;
+}
+
+/* The lowest level the thermal cap may hold, as bc250_dpm.c's thermal_floor() computes it: the thermal floor,
+ * or the lab floor once a point under it has been refused. The cap never goes below this, whatever the clock
+ * was when the part went hot - the idle point is not a load level (0.7.206). Every tick below checks it, so a
+ * cap of 500 MHz (which would pin a loaded GPU there) fails the gate instead of passing `level <= cap`. */
+static unsigned int cap_bottom(const struct bc250_dpm_governor *g)
+{
+	return g->subfloor_ok ? BC250_DPM_THERMAL_FLOOR_LEVEL : BC250_DPM_FLOOR_LEVEL;
 }
 
 /* One tick applied without failure, the temperature in millidegrees (the thresholds' edges); returns the level. */
@@ -239,6 +249,7 @@ static unsigned int run_mc(struct bc250_dpm_governor *g, unsigned int busy, int 
 	in.temperature_mc = temp_mc;
 	level = bc250_dpm_step(g, &in);
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
+	CHECK(g->thermal_cap >= cap_bottom(g));
 	bc250_dpm_commit(g, level);
 	return level;
 }
@@ -527,7 +538,7 @@ static int ref_raise(const struct bc250_dpm_tune *t)
 			g.tune.floor_level = L(0);
 			g.level = l;
 			in.busy_permille = busy; in.temperature_mc = 60000; in.temperature_valid = 1; in.dt_ms = 25;
-			in.ring_busy = 0;
+			in.ring_busy = 0; in.sdma_permille = 0;
 			next = bc250_dpm_step(&g, &in);
 			if (next <= l) return -1;      /* not a raise: the reference itself is wrong */
 			if (t->down_permille * bc250_clock_points[next].mhz > busy * bc250_clock_points[l].mhz) return 0;
@@ -1473,18 +1484,28 @@ static void test_busy_source(void)
 /* The idle point is the table's first level, five below the lab floor (a constant CHECK would trip C4127). */
 typedef char dpm_idle_is_level_zero[(L(-5) == BC250_DPM_IDLE_LEVEL && BC250_DPM_IDLE_LEVEL == 0u) ? 1 : -1];
 
-/* One tick with the ring's state named: the idle state is the only rule that reads it. */
-static unsigned int run_ring(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt,
-			     int ring_busy)
+/* One tick with the ring's state and the paging node's share named: the idle state is the only rule that reads
+ * either of them. */
+static unsigned int run_nodes(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt,
+			      int ring_busy, unsigned int sdma_permille)
 {
 	struct bc250_dpm_input in = tick(busy, 0, dt);
 	unsigned int level;
 	in.temperature_mc = temp_mc;
 	in.ring_busy = ring_busy;
+	in.sdma_permille = sdma_permille;
 	level = bc250_dpm_step(g, &in);
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
+	CHECK(g->thermal_cap >= cap_bottom(g));
 	bc250_dpm_commit(g, level);
 	return level;
+}
+
+/* The same with an idle paging node, which is what most of the cases below describe. */
+static unsigned int run_ring(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt,
+			     int ring_busy)
+{
+	return run_nodes(g, busy, temp_mc, dt, ring_busy, 0u);
 }
 
 /* One tick with no temperature reading at all. */
@@ -1525,7 +1546,7 @@ static void test_idle(void)
 {
 	struct bc250_dpm_governor g;
 	struct bc250_dpm_tune t;
-	unsigned int i, level, hold = BC250_DPM_IDLE_HOLD_MS / 25u;
+	unsigned int i, level, wake, hold = BC250_DPM_IDLE_HOLD_MS / 25u;
 
 	/* The setting itself. 0 is "off" and not an error; anything that is not a table clock under the lab
 	 * floor, and any hold or share out of range, is refused and leaves the state off. */
@@ -1556,15 +1577,56 @@ static void test_idle(void)
 	CHECK(g.idle && g.idle_entries == 1 && g.idle_exits == 0 && g.lowers == 1);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_IDLE && g.level == BC250_DPM_IDLE_LEVEL);
 	CHECK(bc250_dpm_level_mhz(g.level) == 500u && bc250_dpm_level_mv(g.level) == BC250_CLOCK_FLOOR_MV);
-	/* It stays there, and the time at the point is counted. */
+	/* It stays there, and the time at the point is counted from the tick after the entry (the caller's apply
+	 * takes the clock there, so the entry tick itself was not spent at the point). */
 	for (i = 0; i < 400u; i++) CHECK(run_ring(&g, 0, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
-	CHECK(g.idle_total_ms == (400u + 1u) * 25u && g.idle_entries == 1 && g.lowers == 1);
+	CHECK(g.idle_total_ms == 400u * 25u && g.idle_entries == 1 && g.lowers == 1);
 
 	/* Exit: one busy tick returns to the lab floor at once, whatever the load would ask for; the governor
 	 * goes on from the floor at the next tick (1000 -> 1300 at full load). */
 	CHECK(run_ring(&g, 1000, 60000, 25, 0) == L(0));
 	CHECK(!g.idle && g.idle_exits == 1 && g.raises == 1);
 	CHECK(run_ring(&g, 1000, 60000, 25, 0) == L(3));
+
+	/* The exit threshold is the tick's own share and not the window's admitted mean (0.7.206, review): one
+	 * active GRBM sample inside a 25 ms tick is 40 permille, twenty times the 2 permille mean the entry
+	 * window admits, so a per-tick exit at the entry threshold left the state at the very frame the mean rule
+	 * tolerates. A minute of a static desktop that wakes once per second must hold the point, with one entry,
+	 * no exit and one transition of the clock. */
+	for (wake = 500u; wake <= 3000u; wake += 500u) {
+		unsigned int at_point = 0, ticks = 60000u / 25u, every = wake / 25u;
+		idle_init(&g, BC250_DPM_TOP_LEVEL);
+		for (i = 1; i <= ticks; i++)
+			if (run_ring(&g, (i % every) == 0u ? 1000u / 25u : 0u, 45000, 25, 0) == BC250_DPM_IDLE_LEVEL)
+				at_point++;
+		CHECK(g.idle && g.idle_entries == 1 && g.idle_exits == 0);
+		CHECK(g.raises + g.lowers == 1 && at_point > ticks - 2u * hold);
+	}
+	/* A tick at the exit share leaves in that tick, even with both rings empty: that is work the ring
+	 * accounting cannot see, and half a tick of it is no desktop frame. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	CHECK(run_ring(&g, BC250_DPM_IDLE_EXIT_PERMILLE - 1u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL && g.idle);
+	CHECK(run_ring(&g, BC250_DPM_IDLE_EXIT_PERMILLE, 60000, 25, 0) == L(0) && !g.idle && g.idle_exits == 1);
+	/* Between the two thresholds the trailing window decides: a share over the admitted mean that never
+	 * reaches the exit share leaves after one hold time, not at once and not never. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	for (i = 1; i < hold; i++)
+		CHECK(run_ring(&g, BC250_DPM_IDLE_BUSY_PERMILLE + 50u, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL);
+	CHECK(run_ring(&g, BC250_DPM_IDLE_BUSY_PERMILLE + 50u, 60000, 25, 0) == L(0));
+	CHECK(!g.idle && g.idle_exits == 1 && g.idle_entries == 1);
+	/* The paging node (SDMA0) is work as well, and the GFX ring is empty throughout a transfer on it: no
+	 * entry while it runs, and an exit at the first tick that sees it. A single sample of it is tolerated,
+	 * exactly as a GFX one is. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 0; i < 4u * hold; i++) CHECK(run_nodes(&g, 0, 60000, 25, 0, 1000u) == L(0));
+	CHECK(!g.idle && g.idle_entries == 0);
+	CHECK(quiet_until_idle(&g, 2u * hold, 60000) > 0);
+	CHECK(run_nodes(&g, 0, 60000, 25, 0, 1000u) == L(0) && !g.idle && g.idle_exits == 1);
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 1; i < hold; i++) CHECK(run_nodes(&g, 0, 60000, 25, 0, i == 5u ? 40u : 0u) == L(0));
+	CHECK(run_ring(&g, 0, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL && g.idle_entries == 1);
 
 	/* A submission with no hardware busy share of its own (a tick waiting on a fence) exits as well, and
 	 * keeps the window from starting while the ring has work. */
@@ -1640,6 +1702,66 @@ static void test_idle(void)
 	CHECK(g.raise_ms >= BC250_DPM_RAMP_MAX_MS);
 	CHECK(run_ring(&g, 1000, 86000, 25, 0) == L(1));
 
+	/* The same for an idle point that is not 500 MHz (0.7.206, review). The exit is immediate because the
+	 * state held the clock, not because the clock is under the thermal floor: a configured 800 MHz point, and
+	 * the 800 MHz the fallback picks after the firmware refuses 500 MHz, both return to the lab floor in one
+	 * tick at 80 C, where the ramp interval is 2.8 s and would otherwise give 900 MHz. */
+	for (i = 0; i < 2u; i++) {
+		bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+		if (i == 0) {
+			CHECK(bc250_dpm_idle_config(&g, 800, BC250_DPM_IDLE_HOLD_MS,
+						    BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);
+		} else {
+			CHECK(bc250_dpm_idle_config(&g, 500, BC250_DPM_IDLE_HOLD_MS,
+						    BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);
+			bc250_dpm_idle_refused(&g);
+		}
+		CHECK(g.idle_level == BC250_DPM_THERMAL_FLOOR_LEVEL && bc250_dpm_idle_mhz(&g) == 800u);
+		CHECK(quiet_until_idle(&g, 2u * hold, 80000) > 0);
+		CHECK(g.level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.ramp_holds == 0);
+		CHECK(run_ring(&g, 1000, 80000, 25, 1) == L(0));
+		CHECK(!g.idle && g.ramp_holds == 0 && g.raise_ms >= BC250_DPM_RAMP_MAX_MS);
+	}
+	/* The cap's own sub-floor keeps the ramp, though: a cap that walked down to 800 MHz under load comes back
+	 * level by level, as it did in 0.7.205, and not in the one tick an idle exit takes (the idle state must
+	 * not change that). */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 0; i < 400u; i++) run_ring(&g, 1000, 88000, 25, 1);
+	CHECK(g.level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL && !g.idle);
+	CHECK(run_ring(&g, 1000, 80000, 25, 1) == BC250_DPM_THERMAL_FLOOR_LEVEL);	/* the cap still holds it */
+	level = 0;
+	for (i = 1; i <= 400u && level < L(0); i++) level = run_ring(&g, 1000, 80000, 25, 1);
+	CHECK(level == L(0) && i * 25u > BC250_DPM_RELEASE_STEP_MS && g.ramp_holds > 0);
+
+	/* A reading of 87 C or more while the clock is at the idle point: the thermal cap steps from the lab
+	 * floor, never from the idle point (0.7.206, review). A cap at the idle point would hold a loaded GPU at
+	 * 500 MHz, a point nothing has measured under load, until the release below 82 C. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	g.cap_ms = 0;					/* the cap moved just now: the hot entry takes its clamp */
+	CHECK(run_ring(&g, 0, 87500, 25, 0) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL && g.hot && !g.idle);
+	for (i = 0; i < 4000u; i++) level = run_ring(&g, 1000, 85000, 25, 1);
+	CHECK(level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.want == L(0));
+	/* And with the sub-floor already refused the same entry steps to the lab floor. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
+	bc250_dpm_subfloor_refused(&g);
+	g.cap_ms = 0;
+	CHECK(run_ring(&g, 0, 87500, 25, 0) == L(0) && g.thermal_cap == L(0));
+
+	/* The idle point is never above the limits (0.7.206, review): a cap holding a part at 800 MHz wins over a
+	 * configured 900 MHz point, so the state lowers the clock and never raises it. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_idle_config(&g, 900, BC250_DPM_IDLE_HOLD_MS, BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);
+	for (i = 0; i < 400u; i++) run_ring(&g, 1000, 88000, 25, 1);	/* the cap walks down to 800 MHz */
+	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	for (i = 0; i < 8u * hold; i++) {
+		level = run_ring(&g, 0, 84000, 25, 0);		/* above RELEASE_MC: the cap holds */
+		CHECK(level <= g.thermal_cap);
+	}
+	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL && level == BC250_DPM_THERMAL_FLOOR_LEVEL);
+
 	/* An exit while the part is critical goes to the thermal floor, not above it. */
 	idle_init(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
@@ -1658,6 +1780,10 @@ static void test_idle(void)
 	CHECK(g.level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.idle_entries == 2);
 	bc250_dpm_idle_refused(&g);				/* 800 MHz refused too: nothing below the floor */
 	CHECK(!g.idle && !g.idle_on && g.idle_refusals == 2 && bc250_dpm_idle_mhz(&g) == 0u);
+	/* The second step is the thermal floor itself, which the cap asks for with the same two messages: the cap
+	 * loses it as well, so no rule tries a point under the lab floor again for this start. */
+	CHECK(!g.subfloor_ok && g.subfloor_refusals == 1 && g.thermal_cap >= BC250_DPM_FLOOR_LEVEL);
+	for (i = 0; i < 400u; i++) CHECK(run_ring(&g, 1000, 91000, 25, 1) == L(0));
 	g.level = BC250_DPM_FLOOR_LEVEL;
 	for (i = 0; i < 4u * hold; i++) CHECK(run_ring(&g, 0, 60000, 25, 0) == L(0));
 	CHECK(g.idle_entries == 2);

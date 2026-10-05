@@ -37,6 +37,7 @@ try {
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Workspace\toolchain\nuget" }
  Check 'umd-caps' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_caps.ps1" -Out "$Out\umd-caps" -Kits "$Workspace\toolchain\nuget" }
  Check 'interop-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_interop_policy.ps1" -Root $Workspace -Out "$Out\interop-policy" -Kits "$Workspace\toolchain\nuget" }
+ Check 'escape-abi' { & python -m unittest discover -s "$repo\tools\win\bc250kmd_cli" }
  Check 'allocation-identity' { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }
  Check 'object-index' { & python "$repo\tools\quality\object_index.py" --out "$Out\object-index" }
  Check 'hang-witness' { & python "$repo\tools\quality\hang_witness.py" --out "$Out\hang-witness" }

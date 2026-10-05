@@ -377,17 +377,21 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
                  bc250_dpm_level_mhz(Level), report.temperature_mc, Why);
         return FALSE;
     }
-    if (Level < BC250_DPM_THERMAL_FLOOR_LEVEL) {
+    if (Level < BC250_DPM_FLOOR_LEVEL && S->Gov.idle && Level == S->Gov.idle_level) {
         // The idle point (0.7.206), refused. Same reasoning as the sub-floor below: a property of this part,
         // not an SMU fault, so the give-up counter is untouched. The idle point falls back one step
         // (bc250_dpm_idle_refused: 500 MHz, then the thermal floor, then off) and the lab floor goes in now;
         // the next quiet window asks for whatever is left, so the refused point is never asked for twice.
-        GuardLog("dpm: idle point refused: %lu MHz 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), idle now "
-                 "%lu MHz (%s)", bc250_dpm_level_mhz(Level), status, report.status, report.messages_completed,
-                 report.messages_attempted, report.observed_mhz, report.observed_vid,
-                 bc250_dpm_level_mhz(S->Gov.idle_level < BC250_DPM_THERMAL_FLOOR_LEVEL
-                                     ? BC250_DPM_THERMAL_FLOOR_LEVEL : BC250_DPM_FLOOR_LEVEL), Why);
+        // The test is the governor's own state and not the level alone (0.7.206, review): after the first
+        // fallback the idle point IS the thermal floor, and a refusal of it has to count as the second idle
+        // refusal, not as a sub-floor one. bc250_dpm_idle_refused then withdraws the cap's sub-floor as well,
+        // which is what the branch below would have done. A clamped idle target (the cap holds the part lower
+        // than the point) is the cap's own request and takes that branch.
         bc250_dpm_idle_refused(&S->Gov);
+        GuardLog("dpm: idle point refused: %lu MHz 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), idle now "
+                 "%lu MHz, refusals %lu (%s)", bc250_dpm_level_mhz(Level), status, report.status,
+                 report.messages_completed, report.messages_attempted, report.observed_mhz, report.observed_vid,
+                 bc250_dpm_idle_mhz(&S->Gov), S->Gov.idle_refusals, Why);
         InterlockedExchange(&S->Resync, 1);
         (void)DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "idle refused");
         return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
@@ -521,9 +525,17 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         in.dt_ms = dtMs;
         // Work submitted and not yet retired, whatever the hardware samples said: the idle state (0.7.206)
         // does not leave the lab floor while the ring holds anything, and returns to it at the first tick
-        // that sees work again. Worst-case exit latency: this tick's period (BC250_DPM_TICK_MS, 25 ms
-        // nominally, up to BC250_DPM_MAX_DT_MS when the thread was starved) plus one SmuSetPoint.
+        // that sees work again. Exit latency: this tick's detection (the period is BC250_DPM_TICK_MS, 25 ms)
+        // plus one SmuSetPoint, so some 25 to 35 ms for the first work of a burst. Neither figure is a bound.
+        // This thread is an ordinary system thread, it waits a relative 25 ms after each tick, DpmPause holds
+        // TickLock across a power transition, and a raise re-reads the clock up to BC250_CLOCK_SETTLE_READS
+        // times with BC250_CLOCK_SETTLE_US between the reads. The figure is unmeasured on the hardware so far.
         in.ring_busy = inflight ? 1 : 0;
+        // The paging node's share of this tick, 0 for a tick that had too few hardware samples (then only the
+        // GFX submit accounting is left, and ring_busy carries it). The idle state reads it beside the GRBM
+        // share, so an eviction or an upload with the GFX ring empty neither enters the state nor runs at the
+        // idle point; the load governor keeps the GFX-only share in in.busy_permille.
+        in.sdma_permille = T->SdmaPermille;
         S->Gov.stable = InterlockedCompareExchange(&S->Stable, 0, 0) != 0;
         DpmTakeTune(S);
         target = bc250_dpm_step(&S->Gov, &in);
@@ -617,15 +629,24 @@ static void DpmThread(_In_ PVOID Context)
 // The idle state's three settings, read once per start and handed to the policy (0.7.206). A refused value
 // leaves the state off and says so: the clock then behaves as it did in 0.7.205. Absent values are the
 // defaults of bc250_dpm.h, so a lab machine with no DpmIdle* value at all runs the owner's 500 MHz.
+// A start that does not govern (fixed-lab, an unconfirmed or unclean DPM request, no SMU owner) never reaches
+// bc250_dpm_step, so the state could not act: it stays off, the log says why, and the escape and the CLI then
+// read "off" instead of naming a point that nothing would ever apply (0.7.206, review).
 // PASSIVE_LEVEL, under Lock, before the governor thread exists.
-static void DpmConfigureIdle(BC250_DPM_STATE* S)
+static void DpmConfigureIdle(BC250_DPM_STATE* S, BOOLEAN Dpm)
 {
     unsigned int mhz = 0, hold = 0, permille = 0;
-    BOOLEAN mhzPresent = QueryPresent(DPM_SETTING_IDLE_MHZ, &mhz);
-    BOOLEAN holdPresent = QueryPresent(DPM_SETTING_IDLE_HOLD, &hold);
-    BOOLEAN busyPresent = QueryPresent(DPM_SETTING_IDLE_BUSY, &permille);
+    BOOLEAN mhzPresent, holdPresent, busyPresent;
     enum bc250_dpm_idle_error error;
 
+    if (!Dpm) {
+        // bc250_dpm_init left the state off; nothing to configure and nothing to publish.
+        GuardLog("dpm: idle state off: this start does not govern the clock (reason %lu)", S->Decision.reason);
+        return;
+    }
+    mhzPresent = QueryPresent(DPM_SETTING_IDLE_MHZ, &mhz);
+    holdPresent = QueryPresent(DPM_SETTING_IDLE_HOLD, &hold);
+    busyPresent = QueryPresent(DPM_SETTING_IDLE_BUSY, &permille);
     if (!mhzPresent) mhz = BC250_DPM_IDLE_MHZ;
     if (!holdPresent) hold = BC250_DPM_IDLE_HOLD_MS;
     if (!busyPresent) permille = BC250_DPM_IDLE_BUSY_PERMILLE;
@@ -722,7 +743,7 @@ void DpmStart(BC250_DEVICE* Device)
         StoreLogged(DPM_SETTING_LAST_REASON, d->reason);
     }
     bc250_dpm_init(&s->Gov, d->max_level);
-    DpmConfigureIdle(s);
+    DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     GuardLog("dpm: DpmMode %lu%s DpmMaxMHz %lu%s -> %s, ceiling %lu MHz, reason %lu%s%s", r.mode,
              r.mode_present ? "" : " (absent)", r.max_mhz, r.max_present ? "" : " (absent)",
              d->mode == BC250_DPM_MODE_DPM ? "DPM" : "fixed-lab", d->max_mhz, d->reason,
