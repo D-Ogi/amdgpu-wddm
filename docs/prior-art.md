@@ -4,6 +4,16 @@ Surveyed 2026-09-21. Local read-only clones live in `<BC250_ROOT>\ref\` (`BC250_
 
 Community baseline: `lildebil0/awesome-bc250`, `docs/en/07-windows.md` (state "early 2026"). Its summary is accurate: every official AMD driver ends in Code 43 because no shipping driver knows PCI `1002:13FE`; Linux works because `amdgpu`/Mesa are open and were patched; the from-scratch Windows efforts are at the "can we initialize the GPU at all" stage. Nothing in it points to a hardware lock against Windows. It also records the social context worth remembering: a history of hoaxes, malware posted as "drivers", and an unverified "leaking drivers bricks boards" rumor. Consequence for us: publish source and evidence, never binaries of unknown origin.
 
+**The record, as of 2026-10-05.** Three community documentation projects state plainly that no Windows GPU
+driver exists for this board: `elektricM/amd-bc250-docs` at `954b706` (`docs/drivers/radv.md`,
+"No Windows drivers exist"), `katzzero/bc250-unofficial-community-guide` at `ee8df94` and
+`kalpakprod/awesome-bc250` at `d18d3ce` (`docs/en/07-windows.md`). That is no longer so. This driver renders
+the Windows desktop on the GPU and runs DirectX 12 games on unit A. Our facts graph carries the measurements.
+Two limits hold on that statement. The three earlier attempts above are still at the stage this page describes.
+Our own driver is at tester quality on one unit, and it is not a product. PROVENANCE: we cite the three
+projects for their statements only. Their licences are MIT (`katzzero`) and dual documents-and-code
+(`elektricM`, `kalpakprod`). We copied no code and no text.
+
 ## 1. Keshas-dev/AMD-BC-250-Windows-Driver
 
 Clone `ref/keshas-driver__WARN-AGENTS-md-is-not-facts` @ `63f8956` (2026-09-16). Apache-2.0. Tested on one real unit (BIOS P4.00G / `BC250_5.00_clv.bin`).

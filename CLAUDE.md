@@ -112,6 +112,8 @@ python tools/regcalc/regcalc.py reverse <byte_offset...>
 python tools/regcalc/regcalc.py grep <regex>
 python -m unittest discover -s tools/regcalc
 python -m unittest discover -s tools/diagusb
+python -m unittest discover -s tools/win/bc250rd   # the register generators, with the UVD/VCN deny band
+                                                   # (all three are the 'register-generators' gate of quick.ps1)
 python tools/facts/gen_facts.py --write      # after editing docs/facts/data/*.yaml
 python tools/facts/gen_facts.py --check      # the facts gate (also in tools/quality/quick.ps1)
 python tools/facts/gen_facts.py next-id

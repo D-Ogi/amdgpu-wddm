@@ -3,12 +3,17 @@ import argparse
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
 from artifact_gate import sha, verify
 from msvc_analysis import run
+
+# Where the temporary trees of these tests go. BC250_TEST_OUT keeps them off drive C: of the
+# development PC; without it tempfile picks the system temporary directory.
+OUT = os.environ.get("BC250_TEST_OUT") or None
 
 
 class QualityControls(unittest.TestCase):

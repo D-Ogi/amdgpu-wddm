@@ -12,19 +12,22 @@ flowchart LR
   M10["M10"]
   M12["M12"]
   M35["M35<br/>hardware"]
+  M90["M90"]
   M333["M333"]
   M509["M509<br/>icd"]
   M510["M510"]
+  M789["M789<br/>hardware"]
   S3["S3<br/>hardware"]
   S4["S4"]
   R3["R3<br/>hardware"]
+  M789 -.->|refutes| M90
   M5 -.->|refutes| S3
   M10 ==>|supports| S4
   M12 -.->|refutes| R3
   M333 ==>|supersedes| M35
   M510 ==>|supports| M509
   classDef other stroke-dasharray:4 3
-  class M35,M509,S3,R3 other
+  class M35,M509,M789,S3,R3 other
 ```
 
 ## References
@@ -60,6 +63,7 @@ flowchart LR
   M510["M510"]
   M515["M515<br/>icd"]
   M516["M516"]
+  M787["M787<br/>hardware"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -67,6 +71,7 @@ flowchart LR
   M58 --> M55
   M59 --> M55
   M95 --> M53
+  M787 --> M46
   M78 --> M55
   M113 --> M40
   M114 --> M40
@@ -86,6 +91,6 @@ flowchart LR
   M510 --> M508
   M516 --> M515
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515 other
+  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787 other
 ```
 
