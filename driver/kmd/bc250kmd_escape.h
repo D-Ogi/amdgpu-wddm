@@ -35,7 +35,63 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700C6u       // revision 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
+#define BC250_KMD_VERSION 0x000700CDu       // revision 205 (INF 0.7.205.1, on 204): the clock table gains
+                                            // two thermal-only points below the lab floor, 900 and
+                                            // 800 MHz, both at the floor's 820 mV / VID 116 (owner
+                                            // decision 2026-10-05: a clock under 1000 MHz is allowed
+                                            // when Tctl reaches 87 C). 13 levels, index 0 = 800 MHz,
+                                            // BC250_DPM_FLOOR_LEVEL = 2 = 1000 MHz. The load still
+                                            // never asks below 1000 MHz; only the thermal cap goes
+                                            // lower (one level per hot step from 87 C, 800 MHz at once
+                                            // at 90 C). A missing sensor, SetStablePowerState, the
+                                            // fixed mode, stop, power down and giving up stay at
+                                            // 1000 MHz. The firmware has never run below 1000 MHz
+                                            // (facts M47), so a refused sub-floor transition is logged
+                                            // ("sub-floor refused"), does not count towards the SMU
+                                            // give-up limit, and stops the cap at 1000 MHz for the
+                                            // rest of that start. Every escape carries MHz, not a
+                                            // level index: no struct and no ABI changed (RUN_DPM
+                                            // ABI 1, RUN_DPM_TUNE ABI 2). A runtime tune floor still
+                                            // has to be 1000 MHz or more.
+                                            // 204 (INF 0.7.204.1, on 203): the DPM warm zone
+                                            // (no raise) starts at 87 C, the hot limit, instead of
+                                            // 85 C (owner, 2026-10-04). The thermal ramp's interval
+                                            // runs from 1 s at 70 C to 4 s at 87 C. At 87 C and above
+                                            // the hot cap lowers one level per hot step and the warm
+                                            // rule refuses every raise. No escape struct changed.
+                                            // 203 (INF 0.7.203.1, on 202): the DPM governor's
+                                            // thermal ramp (BC250_DPM_RAMP_KNEE_MC, session 367). From
+                                            // 70 C up to the 85 C warm zone a raise goes one level at
+                                            // most, at least 1 s (70 C) to 4 s (85 C) after the last
+                                            // raise; lowering and the thermal limits are unchanged. The
+                                            // dpm log lines count the cut or held raises ("ramp N"),
+                                            // throttle 9 is thermal-ramp. No escape struct changed.
+                                            // 202 (INF 0.7.202.1, on 201): BD-065 diagnostics.
+                                            // A GPU Present whose allocation snapshot is refused is
+                                            // counted by the first failing check (owner, unbound,
+                                            // BC2A, format, ...) and the first 16 are logged with both
+                                            // descriptors. Behaviour and status codes unchanged. No
+                                            // escape struct changed.
+                                            // 201 (INF 0.7.201.1, on 200): the full table offers
+                                            // VidPN source modes in A8B8G8R8, A2B10G10R10 and
+                                            // A16B16G16R16F beside A8R8G8B8 (display_modes.h), so DXGI
+                                            // can list modes for those formats (3DMark, session
+                                            // native-caps349); the scan-out stays 8-bit. Registry value
+                                            // OfferComposedSourceModes 0 turns them off. No escape
+                                            // struct changed.
+                                            // 200 (INF 0.7.200.1, on 199): the DPM governor
+                                            // refuses a raise of clock or voltage from 85 C up to the
+                                            // 87 C hot limit (BC250_DPM_WARM_MC, session 344); the dpm
+                                            // log lines count the refused steps ("warm N"), throttle 8
+                                            // is thermal-warm. No escape struct changed.
+                                            // 199 (INF 0.7.199.1, on 198): the standard-allocation
+                                            // size query leaves the public Pitch alone, the fill publishes it
+                                            // (d3dkmddi.md:32953); the wddm summary counts standard
+                                            // allocation requests and answers by kind and GDI type, LB7A
+                                            // create (created/refused/rolled back) and open outcomes, and
+                                            // CreateAllocation calls by final outcome (BD-060, gdi_admission.h).
+                                            // No escape struct changed.
+                                            // 198 (INF 0.7.198.2, on 197): a system sleep or shutdown
                                             // ends the GPU DWM interop session, so a clean restart no
                                             // longer reads as a dead boot (BD-059): \Callback\PowerState
                                             // and the adapter's D3 for a system action unmark, S0 marks
@@ -189,6 +245,11 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // the share of GRBM_STATUS.GUI_ACTIVE samples when FLAG_HW_BUSY is set, else the GFX ring's submit-to-fence share;
 // SubmitBusyPermille is the latter always, SdmaBusyPermille the share of SDMA0 not-idle samples (the paging node).
 // Both were Reserved (zero) in 0.7.175-176: a caller still sends them as zero, so the ABI stays 1.
+// Throttle 8 (thermal-warm, a raise refused from 85 C, from 87 C since 0.7.204) is new in 0.7.200, throttle 9 (thermal-ramp, a raise cut to
+// one level or held from 70 C) in 0.7.203; the layout and the ABI stay. A tool built before them shows the number
+// it does not know as "?". Since 0.7.205 CurrentMHz, CapMHz, TargetMHz and ObservedMHz may read 900 or 800 MHz,
+// the clock table's two thermal-only points below the lab floor; WantMHz (the load's demand) never does, and
+// MaxMHz stays 1000..2000. Still no level index on the wire, so the layout and the ABI are unchanged.
 #define BC250_DPM_ABI 1u
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_OP_CONFIRM 1u
@@ -230,8 +291,9 @@ typedef struct _BC250_ESCAPE_DPM {
 // up). Nothing is persisted: every device start begins with the defaults. A refused write leaves the values as they
 // were and names the reason in Error (enum bc250_dpm_tune_error, driver/shim/include/bc250_dpm.h): ranges, the order
 // down < target < up, invariant 1 (a one-step lowering never lands at or above up), invariant 2 (a raise never lands
-// below down), the hold, the floor. FloorMHz in: a clock of the table up to the start's ceiling (MaxMHz), 0 or 1000 for
-// no runtime floor; out: 0 when there is none. Every accepted change is logged in the driver log with its old and new
+// below down), the hold, the floor. FloorMHz in: a clock of the table from 1000 MHz up to the start's ceiling (MaxMHz),
+// 0 or 1000 for no runtime floor; out: 0 when there is none. The thermal-only points below 1000 MHz (0.7.205) are the
+// thermal cap's alone, so 800 and 900 are refused here with error 6 (floor). Every accepted change is logged in the driver log with its old and new
 // values. Serial counts the changes since the driver loaded; Applied is the serial the governor thread runs with.
 // The 160-byte RUN_DPM structure and BC250_DPM_ABI are unchanged.
 // ABI 2 (0.7.197.1, BD-055) appends the thermal cap's timing: the hot step, the soft-release delta below HOT (0: off)

@@ -250,6 +250,28 @@ package quietly missing that block is byte for byte the run 1 experiment wearing
 exists to make. Everything that renders in run 2 (DWM on this x64 build, and the Direct3D 11 attempt from the SSH
 session) is 64-bit. The INF says what it would take to add it.
 
+## VidPN source modes and DXGI display formats (0.7.201)
+
+The miniport offers one geometry for the one source: the mode that the firmware left. It can offer this
+geometry in more than one pixel format. `display_modes.h` gives the list. The list comes from the shared
+surface format table (`driver/contract/amdgpu_wddm_surface_format.h`):
+
+1. `A8R8G8B8`. This is the scan-out format, and it is always first.
+2. With the full table only: `A8B8G8R8`, `A2B10G10R10` and `A16B16G16R16F`. These are the composed rows that
+   DXGI can name (`R8G8B8A8_UNORM`, `R10G10B10A2_UNORM`, `R16G16B16A16_FLOAT`).
+
+A mode of step 2 does not change the scan-out. The display keeps the 8-bit plane.
+`SetVidPnSourceAddress` refuses an allocation without the `SCANOUT_PRIMARY` bit. The UMDs present buffers of
+these formats through composition. `CommitVidPn` and `IsSupportedVidPn` accept a pinned source mode only in
+a format of the list. `CommitVidPn` writes one log line when the committed format changes:
+`display: CommitVidPn source WxH format F stride S`.
+
+Up to 0.7.200.1 the list held `A8R8G8B8` only. 3DMark Steel Nomad then stopped with "Display mode list not
+found for given format" (lab session native-caps349). `tools/win/dxgimodes` shows the KMT and DXGI mode
+lists for each format. Use it to measure the change. To turn step 2 off, set the REG_DWORD
+`OfferComposedSourceModes` to 0 under the service's `Parameters` key and restart the adapter. The INF does
+not write this value, and the default is 1.
+
 ## Build
 
 ```powershell

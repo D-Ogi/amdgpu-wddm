@@ -96,6 +96,14 @@ static void ramp(unsigned old_mhz,unsigned old_vid,unsigned mhz,unsigned mv,unsi
 int main(void){
  unsigned path,step;
  positive(1000,116,1500,919); // voltage up, then clock up
+ // The two thermal-only points under the lab floor (0.7.205, owner decision 2026-10-05): the same voltage
+ // as the floor, so no staging, and the same two messages, sent without the import (subfloor_commit).
+ positive(1000,116,900,820);   // the lab floor down to 900 MHz
+ positive(1000,116,800,820);   // and to 800 MHz
+ positive(800,116,1000,820);   // back to the lab floor
+ positive(900,116,800,820);
+ positive(800,116,900,820);
+ positive(2000,88,800,820);    // the ceiling to the bottom: clock first, then voltage down
  positive(1500,104,1000,820); // clock down, then voltage down
  positive(1000,116,1000,820); // repeated startup
  positive(1000,100,1500,919); // already sufficient voltage
@@ -106,6 +114,8 @@ int main(void){
  ramp(1000,116,2000,1000,BC250_CLOCK_SETTLE_READS,1); // the whole budget, floor to ceiling
  ramp(1000,116,1200,860,BC250_CLOCK_SETTLE_READS+1,1); // never arrives
  ramp(1200,110,1000,820,2,1);                        // a lowering that ramps is waited for the same way
+ ramp(1000,116,800,820,2,1);                         // a sub-floor lowering ramps the same way
+ ramp(800,116,1000,820,3,1);
  ramp(1200,110,1000,820,BC250_CLOCK_SETTLE_READS+7,0);
  for(path=0;path<2;path++)for(step=1;step<=(path?8u:6u);step++){
   struct backend b=setup(path?1000:1500,path?116:104,path?1500:1000,path?919:820);
@@ -173,6 +183,27 @@ int main(void){
  {struct backend b=setup(2000,88,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=88000;
   CHECK(bc250_clock_prepare(&c,1500,919,&r)==0);CHECK(r.ready && b.mhz==1500 && b.vid==100);
  }
+ {struct backend b=setup(1000,116,800,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=88000;
+  // The reason the sub-floor exists: at 88 C the lab floor goes down to 800 MHz, voltage unchanged.
+  CHECK(bc250_clock_prepare(&c,800,820,&r)==0);CHECK(r.ready && b.mhz==800 && b.vid==116 && !r.voltage_staged);
+  CHECK(b.msg[2]==PPSMC_MSG_RequestGfxclk && b.param[2]==800 && b.msg[3]==PPSMC_MSG_ForceGfxVid && b.param[3]==116);
+  b.temp=95000;b.count=0;b.temp_count=0;
+  CHECK(bc250_clock_prepare(&c,800,820,&r)==0);CHECK(r.ready); // 95 C: a lowering to a standing point still goes
+ }
+ {struct backend b=setup(800,116,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=87000;
+  // Hot, and 800 -> 1000 MHz is a raise, but it is the gate's one exception (0.7.205): a request up to the lab
+  // floor that does not raise the voltage goes through at any temperature, so the one point this part is known
+  // to run at is always reachable. Without it the fixed start/resume request (SmuPrepareClock), the stop and
+  // power-down applies and the resync would all fail from a thermal-only point at a hot part.
+  CHECK(bc250_clock_prepare(&c,1000,820,&r)==0);CHECK(r.ready && b.mhz==1000 && b.vid==116 && !r.voltage_staged);
+  b.temp=95000;b.count=0;b.temp_count=0;b.mhz=900;b.vid=116;b.target_mhz=1000;b.target_vid=116;
+  CHECK(bc250_clock_prepare(&c,1000,820,&r)==0);CHECK(r.ready && b.mhz==1000); // 95 C: still reachable
+  // The exception is that narrow: above the floor the gate refuses as before, and so does a voltage raise.
+  b.temp=87000;b.count=0;b.temp_count=0;b.mhz=800;b.vid=116;b.target_mhz=1100;b.target_vid=113;
+  CHECK(bc250_clock_prepare(&c,1100,840,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.mhz==800 && b.vid==116);
+  b.count=0;b.temp_count=0;b.vid=120;b.target_mhz=1000;b.target_vid=116;
+  CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.mhz==800 && b.vid==120);
+ }
  positive(1000,116,2000,1000); // the ceiling from the floor: VID 88 staged before the clock
  positive(2000,88,1000,820);   // and back
  {struct backend b={0};struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.fail_begin=1;
@@ -181,7 +212,10 @@ int main(void){
  {struct backend b={0};struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
   CHECK(bc250_clock_prepare(&c,1501,820,&r)==BC250_CLOCK_INVALID);    // off the 100 MHz grid
   CHECK(bc250_clock_prepare(&c,2100,1000,&r)==BC250_CLOCK_INVALID);   // above the ceiling clock
-  CHECK(bc250_clock_prepare(&c,900,820,&r)==BC250_CLOCK_INVALID);     // below the floor clock
+  CHECK(bc250_clock_prepare(&c,700,820,&r)==BC250_CLOCK_INVALID);     // below the table's lowest clock
+  CHECK(bc250_clock_prepare(&c,750,820,&r)==BC250_CLOCK_INVALID);     // off the grid, below the floor
+  CHECK(bc250_clock_prepare(&c,800,819,&r)==BC250_CLOCK_INVALID);     // no undervolt at the thermal-only points
+  CHECK(bc250_clock_prepare(&c,900,819,&r)==BC250_CLOCK_INVALID);
   CHECK(bc250_clock_prepare(&c,1000,1001,&r)==BC250_CLOCK_INVALID);   // above the ceiling voltage
   CHECK(bc250_clock_prepare(&c,1000,819,&r)==BC250_CLOCK_INVALID);    // below the table
   CHECK(bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_INVALID);    // the old lab ceiling is below the table
