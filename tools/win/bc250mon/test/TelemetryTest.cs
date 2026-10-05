@@ -148,7 +148,9 @@ static class TelemetryTest
         Check(Telemetry.Megabytes((1ul << 20) + (1ul << 19)) == 2 && Telemetry.Megabytes((1ul << 20) + (1ul << 19) - 1) == 1 && Telemetry.Megabytes(null) == null, "MB rounding");
 
         // Temperature colours follow GpuProvider's thresholds.
-        foreach (var c in new[] { Tuple.Create(84900, Level.Good), Tuple.Create(85000, Level.Warn), Tuple.Create(92000, Level.Error) })
+        int warnMilli = (int)(GpuProvider.WarnC * 1000), errorMilli = (int)(GpuProvider.ErrorC * 1000);
+        foreach (var c in new[] { Tuple.Create(warnMilli - 100, Level.Good), Tuple.Create(warnMilli, Level.Warn),
+                                  Tuple.Create(errorMilli, Level.Error) })
         {
             s = Source(); s.Default = Dpm(0x000700B1, Running | Temp | Clk | Hw, c.Item1, 1000, 1);
             Check(Window(s, 1).TemperatureLevel == c.Item2, "level at " + c.Item1);
