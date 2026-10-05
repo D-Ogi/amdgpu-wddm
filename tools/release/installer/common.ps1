@@ -283,18 +283,18 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       bc250_interop_decide: persist_close; reason 4 'unclean' is the only one the policy persists today). The next
 #       start that finds a switch open again deletes the record itself (clear_closed), so a reopen writes the default
 #       and deletes the record, the way the control application's "Reopen the GPU desktop path" does.
-#   DpmMode   written 0 with DpmLastReason 3 (an earlier DPM start was never confirmed), 4 (an earlier start ended
+#   DpmMode   written 0 with DpmClosedReason 3 (an earlier DPM start was never confirmed), 4 (an earlier start ended
 #       above the floor) or 8 (the governor gave up after repeated failed clock changes): the three callers of
-#       driver/kmd/dpm.c PersistFallback (bc250_dpm_decide force_fixed for 3 and 4, DpmGiveUp for 8). Every start
-#       overwrites DpmLastReason with what it decided and no guard reads it, so a reopen writes DpmMode 1 and
-#       deletes nothing.
-#       DpmLastReason names the fallback only inside the boot that wrote it. The next start reads DpmMode 0, decides
+#       driver/kmd/dpm.c PersistFallback (bc250_dpm_decide force_fixed for 3 and 4, DpmGiveUp for 8). From KMD
+#       0.7.208.1 that record outlives its boot, because no later start overwrites it and only a start that reads a
+#       DpmMode other than 0 deletes it (bc250_dpm_decide clear_closed). A reopen therefore writes DpmMode 1 and
+#       deletes the record, the way it deletes InteropClosedReason.
+#       A driver before 0.7.208.1 writes no DpmClosedReason, so DpmLastReason is read instead (legacy_record). That
+#       one names the fallback only inside the boot that wrote it: the next start reads DpmMode 0, decides
 #       BC250_DPM_REASON_NOT_REQUESTED (1) and writes that over the record (driver/kmd/dpm.c, StoreLogged
 #       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
-#       the guard's 0 from a 0 the tester wrote, and the value stays 'kept'. A record that outlives the boot needs a
-#       KMD change: a DpmClosedReason beside DpmMode, written by PersistFallback and deleted by the start that runs
-#       with DpmMode 1, the way interop.c handles InteropClosedReason. InteropClosedReason has no such limit. It
-#       stays until a start finds a switch open again.
+#       such a driver's guard 0 from a 0 the tester wrote, and the value stays 'kept'. A reopen deletes nothing
+#       there, because the record is the reason of the last start and that start owns it.
 # The record alone is not a closure: the value has to be the one the driver writes. A value the tester set by hand,
 # with no record of a closure, stays 'kept' as before. The KMD's session marker stays the KMD's: the installer never
 # reads or writes it, and a marker that outlived its boot closes the switches again at the next start, which the
@@ -308,7 +308,8 @@ $script:DriverClosures = @{
         names = @{ 2 = 'invalid-setting'; 4 = 'unclean'; 5 = 'registry' }
         text = @{ 4 = 'the driver closed the GPU desktop path after a boot that ended with the path in use' }
         fallback = 'the driver closed the GPU desktop path itself' }
-    DpmMode = @{ closed = 0; record = 'DpmLastReason'; any_reason = $false; clear = @()
+    DpmMode = @{ closed = 0; record = 'DpmClosedReason'; legacy_record = 'DpmLastReason'; any_reason = $false
+        clear = @('DpmClosedReason')
         names = @{ 3 = 'unconfirmed'; 4 = 'unclean'; 8 = 'smu-error' }
         text = @{ 3 = 'the driver went back to the base clock after a start with the load-driven clock that was never confirmed'
                   4 = 'the driver went back to the base clock after a start that ended above it'
@@ -322,18 +323,28 @@ function Get-DriverClosure([string]$Name, $Current, $Default) {
     if ($Current -isnot [Collections.IDictionary]) { return $null }
     $c = $script:DriverClosures[$Name]
     if ($null -eq $c) { return $null }
-    if (-not $Current.ContainsKey($Name) -or -not $Current.ContainsKey($c.record)) { return $null }
+    if (-not $Current.ContainsKey($Name)) { return $null }
+    # The record the driver leaves next to the value. A driver that writes no durable record is read through its
+    # legacy record, if the table names one: the DPM guard before KMD 0.7.208.1 left only DpmLastReason (above).
+    $record = $null
+    if ($Current.ContainsKey($c.record)) { $record = $c.record }
+    elseif ($c.ContainsKey('legacy_record') -and $Current.ContainsKey($c.legacy_record)) { $record = $c.legacy_record }
+    if ($null -eq $record) { return $null }
     if (-not (Test-RegistryValueSame $Current[$Name] $c.closed)) { return $null }
     if (Test-RegistryValueSame $Default $c.closed) { return $null }
     $code = $null
-    try { $code = [int]$Current[$c.record] } catch { return $null }
+    try { $code = [int]$Current[$record] } catch { return $null }
     if ($c.any_reason) { if ($code -eq 0) { return $null } }
     elseif (-not $c.names.ContainsKey($code)) { return $null }
     $reason = "reason $code"
     if ($c.names.ContainsKey($code)) { $reason = $c.names[$code] }
     $text = $c.fallback
     if ($c.text.ContainsKey($code)) { $text = $c.text[$code] }
-    return [pscustomobject]@{ record = $c.record; code = $code; reason = $reason; text = $text; clear = @($c.clear) }
+    # A repair deletes the durable record it read. A legacy record belongs to the last start, which writes it
+    # again at every start, so nothing deletes it.
+    $clear = @()
+    if ($record -eq $c.record) { $clear = @($c.clear) }
+    return [pscustomobject]@{ record = $record; code = $code; reason = $reason; text = $text; clear = $clear }
 }
 # Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
 # the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).

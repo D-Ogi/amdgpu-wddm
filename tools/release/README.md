@@ -57,18 +57,21 @@ session marker. The control application (INSTALL.md) or a repair install opens a
 
 The driver's own safety closures (BD-069): the KMD writes a release default away itself after a start it must not
 repeat, and records that act next to the value (`InteropClosedReason` for `EnableGpuPresentBlit` and
-`EnableCddDwmInterop`, `DpmLastReason` 3, 4 or 8 for `DpmMode`). `common.ps1` `$script:DriverClosures` holds the value
-each closure writes, its record and its reason words. A value at the closure value with its record is the driver's
-act: `install.cmd -Repair` writes the release default again and clears `InteropClosedReason` (decision `reopened`),
+`EnableCddDwmInterop`, `DpmClosedReason` 3, 4 or 8 for `DpmMode`). `common.ps1` `$script:DriverClosures` holds the
+value each closure writes, its record and its reason words. A value at the closure value with its record is the
+driver's act: `install.cmd -Repair` writes the release default again and clears the record (decision `reopened`),
 every other install keeps it and reports it with its remedy (decision `driver-closed`), and a value the tester set
 by hand, with no record, stays `kept` as before. Only the `-Repair` switch reopens a closure. The automatic `repair`
 action of an unfinished phase does not, because nobody asked for the closure to go and the cause may still be there.
 The reason code stays in the installer's log. The window and the tester's report get the act in plain words.
 
-One limit of the `DpmMode` half: `DpmLastReason` is the reason of the last start, and a start that reads `DpmMode` 0
-writes 1 (not-requested) over it, so the record names the fallback only inside the boot that wrote it. One start
-later the installer keeps the 0 and reports it as the tester's value. A durable record needs a KMD change
-(`docs/design/dpm.md`). `InteropClosedReason` has no such limit: it stays until a start finds a switch open again.
+Both records outlive the boot that wrote them, so a closure is read as the driver's act at every later install until
+somebody asks for the value back (`DpmClosedReason` from KMD 0.7.208.1). A driver
+before 0.7.208.1 writes no `DpmClosedReason`, so `DpmMode` is read through `DpmLastReason` instead (`legacy_record`
+in the table). That one is the reason of the last start, and a start that reads `DpmMode` 0 writes 1 (not-requested)
+over it, so it names the fallback only inside the boot that wrote it. One start later the installer keeps such a
+driver's 0 and reports it as the tester's value. A repair clears no legacy record, because the next start writes it
+again anyway (`docs/design/dpm.md`).
 
 The KMD's own INF stays without `Reboot`, because the lab's deployment kits
 restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks for a

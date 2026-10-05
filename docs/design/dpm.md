@@ -131,7 +131,8 @@ every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 | `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
-| `DpmLastMode`, `DpmLastReason` | what the last start chose and why |
+| `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |
+| `DpmClosedReason` | 0.7.208: the reason the driver itself wrote `DpmMode` 0 (3 UNCONFIRMED, 4 UNCLEAN, 8 SMU_ERROR). `PersistFallback` writes it, a start that reads a `DpmMode` other than 0 deletes it, a start that reads `DpmMode` 0 leaves it alone |
 
 The guard follows the CU-mode pattern. A dpm start with a request not yet confirmed writes `DpmPending` and runs
 dpm; start health reaching ready (or `bc250kmd_cli dpm confirm`, administrator) writes `DpmConfirmed` with the
@@ -140,23 +141,25 @@ healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
 
-`DpmMode` 0 with `DpmLastReason` 3 (UNCONFIRMED), 4 (UNCLEAN) or 8 (SMU_ERROR, `DpmGiveUp`) is therefore the driver's
+`DpmMode` 0 with the reason 3 (UNCONFIRMED), 4 (UNCLEAN) or 8 (SMU_ERROR, `DpmGiveUp`) is therefore the driver's
 own fallback, not a choice of the tester: these three are the reasons `PersistFallback` writes. The tester release
 installer reads it that way (BD-069, `tools/release/installer/common.ps1` `$script:DriverClosures`):
 `install.cmd -Repair` writes `DpmMode` 1 again, and every other install keeps the 0 and names the fallback in its
 report. The installer deletes no guard mark: the start that reads `DpmMode` 1 clears the marks of a request no longer
 made by itself.
 
-`DpmLastReason` holds the fallback only inside the boot that wrote it. Every start with the SMU online overwrites it
-with what that start decided, and a start that reads `DpmMode` 0 decides NOT_REQUESTED (1). One more start, and the
-installer can no longer tell the guard's 0 from a 0 the tester wrote, so it keeps the 0 and reports it as the
-tester's value. `InteropClosedReason` has no such limit, because it stays until a start finds a switch open again.
-A `DpmMode` closure that survives its boot needs a durable record of its own in the KMD: a `DpmClosedReason` written
-by `PersistFallback` next to the 0 and deleted by the first start that runs with `DpmMode` 1, the way `interop.c`
-handles `InteropClosedReason`. Until that record exists, a repair brings the automatic clock back only in the boot
-the fallback happened in. The control application has the same limit: its Recovery page offers "Re-enable automatic
-clocks" for `DpmLastReason` 3, 4 and 8 only. Later, the way back is the automatic-clock box on its Graphics page,
-which writes `DpmMode` 1 whatever the last reason was.
+From KMD 0.7.208.1 the reason comes from `DpmClosedReason`, which `PersistFallback` writes next to the 0. That record
+outlives its boot: no later start overwrites it, and only a start that reads a `DpmMode` other than 0 deletes it
+(`bc250_dpm_decide`, `clear_closed`), the way `interop.c` handles `InteropClosedReason`. A repair therefore writes
+`DpmMode` 1 and deletes the record.
+
+A driver before 0.7.208.1 leaves `DpmLastReason` alone, so the installer reads that one instead (`legacy_record` in
+the table), with its own limit: `DpmLastReason` holds the fallback only inside the boot that wrote it. Every start
+with the SMU online overwrites it with what that start decided, and a start that reads `DpmMode` 0 decides
+NOT_REQUESTED (1). One start later the installer keeps such a driver's 0 and reports it as the tester's value. The
+control application has the same limit while it reads `DpmLastReason` 3, 4 and 8 on its Recovery page. The way back
+without any record is the automatic-clock box on its Graphics page, which writes `DpmMode` 1 whatever the last
+reason was.
 
 ## Runtime tuning (0.7.185)
 
