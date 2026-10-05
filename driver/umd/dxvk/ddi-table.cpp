@@ -22,6 +22,7 @@
 #include "ddi-output.h"
 #include "ddi-srv.h"
 #include "ddi-flush.h"
+#include "ddi-direct-flip.h"
 #include <type_traits>
 namespace bc250::umd {
 namespace {
@@ -35,8 +36,15 @@ void APIENTRY discard(D3D10DDI_HDEVICE,D3D11DDI_HANDLETYPE,void *,const D3D10_DD
 void APIENTRY debug_binary(D3D10DDI_HDEVICE,D3D10DDI_HSHADER,UINT,const void *) {}
 // TEXT_1BIT sampling is not exposed by this D3D11 shell.
 void APIENTRY text_filter(D3D10DDI_HDEVICE,UINT,UINT) {}
-void APIENTRY direct_flip(D3D10DDI_HDEVICE,D3D10DDI_HRESOURCE,D3D10DDI_HRESOURCE,UINT,BOOL *supported) {
-    if(supported)*supported=FALSE;
+// CheckDirectFlipSupport: may the runtime hand the application's back buffer straight to the window's
+// front buffer, with no copy in between. The rule is in ddi-direct-flip.h; here only the handles are
+// resolved. CheckDirectFlipFlags carries IMMEDIATE, which does not enter the rule (see the header).
+void APIENTRY direct_flip(D3D10DDI_HDEVICE,D3D10DDI_HRESOURCE front,D3D10DDI_HRESOURCE back,
+                          UINT,BOOL *supported) {
+    if(!supported)return;
+    auto *a=static_cast<DdiResource *>(front.pDrvPrivate);
+    auto *b=static_cast<DdiResource *>(back.pDrvPrivate);
+    *supported=a&&b&&direct_flip_supported(a->runtime_surface,b->runtime_surface)?TRUE:FALSE;
 }
 // Threading caps do not advertise command lists or deferred contexts. Keep
 // exact typed entries so an unexpected runtime call is diagnosed, not NULL.

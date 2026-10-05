@@ -9,6 +9,8 @@
 #include "adapter-identity.h"
 #include "ddi-srv.h"
 #include "ddi-query.h"
+#include "ddi-direct-flip.h"
+#include "ddi-resource.h"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -69,6 +71,88 @@ void negotiation() {
         level=D3D_FEATURE_LEVEL_9_1;
         const HRESULT at1=requested_feature_level(flags_for(pipeline),level);
         CHECK(pipeline<4 ? at1==S_OK : at1==E_INVALIDARG);
+    }
+}
+// M15.14: the rule behind pfnCheckDirectFlipSupport, and the table entry that resolves the handles.
+void ready_primary(RuntimeSurface &s,DXGI_FORMAT format,UINT width,UINT height,UINT pitch,UINT source) {
+    s.phase=SurfacePhase::ready; s.allocation.allocation=0x1000+source;
+    s.primary=true; s.vidpn_source=source; s.scanout=true;
+    s.desc.Format=format; s.desc.Width=width; s.desc.Height=height; s.pitch=pitch;
+}
+void direct_flip_rule() {
+    RuntimeSurface front,back;
+    ready_primary(front,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+    ready_primary(back,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+    back.allocation.allocation=0x2000;
+    // Two 8-bit primaries of one source, identical layout: the one case that may flip.
+    CHECK(direct_flip_supported(&front,&back) && direct_flip_supported(&back,&front));
+    // The same buffer is not a flip, and a missing surface is not one either.
+    CHECK(!direct_flip_supported(&front,&front) && !direct_flip_supported(&front,nullptr) &&
+          !direct_flip_supported(nullptr,&back) && !direct_flip_supported(nullptr,nullptr));
+    // Every single difference refuses: phase, storage, primary, source, geometry, pitch.
+    const auto refuses=[&](auto &&mutate) {
+        RuntimeSurface a,b; ready_primary(a,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+        ready_primary(b,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0); b.allocation.allocation=0x2000;
+        mutate(a,b);
+        return !direct_flip_supported(&a,&b) && !direct_flip_supported(&b,&a);
+    };
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.phase=SurfacePhase::paging; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.phase=SurfacePhase::quarantined; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.allocation.allocation=0; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.primary=false; }));
+    // The scan-out bit of the resource record. This is the clause that keeps the shell's answer FALSE
+    // while its primaries are still aperture-resident: an aperture address is one the display core
+    // cannot read and SetVidPnSourceAddress refuses, and by then the runtime has skipped the copy.
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.scanout=false; }));
+    CHECK(refuses([](RuntimeSurface &a,RuntimeSurface &b) { a.scanout=false; b.scanout=false; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.vidpn_source=1; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Width=1280; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Height=1080; }));
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.pitch=5120; }));
+    CHECK(refuses([](RuntimeSurface &a,RuntimeSurface &b) { a.pitch=0; b.pitch=0; }));
+    // A format difference refuses even between two scan-out rows: BGRA8 and X8 are not one mode.
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Format=DXGI_FORMAT_B8G8R8X8_UNORM; }));
+    // The sRGB view of the same storage row is the same scan-out row.
+    CHECK(!refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; }));
+    // The composed-only rows are never candidates, so a 10-bit or FP16 swap chain keeps its copy
+    // (HDR-ready Present architecture, owner 2026-09-29), and so does a format outside the table.
+    for (auto format:{DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT,
+                      DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_R32G32B32A32_FLOAT}) {
+        RuntimeSurface a,b; ready_primary(a,format,1920,1200,7680,0);
+        ready_primary(b,format,1920,1200,7680,0); b.allocation.allocation=0x2000;
+        CHECK(!direct_flip_supported(&a,&b));
+    }
+    // The table entry answers from the resources' surfaces, and a resource without one refuses.
+    const auto t=make_wddm2_0_device_table();
+    CHECK(t.pfnCheckDirectFlipSupport);
+    DdiResource a{},b{}; a.runtime_surface=&front; b.runtime_surface=&back;
+    D3D10DDI_HDEVICE device{}; D3D10DDI_HRESOURCE ha{},hb{};
+    ha.pDrvPrivate=&a; hb.pDrvPrivate=&b;
+    BOOL supported=FALSE;
+    t.pfnCheckDirectFlipSupport(device,ha,hb,0,&supported); CHECK(supported==TRUE);
+    supported=FALSE;
+    t.pfnCheckDirectFlipSupport(device,ha,hb,D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE,&supported);
+    CHECK(supported==TRUE);
+    DdiResource plain{}; D3D10DDI_HRESOURCE hplain{}; hplain.pDrvPrivate=&plain;
+    supported=TRUE; t.pfnCheckDirectFlipSupport(device,ha,hplain,0,&supported); CHECK(supported==FALSE);
+    supported=TRUE; t.pfnCheckDirectFlipSupport(device,ha,{},0,&supported); CHECK(supported==FALSE);
+    t.pfnCheckDirectFlipSupport(device,ha,hb,0,nullptr); // No output pointer: nothing is written.
+    // What a surface built the way the shipped shell builds one answers today: decode_create_resource
+    // writes PRIMARY and never SCANOUT, so a pair of this shell's own primaries is refused, which is
+    // the pre-M15.14 answer. The day the bit is written, this is the check that has to change -
+    // together with the placement, and not before it.
+    {
+        RuntimeSurface shipped,shipped2;
+        ready_primary(shipped,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+        ready_primary(shipped2,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+        shipped2.allocation.allocation=0x2000;
+        BC250_SURFACE_RESOURCE_PRIVATE record{};
+        record.Access=BC250_SURFACE_RESOURCE_PRIMARY;      // ddi-resource.cpp's own value for a primary
+        shipped.scanout=shipped2.scanout=(record.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
+        CHECK(!direct_flip_supported(&shipped,&shipped2));
+        record.Access|=BC250_SURFACE_RESOURCE_SCANOUT;     // and what the next increment must write
+        shipped.scanout=shipped2.scanout=(record.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
+        CHECK(direct_flip_supported(&shipped,&shipped2));
     }
 }
 void device_table() {
@@ -204,8 +288,9 @@ void adapter_policy() {
 }
 void test_wddm2_0_ddi() {
     negotiation();
+    direct_flip_rule();
     device_table();
     dxgi_table();
     adapter_policy();
-    std::cout << "PASS WDDM 2.0 DDI: negotiation, device and DXGI 1.4 tables, sparse policy gate, tiled entries (no GPU)\n";
+    std::cout << "PASS WDDM 2.0 DDI: negotiation, device and DXGI 1.4 tables, sparse policy gate, direct-flip rule, tiled entries (no GPU)\n";
 }
