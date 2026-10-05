@@ -45,6 +45,54 @@ namespace Bc250Mon
 
         public const uint FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512;
     }
+    // BC250_ESCAPE_CU_MODE, ABI 1, 184 bytes (driver/kmd/bc250kmd_escape.h; test_lab_state.py keeps the two
+    // layouts equal). The snapshot the start's GFX bring-up left behind: how many compute units this start
+    // applied, how many the registers name, and whether the 40 CU request is confirmed. No BAR access.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CuModeSnapshot
+    {
+        public uint Magic, Command, Status, Version;
+        public uint NtStatus, AbiVersion, Op, Flags;
+        public uint Requested;              // CuMode as read at start, 0 when absent (absent means 24)
+        public uint Applied;                // 24 or 40, 0 when unknown (not run, restore failed)
+        public uint Reason, ActiveCus, DisableMask, PciId;
+        public uint RlcPgCntl, RlcAonWgpMask;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] StockCc;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] StockSpi;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] Cc;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] User;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] Spi;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public uint[] ActiveWgps;
+        public ulong Generation;
+        public ulong ExpectedGeneration;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2)] public uint[] Reserved;
+
+        public const uint FlagValid = 1, FlagPending = 2, FlagConfirmed = 4,
+                          FlagStockRecord = 8, FlagConsistent = 16, FlagWrote = 32;
+        public const uint Stock = 24, Full = 40;
+    }
+    // BC250_ESCAPE_INTEROP, ABI 1, 104 bytes (driver/kmd/bc250kmd_escape.h; test_lab_state.py keeps the two
+    // layouts equal). The GPU DWM interop decision of this start. The registry mirror the driver leaves behind
+    // (`InteropLastState`) carries the same effective and requested bits but none of these flags, and without
+    // them a live session marker cannot be told from the trace of a machine that died with the path in use.
+    [StructLayout(LayoutKind.Sequential)]
+    public struct InteropSnapshot
+    {
+        public uint Magic, Command, Status, Version;
+        public uint NtStatus, AbiVersion, Op, Flags;
+        public uint Requested, Effective, Reason, ClosedReason;
+        public uint BlitSetting, CddSetting;
+        public uint BootId, SessionBootId;
+        public uint Users, Marks, Unmarks, MarkFailures;
+        public uint PreviousEnd, LastEnd;
+        public ulong Generation;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2)] public uint[] Reserved;
+
+        public const uint FlagValid = 1, FlagSession = 2, FlagUnclean = 4, FlagStale = 8,
+                          FlagClosedByDriver = 16, FlagPersisted = 32, FlagPersistFailed = 64,
+                          FlagBlitAbsent = 128, FlagCddAbsent = 256, FlagBlitUnreadable = 512,
+                          FlagCddUnreadable = 1024, FlagPowerCallback = 2048, FlagDown = 4096;
+    }
     // BC250_VIDEO_MEMORY of tools/win/bc250kmd_cli/bc250kmd_cli.c: the control DLL's digest of dxgkrnl's segment
     // statistics, 264 bytes (test_telemetry.py).
     [StructLayout(LayoutKind.Sequential)]
@@ -70,7 +118,15 @@ namespace Bc250Mon
         VideoMemorySnapshot ReadVideoMemory();
         ClockSnapshot ReadClock();
     }
-    public sealed class Driver : IDisposable, ITelemetrySource
+    // What OperatingPointProvider reads. All three are adapter-owned software snapshots answered with
+    // NoAdapterSynchronization alone, so none idles GPU scheduling or touches a BAR.
+    public interface ILabStateSource
+    {
+        CuModeSnapshot ReadCuMode();
+        StartHealthSnapshot ReadStartHealthSnapshot();
+        InteropSnapshot ReadInterop();
+    }
+    public sealed class Driver : IDisposable, ITelemetrySource, ILabStateSource
     {
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250ClockControl(uint op, uint mhz, uint mv, out ClockSnapshot data, uint bytes);
@@ -81,6 +137,13 @@ namespace Bc250Mon
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250StartHealth(uint op, ulong expectedGeneration, ulong expectedEpoch,
             out StartHealthSnapshot data, uint bytes);
+        // Added to bc250control.dll after 2026-09-30. A deployed DLL older than that has no such export and the
+        // first call throws EntryPointNotFoundException; OperatingPointProvider says so instead of going blind.
+        [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250CuMode(uint op, ulong expectedGeneration, out CuModeSnapshot data, uint bytes);
+        // The control application's own interop read. READ only; there is no write operation at all.
+        [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Interop(out InteropSnapshot data, uint bytes);
 
         internal static void ValidateStartHealthReply(int transport, StartHealthSnapshot data, uint op,
             ulong expectedGeneration, ulong expectedEpoch)
@@ -109,6 +172,37 @@ namespace Bc250Mon
         public static StartHealthSnapshot ReadStartHealth() { return StartHealthRequest(0, 0, 0); }
         public static StartHealthSnapshot ConfirmStartHealth(ulong generation, ulong epoch)
         { return StartHealthRequest(1, generation, epoch); }
+        public StartHealthSnapshot ReadStartHealthSnapshot() { return ReadStartHealth(); }
+
+        // BC250_ESCAPE_RUN_CU_MODE op READ (bc250kmd_cli.c, Bc250CuMode). READ only: the overlay reports the CU
+        // mode, it never confirms one - a confirmation belongs to the operator's `cumode confirm`.
+        public CuModeSnapshot ReadCuMode()
+        {
+            CuModeSnapshot data;
+            uint bytes = (uint)Marshal.SizeOf(typeof(CuModeSnapshot));
+            if (bytes != 184) throw new InvalidOperationException("KMD CU mode layout mismatch");
+            int status = Bc250CuMode(0, 0, out data, bytes);
+            if (status < 0)
+                throw new InvalidOperationException("KMD CU mode snapshot unavailable (0x" + status.ToString("X8") + ")");
+            if (data.Magic != 0x30353242 || data.Command != 22 || data.AbiVersion != 1 || data.Op != 0)
+                throw new InvalidOperationException("KMD CU mode reply mismatch");
+            return data;
+        }
+
+        // BC250_ESCAPE_RUN_INTEROP op READ (bc250kmd_cli.c, Bc250Interop): the start's decision, the session
+        // marker it found and what it did about it. Software state, NoAdapterSynchronization alone, no BAR access.
+        public InteropSnapshot ReadInterop()
+        {
+            InteropSnapshot data;
+            uint bytes = (uint)Marshal.SizeOf(typeof(InteropSnapshot));
+            if (bytes != 104) throw new InvalidOperationException("KMD interop layout mismatch");
+            int status = Bc250Interop(out data, bytes);
+            if (status < 0)
+                throw new InvalidOperationException("KMD interop snapshot unavailable (0x" + status.ToString("X8") + ")");
+            if (data.Magic != 0x30353242 || data.Command != 25 || data.AbiVersion != 1 || data.Op != 0)
+                throw new InvalidOperationException("KMD interop reply mismatch");
+            return data;
+        }
         readonly object _lock = new object();
         static ClockSnapshot Request(uint op, uint mhz, uint mv)
         {

@@ -74,13 +74,14 @@ namespace Bc250Mon
         Telemetry _telemetry;
 
         public const int LogCapacity = 300;
+        public const string StopFileName = "STOP";       // MeasurementGuardProvider lists it among the markers
         public event Action Changed;            // raised on any change, on the caller's thread
         public event Action TelemetryChanged;   // raised when the telemetry line would look different, not on Changed
 
         public State(string dataDir)
         {
             _logDir = Path.Combine(dataDir, "log");
-            _stopFile = Path.Combine(dataDir, "STOP");
+            _stopFile = Path.Combine(dataDir, StopFileName);
             Directory.CreateDirectory(_logDir);
             _stop = File.Exists(_stopFile);
         }

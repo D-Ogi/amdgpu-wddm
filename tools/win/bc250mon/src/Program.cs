@@ -33,9 +33,14 @@ namespace Bc250Mon
                 var actions = new Actions(state, driver, kmd);
                 try { new Api(state, actions).Start(); state.Log("api", Level.Info, "listening on " + Api.Prefix); }
                 catch (Exception e) { state.Log("api", Level.Error, "API not started: " + e.Message); }
+                // One DPM snapshot serves two panels: TelemetryProvider takes it anyway, the operating-point
+                // and measurement-guard panels read the last one instead of sending escapes of their own.
+                var dpmFeed = new DpmFeed();
                 ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider(), new KmdProvider(kmd, dataDir),
                                    new KmdInfoProvider(driver), new GraphicsPipelineProvider(dataDir), new GraphicsApiProvider(dataDir),
-                                   new VulkanInventoryProvider(dataDir), new TelemetryProvider(driver));
+                                   new VulkanInventoryProvider(dataDir), new TelemetryProvider(driver, dpmFeed),
+                                   new OperatingPointProvider(driver, dpmFeed, dataDir),
+                                   new MeasurementGuardProvider(dataDir, dpmFeed));
 
                 Application.EnableVisualStyles();
                 Application.Run(new OverlayForm(state, actions));

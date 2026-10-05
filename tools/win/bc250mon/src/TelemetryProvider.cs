@@ -105,19 +105,35 @@ namespace Bc250Mon
         readonly ITelemetrySource _source;
         readonly Func<TimeSpan> _clock;
         readonly TelemetryWindow _window = new TelemetryWindow();
+        // The operating-point panel reads the DPM governor's mode, cap and throttle out of the same snapshot
+        // this provider already takes four times a second, so that panel costs no escape of its own.
+        readonly DpmFeed _feed;
         TimeSpan? _due;
         string _lastNote;
 
-        public TelemetryProvider(ITelemetrySource source) : this(source, Stopwatch.StartNew()) { }
-        TelemetryProvider(ITelemetrySource source, Stopwatch watch) : this(source, () => watch.Elapsed) { }
-        public TelemetryProvider(ITelemetrySource source, Func<TimeSpan> clock) { _source = source; _clock = clock; }
+        public TelemetryProvider(ITelemetrySource source) : this(source, Stopwatch.StartNew(), null) { }
+        public TelemetryProvider(ITelemetrySource source, DpmFeed feed) : this(source, Stopwatch.StartNew(), feed) { }
+        TelemetryProvider(ITelemetrySource source, Stopwatch watch, DpmFeed feed) : this(source, () => watch.Elapsed, feed) { }
+        public TelemetryProvider(ITelemetrySource source, Func<TimeSpan> clock) : this(source, clock, null) { }
+        public TelemetryProvider(ITelemetrySource source, Func<TimeSpan> clock, DpmFeed feed)
+        { _source = source; _clock = clock; _feed = feed; }
         public string Name { get { return "telemetry"; } }
         public TimeSpan Period { get { return SamplePeriod; } }
 
         public void Poll(State state)
         {
-            try { _window.Add(_source.ReadDpm()); }
-            catch (Exception e) { _window.Fail(e.Message); }
+            try
+            {
+                DpmSnapshot sample = _source.ReadDpm();
+                _window.Add(sample);
+                // Published whatever the flags say: a stopped governor is exactly what the other panel reports.
+                if (_feed != null) _feed.Publish(sample);
+            }
+            catch (Exception e)
+            {
+                _window.Fail(e.Message);
+                if (_feed != null) _feed.Fail(e.Message);
+            }
             TimeSpan now = _clock();
             if (_due.HasValue && now < _due.Value) return;
             _due = now + PublishPeriod;
