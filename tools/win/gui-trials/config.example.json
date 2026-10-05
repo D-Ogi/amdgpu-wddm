@@ -1,0 +1,27 @@
+{
+  "_template_notice": "TEMPLATE ONLY - NOT RUNNABLE. Replace all identity, path and hash placeholders; review T2.md admission. Local --check does not authorize execution.",
+  "schema": 1,
+  "trial_id": "REPLACE-L1-UNIQUE-ID",
+  "trial": "L1",
+  "stage": "view",
+  "directory": "C:\\BC250\\tmp\\gui\\REPLACE-L1-UNIQUE-ID",
+  "duration_seconds": 180,
+  "target_computer_name": "REPLACE-LAB-NAME",
+  "expected_session_id": 1,
+  "expected_user_sid": "S-1-5-21-0-0-0-0",
+  "scenario_adapter": {
+    "path": "C:\\BC250\\REPLACE-STAGED-ARTIFACTS\\REPLACE-reviewed-scenario-adapter.ps1",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "bounded_helper": {
+    "path": "C:\\BC250\\REPLACE-STAGED-ARTIFACTS\\REPLACE-bounded-child.exe",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "artifacts": [
+    {
+      "path": "C:\\BC250\\REPLACE-STAGED-ARTIFACTS\\REPLACE-control-app.exe",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "scenario_arguments": []
+}

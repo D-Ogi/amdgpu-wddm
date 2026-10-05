@@ -1,0 +1,60 @@
+GUI lab kit host companion - prepared, not lab-validated
+
+Entry: run-trial.py. No dependency installation is needed (Python standard library).
+Without --execute, it only parses the local config. It does not construct Target,
+read credentials, query a device, or show UI. Example after filling the template:
+
+  python -B scratch/gui/codex/run-trial.py --config scratch/gui/codex/candidate.json --check
+
+Only the lead lab operator starts a stage:
+
+  python -B scratch/gui/codex/run-trial.py --config scratch/gui/codex/candidate.json --execute
+
+Prerequisites are T2.md/config.example.json, a built bounded-child helper with the
+active-console/cancel-file contract, the candidate artifacts and a reviewed,
+hash-pinned scenario adapter. The adapter is not supplied by this kit. Mutating
+stages additionally require the integrator's engine cancellation/closure admission
+and per-run closure receipts. Fable497 explicitly keeps these stages refused until
+that contract exists. Passing the local config check establishes none of those facts.
+
+The runner copies only the chosen PS1 entry, common/firewall helpers and config via
+target.py. Artifact paths in the config are already-staged LAB paths. It atomically
+reserves a fresh C:\BC250\tmp\gui\<trial_id>; a reused remote directory is refused
+before tar can overwrite its evidence. Use a new id and config for every stage.
+Local results also use create-new scratch/gui/codex/runs/<trial_id>.
+
+The lab owns its absolute <=180 s deadline and its own STOP and thermal guard.
+The host waits for a running acknowledgement before taking images or plug samples.
+It observes at 5 s intervals, records new protocol events once, and calls mon.py's
+existing status/image APIs through target.py with a short transport timeout. Every
+image request is scale=0.5. It captures initial/terminal and bounded stage images;
+this is not a video recording or automatic verification of GUI behavior.
+
+L-CU: raw smart-plug telemetry is logged at start and about every 15 s while active.
+It preserves the tool's calibration warning and unknown measurement age. Temperature
+comes from the independent lab-side guard, not from an inferred power/temperature
+relation. The host never controls the relay. A missing power read fails this kit;
+the supervisor still independently observes the temperature and deadline.
+
+Stop is asynchronous. The host requests Stop on interruption/failure/deadline, then
+allows at most 20 s to observe closure before Cleanup. This host-side observation
+window does not extend the lab's work deadline. Cleanup requires can_cleanup=true
+and the explicit cleaned acknowledgement. Uncertain closure is recovery-required,
+never PASS. Remote result.json, logs and original config survive Cleanup for the
+next stage's previous_result and manual inspection. This runner does not reboot,
+restart DWM, install an artifact, or synthesize a scenario result itself.
+
+A terminal evidence-ready means the adapter/supervisor supplied their receipts.
+host-result.json always sets acceptance_pass=false and operator-checklist-required.
+Fable must assess T2.md's pass criteria and screenshots before accepting the test.
+The host cannot convert a successful process exit into a correct visual result.
+
+Offline validation performed here: test_run_trial.py uses fakes for every operation
+and never instantiates LabIO on --check. Run:
+
+  python -B -m unittest discover -s scratch/gui/codex -p test_run_trial.py -v
+
+The tests cover remote reuse refusal, Start acknowledgement loss, event identity,
+stage capture deduplication, STOP, deadlines, asynchronous task closure and cleanup
+failure. They do not prove Scheduled Tasks, firewall behavior, UI automation, the
+engine cancellation contract, or GPU state on the lab.

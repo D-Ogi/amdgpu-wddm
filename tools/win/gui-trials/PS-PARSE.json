@@ -1,0 +1,47 @@
+{
+    "powershell":  "5.1.26100.9444",
+    "mode":  "parse-only",
+    "lab_contacted":  false,
+    "files":  [
+                  {
+                      "file":  "L1.ps1",
+                      "sha256":  "67121506C86EBE0B72D4C196040810D5857030767EFB6E8D6C305F06C6A4A7C5",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "L3.ps1",
+                      "sha256":  "19B3B9AEA9F0CDDF87EADD07CBD7D4D76B3AA3C88503E64A93BF9F12852BEE8F",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "L4.ps1",
+                      "sha256":  "73EBC8916BDED4524BAB4FEC38798890627D7673A7516BC8BB854BDEB72F56BE",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "L5.ps1",
+                      "sha256":  "F4B4DCBEDD95ACE111CC48BFB4BFF5D28786CFFD160C82F1EE1ABA8444CBC5FB",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "L-CU.ps1",
+                      "sha256":  "7E5481186485EED00E6B86BEAB5F2A711E6DAA10357F18DD7294FBDFB52E7E89",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "L-OFF.ps1",
+                      "sha256":  "8E45943FCE50AC6B261C1654BDCFE3A2D44550FCB501BBA8926C1F75B74A47CA",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "gui-trial-common.ps1",
+                      "sha256":  "B9CD5605712D737A34797004297FF98921215B50F23F310305045FC3D015CF1D",
+                      "parse_errors":  0
+                  },
+                  {
+                      "file":  "gui-trial-firewall.ps1",
+                      "sha256":  "CA7A09E916667C1E1D648500230209939D52265BEF9B54C477D25641CBAFB279",
+                      "parse_errors":  0
+                  }
+              ]
+}
