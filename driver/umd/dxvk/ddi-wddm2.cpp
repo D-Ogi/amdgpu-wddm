@@ -151,14 +151,14 @@ void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT format,UINT count,UINT flag
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &o=owner(h);
         if (!out || !o.device() || (flags & ~UINT(D3DWDDM1_3DDI_CHECK_MULTISAMPLE_QUALITY_LEVELS_TILED_RESOURCE))) {
-            report_ddi_error(o,E_INVALIDARG,DdiErrorClass::invalid_arg); return;
+            report_ddi_error(o,E_INVALIDARG,DdiErrorClass::check_invalid_arg); return;
         }
         UINT quality=0;
         const HRESULT hr=o.device()->CheckMultisampleQualityLevels1(format,count,flags,&quality);
         if (hr==E_INVALIDARG) return; // unsupported combination: zero levels, as the D3D11.1 entry
-        if (FAILED(hr)) { report_ddi_error(o,hr,DdiErrorClass::invalid_arg); return; }
+        if (FAILED(hr)) { report_ddi_error(o,hr,DdiErrorClass::check_invalid_arg); return; }
         *out=quality;
-    },DdiErrorClass::invalid_arg);
+    },DdiErrorClass::check_invalid_arg);
 }
 // Tiled resources: DXVK's ID3D11DeviceContext2/ID3D11Device2 implementations (sparse binding in the
 // hosted ICD). Runtime-validated arguments; refusals from the engine go to SetErrorCb.

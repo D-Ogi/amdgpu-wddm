@@ -28,10 +28,16 @@ struct HostBridge {
    bc250_host_progress progress[16];
    bool submission_failed;
    bool device_lost;
+   // The loss has reached the runtime through pfnSetErrorCb. A check-type entry may not report device
+   // removal, so a loss detected inside one stays unreported until an entry whose page allows it runs.
+   bool lost_reported;
    const UINT64 *present_cpu;
    D3DKMT_HANDLE present_sync;
    UINT64 present_value, present_waited[16];
 };
+// Latch a loss whose status the caller already carries: the entry that got it reports it through its
+// own error class, so the bridge must not report it a second time.
+inline void latch_device_lost(HostBridge &bridge) { bridge.device_lost=true; bridge.lost_reported=true; }
 using FlushEngine = HRESULT (*)(void *);
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
     D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine);

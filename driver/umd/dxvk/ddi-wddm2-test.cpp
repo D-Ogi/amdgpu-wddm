@@ -227,6 +227,75 @@ void planar_views() {
     convert_wddm2_uav(uav,uav11,plane);
     CHECK(!plane && convert_uav(uav11,1,1,1,access)==E_INVALIDARG);
 }
+// The other table. A D3D11.1 create argument has no plane field, so the view format is the only thing
+// that can name a chroma plane there, and the engine derives the plane from it. The plan carries that
+// decision: ddi_plane_from_view_format produces the legacy description, which has no plane field, and
+// the engine entry that reads it derives the plane. Sending plane 0 instead would refuse every planar
+// view on that table and cost the device there, which is BD-071 moved one table across.
+void plane_from_view_format() {
+    D3D11DDIARG_CREATESHADERRESOURCEVIEW srv{};
+    srv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; srv.Format=DXGI_FORMAT_R8G8_UNORM;
+    srv.Tex2D={0,0,1,1}; // MostDetailedMip, FirstArraySlice, MipLevels, ArraySize
+    SrvRequest request{};
+    CHECK(plan_srv(srv,1,1,ddi_plane_from_view_format,request)==S_OK && request.derive_plane &&
+          request.legacy.Format==DXGI_FORMAT_R8G8_UNORM &&
+          request.legacy.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2D &&
+          request.legacy.Texture2D.MipLevels==1 && !request.legacy.Texture2D.MostDetailedMip);
+    // A named plane keeps the D3D11.1 description with the plane in it, and derives nothing.
+    CHECK(plan_srv(srv,1,1,1,request)==S_OK && !request.derive_plane &&
+          request.desc1.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2D &&
+          request.desc1.Texture2D.PlaneSlice==1);
+    CHECK(plan_srv(srv,1,1,0,request)==S_OK && !request.derive_plane && !request.desc1.Texture2D.PlaneSlice);
+    // An array view and a multisampled view travel the same way, and the array range survives.
+    srv.Tex2D={0,1,1,2};
+    CHECK(plan_srv(srv,3,1,ddi_plane_from_view_format,request)==S_OK && request.derive_plane &&
+          request.legacy.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2DARRAY &&
+          request.legacy.Texture2DArray.FirstArraySlice==1 && request.legacy.Texture2DArray.ArraySize==2);
+    srv.Tex2D={0,0,1,1};
+    CHECK(plan_srv(srv,1,4,ddi_plane_from_view_format,request)==S_OK && request.derive_plane &&
+          request.legacy.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2DMS);
+    // A buffer view has no plane field in either description, and the derive request still works.
+    srv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; srv.BufferEx={2,4,D3D11_DDI_BUFFEREX_SRV_FLAG_RAW};
+    CHECK(plan_srv(srv,1,1,ddi_plane_from_view_format,request)==S_OK && request.derive_plane &&
+          request.legacy.ViewDimension==D3D11_SRV_DIMENSION_BUFFEREX &&
+          request.legacy.BufferEx.FirstElement==2 && request.legacy.BufferEx.NumElements==4 &&
+          request.legacy.BufferEx.Flags==UINT(D3D11_BUFFEREX_SRV_FLAG_RAW));
+    // A refusal is still a refusal, whoever names the plane.
+    srv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; srv.Tex2D={0,0,1,0};
+    CHECK(plan_srv(srv,1,1,ddi_plane_from_view_format,request)==E_INVALIDARG);
+
+    D3D10DDIARG_CREATERENDERTARGETVIEW rtv{};
+    rtv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; rtv.Format=DXGI_FORMAT_R8G8_UNORM;
+    rtv.Tex2D={2,0,1}; // MipSlice, FirstArraySlice, ArraySize
+    RtvRequest target{};
+    CHECK(plan_rtv(rtv,1,1,ddi_plane_from_view_format,target)==S_OK && target.derive_plane &&
+          target.legacy.Format==DXGI_FORMAT_R8G8_UNORM &&
+          target.legacy.ViewDimension==D3D11_RTV_DIMENSION_TEXTURE2D && target.legacy.Texture2D.MipSlice==2);
+    CHECK(plan_rtv(rtv,1,1,1,target)==S_OK && !target.derive_plane && target.desc1.Texture2D.PlaneSlice==1);
+    CHECK(plan_rtv(rtv,4,1,ddi_plane_from_view_format,target)==S_OK && target.derive_plane &&
+          target.legacy.ViewDimension==D3D11_RTV_DIMENSION_TEXTURE2DARRAY &&
+          target.legacy.Texture2DArray.MipSlice==2 && target.legacy.Texture2DArray.ArraySize==1);
+    rtv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D; rtv.Tex3D={1,2,3};
+    CHECK(plan_rtv(rtv,1,1,ddi_plane_from_view_format,target)==S_OK && target.derive_plane &&
+          target.legacy.ViewDimension==D3D11_RTV_DIMENSION_TEXTURE3D &&
+          target.legacy.Texture3D.MipSlice==1 && target.legacy.Texture3D.FirstWSlice==2 &&
+          target.legacy.Texture3D.WSize==3);
+
+    D3D11DDIARG_CREATEUNORDEREDACCESSVIEW uav{};
+    uav.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; uav.Format=DXGI_FORMAT_R8G8_UNORM;
+    uav.Tex2D={3,0,1}; // MipSlice, FirstArraySlice, ArraySize
+    UavRequest access{};
+    CHECK(plan_uav(uav,1,1,ddi_plane_from_view_format,access)==S_OK && access.derive_plane &&
+          access.legacy.Format==DXGI_FORMAT_R8G8_UNORM &&
+          access.legacy.ViewDimension==D3D11_UAV_DIMENSION_TEXTURE2D && access.legacy.Texture2D.MipSlice==3);
+    CHECK(plan_uav(uav,1,1,1,access)==S_OK && !access.derive_plane && access.desc1.Texture2D.PlaneSlice==1);
+    uav.ResourceDimension=D3D10DDIRESOURCE_BUFFER;
+    uav.Buffer={1,5,D3D11_DDI_BUFFER_UAV_FLAG_COUNTER};
+    CHECK(plan_uav(uav,1,1,ddi_plane_from_view_format,access)==S_OK && access.derive_plane &&
+          access.legacy.ViewDimension==D3D11_UAV_DIMENSION_BUFFER &&
+          access.legacy.Buffer.FirstElement==1 && access.legacy.Buffer.NumElements==5 &&
+          access.legacy.Buffer.Flags==UINT(D3D11_BUFFER_UAV_FLAG_COUNTER));
+}
 void device_table() {
     const auto t=make_wddm2_0_device_table();
     const auto b=make_render_device_table();
@@ -276,9 +345,9 @@ void device_table() {
     CHECK(!query.object && reported==4);
     UINT packed=7,tiles=7; D3D10DDI_HRESOURCE none{};
     t.pfnGetMipPacking(h,none,&packed,&tiles);
-    // GetMipPacking allows E_INVALIDARG and never device removal, so a lost device reports the
-    // strongest status this page does allow (ddi-error-policy.h).
-    CHECK(!packed && !tiles && reported==5 && lastReported==E_INVALIDARG);
+    // GetMipPacking allows E_INVALIDARG for a missing argument, and it is not a check-type entry, so
+    // a lost device is reported as lost (ddi-error-policy.h, BD-071 review).
+    CHECK(!packed && !tiles && reported==5 && lastReported==D3DDDIERR_DEVICEREMOVED);
     D3DWDDM1_3DDI_TILED_RESOURCE_COORDINATE start{}; D3DWDDM1_3DDI_TILE_REGION_SIZE size{}; size.NumTiles=1;
     t.pfnUpdateTileMappings(h,none,1,&start,&size,none,0,nullptr,nullptr,nullptr,0);
     t.pfnCopyTileMappings(h,none,&start,none,&start,&size,0);
@@ -367,8 +436,9 @@ void test_wddm2_0_ddi() {
     negotiation();
     direct_flip_rule();
     planar_views();
+    plane_from_view_format();
     device_table();
     dxgi_table();
     adapter_policy();
-    std::cout << "PASS WDDM 2.0 DDI: negotiation, device and DXGI 1.4 tables, sparse policy gate, direct-flip rule, plane views, tiled entries (no GPU)\n";
+    std::cout << "PASS WDDM 2.0 DDI: negotiation, device and DXGI 1.4 tables, sparse policy gate, direct-flip rule, plane views, plane from the view format, tiled entries (no GPU)\n";
 }

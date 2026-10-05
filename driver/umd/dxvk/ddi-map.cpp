@@ -34,7 +34,7 @@ void APIENTRY map(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,UINT subresource,
         // Translate API status to DDI status. Do not retry a
         // DO_NOT_WAIT request or expose a stale pointer on failure.
         if (FAILED(hr)) {
-            if (hr==D3DDDIERR_DEVICEREMOVED) owner.bridge().device_lost=true;
+            if (hr==D3DDDIERR_DEVICEREMOVED) latch_device_lost(owner.bridge());
             report_ddi_error(owner,hr,DdiErrorClass::still_drawing); return;
         }
         if (!result.pData) { context.Unmap(s->object,subresource); report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return; }

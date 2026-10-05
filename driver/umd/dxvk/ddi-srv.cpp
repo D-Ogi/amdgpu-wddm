@@ -52,6 +52,41 @@ HRESULT convert_srv(const D3D11DDIARG_CREATESHADERRESOURCEVIEW &s,UINT layers,UI
     }
     out=d; return S_OK;
 }
+void demote_srv(const D3D11_SHADER_RESOURCE_VIEW_DESC1 &s,D3D11_SHADER_RESOURCE_VIEW_DESC &out) {
+    D3D11_SHADER_RESOURCE_VIEW_DESC d{}; d.Format=s.Format; d.ViewDimension=s.ViewDimension;
+    switch(s.ViewDimension) {
+    case D3D11_SRV_DIMENSION_BUFFER: d.Buffer={s.Buffer.FirstElement,s.Buffer.NumElements}; break;
+    case D3D11_SRV_DIMENSION_BUFFEREX: d.BufferEx={s.BufferEx.FirstElement,s.BufferEx.NumElements,s.BufferEx.Flags}; break;
+    case D3D11_SRV_DIMENSION_TEXTURE1D: d.Texture1D={s.Texture1D.MostDetailedMip,s.Texture1D.MipLevels}; break;
+    case D3D11_SRV_DIMENSION_TEXTURE1DARRAY:
+        d.Texture1DArray={s.Texture1DArray.MostDetailedMip,s.Texture1DArray.MipLevels,
+            s.Texture1DArray.FirstArraySlice,s.Texture1DArray.ArraySize}; break;
+    // The plane field stops here: the engine derives the plane from the view format instead.
+    case D3D11_SRV_DIMENSION_TEXTURE2D: d.Texture2D={s.Texture2D.MostDetailedMip,s.Texture2D.MipLevels}; break;
+    case D3D11_SRV_DIMENSION_TEXTURE2DARRAY:
+        d.Texture2DArray={s.Texture2DArray.MostDetailedMip,s.Texture2DArray.MipLevels,
+            s.Texture2DArray.FirstArraySlice,s.Texture2DArray.ArraySize}; break;
+    case D3D11_SRV_DIMENSION_TEXTURE2DMS: break;
+    case D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY:
+        d.Texture2DMSArray={s.Texture2DMSArray.FirstArraySlice,s.Texture2DMSArray.ArraySize}; break;
+    case D3D11_SRV_DIMENSION_TEXTURE3D: d.Texture3D={s.Texture3D.MostDetailedMip,s.Texture3D.MipLevels}; break;
+    case D3D11_SRV_DIMENSION_TEXTURECUBE: d.TextureCube={s.TextureCube.MostDetailedMip,s.TextureCube.MipLevels}; break;
+    case D3D11_SRV_DIMENSION_TEXTURECUBEARRAY:
+        d.TextureCubeArray={s.TextureCubeArray.MostDetailedMip,s.TextureCubeArray.MipLevels,
+            s.TextureCubeArray.First2DArrayFace,s.TextureCubeArray.NumCubes}; break;
+    default: break; // The conversion above produces no other dimension.
+    }
+    out=d;
+}
+HRESULT plan_srv(const D3D11DDIARG_CREATESHADERRESOURCEVIEW &s,UINT layers,UINT samples,UINT plane,
+    SrvRequest &out) {
+    SrvRequest request{};
+    request.derive_plane=plane==ddi_plane_from_view_format;
+    const HRESULT hr=convert_srv(s,layers,samples,request.derive_plane ? 0u : plane,request.desc1);
+    if (FAILED(hr)) return hr;
+    if (request.derive_plane) demote_srv(request.desc1,request.legacy);
+    out=request; return S_OK;
+}
 namespace {
 DeviceOwner &owner(D3D10DDI_HDEVICE h) { return *static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner; }
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATESHADERRESOURCEVIEW *) { return sizeof(DdiShaderResourceView); }
@@ -84,11 +119,21 @@ void create_shader_resource_view(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATESHAD
             if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE3D) { refuse(); return; } break;
         default: refuse(); return;
         }
-        D3D11_SHADER_RESOURCE_VIEW_DESC1 d{}; HRESULT hr=convert_srv(*desc,layers,samples,plane,d);
-        ID3D11ShaderResourceView1 *view=nullptr;
-        // The plane travels in the view description, so the engine reads the plane the runtime named
-        // instead of deriving one from the view format.
-        if (SUCCEEDED(hr)) hr=o.device()->CreateShaderResourceView1(r->object,&d,&view);
+        SrvRequest request{}; HRESULT hr=plan_srv(*desc,layers,samples,plane,request);
+        ID3D11ShaderResourceView *view=nullptr;
+        if (SUCCEEDED(hr)) {
+            if (request.derive_plane) {
+                // The D3D11.1 table names no plane, so the engine reads the view format and picks the
+                // plane of that format in the resource's format family.
+                hr=o.device()->CreateShaderResourceView(r->object,&request.legacy,&view);
+            } else {
+                // The plane travels in the description, so the engine takes the plane the WDDM 2.0
+                // runtime named instead of deriving one.
+                ID3D11ShaderResourceView1 *planar=nullptr;
+                hr=o.device()->CreateShaderResourceView1(r->object,&request.desc1,&planar);
+                view=planar;
+            }
+        }
         if (FAILED(hr)) {
             if (view) view->Release();
             report_ddi_error(o,hr,DdiErrorClass::out_of_memory);
@@ -99,7 +144,8 @@ void create_shader_resource_view(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATESHAD
 namespace {
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATESHADERRESOURCEVIEW *desc,
     D3D10DDI_HSHADERRESOURCEVIEW handle,D3D10DDI_HRTSHADERRESOURCEVIEW runtime) {
-    create_shader_resource_view(h,desc,0,handle,runtime); // The D3D11.1 argument has no plane.
+    // The D3D11.1 argument has no plane field, so the engine derives the plane from the view format.
+    create_shader_resource_view(h,desc,ddi_plane_from_view_format,handle,runtime);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HSHADERRESOURCEVIEW handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) { auto *s=static_cast<DdiShaderResourceView *>(handle.pDrvPrivate); if (s && s->object) { s->object->Release(); s->object=nullptr; } });

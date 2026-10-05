@@ -35,10 +35,13 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     // and the engine carries them without a usage of their own, so a planar image is still sampled
     // and written the way its other bind flags ask. The media pipeline asks for NV12 with
     // SHADER_RESOURCE|DECODER, and E_NOTIMPL for that costs the device, because CreateResource may
-    // not report it (BD-071). CAPTURE has no API flag: it is consumed and carries no usage.
+    // not report it (BD-071). D3D11_DDI_BIND_CAPTURE has no API flag at all, so the engine cannot be
+    // asked for a capture-capable resource: the request falls through to the answer below, which
+    // fails that one call. Consuming the bit would hand the video capture engine a resource it cannot
+    // write (BD-071 review). This driver reports no CAPTURE format support, so the runtime does not
+    // ask.
     BIND(D3D11_DDI_BIND_DECODER,D3D11_BIND_DECODER);
     BIND(D3D11_DDI_BIND_VIDEO_ENCODER,D3D11_BIND_VIDEO_ENCODER);
-    BIND(D3D11_DDI_BIND_CAPTURE,0u);
 #undef BIND
     // A bind flag this driver does not know is a request it cannot serve, which is what
     // DXGI_DDI_ERR_UNSUPPORTED says. The runtime then fails the caller instead of losing the device.

@@ -162,7 +162,8 @@ int main() {
         const DdiErrorClass classes[]={DdiErrorClass::removed_only,DdiErrorClass::out_of_memory,
             DdiErrorClass::unsupported,DdiErrorClass::non_exclusive,DdiErrorClass::still_drawing,
             DdiErrorClass::invalid_arg,DdiErrorClass::invalid_arg_oom,DdiErrorClass::fail_or_invalid_arg,
-            DdiErrorClass::unsupported_check,DdiErrorClass::nothing};
+            DdiErrorClass::check_invalid_arg,DdiErrorClass::check_fail_or_invalid_arg,
+            DdiErrorClass::check_unsupported,DdiErrorClass::nothing};
         const HRESULT statuses[]={D3DDDIERR_DEVICEREMOVED,E_OUTOFMEMORY,E_INVALIDARG,E_FAIL,E_NOTIMPL,
             E_UNEXPECTED,DXGI_DDI_ERR_UNSUPPORTED,DXGI_DDI_ERR_NONEXCLUSIVE,DXGI_DDI_ERR_WASSTILLDRAWING,
             DXGI_ERROR_DEVICE_REMOVED,DXGI_ERROR_DEVICE_HUNG,DXGI_ERROR_DRIVER_INTERNAL_ERROR,
@@ -177,15 +178,25 @@ int main() {
                 if (reported!=(ddi_status_allowed(policy,mapped) ? mapped : ddi_class_internal_failure(policy))) fail(__LINE__);
             }
         }
-        // The two statuses BD-071 was made of. E_INVALIDARG from CreateShaderResourceView and
-        // E_NOTIMPL from CreateResource are both outside their pages and both end as device removal.
-        // A check-type entry may not report removal, so it reports its own strongest status instead.
-        if (ddi_class_status(DdiErrorClass::out_of_memory,E_INVALIDARG)!=D3DDDIERR_DEVICEREMOVED ||
+        // Only a capability-check entry refuses device removal ("The driver cannot return
+        // D3DDDIERR_DEVICEREMOVED for any check-type function", handling-errors.md). The tile and
+        // GenMips classes carry E_INVALIDARG next to removal, so a lost device is reported as lost
+        // and a missing argument as a bad argument (BD-071 review).
+        if (ddi_class_status(DdiErrorClass::invalid_arg,D3DDDIERR_DEVICEREMOVED)!=D3DDDIERR_DEVICEREMOVED ||
+            ddi_class_status(DdiErrorClass::invalid_arg,E_INVALIDARG)!=E_INVALIDARG ||
+            ddi_class_status(DdiErrorClass::invalid_arg_oom,DXGI_ERROR_DEVICE_HUNG)!=D3DDDIERR_DEVICEREMOVED ||
+            ddi_class_status(DdiErrorClass::fail_or_invalid_arg,DXGI_ERROR_DEVICE_HUNG)!=D3DDDIERR_DEVICEREMOVED ||
+            ddi_class_status(DdiErrorClass::fail_or_invalid_arg,E_FAIL)!=E_FAIL ||
+            // The two statuses BD-071 was made of. E_INVALIDARG from CreateShaderResourceView and
+            // E_NOTIMPL from CreateResource are both outside their pages and both end as removal.
+            ddi_class_status(DdiErrorClass::out_of_memory,E_INVALIDARG)!=D3DDDIERR_DEVICEREMOVED ||
             ddi_class_status(DdiErrorClass::unsupported,E_NOTIMPL)!=D3DDDIERR_DEVICEREMOVED ||
             ddi_class_status(DdiErrorClass::unsupported,DXGI_DDI_ERR_UNSUPPORTED)!=DXGI_DDI_ERR_UNSUPPORTED ||
-            ddi_class_status(DdiErrorClass::invalid_arg,D3DDDIERR_DEVICEREMOVED)!=E_INVALIDARG ||
-            ddi_class_status(DdiErrorClass::fail_or_invalid_arg,DXGI_ERROR_DEVICE_HUNG)!=E_FAIL ||
-            ddi_class_status(DdiErrorClass::unsupported_check,E_FAIL)!=DXGI_DDI_ERR_UNSUPPORTED ||
+            // A check-type entry reports the strongest status its own page allows instead.
+            ddi_class_status(DdiErrorClass::check_invalid_arg,D3DDDIERR_DEVICEREMOVED)!=E_INVALIDARG ||
+            ddi_class_status(DdiErrorClass::check_fail_or_invalid_arg,DXGI_ERROR_DEVICE_HUNG)!=E_FAIL ||
+            ddi_class_status(DdiErrorClass::check_unsupported,E_FAIL)!=DXGI_DDI_ERR_UNSUPPORTED ||
+            ddi_class_status(DdiErrorClass::nothing,D3DDDIERR_DEVICEREMOVED)!=S_OK ||
             // The API status is not the DDI status: ddi_map_status owns that translation.
             ddi_class_status(DdiErrorClass::still_drawing,DXGI_ERROR_WAS_STILL_DRAWING)!=D3DDDIERR_DEVICEREMOVED ||
             ddi_class_status(DdiErrorClass::still_drawing,ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true))!=
@@ -254,6 +265,14 @@ int main() {
     table.pfnCheckCounter(h,static_cast<D3D10DDI_QUERY>(0x40000000),&ct,&activeCounters,
         nullptr,&nameLength,nullptr,&unitLength,nullptr,&descriptionLength);
     if(capabilityErrors!=4 || capabilityStatus!=E_INVALIDARG || activeCounters || nameLength || unitLength || descriptionLength)fail(__LINE__);
+    // A runtime-defined (well-known) counter is a different answer: this driver supports none, which
+    // is what DXGI_DDI_ERR_UNSUPPORTED says. E_INVALIDARG belongs to a device-dependent identifier
+    // outside the advertised range (BD-071 review, handling-errors.md AllowWKCheckCounterErrors).
+    activeCounters=99;nameLength=99;unitLength=99;descriptionLength=99;
+    table.pfnCheckCounter(h,D3D10DDI_QUERY_EVENT,&ct,&activeCounters,
+        nullptr,&nameLength,nullptr,&unitLength,nullptr,&descriptionLength);
+    if(capabilityErrors!=5 || capabilityStatus!=DXGI_DDI_ERR_UNSUPPORTED || activeCounters ||
+        nameLength || unitLength || descriptionLength)fail(__LINE__);
     owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     if(!table.pfnCheckCounterInfo)fail(__LINE__);
     D3D10DDI_COUNTER_INFO counterInfo{};
@@ -453,11 +472,16 @@ int main() {
         nv12.BindFlags=D3D11_DDI_BIND_VIDEO_ENCODER|D3D10_DDI_BIND_RENDER_TARGET;
         if (convert_resource(nv12,nv12out)!=S_OK ||
             nv12out.texture2d.BindFlags!=(D3D11_BIND_VIDEO_ENCODER|D3D11_BIND_RENDER_TARGET)) fail(__LINE__);
-        // CAPTURE and DISCARD_ON_PRESENT have no engine flag: both are consumed, the rest stands.
-        nv12.BindFlags=D3D11_DDI_BIND_CAPTURE|D3D10_DDI_BIND_SHADER_RESOURCE;
+        // DISCARD_ON_PRESENT has no engine flag and asks for nothing: it is consumed.
+        nv12.BindFlags=D3D10_DDI_BIND_SHADER_RESOURCE;
         nv12.MiscFlags=D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT;
         if (convert_resource(nv12,nv12out)!=S_OK || nv12out.texture2d.BindFlags!=D3D11_BIND_SHADER_RESOURCE ||
             nv12out.texture2d.MiscFlags) fail(__LINE__);
+        // CAPTURE has no engine flag either, but it does ask for something: an output of the video
+        // capture engine. Consuming it would create a resource that cannot serve the request, so the
+        // request is refused instead, and the device survives the refusal (BD-071 review).
+        nv12.MiscFlags=0; nv12.BindFlags=D3D11_DDI_BIND_CAPTURE|D3D10_DDI_BIND_SHADER_RESOURCE;
+        if (convert_resource(nv12,nv12out)!=DXGI_DDI_ERR_UNSUPPORTED) fail(__LINE__);
         // A bind or misc flag this driver does not know is refused without losing the device.
         nv12.MiscFlags=0; nv12.BindFlags=0x40000000;
         if (convert_resource(nv12,nv12out)!=DXGI_DDI_ERR_UNSUPPORTED) fail(__LINE__);
@@ -663,8 +687,9 @@ int main() {
     table.pfnVsSetShaderResources(h,127,1,&svh); table.pfnPsSetShaderResources(h,0,0,nullptr);
     table.pfnGsSetShaderResources(h,0,0,nullptr); table.pfnHsSetShaderResources(h,0,0,nullptr);
     table.pfnDsSetShaderResources(h,0,0,nullptr); table.pfnCsSetShaderResources(h,0,0,nullptr);
-    // GenMips allows E_FAIL and E_INVALIDARG, and never device removal.
-    allowedError=E_FAIL; table.pfnGenMips(h,svh); allowedError=D3DDDIERR_DEVICEREMOVED;
+    // GenMips allows E_FAIL and E_INVALIDARG next to device removal. It is not a check-type entry, so
+    // a lost context reports the device as lost, which is what this owner without an engine is.
+    table.pfnGenMips(h,svh);
     table.pfnDestroyShaderResourceView(h,svh);
     if (errors!=88 || sview.object || owner.runtime().domain.entered()) fail(__LINE__);
     D3D11_BUFFER_DESC indirectDesc{}; indirectDesc.ByteWidth=64;

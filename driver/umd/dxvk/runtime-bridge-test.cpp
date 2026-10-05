@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-bridge.h"
+#include "ddi-error-policy.h"
 #include <cstdlib>
 #include <iostream>
 #include <thread>
 using namespace bc250::umd;
 static void require(bool ok) { if (!ok) std::abort(); }
 static int identity, context;
+static unsigned hostReports; static HRESULT hostReported;
+static void APIENTRY count_host_error(D3D10DDI_HRTCORELAYER, HRESULT hr) { ++hostReports; hostReported=hr; }
 static unsigned allocated, created, destroyed, submitted, waited, updated;
 static HRESULT APIENTRY allocate(HANDLE device, D3DDDICB_ALLOCATE *a) {
     require(device==&identity && a->NumAllocations==1 && a->PrivateDriverDataSize==4);
@@ -100,7 +103,28 @@ int main() {
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)==static_cast<int32_t>(0xc00002b6u));
     lost=0;
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)==static_cast<int32_t>(0xc00002b6u));
-    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, worker denial, teardown\n";
+    // The host reports a lost device from inside the engine, under whichever DDI entry is running, so
+    // it reports through that entry's error class. A capability-check entry accepts no status at all,
+    // and the report then waits for an entry whose page allows device removal: the loss is not lost
+    // (BD-071 review).
+    {
+        RuntimeDevice losing; losing.hDevice=&identity;
+        losing.UMCallbacks.pfnSetErrorCb=count_host_error;
+        HostBridge reporting{}; reporting.device=&losing;
+        volatile UINT64 gone=UINT64_MAX; losing.pagingFence=&gone;
+        RuntimeDomain::Scope reportingScope(losing.domain);
+        hostReports=0; hostReported=S_OK;
+        ddi_entry_class=DdiErrorClass::nothing;
+        require(host_dispatch(&reporting, BC250_HOST_CHECK_STATUS, nullptr)<0);
+        require(hostReports==0 && reporting.device_lost && !reporting.lost_reported);
+        ddi_entry_class=DdiErrorClass::check_invalid_arg;
+        require(host_dispatch(&reporting, BC250_HOST_CHECK_STATUS, nullptr)<0);
+        require(hostReports==1 && hostReported==E_INVALIDARG && reporting.lost_reported);
+        ddi_entry_class=DdiErrorClass::removed_only;
+        require(host_dispatch(&reporting, BC250_HOST_CHECK_STATUS, nullptr)<0);
+        require(hostReports==1); // One report per loss, whatever follows.
+    }
+    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, worker denial, host-lost class, teardown\n";
 }
 
 

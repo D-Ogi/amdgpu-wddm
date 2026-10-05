@@ -46,6 +46,9 @@ template<typename F> void enter_context(D3D10DDI_HDEVICE handle,F &&call,
     if (!storage || !storage->owner) return;
     auto &owner=*storage->owner;
     RuntimeDomain::Scope scope(owner.runtime().domain);
+    // The class travels with the thread for the length of the entry: the host bridge reports a lost
+    // device from inside the engine, where the entry that is running is not an argument it can take.
+    DdiEntryClassScope entryClass(policy);
     if (!owner.context()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,policy); return; }
     try { call(*owner.context()); }
     catch (const std::bad_alloc &) {
