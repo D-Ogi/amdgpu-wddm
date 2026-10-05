@@ -2180,6 +2180,12 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         GuardLog("wddm summary: flip flags mode/immediate/shared-transition/independent %ld/%ld/%ld/%ld, redirected presents %ld",
                  flipFlags[0], flipFlags[1], flipFlags[2], flipFlags[3], Wddm->RedirectedPresents);
     }
+    // The published answer of this start, in the summary and not only in the start-time line: the log ring
+    // holds minutes, and a trial that reads the counters an hour after boot would otherwise have to guess
+    // whether the compositor was ever offered the flip at all. Without this, "no candidate reached the
+    // driver" cannot be told from "nobody was asked", which is the one distinction the whole handshake is
+    // about. It is a state, so it is printed as a word, not as a count.
+    GuardLog("wddm summary: DirectFlip handshake %s", Wddm->DirectFlipHandshake ? "on" : "off");
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",

@@ -350,6 +350,11 @@ may be programmed into HUBP0.
   never as transcribed masks: the trailing comments in the WDK's `d3dkmddi.h` give `0x00000010` for both
   `FlipStereoTemporaryMono` and `FlipStereoPreferRight` and are shifted by one bit from there on, so a
   copied number would report a run that did enter independent flip as a run that never did.
+- `DirectFlip handshake on|off`: the answer this start publishes, as a word. It is also in the start-time
+  line, but the log ring holds minutes: a trial that reads the counters later must still be able to tell
+  "no candidate reached the driver" from "nobody was ever offered the flip", which is the one distinction
+  the handshake is about. `tools\win\d3d12queue\scanout-trial.ps1` reads all four lines and names the state
+  in its verdict.
 
 ## Build
 
@@ -368,6 +373,11 @@ pwsh driver\kmd\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_
 
 `<Out>\package` is run 1 and `<Out>\package-umd` is run 2; both are catalogued and test-signed, and the run 2
 catalog covers `bc250umd.dll` as well. Without `-UmdStub` nothing about the plain package changes.
+
+From a git worktree, set `BC250_ROOT` (or pass `-QualityWorkspace`). Without one of the two, this build and
+the recipes under `tools\build\` take the workspace to be the repository's parent directory, which for a
+worktree is the directory that holds the worktree: the kits, the Mesa sources and the quality gates are then
+all missing, and `radv-contract` and `umd-contract` fail for a reason that has nothing to do with the change.
 
 ## What M3 had to show on hardware (acceptance, mirrors E05)
 
