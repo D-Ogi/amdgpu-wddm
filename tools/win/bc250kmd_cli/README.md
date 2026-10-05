@@ -25,7 +25,7 @@ bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore
 bc250kmd_cli sdmacopy [bytes]                     SDMA copy/fill positive control, read back and compared by the CPU (ADR 0013)
 bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0), assembled from several read-only bands into a BMP
 bc250kmd_cli dpm [count [interval ms]]            the KMD DPM governor's state, with the thresholds and floor in force (docs/design/dpm.md)
-                                                  the header also carries the idle state: its point, window and counters (0.7.206)
+                                                  the header also carries the idle state: its point, window and counters (0.7.207)
 bc250kmd_cli dpm tune <up> <target> <down> [hold_ms] | dpm tune reset
                                                   governor thresholds (permille) at run time, elevated, not persisted (0.7.185)
 bc250kmd_cli dpm tune thermal <hot_ms> <soft_mC|off> <soft_ms>

@@ -306,14 +306,14 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // it does not know as "?". Since 0.7.205 CurrentMHz, CapMHz, TargetMHz and ObservedMHz may read 900 or 800 MHz,
 // the clock table's two thermal-only points below the lab floor; WantMHz (the load's demand) never does, and
 // MaxMHz stays 1000..2000. Still no level index on the wire, so the layout and the ABI are unchanged.
-// ABI 2 (0.7.206, the idle state) appends the state's setting and counters: IdleMHz (the point in force, 0 when
+// ABI 2 (0.7.207, the idle state) appends the state's setting and counters: IdleMHz (the point in force, 0 when
 // the state is off for this start), IdleHoldMs and IdleBusyPermille (the window the GPU must be quiet for and
 // the busy share it still admits), IdleEntries, IdleExits, IdleRefusals and IdleMs (time at the point).
 // FLAG_IDLE says the clock is at the idle point now, and throttle 10 (idle) names it; both reach an ABI 1
 // caller too, which shows the flag as a number it does not know. CurrentMHz, CapMHz, TargetMHz and ObservedMHz
 // may now read 500 MHz. The driver takes both sizes: AbiVersion 1 with the first BC250_DPM_ABI1_SIZE bytes (the
 // 0.7.205 layout, unchanged) and AbiVersion 2 with all 192. A size that is not its AbiVersion's is refused
-// before any state is read. A driver before 0.7.206 fails the 192-byte escape itself with
+// before any state is read. A driver before 0.7.207 fails the 192-byte escape itself with
 // STATUS_INVALID_PARAMETER: a tool asks with ABI 2 and repeats with ABI 1 on that answer.
 #define BC250_DPM_ABI 2u
 #define BC250_DPM_ABI_1 1u
@@ -330,7 +330,7 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_TEMPERATURE 128u      // TemperatureMc is this tick's reading
 #define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
 #define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
-#define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.206)
+#define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.207)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;

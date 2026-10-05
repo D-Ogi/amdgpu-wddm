@@ -15,14 +15,14 @@ static int checks, failures;
 
 /* A level counted from the lab floor, which is where the load lives: L(0) is 1000 MHz, L(10) the 2000 MHz
  * ceiling, the two thermal-only points of 0.7.205 are L(-1) (900 MHz) and L(-2) (800 MHz,
- * BC250_DPM_THERMAL_FLOOR_LEVEL), and L(-5) == 0 is the idle point of 0.7.206 (500 MHz,
+ * BC250_DPM_THERMAL_FLOOR_LEVEL), and L(-5) == 0 is the idle point of 0.7.207 (500 MHz,
  * BC250_DPM_IDLE_LEVEL). Up to 0.7.204 the lab floor was index 0 and these tests wrote the index
  * itself; L() keeps every expectation below written in the same numbers. */
 #define L(n) ((unsigned int)((int)BC250_DPM_FLOOR_LEVEL + (n)))
 
 /* ---- the table ---------------------------------------------------------------------------------- */
 
-/* The table's shape since 0.7.206: 16 levels, 500 MHz first (the idle point, index 0), the thermal floor at
+/* The table's shape since 0.7.207: 16 levels, 500 MHz first (the idle point, index 0), the thermal floor at
  * index 3 (800 MHz) and the lab floor at index 5 (1000 MHz).
  * A constant CHECK would trip C4127 under /WX, so these fail the build instead. */
 typedef char dpm_table_is_16_levels[(BC250_CLOCK_LEVELS == 16u && BC250_DPM_TOP_LEVEL == 15u &&
@@ -227,14 +227,14 @@ static struct bc250_dpm_input tick(unsigned int busy, int temp_c, unsigned int d
 	in.temperature_mc = temp_c * 1000;
 	in.temperature_valid = 1;
 	in.dt_ms = dt;
-	in.ring_busy = 0;		/* the ring is empty: only the idle state of 0.7.206 reads this */
+	in.ring_busy = 0;		/* the ring is empty: only the idle state of 0.7.207 reads this */
 	in.sdma_permille = 0;		/* the paging node is idle: the idle state alone reads this too */
 	return in;
 }
 
 /* The lowest level the thermal cap may hold, as bc250_dpm.c's thermal_floor() computes it: the thermal floor,
  * or the lab floor once a point under it has been refused. The cap never goes below this, whatever the clock
- * was when the part went hot - the idle point is not a load level (0.7.206). Every tick below checks it, so a
+ * was when the part went hot - the idle point is not a load level (0.7.207). Every tick below checks it, so a
  * cap of 500 MHz (which would pin a loaded GPU there) fails the gate instead of passing `level <= cap`. */
 static unsigned int cap_bottom(const struct bc250_dpm_governor *g)
 {
@@ -915,7 +915,7 @@ static void test_reentry(void)
 		 * tick (t = 7975 ms), bounded by the floor ten levels down. */
 		/* ... bounded by the thermal floor, which is TOP_LEVEL - THERMAL_FLOOR_LEVEL levels down: twelve
 		 * since 0.7.205 (ten up to 0.7.204). Up to 0.7.205 that was BC250_DPM_TOP_LEVEL itself, because the
-		 * thermal floor was index 0; since 0.7.206 the table has three idle-only levels under it. */
+		 * thermal floor was index 0; since 0.7.207 the table has three idle-only levels under it. */
 		{
 			unsigned int span = BC250_DPM_TOP_LEVEL - BC250_DPM_THERMAL_FLOOR_LEVEL;
 			CHECK(changes == (7975u / steps[s] + 1u < span ? 7975u / steps[s] + 1u : span));
@@ -1479,7 +1479,7 @@ static void test_busy_source(void)
 	}
 }
 
-/* ---- the idle state (0.7.206, owner decision 2026-10-05) ---------------------------------------- */
+/* ---- the idle state (0.7.207, owner decision 2026-10-05) ---------------------------------------- */
 
 /* The idle point is the table's first level, five below the lab floor (a constant CHECK would trip C4127). */
 typedef char dpm_idle_is_level_zero[(L(-5) == BC250_DPM_IDLE_LEVEL && BC250_DPM_IDLE_LEVEL == 0u) ? 1 : -1];
@@ -1588,7 +1588,7 @@ static void test_idle(void)
 	CHECK(!g.idle && g.idle_exits == 1 && g.raises == 1);
 	CHECK(run_ring(&g, 1000, 60000, 25, 0) == L(3));
 
-	/* The exit threshold is the tick's own share and not the window's admitted mean (0.7.206, review): one
+	/* The exit threshold is the tick's own share and not the window's admitted mean (0.7.207, review): one
 	 * active GRBM sample inside a 25 ms tick is 40 permille, twenty times the 2 permille mean the entry
 	 * window admits, so a per-tick exit at the entry threshold left the state at the very frame the mean rule
 	 * tolerates. A minute of a static desktop that wakes once per second must hold the point, with one entry,
@@ -1702,7 +1702,7 @@ static void test_idle(void)
 	CHECK(g.raise_ms >= BC250_DPM_RAMP_MAX_MS);
 	CHECK(run_ring(&g, 1000, 86000, 25, 0) == L(1));
 
-	/* The same for an idle point that is not 500 MHz (0.7.206, review). The exit is immediate because the
+	/* The same for an idle point that is not 500 MHz (0.7.207, review). The exit is immediate because the
 	 * state held the clock, not because the clock is under the thermal floor: a configured 800 MHz point, and
 	 * the 800 MHz the fallback picks after the firmware refuses 500 MHz, both return to the lab floor in one
 	 * tick at 80 C, where the ramp interval is 2.8 s and would otherwise give 900 MHz. */
@@ -1734,7 +1734,7 @@ static void test_idle(void)
 	CHECK(level == L(0) && i * 25u > BC250_DPM_RELEASE_STEP_MS && g.ramp_holds > 0);
 
 	/* A reading of 87 C or more while the clock is at the idle point: the thermal cap steps from the lab
-	 * floor, never from the idle point (0.7.206, review). A cap at the idle point would hold a loaded GPU at
+	 * floor, never from the idle point (0.7.207, review). A cap at the idle point would hold a loaded GPU at
 	 * 500 MHz, a point nothing has measured under load, until the release below 82 C. */
 	idle_init(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(quiet_until_idle(&g, hold, 60000) == hold);
@@ -1750,7 +1750,7 @@ static void test_idle(void)
 	g.cap_ms = 0;
 	CHECK(run_ring(&g, 0, 87500, 25, 0) == L(0) && g.thermal_cap == L(0));
 
-	/* The idle point is never above the limits (0.7.206, review): a cap holding a part at 800 MHz wins over a
+	/* The idle point is never above the limits (0.7.207, review): a cap holding a part at 800 MHz wins over a
 	 * configured 900 MHz point, so the state lowers the clock and never raises it. */
 	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(bc250_dpm_idle_config(&g, 900, BC250_DPM_IDLE_HOLD_MS, BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);

@@ -9,7 +9,7 @@
  * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
  * top and wins over everything, the lab floor included: since 0.7.205 it alone may go under it, to 900 or
- * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). Since 0.7.206 the idle state goes lower
+ * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). Since 0.7.207 the idle state goes lower
  * still, to 500 MHz, but only while the GPU has no work at all. From WARM_MC (87 C since 0.7.204) no raise happens at all, and from RAMP_KNEE_MC
  * (70 C) a raise goes one level per ramp interval (0.7.203). The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
@@ -227,7 +227,7 @@ void bc250_dpm_idle_refused(struct bc250_dpm_governor *g)
 	g->idle_acc = 0;
 	/* One step up the fallback: the idle point, then the thermal floor, then nothing. A refused point at or
 	 * above the thermal floor is the thermal cap's own lowest point, asked for with the same two messages, so
-	 * the cap loses it too and nothing below the lab floor is asked for again (0.7.206). */
+	 * the cap loses it too and nothing below the lab floor is asked for again (0.7.207). */
 	if (g->idle_level < BC250_DPM_THERMAL_FLOOR_LEVEL) g->idle_level = BC250_DPM_THERMAL_FLOOR_LEVEL;
 	else {
 		g->idle_on = 0;
@@ -258,7 +258,7 @@ void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g)
 		g->thermal_cap = BC250_DPM_FLOOR_LEVEL;
 		g->cap_ms = 0;
 	}
-	/* Nothing under the lab floor works on this part, so the idle state goes with the sub-floor (0.7.206);
+	/* Nothing under the lab floor works on this part, so the idle state goes with the sub-floor (0.7.207);
 	 * bc250_dpm_idle_mhz then reads 0 and the step below never asks for the point again. */
 	g->idle = 0;
 	g->idle_ms = 0;
@@ -273,7 +273,7 @@ enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const
 }
 
 /* The busy share the idle state reads: the graphics engine's, or the paging node's when that is higher
- * (0.7.206). busy_permille is GRBM GUI_ACTIVE and ring_busy is the GFX ring, so an eviction or an upload on
+ * (0.7.207). busy_permille is GRBM GUI_ACTIVE and ring_busy is the GFX ring, so an eviction or an upload on
  * the paging queue shows in neither; without this the clock would drop to the idle point in the middle of such
  * a transfer and nothing would end the state. The load governor keeps the GFX-only share it always had. */
 static unsigned int idle_busy_of(const struct bc250_dpm_input *in, unsigned int busy)
@@ -290,7 +290,7 @@ static unsigned int idle_exit_permille(const struct bc250_dpm_governor *g)
 								    : g->idle_busy_permille + 1u;
 }
 
-/* One tick of the idle state (0.7.206). Returns 1 while the clock belongs at the idle point, and sets *left
+/* One tick of the idle state (0.7.207). Returns 1 while the clock belongs at the idle point, and sets *left
  * when this tick ended an episode (the caller's exit rule reads it).
  *
  * Entry needs a quiet window: no work outstanding on either ring at any tick of it, and a mean busy share
@@ -408,7 +408,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 			 * to the clock, which lowers nothing) and its step follows a hot step after the last change.
 			 *
 			 * The step is measured from the clock a load could be running at, never from below the cap's own
-			 * bottom (0.7.206): the idle point is not a load level, and a cap set to it would hold a loaded
+			 * bottom (0.7.207): the idle point is not a load level, and a cap set to it would hold a loaded
 			 * GPU at 500 MHz until the release below 82 C - a point nothing has measured under load. With the
 			 * clock at or above the thermal floor this is cur, exactly as in 0.7.205. */
 			unsigned int base = cur > thermal_floor(g) ? cur : thermal_floor(g);
@@ -513,7 +513,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		else g->throttle = BC250_DPM_THROTTLE_MAX_SETTING;
 		target = limit;
 	}
-	/* The idle state (0.7.206, owner decision 2026-10-05: 500 MHz while the lab does not work). It is a
+	/* The idle state (0.7.207, owner decision 2026-10-05: 500 MHz while the lab does not work). It is a
 	 * lowering below the lab floor, so it comes after the limits and replaces the warm zone and the ramp,
 	 * which bound raises only. Three outcomes:
 	 *   in idle          the idle point, whatever the load wanted, and never above the limits

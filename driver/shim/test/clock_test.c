@@ -97,12 +97,12 @@ int main(void){
  unsigned path,step;
  positive(1000,116,1500,919); // voltage up, then clock up
  // The points under the lab floor (900 and 800 MHz for the thermal cap, 0.7.205; 500 MHz for the idle
- // state, 0.7.206, both owner decisions of 2026-10-05): the same voltage
+ // state, 0.7.207, both owner decisions of 2026-10-05): the same voltage
  // as the floor, so no staging, and the same two messages, sent without the import (subfloor_commit).
  positive(1000,116,900,820);   // the lab floor down to 900 MHz
  positive(1000,116,800,820);   // and to 800 MHz
  positive(800,116,1000,820);   // back to the lab floor
- positive(1000,116,500,820);   // the lab floor down to the idle point of 0.7.206
+ positive(1000,116,500,820);   // the lab floor down to the idle point of 0.7.207
  positive(500,116,1000,820);   // and back up from it
  positive(800,116,500,820);    // between two points under the floor, both at 820 mV
  positive(900,116,800,820);
@@ -195,7 +195,7 @@ int main(void){
   CHECK(bc250_clock_prepare(&c,800,820,&r)==0);CHECK(r.ready); // 95 C: a lowering to a standing point still goes
  }
  {struct backend b=setup(500,116,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=95000;
-  // The same exception covers the idle point of 0.7.206: 500 -> 1000 MHz at 820 mV is reachable at any
+  // The same exception covers the idle point of 0.7.207: 500 -> 1000 MHz at 820 mV is reachable at any
   // temperature, so a GPU that gets work while hot is never stuck at the idle clock.
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==0);CHECK(r.ready && b.mhz==1000 && b.vid==116 && !r.voltage_staged);
  }

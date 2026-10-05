@@ -3,7 +3,7 @@
  * BC-250 DPM: a load-driven GFX clock governor between the lab floor (1000 MHz / 820 mV) and at
  * most 2000 MHz, with thermal clamps and a boot guard. The load never goes under the lab floor. Two
  * other rules do, both at the floor's own 820 mV: the thermal clamp, down to 800 MHz (0.7.205, owner
- * decision 2026-10-05), and the idle state, 500 MHz while the GPU has no work (0.7.206, owner decision
+ * decision 2026-10-05), and the idle state, 500 MHz while the GPU has no work (0.7.207, owner decision
  * 2026-10-05).
  * Not amdgpu: amdgpu does no DPM on this part
  * under load (facts M90), the community governors run in user space. docs/design/dpm.md in
@@ -17,7 +17,7 @@
  *   bc250_dpm_tune_check()    the thresholds and floor an administrator may set at run time (0.7.185)
  *   bc250_dpm_session_step()  the "running above the floor" marker that turns a crash at a high
  *                             clock into a fixed-lab next start
- * The idle state (0.7.206) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on.
+ * The idle state (0.7.207) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on.
  * The operating points themselves are bc250_clock.h's table; a level is an index into it.
  */
 #ifndef BC250_DPM_H
@@ -35,14 +35,14 @@
 
 /* The lab floor, 1000 MHz: the level a fixed start runs at, the lowest the load may ask for, and where every
  * rule that needs one clock this part is known to run puts it (a missing sensor, SetStablePowerState, the
- * fixed mode, stop, power down, giving up, an unknown readback). Index 5 since 0.7.206, where the table
+ * fixed mode, stop, power down, giving up, an unknown readback). Index 5 since 0.7.207, where the table
  * reaches down to 500 MHz (index 2 in 0.7.205, with 900 and 800 MHz under it). */
 #define BC250_DPM_FLOOR_LEVEL	5u
 /* 800 MHz: the lowest level the thermal cap may reach (0.7.205, owner decision 2026-10-05, after RotTR scene
  * 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy). The firmware has never
  * run below 1000 MHz (facts M47), so the KMD may withdraw it for a start: bc250_dpm_subfloor_refused(). */
 #define BC250_DPM_THERMAL_FLOOR_LEVEL	3u
-/* 500 MHz: the idle point (0.7.206). Only the idle state goes there, and only while the GPU has no work; the
+/* 500 MHz: the idle point (0.7.207). Only the idle state goes there, and only while the GPU has no work; the
  * levels between it and the thermal floor (700 and 600 MHz) exist to keep the 100 MHz grid whole and no rule
  * selects them. The KMD may withdraw the point for a start: bc250_dpm_idle_refused(). */
 #define BC250_DPM_IDLE_LEVEL	0u
@@ -126,7 +126,7 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_FIXED = 7,		/* this start is fixed-lab */
 	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* WARM_MC (85 C in 0.7.200, 87 C from 0.7.204): a raise refused */
 	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 70 C to WARM_MC (0.7.203): a raise cut to one level, or held */
-	BC250_DPM_THROTTLE_IDLE = 10,		/* the idle state holds the clock at the idle point, or is being left (0.7.206) */
+	BC250_DPM_THROTTLE_IDLE = 10,		/* the idle state holds the clock at the idle point, or is being left (0.7.207) */
 	BC250_DPM_THROTTLE_COUNT
 };
 
@@ -169,7 +169,7 @@ enum bc250_dpm_throttle {
  * levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500..1600 MHz, frozen at 85.6-86.2 C). */
 #define BC250_DPM_SOFT_DELTA_MC		0u	/* 0: no soft release */
 #define BC250_DPM_SOFT_STEP_MS		3000u
-/* The idle state (0.7.206, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
+/* The idle state (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
  * 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). While the GPU has no work the
  * governor holds the idle point, below the lab floor, at the floor's own 820 mV. The three settings are the
  * KMD's registry values DpmIdleMHz, DpmIdleHoldMs and DpmIdleBusyPermille (driver/kmd/dpm.c), checked and
@@ -222,7 +222,7 @@ unsigned int bc250_dpm_ramp_interval_ms(int temperature_mc);
  * SetStablePowerState, and it never exceeds the start's ceiling (max_level, DpmMaxMHz). It never goes under
  * BC250_DPM_FLOOR_LEVEL either (0.7.205): the points below it belong to the thermal cap and the idle state
  * alone, and a runtime floor there would say nothing, because the load never asks for them. A runtime floor
- * also turns the idle state off while it is set (0.7.206): the operator asked for a clock, not for 500 MHz. */
+ * also turns the idle state off while it is set (0.7.207): the operator asked for a clock, not for 500 MHz. */
 struct bc250_dpm_tune {
 	unsigned int	up_permille;
 	unsigned int	target_permille;
@@ -292,11 +292,11 @@ struct bc250_dpm_input {
 	int		temperature_valid;
 	unsigned int	dt_ms;			/* since the previous tick */
 	/* Work outstanding on the GFX ring at this tick (the KMD's GfxSubmitBusy): submitted and not yet
-	 * retired, whatever the hardware's busy samples say. The idle state alone reads it (0.7.206): a
+	 * retired, whatever the hardware's busy samples say. The idle state alone reads it (0.7.207): a
 	 * submission waiting on a fence keeps the clock at the lab floor. Zero is "the ring is empty". */
 	int		ring_busy;
 	/* The paging node's busy share over this tick, from the same hardware samples as busy_permille
-	 * (SDMA0_STATUS_REG.IDLE), 0 for a tick with too few samples. The idle state alone reads it (0.7.206):
+	 * (SDMA0_STATUS_REG.IDLE), 0 for a tick with too few samples. The idle state alone reads it (0.7.207):
 	 * busy_permille is GRBM GUI_ACTIVE and ring_busy is the GFX ring, so both are blind to a transfer on the
 	 * paging queue, and without this field an eviction or an upload with the GFX ring empty would run at the
 	 * idle point and nothing would end the state. The load governor keeps its GFX-only accounting. */
@@ -324,7 +324,7 @@ struct bc250_dpm_governor {
 	unsigned int	ramp_holds;		/* steps in which the thermal ramp cut or held a raise (0.7.203) */
 	int		subfloor_ok;		/* the thermal cap may use the points under the lab floor (0.7.205) */
 	unsigned int	subfloor_refusals;	/* bc250_dpm_subfloor_refused() calls of this start */
-	/* The idle state (0.7.206). idle_on is the setting of this start, idle the state now. */
+	/* The idle state (0.7.207). idle_on is the setting of this start, idle the state now. */
 	int		idle_on, idle;
 	unsigned int	idle_level;		/* the point idle holds; raised to the thermal floor after a refusal */
 	unsigned int	idle_hold_ms;		/* the window the GPU must be quiet for */
@@ -348,7 +348,7 @@ void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level);
  * 1000 MHz (facts M47), so one refusal is enough: the governor does not try the same point again and again. */
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g);
 
-/* ---- the idle state (0.7.206) ----------------------------------------------------------------- */
+/* ---- the idle state (0.7.207) ----------------------------------------------------------------- */
 
 /* Why an idle setting was refused; the KMD logs it and runs without the idle state. */
 enum bc250_dpm_idle_error {

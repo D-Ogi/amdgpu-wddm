@@ -40,7 +40,7 @@ struct bc250_clock_report {
  * (VID 116): a lower clock at the voltage the part is known to run at, never an undervolt, and the
  * anchors' line is not extrapolated below its lowest anchor. Two of them, 900 and 800 MHz, are the
  * thermal cap's (0.7.205, owner decision 2026-10-05: a clock under 1000 MHz is allowed when Tctl reaches
- * 87 C). 500 MHz is the idle point (0.7.206, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj
+ * 87 C). 500 MHz is the idle point (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj
  * mu zegar gpu na 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). 700 and 600 MHz
  * keep the 100 MHz grid whole, so that a level stays (mhz - MIN) / STEP; no rule of the governor selects
  * them, and only an administrator's own request (DpmIdleMHz, the clock escape) reaches them.

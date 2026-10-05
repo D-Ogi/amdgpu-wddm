@@ -1,6 +1,6 @@
 # Scan-out admission: which allocation the display pipeline may read
 
-M15.14, KMD 0.7.206.1. This note says what changed, why the change is shaped this way, and what a reader
+M15.14, KMD 0.7.207.1. This note says what changed, why the change is shaped this way, and what a reader
 must check before trusting it. The rule itself is `driver/kmd/scanout_admit.h`; its host test is
 `driver/kmd/test/scanout_admit_test.c`, gate `scanout-admit`.
 

@@ -149,7 +149,7 @@ def dpm_tune_problems(display_source, dpm_source, cli_source):
 
 
 def dpm_request_problems(display_source, dpm_source, cli_source):
-    """KMD 0.7.206.2 BC250_ESCAPE_RUN_DPM: ABI 2 (192 bytes, the idle state's setting and counters) beside the
+    """KMD 0.7.207.1 BC250_ESCAPE_RUN_DPM: ABI 2 (192 bytes, the idle state's setting and counters) beside the
     unchanged ABI 1 prefix (160 bytes). The same discipline RUN_DPM_TUNE has had since 0.7.197: the driver admits
     exactly the two sizes, pairs each with its own AbiVersion, hands the size on, and touches an ABI 2 field only
     inside an `if (abi2)` block - an unguarded one writes past the end of a 160-byte request, which is a kernel pool
