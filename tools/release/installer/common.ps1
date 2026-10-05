@@ -295,6 +295,11 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
 #       such a driver's guard 0 from a 0 the tester wrote, and the value stays 'kept'. A reopen deletes nothing
 #       there, because the record is the reason of the last start and that start owns it.
+# Which codes count depends on who writes the record. Only PersistFallback writes a durable record, so any reason in
+# it is the driver's act (any_reason), and a code the table does not name is reported by its number: a later caller
+# of PersistFallback with a new reason must not become a 0 that reads as the tester's own setting. A legacy record is
+# the reason of the last start, whatever that start decided, so only the reasons of a fallback count there. Where a
+# durable record holds nothing (0, or text), the legacy record is read instead.
 # The record alone is not a closure: the value has to be the one the driver writes. A value the tester set by hand,
 # with no record of a closure, stays 'kept' as before. The KMD's session marker stays the KMD's: the installer never
 # reads or writes it, and a marker that outlived its boot closes the switches again at the next start, which the
@@ -308,7 +313,7 @@ $script:DriverClosures = @{
         names = @{ 2 = 'invalid-setting'; 4 = 'unclean'; 5 = 'registry' }
         text = @{ 4 = 'the driver closed the GPU desktop path after a boot that ended with the path in use' }
         fallback = 'the driver closed the GPU desktop path itself' }
-    DpmMode = @{ closed = 0; record = 'DpmClosedReason'; legacy_record = 'DpmLastReason'; any_reason = $false
+    DpmMode = @{ closed = 0; record = 'DpmClosedReason'; legacy_record = 'DpmLastReason'; any_reason = $true
         clear = @('DpmClosedReason')
         names = @{ 3 = 'unconfirmed'; 4 = 'unclean'; 8 = 'smu-error' }
         text = @{ 3 = 'the driver went back to the base clock after a start with the load-driven clock that was never confirmed'
@@ -324,27 +329,33 @@ function Get-DriverClosure([string]$Name, $Current, $Default) {
     $c = $script:DriverClosures[$Name]
     if ($null -eq $c) { return $null }
     if (-not $Current.ContainsKey($Name)) { return $null }
-    # The record the driver leaves next to the value. A driver that writes no durable record is read through its
-    # legacy record, if the table names one: the DPM guard before KMD 0.7.208.1 left only DpmLastReason (above).
-    $record = $null
-    if ($Current.ContainsKey($c.record)) { $record = $c.record }
-    elseif ($c.ContainsKey('legacy_record') -and $Current.ContainsKey($c.legacy_record)) { $record = $c.legacy_record }
-    if ($null -eq $record) { return $null }
     if (-not (Test-RegistryValueSame $Current[$Name] $c.closed)) { return $null }
     if (Test-RegistryValueSame $Default $c.closed) { return $null }
-    $code = $null
-    try { $code = [int]$Current[$record] } catch { return $null }
-    if ($c.any_reason) { if ($code -eq 0) { return $null } }
-    elseif (-not $c.names.ContainsKey($code)) { return $null }
-    $reason = "reason $code"
-    if ($c.names.ContainsKey($code)) { $reason = $c.names[$code] }
-    $text = $c.fallback
-    if ($c.text.ContainsKey($code)) { $text = $c.text[$code] }
-    # A repair deletes the durable record it read. A legacy record belongs to the last start, which writes it
-    # again at every start, so nothing deletes it.
-    $clear = @()
-    if ($record -eq $c.record) { $clear = @($c.clear) }
-    return [pscustomobject]@{ record = $record; code = $code; reason = $reason; text = $text; clear = $clear }
+    # The records the driver may leave next to the value, best first: the durable record, then the legacy record of
+    # a driver that writes none, if the table names one (the DPM guard before KMD 0.7.208.1 left only DpmLastReason,
+    # above). The first record that names a closure decides, so a durable record with nothing in it does not hide
+    # the legacy one.
+    $records = @($c.record)
+    if ($c.ContainsKey('legacy_record')) { $records = @($c.record, $c.legacy_record) }
+    foreach ($record in $records) {
+        if (-not $Current.ContainsKey($record)) { continue }
+        $code = $null
+        try { $code = [int]$Current[$record] } catch { continue }
+        # Any reason in a durable record is the driver's act, because only the driver writes one. A legacy record
+        # needs one of the reasons of a fallback (above).
+        if (($record -eq $c.record) -and $c.any_reason) { if ($code -eq 0) { continue } }
+        elseif (-not $c.names.ContainsKey($code)) { continue }
+        $reason = "reason $code"
+        if ($c.names.ContainsKey($code)) { $reason = $c.names[$code] }
+        $text = $c.fallback
+        if ($c.text.ContainsKey($code)) { $text = $c.text[$code] }
+        # A repair deletes the durable record it read. A legacy record belongs to the last start, which writes it
+        # again at every start, so nothing deletes it.
+        $clear = @()
+        if ($record -eq $c.record) { $clear = @($c.clear) }
+        return [pscustomobject]@{ record = $record; code = $code; reason = $reason; text = $text; clear = $clear }
+    }
+    return $null
 }
 # Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
 # the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).
@@ -544,15 +555,19 @@ function Read-RegistryValues([string]$Key) {
 function Write-RegistryPlan([string]$Key, $Plan) {
     Initialize-RegistryKey $Key
     foreach ($e in @($Plan)) {
-        # A reopened driver closure (BD-069) also clears the record the driver left next to the value.
+        if ($e.write) {
+            $v = $e.value
+            if ($v -is [array]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([string[]]@($v | ForEach-Object { [string]$_ })) -PropertyType MultiString -Force | Out-Null }
+            elseif ($v -is [string]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value $v -PropertyType String -Force | Out-Null }
+            else { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([int]$v) -PropertyType DWord -Force | Out-Null }
+        }
+        # A reopened driver closure (BD-069) also clears the record the driver left next to the value, after the
+        # value itself. A write that throws then leaves the record where it is, and the closure is still readable
+        # at the next install. With the clear first, a failed write would lose the record and the install after it
+        # would report the closed value as the tester's own setting.
         if ($e.PSObject.Properties['clear']) {
             foreach ($n in @($e.clear)) { Remove-ItemProperty -LiteralPath $Key -Name $n -Force -ErrorAction SilentlyContinue }
         }
-        if (-not $e.write) { continue }
-        $v = $e.value
-        if ($v -is [array]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([string[]]@($v | ForEach-Object { [string]$_ })) -PropertyType MultiString -Force | Out-Null }
-        elseif ($v -is [string]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value $v -PropertyType String -Force | Out-Null }
-        else { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([int]$v) -PropertyType DWord -Force | Out-Null }
     }
 }
 

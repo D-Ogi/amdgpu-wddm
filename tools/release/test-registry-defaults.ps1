@@ -100,17 +100,29 @@ foreach ($record in 'DpmClosedReason', 'DpmLastReason') {
         $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; $record = $case.code } -Reopen) 'DpmMode'
         Check (($d.decision -eq 'reopened') -and ($d.value -eq 1)) "DpmMode 0 with $record $($case.code), repair: $($d.decision) -> $($d.value)"
     }
-    foreach ($reason in 0, 1, 2, 5, 6, 7) {
-        $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; $record = $reason } -Reopen) 'DpmMode'
-        Check ($d.decision -eq 'kept') "DpmMode 0 with $record $reason (not a guard fallback): $($d.decision)"
-    }
+}
+# A legacy record holds the reason of any start, so only the three reasons above are a closure there.
+foreach ($reason in 0, 1, 2, 5, 6, 7) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = $reason } -Reopen) 'DpmMode'
+    Check ($d.decision -eq 'kept') "DpmMode 0 with DpmLastReason $reason (not a guard fallback): $($d.decision)"
+}
+# Only PersistFallback writes a durable record, so any reason in it is the driver's act: a later caller with a new
+# reason must not read as a setting of the tester. An unnamed code is reported by its number.
+foreach ($reason in 1, 2, 5, 6, 7) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = $reason; DpmLastReason = 1 }) 'DpmMode'
+    Check (($d.decision -eq 'driver-closed') -and ($d.closure_record -eq 'DpmClosedReason') -and ($d.closure_reason -eq "reason $reason") -and ($d.closure -eq 'the driver went back to the base clock itself')) "DpmMode 0 with DpmClosedReason $reason (a reason the table does not name): $($d.decision) ($($d.closure_reason))"
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = $reason; DpmLastReason = 1 } -Reopen) 'DpmMode'
+    Check (($d.decision -eq 'reopened') -and ($d.value -eq 1) -and (@($d.clear) -contains 'DpmClosedReason')) "DpmMode 0 with DpmClosedReason $reason, repair: $($d.decision) -> $($d.value)"
 }
 # The durable record decides where both exist: a 0.7.208.1 fallback whose boot has passed holds 4 in one and 1 in
 # the other, and the reading must not fall back to the start's own reason.
 $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = 8; DpmLastReason = 1 }) 'DpmMode'
 Check (($d.decision -eq 'driver-closed') -and ($d.closure_record -eq 'DpmClosedReason') -and ($d.closure_reason -eq 'smu-error')) "both records: the durable one decides ($($d.closure_record) $($d.closure_reason))"
-$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = 1; DpmLastReason = 4 }) 'DpmMode'
-Check ($d.decision -eq 'kept') "both records, the durable one not a fallback reason: $($d.decision)"
+# A durable record with nothing in it does not hide the legacy one: the legacy record is read instead.
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = 0; DpmLastReason = 4 }) 'DpmMode'
+Check (($d.decision -eq 'driver-closed') -and ($d.closure_record -eq 'DpmLastReason') -and ($d.closure_reason -eq 'unclean')) "an empty durable record, DpmLastReason 4: read through $($d.closure_record)"
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmClosedReason = 0; DpmLastReason = 1 }) 'DpmMode'
+Check ($d.decision -eq 'kept') "an empty durable record, DpmLastReason 1: $($d.decision)"
 # The record is deleted with the write, and the restore set does not write it back.
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test'
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
@@ -128,6 +140,12 @@ try {
     Check ($v.DpmLastReason -eq 4) 'DpmLastReason stays: it is the record of the last start, which the next start overwrites'
     $again = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current (Read-RegistryValues $k) -Reopen
     Check (@($again | Where-Object { $_.decision -in 'reopened', 'driver-closed' }).Count -eq 0) 'a second repair over the result finds no closure left'
+    # The order inside Write-RegistryPlan: the value first, the record after it. A write that throws must leave the
+    # record where it is, so that the next install still reads the closure (BD-069). The probe is a hand-made entry
+    # that writes a name and clears the same name: with the write first the name is gone afterwards.
+    $probe = "$key\Order"
+    Write-RegistryPlan $probe @([pscustomobject]@{ name = 'DpmMode'; value = 1; write = $true; clear = @('DpmMode') })
+    Check (-not (Read-RegistryValues $probe).ContainsKey('DpmMode')) 'Write-RegistryPlan writes the value before it clears the record'
 } finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
 Check (-not (Test-Path -LiteralPath $key)) 'closure scratch key removed'
 

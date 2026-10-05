@@ -151,7 +151,13 @@ made by itself.
 From KMD 0.7.208.1 the reason comes from `DpmClosedReason`, which `PersistFallback` writes next to the 0. That record
 outlives its boot: no later start overwrites it, and only a start that reads a `DpmMode` other than 0 deletes it
 (`bc250_dpm_decide`, `clear_closed`), the way `interop.c` handles `InteropClosedReason`. A repair therefore writes
-`DpmMode` 1 and deletes the record.
+`DpmMode` 1 and deletes the record, in that order: a write that fails leaves the record where it is, so the next
+install still reads the closure.
+
+Only `PersistFallback` writes that record, so the installer reads any reason in it as the driver's act and names a
+reason the table does not know by its number. A later caller of `PersistFallback` with a new reason therefore stays
+a closure instead of reading as the tester's own setting. The legacy record below holds the reason of any start, so
+there only 3, 4 and 8 count, and a durable record with nothing in it (0) is read through the legacy one.
 
 A driver before 0.7.208.1 leaves `DpmLastReason` alone, so the installer reads that one instead (`legacy_record` in
 the table), with its own limit: `DpmLastReason` holds the fallback only inside the boot that wrote it. Every start
