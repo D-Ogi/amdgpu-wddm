@@ -42,14 +42,29 @@ namespace Bc250Mon
             else using (dwm)
             {
                 panel.Rows.Add(new Row("DWM", "PID " + dwm.Id + ", since " + dwm.StartTime.ToString("HH:mm:ss")));
-                string path = null;
+                string path = null, zink = null;
+                bool radv = false;
                 try
                 {
                     foreach (ProcessModule m in dwm.Modules)
-                        if (m.ModuleName.Equals("bc250d3d.dll", StringComparison.OrdinalIgnoreCase)) { path = m.FileName; break; }
+                    {
+                        string n = m.ModuleName;
+                        if (n.Equals("bc250d3d.dll", StringComparison.OrdinalIgnoreCase)) path = m.FileName;
+                        else if (n.Equals("bc250d3d_zink.dll", StringComparison.OrdinalIgnoreCase)) zink = m.FileName;
+                        else if (n.Equals("amdgpu_wddm_radv.dll", StringComparison.OrdinalIgnoreCase) ||
+                                 n.Equals("vulkan_radeon.dll", StringComparison.OrdinalIgnoreCase)) radv = true;
+                    }
                 }
                 catch { panel.Rows.Add(new Row("Modules", "cannot inspect current DWM", Level.Warn)); }
-                if (path == null) panel.Rows.Add(new Row("Renderer", "not identified in DWM", Level.Warn));
+                // The GPU desktop route (owner 2026-10-01): DWM maps the zink build of the UMD and draws through RADV.
+                // The zink build changes with every Mesa update, so the module names, not a hash list, identify it.
+                if (zink != null)
+                {
+                    panel.Rows.Add(new Row("D3D UMD", "bc250d3d_zink / " + new DirectoryInfo(Path.GetDirectoryName(zink)).Name));
+                    panel.Rows.Add(radv ? new Row("Renderer", "Mesa zink on RADV (GPU)", Level.Good)
+                                        : new Row("Renderer", "zink loaded, RADV not loaded", Level.Warn));
+                }
+                else if (path == null) panel.Rows.Add(new Row("Renderer", "not identified in DWM", Level.Warn));
                 else
                 {
                     DateTime write = File.GetLastWriteTimeUtc(path);
