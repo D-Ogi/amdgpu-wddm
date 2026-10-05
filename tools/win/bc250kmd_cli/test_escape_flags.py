@@ -204,9 +204,30 @@ def dpm_request_problems(display_source, dpm_source, cli_source):
         found.append("bc250kmd_cli.c: DpmPrintIdle not found")
     elif not re.search(r"if\s*\(d->AbiVersion\s*!=\s*BC250_DPM_ABI\)\s*\{", idle):
         found.append("bc250kmd_cli.c: DpmPrintIdle reads the ABI 2 fields without checking the answer's AbiVersion")
+    # Bc250Dpm, the export bc250mon and the control application call through bc250control.dll. Its callers were
+    # built against the ABI 1 layout and pass 160 bytes, so the ABI it asks with is the one its caller's length
+    # names, and it must zero and send that length and no more. A check against sizeof(BC250_ESCAPE_DPM) alone
+    # would refuse every deployed caller and stop the DLL compiling.
+    export = function_body(cli_source, "Bc250Dpm")
+    if export is None:
+        found.append("bc250kmd_cli.c: Bc250Dpm not found")
+    else:
+        if not re.search(r"bytes\s*!=\s*BC250_DPM_ABI1_SIZE\s*&&\s*bytes\s*!=\s*sizeof\(\*data\)\)+\s*return", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not admit exactly the ABI 1 prefix and the whole structure")
+        if not re.search(r"abi\s*=\s*bytes\s*==\s*BC250_DPM_ABI1_SIZE\s*\?\s*BC250_DPM_ABI_1\s*:\s*BC250_DPM_ABI\s*;", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not pair the caller's length with its AbiVersion")
+        if not re.search(r"memset\(data,\s*0,\s*bytes\)\s*;", export) or \
+           not re.search(r"TelemetryEscape\(data,\s*bytes\)\s*;", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm writes or sends more than the caller's length")
+        if not re.search(r"data->AbiVersion\s*!=\s*abi\s*\|\|", export):
+            found.append("bc250kmd_cli.c: Bc250Dpm does not check the answer's AbiVersion against the one it asked with")
+    # Exactly two request builders, and each in its own function: the CLI command and the DLL export.
     builders = re.findall(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", cli_source)
-    if len(builders) != 1 or (query is not None and not re.search(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", query)):
-        found.append(f"bc250kmd_cli.c: {len(builders)} RUN_DPM requests built, expected one, in DpmQuery")
+    in_both = query is not None and export is not None and \
+        re.search(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", query) and \
+        re.search(r"Command\s*=\s*BC250_ESCAPE_RUN_DPM\s*;", export)
+    if len(builders) != 2 or not in_both:
+        found.append(f"bc250kmd_cli.c: {len(builders)} RUN_DPM requests built, expected two, in DpmQuery and Bc250Dpm")
     return found
 
 
@@ -240,6 +261,19 @@ class DpmRequestAbiTest(unittest.TestCase):
                                        "size = (unsigned)sizeof(*d);", 1)),
             # The CLI printing the ABI 2 fields whatever the driver answered.
             (display, dpm, cli.replace("    if (d->AbiVersion != BC250_DPM_ABI) {", "    if (0) {", 1)),
+            # The export asking with ABI 2 for a 160-byte caller, which reads 32 bytes of its stack.
+            (display, dpm, cli.replace("    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : BC250_DPM_ABI;",
+                                       "    abi = BC250_DPM_ABI;", 1)),
+            # The export zeroing the whole structure in a 160-byte caller's buffer.
+            (display, dpm, cli.replace("    memset(data, 0, bytes);", "    memset(data, 0, sizeof(*data));", 1)),
+            # The export back to one size, which refuses every deployed caller.
+            (display, dpm, cli.replace("if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data)))",
+                                       "if (!data || bytes != sizeof(*data))", 1)),
+            # A third request builder, outside both functions.
+            (display, dpm, cli.replace("static void DpmPrint(const BC250_ESCAPE_DPM *d)",
+                                       "static void DpmStray(BC250_ESCAPE_DPM *d)\n"
+                                       "{\n    d->Command = BC250_ESCAPE_RUN_DPM;\n}\n"
+                                       "static void DpmPrint(const BC250_ESCAPE_DPM *d)", 1)),
         ]
         for i, (d, k, c) in enumerate(mutations):
             with self.subTest(mutation=i):
