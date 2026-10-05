@@ -576,7 +576,7 @@ static partial class UnitTests
         Check(bare.Count == 2 && bare[0].Topic == "Desktop compositor" && bare[1].Topic == "Driver", "not installed: the compositor line and the driver line");
 
         // The selected route (DwmForceCpu) and the active route (the running DWM's modules) are separate; a write
-        // after this DWM started is pending until the restart (codex 907).
+        // after this DWM started is pending until the restart (review 907).
         var cpuPending = Open(); cpuPending.DwmForceCpu = 1; cpuPending.DwmRoute = "gpu";
         var cp = line(Recovery.Describe(cpuPending), "Desktop composition");
         Check(cp.Text.StartsWith("Selected: the CPU route; the running DWM loaded the GPU route. A route chosen in this session applies at the next restart of Windows.") &&
@@ -699,7 +699,7 @@ static partial class UnitTests
         };
     }
 
-    // BD-060 (codex 907): only a replacement an observer saw is a restart; a first observation is unknown history,
+    // BD-060 (review 907): only a replacement an observer saw is a restart; a first observation is unknown history,
     // never "restarted" and never "healthy"; a new session or boot starts a new baseline.
     static void Compositor()
     {

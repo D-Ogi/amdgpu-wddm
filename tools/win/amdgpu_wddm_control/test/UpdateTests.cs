@@ -1,4 +1,4 @@
-// G-UPD (Codex 916 A5): tag grammar and order, eligible releases only, completeness, never a downgrade, unknown
+// G-UPD (review 916 A5): tag grammar and order, eligible releases only, completeness, never a downgrade, unknown
 // installed version, backoff and rate limits, the cache's attempt/success split and the recompare after an upgrade.
 using System;
 using System.Collections.Generic;

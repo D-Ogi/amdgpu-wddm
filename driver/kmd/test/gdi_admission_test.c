@@ -1,6 +1,6 @@
 // Host test of gdi_admission.h (BD-060): the standard-allocation decision of DxgkDdiGetStandardAllocationDriverData,
 // its per-start request/answer counters, the LB7A admission of CreateAllocation/OpenAllocation, and the control flow
-// of CreateAllocation with injected failures (Codex 904). Built with no WDK header by run_gdi_admission.ps1, beside
+// of CreateAllocation with injected failures (review 904). Built with no WDK header by run_gdi_admission.ps1, beside
 // dcn_translate.c, which holds the layouts it calls.
 #include <stdio.h>
 #include <string.h>
@@ -82,7 +82,7 @@ static void SameAsBefore(void)
     printf("same as before: %lu requests compared, %lu admitted\n", compared, admitted);
 }
 
-// Codex 900/901: a refused type is counted at entry and as a refusal, never as a success.
+// Review 900/901: a refused type is counted at entry and as a refusal, never as a success.
 static void RefusalsCounted(void)
 {
     unsigned long type;
@@ -202,7 +202,7 @@ static void ReceivedBlobs(void)
     CHECK(Bc250Lb7aAdmit(&b, 48, 0, 0, 1, &gotType, &p) == BC250_LB7A_ADMITTED && gotType == 2);
 }
 
-// ---- CreateAllocation with injected failures (Codex 904) ----------------------------------------------------------
+// ---- CreateAllocation with injected failures (review 904) ----------------------------------------------------------
 
 #define MAX_ALLOCS 8
 // One allocation of the model: its slot (GDI type or BC250_CREATE_NOT_LB7A) and what Admit does with it.

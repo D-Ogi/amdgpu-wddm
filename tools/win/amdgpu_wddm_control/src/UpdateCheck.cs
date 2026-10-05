@@ -1,4 +1,4 @@
-// The update check (WU-043, WU-046, Codex 916 A5). The ONLY file of this app that talks to the network, and the only
+// The update check (WU-043, WU-046, review 916 A5). The ONLY file of this app that talks to the network, and the only
 // place its web addresses live (G-SRC). No account, no token, no upload: one unauthenticated GET per page of
 // https://api.github.com/repos/D-Ogi/amdgpu-wddm/releases, at start (when the user has not turned it off) and on a
 // click; and the browser opened on the release page the user asks for.

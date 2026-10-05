@@ -7,6 +7,6 @@ using System.Runtime.Versioning;
 [assembly: AssemblyVersion("0.5.0.0")]
 [assembly: AssemblyFileVersion("0.5.0.0")]
 // csc does not add this attribute by itself; without it the runtime treats the exe as an old-framework image and
-// SecurityProtocolType.SystemDefault would not mean "the operating system's choice" (Codex 916 A5). build.ps1 checks
+// SecurityProtocolType.SystemDefault would not mean "the operating system's choice" (review 916 A5). build.ps1 checks
 // the built image for the string.
 [assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]

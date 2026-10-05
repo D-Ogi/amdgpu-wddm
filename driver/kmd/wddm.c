@@ -3348,7 +3348,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     default:
         break;
     }
-    // BD-060: counted on entry, before anything can refuse (Codex 900: Calls[] below advances on success only).
+    // BD-060: counted on entry, before anything can refuse (review 900: Calls[] below advances on success only).
     if (wddm != NULL) Bc250StdAllocEnter(&wddm->StdAlloc, &request);
 
     // Retain the CDD/DWM allocation contract independently of the shared first-DDI
@@ -3438,7 +3438,7 @@ static NTSTATUS WddmSurfaceResourcePolicy(const void* Data, UINT Bytes,
 
 // CreateAllocation's per-allocation work, as the operations of Bc250CreateRun (gdi_admission.h), which owns the loop,
 // the resource object and the rollback, so that the rollback paths are host-tested with injected failures and every
-// call is counted by its final outcome (Codex 904).
+// call is counted by its final outcome (review 904).
 typedef struct _BC250_CREATE_CALL {
     BC250_DEVICE* Device;
     BC250_WDDM* Wddm;
