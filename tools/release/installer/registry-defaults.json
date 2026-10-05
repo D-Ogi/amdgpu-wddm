@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "defaults": {
+    "parameters": {
+      "EnableMmio": 1,
+      "EnableVram": 1,
+      "EnableVramWrite": 1,
+      "EnableGart": 1,
+      "EnablePsp": 1,
+      "EnableGfx": 1,
+      "EnableIh": 1,
+      "EnableDcnWrite": 1,
+      "EnableVidPnFlip": 1,
+      "EnableGpuVa": 1,
+      "EnableGpuSubmit": 1,
+      "EnablePagingNode": 1,
+      "EnablePresentBlit": 1,
+      "EnableFullWddm": 2,
+      "EnableNativeSmu": 1,
+      "EnableNativePteCopy": 1,
+      "EnableHandleIdentityProbe": 1,
+      "EnableGpuPresentBlit": 1,
+      "EnableCddDwmInterop": 1,
+      "DpmMode": 1,
+      "DpmMaxMHz": 1500,
+      "KeepLog": 0
+    },
+    "desktop_router": {
+      "DwmForceCpu": 0,
+      "RequireKmdSwitches": 1
+    },
+    "app_router": {
+      "Mode": "gpu-default",
+      "Allow": ["dxdiag.exe"],
+      "Deny": ["witcher3.exe"]
+    },
+    "d3d12_applications": {
+      "witcher3.exe": {
+        "Experiment": "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay"
+      }
+    }
+  },
+  "legacy_applied": {
+    "parameters": {
+      "EnableMmio": 1,
+      "EnableVram": 1,
+      "EnableVramWrite": 1,
+      "EnableGart": 1,
+      "EnablePsp": 1,
+      "EnableGfx": 1,
+      "EnableIh": 1,
+      "EnableDcnWrite": 1,
+      "EnableVidPnFlip": 1,
+      "EnableGpuVa": 1,
+      "EnableGpuSubmit": 1,
+      "EnablePagingNode": 1,
+      "EnablePresentBlit": 1,
+      "EnableFullWddm": 2,
+      "EnableNativeSmu": 1,
+      "EnableNativePteCopy": 1,
+      "EnableHandleIdentityProbe": 1,
+      "EnableGpuPresentBlit": 1,
+      "EnableCddDwmInterop": 1,
+      "DpmMode": 1,
+      "DpmMaxMHz": 1500,
+      "KeepLog": 0
+    },
+    "desktop_router": {
+      "DwmForceCpu": 1,
+      "RequireKmdSwitches": 1
+    },
+    "app_router": {
+      "Mode": "allowlist",
+      "Allow": ["dxdiag.exe"],
+      "Deny": ["witcher3.exe"]
+    },
+    "d3d12_applications": {
+      "witcher3.exe": {
+        "Experiment": "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay"
+      }
+    }
+  }
+}

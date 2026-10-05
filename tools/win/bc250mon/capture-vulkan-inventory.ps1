@@ -6,14 +6,21 @@ $meta=[ordered]@{SchemaVersion=1;Status='error';CapturedUtc=[DateTime]::UtcNow.T
 try {
  if((Invoke-RestMethod http://127.0.0.1:2250/state).stop){throw 'Owner STOP requested'}
  $tool='C:\BC250\m8\vulkaninfo.exe'
- $icd='C:\BC250\m9\radv-main-icd2\radeon_icd.json'
- $library='C:\BC250\m9\radv-main-icd2\vulkan_radeon.dll'
+ # The ICD the adapter registers (display class key VulkanDriverName), not a pinned lab copy: the panel must
+ # describe the driver that applications get. The library path comes from the manifest, next to it.
+ $class=Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue |
+  Where-Object {(Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).MatchingDeviceId -like 'pci\ven_1002&dev_13fe*'} | Select-Object -First 1
+ if(-not $class){throw 'No BC250 display class key'}
+ $icd=[string](Get-ItemProperty $class.PSPath).VulkanDriverName
+ if(-not $icd -or -not (Test-Path $icd)){throw 'No registered Vulkan ICD manifest'}
+ $libraryPath=[string](Get-Content $icd -Raw | ConvertFrom-Json).ICD.library_path
+ $library=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($libraryPath)){$libraryPath}else{Join-Path (Split-Path $icd) $libraryPath}))
+ if(-not (Test-Path $library)){throw 'Registered ICD library missing'}
  $meta.ToolSha256=(Get-FileHash $tool).Hash
  if($meta.ToolSha256 -ne '02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00'){throw 'Unexpected vulkaninfo artifact'}
  $meta.Collector='vulkaninfo '+(Get-Item $tool).VersionInfo.FileVersion
  $meta.IcdPath=$icd;$meta.IcdSha256=(Get-FileHash $icd).Hash
  $meta.IcdLibraryPath=$library;$meta.IcdLibrarySha256=(Get-FileHash $library).Hash
- if($meta.IcdLibrarySha256 -ne 'DB886B8D53E6BEE89665287AF5EE19A1868E5874868C795F6B11472FBB4A3986'){throw 'Unexpected ICD'}
  $gpus=@(Get-PnpDevice -Class Display | Where-Object {$_.InstanceId -like 'PCI\VEN_1002&DEV_13FE*'})
  if($gpus.Count -ne 1 -or $gpus[0].Status -ne 'OK'){throw 'Expected one healthy BC250'}
  $meta.KmdVersion=(Get-PnpDeviceProperty -InstanceId $gpus[0].InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data
@@ -27,7 +34,7 @@ try {
  $meta.ProcessId=$process.Id
  $modules=@{}
  $timer=[Diagnostics.Stopwatch]::StartNew()
- while(-not $process.HasExited -and $timer.Elapsed.TotalSeconds -lt 40){
+ while(-not $process.HasExited -and $timer.Elapsed.TotalSeconds -lt 120){
   try {foreach($m in $process.Modules){if($m.ModuleName -match 'vulkan|bc250'){$modules[$m.FileName]=1}}}catch{}
   Start-Sleep -Milliseconds 20
   $process.Refresh()

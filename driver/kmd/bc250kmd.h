@@ -287,6 +287,9 @@ typedef struct _BC250_DEVICE {
     PVOID Gfx;                          // gfx.c, the same
     PVOID Ih;                           // ih.c, NULL unless the EnableIh gate was open at start
     BOOLEAN FullWddm;                   // DriverEntry found EnableFullWddm open and gave dxgkrnl the full table
+    BOOLEAN ComposedSourceModes;        // display_modes.h: offer the composed formats' source modes too (full table,
+                                        // OfferComposedSourceModes not 0; read at WddmStart)
+    ULONG CommittedSourceFormat;        // D3DDDIFORMAT of the last committed source mode, for the commit log
     PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;

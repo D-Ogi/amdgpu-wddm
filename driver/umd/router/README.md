@@ -7,12 +7,20 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   the kill switch `DwmForceCpu` or when the KMD's GPU DWM interop switches are off;
 - every other process goes to the application GPU UMD (the DXVK-based shell `amdgpu_wddm_d3d11.dll`,
   `driver/umd/dxvk`) or to the CPU UMD, by the `AppRouter` policy (`cpu`, `allowlist`, `gpu-default`, with `Allow`
-  and `Deny` lists). The sign-in and consent processes always stay on the CPU UMD;
+  and `Deny` lists). The sign-in and consent processes always stay on the CPU UMD. In `gpu-default` mode (the
+  installer's default since 2026-10-04) Windows components - images below the Windows directory and packaged apps
+  under `WindowsApps\Microsoft*` - also stay on the CPU UMD unless `Allow` names them (BD-061: on the GPU UMD Notepad
+  loops on `OpenAdapter` without a window, Calculator and Task Manager show blank content; lab, 2026-10-04; the cause
+  is not established). The second rule matches a directory name, not a publisher, so a packaged game below such a
+  directory needs an `Allow` entry. Image and Windows directory are compared as final resolved paths
+  (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions do not bypass the test; an image or directory
+  that cannot be resolved also stays on the CPU UMD unless `Allow` names it (reason `app-component-unknown`);
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
 
 The registry interface (`HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`, `...\AppRouter` and the KMD's
 `InteropLastState`) is documented value by value at the top of `router.cpp`. The decisions themselves are free of
-I/O in `router-policy.h`, so the host tests drive them directly.
+I/O in `router-policy.h`, so the host tests drive them directly; the path resolution in `router-identity.h` is
+tested on real files (the `identity` scenario: extended prefix, 8.3 alias, junction, `Windows2`/`Windows.old`).
 
 The compiled default CPU UMD path, `C:\BC250\m15\desktop-umd173-007\bc250d3d.dll`, is the lab's deployment path
 on unit A; the `DesktopRouter` value `CpuUmdPath` overrides it. It stays in the source because it is part of the

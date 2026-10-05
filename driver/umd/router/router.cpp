@@ -58,6 +58,7 @@
 #include <cstdio>
 #include <cwchar>
 #include "router-policy.h"
+#include "router-identity.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -366,13 +367,17 @@ static HRESULT ForwardCpu(const Config &c, const char *entry, D3D10DDIARG_OPENAD
     return cpu ? CallEntry(cpu, entry, args) : HRESULT_FROM_WIN32(error);
 }
 
-static HRESULT ForwardApp(const Config &c, const wchar_t *exe, const char *entry, D3D10DDIARG_OPENADAPTER *args,
-                          size_t tableBytes)
+static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *exe, const char *entry,
+                          D3D10DDIARG_OPENADAPTER *args, size_t tableBytes)
 {
     AppConfig a;
     ReadAppConfig(&a);
     const bool entry_10_2 = !strcmp(entry, "OpenAdapter10_2");
-    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0});
+    wchar_t windows[PathChars];
+    const UINT wn = GetSystemWindowsDirectoryW(windows, PathChars);
+    if (!wn || wn >= PathChars) windows[0] = 0; // ClassifyComponent: Unknown, which keeps gpu-default on the CPU UMD
+    const Component component = ClassifyComponent(image, windows);
+    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component});
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {
         gpuHr = TryGpu(a.gpu, entry, args, tableBytes);
@@ -392,9 +397,10 @@ static HRESULT Forward(const char *entry, D3D10DDIARG_OPENADAPTER *args, size_t 
     Config c;
     ReadConfig(&c);
     wchar_t exeBuffer[PathChars];
-    const wchar_t *exe = ExeBase(exeBuffer, PathChars);
+    exeBuffer[0] = 0;
+    const wchar_t *exe = ExeBase(exeBuffer, PathChars); // exeBuffer keeps the full image path
     const Decision d = Decide({exe, c.clients, c.force_cpu, c.require_switches, c.blit_on, c.interop_on});
-    if (d.reason == Reason::NotHostedClient) return ForwardApp(c, exe, entry, args, tableBytes);
+    if (d.reason == Reason::NotHostedClient) return ForwardApp(c, exeBuffer, exe, entry, args, tableBytes);
     // Desktop: dwm.exe and HostedClients, as router 5BBEB783.
     HRESULT hostedHr = S_FALSE; // not tried
     if (d.route == Route::Hosted) {

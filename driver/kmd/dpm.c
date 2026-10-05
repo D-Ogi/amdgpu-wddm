@@ -2,6 +2,12 @@
 // (docs/design/dpm.md). Owner decision 2026-09-30: The Witcher 3 with RT ran 91.5 % GPU-busy at the fixed
 // 1000 MHz, so the clock was the limit.
 //
+// Since 0.7.205 the thermal cap alone may go under that floor, to 900 or 800 MHz at the floor's own 820 mV
+// (owner decision 2026-10-05, after RotTR scene 2 held 88 C with the governor already at 1000 MHz and the GPU
+// 97 % busy). The firmware has never been seen below 1000 MHz (facts M47), so DpmApply treats a refused
+// sub-floor transition as "this part has no sub-floor": one log line, the lab floor applied instead, the SMU
+// give-up counter untouched, and the governor's cap stops at the lab floor for the rest of the start.
+//
 // What lives where:
 //   driver/shim/bc250_dpm.c     the policy: guard decision, governor step, session marker (host-tested)
 //   driver/shim/bc250_clock.c   the operating-point table and the one SMU transaction every change uses
@@ -42,7 +48,7 @@
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
 
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 160);
-C_ASSERT(BC250_DPM_THROTTLE_COUNT == 8);
+C_ASSERT(BC250_DPM_THROTTLE_COUNT == 10);
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 152);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_SIZE);
 C_ASSERT(BC250_DPM_TUNE_COUNT == 8);
@@ -50,7 +56,8 @@ C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAP
          FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 
 static const char* const g_Throttle[BC250_DPM_THROTTLE_COUNT] = {
-    "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed"
+    "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed", "thermal-warm",
+    "thermal-ramp"
 };
 
 static void DpmLock(BC250_DPM_STATE* S)
@@ -88,7 +95,8 @@ static BOOLEAN TuneEqual(const struct bc250_dpm_tune* A, const struct bc250_dpm_
            ThermalEqual(A, B);
 }
 
-// The floor as the escape and the log give it: the clock, 0 for none (level 0 is the table's own floor).
+// The floor as the escape and the log give it: the clock, 0 for none (BC250_DPM_FLOOR_LEVEL is the lab floor,
+// which means no runtime floor; nothing below it is admitted as one).
 static ULONG TuneFloorMHz(const struct bc250_dpm_tune* T)
 {
     return T->floor_level != BC250_DPM_FLOOR_LEVEL ? bc250_dpm_level_mhz(T->floor_level) : 0;
@@ -246,6 +254,8 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.TuneApplied = S->TuneTaken;
     snap.FloorTicks = g->floor_ticks;
     snap.SoftReleases = g->soft_releases;
+    snap.WarmHolds = g->warm_holds;
+    snap.RampHolds = g->ramp_holds;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
@@ -294,14 +304,14 @@ static void DpmLogLine(const char* What, const BC250_DPM_SNAP* P)
 {
     LONG t = P->TemperatureMc;
     GuardLog("dpm: %s %s %lu MHz/%lu mV (SMU %lu MHz VID %lu) %ld.%01ld C busy %lu.%lu%% avg %lu.%lu%% "
-             "want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu errors %lu resyncs %lu, busy from %s "
+             "want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu warm %lu ramp %lu errors %lu resyncs %lu, busy from %s "
              "(%lu samples), submit %lu.%lu%%, sdma %lu.%lu%%",
              What, P->Mode == BC250_DPM_MODE_DPM ? "dpm" : "fixed", P->CurrentMHz, P->CurrentMv,
              P->ObservedMHz, P->ObservedVid, t / 1000, (t < 0 ? -t : t) % 1000 / 100,
              P->BusyPermille / 10, P->BusyPermille % 10, P->BusyAvgPermille / 10, P->BusyAvgPermille % 10,
              P->WantMHz, P->CapMHz, P->MaxMHz,
              P->Throttle < BC250_DPM_THROTTLE_COUNT ? g_Throttle[P->Throttle] : "?",
-             P->Raises, P->Lowers, P->ThermalEvents, P->Errors, P->Resyncs,
+             P->Raises, P->Lowers, P->ThermalEvents, P->WarmHolds, P->RampHolds, P->Errors, P->Resyncs,
              P->BusySource == BC250_DPM_BUSY_GRBM ? "grbm" : "submit", P->HwSamples,
              P->SubmitBusyPermille / 10, P->SubmitBusyPermille % 10, P->SdmaBusyPermille / 10, P->SdmaBusyPermille % 10);
 }
@@ -330,6 +340,22 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
         GuardLog("dpm: %lu -> %lu MHz refused by the clock gate at %d mC (%s)", from,
                  bc250_dpm_level_mhz(Level), report.temperature_mc, Why);
         return FALSE;
+    }
+    if (Level < BC250_DPM_FLOOR_LEVEL) {
+        // A thermal-only point under the lab floor (0.7.205). The firmware has never been seen below 1000 MHz
+        // (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there), so a refusal here is a
+        // property of this part, not an SMU fault: the governor loses the sub-floor for the rest of the start,
+        // the lab floor goes in instead, and the SMU give-up counter (BC250_DPM_ERROR_LIMIT) is untouched, so
+        // one unsupported point never costs the whole DPM start.
+        // Kept under BC250_LOG_TEXT (160 bytes), so the whole line survives in the driver log.
+        GuardLog("dpm: sub-floor refused: %lu MHz 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), cap stops at "
+                 "%lu MHz for this start (%s)", bc250_dpm_level_mhz(Level), status, report.status,
+                 report.messages_completed, report.messages_attempted, report.observed_mhz, report.observed_vid,
+                 bc250_dpm_level_mhz(BC250_DPM_FLOOR_LEVEL), Why);
+        bc250_dpm_subfloor_refused(&S->Gov);
+        InterlockedExchange(&S->Resync, 1);
+        (void)DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "sub-floor refused");
+        return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
     }
     T->Errors++;
     S->ErrorsInRow++;
@@ -674,9 +700,16 @@ void DpmStop(BC250_DEVICE* Device)
     s->Thread = NULL;
     s->Created = FALSE;
     RtlZeroMemory(&tick, sizeof(tick));
+    // The lab floor, from above or (since 0.7.205) from a thermal-only point below it: the clock gate admits a
+    // request up to the floor that does not raise the voltage however hot the part is, so the hardware does not
+    // keep an untested sub-floor clock after the driver has given up ownership.
     if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL)
         (void)DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "stop");
-    if (s->Session.marked && s->Gov.level == BC250_DPM_FLOOR_LEVEL &&
+    // "Not above the floor" ends a start cleanly, the same reading the session marker itself uses
+    // (bc250_dpm_session_step): since 0.7.205 the thermal cap can leave the governor at 800 or 900 MHz, and a
+    // stop from there is clean. Testing for the floor alone left the marker behind whenever the floor apply
+    // above did not go through, and the next start then read it as an unclean end and wrote DpmMode = 0.
+    if (s->Session.marked && s->Gov.level <= BC250_DPM_FLOOR_LEVEL &&
         NT_SUCCESS(GuardDeleteSetting(DPM_SETTING_SESSION)))
         s->Session.marked = 0;
     InterlockedExchange(&Device->Smu.GovernorActive, 0);
@@ -706,6 +739,8 @@ void DpmPause(BC250_DEVICE* Device)
     KeFlushQueuedDpcs();                // a sampler callback that read Paused as 0 has finished its reads
     KeWaitForSingleObject(&s->TickLock, Executive, KernelMode, FALSE, NULL);
     RtlZeroMemory(&tick, sizeof(tick));
+    // As in DpmStop: the floor is reachable from a sub-floor point at any temperature, so D3 is entered at the
+    // lab point and the resume transaction (power.c, SmuPrepareClock) finds the clock it expects.
     if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL)
         (void)DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "power down");
     KeReleaseMutex(&s->TickLock, FALSE);

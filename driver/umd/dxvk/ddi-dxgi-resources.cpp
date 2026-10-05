@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-dxgi-resources.h"
 #include <d3d9.h> // S_NOT_RESIDENT / S_RESIDENT_IN_SHARED_MEMORY, DXGI DDI contract.
+#include <climits>
+#include <cstdint>
 namespace bc250::umd {
 namespace {
 template<typename F> HRESULT entry(DXGI_DDI_HDEVICE h,F &&call) noexcept {
@@ -22,14 +24,23 @@ HRESULT allocation(DeviceOwner &owner,DXGI_DDI_HRESOURCE handle,D3DKMT_HANDLE &o
         surface->allocation.allocation!=r->present_allocation) return E_INVALIDARG;
     out=surface->allocation.allocation; return S_OK;
 }
+// Offer, Reclaim, SetResourcePriority and QueryResourceResidency are hints for an engine-private resource (no runtime
+// surface, so no kernel allocation the shell can name): its memory stays as it is, Reclaim reports its content kept
+// and residency reports it resident. Refusing them is not an option: DXGI turns a failed Offer into
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR and removes the device (M14.1: Task Manager's XAML offers its surfaces right after
+// device creation, and its device was removed and recreated in a loop, 2026-10-01). The runtime surfaces in the same
+// batch still go to the kernel by allocation handle. `slot[i]` is the index of resource i in `handles`, or UINT_MAX
+// for an engine-private resource.
 HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,UINT count,
-                         std::vector<D3DKMT_HANDLE> &handles) {
+                         std::vector<D3DKMT_HANDLE> &handles,std::vector<UINT> &slot) {
     if (count && !resources) return E_INVALIDARG;
-    handles.resize(count);
+    handles.clear(); handles.reserve(count); slot.assign(count,UINT_MAX);
     for (UINT i=0;i<count;++i) {
-        HRESULT hr=allocation(owner,resources[i],handles[i]);
+        D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,resources[i],handle);
+        if (hr==E_NOTIMPL) continue; // Engine-private: a hint only.
         if (FAILED(hr)) return hr;
-        for (UINT j=0;j<i;++j) if (handles[i]==handles[j]) return E_INVALIDARG;
+        for (D3DKMT_HANDLE seen:handles) if (seen==handle) return E_INVALIDARG;
+        slot[i]=UINT(handles.size()); handles.push_back(handle);
     }
     return S_OK;
 }
@@ -38,10 +49,10 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
     return entry(args->hDevice,[&](DeviceOwner &owner) {
         if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_AUTO)
             return E_INVALIDARG;
-        std::vector<D3DKMT_HANDLE> handles;
-        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles);
+        std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
+        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
         if (FAILED(hr) || handles.empty()) return hr;
-        return offer_after_submit(owner.runtime(),handles.data(),args->Resources,args->Priority,[&]() -> HRESULT {
+        return offer_after_submit(owner.runtime(),handles.data(),UINT(handles.size()),args->Priority,[&]() -> HRESULT {
             if (!owner.context() || !owner.device()) return E_FAIL;
             auto status=[&]() -> HRESULT {
                 if (owner.bridge().device_lost || owner.bridge().submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
@@ -56,21 +67,24 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
 HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
     if (!args) return E_INVALIDARG;
     return entry(args->hDevice,[&](DeviceOwner &owner) {
-        std::vector<D3DKMT_HANDLE> handles;
-        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles);
-        if (FAILED(hr) || handles.empty()) return hr;
-        auto &runtime=owner.runtime();
-        if (!runtime.KTCallbacks.pfnReclaimAllocationsCb) return E_NOTIMPL;
-        std::vector<BOOL> discarded(args->Resources,FALSE);
-        D3DDDICB_RECLAIMALLOCATIONS request{};
-        // BIND_PRESENT resources must be reclaimed by allocation handle.
-        request.HandleList=handles.data(); request.NumAllocations=args->Resources;
-        request.pDiscarded=discarded.data();
-        hr=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+        std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
+        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
         if (FAILED(hr)) return hr;
-        // This synchronous callback returns resident allocations. Reclaim2 would
-        // require retaining and waiting its paging fence before further GPU use.
-        if (args->pDiscarded) for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=discarded[i];
+        std::vector<BOOL> discarded(handles.size(),FALSE);
+        if (!handles.empty()) {
+            auto &runtime=owner.runtime();
+            if (!runtime.KTCallbacks.pfnReclaimAllocationsCb) return E_NOTIMPL;
+            D3DDDICB_RECLAIMALLOCATIONS request{};
+            // BIND_PRESENT resources must be reclaimed by allocation handle.
+            request.HandleList=handles.data(); request.NumAllocations=UINT(handles.size());
+            request.pDiscarded=discarded.data();
+            hr=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+            if (FAILED(hr)) return hr;
+            // This synchronous callback returns resident allocations. Reclaim2 would
+            // require retaining and waiting its paging fence before further GPU use.
+        }
+        if (args->pDiscarded)
+            for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=slot[i]==UINT_MAX ? FALSE : discarded[slot[i]];
         return hr;
     });
 }
@@ -95,6 +109,7 @@ HRESULT APIENTRY priority(DXGI_DDI_ARG_SETRESOURCEPRIORITY *args) {
     if (!args) return E_INVALIDARG;
     return entry(args->hDevice,[&](DeviceOwner &owner) {
         D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,args->hResource,handle);
+        if (hr==E_NOTIMPL) return S_OK; // Engine-private: a hint only (see allocation_batch).
         if (FAILED(hr)) return hr;
         auto &runtime=owner.runtime();
         if (!runtime.KTCallbacks.pfnSetPriorityCb) return E_NOTIMPL;
@@ -109,20 +124,27 @@ HRESULT APIENTRY residency(DXGI_DDI_ARG_QUERYRESOURCERESIDENCY *args) {
         if (!args->Resources) return S_OK;
         if (args->Resources>UINT32_MAX || !args->pResources || !args->pStatus) return E_INVALIDARG;
         auto &runtime=owner.runtime();
-        if (!runtime.KTCallbacks.pfnQueryResidencyCb) return E_NOTIMPL;
-        std::vector<D3DKMT_HANDLE> handles(args->Resources);
-        std::vector<D3DDDI_RESIDENCYSTATUS> status(args->Resources);
-        std::vector<DXGI_DDI_RESIDENCY> result(args->Resources);
+        std::vector<D3DKMT_HANDLE> handles; handles.reserve(args->Resources);
+        std::vector<SIZE_T> slot(args->Resources,SIZE_MAX);
+        std::vector<DXGI_DDI_RESIDENCY> result(args->Resources,DXGI_DDI_RESIDENCY_FULLY_RESIDENT);
         for (SIZE_T i=0;i<args->Resources;++i) {
-            HRESULT hr=allocation(owner,args->pResources[i],handles[i]); if (FAILED(hr)) return hr;
+            D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,args->pResources[i],handle);
+            if (hr==E_NOTIMPL) continue; // Engine-private: reported resident (see allocation_batch).
+            if (FAILED(hr)) return hr;
+            slot[i]=handles.size(); handles.push_back(handle);
         }
-        D3DDDICB_QUERYRESIDENCY request{}; request.NumAllocations=UINT(args->Resources);
-        request.HandleList=handles.data(); request.pResidencyStatus=status.data();
-        HRESULT hr=runtime.KTCallbacks.pfnQueryResidencyCb(runtime.hDevice,&request);
-        if (FAILED(hr)) return hr;
+        std::vector<D3DDDI_RESIDENCYSTATUS> status(handles.size());
+        if (!handles.empty()) {
+            if (!runtime.KTCallbacks.pfnQueryResidencyCb) return E_NOTIMPL;
+            D3DDDICB_QUERYRESIDENCY request{}; request.NumAllocations=UINT(handles.size());
+            request.HandleList=handles.data(); request.pResidencyStatus=status.data();
+            HRESULT hr=runtime.KTCallbacks.pfnQueryResidencyCb(runtime.hDevice,&request);
+            if (FAILED(hr)) return hr;
+        }
         HRESULT aggregate=S_OK;
         for (SIZE_T i=0;i<args->Resources;++i) {
-            switch (status[i]) {
+            if (slot[i]==SIZE_MAX) continue;
+            switch (status[slot[i]]) {
             case D3DDDI_RESIDENCYSTATUS_RESIDENTINGPUMEMORY: result[i]=DXGI_DDI_RESIDENCY_FULLY_RESIDENT; break;
             case D3DDDI_RESIDENCYSTATUS_RESIDENTINSHAREDMEMORY:
                 result[i]=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY;

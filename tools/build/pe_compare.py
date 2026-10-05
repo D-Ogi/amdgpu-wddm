@@ -67,12 +67,18 @@ def main(reference_path, rebuilt_path):
         elif not differs and start is not None:
             ranges.append((start, i))
             start = None
+    # A range is explained when every byte of it lies in some per-build field: one contiguous range can span two
+    # adjacent fields (RSDS GUID followed by RSDS age).
+    covered = set()
+    for off, ln, _ in fields:
+        covered.update(range(off, off + ln))
     unexplained = 0
     for a, b in ranges:
-        names = [n for off, ln, n in fields if off <= a and b <= off + ln]
-        if not names:
+        names = [n for off, ln, n in fields if off < b and a < off + ln]
+        explained = all(i in covered for i in range(a, b))
+        if not explained:
             unexplained += 1
-        print('0x%05X-0x%05X  %s  %s -> %s' % (a, b - 1, names[0] if names else 'UNEXPLAINED',
+        print('0x%05X-0x%05X  %s  %s -> %s' % (a, b - 1, ' + '.join(names) if explained else 'UNEXPLAINED',
                                                reference[a:b].hex(), rebuilt[a:b].hex()))
     print('%d bytes, %d differing range(s), %d outside the per-build fields' % (len(reference), len(ranges), unexplained))
     # The rebuilt image with the reference's per-build fields copied in: equal to the reference exactly when every

@@ -19,5 +19,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Surface-allocation compilation failed' }
         & .\surface-allocation-test.exe
         if ($LASTEXITCODE -ne 0) { throw 'Surface-allocation test failed' }
+        # BD-065: the Present shadow request passes the same allocation admission.
+        & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /external:W0 /MD /DNOMINMAX /DWIN32_LEAN_AND_MEAN /DVK_USE_PLATFORM_WIN32_KHR @includes /Fe:present-shadow-test.exe "/Tp$repo\driver\kmd\dcn_translate.c" "$repo\driver\umd\dxvk\runtime-surface-allocation.cpp" "$repo\driver\umd\dxvk\present-shadow-test.cpp"
+        if ($LASTEXITCODE -ne 0) { throw 'Present-shadow compilation failed' }
+        & .\present-shadow-test.exe
+        if ($LASTEXITCODE -ne 0) { throw 'Present-shadow test failed' }
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }

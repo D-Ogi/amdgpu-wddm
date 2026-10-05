@@ -20,6 +20,7 @@
 #include <d3d10umddi.h>
 #pragma warning(pop)
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cwchar>
 #include <cwctype>
@@ -27,6 +28,7 @@
 #include <string>
 #include <vector>
 #include "../router-policy.h"
+#include "../router-identity.h"
 #include "bc250_adapter_identity.h" // driver/contract (build.ps1 /I)
 
 #pragma comment(lib, "advapi32.lib")
@@ -107,6 +109,57 @@ static void PolicyTests()
         CHECK(d.route == c.route && d.reason == c.reason, "app exe=%ls mode=%d e102=%d gpu=%d got %s",
               c.exe ? c.exe : L"(null)", (int)c.mode, c.e102, c.gpu, AppReasonName(d.reason));
     }
+
+    // Windows components (gpu-default only; Allow overrides; Deny and the protected list still win).
+    const wchar_t allowDx[] = L"dxdiag.exe\0";
+    // Unknown (an unresolvable image or Windows directory) is treated like Yes: CPU unless Allow names the image.
+    const Component Y = Component::Yes, N = Component::No, U = Component::Unknown;
+    struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; AppRoute route; AppReason reason; };
+    const CompCase comp[] = {
+        {L"notepad.exe", Gd, allowDx, nullptr, Y, AppRoute::Cpu, AppReason::WindowsComponent},
+        {L"dxdiag.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
+        {L"game.exe", Gd, allowDx, nullptr, N, AppRoute::Gpu, AppReason::Default},
+        {L"witcher3.exe", Gd, allowDx, deny, N, AppRoute::Cpu, AppReason::Denied},
+        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", Y, AppRoute::Cpu, AppReason::Denied},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, Y, AppRoute::Cpu, AppReason::Protected},
+        {L"notepad.exe", Al, allowDx, nullptr, Y, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"dxdiag.exe", Al, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Allowed},
+        {L"game.exe", Gd, allowDx, nullptr, U, AppRoute::Cpu, AppReason::ComponentUnknown},
+        {L"dxdiag.exe", Gd, allowDx, nullptr, U, AppRoute::Gpu, AppReason::Default},
+        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", U, AppRoute::Cpu, AppReason::Denied},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, U, AppRoute::Cpu, AppReason::Protected},
+        {L"game.exe", Al, L"game.exe\0", nullptr, U, AppRoute::Gpu, AppReason::Allowed},
+    };
+    for (const CompCase &c : comp) {
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component});
+        CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%d got %s",
+              c.exe, (int)c.mode, (int)c.component, AppReasonName(d.reason));
+    }
+    struct PathCase { const wchar_t *image, *windows; bool component; };
+    const PathCase paths[] = {
+        {L"C:\\Windows\\System32\\notepad.exe", L"C:\\Windows", true},
+        {L"c:\\windows\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartMenuExperienceHost.exe", L"C:\\Windows\\", true},
+        {L"C:\\Windows\\explorer.exe", L"C:\\Windows", true},
+        {L"C:\\Windows2\\game.exe", L"C:\\Windows", false},
+        {L"C:\\Windows.old\\game.exe", L"C:\\Windows", false},
+        {L"C:\\WindowsGames\\game.exe", L"C:\\Windows", false},
+        {L"C:\\Program Files\\WindowsApps\\Microsoft.WindowsNotepad_11.2507.26.0_x64__8wekyb3d8bbwe\\Notepad\\Notepad.exe", L"C:\\Windows", true},
+        {L"C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe\\CalculatorApp.exe", L"C:\\Windows", true},
+        {L"C:\\Program Files\\WindowsApps\\MicrosoftWindows.Client.CBS_1000.0_x64__cw5n1h2txyewy\\x.exe", L"C:\\Windows", true},
+        {L"D:\\WindowsApps\\Microsoft.Foo_1.0_x64__8wekyb3d8bbwe\\foo.exe", L"C:\\Windows", true},
+        {L"C:\\Program Files\\WindowsApps\\BethesdaSoftworks.Game_1.0_x64__3275kfvn8vcwc\\game.exe", L"C:\\Windows", false},
+        {L"C:\\XboxGames\\Game\\Content\\game.exe", L"C:\\Windows", false},
+        {L"D:\\SteamLibrary\\steamapps\\common\\Factorio\\bin\\x64\\factorio.exe", L"C:\\Windows", false},
+        {L"C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe", L"C:\\Windows", false},
+        {L"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", L"C:\\Windows", false},
+        {L"C:\\Games\\MicrosoftWindowsApps\\game.exe", L"C:\\Windows", false},
+        {L"C:\\Windows\\notepad.exe", L"", false},
+        {L"", L"C:\\Windows", false},
+        {nullptr, L"C:\\Windows", false},
+    };
+    for (const PathCase &p : paths)
+        CHECK(IsWindowsComponentPath(p.image, p.windows) == p.component, "IsWindowsComponentPath(%ls, %ls) != %d",
+              p.image ? p.image : L"(null)", p.windows, p.component);
     struct ModeCase { const wchar_t *text; AppMode mode; };
     const ModeCase modes[] = {
         {L"cpu", AppMode::Cpu}, {L"CPU", AppMode::Cpu}, {L"allowlist", AppMode::Allowlist}, {L"AllowList", AppMode::Allowlist},
@@ -292,11 +345,103 @@ static void RouterBase(bool clientIsSelf)
     if (clientIsSelf) SetMulti(RouterKey, L"HostedClients", {L"unrelated.exe", ExeBase()});
 }
 
+// ---------------------------------------------------------------- image identity (router-identity.h)
+
+// ClassifyComponent on real files: the spellings GetModuleFileNameW may return for one file must classify alike.
+// Fixtures live in <layout>\identity (junctions made with mklink /J, which needs no privilege).
+static void IdentityTests()
+{
+    using namespace bc250router;
+    wchar_t windows[MAX_PATH];
+    const UINT wn = GetSystemWindowsDirectoryW(windows, MAX_PATH);
+    if (!wn || wn >= MAX_PATH) { CHECK(false, "GetSystemWindowsDirectoryW failed"); return; }
+    const std::wstring win = windows;
+    const std::wstring cmdExe = win + L"\\System32\\cmd.exe";
+    const std::wstring base = Layout + L"\\identity";
+    CreateDirectoryW(base.c_str(), nullptr);
+
+    struct Case { std::wstring image, windows_dir; Component want; const char *what; };
+    std::vector<Case> cases = {
+        {cmdExe, win, Component::Yes, "plain System32 image"},
+        {L"\\\\?\\" + cmdExe, win, Component::Yes, "extended-prefix image"},
+        {cmdExe, L"\\\\?\\" + win, Component::Yes, "extended-prefix Windows directory"},
+        {cmdExe, win + L"\\", Component::Yes, "Windows directory with a trailing separator"},
+        {cmdExe, L"", Component::Unknown, "Windows directory query failed (empty)"},
+        {base + L"\\missing.exe", win, Component::Unknown, "image that cannot be opened"},
+        {cmdExe, base + L"\\no-such-windows", Component::Unknown, "Windows directory that cannot be opened"},
+    };
+
+    // 8.3 alias of a long name below the Windows directory, when the volume has short names.
+    const std::wstring longImage = win + L"\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+    wchar_t shortImage[MAX_PATH];
+    const DWORD sn = GetShortPathNameW(longImage.c_str(), shortImage, MAX_PATH);
+    if (sn && sn < MAX_PATH && _wcsicmp(shortImage, longImage.c_str()))
+        cases.push_back({shortImage, win, Component::Yes, "8.3 alias image"});
+    else
+        printf("  note: no 8.3 alias for %ls (short names off on this volume); alias case skipped\n", longImage.c_str());
+
+    // A junction outside the Windows directory that points into it.
+    const std::wstring junction = base + L"\\winlink";
+    RemoveDirectoryW(junction.c_str());
+    const std::wstring mk = L"cmd /c mklink /J \"" + junction + L"\" \"" + win + L"\" >nul";
+    if (_wsystem(mk.c_str()) == 0)
+        cases.push_back({junction + L"\\System32\\cmd.exe", win, Component::Yes, "junction into the Windows directory"});
+    else
+        CHECK(false, "mklink /J %ls failed", junction.c_str());
+
+    // Separator boundary on real directories: <base>\Windows is the "Windows directory" here.
+    const wchar_t *dirs[] = {L"\\Windows", L"\\Windows2", L"\\Windows.old"};
+    for (const wchar_t *d : dirs) {
+        const std::wstring dir = base + d;
+        CreateDirectoryW(dir.c_str(), nullptr);
+        HANDLE f = CreateFileW((dir + L"\\game.exe").c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+        if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+    }
+    cases.push_back({base + L"\\Windows\\game.exe", base + L"\\Windows", Component::Yes, "fixture Windows directory"});
+    // 8.3 alias inside the fixture (the layout's volume may have short names where the system volume has not).
+    const std::wstring longDir = base + L"\\Windows\\Long Directory Name";
+    CreateDirectoryW(longDir.c_str(), nullptr);
+    HANDLE lf = CreateFileW((longDir + L"\\game.exe").c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    if (lf != INVALID_HANDLE_VALUE) CloseHandle(lf);
+    wchar_t shortFixture[MAX_PATH];
+    const DWORD fn = GetShortPathNameW((longDir + L"\\game.exe").c_str(), shortFixture, MAX_PATH);
+    if (fn && fn < MAX_PATH && !wcsstr(shortFixture, L"Long Directory Name"))
+        cases.push_back({shortFixture, base + L"\\Windows", Component::Yes, "8.3 alias in the fixture"});
+    else
+        printf("  note: no 8.3 alias on the layout volume either; fixture alias case skipped\n");
+    cases.push_back({base + L"\\Windows2\\game.exe", base + L"\\Windows", Component::No, "Windows2 sibling"});
+    cases.push_back({base + L"\\Windows.old\\game.exe", base + L"\\Windows", Component::No, "Windows.old sibling"});
+    wchar_t self[MAX_PATH];
+    const DWORD selfn = GetModuleFileNameW(nullptr, self, MAX_PATH);
+    if (selfn && selfn < MAX_PATH)
+        cases.push_back({self, win, Component::No, "this test's image (outside the Windows directory)"});
+
+    for (const Case &c : cases) {
+        const Component got = ClassifyComponent(c.image.c_str(), c.windows_dir.empty() ? nullptr : c.windows_dir.c_str());
+        CHECK(got == c.want, "%s: ClassifyComponent(%ls, %ls) = %d, want %d", c.what, c.image.c_str(),
+              c.windows_dir.c_str(), (int)got, (int)c.want);
+    }
+    CHECK(ClassifyComponent(nullptr, win.c_str()) == Component::Unknown, "null image is not Unknown");
+    CHECK(ClassifyComponent(cmdExe.c_str(), nullptr) == Component::Unknown, "null Windows directory is not Unknown");
+    // Removes the junction only, never its target. A failure would leave a link into the Windows directory behind.
+    // Already absent counts only for the two not-found errors; any other state (query denied) fails.
+    if (!RemoveDirectoryW(junction.c_str())) {
+        const DWORD removeError = GetLastError();
+        const DWORD attributes = GetFileAttributesW(junction.c_str());
+        const DWORD queryError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+        const bool absent = attributes == INVALID_FILE_ATTRIBUTES &&
+                            (queryError == ERROR_FILE_NOT_FOUND || queryError == ERROR_PATH_NOT_FOUND);
+        CHECK(absent, "junction %ls not removed: RemoveDirectoryW error %lu, then attributes 0x%lx error %lu",
+              junction.c_str(), removeError, attributes, queryError);
+    }
+}
+
 // ---------------------------------------------------------------- scenarios
 
 static void Child(const std::string &s)
 {
     if (s == "policy") { PolicyTests(); return; }
+    if (s == "identity") { IdentityTests(); return; }
     OpenHive(s);
 
     // Router with doubles. The router lives in <layout>\router next to a double named bc250d3d_zink.dll.
@@ -711,7 +856,7 @@ static int RunAll(const std::wstring &out)
 {
     const std::wstring hex = L"100002a5f";
     const std::vector<Scenario> scenarios = {
-        {"policy", nullptr, {}},
+        {"policy", nullptr, {}}, {"identity", nullptr, {}},
         {"route-not-client", nullptr, {}}, {"route-client-hosted", nullptr, {}}, {"route-kill-switch", nullptr, {}},
         {"route-kill-switch-wrong-type", nullptr, {}}, {"route-kill-switch-toggle", nullptr, {}},
         {"route-switches-off", nullptr, {}}, {"route-switches-absent", nullptr, {}},

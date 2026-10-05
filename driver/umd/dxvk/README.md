@@ -258,8 +258,19 @@ not yet a measured runtime-image import on the lab.
 
 create_linear_runtime_image now creates the Vulkan image and verifies its measured
 subresource offset/rowPitch/size against runtime storage before import+bind. The
-initial supported layout is single-mip/layer RGBA8/BGRA8 linear 2D, one sample;
-other formats/layouts remain implementation work. Checks avoid row-footprint
+supported layout is single-mip/layer linear 2D, one sample, in a format the surface
+format table (driver/contract/amdgpu_wddm_surface_format.h) enables for composition:
+BGRA8/RGBA8 with their sRGB views and RGB10A2 at 4 bytes a pixel, RGBA16F at 8 and
+A8 at 1 (the shared atlases DirectComposition creates, M14.1). The row's pixel size
+sets the LB7A pitch (width * bytes rounded up to 256) and must equal the engine
+image's texel size (A8 is A8_UNORM_KHR, or R8_UNORM where DXVK remaps it). A
+primary (a swap-chain buffer with a primary descriptor) may have any of these rows except
+A8, and keeps the descriptor's VidPn source (dxgkrnl refused an RGB10A2 primary
+allocation with D3DDDI_ID_UNINITIALIZED, lab session 343). Admission as a primary is not
+permission to scan out: the kernel driver's SetVidPnSourceAddress takes only the 8-bit
+scan-out rows, and direct scan-out of RGB10A2/RGBA16F remains unsupported; this revision
+does not establish when the OS promotes such a buffer. The Ascent's UE 4.26 borderless
+swap chain is an RGB10A2 primary. Other layouts remain implementation work. Checks avoid row-footprint
 integer overflow. Failure destroys the image and releases any failed-bind memory
 wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
 Mock tests cover pitch mismatch, bind failure, success, teardown and oversized

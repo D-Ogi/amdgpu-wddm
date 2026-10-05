@@ -30,16 +30,24 @@ struct bc250_clock_report {
 #define BC250_CLOCK_STATE_INVALID (-1003)
 
 /* The operating points this driver may request (docs/design/dpm.md). One table serves the fixed
- * lab point (level 0), the governor's steps and the administrator's escape: a point is admitted only
- * on the 100 MHz grid, with a voltage at or above the table's for that clock and at or below the
- * ceiling. Anchors: 1000 MHz / 820 mV, the lab point under Windows since E04 (facts M22);
+ * lab point (level BC250_DPM_FLOOR_LEVEL), the governor's steps and the administrator's escape: a point is
+ * admitted only on the 100 MHz grid, with a voltage at or above the table's for that clock and at or below
+ * the ceiling. Anchors: 1000 MHz / 820 mV, the lab point under Windows since E04 (facts M22);
  * 1500 MHz / 918.75 mV (VID 101), the firmware's own point (facts M22, M47); 2000 MHz / 1000 mV, the
  * owner's DPM ceiling (2026-09-30), 61 mV above the community curve's interpolated 939 mV and 129 mV
- * below amdgpu's overdrive maximum of 1129 mV. Linear between anchors, rounded up to a whole mV. */
-#define BC250_CLOCK_FLOOR_MHZ 1000u
+ * below amdgpu's overdrive maximum of 1129 mV. Linear between anchors, rounded up to a whole mV.
+ * Below the lab floor the table holds two thermal-only points, 900 and 800 MHz (0.7.205, owner decision
+ * 2026-10-05: a clock under 1000 MHz is allowed when Tctl reaches 87 C). Both keep the floor's 820 mV
+ * (VID 116): a lower clock at the voltage the part is known to run at, never an undervolt, and the
+ * anchors' line is not extrapolated below its lowest anchor. The load never asks for them (the governor's
+ * BC250_DPM_FLOOR_LEVEL is 1000 MHz); only the thermal cap goes there. The firmware has never run below
+ * 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there), so the KMD treats a
+ * refused sub-floor transition as "no sub-floor for this start" (driver/kmd/dpm.c). */
+#define BC250_CLOCK_MIN_MHZ 800u        /* the table's lowest clock: thermal-only, below the lab floor */
+#define BC250_CLOCK_FLOOR_MHZ 1000u     /* the lab point, and the lowest clock the load may ask for */
 #define BC250_CLOCK_CEILING_MHZ 2000u
 #define BC250_CLOCK_STEP_MHZ 100u
-#define BC250_CLOCK_LEVELS 11u
+#define BC250_CLOCK_LEVELS 13u
 #define BC250_CLOCK_FLOOR_MV 820u
 #define BC250_CLOCK_CEILING_MV 1000u
 #define BC250_CLOCK_HOT_MC 87000     /* no raise of clock or voltage at or above this (owner, 2026-10-01; was 85000) */
@@ -55,7 +63,8 @@ extern const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS];
 static __inline unsigned int bc250_clock_vid(unsigned int mv) { return (1550u - mv) * 160u / 1000u; }
 /* Voltage of a VID in microvolts (6.25 mV steps). */
 static __inline unsigned int bc250_clock_vid_uv(unsigned int vid) { return 1550000u - vid * 6250u; }
-/* The table's voltage for a clock on the grid; 0 for any other clock. */
+/* The table's voltage for a clock on the grid (BC250_CLOCK_MIN_MHZ..BC250_CLOCK_CEILING_MHZ); 0 for any
+ * other clock. */
 unsigned int bc250_clock_min_mv(unsigned int mhz);
 /* Clock on the grid within the table, voltage between the table's and the ceiling. */
 int bc250_clock_point_allowed(unsigned int mhz, unsigned int mv);
@@ -68,7 +77,12 @@ int bc250_clock_message_allowed(unsigned int message);
  * On partial failure do not undo a successful downclock by raising frequency.
  * At or above BC250_CLOCK_HOT_MC a transition that raises clock or voltage is refused (TOO_HOT)
  * after the two readbacks; one that raises neither is carried out, so a hot part can always be
- * clocked down.
+ * clocked down. One exception (0.7.205): a request up to BC250_CLOCK_FLOOR_MHZ that does not raise
+ * the voltage is carried out however hot the part is, so that the lab point - the one operating point
+ * this part is known to run at - is reachable from the two thermal-only points below it. Without it the
+ * fixed start/resume request, the stop and power-down applies and the resync would all fail at a hot part.
+ * A clock below CYAN_SKILLFISH_SCLK_MIN (the two thermal-only points) cannot go through the imported
+ * commit, which refuses it; the same two messages are then sent directly, in the same order (bc250_clock.c).
  * Caller must prohibit GPU startup unless report.ready and status zero. */
 int bc250_clock_prepare(const struct bc250_clock_io *io, unsigned int mhz,
                         unsigned int mv, struct bc250_clock_report *report);

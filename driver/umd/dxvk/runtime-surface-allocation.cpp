@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface-allocation.h"
+#include "runtime-surface-format.h"
 namespace bc250::umd {
 // E26R v2 resource-group ABI, consumed by KMD wddm.c resource-private parser.
 struct ResourcePrivate { UINT magic,version,shared,access; };
@@ -8,17 +9,21 @@ static_assert(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceRequest &request,RuntimeSurfaceAllocation &out) {
     if (out.allocation || out.kernel_resource || out.runtime_resource) return E_UNEXPECTED;
     if (!device.domain.entered() || !device.hDevice || !device.KTCallbacks.pfnAllocateCb || !device.KTCallbacks.pfnDeallocate2Cb ||
-        !WddmSurfaceGeometry(&request.surface,0,4) || (request.primary && request.cpu_read)) return E_INVALIDARG;
-    switch (request.surface.Format) {
-    case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8: case D3DDDIFMT_A8B8G8R8: break;
-    default: return E_NOTIMPL;
-    }
+        (request.primary && request.cpu_read)) return E_INVALIDARG;
+    // The kernel driver's type-0 admission, by the same table: the composed rows and the scan-out
+    // rows a primary may have (X8R8G8B8). The row sizes the pixel: 1 byte for A8, 8 for RGBA16F.
+    const auto *row=amdgpu_wddm_surface_format_by_d3dddi(request.surface.Format);
+    if (!amdgpu_wddm_surface_admit(row,AMDGPU_WDDM_SURFACE_COMPOSED) &&
+        !amdgpu_wddm_surface_admit(row,AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY)) return E_NOTIMPL;
+    if (!runtime_surface_geometry(request.surface,row->bytes_per_pixel)) return E_INVALIDARG;
     auto texture=request.texture;
     const bool extended=texture.Magic!=0;
+    // The E26R v3 texture format is what an opener reads back; it must be the LB7A row's.
     if (extended && (texture.Magic!=BC250_SURFACE_RESOURCE_MAGIC ||
         texture.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION || texture.Shared!=UINT(request.shared) ||
         texture.Access!=((request.primary ? 1u : 0u)|(request.cpu_read ? 2u : 0u)) ||
-        texture.Width!=request.surface.Width || texture.Height!=request.surface.Height)) return E_INVALIDARG;
+        texture.Width!=request.surface.Width || texture.Height!=request.surface.Height ||
+        !runtime_surface_format(request.surface.Format,DXGI_FORMAT(texture.Format)))) return E_INVALIDARG;
     static_assert(sizeof(texture)==64);
     auto surface=request.surface;
     ResourcePrivate group{0x52363245u,2,request.shared ? 1u : 0u,

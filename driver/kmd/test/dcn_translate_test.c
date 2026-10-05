@@ -185,6 +185,21 @@ static void SurfaceFormats(void)
     CHECK(!WddmSurfaceFormatBpp(31,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(31,BC250_SURFACE_SCANOUT));
     CHECK(WddmSurfaceFormatBpp(113,BC250_SURFACE_COMPOSED)==8);
     CHECK(!WddmSurfaceFormatBpp(113,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(113,BC250_SURFACE_SCANOUT));
+    /* A8 (D3DDDIFMT_A8, DXGI A8_UNORM) has a COMPOSED row at 1 byte a pixel since the shared table gained it,
+     * where the KMD answered 0 before. No composed surface is admitted at that size: DcnLinearSurfaceBytes takes
+     * 4 and 8 bytes a pixel only, so a type-0 A8 blob is refused however well its pitch fits. Pinned here so that
+     * a later 1-byte layout cannot make A8 a composed surface without a gate saying so. */
+    CHECK(WddmSurfaceFormatBpp(28,BC250_SURFACE_COMPOSED)==1);
+    CHECK(WddmSurfaceFormatBpp(28,BC250_SURFACE_GDI)==1 && !WddmSurfaceFormatBpp(28,BC250_SURFACE_SCANOUT));
+    CHECK(!DcnLinearSurfaceBytes(1920,1080,1920,1,&bytes) && !bytes);
+    {
+        BC250_WDDM_ALLOCATION_PRIVATE a8={0};
+        a8.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;a8.Version=1;
+        a8.Width=1920;a8.Height=1080;a8.Pitch=1920;a8.Size=1920ull*1080u;a8.Format=28;
+        CHECK(!WddmSurfaceAdmitted(&a8,0));
+        a8.Pitch=7680;a8.Size=7680ull*1080u;
+        CHECK(!WddmSurfaceAdmitted(&a8,0));
+    }
     /* The 8-byte geometry itself: a whole number of pixels per row, the row inside the pitch. */
     CHECK(DcnLinearSurfaceBytes(256,64,2048,8,&bytes) && bytes==131072ull);
     CHECK(!DcnLinearSurfaceBytes(256,64,2044,8,&bytes) && !bytes);
