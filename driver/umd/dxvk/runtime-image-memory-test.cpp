@@ -7,7 +7,7 @@
 using namespace bc250::umd;
 namespace {
 int identity; unsigned allocations,bindings,frees;
-VkDeviceMemory memory=reinterpret_cast<VkDeviceMemory>(uintptr_t(7));
+VkDeviceMemory memory=(VkDeviceMemory)(uintptr_t(7));
 VkResult allocationResult=VK_SUCCESS,bindResult=VK_SUCCESS;
 void check(bool b) { if (!b) std::abort(); }
 void VKAPI_CALL requirements(VkDevice,VkImage,VkMemoryRequirements *r) { *r={4096,256,2}; }
@@ -30,7 +30,7 @@ const VkFormat viewFormats[]={VK_FORMAT_R8G8B8A8_UNORM,VK_FORMAT_R8G8B8A8_SRGB};
 const VkImageFormatListCreateInfo formatList{VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,nullptr,2,viewFormats};
 VkResult VKAPI_CALL image_create(VkDevice,const VkImageCreateInfo *info,const VkAllocationCallbacks *,VkImage *out) {
     createdInfo=*info; ++imageCreates; check(info->usage==VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-    *out=reinterpret_cast<VkImage>(uintptr_t(2)); return VK_SUCCESS;
+    *out=(VkImage)(uintptr_t(2)); return VK_SUCCESS;
 }
 void VKAPI_CALL image_destroy(VkDevice,VkImage,const VkAllocationCallbacks *) { ++imageDestroys; }
 void VKAPI_CALL image_layout(VkDevice,VkImage,const VkImageSubresource *sub,VkSubresourceLayout *out) {
@@ -130,7 +130,7 @@ struct ImportEngine final : IBc250DxvkDevice2 {
 }
 int main() {
     RuntimeDevice runtime; runtime.hDevice=&identity;
-    VkDevice device=reinterpret_cast<VkDevice>(uintptr_t(1)); VkImage image=reinterpret_cast<VkImage>(uintptr_t(2));
+    VkDevice device=reinterpret_cast<VkDevice>(uintptr_t(1)); VkImage image=(VkImage)(uintptr_t(2));
     ImageMemoryDispatch dispatch{requirements,allocate,bind,release};
     VkPhysicalDeviceMemoryProperties properties{}; properties.memoryTypeCount=2; properties.memoryTypes[1].propertyFlags=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     bc250_host_import imported{}; imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=&identity;

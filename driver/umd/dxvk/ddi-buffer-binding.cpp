@@ -23,7 +23,7 @@ void APIENTRY vertex(D3D10DDI_HDEVICE h,UINT first,UINT count,const D3D10DDI_HRE
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         std::array<ID3D11Buffer *,D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> b{};
         HRESULT hr=buffers(first,count,handles,b);
-        if (FAILED(hr) || (count && (!strides || !offsets))) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        if (FAILED(hr) || (count && (!strides || !offsets))) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         context.IASetVertexBuffers(first,count,b.data(),strides,offsets);
     });
 }
@@ -31,7 +31,7 @@ void APIENTRY stream_output(D3D10DDI_HDEVICE h,UINT count,UINT clear,const D3D10
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         constexpr UINT limit=D3D11_SO_BUFFER_SLOT_COUNT;
         if (count>limit || clear>limit-count || (count && (!handles || !offsets))) {
-            report_ddi_error(owner(h),E_INVALIDARG); return;
+            report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return;
         }
         std::array<ID3D11Buffer *,limit> b{};
         for (UINT i=0;i<count;++i) {
@@ -39,7 +39,7 @@ void APIENTRY stream_output(D3D10DDI_HDEVICE h,UINT count,UINT clear,const D3D10
             if (FAILED(hr)) { report_ddi_error(owner(h),hr); return; }
             if (b[i]) {
                 D3D11_BUFFER_DESC desc{}; b[i]->GetDesc(&desc);
-                if (!valid_stream_output_buffer(desc,offsets[i])) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+                if (!valid_stream_output_buffer(desc,offsets[i])) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
             }
         }
         // COM replaces the complete target set and unbinds omitted slots.
@@ -52,7 +52,7 @@ void APIENTRY index(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,DXGI_FORMAT for
         ID3D11Buffer *b=nullptr;
         HRESULT hr=resource_buffer(handle,b);
         if (FAILED(hr) || (b && format!=DXGI_FORMAT_R16_UINT && format!=DXGI_FORMAT_R32_UINT)) {
-            report_ddi_error(owner(h),E_INVALIDARG); return;
+            report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return;
         }
         context.IASetIndexBuffer(b,format,offset);
     });

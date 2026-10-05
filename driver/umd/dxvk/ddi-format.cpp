@@ -73,18 +73,18 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
     if (out) *out=0;
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
-        if (!defined_dxgi_format(value)) { report_ddi_error(owner,E_FAIL); return; }
+        if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG,DdiErrorClass::fail_or_invalid_arg); return; }
+        if (!defined_dxgi_format(value)) { report_ddi_error(owner,E_FAIL,DdiErrorClass::fail_or_invalid_arg); return; }
         UINT support=0;
         HRESULT hr=classify_format_result(value,owner.device()->CheckFormatSupport(value,&support),*out);
         if (hr==S_FALSE) return;
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::fail_or_invalid_arg); return; }
         D3D11_FEATURE_DATA_FORMAT_SUPPORT2 extra{value,0};
         hr=owner.device()->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2,&extra,sizeof(extra));
         hr=classify_format_support2_result(hr,extra.OutFormatSupport2);
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::fail_or_invalid_arg); return; }
         *out=constrain_format_support(value,convert_format_support(support,extra.OutFormatSupport2));
-    });
+    },DdiErrorClass::fail_or_invalid_arg);
 }
 void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out) {
     if (out) *out=0;
@@ -93,13 +93,13 @@ void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out)
     if(out && count==1){*out=1;return;}
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG,DdiErrorClass::invalid_arg); return; }
         if (depth_stencil_component_view(value) || !count || count>D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT) return;
         UINT quality=0; HRESULT hr=owner.device()->CheckMultisampleQualityLevels(value,count,&quality);
         if (hr==E_INVALIDARG) return;
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::invalid_arg); return; }
         *out=quality;
-    });
+    },DdiErrorClass::invalid_arg);
 }
 }
 void install_format_ddi(D3D11_1DDI_DEVICEFUNCS &t) {

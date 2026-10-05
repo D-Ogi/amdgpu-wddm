@@ -38,13 +38,13 @@ void APIENTRY create_stream_output(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATEGE
     if (storage) { storage->object=nullptr; storage->stage=ShaderStage::geometry; }
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!storage || !args || !signatures || !owner.engine()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!storage || !args || !signatures || !owner.engine()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         std::vector<BC250_DXVK_SO_ENTRY> entries;
         std::vector<BC250_DXVK_SIGNATURE_ENTRY> input,output;
         HRESULT hr=copy_stream_output(*args,entries);
         if (SUCCEEDED(hr)) hr=copy_legacy_signature(signatures->pInputSignatureDeprecated,signatures->NumInputSignatureEntries,input);
         if (SUCCEEDED(hr)) hr=copy_legacy_signature(signatures->pOutputSignatureDeprecated,signatures->NumOutputSignatureEntries,output);
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
         BC250_DXVK_STREAM_OUTPUT so{entries.data(),args->NumEntries,args->BufferStridesInBytes,args->NumStrides,args->RasterizedStream};
         BC250_DXVK_SHADER_DESC desc{}; desc.Size=sizeof(desc); desc.Code=args->pShaderCode;
         desc.Input={input.data(),static_cast<UINT>(input.size())};
@@ -55,7 +55,7 @@ void APIENTRY create_stream_output(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATEGE
         ID3D11GeometryShader *object=nullptr;
         hr=owner.engine()->CreateShader(&desc,__uuidof(ID3D11GeometryShader),reinterpret_cast<void **>(&object));
         if (FAILED(hr) || !object) {
-            if (object) object->Release(); report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
+            if (object) object->Release(); report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return;
         }
         storage->object=object;
     });
@@ -68,7 +68,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const UINT *code,D3D10DDI_HSHADER shader
     if (storage) { storage->object=nullptr; storage->stage=stage; }
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!storage || !code || !signatures || !owner.engine()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!storage || !code || !signatures || !owner.engine()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         std::vector<BC250_DXVK_SIGNATURE_ENTRY> input,output,patch;
         HRESULT hr=copy_legacy_signature(signatures->pInputSignatureDeprecated,signatures->NumInputSignatureEntries,input);
         if (SUCCEEDED(hr)) hr=copy_legacy_signature(signatures->pOutputSignatureDeprecated,signatures->NumOutputSignatureEntries,output);
@@ -76,15 +76,15 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const UINT *code,D3D10DDI_HSHADER shader
             if (SUCCEEDED(hr)) hr=copy_legacy_signature(signatures->pPatchConstantSignatureDeprecated,
                 signatures->NumPatchConstantSignatureEntries,patch);
         }
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
         BC250_DXVK_SHADER_DESC desc{}; desc.Size=sizeof(desc); desc.Code=code;
         desc.Input={input.data(),static_cast<UINT>(input.size())};
         desc.Output={output.data(),static_cast<UINT>(output.size())};
         desc.PatchConstant={patch.data(),static_cast<UINT>(patch.size())};
         Shader *object=nullptr;
         hr=owner.engine()->CreateShader(&desc,__uuidof(Shader),reinterpret_cast<void **>(&object));
-        if (FAILED(hr)) { if (object) object->Release(); report_ddi_error(owner,hr); return; }
-        if (!object) { report_ddi_error(owner,E_FAIL); return; }
+        if (FAILED(hr)) { if (object) object->Release(); report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
+        if (!object) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         storage->object=object;
     });
 }
@@ -106,7 +106,7 @@ void APIENTRY bind(D3D10DDI_HDEVICE h,D3D10DDI_HSHADER shader) {
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto *s=static_cast<DdiShader *>(shader.pDrvPrivate);
         if (s && s->stage!=stage) {
-            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,E_INVALIDARG); return;
+            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,D3DDDIERR_DEVICEREMOVED); return;
         }
         auto *object=s ? static_cast<Shader *>(s->object) : nullptr;
         if constexpr(stage==ShaderStage::vertex) context.VSSetShader(object,nullptr,0);

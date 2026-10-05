@@ -30,7 +30,7 @@ ID3D11Resource *resource(D3D10DDI_HRESOURCE h) {
 void APIENTRY copy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,D3D10DDI_HRESOURCE src) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
         auto *d=resource(dst); auto *s=resource(src);
-        if (!d || !s) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        if (!d || !s) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         c.CopyResource(d,s);
     });
 }
@@ -41,7 +41,7 @@ void APIENTRY region(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT dstSub,UINT 
         D3D11_BOX converted{}; bool empty=false; UINT copyFlags=0;
         HRESULT hr=convert_copy_box(box,converted,empty);
         if (SUCCEEDED(hr)) hr=convert_copy_flags(flags,copyFlags);
-        if (FAILED(hr) || !d || !s) { report_ddi_error(owner(h),FAILED(hr) ? hr : E_INVALIDARG); return; }
+        if (FAILED(hr) || !d || !s) { report_ddi_error(owner(h),FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED); return; }
         if (!empty) c.CopySubresourceRegion1(d,dstSub,x,y,z,s,srcSub,box ? &converted : nullptr,copyFlags);
     });
 }
@@ -52,7 +52,7 @@ void APIENTRY update(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT sub,const D3
         D3D11_BOX converted{}; bool empty=false; UINT copyFlags=0;
         HRESULT hr=convert_copy_box(box,converted,empty);
         if (SUCCEEDED(hr)) hr=convert_copy_flags(flags,copyFlags);
-        if (FAILED(hr) || !d || (!empty && !data)) { report_ddi_error(owner(h),FAILED(hr) ? hr : E_INVALIDARG); return; }
+        if (FAILED(hr) || !d || (!empty && !data)) { report_ddi_error(owner(h),FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED); return; }
         if (!empty) {
             hr=owner(h).take_deferred_error();
             if (FAILED(hr)) { report_ddi_error(owner(h),hr); return; }
@@ -66,7 +66,7 @@ void APIENTRY resolve(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT dstSub,
     D3D10DDI_HRESOURCE src,UINT srcSub,DXGI_FORMAT format) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
         auto *d=resource(dst); auto *s=resource(src);
-        if (!d || !s) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        if (!d || !s) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         c.ResolveSubresource(d,dstSub,s,srcSub,format);
     });
 }

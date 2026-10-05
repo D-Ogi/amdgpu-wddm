@@ -58,7 +58,7 @@ struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
             auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
             if(storage && storage->owner) {
                 RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-                report_ddi_error(*storage->owner,E_FAIL);
+                report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
             }
         }else if constexpr(std::is_same_v<R,HRESULT>)return E_NOTIMPL;
         else return 0;
@@ -74,7 +74,7 @@ void APIENTRY counter(D3D10DDI_HDEVICE h,D3D10DDI_QUERY,D3D10DDI_COUNTER_TYPE *t
     auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
     if(storage && storage->owner) {
         RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-        report_ddi_error(*storage->owner,E_INVALIDARG);
+        report_ddi_error(*storage->owner,E_INVALIDARG,DdiErrorClass::unsupported_check);
     }
 }
 template<auto Bind> void APIENTRY shader_ifaces(D3D10DDI_HDEVICE h,D3D10DDI_HSHADER shader,
@@ -83,7 +83,7 @@ template<auto Bind> void APIENTRY shader_ifaces(D3D10DDI_HDEVICE h,D3D10DDI_HSHA
         auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
         if(storage && storage->owner) {
             RuntimeDomain::Scope scope(storage->owner->runtime().domain);
-            report_ddi_error(*storage->owner,E_NOTIMPL);
+            report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
         }
         return;
     }

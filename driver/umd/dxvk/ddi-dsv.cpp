@@ -13,8 +13,10 @@ HRESULT convert_dsv(const D3D11DDIARG_CREATEDEPTHSTENCILVIEW &s,UINT layers,UINT
     case D3D10DDIRESOURCE_TEXTURECUBE: r.TexCube={s.TexCube.MipSlice,s.TexCube.FirstArraySlice,s.TexCube.ArraySize}; break;
     default: return E_INVALIDARG;
     }
-    D3D11_RENDER_TARGET_VIEW_DESC v{};
-    HRESULT hr=convert_rtv(r,layers,samples,v); if (FAILED(hr)) return hr;
+    D3D11_RENDER_TARGET_VIEW_DESC1 v{};
+    // The WDDM 2.0 depth-stencil argument has no plane slice, so this view is always plane 0: a
+    // depth-stencil format has one plane in D3D terms (d3d10umddi.h 10.0.26100, no PlaneSlice field).
+    HRESULT hr=convert_rtv(r,layers,samples,0,v); if (FAILED(hr)) return hr;
     D3D11_DEPTH_STENCIL_VIEW_DESC d{}; d.Format=s.Format;
     if (s.Flags & D3D11_DDI_CREATE_DSV_READ_ONLY_DEPTH) d.Flags|=D3D11_DSV_READ_ONLY_DEPTH;
     if (s.Flags & D3D11_DDI_CREATE_DSV_READ_ONLY_STENCIL) d.Flags|=D3D11_DSV_READ_ONLY_STENCIL;
@@ -37,22 +39,22 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATEDEPTHSTENCILVIEW
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         auto *r=desc ? static_cast<DdiResource *>(desc->hDrvResource.pDrvPrivate) : nullptr;
-        if (!s || !r || !r->object || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !r || !r->object || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         UINT layers=1,samples=1;
         D3D11_RESOURCE_DIMENSION actual{}; r->object->GetType(&actual);
         if (desc->ResourceDimension==D3D10DDIRESOURCE_TEXTURE1D && actual==D3D11_RESOURCE_DIMENSION_TEXTURE1D) {
             D3D11_TEXTURE1D_DESC d{}; static_cast<ID3D11Texture1D *>(r->object)->GetDesc(&d); layers=d.ArraySize;
         } else if ((desc->ResourceDimension==D3D10DDIRESOURCE_TEXTURE2D || desc->ResourceDimension==D3D10DDIRESOURCE_TEXTURECUBE) && actual==D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
             D3D11_TEXTURE2D_DESC d{}; static_cast<ID3D11Texture2D *>(r->object)->GetDesc(&d); layers=d.ArraySize; samples=d.SampleDesc.Count;
-        } else { report_ddi_error(owner,E_INVALIDARG); return; }
+        } else { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         D3D11_DEPTH_STENCIL_VIEW_DESC d{};
         HRESULT hr=convert_dsv(*desc,layers,samples,d);
         if (SUCCEEDED(hr)) hr=owner.device()->CreateDepthStencilView(r->object,&d,&s->object);
         if (FAILED(hr)) {
             if (s->object) { s->object->Release(); s->object=nullptr; }
-            report_ddi_error(owner,hr);
-        } else if (!s->object) report_ddi_error(owner,E_FAIL);
-    });
+            report_ddi_error(owner,hr,DdiErrorClass::out_of_memory);
+        } else if (!s->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory);
+    },DdiErrorClass::out_of_memory);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HDEPTHSTENCILVIEW handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
@@ -64,7 +66,7 @@ void APIENTRY clear(D3D10DDI_HDEVICE h,D3D10DDI_HDEPTHSTENCILVIEW handle,UINT fl
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto *s=static_cast<DdiDepthStencilView *>(handle.pDrvPrivate);
         if (!s || !s->object || (flags & ~UINT(D3D10_DDI_CLEAR_DEPTH|D3D10_DDI_CLEAR_STENCIL))) {
-            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,E_INVALIDARG); return;
+            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,D3DDDIERR_DEVICEREMOVED); return;
         }
         UINT converted=0;
         if (flags & D3D10_DDI_CLEAR_DEPTH) converted|=D3D11_CLEAR_DEPTH;
