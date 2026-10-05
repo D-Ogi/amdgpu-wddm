@@ -141,8 +141,14 @@ Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itsel
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
 Check (($src -match "Add-Result 'GPU desktop path'") -and ($src -match "Invoke-Native \`$cli @\('interop'\)") -and ($src -match 'effective blit\\\+cdd') -and ($src -match 'died in a session') -and ($src -match 'bc250d3d_zink')) 'verify checks the GPU desktop path (interop effective blit+cdd, no unclean session, zink in DWM)'
 $pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'pnputil /add-driver", "Invoke-RegistryDefaults `$script:ParametersKey") | ForEach-Object { $src.IndexOf($_) }
-Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$infParameterNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
-Check ($r.text -match 'driver settings before the driver package: \d+ of \d+ values present') 'the walk-through takes the snapshot before pnputil'
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$restoreNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
+Check ($r.text -match 'driver settings before the driver package: \d+ values under Parameters, \d+ of \d+ judged by this release') 'the walk-through takes the snapshot before pnputil'
+# The snapshot keeps the whole key, and every value that this release does not judge goes back as it was. A snapshot
+# of the judged names alone dropped CuMode at every release install, and the GPU then ran on 24 of its 40 compute
+# units (test-registry-defaults.ps1 has the case).
+Check (($src -match 'foreach \(\$n in \$all\.Keys\) \{ \$parametersBefore\[\$n\] = \$all\[\$n\] \}') -and ($src -match '\$restoreNames = @\(@\(\$infParameterNames\) \+ @\(\$parametersBefore\.Keys \| Where-Object \{ \$_ -notin \$judgedNames -and \(Test-RestorableRegistryValue')) 'the snapshot keeps every value of the Parameters key, and the ones outside the table are written back'
+# The encoder registration is reported where a support report can read it (BugReport.cs collects every verify report).
+Check (($src -match "Add-Result 'H\.264 encoder'") -and ($src -match "Add-Warning 'H\.264 encoder'") -and ($src -match 'Test-MftRegistration -ClassesKey \$script:ClassesKey -DllPath \$mftInstalled')) 'verify reports the H.264 encoder registration, and a registration that is not right is a warning'
 Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
 $common = [IO.File]::ReadAllText((Join-Path $Package 'installer\common.ps1'))
 Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-1-5-32-545:\(OI\)\(CI\)RX") -and ($common -match "'/reset', '/T'") -and ($common -match 'function Set-StateDirAccess \{\s+if \(\$script:DryRunMode\) \{ return \}')) 'the state folder (logs, verify results) gets administrators/SYSTEM full and users read, children reset; not in a dry run'

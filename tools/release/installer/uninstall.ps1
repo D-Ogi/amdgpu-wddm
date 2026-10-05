@@ -72,6 +72,10 @@ Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile
 $mftKeys = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
 Invoke-Change "remove the H.264 encoder MFT registration ($(if ($mftKeys.Count) { $mftKeys -join ', ' } else { 'no key of ours present' }))" {
     [void](Remove-MftRegistration -ClassesKey $script:ClassesKey)
+    # The computer answers, not the return value: a key the access rights kept is named here, because the files below
+    # go whatever happens and a key that stays would name a DLL that is gone.
+    $left = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
+    if ($left.Count) { Write-Warn2 "the H.264 encoder MFT registration is still on this computer: $($left -join ', '). Remove these keys by hand (regedit, as an administrator): the file they name goes with the install root below." }
 } | Out-Null
 
 # The GPU leaves the driver now, under the running desktop: pnputil has no documented way to defer the removal of a

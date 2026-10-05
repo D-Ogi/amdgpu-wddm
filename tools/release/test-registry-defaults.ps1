@@ -150,6 +150,36 @@ try {
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
     Check (($v.EnableFullWddm -eq 2) -and ($v.EnableMmio -eq 1) -and ($v.DpmMaxMHz -eq 1500) -and ($v.EnableMmioWrite -eq 0)) "fresh install: EnableFullWddm $($v.EnableFullWddm), EnableMmio $($v.EnableMmio), DpmMaxMHz $($v.DpmMaxMHz), EnableMmioWrite $($v.EnableMmioWrite) (INF)"
+
+    # The whole key, as install.ps1 takes it now: a value that this release's table and the INF do not name goes back
+    # as it was. Unit A lost CuMode 40 at every release install before this one, because the snapshot kept the judged
+    # names alone; the GPU then ran on 24 of its 40 compute units with nothing saying so.
+    $k = "$key\WholeKey"
+    Write-RegistryPlan $k (Get-RegistryDefaultPlan -Defaults $legacy.parameters -Previous $null -Current @{})
+    foreach ($e in @{ CuMode = 40; CuModeConfirmed = 1; DpmMaxMHz = 1200 }.GetEnumerator()) { New-ItemProperty -LiteralPath $k -Name $e.Key -Value $e.Value -PropertyType DWord -Force | Out-Null }
+    New-ItemProperty -LiteralPath $k -Name 'LabNote' -Value 'unit A' -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath $k -Name 'SomeBlob' -Value ([byte[]](1, 2, 3, 4)) -PropertyType Binary -Force | Out-Null
+    $judged = @(@($infNames) + @(ConvertTo-PairList $table.defaults.parameters | ForEach-Object { $_.Name })) | Select-Object -Unique
+    $whole = Read-RegistryValues $k
+    Check ((Test-RestorableRegistryValue $whole['CuMode']) -and (Test-RestorableRegistryValue $whole['LabNote']) -and -not (Test-RestorableRegistryValue $whole['SomeBlob'])) 'a REG_DWORD and a REG_SZ value go back through the plan, a REG_BINARY value does not'
+    $restore = @(@($infNames) + @($whole.Keys | Where-Object { $_ -notin $judged -and (Test-RestorableRegistryValue $whole[$_]) })) | Select-Object -Unique
+    # What the driver package install does to the service key: the other values are gone, the INF's names are 0.
+    Remove-Item -LiteralPath $k -Recurse -Force
+    Initialize-RegistryKey $k
+    Invoke-InfReset $k
+    $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $whole -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $restore
+    Write-RegistryPlan $k $plan
+    $v = Read-RegistryValues $k
+    Check (((Get-Decision $plan 'CuMode').decision -eq 'restored') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
+    Check ($v.LabNote -eq 'unit A') "a REG_SZ value outside the table back as before: LabNote '$($v.LabNote)'"
+    Check (-not $v.ContainsKey('SomeBlob')) 'a REG_BINARY value is not written back (the installer names it in its log)'
+    Check ($v.DpmMaxMHz -eq 1200) "a value of the table that the tester changed is still kept: DpmMaxMHz $($v.DpmMaxMHz)"
+    $again = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $whole -After (Read-RegistryValues $k) -Restore $restore
+    Check (@($again | Where-Object { $_.write }).Count -eq 0) 'the whole-key plan writes nothing more on a re-run with the same snapshot'
+    # The command line over a value on the computer: one entry for the name, and the command line wins. Two entries
+    # would write the value from before the install over the value the tester asked for.
+    $cmd = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ CuMode = 24 } -Explicit @{ CuMode = 40 } -After @{ CuMode = 24 } -Restore @('CuMode')
+    Check ((@($cmd | Where-Object { $_.name -eq 'CuMode' }).Count -eq 1) -and ((Get-Decision $cmd 'CuMode').decision -eq 'command') -and ((Get-Decision $cmd 'CuMode').value -eq 40)) '-CuMode 40 is judged once, and the command line wins over the value from before the install'
 } finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
 Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 

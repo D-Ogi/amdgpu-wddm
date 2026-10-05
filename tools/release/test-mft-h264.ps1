@@ -142,6 +142,27 @@ $un = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
 Check ($inst -match 'Get-MftReleaseSwitch -Manifest \$script:Manifest -PackageRoot \$package') 'install.ps1 reads the switch from the manifest'
 Check (($inst -match 'Write-MftRegistration -ClassesKey \$script:ClassesKey') -and ($inst -match 'Remove-MftRegistration -ClassesKey \$script:ClassesKey')) 'install.ps1 registers and rolls back'
 Check ($inst.IndexOf('Write-MftRegistration') -gt $inst.IndexOf('$dirs += $mft.payload_dir')) 'install.ps1 copies the DLL before it writes the keys'
+# The other direction: a rollback (a release that does not register the encoder, over one that did) removes the keys
+# before the file. Between the two stand pnputil, the firmware and a restart, each of which can end the run.
+Check ($inst.IndexOf('Remove-MftRegistration') -lt $inst.IndexOf('the H.264 encoder MFT of an earlier install')) 'install.ps1 removes the keys of an earlier install before its DLL'
+Check ($un.IndexOf('Remove-MftRegistration') -lt $un.IndexOf('Invoke-Change "remove $root"')) 'uninstall.ps1 removes the keys before the install root'
+# A key that cannot be removed is never silent (an access right of the computer, a registry cleaner).
+$mod0 = [IO.File]::ReadAllText((Join-Path $Installer 'mft-h264.ps1'))
+Check ($mod0 -match 'Write-MftWarning "the H\.264 encoder MFT key') 'Remove-MftRegistration warns about a key it could not remove'
+Check (($un -match '\$left = @\(Get-MftRegistrationKeysPresent') -and ($un -match 'if \(\$left\.Count\)')) 'uninstall.ps1 reads the computer back and warns about a key that stayed'
+# The registration values are read from the installed copy, under %ProgramFiles%; the package copy is for the dry run,
+# which has copied nothing. A package on a file server has a UNC path, which the interop pattern now admits.
+Check ($inst -match '\$mftBlobDll = \$mftDll') 'install.ps1 reads the registration values from the installed copy'
+foreach ($p in @('C:\Program Files\amdgpu-wddm\mft\amdgpu_wddm_mft_h264.dll', '\\server\share\pkg\payload\mft\amdgpu_wddm_mft_h264.dll')) {
+    $ok = $true
+    try { [void](Get-MftInteropSource -DllPath $p) } catch { $ok = $false }
+    Check $ok "the interop source takes $p"
+}
+foreach ($p in @('payload\mft\amdgpu_wddm_mft_h264.dll', 'C:\x\a"b.dll', 'C:\x\mft.exe')) {
+    $bad = $false
+    try { [void](Get-MftInteropSource -DllPath $p) } catch { $bad = $true }
+    Check $bad "the interop source refuses $p"
+}
 Check ($un -match 'Remove-MftRegistration -ClassesKey \$script:ClassesKey') 'uninstall.ps1 removes the keys'
 foreach ($f in 'install.ps1', 'uninstall.ps1') {
     Check ([IO.File]::ReadAllText((Join-Path $Installer $f)) -match "\. \(Join-Path \`$here 'mft-h264\.ps1'\)") "$f dot-sources mft-h264.ps1"

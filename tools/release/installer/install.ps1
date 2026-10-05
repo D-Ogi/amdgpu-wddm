@@ -546,6 +546,32 @@ function Invoke-Verify {
         $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $wowKey)
         Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9/10/11, no D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
+
+    # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
+    # encoder is registered, which DLL the registration names and which bytes that DLL has (BugReport.cs collects
+    # every verify report). The encoder is an extra, never a condition of the driver, so a registration that is not
+    # right is a warning with its remedy, not a failed verification.
+    try {
+        $mftSwitch = Get-MftReleaseSwitch -Manifest $script:Manifest -PackageRoot $null
+        $mftInstalled = Join-Path $InstallRoot $mftSwitch.install_path
+        if (-not $mftSwitch.register) {
+            Add-Info 'H.264 encoder' "not registered by this release; keys of ours on this computer: $(@(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey).Count)"
+        } elseif ($script:DryRunMode) {
+            Add-Info 'H.264 encoder' "registered by this release: $($mftSwitch.clsid), $mftInstalled"
+        } else {
+            # The values of the installed DLL when it can be read, so that the check compares the registration with
+            # the file it names; the keys and the names alone when it cannot.
+            $mftBlobs = $null
+            $mftWhy = ''
+            try { $mftBlobs = Get-MftRegistrationBlobs -DllPath $mftInstalled } catch { $mftWhy = " (the values of $($mftSwitch.install_path) could not be read: $($_.Exception.Message))" }
+            $mftState = Test-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftInstalled -Blobs $mftBlobs
+            $mftSha = 'no file'
+            if (Test-Path -LiteralPath $mftInstalled -PathType Leaf) { $mftSha = (Get-Sha256 $mftInstalled).Substring(0, 16) }
+            $mftWhere = "InprocServer32 = $mftInstalled (SHA256 $mftSha), $(@($mftState.keys).Count) of our 3 keys present$mftWhy"
+            if ($mftState.ok) { Add-Result 'H.264 encoder' $true "registered, $mftWhere" }
+            else { Add-Warning 'H.264 encoder' "the registration is not right: $($mftState.detail). $mftWhere. Remedy: run install.cmd -Repair, and send the support report if it stays. The driver itself is not affected." }
+        }
+    } catch { Add-Info 'H.264 encoder' "not checked: $($_.Exception.Message)" }
     $script:VerifyComplete = $true
     return $results
     } catch {
@@ -847,8 +873,16 @@ foreach ($d in $dirs) {
         Copy-TreeSafe -Source $src -Destination (Join-Path $InstallRoot $d)
     } | Out-Null
 }
-# A release that does not register the encoder takes the files of an earlier install away again; its registry keys go
-# in the settings stage. A repair with the switch off is therefore a rollback.
+# A release that does not register the encoder takes the registration and the files of an earlier install away again. A
+# repair with the switch off is therefore a rollback. The keys go first, in this stage, and the file after them, as
+# uninstall.ps1 does it: a step between the two (pnputil, the firmware, a restart, a failure of any of them) would
+# otherwise leave a COM registration that names a DLL which is gone, and every Media Foundation client that enumerates
+# hardware or asynchronous H.264 encoders would get an activation object that cannot be created.
+if ($mftAction -eq 'rollback' -and $mftKeys.Count) {
+    Invoke-Change "remove the H.264 encoder MFT registration of an earlier install ($($mftKeys -join ', ')): this release does not register it" {
+        [void](Remove-MftRegistration -ClassesKey $script:ClassesKey)
+    } | Out-Null
+}
 if ($mftAction -eq 'rollback' -and (Test-Path -LiteralPath (Split-Path $mftDll))) {
     Invoke-Change "remove $(Split-Path $mftDll) (the H.264 encoder MFT of an earlier install; this release does not register it)" {
         Remove-PathOrSchedule (Split-Path $mftDll)
@@ -915,12 +949,21 @@ if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $sta
     foreach ($p in $state.parameters_before_install.PSObject.Properties) { $parametersBefore[$p.Name] = $p.Value }
     Write-Info "driver settings from before the first driver package install of this run: $($parametersBefore.Count) values"
 } else {
+    # The whole key, not only the names this release judges. The driver package install takes the other values of the
+    # service key away, and a value this release knows nothing about is still the tester's setting: unit A lost
+    # CuMode 40 at every release install until this release, which halved its compute units with nothing saying so.
     $all = Read-RegistryValues $script:ParametersKey
-    foreach ($n in $judgedNames) { if ($all.ContainsKey($n)) { $parametersBefore[$n] = $all[$n] } }
+    foreach ($n in $all.Keys) { $parametersBefore[$n] = $all[$n] }
     Set-StateValue $state 'parameters_before_install' ([pscustomobject]$parametersBefore)
     Save-InstallState $state
-    Write-Info "driver settings before the driver package: $($parametersBefore.Count) of $(@($judgedNames).Count) values present"
+    Write-Info "driver settings before the driver package: $($parametersBefore.Count) values under Parameters, $(@(@($judgedNames) | Where-Object { $parametersBefore.ContainsKey($_) }).Count) of $(@($judgedNames).Count) judged by this release"
 }
+# Values outside the table and outside the command line go back as they were (Get-RegistryDefaultPlan -Restore): the
+# INF's own names, and every other value the key held before. A value whose type the plan cannot write back is named
+# here and left to the driver package.
+$restoreNames = @(@($infParameterNames) + @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and (Test-RestorableRegistryValue $parametersBefore[$_]) })) | Select-Object -Unique
+$keptBack = @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and -not (Test-RestorableRegistryValue $parametersBefore[$_]) })
+if ($keptBack.Count) { Write-Warn2 "not written back after the driver package (the plan writes REG_DWORD, REG_SZ and REG_MULTI_SZ only): $($keptBack -join ', ')" }
 
 # The driver package. Its INF carries the Reboot directive (build-release.ps1): Windows installs the package but does
 # not restart a GPU that is already started (on Microsoft Basic Display or on the previous release), so the desktop
@@ -1016,7 +1059,7 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 # the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
 # from before pnputil; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
 # pnputil back.
-Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $infParameterNames
+Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames
 
 # Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.
 $umd = @('bc250umd.dll', (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
@@ -1052,23 +1095,35 @@ Set-StateValue $state 'khronos_wow_value' $icdJsonWow
 # gets a warning here and the rest of the install.
 if ($mftAction -eq 'register') {
     $mftBlobs = $null
-    try { $mftBlobs = Get-MftRegistrationBlobs -DllPath $mft.source }
+    # The installed copy, under %ProgramFiles%, not the package copy: the package can sit on a file server, and a UNC
+    # path is not a path the interop of mft-h264.ps1 takes. A dry run has copied nothing, so there the package copy is
+    # the only one there is.
+    $mftBlobDll = $mftDll
+    if (-not (Test-Path -LiteralPath $mftBlobDll -PathType Leaf)) { $mftBlobDll = $mft.source }
+    try { $mftBlobs = Get-MftRegistrationBlobs -DllPath $mftBlobDll }
     catch { Write-Warn2 "the H.264 encoder MFT is NOT registered: $($_.Exception.Message). The driver itself is not affected." }
     if ($mftBlobs) {
-        Write-Info "H.264 encoder MFT: $($mft.name) $($mft.clsid), registration values from $($mft.package_path)"
-        Invoke-Change ('register the H.264 encoder MFT: ' + (Format-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)) {
-            [void](Write-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)
-            $mftCheck = Test-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs
-            if (-not $mftCheck.ok) { throw "the H.264 encoder MFT registration does not read back: $($mftCheck.detail)" }
-        } | Out-Null
-        Set-StateValue $state 'mft_h264' $mftDll
+        Write-Info "H.264 encoder MFT: $($mft.name) $($mft.clsid), registration values from $(if ($mftBlobDll -eq $mft.source) { $mft.package_path } else { $mft.install_path })"
+        # The encoder is an extra: a registry key that this computer does not let us write ends the step with a
+        # warning, never the install of the driver (the comment above this block). Invoke-Change itself throws on to
+        # the top-level trap, so the catch has to be outside it.
+        try {
+            Invoke-Change ('register the H.264 encoder MFT: ' + (Format-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)) {
+                [void](Write-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)
+                $mftCheck = Test-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs
+                if (-not $mftCheck.ok) { throw "the H.264 encoder MFT registration does not read back: $($mftCheck.detail)" }
+            } | Out-Null
+            Set-StateValue $state 'mft_h264' $mftDll
+        } catch {
+            Write-Warn2 "the H.264 encoder MFT is NOT registered: $($_.Exception.Message). The driver itself is not affected."
+            Set-StateValue $state 'mft_h264' $null
+        }
     } else { Set-StateValue $state 'mft_h264' $null }
 } elseif ($mftAction -eq 'rollback') {
-    if ($mftKeys.Count) {
-        Invoke-Change "remove the H.264 encoder MFT registration of an earlier install ($($mftKeys -join ', ')): this release does not register it" {
-            [void](Remove-MftRegistration -ClassesKey $script:ClassesKey)
-        } | Out-Null
-    } else { Write-Info 'H.264 encoder MFT: not registered by this release; no registry key of an earlier install' }
+    # The registration of an earlier install went in the files stage, before its DLL: the keys must never outlive the
+    # file they name.
+    if ($mftKeys.Count) { Write-Info 'H.264 encoder MFT: the registration of an earlier install was removed with its file, in the files stage' }
+    else { Write-Info 'H.264 encoder MFT: not registered by this release; no registry key of an earlier install' }
     Set-StateValue $state 'mft_h264' $null
 } else {
     Write-Info 'H.264 encoder MFT: not registered by this release, and nothing of an earlier install on this computer'

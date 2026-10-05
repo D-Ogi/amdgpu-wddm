@@ -290,6 +290,9 @@ function Get-RegistryDefaultPlan {
     }
     foreach ($e in $Explicit.GetEnumerator()) {
         if ($seen.ContainsKey($e.Key)) { continue }
+        # A name from the command line is judged once: without this, a name that is also in $Restore below got a
+        # second entry, and the value from before the install was written over the value the tester asked for.
+        $seen[$e.Key] = $true
         $has = $Current.ContainsKey($e.Key)
         [void]$plan.Add([pscustomobject]@{ name = [string]$e.Key; value = $e.Value; default = $null; current = $(if ($has) { $Current[$e.Key] } else { $null }); present = $has; decision = 'command'; write = $true })
     }
@@ -320,6 +323,22 @@ function Get-RegistryDefaultPlan {
         }
     }
     return , $plan.ToArray()
+}
+# Can Write-RegistryPlan write this value back with the type it had? It writes REG_MULTI_SZ for a list of strings,
+# REG_SZ for text and REG_DWORD for a number, so a REG_BINARY or REG_QWORD value cannot go back through the plan and
+# is left alone (install.ps1 names it in the log). A number outside the REG_DWORD range is not restorable either.
+function Test-RestorableRegistryValue($Value) {
+    if ($null -eq $Value) { return $false }
+    if ($Value -is [string]) { return $true }
+    if ($Value -is [array]) {
+        if (@($Value).Count -eq 0) { return $false }       # an empty REG_BINARY looks the same here
+        foreach ($x in $Value) { if ($x -isnot [string]) { return $false } }
+        return $true
+    }
+    if ($Value -is [int] -or $Value -is [long] -or $Value -is [uint32] -or $Value -is [uint64] -or $Value -is [int16] -or $Value -is [byte]) {
+        return (([int64]$Value -ge [int]::MinValue) -and ([int64]$Value -le [int]::MaxValue))
+    }
+    return $false
 }
 # The value names the driver package writes under HKR\Parameters (the INF's AddReg lines), i.e. what pnputil resets.
 function Get-InfParameterNames([string]$InfPath) {

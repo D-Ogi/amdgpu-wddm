@@ -31,6 +31,12 @@ $script:ClassesKey       = 'HKLM:\SOFTWARE\Classes'   # host tests pass their ow
 $script:MftInteropDll    = $null                      # the DLL this process compiled its interop for
 $script:MftValueNames    = @('MFTFlags', 'InputTypes', 'OutputTypes', 'Attributes')
 
+# A warning goes into the installer's log through common.ps1 (Write-Warn2). A host that dot-sources this file without
+# common.ps1 gets it on the warning stream, so a failure here is never silent.
+function Write-MftWarning([string]$Text) {
+    if (Get-Command -Name Write-Warn2 -ErrorAction SilentlyContinue) { Write-Warn2 $Text } else { Write-Warning $Text }
+}
+
 # The five keys of the registration, in the order they are written. Removal goes the other way.
 function Get-MftKeys {
     param([Parameter(Mandatory)][string]$ClassesKey)
@@ -97,10 +103,12 @@ function Get-MftAction {
     return 'none'
 }
 
-# The C# interop for the shipped DLL. DllImport takes the full path, so the process loads the package's own copy and
+# The C# interop for the shipped DLL. DllImport takes the full path, so the process loads exactly that copy and
 # nothing from the search path. MFStartup comes first: the attribute blob is built with MFCreateAttributes.
+# The pattern admits a local path and a UNC path, and no quotation mark, because the path goes into the C# source
+# below: a package unpacked on a file server was refused here, and the installer then installed no encoder at all.
 function Get-MftInteropSource {
-    param([Parameter(Mandatory)][ValidatePattern('^[A-Za-z]:\\[^"]+\.dll$')][string]$DllPath)
+    param([Parameter(Mandatory)][ValidatePattern('^(?:[A-Za-z]:\\|\\\\[^"\\]+\\)[^"]+\.dll$')][string]$DllPath)
     return @"
 using System;
 using System.Runtime.InteropServices;
@@ -187,7 +195,8 @@ function Write-MftRegistration {
 }
 
 # Takes the registration away: our class id key, our transform key and our membership in the category. Returns the
-# keys it removed.
+# keys it removed, and warns about each key that stayed: a key that the access rights of the computer do not let us
+# remove would otherwise leave an uninstall log that says the registration went when it did not.
 function Remove-MftRegistration {
     param([Parameter(Mandatory)][string]$ClassesKey)
     $k = Get-MftKeys $ClassesKey
@@ -196,6 +205,7 @@ function Remove-MftRegistration {
         if (-not (Test-Path -LiteralPath $p)) { continue }
         Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $p)) { [void]$removed.Add($p) }
+        else { Write-MftWarning "the H.264 encoder MFT key $p could not be removed: a Media Foundation client can still find the transform. Remove the key by hand (regedit, as an administrator)." }
     }
     # The category key belongs to every video encoder of the machine, Windows' own included: it goes only when our
     # membership was the last thing in it, and MediaFoundation\Transforms itself never goes.
