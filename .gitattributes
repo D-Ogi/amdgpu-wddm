@@ -25,5 +25,9 @@ tools/win/cts/lists/** -text
 # file, and line-ending normalization would break both sums.
 tools/win/wsi-dxgi/*.cpp -text
 
+# The kmd168 transition helpers are hash pinned: check-offline.py and stage.py compare each file with the
+# recorded 171 stage manifest and refuse a difference. Line-ending normalization would break every hash.
+tools/win/kmd-deploy/template/kmd168-transition/** -text
+
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary
