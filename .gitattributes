@@ -21,5 +21,9 @@ evidence/** -text
 tools/win/cts/batches/** -text
 tools/win/cts/lists/** -text
 
+# The two M16 WSI harness sources are hash pinned: the E56 manifests record the SHA-256 of each source
+# file, and line-ending normalization would break both sums.
+tools/win/wsi-dxgi/*.cpp -text
+
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary

@@ -17,9 +17,11 @@ D3D11 device, an NT shared texture, a cross-device shared fence, DirectCompositi
 
 ## Harnesses
 
-Two harnesses produced these logs. They live outside the repository, in the design directory of this work.
-Their SHA-256 sums are in the two `manifest.json` files, together with the compiler, the System32 module
-versions and the hash of every app-local DLL that the runner put next to the test executable.
+Two harnesses produced these logs. `tools/win/wsi-dxgi` holds their sources byte for byte, with the build
+script and the two runners. Their SHA-256 sums are in the two `manifest.json` files, together with the
+compiler, the System32 module versions and the hash of every app-local DLL that the runner put next to the
+test executable. At the time of this run the sources were still in the workspace design directory, outside
+the repository.
 
 | Harness | Source SHA-256 prefix | Binary SHA-256 prefix | Logs |
 |---|---|---|---|
