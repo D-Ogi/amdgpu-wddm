@@ -67,9 +67,12 @@ $patterns = [ordered]@{
         names  = @('presents', 'flips', 'address_calls', 'above_dispatch')
     }
     scanout  = @{
-        regex  = 'scan-out flips (\d+) of (\d+) requested candidates; admission ok/no-alloc/not-requested (\d+)/(\d+)/(\d+), format/geometry/pitch/size/segment/alignment (\d+)/(\d+)/(\d+)/(\d+)/(\d+)/(\d+)'
+        # KMD 0.7.207.1 adds a 'gated' column (EnableScanoutAdmit=0 refusals); 0.7.206.1 prints six columns.
+        # 0.7.207.1 also cuts the line at its 160-character log text limit, inside the refusal columns, so those
+        # columns are optional: the verdict rests on the first five counters, which always survive.
+        regex  = 'scan-out flips (\d+) of (\d+) requested candidates; admission ok/no-alloc/not-requested (\d+)/(\d+)/(\d+)(?:, format/geometry/pitch/size/segment/alignment(?:/gated)? (\d+)/(\d+)/(\d+)/(\d+)/(\d+)/(\d+)(?:/(\d+))?)?'
         names  = @('scanout_flips', 'scanout_requests', 'admit_ok', 'admit_no_allocation', 'admit_not_requested',
-                   'admit_format', 'admit_geometry', 'admit_pitch', 'admit_size', 'admit_segment', 'admit_alignment')
+                   'admit_format', 'admit_geometry', 'admit_pitch', 'admit_size', 'admit_segment', 'admit_alignment', 'admit_gated')
     }
     vidpn    = @{
         regex  = 'vidpn flip (\w+): (\d+) hardware flips, (\d+) refused'
@@ -80,12 +83,15 @@ function Parse-Counters {
     param([string]$Text, [string]$Label)
     $values = [ordered]@{}
     foreach ($key in $patterns.Keys) {
-        $match = [regex]::Match($Text, $patterns[$key].regex)
-        if (-not $match.Success) { $values["${key}_line"] = 'absent'; continue }
+        # The ring holds every earlier summary too (the overlay writes one every few seconds): the newest counts.
+        $all = [regex]::Matches($Text, $patterns[$key].regex)
+        if ($all.Count -eq 0) { $values["${key}_line"] = 'absent'; continue }
+        $match = $all[$all.Count - 1]
         $i = 1
         foreach ($name in $patterns[$key].names) {
             $raw = $match.Groups[$i].Value
-            $values[$name] = if ($raw -match '^\d+$') { [int64]$raw } else { $raw }
+            # An optional group that did not match (a truncated line) leaves the counter out, never as ''.
+            if ($match.Groups[$i].Success) { $values[$name] = if ($raw -match '^\d+$') { [int64]$raw } else { $raw } }
             $i++
         }
     }
@@ -155,7 +161,7 @@ function Write-Verdict {
     else {
         Write-Output 'VERDICT not reached: no scan-out candidate reached SetVidPnSourceAddress, so the stop is above the kernel driver.'
         Write-Output '  For a borderless chain that layer is the compositor: DWM decides DirectFlip through its own UMD, which has no CheckDirectFlipSupport entry (see docs/design/scanout-admission.md, "What is still missing").'
-        Write-Output '  For an exclusive-fullscreen chain it is DXGI or the shell: check the client trace for GetFullscreenState and whether the allocation carried the SCANOUT record.'
+        Write-Output '  A D3D12 chain in the fullscreen state is no exception: DXGI keeps it under the compositor. On unit A (2026-10-05) DWM consumed 599 of its 600 presents as windowed flips and scanned out its own three buffers throughout, with GetFullscreenState exclusive (etw-present-mode.py on a -PresentMode capture).'
     }
 }
 
@@ -206,6 +212,10 @@ vidpn flip on: off: 0 hardware flips, 0 refused
     Expect 'scan-out not confirmed' (Judge $v1 $v2.Replace('vidpn flip on: 4600', 'vidpn flip on: 4000') 'scanout-flip-1920x1200') 'NOT CONFIRMED'
     # Candidates that reached the kernel driver and were refused, with the clause named.
     Expect 'refusal named' (Judge $v1 $gated 'scanout-flip-1920x1200') 'VERDICT refused.*admit_segment 600'
+    # 0.7.207.1 cuts the line at 160 characters of text: the leading counters still carry the verdict.
+    $cut = { param($t) ($t -split "`n" | ForEach-Object { if ($_ -match '^wddm summary: scan-out') { $_.Substring(0, 160) } else { $_ } }) -join "`n" }
+    Expect 'truncated line, scan-out confirmed' (Judge (& $cut $v1) (& $cut $v2) 'scanout-flip-1920x1200') 'confirmed at the display hardware'
+    Expect 'truncated line, control arm' (Judge (& $cut $v1) (& $cut $v1) '') 'VERDICT control arm'
     # Nothing reached the kernel driver: the verdict names the layer above it, and names DWM.
     Expect 'not reached names DWM' (Judge $v1 $v1 'scanout-flip-1920x1200') 'VERDICT not reached'
     Expect 'not reached explains DWM' (Judge $v1 $v1 'scanout-flip-1920x1200') 'DWM decides DirectFlip'
@@ -215,7 +225,7 @@ vidpn flip on: off: 0 hardware flips, 0 refused
     catch { if ($_.Exception.Message -match 'names its geometry') { Write-Host 'ok   bare scanout-flip refused' }
             else { $failures++; Write-Host "FAIL bare scanout-flip: $($_.Exception.Message)" } }
     Write-Host ("scanout-trial self-test: {0} failure(s)" -f $failures)
-    exit ($failures ? 1 : 0)
+    if ($failures) { exit 1 } else { exit 0 }
 }
 
 $before = Read-Counters 'before'
@@ -299,7 +309,7 @@ $session = Join-Path $root 'session.json'
 $trace = Join-Path $root 'trace.jsonl'
 function Trace-Line { param([string]$Pattern)
     if (Test-Path -LiteralPath $trace) { (Select-String -LiteralPath $trace -Pattern $Pattern | Select-Object -Last 1).Line } else { $null } }
-$report = [pscustomobject]@{
+$trialResult = [pscustomobject]@{
     schema       = 2
     utc          = $started.ToUniversalTime().ToString('o')
     client       = (Get-FileHash -LiteralPath $Client).Hash
@@ -319,7 +329,7 @@ $report = [pscustomobject]@{
     delta        = $delta
     missing      = $missing
 }
-$report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Report -Encoding ascii
+$trialResult | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Report -Encoding ascii
 Write-Host "delta: $($delta | ConvertTo-Json -Compress)"
 Write-Host "report: $Report"
 
