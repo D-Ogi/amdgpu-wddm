@@ -214,6 +214,17 @@ The two direct-load rows are the positive control of the lab path, for both arch
 driver passes every case when the client loads its DLL the way the lab needs, without the Vulkan loader. The
 negative control rows prove that the comparison can fail, guard bytes included.
 
-Our own ICD has not met this client yet. The first run on the lab is the measurement that matters.
+Unit A, 2026-10-05, release 0.7.207.100-tester.12 (evidence `evidence/windows/2026-10-05-E55-vkfillcheck-lab`):
+
+| Program and ICD (`--icd`) | Result |
+|---|---|
+| x64, deployed `d3d12\amdgpu_wddm_radv.dll` 72E1D192 | 864 PASS, 0 FAIL, 16 SKIP, exit 0 |
+| x86, deployed `wow64\d3d11\amdgpu_wddm_radv.dll` E03A79CA | 864 PASS, 0 FAIL, 16 SKIP, exit 0 |
+| x64, BD-068 fix candidate 45712A13 | 864 PASS, 0 FAIL, 16 SKIP, exit 0 |
+| x86, BD-068 fix candidate A8A7FE3C | 864 PASS, 0 FAIL, 16 SKIP, exit 0 |
+| x64, b18 ICD 013DA4B0 (the BD-068 defect) | 16 PASS, 848 FAIL, 16 SKIP, exit 1 |
+
+The b18 row is the negative control on real hardware. Only the small updates into host memory pass. Every
+other case writes wrong bytes, and 348 cases also write before `dstOffset`. That run did not fault the GPU.
 
 Ufaj, ale sprawdzaj. (Trust, but check: the driver reports success either way.)
