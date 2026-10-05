@@ -130,8 +130,8 @@ restart, not a Windows or DWM restart.
 `GraphicsApiProvider.cs` samples every 3 seconds which graphics API a windowed application in the
 overlay's session started and which driver path serves it. The evidence is the set of image files mapped
 into that process, not the registry or the router configuration. Candidates are the foreground window's
-process and the owners of other visible, uncloaked windows of at least 200x150 (at most 8 per poll);
-shells, launchers and our own tools are excluded by name. The panel shows at most 3 applications: the
+process and the owners of other visible, uncloaked windows of at least 200x150 (at most 8 per poll).
+The provider excludes shells, launchers and our own tools by name. The panel shows at most 3 applications: the
 foreground one first, then the ones on our GPU path.
 
 A green row needs the whole user-mode stack of one render path: the shell the runtime opened, the engine
@@ -154,23 +154,23 @@ it does not have (`tools/release/installer/common.ps1`), so 32-bit processes are
 
 An API runtime with none of our modules gives `none of our UMDs loaded`: many D3D12 games load `d3d11.dll`
 without drawing with it, so no claim is made, and another adapter's UMD is not ours to name.
-`amdgpu_wddm_radv.dll` is the ICD our own shells load by name; the Vulkan row ignores it, because only the
+`amdgpu_wddm_radv.dll` is the ICD our own shells load by name. The Vulkan row ignores it, because only the
 registered `vulkan_radeon.dll` proves the Vulkan loader chose RADV.
 
 A shell without its engine or ICD is a device still being created, and the row is grey for the first 10
 seconds. After that it is a failed `LoadLibrary` and the row turns amber with `engine never loaded (load
 failed)`: D3D11 usually falls back to WARP in that case, which the WARP row reports, but D3D12 has no
 implicit fallback, so the shell stays mapped alone for the life of the process and nothing else would say
-so. `d3d10warp.dll` is shared by D3D11 and D3D12; when both runtimes are loaded the WARP row cannot say
+so. `d3d10warp.dll` is shared by D3D11 and D3D12. When both runtimes are loaded the WARP row cannot say
 which one uses it.
 
 `bc250d3d.dll` is the CPU UMD of both router decisions (`driver/umd/router/router-policy.h`). `dwm` is
 excluded from this panel, so a process that shows it took the application decision (`AppRouter` `Mode`,
-`Deny`), which is the knob to change; a `HostedClients` entry on the desktop CPU route maps the same two
+`Deny`), which is the knob to change. A `HostedClients` entry on the desktop CPU route maps the same two
 files and cannot be told apart from the modules alone.
 
 An OpenGL row appears whenever `opengl32.dll` is mapped and no row claims one of our GPU paths: most GL
-engines map `d3d11.dll` or `dxgi.dll` for the display, so the presence of a Direct3D runtime must not hide
+engines map `d3d11.dll` or `dxgi.dll` for the screen output, so the presence of a Direct3D runtime must not hide
 the API the application actually draws with.
 
 A `d3d11.dll`, `d3d12.dll`, `d3d9.dll`, `d3d10*.dll` or `dxgi.dll` mapped from outside the Windows directory
@@ -196,7 +196,7 @@ The scan has two off switches in the data directory, like the pipeline panel's `
   The name is read through a query-limited-information handle first, so a skipped or excluded process never
   sees the `PROCESS_VM_READ` handle that an anti-tamper check may dislike.
 `test-graphics-api.ps1` checks classification, side-loading, 32-bit answers, ordering and rows on fake
-module lists; `build.ps1` runs it. The panel is only a report of which modules are mapped: it does not say
+module lists. `build.ps1` runs it. The panel is only a report of which modules are mapped: it does not say
 that the application draws anything, and `GraphicsPipelineProvider` above still answers the same question
 for DWM.
 
