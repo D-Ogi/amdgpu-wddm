@@ -12,7 +12,10 @@ namespace Bc250Mon
     {
         public const string CliPath = "stub-cli";
         public static int Calls, Exit;
-        public static string Output = "vidpn flip open: 12 hardware flips\nblit gate closed, 0 blits\nnode 0 hardware: 9 submitted, 9 completed\nnode 1 (paging, open): 17 hardware submitted, 17 completed";
+        // KMD 0.7.208 shape (BD-070): the scan-out and vidpn flip summaries are two lines each.
+        // The second line of each pair is here on purpose. The provider must read the first line
+        // of a pair and must not take "vidpn flip vsyncs 300 armed" for the flip line.
+        public static string Output = "wddm summary: scan-out flips 0 of 4 requested candidates; admission ok/no-alloc/not-requested 0/0/4\nwddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0\nvidpn flip open: 12 hardware flips, 0 refused\nwddm summary: vidpn flip vsyncs 300 armed, 300 acked, 0 refused, 0 completion-deferred, 0 old-buffer-reports\nblit gate closed, 0 blits\nnode 0 hardware: 9 submitted, 9 completed\nnode 1 (paging, open): 17 hardware submitted, 17 completed";
         public static int Run(string path,string args,int timeout,out string output,out string error)
         {
             if(path!=CliPath || args!="log summary" || timeout!=5000)throw new Exception("unexpected subprocess");
@@ -40,6 +43,7 @@ static class GraphicsSummaryTest
             var panel=Poll(provider);
             Check(KmdInfoProvider.Calls==1,"default retains summary subprocess");
             Check(Value(panel,"HW flips")=="12" && Value(panel,"GPU compute")=="9/9 fences completed","real output parser");
+            Check(Value(panel,"Scanout")=="DCN flip + hardware VSync","the vsync line of the 0.7.208 pair is not the flip line");
             Check(Value(panel,"KMD counters")==null,"default not paused");
             File.WriteAllText(marker,"");
             panel=Poll(provider);
