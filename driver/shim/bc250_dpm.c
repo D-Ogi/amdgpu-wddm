@@ -529,7 +529,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	 * administrator's own request, or a point the cap lost (bc250_dpm_subfloor_refused), does not walk back up
 	 * through 600 and 700 MHz one ramp interval at a time.
 	 *
-	 * Worst-case exit latency: this tick's detection plus the caller's SMU transaction. The tick is
+	 * Exit latency: this tick's detection plus the caller's SMU transaction. The tick is
 	 * BC250_DPM_TICK_MS (25 ms) and the transaction's two messages measure in single milliseconds, so the first
 	 * work of a burst runs some 25 to 35 ms at the idle point. Neither figure is a bound: the governor's thread
 	 * is an ordinary system thread, the period is relative to the end of the previous tick, DpmPause holds its
