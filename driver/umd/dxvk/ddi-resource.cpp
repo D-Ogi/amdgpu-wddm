@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-resource.h"
 #include "diagnostics.h"
+#include "runtime-surface-format.h"
 #include <algorithm>
 #include <utility>
 #include <cstring>
@@ -112,20 +113,26 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     if (FAILED(hr)) return hr;
     const auto &d=converted.texture2d;
     if (d.Width>16384 || d.Height>16384) return E_INVALIDARG;
-    UINT format;
-    switch (d.Format) {
-    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: format=D3DDDIFMT_A8R8G8B8; break;
-    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: format=D3DDDIFMT_A8B8G8R8; break;
-    default: return E_NOTIMPL;
-    }
+    // The storage formats the kernel driver and the compositor's UMD admit by the same table: BGRA8
+    // and RGBA8 with their sRGB views, RGB10A2, RGBA16F, and A8 for the atlases DirectComposition
+    // shares (M14.1: Task Manager's 32x32 A8 render target). A primary is the buffer of a flip-model
+    // or fullscreen swap chain; A8 is never one. Every primary keeps the descriptor's VidPn source:
+    // dxgkrnl refused an RGB10A2 primary allocation with D3DDDI_ID_UNINITIALIZED (343: AllocateCb
+    // E_INVALIDARG, the kernel driver saw no request). Admission as a primary is not permission to
+    // scan out: the kernel driver's SetVidPnSourceAddress still takes only the SCANOUT_PRIMARY rows
+    // (8-bit), and direct scan-out of RGB10A2/RGBA16F stays unsupported. The Ascent's UE 4.26
+    // borderless swap chain is RGB10A2 with a primary descriptor; refusing it removed the device at
+    // startup (339-342).
+    const auto *row=runtime_surface_format(d.Format);
+    if (!row || (input.pPrimaryDesc && row->dxgi==AMDGPU_WDDM_DXGI_A8_UNORM)) return E_NOTIMPL;
     RuntimeSurfaceRequest r{};
     r.runtime_resource=runtimeHandle; r.primary=input.pPrimaryDesc!=nullptr;
     r.displayable=(input.MiscFlags&D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE)!=0;
     r.shared=(input.MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)!=0;
     if (input.pPrimaryDesc) r.vidpn_source=input.pPrimaryDesc->VidPnSourceId;
-    const UINT pitch=(d.Width*4+255)&~255u;
+    const UINT pitch=runtime_surface_pitch(d.Width,row->bytes_per_pixel);
     const UINT64 bytes=(UINT64(pitch)*((d.Height+3)&~3u)+4095)&~UINT64(4095);
-    r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,d.Width,d.Height,pitch,format,bytes};
+    r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,d.Width,d.Height,pitch,row->d3dddi,bytes};
     D3D11_TEXTURE2D_DESC1 result{d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,
         d.Usage,d.BindFlags,d.CPUAccessFlags,d.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
     r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,
@@ -143,19 +150,17 @@ HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_AL
     std::memcpy(&m,a.pPrivateDriverData,sizeof(m)); std::memcpy(&p,input.pPrivateDriverData,sizeof(p));
     int shared=0,cached=0;
     if (p.Magic!=BC250_SURFACE_RESOURCE_MAGIC || p.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION ||
-        !Bc250SurfaceResourcePolicy(&p,sizeof(p),&shared,&cached) || !WddmSurfaceGeometry(&m,0,4) ||
+        !Bc250SurfaceResourcePolicy(&p,sizeof(p),&shared,&cached) ||
+        m.Magic!=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || m.Version!=1 ||
         p.Width!=m.Width || p.Height!=m.Height || p.Width>16384 || p.Height>16384 ||
         p.MipLevels!=1 || p.ArraySize!=1 || p.SampleCount!=1 || p.SampleQuality ||
         p.Usage!=D3D11_USAGE_DEFAULT || p.CpuAccessFlags || p.TextureLayout!=D3D11_TEXTURE_LAYOUT_UNDEFINED ||
         (p.BindFlags&~UINT(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS)) ||
         (p.MiscFlags&~UINT(D3D11_RESOURCE_MISC_GENERATE_MIPS|D3D11_RESOURCE_MISC_RESOURCE_CLAMP))) return E_INVALIDARG;
-    switch (p.Format) {
-    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-        if (m.Format!=D3DDDIFMT_A8B8G8R8) return E_INVALIDARG; break;
-    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-        if (m.Format!=D3DDDIFMT_A8R8G8B8) return E_INVALIDARG; break;
-    default: return E_NOTIMPL;
-    }
+    // The row the creator took the LB7A format and pitch from; its pixel size bounds the geometry.
+    const auto *row=runtime_surface_format(DXGI_FORMAT(p.Format));
+    if (!row) return E_NOTIMPL;
+    if (row->d3dddi!=m.Format || !runtime_surface_geometry(m,row->bytes_per_pixel)) return E_INVALIDARG;
     D3D11_TEXTURE2D_DESC1 d{p.Width,p.Height,p.MipLevels,p.ArraySize,DXGI_FORMAT(p.Format),
         {p.SampleCount,p.SampleQuality},D3D11_USAGE(p.Usage),p.BindFlags,p.CpuAccessFlags,p.MiscFlags,D3D11_TEXTURE_LAYOUT(p.TextureLayout)};
     metadata=m; desc=d; return S_OK;
@@ -200,6 +205,8 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
             s->runtime_surface=surface; s->object=surface->texture.texture;
             s->dimension=D3D10DDIRESOURCE_TEXTURE2D;
             s->present_allocation=surface->allocation.allocation; s->present_subresource=0;
+            s->blt_model_buffer=(desc->BindFlags&D3D10_DDI_BIND_PRESENT) && !request.primary && !request.shared &&
+                !request.displayable;
             if (desc->pInitialDataUP) {
                 const auto &initial=desc->pInitialDataUP[0];
                 owner.context()->UpdateSubresource(s->object,0,nullptr,initial.pSysMem,initial.SysMemPitch,initial.SysMemSlicePitch);

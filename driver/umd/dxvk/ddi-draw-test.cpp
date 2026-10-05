@@ -996,6 +996,60 @@ int main() {
     }
     openArgs.PrivateDriverDataSize=sizeof(request.texture); request.texture.BindFlags=UINT32_MAX;
     if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    // M14.1: the atlases DirectComposition shares (Task Manager: A8_UNORM 32x32, SRV|RT|PRESENT,
+    // SHARED) and the other composed rows, at the row's pixel size: pitch = width * bytes rounded
+    // up to 256, rows rounded up to 4, size rounded up to a page. A primary stays 8-bit.
+    struct SharedCase { DXGI_FORMAT format; UINT width,height,d3dddi,pitch; UINT64 size; };
+    const SharedCase sharedCases[]={
+        {DXGI_FORMAT_A8_UNORM,32,32,D3DDDIFMT_A8,256,8192},
+        {DXGI_FORMAT_A8_UNORM,300,17,D3DDDIFMT_A8,512,12288},
+        {DXGI_FORMAT_R16G16B16A16_FLOAT,65,17,D3DDDIFMT_A16B16G16R16F,768,16384},
+        {DXGI_FORMAT_R10G10B10A2_UNORM,65,17,D3DDDIFMT_A2B10G10R10,512,12288},
+        {DXGI_FORMAT_B8G8R8A8_UNORM,1024,1024,D3DDDIFMT_A8R8G8B8,4096,4194304}};
+    D3D10DDI_MIPINFO atlasMip{}; atlasMip.TexelDepth=1;
+    auto atlasDesc=runtimeDesc; atlasDesc.pPrimaryDesc=nullptr; atlasDesc.pMipInfoList=&atlasMip;
+    atlasDesc.BindFlags=D3D10_DDI_BIND_SHADER_RESOURCE|D3D10_DDI_BIND_RENDER_TARGET|D3D10_DDI_BIND_PRESENT;
+    atlasDesc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED;
+    for (const auto &c:sharedCases) {
+        atlasDesc.Format=c.format; atlasMip.TexelWidth=c.width; atlasMip.TexelHeight=c.height;
+        if (convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc)!=S_OK ||
+            request.primary || !request.shared || request.displayable || request.surface.Format!=c.d3dddi ||
+            request.surface.Width!=c.width || request.surface.Height!=c.height ||
+            request.surface.Pitch!=c.pitch || request.surface.Size!=c.size ||
+            request.texture.Format!=UINT(c.format) || request.texture.Access || importedDesc.Format!=c.format ||
+            importedDesc.BindFlags!=(D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET) || importedDesc.MiscFlags) std::abort();
+        if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=S_OK || decodedDesc.Format!=c.format ||
+            std::memcmp(&decodedSurface,&request.surface,sizeof(decodedSurface)) ||
+            decodedDesc.BindFlags!=importedDesc.BindFlags || decodedDesc.Width!=c.width) std::abort();
+        // A primary of every swap-chain row keeps the descriptor's VidPn source (dxgkrnl refuses a
+        // D3D11 primary allocation without one, 343); A8 is no swap-chain format.
+        atlasDesc.pPrimaryDesc=&primary;
+        const bool atlasOnly=c.format==DXGI_FORMAT_A8_UNORM;
+        const HRESULT hr=convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc);
+        if (atlasOnly ? hr!=E_NOTIMPL :
+            hr!=S_OK || !request.primary || request.surface.Format!=c.d3dddi || request.surface.Pitch!=c.pitch ||
+            request.vidpn_source!=2u || request.texture.Access!=1u)
+            std::abort();
+        atlasDesc.pPrimaryDesc=nullptr;
+    }
+    // A reader takes the pixel size from the row, never 4: an FP16 surface described with a
+    // 32-bit row, an A8 pitch below the row and a format the LB7A blob does not carry are refused.
+    atlasDesc.Format=DXGI_FORMAT_R16G16B16A16_FLOAT; atlasMip.TexelWidth=65; atlasMip.TexelHeight=17;
+    if (convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc)!=S_OK) std::abort();
+    request.surface.Pitch=512; request.surface.Size=12288;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    request.surface.Pitch=772; request.surface.Size=16384;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    atlasDesc.Format=DXGI_FORMAT_A8_UNORM; atlasMip.TexelWidth=32; atlasMip.TexelHeight=32;
+    if (convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc)!=S_OK) std::abort();
+    request.surface.Pitch=16;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    request.surface.Pitch=256; request.surface.Format=D3DDDIFMT_A8R8G8B8;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    request.surface.Format=D3DDDIFMT_A8; request.texture.Format=DXGI_FORMAT_R8_UNORM;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_NOTIMPL) std::abort();
+    atlasDesc.Format=DXGI_FORMAT_R8_UNORM;
+    if (convert_runtime_resource(atlasDesc,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL) std::abort();
     if (!table.pfnOpenResource || table.pfnCalcPrivateOpenedResourceSize(h,&openArgs)!=sizeof(DdiResource)) std::abort();
     DXGI1_2_DDI_BASE_FUNCTIONS resourceTable{}; install_dxgi_resource_ddi(resourceTable);
     owner.runtime().hDevice=&createIdentity; expected=&owner;
@@ -1050,6 +1104,27 @@ int main() {
     if(resourceTable.pfnOfferResources(&offerArgs)!=E_FAIL || offerCalls!=2) std::abort(); // no engine/context
     reclaimArgs.Resources=0; reclaimArgs.pResources=nullptr;
     if(resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaimCalls!=3 || owner.runtime().domain.entered()) std::abort();
+    // Engine-private resources (no runtime surface): Offer, Reclaim and residency are hints and never fail a batch;
+    // DXGI removes the device on a failed Offer (Task Manager's XAML looped on that, M14.1, 2026-10-01). Runtime
+    // surfaces in the same batch still reach the kernel by allocation handle.
+    {
+        DdiResource privateResource{}; privateResource.object=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[0]);
+        DXGI_DDI_HRESOURCE mixed[4]={reinterpret_cast<DXGI_DDI_HRESOURCE>(&privateResource),
+                                     sharedHandles[0],sharedHandles[1],sharedHandles[2]};
+        BOOL kept[4]={9,9,9,9};
+        DXGI_DDI_ARG_OFFERRESOURCES privateOffer{reclaimArgs.hDevice,mixed,1,D3DDDI_OFFER_PRIORITY_LOW};
+        DXGI_DDI_ARG_RECLAIMRESOURCES mixedReclaim{reclaimArgs.hDevice,mixed,kept,4};
+        DXGI_DDI_RESIDENCY privateStatus=static_cast<DXGI_DDI_RESIDENCY>(99);
+        DXGI_DDI_ARG_QUERYRESOURCERESIDENCY privateResidency{reclaimArgs.hDevice,mixed,&privateStatus,1};
+        const unsigned offers=offerCalls,reclaims=reclaimCalls,residencies=residencyCalls;
+        if (resourceTable.pfnOfferResources(&privateOffer)!=S_OK || offerCalls!=offers ||
+            resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 ||
+            kept[0] || kept[1] || !kept[2] || kept[3] ||
+            resourceTable.pfnQueryResourceResidency(&privateResidency)!=S_OK || residencyCalls!=residencies ||
+            privateStatus!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || owner.runtime().domain.entered()) std::abort();
+        mixedReclaim.Resources=1; kept[0]=9;
+        if (resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 || kept[0]) std::abort();
+    }
     DXGI_DDI_ARG_SETDISPLAYMODE modeArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],0};
     if (!resourceTable.pfnSetDisplayMode || resourceTable.pfnSetDisplayMode(nullptr)!=E_INVALIDARG ||
         resourceTable.pfnSetDisplayMode(&modeArgs)!=E_NOTIMPL || displayModeCalls) std::abort();
@@ -1087,8 +1162,8 @@ int main() {
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_RESIDENT_IN_SHARED_MEMORY) std::abort();
     tracked[1].owner=&foreignRuntime;
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_INVALIDARG || residencyCalls!=5) std::abort();
-    sharedResources[0].runtime_surface=nullptr;
-    if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=E_NOTIMPL || priorityCalls!=1 ||
+    sharedResources[0].runtime_surface=nullptr; // Engine-private: SetResourcePriority is a hint, no callback.
+    if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 ||
         resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) std::abort();
     UINT64 adapterLuid=77;
     if(query_adapter_identity(nullptr,adapter_query,adapterLuid)!=E_INVALIDARG ||

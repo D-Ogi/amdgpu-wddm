@@ -337,16 +337,25 @@ HRESULT signal_present(HostBridge &bridge)
 
 HRESULT wait_present_idle(HostBridge &bridge)
 {
+   return wait_present_value(bridge,bridge.present_value);
+}
+
+HRESULT wait_present_value(HostBridge &bridge, UINT64 value)
+{
    auto *s=&bridge;
    auto *device=s->device;
    if (!device || !device->domain.entered()) return E_INVALIDARG;
-   if (!s || !s->present_value) return S_OK;
+   if (!s || !value) return S_OK;
+   // Only a value this bridge has signalled can be waited for.
+   if (value>s->present_value) return E_INVALIDARG;
    if (FAILED(Bc250HostStatus(s))) return D3DDDIERR_DEVICEREMOVED;
+   // BD-065: the Present shadow waits for a Present two frames back, normally retired already.
+   if (s->present_cpu && *(const volatile UINT64 *)s->present_cpu>=value) return Bc250HostStatus(s);
    if (!device->domain.entered() || !device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_INVALIDARG;
    HANDLE event=CreateEventW(NULL,FALSE,FALSE,NULL);
    if (!event) return HRESULT_FROM_WIN32(GetLastError());
    D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait={};
-   wait.ObjectCount=1; wait.ObjectHandleArray=&s->present_sync; wait.FenceValueArray=&s->present_value;
+   wait.ObjectCount=1; wait.ObjectHandleArray=&s->present_sync; wait.FenceValueArray=&value;
    wait.hAsyncEvent=event;
    HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
    if (SUCCEEDED(hr) && WaitForSingleObject(event,10000)!=WAIT_OBJECT_0) hr=DXGI_ERROR_DEVICE_HUNG;

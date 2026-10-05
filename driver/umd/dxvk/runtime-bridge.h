@@ -39,6 +39,9 @@ HRESULT queue_present_wait(HostBridge &bridge);
 HRESULT signal_present(HostBridge &bridge);
 // Destruction/readback only. Steady-state Present uses GPU waits above.
 HRESULT wait_present_idle(HostBridge &bridge);
+// CPU wait until the Present that signalled value has retired; value must be one this bridge signalled.
+// Returns at once when the fence already reached it. Used before the engine writes a Present shadow again.
+HRESULT wait_present_value(HostBridge &bridge, UINT64 value);
 int32_t host_dispatch(void *userdata, uint32_t operation, void *argument);
 // Descriptor is copied by the hosted ICD, but userdata and device remain borrowed.
 // Only call with a live, initialized bridge. Device destruction must first drain

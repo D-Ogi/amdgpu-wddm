@@ -157,6 +157,7 @@ HRESULT DeviceOwner::close() {
         hr=close_surface(*surfaces_.back());
         if (hr!=S_OK) return hr;
     }
+    present_shadows_={};
     hr=destroy_surface_paging_queue(runtime_,surface_queue_);
     if (hr!=S_OK) return hr;
     surface_vk_={}; surface_memory_={};
