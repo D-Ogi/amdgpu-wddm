@@ -533,6 +533,8 @@ static int Clock(int argc,wchar_t** argv)
 // tools/win/bc250mon/test_telemetry.py compares it with the header of the KMD that ships it.
 #define BC250_ESCAPE_RUN_DPM 23u
 #define BC250_DPM_ABI 1u
+#define BC250_DPM_ABI_1 1u
+#define BC250_DPM_ABI1_SIZE 160u
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_FLAG_TEMPERATURE 128u
 #define BC250_DPM_FLAG_CLOCK 256u
@@ -587,25 +589,35 @@ static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
 }
 
 // READ only: the overlay has no business confirming a DPM start. Never idles the scheduler, never reads a BAR.
+//
+// The caller's buffer decides the ABI, and that is what keeps the deployed callers working. bc250mon's
+// Driver.cs and the control DLL's Native.cs both pass 160 bytes, the ABI 1 layout, and they were built
+// against a header in which that was the whole structure. RUN_DPM grew to 192 bytes in 0.7.207 (the idle
+// state), so a check against sizeof(BC250_ESCAPE_DPM) alone would refuse every one of those calls and a
+// compile-time assertion on that size would stop the DLL being built at all. The driver takes either size
+// with its own AbiVersion (driver/kmd/display.c), so this function asks with the ABI of the size it was
+// given and never writes past it. A rebuilt caller that passes 192 gets the idle fields as well.
 BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
 {
     NTSTATUS status;
-    typedef char DpmAbiSizeCheck[(sizeof(BC250_ESCAPE_DPM) == 160) ? 1 : -1];
+    unsigned long abi;
+    typedef char DpmAbiSizeCheck[(BC250_DPM_ABI1_SIZE == 160 && sizeof(BC250_ESCAPE_DPM) >= 160) ? 1 : -1];
     (void)sizeof(DpmAbiSizeCheck);
-    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
-    memset(data, 0, sizeof(*data));
+    if (!data || (bytes != BC250_DPM_ABI1_SIZE && bytes != sizeof(*data))) return (LONG)0xC000000D;
+    abi = bytes == BC250_DPM_ABI1_SIZE ? BC250_DPM_ABI_1 : BC250_DPM_ABI;
+    memset(data, 0, bytes);
     data->Magic = BC250_ESCAPE_MAGIC;
     data->Command = BC250_ESCAPE_RUN_DPM;
     data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-    data->AbiVersion = BC250_DPM_ABI;
+    data->AbiVersion = abi;
     data->Op = BC250_DPM_OP_READ;
-    status = TelemetryEscape(data, sizeof(*data));
+    status = TelemetryEscape(data, bytes);
     if (!NT_SUCCESS(status)) return status;         // a KMD before 0.7.175 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_DPM ||
-        data->AbiVersion != BC250_DPM_ABI || data->Op != BC250_DPM_OP_READ)
+        data->AbiVersion != abi || data->Op != BC250_DPM_OP_READ)
         return (LONG)0xC000000D;
     return 0;
 }

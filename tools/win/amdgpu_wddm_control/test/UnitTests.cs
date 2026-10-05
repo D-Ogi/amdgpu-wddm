@@ -68,7 +68,13 @@ static partial class UnitTests
     {
         int size;
         var dpm = Layout(header, "BC250_ESCAPE_DPM", out size);
-        Equal(KmdReply.DpmBytes, size, "DPM size from the header");
+        // The reply this app parses is RUN_DPM ABI 1, whose length the header states as BC250_DPM_ABI1_SIZE.
+        // The structure itself is longer since 0.7.207, which appends the idle state as ABI 2; IdleMHz is the
+        // first of those fields, so its offset is the ABI 1 length and the assertion holds for both revisions.
+        Equal(KmdReply.DpmBytes, Regex.Match(header, @"#define BC250_DPM_ABI1_SIZE (\d+)u").Success
+            ? int.Parse(Regex.Match(header, @"#define BC250_DPM_ABI1_SIZE (\d+)u").Groups[1].Value) : size,
+            "DPM ABI 1 length from the header");
+        Equal(KmdReply.DpmBytes, dpm.ContainsKey("IdleMHz") ? dpm["IdleMHz"] : size, "DPM ABI 1 fields fit it");
         var b = new byte[KmdReply.DpmBytes];
         Put(b, dpm["Magic"], KmdReply.Magic); Put(b, dpm["Command"], 23u); Put(b, dpm["AbiVersion"], 1u);
         Put(b, dpm["Version"], 0x000700C5u); Put(b, dpm["Flags"], 128u | 256u | 512u); Put(b, dpm["Mode"], 1u);
