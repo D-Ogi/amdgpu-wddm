@@ -22,7 +22,11 @@ CU_HEADER = REPO / 'driver/shim/include/bc250_cu_mode.h'
 DPM_HEADER = REPO / 'driver/shim/include/bc250_dpm.h'
 CUMODE_C = REPO / 'driver/kmd/cumode.c'
 INTEROP_C = REPO / 'driver/kmd/interop.c'
+INTEROP_POLICY_C = REPO / 'driver/kmd/interop_policy.c'
+DPM_C = REPO / 'driver/kmd/dpm.c'
+INTEROP_POLICY_H = REPO / 'driver/kmd/interop_policy.h'
 CLI = REPO / 'tools/win/bc250kmd_cli/bc250kmd_cli.c'
+WITNESS_PS1 = REPO / 'tools/release/installer/release-witness.ps1'
 REGISTRY_DEFAULTS = REPO / 'tools/release/installer/registry-defaults.json'
 DRIVER_CS = HERE / 'src/Driver.cs'
 NAMES_CS = HERE / 'src/LabState.cs'
@@ -171,6 +175,72 @@ class DpmAndHealthFlagTest(unittest.TestCase):
         self.assertEqual(cs_const(view, 'FreshMs'), define(ESCAPE_HEADER, 'BC250_START_HEALTH_FRESH_MS'))
 
 
+class InteropEscapeTest(unittest.TestCase):
+    """The escape the panel now reads, because the registry mirror cannot tell a live session from a dead one."""
+
+    def test_layout(self):
+        fields = c_fields(text(ESCAPE_HEADER), 'BC250_ESCAPE_INTEROP')
+        self.assertEqual(fields, cs_fields('InteropSnapshot'))
+        self.assertEqual(size_of(fields), 104)
+
+    def test_size_passed_by_the_monitor(self):
+        source = text(DRIVER_CS)
+        self.assertIn('if (bytes != 104) throw', source)
+        self.assertIn('Bc250Interop(out data, bytes)', source)
+
+    def test_protocol_constants(self):
+        snapshot = cs_class(DRIVER_CS, 'InteropSnapshot')
+        self.assertEqual(define(ESCAPE_HEADER, 'BC250_ESCAPE_RUN_INTEROP'), 25)
+        self.assertEqual(define(ESCAPE_HEADER, 'BC250_INTEROP_ABI'), 1)
+        self.assertEqual(define(ESCAPE_HEADER, 'BC250_INTEROP_OP_READ'), 0)
+        for cs, suffix in {'FlagValid': 'VALID', 'FlagSession': 'SESSION', 'FlagUnclean': 'UNCLEAN',
+                           'FlagStale': 'STALE', 'FlagClosedByDriver': 'CLOSED_BY_DRIVER',
+                           'FlagPersisted': 'PERSISTED', 'FlagPersistFailed': 'PERSIST_FAILED',
+                           'FlagBlitAbsent': 'BLIT_ABSENT', 'FlagCddAbsent': 'CDD_ABSENT',
+                           'FlagBlitUnreadable': 'BLIT_UNREADABLE', 'FlagCddUnreadable': 'CDD_UNREADABLE',
+                           'FlagPowerCallback': 'POWER_CALLBACK', 'FlagDown': 'DOWN'}.items():
+            self.assertEqual(cs_const(snapshot, cs),
+                             define(ESCAPE_HEADER, 'BC250_INTEROP_FLAG_' + suffix), cs)
+
+    def test_there_is_no_write_operation(self):
+        """interop.c has no write escape at all: the operator changes the registry and restarts."""
+        self.assertNotIn('BC250_INTEROP_OP_WRITE', text(ESCAPE_HEADER))
+        self.assertIn('Bc250Interop(out InteropSnapshot data, uint bytes);', text(DRIVER_CS))
+
+    def test_reason_names(self):
+        """LabNames.InteropReason mirrors g_InteropReason of interop_policy.c, entry for entry."""
+        body = re.search(r'g_InteropReason\[BC250_INTEROP_REASON_COUNT\] = \{(.*?)\};',
+                         text(INTEROP_POLICY_C), re.S)
+        self.assertIsNotNone(body, 'g_InteropReason not found')
+        driver = re.findall(r'"([^"]*)"', body.group(1))
+        body = re.search(r'string\[\] InteropReason =\s*\{(.*?)\};', text(NAMES_CS), re.S)
+        self.assertIsNotNone(body, 'LabNames.InteropReason not found')
+        self.assertEqual(driver, re.findall(r'"([^"]*)"', body.group(1)),
+                         'LabNames.InteropReason no longer follows g_InteropReason')
+
+    def test_the_session_marker_is_the_live_state(self):
+        """
+        Why the panel must not raise its level on `InteropSession` or `InteropLastEnd`: the first is on disk
+        while a device that uses the path is alive, and the second is never cleared at a later start. Only the
+        three flags above distinguish a marker a dead machine left. If the driver ever changes that, the panel's
+        rule has to change with it.
+        """
+        source = text(INTEROP_C)
+        self.assertRegex(source, r'InteropSession\s+this boot\'s BootId, on disk while a DDI device that used '
+                                 r'the path is alive')
+        self.assertRegex(source, r'InteropLastEnd\s+how the last session ended')
+        # interop.c writes InteropLastEnd at the unmark and nothing deletes it afterwards.
+        self.assertNotRegex(source, r'InteropDelete\(INTEROP_SETTING_LAST_END\)')
+
+    def test_the_panel_judges_the_escape_flags_only(self):
+        source = text(POINT_CS)
+        marker = re.search(r'if \(v\.Session\.HasValue\) text\.Append\("; session marked"\);', source)
+        self.assertIsNotNone(marker, 'the mirror path no longer prints the session marker')
+        # No level change on either of the two mirror values: they are both normal states.
+        tail = source[marker.start():marker.start() + 600]
+        self.assertNotIn('Level.Warn', tail.split('panel.Rows.Add')[0])
+
+
 class InteropMirrorTest(unittest.TestCase):
     def test_switch_bits(self):
         view = cs_class(POINT_CS, 'InteropView')
@@ -236,6 +306,120 @@ class RegistryNameTest(unittest.TestCase):
         self.assertIn(r'SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters', text(POINT_CS))
 
 
+class AbsentDefaultTest(unittest.TestCase):
+    """
+    The panel's own table of what the driver does with a name that is not in the Parameters key. It decides
+    whether "absent" is a deviation, so every entry has to agree with the driver's reader.
+    """
+
+    def table(self):
+        body = re.search(r'Dictionary<string, int> Absent = new[^{]*\{(.*?)\n        \};', text(GUARD_CS), re.S)
+        assert body, 'the Absent table was not found in MeasurementGuardProvider.cs'
+        return dict((name, int(value)) for name, value in re.findall(r'\{ "(\w+)", (\d+) \}', body.group(1)))
+
+    def test_guard_read_setting_defaults(self):
+        """Every GuardReadSetting(L"Name", N) of the driver that the table knows must carry the same N."""
+        table = self.table()
+        seen = 0
+        for path in sorted((REPO / 'driver/kmd').glob('*.c')):
+            for name, value in re.findall(r'GuardReadSetting\(L"(\w+)",\s*(\d+)\)', text(path)):
+                if name in table:
+                    seen += 1
+                    self.assertEqual(table[name], int(value), '%s in %s' % (name, path.name))
+        self.assertGreater(seen, 10, 'no driver reader was matched: the regular expression went stale')
+
+    def test_the_two_interop_switches_are_on_when_absent(self):
+        """The entries that make this table worth having: absent means 1, not a difference from the default 1."""
+        table = self.table()
+        self.assertEqual(table['EnableGpuPresentBlit'], 1)
+        self.assertEqual(table['EnableCddDwmInterop'], 1)
+        self.assertRegex(text(INTEROP_POLICY_H), r'an absent value means 1 \(on\)')
+        self.assertIn('if (v->state == BC250_INTEROP_ABSENT) { *requested |= bit;', text(INTEROP_POLICY_C))
+
+    def test_dpm_and_cu_defaults(self):
+        table = self.table()
+        self.assertEqual(table['DpmMaxMHz'], define(DPM_HEADER, 'BC250_DPM_DEFAULT_MAX_MHZ'))
+        self.assertEqual(table['CuMode'], define(CU_HEADER, 'BC250_CU_MODE_STOCK'))
+        # BC250_DPM_DEFAULT_MODE is BC250_DPM_MODE_FIXED, which the escape header numbers.
+        self.assertRegex(text(DPM_HEADER), r'#define\s+BC250_DPM_DEFAULT_MODE\s+BC250_DPM_MODE_FIXED')
+        self.assertEqual(table['DpmMode'], define(DPM_HEADER, 'BC250_DPM_MODE_FIXED'))
+
+    def test_every_installer_default_is_known(self):
+        """
+        A name the installer applies whose absent meaning the table does not know would be reported as plain
+        "absent", which is the old behaviour and never wrong - but it is worth knowing when one appears.
+        """
+        table = self.table()
+        defaults = json.loads(text(REGISTRY_DEFAULTS))['defaults']['parameters']
+        self.assertEqual([name for name in defaults if name not in table], [])
+
+
+class DpmErrorToleranceTest(unittest.TestCase):
+    def test_the_panel_does_not_call_a_recovered_retry_a_failure(self):
+        """
+        `Errors` counts failed SMU transitions of the whole start; the governor gives up only after
+        BC250_DPM_ERROR_LIMIT failures in a row, and resets that counter on every success. So the count alone
+        is not red, and the panel must not make it so (it reads amber, with the number in the text).
+        """
+        self.assertEqual(define(REPO / 'driver/kmd/dpm.h', 'BC250_DPM_ERROR_LIMIT'), 3)
+        self.assertIn('S->ErrorsInRow = 0;', text(DPM_C))
+        self.assertRegex(text(DPM_C), r'S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT')
+        source = text(POINT_CS)
+        self.assertNotIn('s.Errors > 0) level = Level.Error', source)
+        self.assertNotIn('s.Throttle == 6 || s.Errors > 0', source)
+        self.assertIn('else if (s.Errors > 0) capLevel = Level.Warn;', source)
+
+
+class StartHealthCompletionTest(unittest.TestCase):
+    def test_the_no_completion_sentinel(self):
+        """start_health.c writes ~0ull when nothing has completed; printed as an age it was 1.8e16 seconds."""
+        self.assertRegex(text(REPO / 'driver/kmd/start_health.c'),
+                         r'Data->LastCompletionAgeMs=H->LastCompletion \?.*: ~0ull;')
+        self.assertIn('public const ulong NoCompletion = ulong.MaxValue;', text(POINT_CS))
+        self.assertIn('if (v.NothingCompleted) text.Append(", no completed presentation yet");', text(POINT_CS))
+
+
+class RunningReleaseWitnessTest(unittest.TestCase):
+    """
+    The `KMD image` row's green case. One kmd_abi covers every build of a driver revision, so the ABI word
+    alone cannot say that the release's own .sys is the loaded one; the witness says it by SHA-256.
+    """
+
+    def test_path_and_field_names(self):
+        witness = text(WITNESS_PS1)
+        self.assertRegex(witness, r"WitnessPath = Join-Path \$env:ProgramData 'amdgpu-wddm\\installer\\running-release\.json'")
+        guard = text(GUARD_CS)
+        self.assertIn(r'@"amdgpu-wddm\installer\running-release.json"', guard)
+        for field in ('schema', 'recorded_by', 'boot_id', 'version', 'kmd_build', 'kmd_abi'):
+            self.assertRegex(witness, r'(?m)^\s+%s\s+=' % field, field + ' is not a witness field')
+            self.assertIn('"%s"' % field, guard, field + ' is not read by the panel')
+
+    def test_the_two_writers_and_the_schema(self):
+        witness = text(WITNESS_PS1)
+        self.assertRegex(witness, r'WitnessSchema = 1')
+        self.assertRegex(witness, r"ValidateSet\('verify', 'start-confirm'\)\]\[string\]\$RecordedBy")
+        guard = text(GUARD_CS)
+        self.assertIn('schema != "1"', guard)
+        self.assertIn('by != "verify" && by != "start-confirm"', guard)
+
+    def test_the_boot_id_is_read_the_way_the_driver_tools_read_it(self):
+        key = r'SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters'
+        self.assertIn(key, text(WITNESS_PS1))
+        self.assertIn(key, text(GUARD_CS))
+        self.assertIn('"BootId"', text(GUARD_CS))
+
+    def test_the_witness_binds_the_loaded_image(self):
+        """What makes the record worth trusting: it is written only when the loaded image hashes to the release's."""
+        witness = text(WITNESS_PS1)
+        self.assertRegex(witness, r'\$Reading\.image\.sha256 -ne \(\[string\]\$comp\.sha256\)\.ToUpperInvariant\(\)')
+        self.assertRegex(witness, r'was replaced after this boot started')
+
+    def test_one_abi_covers_several_builds(self):
+        """The reason the ABI word alone is not enough; if this ever stops being true, say so in the README."""
+        self.assertRegex(text(REPO / 'tools/release/test-dryrun.ps1'),
+                         r"kmd_abi -eq '0x[0-9A-F]+' -and \[version\]\(\$m\.kmd_build\) -ge")
+
+
 class ControlDllExportTest(unittest.TestCase):
     def test_cu_mode_export_signature(self):
         """The managed declaration must match the control DLL's export, argument for argument."""
@@ -244,6 +428,30 @@ class ControlDllExportTest(unittest.TestCase):
         self.assertIsNotNone(native, 'Bc250CuMode not found in the control DLL source')
         self.assertIn('static extern int Bc250CuMode(uint op, ulong expectedGeneration, '
                       'out CuModeSnapshot data, uint bytes);', text(DRIVER_CS))
+
+    def test_interop_export_signature(self):
+        native = re.search(r'Bc250Interop\(BC250_ESCAPE_INTEROP \*data, ULONG bytes\)', text(CLI))
+        self.assertIsNotNone(native, 'Bc250Interop not found in the control DLL source')
+        self.assertIn('static extern int Bc250Interop(out InteropSnapshot data, uint bytes);', text(DRIVER_CS))
+
+    def test_the_panel_only_sends_software_snapshots(self):
+        """
+        Every escape of this panel is answered with NoAdapterSynchronization alone, which is what keeps it clear
+        of the adapter lock a game's threads wait on (BD-054). The escape header states it per command, right
+        above the structure, and the driver's request handlers refuse any other flag.
+        """
+        header = text(ESCAPE_HEADER)
+        for command, struct in (('BC250_ESCAPE_RUN_CU_MODE', 'BC250_ESCAPE_CU_MODE'),
+                                ('BC250_ESCAPE_RUN_INTEROP', 'BC250_ESCAPE_INTEROP')):
+            block = header[:header.index('typedef struct _' + struct)].rsplit('// ---', 1)[-1]
+            self.assertIn('NoAdapterSynchronization', block.rsplit('\n\n', 1)[-1],
+                          command + ' no longer documents NoAdapterSynchronization')
+        # Start health says it in its own words, and KmdProvider has sent that one since long before this panel.
+        self.assertRegex(header, r'Adapter-owned software snapshot; READ must not idle GPU scheduling or read BARs')
+        for handler, source in (('CuModeRequest', text(CUMODE_C)), ('InteropRequest', text(INTEROP_C))):
+            found = re.search(r'%s\(.*?\n\}' % handler, source, re.S)
+            self.assertIsNotNone(found, handler + ' not found')
+            self.assertIn('Flags', found.group(0), handler + ' no longer checks the escape flags')
 
 
 if __name__ == '__main__':

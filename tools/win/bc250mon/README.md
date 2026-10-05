@@ -251,14 +251,21 @@ as it differs from the lab's expectation.
 
 | Row | Source | Amber | Red |
 |---|---|---|---|
-| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: applied units, counted units, and the pending or confirmed mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | applied units differ from the expectation, 40 applied and nobody confirmed it, or the registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`) | a request for 40 units that applied 24, or 0 units applied (the stage did not run, or the stock restore failed) |
-| `CU setting` | `Parameters\CuMode`, `CuModePending` and `CuModeConfirmed`: what the next start applies | the setting differs from the expectation. An absent `CuMode` reads `the next start harvests to 24` | - |
+| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: the mode this start applied, the units the registers count, and the pending or confirmed mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | the counted units differ from the expectation. 40 applied and nobody confirmed it. The registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`). This start did not run the CU stage | a request for 40 units that applied 24, or 0 units applied (the stock restore failed) |
+| `CU setting` | `Parameters\CuMode` and `CuDisableWgp`, against the encoded request in `CuModePending` and `CuModeConfirmed`: what the next start applies | the setting differs from the expectation. The mark on disk names another request, so the next start is pending. A `CuDisableWgp` mask holds the next start under a full expectation. An absent `CuMode` reads `the next start harvests to 24` | - |
 | `CU reason` | `Parameters\CuModeLastReason` or the snapshot, by the name of `enum bc250_cu_reason`. The row appears only when the reason is not `none` | any other reason | the five reasons that make the driver write `CuMode = 24` durably: `PENDING_UNCONFIRMED`, `POWER_GATING`, `STOCK_UNEXPECTED`, `READBACK`, `RESTORE_FAILED` |
 | `CU snapshot` | why the escape gave no answer. The row appears only then | always | - |
-| `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`, or `STABLE` (a D3D12 client called `SetStablePowerState` and pinned the clock to the floor), or a snapshot older than 30 seconds | `PENDING` without `CONFIRMED` (a restart falls back to fixed-lab), mode DPM without `GOVERNING`, or SMU errors |
-| `DPM cap` | `CapMHz` against `MaxMHz`, and the throttle by the name of `enum bc250_dpm_throttle` | the thermal cap sits under the ceiling, or the throttle is one of the four thermal ones | throttle `SMU` (the governor stopped after SMU failures), or SMU errors |
-| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch | flags 7 (the start is not confirmed yet), or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation or the epoch changed inside this overlay session, or `FULL` without `READY` |
-| `Interop` | `Parameters\InteropLastState`, which the driver writes at every full start as effective bits plus requested bits shifted left by 8. `InteropSession` and `InteropLastEnd` beside it | a session marker that nobody removed, which closes the next start, or a last end of `device stop` | the effective switches differ from the requested ones (the driver closed the GPU desktop path), or one switch alone |
+| `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`. `STABLE`: a D3D12 client called `SetStablePowerState` and pinned the clock to the floor. A snapshot older than 30 seconds, or a read that failed after it | `PENDING` without `CONFIRMED` (a restart falls back to fixed-lab), or mode DPM without `GOVERNING` |
+| `DPM cap` | `CapMHz` against `MaxMHz`, and the throttle by the name of `enum bc250_dpm_throttle` | the thermal cap sits under the ceiling, the throttle is one of the four thermal ones, or the start counts failed SMU transitions | throttle `SMU`: the governor gave up after `BC250_DPM_ERROR_LIMIT` failures in a row |
+| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch | `CONFIRMED` is absent, or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation or the epoch changed inside this overlay session, or `FULL` without `READY` |
+| `Interop` | `BC250_ESCAPE_RUN_INTEROP` op READ through `Bc250Interop`: the requested and the effective switches. Also the session marker this start found, and what it did about it. Without the export, `Parameters\InteropLastState`, marked as the registry mirror | `STALE`: a marker of this boot, from a start that ended without an unmark. A system power transition in progress. No full WDDM start decided the switches | the effective switches differ from the requested ones, so the driver closed the GPU desktop path. One switch alone. `UNCLEAN`: a marker of an earlier boot, so the machine died with the path in use. `CLOSED_BY_DRIVER`, or a failed durable close |
+
+A live session is not a fault, and this is the one place the panel had to be told so. `InteropSession` is on disk
+while a DDI device that uses the path is alive. On the lab's GPU desktop route it is thus there for the whole
+session. The driver writes `InteropLastEnd` at every unmark and clears it at no later start, so one driver swap
+leaves `device stop` there for the life of the machine. The row prints both and changes no level for them. Only
+the start can tell a live marker from the trace of a dead machine, and it says so in `UNCLEAN`, `STALE` and
+`CLOSED_BY_DRIVER`, which the registry mirror has not got. That is why this row sends an escape.
 
 ## Measurement guard
 
@@ -267,11 +274,29 @@ decided. This panel reports what the machine around the driver changes without t
 
 | Row | Source | Amber | Red |
 |---|---|---|---|
-| `Parameters` | every REG_DWORD of `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, against the record the installer writes of its own table in `HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`, with `expectations.json` on top of it | any expected value that differs, or that is absent. The row names at most three of them and counts the rest | one of the latched gates is 0 where the installer applied a non-zero: `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `EnableGpuSubmit`, `DpmMode` |
+| `Parameters` | every REG_DWORD of `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, against the record the installer writes of its own table in `HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`, with `expectations.json` on top of it | any expected value that differs from what is in force. The row names at most three of them and counts the rest | one of the latched gates is 0 where the installer applied a non-zero: `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `EnableGpuSubmit`, `DpmMode` |
 | `Defaults` | the row appears only when `Release\AppliedDefaults` is absent or does not parse. Then the panel compares `CuMode` alone | always | - |
 | `Markers` | `STOP`, `graphics-summary.pause`, `graphics-api.pause` and `graphics-api.skip` in the data directory, plus `C:\BC250\tools\radv-perftest.txt` and `C:\BC250\tmp\amdgpu_wddm_radv.cfg` on the lab | any of the four markers exists, or one of the two files holds text. An armed file shows its first characters and its age | - |
 | `Release` | `Release\Version` and `Release\InstalledUtc` | no record | - |
-| `KMD image` | the version the live driver reports in its DPM snapshot, against `kmd_abi` of `manifest.json` under `Release\InstallDir` | either side is unknown | the two differ, so somebody swapped a module under a release that claims otherwise |
+| `KMD image` | the version the live driver reports in its DPM snapshot, against `kmd_abi` of `manifest.json` under `Release\InstallDir`, and against the running-release witness `%ProgramData%\amdgpu-wddm\installer\running-release.json` | the live version is unknown or stale, the manifest is unknown, or the ABI matches but no witness of this boot names the running image | the live version and the manifest's `kmd_abi` differ, so somebody swapped a module under a release that claims otherwise |
+
+An absent value is not always a difference. `EnableGpuPresentBlit` and `EnableCddDwmInterop` are on when absent
+(driver/kmd/interop_policy.h, since 0.7.181), so the panel keeps a table of what the driver does with a name
+that is not in the key, and reports `DpmMode absent, so 0` where absent means something else. A name the table
+does not know stays a plain `absent`.
+
+`Release\AppliedDefaults` is the package's whole default table, written at every install. It includes names the
+installer deliberately did not write, because the tester changed them (`kept`) or gave them on the command
+line (`-DpmMaxMHz`, `-CuMode`). Those states are real deviations from the package's defaults, and the row
+reports them. `expectations.json` is where the lab admits the ones it meant.
+
+`kmd_abi` is one word per driver revision, and the release scripts admit every build of a revision for it. A
+matching ABI thus does not say that the release's own `bc250kmd.sys` is the loaded one. The witness does. The
+installer's `verify` step and the start-confirm task write it only when the SHA-256 of the loaded image is the
+release's, and when nothing replaced that file after the boot started. The panel accepts a witness of schema 1,
+written by one of those two, of this boot (`BootId`), for the installed release, and naming the ABI the driver
+replies. That is a subset of the control application's rule (`DriverCard.WitnessProblem`), which also binds the
+manifest and every known package. The row says which of the two answers it has.
 
 ### The expectations file
 
@@ -291,25 +316,27 @@ record of the applied defaults.
 
 ### Cost
 
-The two panels poll every 10 seconds and send two KMD escapes between them. The driver answers both escapes
+The two panels poll every 10 seconds and send three KMD escapes between them. The driver answers all three
 from adapter-owned software state with `NoAdapterSynchronization` alone, as it answers the DPM read. No BAR
 access, no SMU message, and no scheduler idle. The warning above still holds: a `log summary` escape every 5
-seconds once cost a game 300 ms, and that escape takes the adapter lock, which these two do not.
+seconds once cost a game 300 ms, and that escape takes the adapter lock, which these three do not.
 
 - The DPM mode, cap and throttle cost nothing at all. `TelemetryProvider` reads that snapshot four times a
   second anyway and publishes it in a `DpmFeed`, which both panels read.
-- The interop state comes from the driver's registry mirror and not from a third escape.
-- The CU read uses the control DLL's cached adapter path, which the DPM read shares. The call costs a few
-  microseconds.
+- The CU and interop reads use the control DLL's cached adapter path, which the DPM read shares. Each call
+  costs a few microseconds.
 - The start-health read goes through the control DLL's other lookup, which walks SetupAPI for about 0.7 ms.
   `KmdProvider` uses that same path already. Once per 10 seconds it is 0.007 % of one core.
-- The release manifest is about 37 kB. The panel parses it only when its write time changes.
+- The release manifest is about 37 kB and the witness about 1 kB. The panel parses each only when its write
+  time changes, and the installer's `AppliedDefaults` table only when the registry string itself changes.
 - The host test measures the managed work of both panels at 4.6 us per poll.
 
-`graphics-summary.pause`, the pipeline panel's own marker, also stops both escapes of the operating-point
+`graphics-summary.pause`, the pipeline panel's own marker, also stops all three escapes of the operating-point
 panel. The rows then show the last snapshot, and the `Sampled` row says `paused; snapshot HH:mm:ss` in amber,
 so a paused panel never looks like a fresh one. The registry rows and the whole measurement guard keep working
-while paused, because a registry read costs about ten microseconds.
+while paused, because a registry read costs about ten microseconds. Nothing in the repository creates that
+marker by itself: it is an operator step, so a measured session normally does run the three escapes, at 0.1 Hz
+and without the adapter lock.
 
 ### The log
 
@@ -317,24 +344,27 @@ Each panel writes one line to the log when its state changes, and not once per p
 itself, in a compact form:
 
 ```
-cu=40/40 set=40 flags=21 reason=0 snapshot=yes; dpm=1/10 max=1500 errors=no; health=15 gen=3 epoch=1; interop=3/3 end=3
-parameters=as expected; markers=none; release=0.7.205.100-tester.11 kmd=0x000700CD/0x000700CD
+cu=40/40 counted=40 set=40 flags=21 reason=0 snapshot=yes; dpm=1/10 max=1500 errors=no; health=15 gen=3 epoch=1; interop=3/3 flags=1
+parameters=as expected; markers=none; release=0.7.205.100-tester.11 kmd=0x000700CD/0x000700CD image=witnessed
 ```
 
 The clock, the temperature, the throttle and the completion counters stay out of that line on purpose. A game
 changes all four every second, and a log full of normal thermal behaviour hides the events that matter. The
-level of the line is the worst level among the panel's rows.
+interop flags in the key are the start-latched ones only, for the same reason: a device beginning or ending its
+use of the path is normal traffic. The level of the line is the worst level among the panel's rows.
 
 ### What these panels cannot see
 
-- The deployed `bc250control.dll` of 2026-09-30 has no `Bc250CuMode` export. The `CU` row then falls back to
-  the driver's registry record and names the reason. Deploy the DLL beside the executable, as `build.ps1`
-  copies it.
+- The deployed `bc250control.dll` of 2026-09-30 has neither the `Bc250CuMode` nor the `Bc250Interop` export.
+  The `CU` row then falls back to the driver's registry record and the `Interop` row to the registry mirror,
+  both marked as such, and each names the reason. Deploy the DLL beside the executable, as `build.ps1` copies it.
 - The panel does not compare the registered UMD and ICD paths. The adapter's class key needs a SetupAPI walk of
   about 0.7 ms, and the panel keeps its budget instead.
-- The interop registry mirror carries the effective and the requested bits. It does not carry the escape's
-  `UNCLEAN`, `STALE` or `CLOSED_BY_DRIVER` flags. A difference between effective and requested already names
-  the state that matters.
+- A start that never ran the CU stage leaves no number the panel can trust. The `CU` row says so and does not
+  fall back to `CuModeLastApplied`, which then describes the previous full start.
+- The witness rule here is a subset: it does not read the installer's `state.json` for an install action that
+  came after the witness in this boot, and it binds no package list. Use the control application for the full
+  answer.
 - The 251 rule for `radv-perftest.txt` belongs to the operator. The overlay does not know when a game session
   started, so the row shows the content and the age, and the operator applies the rule.
 

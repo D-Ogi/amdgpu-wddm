@@ -61,10 +61,14 @@ namespace Bc250Mon
                 DateTime write = exists ? info.LastWriteTimeUtc : default(DateTime);
                 long length = exists ? info.Length : -1;
                 if (_read && write == _write && length == _length) return _current;
+                // The keys are stored after the read succeeded, never before it: a transient failure (the
+                // operator's editor holding the file) must be retried on the next poll, not latched until the
+                // file's write time or length changes again.
+                LabExpectations fresh = exists ? Parse(File.ReadAllText(_path)) : new LabExpectations();
                 _write = write;
                 _length = length;
                 _read = true;
-                _current = exists ? Parse(File.ReadAllText(_path)) : new LabExpectations();
+                _current = fresh;
             }
             catch (Exception e) { _current = new LabExpectations { FromFile = true, Error = e.Message }; }
             return _current;
@@ -226,6 +230,15 @@ namespace Bc250Mon
             if ((bits & 2) != 0) parts.Add("cdd");
             if ((bits & ~3) != 0) parts.Add("0x" + (bits & ~3).ToString("X", CultureInfo.InvariantCulture));
             return string.Join("+", parts.ToArray());
+        }
+        // g_InteropReason of driver/kmd/interop_policy.c, enum bc250_interop_reason. Two numbers are unused: the
+        // enumeration is numbered like enum bc250_dpm_reason where the meaning is the same.
+        public static readonly string[] InteropReason =
+        { "none", "not-requested", "invalid-setting", "unused", "unclean", "registry", "unused", "not-run" };
+        public static string InteropReasonName(uint reason)
+        {
+            return reason < InteropReason.Length ? InteropReason[reason]
+                : "reason " + reason.ToString(CultureInfo.InvariantCulture);
         }
         // BC250_INTEROP_END_*, bc250kmd_escape.h.
         public static string InteropEnd(int end)

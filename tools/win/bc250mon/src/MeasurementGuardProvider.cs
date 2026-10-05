@@ -8,8 +8,10 @@
 // way. The rule: the live `Parameters` key is compared with `HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`,
 // the record the installer writes of its own table, and with the lab's `expectations.json` on top of it.
 //
-// Cost: two registry key reads, up to six File.Exists, and two short file reads plus one manifest read, each
-// only when the write time changed. Measured in tens of microseconds, polled every 10 seconds.
+// Cost: two registry key reads, one BootId read, up to six File.Exists, and the short marker files, the release
+// manifest and the running-release witness, each parsed only when its write time changed. The installer's
+// `AppliedDefaults` table is deserialised only when the registry string itself changed. Measured in tens of
+// microseconds, polled every 10 seconds.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -65,9 +67,37 @@ namespace Bc250Mon
     {
         public string Version, InstallDir, InstalledUtc;
         public string ManifestKmdAbi, ManifestKmdBuild, ManifestError;
-        public uint LiveKmdVersion;         // BC250_KMD_VERSION out of the DPM snapshot; 0 when unknown
+        public uint LiveKmdVersion;         // BC250_KMD_VERSION out of the DPM snapshot; 0 when unknown or stale
+        // The running-release witness, %ProgramData%\amdgpu-wddm\installer\running-release.json: a record the
+        // installer's verify step and the start-confirm task write only when the SHA-256 of the loaded
+        // bc250kmd.sys is the release's and the file was not replaced after this boot started
+        // (tools/release/installer/release-witness.ps1). It is the only thing here that names the running image
+        // rather than its ABI word, and one `kmd_abi` covers every build of a driver revision.
+        public string WitnessVersion, WitnessKmdBuild, WitnessKmdAbi, WitnessProblem;
+        public long WitnessBootId, BootId;  // 0 = unreadable
 
         public string LiveText { get { return LiveKmdVersion == 0 ? null : "0x" + LiveKmdVersion.ToString("X8"); } }
+
+        /// <summary>
+        /// The witness names the image that runs now: written by one of the two writers, of this boot, for the
+        /// installed release, and naming the ABI the driver replies. A subset of the control application's rule
+        /// (DriverCard.WitnessProblem), which also binds the manifest and the known packages.
+        /// </summary>
+        public string WitnessWhyNot(string live)
+        {
+            if (WitnessProblem != null) return WitnessProblem;
+            if (string.IsNullOrEmpty(WitnessKmdAbi)) return "no running-release witness";
+            if (BootId == 0) return "the current boot cannot be read";
+            if (WitnessBootId != BootId)
+                return "the witness is from another boot (" + WitnessBootId.ToString(CultureInfo.InvariantCulture)
+                       + ", now " + BootId.ToString(CultureInfo.InvariantCulture) + ")";
+            if (!string.Equals(WitnessKmdAbi, live, StringComparison.OrdinalIgnoreCase))
+                return "the witness names kmd_abi " + WitnessKmdAbi + ", the driver replies " + live;
+            if (!string.IsNullOrEmpty(Version) && !string.IsNullOrEmpty(WitnessVersion) &&
+                !string.Equals(Version, WitnessVersion, StringComparison.OrdinalIgnoreCase))
+                return "the witness is of release " + WitnessVersion + ", installed is " + Version;
+            return null;
+        }
     }
 
     public sealed class MeasurementGuardView
@@ -94,6 +124,49 @@ namespace Bc250Mon
             foreach (string gate in LatchedGates)
                 if (string.Equals(gate, name, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
+        }
+
+        /// <summary>
+        /// What the driver does with a name that is not in the `Parameters` key at all. Absent is not always a
+        /// deviation: `EnableGpuPresentBlit` and `EnableCddDwmInterop` are on when absent since 0.7.181
+        /// (driver/kmd/interop_policy.h, `BC250_INTEROP_FLAG_*_ABSENT`), so reporting them as a difference was
+        /// amber for a setting that is in force. Everything else here reads its value with an explicit default
+        /// (`GuardReadSetting(name, default)` in the driver, or `BC250_DPM_DEFAULT_*` and
+        /// `BC250_CU_MODE_STOCK`), and for those an absent value really is a different machine. A name not in
+        /// this table keeps the old behaviour: absent is reported as a difference, because nothing here knows
+        /// what it means.
+        /// </summary>
+        static readonly Dictionary<string, int> Absent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "EnableGpuPresentBlit", 1 },      // interop_policy.c Switch(): ABSENT means the switch is on
+            { "EnableCddDwmInterop", 1 },
+            { "OfferComposedSourceModes", 1 },  // wddm.c: GuardReadSetting(..., 1)
+            { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
+            { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
+            { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ
+            { "EnableMmio", 0 }, { "EnableMmioWrite", 0 }, { "EnableVram", 0 }, { "EnableVramWrite", 0 },
+            { "EnableGart", 0 }, { "EnablePsp", 0 }, { "EnableGfx", 0 }, { "EnableIh", 0 },
+            { "EnableDcnWrite", 0 }, { "EnableVidPnFlip", 0 }, { "EnableGpuVa", 0 }, { "EnableGpuSubmit", 0 },
+            { "EnablePagingNode", 0 }, { "EnablePresentBlit", 0 }, { "EnableFullWddm", 0 },
+            { "EnableNativeSmu", 0 }, { "EnableNativePteCopy", 0 }, { "EnableHandleIdentityProbe", 0 },
+            { "KeepLog", 0 },
+        };
+
+        /// <summary>The driver's own default for an absent value, or null when this table does not know it.</summary>
+        public static int? AbsentDefault(string name)
+        {
+            int value;
+            return name != null && Absent.TryGetValue(name, out value) ? (int?)value : null;
+        }
+
+        /// <summary>
+        /// The value in force: the one in the key, or the driver's default for an absent name. Null when the name
+        /// is absent and no default is known.
+        /// </summary>
+        public static int? InForce(RegistryDwords parameters, string name)
+        {
+            int? live = parameters == null ? null : parameters.Get(name);
+            return live.HasValue ? live : AbsentDefault(name);
         }
 
         /// <summary>
@@ -128,10 +201,18 @@ namespace Bc250Mon
                 checkedNames++;
                 int want = pair.Value.Value;
                 int? live = v.Parameters.Get(pair.Key);
-                if (live.HasValue && live.Value == want) continue;
-                differences.Add(pair.Key + " " + (live.HasValue ? live.Value.ToString(CultureInfo.InvariantCulture) : "absent")
+                int? force = InForce(v.Parameters, pair.Key);
+                if (force.HasValue && force.Value == want) continue;
+                string how = live.HasValue
+                    ? live.Value.ToString(CultureInfo.InvariantCulture)
+                    : force.HasValue
+                        ? "absent, so " + force.Value.ToString(CultureInfo.InvariantCulture)
+                        : "absent";
+                differences.Add(pair.Key + " " + how
                                 + " (expected " + want.ToString(CultureInfo.InvariantCulture) + ")");
-                bool latchedOff = IsLatchedGate(pair.Key) && want != 0 && live.HasValue && live.Value == 0;
+                // A gate the driver latches at start is red when what is in force is 0 and the expectation is
+                // not: an absent `DpmMode` is fixed-lab just as surely as an explicit 0.
+                bool latchedOff = IsLatchedGate(pair.Key) && want != 0 && force.HasValue && force.Value == 0;
                 if (latchedOff) level = Level.Error;
                 else if (level == Level.Good) level = Level.Warn;
             }
@@ -194,13 +275,24 @@ namespace Bc250Mon
                 panel.Rows.Add(new Row("KMD image", why, Level.Warn));
                 return;
             }
-            bool same = string.Equals(live, r.ManifestKmdAbi, StringComparison.OrdinalIgnoreCase);
-            panel.Rows.Add(new Row("KMD image", same
-                ? live + " = the release's " + (r.ManifestKmdBuild ?? r.ManifestKmdAbi)
-                : "live " + live + ", release " + r.ManifestKmdAbi +
-                  (string.IsNullOrEmpty(r.ManifestKmdBuild) ? "" : " (" + r.ManifestKmdBuild + ")") +
-                  ": a module was swapped",
-                same ? Level.Good : Level.Error));
+            if (!string.Equals(live, r.ManifestKmdAbi, StringComparison.OrdinalIgnoreCase))
+            {
+                panel.Rows.Add(new Row("KMD image",
+                    "live " + live + ", release " + r.ManifestKmdAbi +
+                    (string.IsNullOrEmpty(r.ManifestKmdBuild) ? "" : " (" + r.ManifestKmdBuild + ")") +
+                    ": a module was swapped", Level.Error));
+                return;
+            }
+            // The ABI word is one per driver revision, and the release scripts admit every build of a revision
+            // for it (tools/release/test-dryrun.ps1), so a matching ABI does not say that the release's own
+            // .sys file is the one loaded - which is exactly what the deploy kit changes all day. Only the
+            // witness says that, by the SHA-256 of the loaded image, and the row says which of the two it has.
+            string whyNot = r.WitnessWhyNot(live);
+            string build = r.WitnessKmdBuild ?? r.ManifestKmdBuild ?? r.ManifestKmdAbi;
+            panel.Rows.Add(whyNot == null
+                ? new Row("KMD image", live + " = the release's " + build + ", image witnessed", Level.Good)
+                : new Row("KMD image", live + " = the release's ABI " + build
+                          + "; the running image is not witnessed (" + whyNot + ")", Level.Warn));
         }
 
         public static List<Row> Rows(MeasurementGuardView v, LabExpectations x)
@@ -221,7 +313,8 @@ namespace Bc250Mon
             {
                 if (!pair.Value.HasValue) continue;
                 int? live = v.Parameters.Get(pair.Key);
-                if (live.HasValue && live.Value == pair.Value.Value) continue;
+                int? force = InForce(v.Parameters, pair.Key);
+                if (force.HasValue && force.Value == pair.Value.Value) continue;
                 differences.Add(pair.Key + "=" + (live.HasValue ? live.Value.ToString(CultureInfo.InvariantCulture) : "-"));
             }
             parts.Add("parameters=" + (!v.Parameters.Present ? "absent"
@@ -231,7 +324,9 @@ namespace Bc250Mon
                 if (marker.Present && (marker.Value == null || marker.Value.Length > 0)) markers.Add(marker.Name);
             parts.Add("markers=" + (markers.Count == 0 ? "none" : string.Join(",", markers.ToArray())));
             parts.Add("release=" + (v.Release.Version ?? "-") + " kmd=" + (v.Release.LiveText ?? "-")
-                      + "/" + (v.Release.ManifestKmdAbi ?? "-"));
+                      + "/" + (v.Release.ManifestKmdAbi ?? "-")
+                      + " image=" + (v.Release.LiveText != null && v.Release.WitnessWhyNot(v.Release.LiveText) == null
+                                     ? "witnessed" : "unwitnessed"));
             return string.Join("; ", parts.ToArray());
         }
 
@@ -272,11 +367,23 @@ namespace Bc250Mon
         public const string PerftestMarkerPath = @"C:\BC250\tools\radv-perftest.txt";
         public const string IcdConfigPath = @"C:\BC250\tmp\amdgpu_wddm_radv.cfg";
 
+        // The running-release witness of this boot (tools/release/installer/release-witness.ps1), the only
+        // record that names the loaded bc250kmd.sys by its SHA-256 rather than by its ABI word.
+        public static readonly string WitnessPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            @"amdgpu-wddm\installer\running-release.json");
+        public const string BootIdKey =
+            @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters";
+
         readonly string _dataDir;
         readonly DpmFeed _dpm;
         readonly ExpectationsFile _expectations;
-        readonly FileCache _perftest, _icdConfig, _manifest;
+        readonly FileCache _perftest, _icdConfig, _manifest, _witness;
         string _manifestAbi, _manifestBuild, _manifestError;
+        string _witnessVersion, _witnessBuild, _witnessAbi, _witnessProblem;
+        long _witnessBootId;
+        string _installedText;
+        InstalledDefaults _installed = new InstalledDefaults();
         string _lastKey;
 
         public MeasurementGuardProvider(string dataDir, DpmFeed dpm)
@@ -287,6 +394,7 @@ namespace Bc250Mon
             _perftest = new FileCache(PerftestMarkerPath);
             _icdConfig = new FileCache(IcdConfigPath);
             _manifest = new FileCache(null);
+            _witness = new FileCache(WitnessPath);
         }
 
         public string Name { get { return "guard"; } }
@@ -303,7 +411,15 @@ namespace Bc250Mon
                 Markers = ReadMarkers(),
                 Release = ReadRelease(),
             };
-            view.Installed = InstalledDefaults.Parse(ReadString(ReleaseKey, "AppliedDefaults"));
+            // `Release\AppliedDefaults` is a JSON table of about 1.5 kB that changes once per install. It is
+            // deserialised only when the string itself changed, so the usual poll costs one registry read.
+            string applied = ReadString(ReleaseKey, "AppliedDefaults");
+            if (!string.Equals(applied, _installedText, StringComparison.Ordinal))
+            {
+                _installedText = applied;
+                _installed = InstalledDefaults.Parse(applied);
+            }
+            view.Installed = _installed;
 
             List<Row> rows = MeasurementGuardRules.Rows(view, expectations);
             foreach (var row in rows) panel.Rows.Add(row);
@@ -350,8 +466,13 @@ namespace Bc250Mon
                 InstallDir = ReadString(ReleaseKey, "InstallDir"),
                 InstalledUtc = ReadString(ReleaseKey, "InstalledUtc"),
             };
+            // A failed read keeps the last snapshot in the feed by design, so its version word has to be aged
+            // here as well. Without that, a release install that raises `kmd_abi` while the new driver fails to
+            // start read "a module was swapped" - a false diagnosis of a driver that simply stopped answering.
             DpmView dpm = _dpm != null ? _dpm.Read() : new DpmView();
-            if (dpm.Have) release.LiveKmdVersion = dpm.Snapshot.Version;
+            if (dpm.Have && (DateTime.UtcNow - dpm.Utc).TotalSeconds <= DpmView.StaleSeconds)
+                release.LiveKmdVersion = dpm.Snapshot.Version;
+            ReadWitness(release);
             if (string.IsNullOrEmpty(release.InstallDir)) { release.ManifestError = "no InstallDir record"; return release; }
             // The release manifest is about 37 kB and it changes once per install, so it is parsed only when
             // its write time changed; every other poll reuses the two strings taken out of it.
@@ -379,6 +500,71 @@ namespace Bc250Mon
             release.ManifestKmdBuild = _manifestBuild;
             release.ManifestError = _manifestError;
             return release;
+        }
+
+        // The witness file, re-read only when its write time changes (the start-confirm task writes it once per
+        // logon), plus this boot's BootId, which the control application reads the same way.
+        void ReadWitness(ReleaseView release)
+        {
+            _witness.Refresh(64 * 1024);
+            if (_witness.Changed)
+            {
+                _witnessVersion = _witnessBuild = _witnessAbi = _witnessProblem = null;
+                _witnessBootId = 0;
+                try
+                {
+                    var root = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(_witness.Text);
+                    string schema = root == null ? null : Member(root, "schema");
+                    string by = root == null ? null : Member(root, "recorded_by");
+                    string bootId = root == null ? null : Member(root, "boot_id");
+                    // The same acceptance as the control application's ParseWitness: schema 1, one of the two
+                    // writers, and a boot id. Anything else is not a witness at all.
+                    if (schema != "1" || bootId == null || (by != "verify" && by != "start-confirm"))
+                        _witnessProblem = "running-release.json is damaged or of an unknown schema";
+                    else
+                    {
+                        _witnessBootId = long.Parse(bootId, CultureInfo.InvariantCulture);
+                        _witnessVersion = Member(root, "version");
+                        _witnessBuild = Member(root, "kmd_build");
+                        _witnessAbi = Member(root, "kmd_abi");
+                    }
+                }
+                catch (Exception e) { _witnessProblem = "running-release.json is not read (" + e.Message + ")"; }
+            }
+            if (!_witness.Present)
+            {
+                _witnessVersion = _witnessBuild = _witnessAbi = null;
+                _witnessBootId = 0;
+                _witnessProblem = _witness.Error != null
+                    ? "running-release.json is not read (" + _witness.Error + ")" : null;
+            }
+            release.WitnessVersion = _witnessVersion;
+            release.WitnessKmdBuild = _witnessBuild;
+            release.WitnessKmdAbi = _witnessAbi;
+            release.WitnessProblem = _witnessProblem;
+            release.WitnessBootId = _witnessBootId;
+            release.BootId = ReadBootId();
+        }
+
+        static string Member(Dictionary<string, object> root, string name)
+        {
+            object value;
+            return root.TryGetValue(name, out value) && value != null ? Convert.ToString(value) : null;
+        }
+
+        // The REG_DWORD Windows increments at every boot, read as an unsigned 32-bit number, exactly as
+        // Get-BootIdentity and the control application read it. 0 means it could not be read.
+        static long ReadBootId()
+        {
+            try
+            {
+                using (var key = Registry.LocalMachine.OpenSubKey(BootIdKey, false))
+                {
+                    object value = key == null ? null : key.GetValue("BootId");
+                    return value is int ? (long)(uint)(int)value : 0;
+                }
+            }
+            catch { return 0; }
         }
 
         static string ReadString(string subKey, string name)
@@ -432,11 +618,13 @@ namespace Bc250Mon
             catch (Exception e) { Clear(); Error = e.Message; }
         }
 
-        // A file we cannot read is never reported as armed.
+        // A file we cannot read is never reported as armed. Error goes with it: a file that is simply absent now
+        // must not keep reporting the reason an earlier read failed (the caller sets Error after this call).
         void Clear()
         {
             Present = false;
             Text = null;
+            Error = null;
             WriteUtc = default(DateTime);
             _read = default(DateTime);
             _readPath = null;

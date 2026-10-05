@@ -16,8 +16,8 @@ using Bc250Mon;
 
 sealed class FakeLabSource : ILabStateSource
 {
-    public object CuMode, Health;
-    public int CuCalls, HealthCalls;
+    public object CuMode, Health, Interop;
+    public int CuCalls, HealthCalls, InteropCalls;
     public CuModeSnapshot ReadCuMode()
     {
         CuCalls++;
@@ -29,6 +29,12 @@ sealed class FakeLabSource : ILabStateSource
         HealthCalls++;
         if (Health is Exception) throw (Exception)Health;
         return (StartHealthSnapshot)Health;
+    }
+    public InteropSnapshot ReadInterop()
+    {
+        InteropCalls++;
+        if (Interop is Exception) throw (Exception)Interop;
+        return (InteropSnapshot)Interop;
     }
 }
 
@@ -122,16 +128,44 @@ static class LabStateTest
         };
     }
     static StartHealthView HealthGood() { return Health(15, 3, 1, 400, 3, 1); }
-    // InteropLastState as driver/kmd/interop.c writes it: effective | requested << 8. The lab reads 771.
+    // BC250_ESCAPE_INTEROP as a full WDDM start publishes it. The lab's healthy state: both switches effective,
+    // the session live because DWM's device presents through the Blt path, nothing unclean.
+    static InteropSnapshot InteropEscape(uint effective, uint requested, uint flags, uint users, uint closedReason)
+    {
+        return new InteropSnapshot
+        {
+            Magic = 0x30353242, Command = 25, AbiVersion = 1, Op = 0,
+            Flags = flags, Requested = requested, Effective = effective, Users = users,
+            ClosedReason = closedReason, BootId = 41, Generation = 3,
+        };
+    }
+    static InteropView InteropLive()
+    {
+        return new InteropView
+        {
+            ParametersPresent = true, LastState = 3 | (3 << 8), Session = 41, LastEnd = 1,
+            HaveEscape = true, EscapeUtc = Now,
+            Escape = InteropEscape(3, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagSession
+                                   | InteropSnapshot.FlagPowerCallback, 1, 0),
+        };
+    }
+    // InteropLastState as driver/kmd/interop.c writes it: effective | requested << 8. The lab reads 771. Used
+    // for the fallback path of a control DLL without the Bc250Interop export.
     static InteropView Interop(int effective, int requested)
     {
         return new InteropView { ParametersPresent = true, LastState = effective | (requested << 8), LastEnd = 3 };
+    }
+    static InteropView InteropEscaped(uint effective, uint requested, uint flags, uint users, uint closedReason)
+    {
+        var v = InteropLive();
+        v.Escape = InteropEscape(effective, requested, flags, users, closedReason);
+        return v;
     }
     static OperatingPointView Point()
     {
         return new OperatingPointView
         {
-            Cu = Cu40(), Dpm = DpmGood(), Health = HealthGood(), Interop = Interop(3, 3), NowUtc = Now,
+            Cu = Cu40(), Dpm = DpmGood(), Health = HealthGood(), Interop = InteropLive(), NowUtc = Now,
         };
     }
     static LabExpectations Expect40() { return new LabExpectations(); }
@@ -188,6 +222,10 @@ static class LabStateTest
                 Version = "0.7.205.100-tester.11", InstallDir = @"C:\Program Files\amdgpu-wddm",
                 InstalledUtc = "2026-10-04T23:34:00.0000000Z",
                 ManifestKmdAbi = "0x000700CD", ManifestKmdBuild = "0.7.205.1", LiveKmdVersion = 0x000700CD,
+                // The witness the start-confirm task wrote after this boot's logon: the loaded image is the
+                // release's own .sys, by SHA-256, and the record is of this boot.
+                WitnessVersion = "0.7.205.100-tester.11", WitnessKmdBuild = "0.7.205.1",
+                WitnessKmdAbi = "0x000700CD", WitnessBootId = 190, BootId = 190,
             },
         };
     }
@@ -249,6 +287,16 @@ static class LabStateTest
         Check(file.Read().CuMode == 40, "a rewritten file is re-read");
         File.WriteAllText(path, "{\"cuMode\":24,\"parameters\":{}}");
         Check(file.Read().CuMode == 24, "a rewrite of a different length is re-read whatever the clock did");
+        // A transient failure (the operator's editor holding the file) must not latch the default expectations
+        // until the file's write time or length changes again: the cache keys are stored after a successful read.
+        File.WriteAllText(path, "{\"cuMode\":40,\"parameters\":{\"DpmMaxMHz\":1500}}");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(4));
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            Check(file.Read().Error != null, "a file that cannot be read is reported, not hidden");
+        LabExpectations after = file.Read();
+        Check(after.Error == null && after.Parameters.ContainsKey("DpmMaxMHz"),
+              "and the next poll reads it again instead of latching the failure");
+
         File.Delete(path);
         Check(file.Read().CuMode == 40 && !file.Read().FromFile, "a deleted file falls back to the default");
     }
@@ -340,6 +388,61 @@ static class LabStateTest
         var expect24 = new LabExpectations { CuMode = 24 };
         Check(LevelOf(CuRows(lost, expect24), "CU") == Level.Good, "expectations.json cuMode 24 makes 24 CU green");
         Check(LevelOf(CuRows(Cu40(), expect24), "CU") == Level.Warn, "and 40 CU amber against that expectation");
+
+        // CuDisableWgp is a supported setting: mode 40 applies, one WGP stays masked, and the part runs 38 of
+        // 40 units. The mode word says 40, so only the counted units answer the question the panel exists for.
+        var masked = Cu40();
+        masked.CuDisableWgp = 0x10;
+        masked.Escape = Escape(40, 40, 38, GoodCuFlags, 0);
+        rows = CuRows(masked, x);
+        Check(LevelOf(rows, "CU") == Level.Warn && Value(rows, "CU").Contains("38 counted") &&
+              Value(rows, "CU").Contains("expected 40"),
+              "mode 40 with a masked WGP is judged on the counted units: " + Value(rows, "CU"));
+
+        // The escape answered, but this start never reached the CU stage (a display-only start, or a full one
+        // stopped at an earlier gate). CuModeLastApplied then still names the previous full start's 40, which
+        // describes hardware this start never touched: unknown, never green.
+        var notRun = new CuModeView
+        {
+            ParametersPresent = true, CuMode = 40, Confirmed = 40, LastApplied = 40, LastReason = 10,
+            HaveEscape = true, Escape = Escape(0, 0, 0, 0, 10), EscapeUtc = Now,
+        };
+        rows = CuRows(notRun, x);
+        Check(LevelOf(rows, "CU") == Level.Warn && Value(rows, "CU").Contains("did not run the CU stage") &&
+              Value(rows, "CU").Contains("an earlier start applied 40"),
+              "a start without the CU stage is unknown, not the old registry record: " + Value(rows, "CU"));
+        Check(!notRun.Counted.HasValue && !notRun.Applied.HasValue, "neither a count nor a mode is claimed");
+        Check(LevelOf(rows, "CU reason") == Level.Warn, "and the driver's NOT_RUN reason is beside it");
+
+        // CuModePending and CuModeConfirmed hold bc250_cu_encode(mode, disable). A confirmation of plain 40
+        // does not cover 40 with a WGP masked: the next start is PENDING, and a crash in it falls back to 24.
+        var otherMark = Cu40();
+        otherMark.CuDisableWgp = 0x10;
+        otherMark.Confirmed = 40;
+        rows = CuRows(otherMark, x);
+        Check(LevelOf(rows, "CU setting") == Level.Warn &&
+              Value(rows, "CU setting").Contains("names another request") &&
+              Value(rows, "CU setting").Contains("WGP mask 0x10"),
+              "a confirmation of another request is amber and named: " + Value(rows, "CU setting"));
+        var encoded = Cu40();
+        encoded.CuDisableWgp = 0x10;
+        encoded.Confirmed = 40 | (0x10 << 8);
+        Check(Value(CuRows(encoded, x), "CU setting").EndsWith(", confirmed"),
+              "the matching encoded confirmation reads confirmed: " + Value(CuRows(encoded, x), "CU setting"));
+        Check(LevelOf(CuRows(encoded, x), "CU setting") == Level.Warn,
+              "but a mask keeps the next start under a 40 unit expectation, so the row stays amber");
+        var unmarked = Cu40();
+        unmarked.Confirmed = null;
+        Check(Value(CuRows(unmarked, x), "CU setting") == "CuMode 40, the next start marks it pending",
+              "a 40 request nobody confirmed says what the next start does: " + Value(CuRows(unmarked, x), "CU setting"));
+        var stock = new CuModeView
+        {
+            ParametersPresent = true, CuMode = 24, Confirmed = 40, LastApplied = 24, LastReason = 0,
+            HaveEscape = true, Escape = Escape(24, 24, 24, CuModeSnapshot.FlagValid | CuModeSnapshot.FlagConsistent, 0),
+        };
+        Check(Value(CuRows(stock, expect24), "CU setting") == "CuMode 24" &&
+              LevelOf(CuRows(stock, expect24), "CU setting") == Level.Good,
+              "a 24 request carries no mark at all: " + Value(CuRows(stock, expect24), "CU setting"));
     }
 
     // ---- the DPM governor -----------------------------------------------------------------------------------
@@ -374,10 +477,16 @@ static class LabStateTest
                                   1500, 1500, 6, 0, Now)), "DPM cap") == Level.Error, "throttle smu is red");
         Check(LevelOf(DpmRows(Dpm(DpmView.ModeDpm, DpmView.FlagRunning | DpmView.FlagGoverning | DpmView.FlagConfirmed,
                                   1500, 1000, 1, 0, Now)), "DPM cap") == Level.Warn, "a thermal cap under the ceiling is amber");
+        // Errors is cumulative for the start and the governor gives up only after three failures in a row, so a
+        // recovered SMU retry during a game must not paint the panel red for the rest of the start.
         rows = DpmRows(Dpm(DpmView.ModeDpm, DpmView.FlagRunning | DpmView.FlagGoverning | DpmView.FlagConfirmed,
                            1500, 1500, 0, 4, Now));
-        Check(LevelOf(rows, "DPM") == Level.Error && LevelOf(rows, "DPM cap") == Level.Error &&
-              Value(rows, "DPM cap").Contains("4 SMU errors"), "SMU errors are red and counted");
+        Check(LevelOf(rows, "DPM") == Level.Good && LevelOf(rows, "DPM cap") == Level.Warn &&
+              Value(rows, "DPM cap").Contains("4 SMU errors"),
+              "recovered SMU errors are counted and amber, not red: " + Value(rows, "DPM cap"));
+        Check(LevelOf(DpmRows(Dpm(DpmView.ModeDpm, DpmView.FlagRunning | DpmView.FlagConfirmed, 1500, 1500, 6, 9, Now)),
+                      "DPM cap") == Level.Error,
+              "the governor giving up is red: throttle smu, whatever the count");
 
         foreach (uint flag in new uint[] { DpmView.FlagPaused, DpmView.FlagStable })
             Check(LevelOf(DpmRows(Dpm(DpmView.ModeDpm, DpmView.FlagRunning | DpmView.FlagGoverning | DpmView.FlagConfirmed | flag,
@@ -393,6 +502,12 @@ static class LabStateTest
         Check(LevelOf(DpmRows(new DpmView { Error = "KMD DPM snapshot unavailable (0xC00000A3)" }), "DPM") == Level.Warn,
               "no snapshot is amber with the reason");
         Check(Value(DpmRows(new DpmView()), "DPM") == "no snapshot yet", "before the first sample the row says so");
+        // A failure after a good snapshot keeps the snapshot in the feed; the reason must still reach the row.
+        DpmView failing = DpmGood();
+        failing.Error = "KMD DPM snapshot unavailable (0xC00000A3)";
+        rows = DpmRows(failing);
+        Check(LevelOf(rows, "DPM") == Level.Warn && Value(rows, "DPM").Contains("0xC00000A3"),
+              "a driver that stopped answering says why, not only how old the snapshot is: " + Value(rows, "DPM"));
     }
 
     // ---- start health ---------------------------------------------------------------------------------------
@@ -416,6 +531,17 @@ static class LabStateTest
         Check(LevelOf(HealthRows(Health(15, 3, 9, 400, 3, 1)), "Start health") == Level.Error,
               "an epoch change is red as well");
         Check(!Health(15, 3, 1, 400, 0, 0).IdentityChanged, "before the first identity nothing has changed");
+        // start_health.c returns ~0ull while nothing has completed, and HealthInvalidate zeroes the record at
+        // every visibility or mode change. Printed as an age that read "18446744073709552 s ago", and on the
+        // CPU desktop route, which completes no GPU presentation at all, it read that for ever.
+        rows = HealthRows(Health(15, 3, 1, ulong.MaxValue, 3, 1));
+        Check(LevelOf(rows, "Start health") == Level.Good &&
+              Value(rows, "Start health").Contains("no completed presentation yet") &&
+              !Value(rows, "Start health").Contains("18446744073709552"),
+              "no completion yet is said in words, not as an age: " + Value(rows, "Start health"));
+        Check(!Health(15, 3, 1, ulong.MaxValue, 3, 1).Stalled && Health(15, 3, 1, ulong.MaxValue, 3, 1).NothingCompleted,
+              "the sentinel is not a stall");
+        Check(Health(15, 3, 1, 40000, 3, 1).Stalled, "a real age over the bound is one");
         Check(LevelOf(HealthRows(new StartHealthView { Error = "KMD start health failed" }), "Start health") == Level.Warn,
               "a failed read is amber with the reason");
         Check(Value(HealthRows(Health(0, 0, 0, 0, 0, 0)), "Start health").Contains("(none)"),
@@ -426,29 +552,74 @@ static class LabStateTest
 
     static void InteropChecks()
     {
-        var rows = InteropRows(Interop(3, 3));
-        Check(LevelOf(rows, "Interop") == Level.Good && Value(rows, "Interop") == "effective blit+cdd, as requested",
-              "both switches effective is green: " + Value(rows, "Interop"));
+        // The state the lab runs in: DWM's device presents through the Blt path, so InteropSession is on disk
+        // and InteropLastEnd keeps the end of some earlier session for ever. Both are normal, and the first
+        // version of this panel turned them into a permanent amber row on exactly this configuration.
+        var rows = InteropRows(InteropLive());
+        Check(LevelOf(rows, "Interop") == Level.Good &&
+              Value(rows, "Interop") == "effective blit+cdd, as requested; session live, 1 device",
+              "a live session on the GPU desktop route is green: " + Value(rows, "Interop"));
         Check(Interop(3, 3).LastState == 771, "the lab's InteropLastState 771 is effective 3, requested 3");
-        rows = InteropRows(Interop(0, 3));
+        Check(LevelOf(InteropRows(InteropEscaped(3, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagSession, 3, 0)),
+                      "Interop") == Level.Good &&
+              Value(InteropRows(InteropEscaped(3, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagSession, 3, 0)),
+                    "Interop").Contains("3 devices"), "the device count is text, never a level");
+
+        rows = InteropRows(InteropEscaped(0, 3, InteropSnapshot.FlagValid, 0, 0));
         Check(LevelOf(rows, "Interop") == Level.Error && Value(rows, "Interop").Contains("closed the GPU desktop path"),
               "effective different from requested is red: " + Value(rows, "Interop"));
-        Check(LevelOf(InteropRows(Interop(1, 1)), "Interop") == Level.Error,
+        Check(LevelOf(InteropRows(InteropEscaped(1, 1, InteropSnapshot.FlagValid, 0, 0)), "Interop") == Level.Error,
               "one switch alone is red: the GPU desktop path is not complete");
+
+        // Only the start can say that a marker is the trace of a dead machine, and only in these flags.
+        rows = InteropRows(InteropEscaped(0, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagUnclean
+                                          | InteropSnapshot.FlagClosedByDriver | InteropSnapshot.FlagPersisted, 0, 4));
+        Check(LevelOf(rows, "Interop") == Level.Error && Value(rows, "Interop").Contains("died with the path in use") &&
+              Value(rows, "Interop").Contains("closed by the driver (unclean)"),
+              "an unclean start is red and names the driver's reason: " + Value(rows, "Interop"));
+        rows = InteropRows(InteropEscaped(3, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagStale, 0, 0));
+        Check(LevelOf(rows, "Interop") == Level.Warn && Value(rows, "Interop").Contains("marker of this boot"),
+              "a stale marker of this boot is amber, not red: " + Value(rows, "Interop"));
+        rows = InteropRows(InteropEscaped(0, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagUnclean
+                                          | InteropSnapshot.FlagPersistFailed, 0, 4));
+        Check(Value(rows, "Interop").Contains("the durable close failed"), "a failed durable close is named");
+        rows = InteropRows(InteropEscaped(3, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagDown, 1, 0));
+        Check(LevelOf(rows, "Interop") == Level.Warn && Value(rows, "Interop").Contains("system power transition"),
+              "a system power transition in progress is amber");
+
+        // A display-only start, or one that stopped before the decision: the zeros mean nothing.
+        // bc250_interop_decide leaves BC250_INTEROP_REASON_NOT_RUN = 7 behind and no VALID flag.
+        var notDecided = InteropEscaped(0, 0, 0, 0, 0);
+        notDecided.Escape.Reason = 7;
+        rows = InteropRows(notDecided);
+        Check(LevelOf(rows, "Interop") == Level.Warn && Value(rows, "Interop").Contains("not-run"),
+              "no full start decided the switches: amber with the driver's reason, not a closed path: "
+              + Value(rows, "Interop"));
+
+        // The fallback for a control DLL without the export: the mirror answers, and its two normal states
+        // (a live session, the last end of any boot) never change the level.
+        rows = InteropRows(Interop(3, 3));
+        Check(LevelOf(rows, "Interop") == Level.Good && Value(rows, "Interop").Contains("registry mirror, no snapshot"),
+              "the mirror alone is green when the switches are as requested: " + Value(rows, "Interop"));
         var marked = Interop(3, 3);
         marked.Session = 41;
-        Check(LevelOf(InteropRows(marked), "Interop") == Level.Warn &&
-              Value(InteropRows(marked), "Interop").Contains("session marked"),
-              "a session marker nobody removed is amber: it closes the next start");
-        var stopped = Interop(3, 3);
-        stopped.LastEnd = 1;
-        Check(LevelOf(InteropRows(stopped), "Interop") == Level.Warn &&
-              Value(InteropRows(stopped), "Interop").Contains("device stop"), "a device-stop end is amber");
+        marked.LastEnd = 1;
+        Check(LevelOf(InteropRows(marked), "Interop") == Level.Good &&
+              Value(InteropRows(marked), "Interop").Contains("session marked") &&
+              Value(InteropRows(marked), "Interop").Contains("previous end device stop"),
+              "a session marker and a device-stop end are text in the mirror path, never amber: "
+              + Value(InteropRows(marked), "Interop"));
         Check(LevelOf(InteropRows(new InteropView { ParametersPresent = true }), "Interop") == Level.Info,
               "no record is neutral, not a claim");
+        Check(Value(InteropRows(new InteropView { ParametersPresent = true, EscapeError = "control DLL too old for the interop snapshot" }),
+                    "Interop") == "control DLL too old for the interop snapshot",
+              "with neither snapshot nor mirror the reason is on the panel");
         Check(LabNames.InteropSwitches(0) == "none" && LabNames.InteropSwitches(2) == "cdd" &&
               LabNames.InteropSwitches(7) == "blit+cdd+0x4", "switch names, unknown bits kept visible");
         Check(LabNames.InteropEnd(3) == "system power" && LabNames.InteropEnd(77) == "end 77", "end names");
+        Check(LabNames.InteropReasonName(0) == "none" && LabNames.InteropReasonName(4) == "unclean" &&
+              LabNames.InteropReasonName(7) == "not-run" && LabNames.InteropReasonName(99) == "reason 99",
+              "interop reason names follow the driver's own table");
     }
 
     // ---- the measurement guard ------------------------------------------------------------------------------
@@ -463,15 +634,16 @@ static class LabStateTest
         Check(Value(rows, "Markers") == "none set" && LevelOf(rows, "Markers") == Level.Good, "no marker is green");
         Check(Value(rows, "Release").StartsWith("0.7.205.100-tester.11, installed 12.4 h ago"),
               "the release row names version and age: " + Value(rows, "Release"));
-        Check(Value(rows, "KMD image") == "0x000700CD = the release's 0.7.205.1" && LevelOf(rows, "KMD image") == Level.Good,
-              "the loaded module answers the version the release claims: " + Value(rows, "KMD image"));
+        Check(Value(rows, "KMD image") == "0x000700CD = the release's 0.7.205.1, image witnessed" &&
+              LevelOf(rows, "KMD image") == Level.Good,
+              "a witnessed image of the installed release is green: " + Value(rows, "KMD image"));
 
         // The 2026-10-05 shape of the regression, in its general form: a value the installer never carried.
         var lost = Guard();
         lost.Parameters.Values.Remove("CuMode");
         rows = GuardRows(lost, x);
-        Check(LevelOf(rows, "Parameters") == Level.Warn && Value(rows, "Parameters") == "CuMode absent (expected 40)",
-              "a missing expected value is amber and named: " + Value(rows, "Parameters"));
+        Check(LevelOf(rows, "Parameters") == Level.Warn && Value(rows, "Parameters") == "CuMode absent, so 24 (expected 40)",
+              "a missing expected value is amber, named, and says what is in force: " + Value(rows, "Parameters"));
 
         var raised = Guard();
         raised.Parameters.Values["DpmMaxMHz"] = 2000;
@@ -494,6 +666,39 @@ static class LabStateTest
             Check(MeasurementGuardRules.IsLatchedGate(gate.ToLowerInvariant()), gate + " is a latched gate");
         }
         Check(!MeasurementGuardRules.IsLatchedGate("KeepLog"), "KeepLog is not a latched gate");
+
+        // Absent is not always a deviation. The two interop switches are on when absent (since 0.7.181), so a
+        // key written by the driver package rather than the installer used to show amber for settings that are
+        // in force at the expectation.
+        foreach (string name in new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop" })
+        {
+            var gone = Guard();
+            gone.Parameters.Values.Remove(name);
+            Check(LevelOf(GuardRows(gone, x), "Parameters") == Level.Good,
+                  name + " absent means on, so it is green: " + Value(GuardRows(gone, x), "Parameters"));
+            Check(MeasurementGuardRules.AbsentDefault(name) == 1, name + " absent default is 1");
+        }
+        // And where absent means something else it stays a deviation, with what is in force spelled out.
+        var noDpm = Guard();
+        noDpm.Parameters.Values.Remove("DpmMode");
+        rows = GuardRows(noDpm, x);
+        Check(LevelOf(rows, "Parameters") == Level.Error && Value(rows, "Parameters").Contains("DpmMode absent, so 0"),
+              "an absent DpmMode is fixed-lab, which is red for a latched gate: " + Value(rows, "Parameters"));
+        Check(MeasurementGuardRules.AbsentDefault("CuMode") == 24 && MeasurementGuardRules.AbsentDefault("DpmMaxMHz") == 1500 &&
+              MeasurementGuardRules.AbsentDefault("EnableGpuSubmit") == 0,
+              "the absent defaults come from the driver's own readers");
+        Check(MeasurementGuardRules.AbsentDefault("SomethingNobodyKnows") == null,
+              "an unknown name has no default, so absent stays a difference");
+        var unknownName = Guard();
+        unknownName.Installed = InstalledDefaults.Parse("{\"parameters\":{\"SomethingNobodyKnows\":1}}");
+        unknownName.Parameters.Values.Remove("CuMode");
+        rows = GuardRows(unknownName, x);
+        Check(Value(rows, "Parameters").Contains("SomethingNobodyKnows absent (expected 1)"),
+              "and it is reported as plain absent: " + Value(rows, "Parameters"));
+        Check(MeasurementGuardRules.InForce(Guard().Parameters, "DpmMaxMHz") == 1500 &&
+              MeasurementGuardRules.InForce(new RegistryDwords(), "EnableCddDwmInterop") == 1 &&
+              MeasurementGuardRules.InForce(new RegistryDwords(), "NoSuchValue") == null,
+              "InForce is the value in the key, else the driver's default");
 
         var many = Guard();
         many.Parameters.Values["DpmMaxMHz"] = 2000;
@@ -545,6 +750,36 @@ static class LabStateTest
         var unknown = Guard();
         unknown.Release.LiveKmdVersion = 0;
         Check(LevelOf(GuardRows(unknown, x), "KMD image") == Level.Warn, "an unknown live version is amber, never green");
+
+        // One kmd_abi covers every build of a driver revision (tools/release/test-dryrun.ps1 admits them all),
+        // so a candidate .sys of the same revision matches the ABI word. Only the witness names the image.
+        var noWitness = Guard();
+        noWitness.Release.WitnessKmdAbi = null;
+        noWitness.Release.WitnessKmdBuild = null;
+        rows = GuardRows(noWitness, x);
+        Check(LevelOf(rows, "KMD image") == Level.Warn && Value(rows, "KMD image").Contains("the release's ABI") &&
+              Value(rows, "KMD image").Contains("not witnessed (no running-release witness)"),
+              "a matching ABI without a witness says so instead of claiming the image: " + Value(rows, "KMD image"));
+        var oldBoot = Guard();
+        oldBoot.Release.WitnessBootId = 189;
+        Check(Value(GuardRows(oldBoot, x), "KMD image").Contains("from another boot (189, now 190)"),
+              "a witness of an earlier boot is named: " + Value(GuardRows(oldBoot, x), "KMD image"));
+        var noBoot = Guard();
+        noBoot.Release.BootId = 0;
+        Check(Value(GuardRows(noBoot, x), "KMD image").Contains("the current boot cannot be read"),
+              "an unreadable BootId is named");
+        var otherRelease = Guard();
+        otherRelease.Release.WitnessVersion = "0.7.204.100-tester.11";
+        Check(Value(GuardRows(otherRelease, x), "KMD image").Contains("witness is of release 0.7.204.100-tester.11"),
+              "a witness of another release is named");
+        var witnessAbi = Guard();
+        witnessAbi.Release.WitnessKmdAbi = "0x000700CC";
+        Check(Value(GuardRows(witnessAbi, x), "KMD image").Contains("the driver replies"),
+              "a witness that names another ABI than the driver replies is named");
+        var damaged = Guard();
+        damaged.Release.WitnessProblem = "running-release.json is damaged or of an unknown schema";
+        Check(Value(GuardRows(damaged, x), "KMD image").Contains("damaged or of an unknown schema"),
+              "a damaged witness file is named");
         var noManifest = Guard();
         noManifest.Release.ManifestKmdAbi = null;
         noManifest.Release.ManifestError = "no manifest.json in C:\\Program Files\\amdgpu-wddm";
@@ -584,15 +819,25 @@ static class LabStateTest
         OperatingPointView c = Point();
         c.Health.Snapshot.Flags = 7;
         Check(OperatingPointRules.StateKey(a, x) != OperatingPointRules.StateKey(c, x), "a health flag change is one too");
+        // A device beginning or ending its use of the interop path is normal traffic, not a state change; the
+        // start-latched flags are.
         OperatingPointView d = Point();
-        d.Interop.Session = 41;
-        Check(OperatingPointRules.StateKey(a, x) != OperatingPointRules.StateKey(d, x), "so is a session marker");
+        d.Interop.Escape.Users = 4;
+        d.Interop.Escape.Flags &= ~InteropSnapshot.FlagSession;
+        Check(OperatingPointRules.StateKey(a, x) == OperatingPointRules.StateKey(d, x),
+              "the session marker and the device count are not a state change");
+        d.Interop.Escape.Flags |= InteropSnapshot.FlagUnclean;
+        Check(OperatingPointRules.StateKey(a, x) != OperatingPointRules.StateKey(d, x), "an unclean start is");
+        OperatingPointView e = Point();
+        e.Cu.Escape = Escape(40, 40, 38, GoodCuFlags, 0);
+        Check(OperatingPointRules.StateKey(a, x) != OperatingPointRules.StateKey(e, x),
+              "a change in the counted units is a state change even at the same mode");
         Check(OperatingPointRules.StateKey(a, x) != OperatingPointRules.StateKey(a, new LabExpectations { CuMode = 24 }),
               "a changed expectation is a state change: the rules in force belong in the log");
         Check(OperatingPointRules.StateKey(a, x).Contains("cu=40/40"), "the key is readable: " + OperatingPointRules.StateKey(a, x));
         Check(OperatingPointRules.Worst(OperatingPointRules.Rows(a, x)) == Level.Good, "a healthy lab logs as good");
         OperatingPointView bad = Point();
-        bad.Interop = Interop(0, 3);
+        bad.Interop = InteropEscaped(0, 3, InteropSnapshot.FlagValid, 0, 0);
         Check(OperatingPointRules.Worst(OperatingPointRules.Rows(bad, x)) == Level.Error, "a red row sets the log level");
 
         MeasurementGuardView g = Guard(), h = Guard();
@@ -642,6 +887,7 @@ static class LabStateTest
         {
             CuMode = Escape(40, 40, 40, GoodCuFlags, 0),
             Health = new StartHealthSnapshot { Magic = 0x30353242, Command = 21, AbiVersion = 1, Flags = 15, Generation = 3, Epoch = 1 },
+            Interop = InteropEscape(3, 3, InteropSnapshot.FlagValid | InteropSnapshot.FlagSession, 1, 0),
         };
         var feed = new DpmFeed();
         feed.Publish(new DpmSnapshot { Version = 0x000700CD, Mode = 1, MaxMHz = 1500, CapMHz = 1500, Flags = 11 });
@@ -650,7 +896,11 @@ static class LabStateTest
         point.Poll(state);
         Panel panel = state.Take(0).Panels.First(p => p.Name == "operating");
         Check(panel.Title == "Operating point" && panel.Order == 14, "the panel keeps its place in the column");
-        Check(source.CuCalls == 1 && source.HealthCalls == 1, "one escape of each per poll");
+        Check(source.CuCalls == 1 && source.HealthCalls == 1 && source.InteropCalls == 1,
+              "one escape of each per poll");
+        Check(LevelOf(panel.Rows, "Interop") == Level.Good &&
+              Value(panel.Rows, "Interop").Contains("session live"),
+              "the provider's interop row reads the escape: " + Value(panel.Rows, "Interop"));
         Check(Value(panel.Rows, "CU").StartsWith("40 CU"), "the provider's CU row: " + Value(panel.Rows, "CU"));
         Check(Value(panel.Rows, "Sampled").EndsWith("(10 s poll)"), "the sample time is on the panel");
         int logged = state.Take(State.LogCapacity).Log.Count(l => l.Source == "operating");
@@ -662,7 +912,8 @@ static class LabStateTest
         string marker = Path.Combine(dir, GraphicsPipelineProvider.SummaryPauseFileName);
         File.WriteAllText(marker, "");
         point.Poll(state);
-        Check(source.CuCalls == 2 && source.HealthCalls == 2, "graphics-summary.pause stops both escapes");
+        Check(source.CuCalls == 2 && source.HealthCalls == 2 && source.InteropCalls == 2,
+              "graphics-summary.pause stops all three escapes");
         panel = state.Take(0).Panels.First(p => p.Name == "operating");
         Check(Value(panel.Rows, "Sampled").StartsWith("paused; snapshot ") && LevelOf(panel.Rows, "Sampled") == Level.Warn,
               "a paused panel never looks like a fresh one: " + Value(panel.Rows, "Sampled"));
@@ -672,6 +923,7 @@ static class LabStateTest
         // No control DLL on this computer: the provider says so and the rest of the panel still works.
         source.CuMode = new EntryPointNotFoundException("Bc250CuMode");
         source.Health = new EntryPointNotFoundException("Bc250StartHealth");
+        source.Interop = new EntryPointNotFoundException("Bc250Interop");
         point.Poll(state);
         panel = state.Take(0).Panels.First(p => p.Name == "operating");
         Check(Value(panel.Rows, "CU").Contains("control DLL too old for CU mode") ||
@@ -679,6 +931,9 @@ static class LabStateTest
               "a missing export is a row, not a dead provider: " + Value(panel.Rows, "CU"));
         Check(Value(panel.Rows, "Start health") == "control DLL too old for start health", "and the same for start health");
         Check(Find(panel.Rows, "DPM") != null && Find(panel.Rows, "Interop") != null, "the other rows are unaffected");
+        Check(Value(panel.Rows, "Interop").Contains("interop snapshot") ||
+              Value(panel.Rows, "Interop").Contains("registry mirror"),
+              "the interop row falls back to the mirror and says so: " + Value(panel.Rows, "Interop"));
 
         // A broken expectations file is named on the panel, and the default expectation still applies.
         File.WriteAllText(Path.Combine(dir, ExpectationsFile.FileName), "{oops");
