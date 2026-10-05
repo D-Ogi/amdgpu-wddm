@@ -1,0 +1,75 @@
+mode shadow-search
+exe (null)
+os 10.0.26200
+stage L: loads
+  LoadLibraryW("dxgi.dll") by name (game-style) -> P:\bc-250\scratch\m16\wsi-dxgi\run\appdir\dxgi.dll
+  LoadLibraryW(System32 dxgi full path) -> 00007FF905D20000 C:\WINDOWS\system32\dxgi.dll (separate module)
+  GetModuleHandleW("dxgi.dll") now -> P:\bc-250\scratch\m16\wsi-dxgi\run\appdir\dxgi.dll
+  LoadLibraryExW("d3d11.dll", LOAD_LIBRARY_SEARCH_SYSTEM32) -> C:\WINDOWS\SYSTEM32\d3d11.dll
+stage I: d3d11 import binding
+  [d3d11] static imports from dxgi.dll: 1
+    CreateDXGIFactory2           -> P:\bc-250\scratch\m16\wsi-dxgi\run\appdir\dxgi.dll
+stage F: System32 DXGI factory and adapter
+  System32 CreateDXGIFactory2: 0x00000000 exc 0x00000000 implemented by C:\WINDOWS\system32\dxgi.dll
+  adapter 0 'NVIDIA GeForce RTX 4090' LUID 00000000:000243C1 flags 0x0
+  adapter 1 'Microsoft Basic Render Driver' LUID 00000000:00027299 flags 0x2
+  chosen adapter implemented by C:\WINDOWS\system32\dxgi.dll
+stage D1: System32 D3D11CreateDevice(explicit System32 adapter, UNKNOWN)
+  D3D11CreateDevice: 0x00000000 exc 0x00000000 FL 0xB100 device implemented by C:\WINDOWS\SYSTEM32\d3d11.dll
+  [D1] CreateTexture2D 64x64 BGRA8 RT|SRV: 0x00000000
+  [D1] CreateRenderTargetView: 0x00000000
+  [D1] GetDeviceRemovedReason after clear+flush: 0x00000000
+  [D1] QI IDXGIDevice: 0x00000000 implemented by C:\WINDOWS\SYSTEM32\d3d11.dll
+  [D1] IDXGIDevice::GetAdapter: 0x00000000 adapter 'NVIDIA GeForce RTX 4090' LUID 00000000:000243C1 implemented by C:\WINDOWS\system32\dxgi.dll
+  [D1] adapter GetParent(IDXGIFactory1): 0x00000000 implemented by C:\WINDOWS\system32\dxgi.dll
+  [D1] CreateTexture2D SHARED_NTHANDLE: 0x00000000
+  [D1] IDXGIResource1::CreateSharedHandle: 0x00000000 handle non-null
+  [D1] OpenSharedResource1(NT): 0x00000000
+  [D1] KMT shared texture GetSharedHandle: 0x00000000 handle non-null
+  [D1] ID3D11Device5::CreateFence(SHARED): 0x00000000
+  [D1] ID3D11Fence::CreateSharedHandle: 0x00000000
+  [D1] ID3D11Device5::OpenSharedFence: 0x00000000
+  [D1] Signal(1): 0x00000000, SetEventOnCompletion: 0x00000000, wait: signaled, completed value 1
+  [d3d11 after D1] static imports from dxgi.dll: 1
+    CreateDXGIFactory2           -> P:\bc-250\scratch\m16\wsi-dxgi\run\appdir\dxgi.dll
+stage D2: System32 D3D11CreateDevice(NULL adapter, HARDWARE)
+  D3D11CreateDevice: 0x8000FFFF exc 0xC0000005 FL 0x0 device implemented by (null)
+stage C: System32 DComp (Mesa's dcomp_get_device path)
+  LoadLibraryW(System32 dcomp full path) -> C:\WINDOWS\system32\dcomp.dll
+  [dcomp before use] delay imports from dxgi.dll: 2, module slot -> (unresolved)
+    CreateDXGIFactory1           -> C:\WINDOWS\system32\dcomp.dll
+    CreateDXGIFactory2           -> C:\WINDOWS\system32\dcomp.dll
+  [dcomp before use] delay imports from d3d11.dll: 1, module slot -> (unresolved)
+    D3D11CreateDevice            -> C:\WINDOWS\system32\dcomp.dll
+  DCompositionCreateDevice(NULL): 0x00000000 exc 0x00000000
+  CreateVisual 0x00000000, Commit 0x00000000
+  DCompositionCreateDevice(D1 IDXGIDevice): 0x00000000 exc 0x00000000
+  CreateVisual 0x00000000, Commit 0x00000000
+  [dcomp after use] delay imports from dxgi.dll: 2, module slot -> (unresolved)
+    CreateDXGIFactory1           -> C:\WINDOWS\system32\dcomp.dll
+    CreateDXGIFactory2           -> C:\WINDOWS\system32\dcomp.dll
+  [dcomp after use] delay imports from d3d11.dll: 1, module slot -> (unresolved)
+    D3D11CreateDevice            -> C:\WINDOWS\system32\dcomp.dll
+  [System32 dxgi] delay imports from dcomp.dll: 4, module slot -> (unresolved)
+    #1100                        -> C:\WINDOWS\system32\dxgi.dll
+    #1102                        -> C:\WINDOWS\system32\dxgi.dll
+    DCompositionCreateDevice3    -> C:\WINDOWS\system32\dxgi.dll
+    #1101                        -> C:\WINDOWS\system32\dxgi.dll
+stage M: final module state
+  GetModuleHandleW("dxgi.dll") -> P:\bc-250\scratch\m16\wsi-dxgi\run\appdir\dxgi.dll
+  GetModuleHandleW("d3d11.dll") -> C:\WINDOWS\SYSTEM32\d3d11.dll
+  [final] 70 modules; graphics-related:
+    00007FF8A9AF0000 P:\bc-250\scratch\m16\wsi-dxgi\run\appdir\dxgi.dll
+    00007FF905ED0000 C:\WINDOWS\SYSTEM32\dxcore.dll
+    00007FF905D20000 C:\WINDOWS\system32\dxgi.dll
+    00007FF904790000 C:\WINDOWS\SYSTEM32\d3d11.dll
+    00007FF8FFF00000 <DriverStore>\...\nvldumdx.dll
+    00007FF8F9420000 <DriverStore>\...\nvgpucomp64.dll
+    00007FF8F7010000 <DriverStore>\...\NvMemMapStoragex.dll
+    00007FF8F04A0000 <DriverStore>\...\nvwgf2umx.dll
+    00007FF8F8FB0000 C:\WINDOWS\system32\nvspcap64.dll
+    00007FF8C19C0000 <DriverStore>\...\nvppex.dll
+    00007FF8A0590000 C:\WINDOWS\SYSTEM32\vulkan-1.dll
+    00007FFFC2FB0000 <DriverStore>\...\nvoglv64.dll
+    00007FF904A00000 C:\WINDOWS\system32\dcomp.dll
+RESULT mode=shadow-search devices_ok=1 devices_failed=1

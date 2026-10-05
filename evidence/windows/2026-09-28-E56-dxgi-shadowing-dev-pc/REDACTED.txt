@@ -1,0 +1,17 @@
+Checked before the commit that adds this directory (docs/01-evidence-rules.md).
+
+This directory keeps every log whole. Nobody removed or edited a line. The logs are the raw
+output of the two harnesses.
+
+The harnesses already print short names for two kinds of path, so the raw files never held
+anything more:
+
+- presenttest writes "System32\<name>" and "APPDIR\<name>" instead of the full paths, because
+  the whole point of each line is which of the two directories answered.
+- both harnesses write "<DriverStore>\...\<name>" for the display driver modules of this
+  machine, except in the loader trace of presenttest, which keeps the full path of the one
+  module that System32 dxgi loaded.
+
+The directory holds no address, no account name, no serial number and no network name. The
+SHA-256 sums and the module versions are build identifiers of public binaries and of our own
+test builds. They stay here so that a reader can tell exactly which artifact the run measured.

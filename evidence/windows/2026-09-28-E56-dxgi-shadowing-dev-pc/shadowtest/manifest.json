@@ -1,0 +1,66 @@
+{
+  "utc": "2026-09-28T17:15:41.7239901Z",
+  "host": "development PC (NVIDIA RTX 4090), headless console process",
+  "shadowtest_sha256": "7BEC4531E48A595675C2C9E173909421317B2F8109F7E2EFAE6A214C15386D15",
+  "source_sha256": "400B7C0C295B15CCE6BA719FFBD8E681C760FBF092BE694ECEBBAFB82AB5392C",
+  "app_local_dxgi": {
+    "source": "P:\\bc-250\\scratch\\m12\\vkd3d-package001\\dxgi.dll",
+    "sha256": "2E674A56A48B2739B2B636105F7CDFA14A4C1964C278BCE6F9EE4C31ED50C05F",
+    "note": "DXVK 3.1.1 (dc7f97df), E40 Witcher 3 DX12 package"
+  },
+  "cl": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+  "system_modules": {
+    "dxgi.dll": {
+      "version": "10.0.26100.9444 (WinBuild.160101.0800)",
+      "sha256": "B12AEBF0F077D6C1394B50E2EECDD5E16072C9A0C871F30887B5D170CBF2EAAE"
+    },
+    "d3d11.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "AE2777002F5A0FF543B5B9BEC5124746559FD01D6C7C0C216D3194632F084502"
+    },
+    "dcomp.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "5A749ADF7CE752FCEFBB8AE968947C3C6312EF67C39B47CE46E89FDA9FB48016"
+    },
+    "d3d12.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "6B32181599D4D6373F0B49905236B122ED5545C5D061AB4350A80CC095DC15E4"
+    }
+  },
+  "runs": {
+    "control": {
+      "exit": 0,
+      "seconds": 0.255,
+      "dxvk_logs": []
+    },
+    "shadow": {
+      "exit": 0,
+      "seconds": 0.666,
+      "dxvk_logs": [
+        "shadowtest_dxgi.log"
+      ]
+    },
+    "shadow-rebind": {
+      "exit": 0,
+      "seconds": 0.238,
+      "dxvk_logs": []
+    },
+    "shadow-actctx": {
+      "exit": 0,
+      "seconds": 0.251,
+      "dxvk_logs": []
+    },
+    "shadow-search": {
+      "exit": 0,
+      "seconds": 0.297,
+      "dxvk_logs": [
+        "shadowtest_dxgi.log"
+      ]
+    },
+    "sysfirst": {
+      "exit": 0,
+      "seconds": 0.233,
+      "dxvk_logs": []
+    }
+  }
+}
