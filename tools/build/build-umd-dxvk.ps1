@@ -12,6 +12,10 @@ if ($EnginePath) {
     & "$PSScriptRoot\test-umd-engine-pair.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\engine-pair') -VsInstall $VsInstall -EnginePath $EnginePath -IcdPath $IcdPath
 }
 
+# The error contract of the DDI entries. A void-return entry that reports a status its reference page does
+# not allow loses the device on purpose (BD-071), so this source gate runs before anything is built.
+& python "$repo\tools\quality\ddi_error_policy.py"
+if ($LASTEXITCODE -ne 0) { throw 'DDI error policy gate failed' }
 # Deferred-error state and session cleanup must pass for this ABI1.4 shell.
 & "$PSScriptRoot\test-umd-engine-session.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\engine-session') -VsInstall $VsInstall
 # Device-table ABI and capability behavior are promotion gates, not optional
