@@ -1,0 +1,111 @@
+{
+  "utc": "2026-09-28T17:34:55.1133759Z",
+  "host": "development PC (NVIDIA RTX 4090), headless console process, composition swap chain without HWND target",
+  "presenttest_sha256": "DE758CC02CFFB651F65D10EDDDFCACDC489FFF87018F25D943DCECCB61767867",
+  "source_sha256": "5525AEE8D2C8E4FC8653B1144D22AEB51BF6F824786AB318523A51ECFAD883B9",
+  "cl": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+  "app_local": {
+    "control": [],
+    "dxvk11": [
+      {
+        "name": "d3d11.dll",
+        "source": "P:\\BC-250\\scratch\\m14\\dxvk-per-app-bf14ecca\\src\\d3d11\\d3d11.dll",
+        "sha256": "41CE2364783DB0DD3291F24516C181329471668FAB8F974AE255AA572A61CDBF"
+      },
+      {
+        "name": "dxgi.dll",
+        "source": "P:\\BC-250\\scratch\\m14\\dxvk-per-app-bf14ecca\\src\\dxgi\\dxgi.dll",
+        "sha256": "F593D6C2C7F3ABE312094DA1A7F93BD51C6EE6AA7A44EDA1C84BBCBBA2003F81"
+      }
+    ],
+    "vkd3d": [
+      {
+        "name": "dxgi.dll",
+        "source": "P:\\bc-250\\scratch\\m12\\vkd3d-package001\\dxgi.dll",
+        "sha256": "2E674A56A48B2739B2B636105F7CDFA14A4C1964C278BCE6F9EE4C31ED50C05F"
+      },
+      {
+        "name": "d3d12.dll",
+        "source": "P:\\bc-250\\scratch\\m12\\vkd3d-package001\\d3d12.dll",
+        "sha256": "7B77ED5C107033DCB33D339D5AE54122D94A37A78DD817590FC3D4142C431887"
+      },
+      {
+        "name": "d3d12core.dll",
+        "source": "P:\\bc-250\\scratch\\m12\\vkd3d-package001\\d3d12core.dll",
+        "sha256": "90B1DAD6441BB2A6569681011D75770D5BCFE79882E4AA3DBBA21FF419EC9ECC"
+      }
+    ]
+  },
+  "system_modules": {
+    "dxgi.dll": {
+      "version": "10.0.26100.9444 (WinBuild.160101.0800)",
+      "sha256": "B12AEBF0F077D6C1394B50E2EECDD5E16072C9A0C871F30887B5D170CBF2EAAE"
+    },
+    "d3d11.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "AE2777002F5A0FF543B5B9BEC5124746559FD01D6C7C0C216D3194632F084502"
+    },
+    "dcomp.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "5A749ADF7CE752FCEFBB8AE968947C3C6312EF67C39B47CE46E89FDA9FB48016"
+    },
+    "d3d12.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "6B32181599D4D6373F0B49905236B122ED5545C5D061AB4350A80CC095DC15E4"
+    },
+    "dxcore.dll": {
+      "version": "10.0.26100.9278 (WinBuild.160101.0800)",
+      "sha256": "7DBABBD215D1E93BA8904540033D3BB71DC795C0C58371C8905583E105311B3C"
+    }
+  },
+  "runs": {
+    "control-plain": {
+      "exit": 0,
+      "seconds": 0.288,
+      "result": "RESULT mode=control-plain gate=clean route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=0 game_view=ok",
+      "dxvk_logs": []
+    },
+    "control-seal": {
+      "exit": 0,
+      "seconds": 0.3,
+      "result": "RESULT mode=control-seal gate=clean route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=0 game_view=ok",
+      "dxvk_logs": []
+    },
+    "dxvk11-none": {
+      "exit": 0,
+      "seconds": 0.311,
+      "result": "RESULT mode=dxvk11-none route=skipped",
+      "dxvk_logs": []
+    },
+    "dxvk11-plain": {
+      "exit": 0,
+      "seconds": 0.292,
+      "result": "RESULT mode=dxvk11-plain gate=shadowed route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=5 game_view=ok",
+      "dxvk_logs": []
+    },
+    "dxvk11-seal": {
+      "exit": 0,
+      "seconds": 0.285,
+      "result": "RESULT mode=dxvk11-seal gate=shadowed route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=2 game_view=ok",
+      "dxvk_logs": []
+    },
+    "vkd3d-none": {
+      "exit": 0,
+      "seconds": 0.325,
+      "result": "RESULT mode=vkd3d-none route=skipped",
+      "dxvk_logs": []
+    },
+    "vkd3d-plain": {
+      "exit": 0,
+      "seconds": 0.285,
+      "result": "RESULT mode=vkd3d-plain gate=shadowed route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=3 game_view=ok",
+      "dxvk_logs": []
+    },
+    "vkd3d-seal": {
+      "exit": 0,
+      "seconds": 0.278,
+      "result": "RESULT mode=vkd3d-seal gate=shadowed route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=0 game_view=ok",
+      "dxvk_logs": []
+    }
+  }
+}

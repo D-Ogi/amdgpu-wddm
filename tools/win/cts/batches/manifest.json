@@ -1,0 +1,1349 @@
+{
+ "cases_file": "lists/sparse-resources.txt",
+ "cases_sha256": "B3089EA40223DFD6B3BA1D80E88CB2E426AA4F3FB5C48C5626DB17D15CAA5723",
+ "case_count": 19078,
+ "scale": 10.0,
+ "measured_ratio": {
+  "quantile": 0.9,
+  "value": 7.343247196489517,
+  "n": 170,
+  "median": 3.0028963837798814,
+  "max": 116.3755880815473
+ },
+ "startup_s": 10.0,
+ "per_case_s": 0.02,
+ "budget_s": 100.0,
+ "max_cases": 1000,
+ "estimate_sources": {
+  "group4": 1924,
+  "host": 11710,
+  "host-notsupported-1-device": 4691,
+  "group5": 685,
+  "global": 68
+ },
+ "batches": [
+  {
+   "index": 1,
+   "file": "sparse-0001.txt",
+   "count": 160,
+   "sha256": "A8887435D8045D042A730B65B0461D8E1A9A6EA73DE1ED80BBE3DC7214B6A701",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.aligned_mip_size.2d.b10x6g10x6r10x6g10x6_422_unorm_4pack16",
+   "last": "dEQP-VK.sparse_resources.aligned_mip_size.3d.rg8_snorm"
+  },
+  {
+   "index": 2,
+   "file": "sparse-0002.txt",
+   "count": 158,
+   "sha256": "B9C6A2FAA6394B5DAF23D2293CFA4030EEBA1A883E37BF39DA52CF7BE9014BA8",
+   "estimate_lab_s": 98.1,
+   "first": "dEQP-VK.sparse_resources.aligned_mip_size.3d.rg8i",
+   "last": "dEQP-VK.sparse_resources.buffer.ssbo.sparse_residency.non_resident_buffer_strict_copy_src_alloc_none_1024"
+  },
+  {
+   "index": 3,
+   "file": "sparse-0003.txt",
+   "count": 45,
+   "sha256": "C67F7D1EEA2D07E137A57D60D329790E26FBE18AD24B6A64F19B36FBF14459A1",
+   "estimate_lab_s": 84.6,
+   "first": "dEQP-VK.sparse_resources.buffer.ssbo.sparse_residency.non_resident_buffer_strict_copy_src_alloc_none_16777216",
+   "last": "dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_sparse_read_size_2_24_r32ui"
+  },
+  {
+   "index": 4,
+   "file": "sparse-0004.txt",
+   "count": 37,
+   "sha256": "6EB56D37002D4B1C7C32C0CB34030374635D71BAFD8529BE1408FCF1286A72A5",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.buffer.texel_buffers.sparse_residency.storage_texel_buffer_sparse_read_size_2_24_r32ui_strict",
+   "last": "dEQP-VK.sparse_resources.buffer.ubo.device_group_sparse_residency_non_resident_strict"
+  },
+  {
+   "index": 5,
+   "file": "sparse-0005.txt",
+   "count": 807,
+   "sha256": "AFF09EEC92D8067A34C127CE6B876488CB691A4CB63B7F8C6C3F3CD0321773EE",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.buffer.ubo.sparse_binding",
+   "last": "dEQP-VK.sparse_resources.device_group_image_sparse_binding.multiple_bind_sparse_info.cube_array.rg16.137_137_3"
+  },
+  {
+   "index": 6,
+   "file": "sparse-0006.txt",
+   "count": 856,
+   "sha256": "FAD727A35BD0FDDC9848DCBF3336A517016C6636F2ECF4E5CC7D656CAF51D66B",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.device_group_image_sparse_binding.multiple_bind_sparse_info.cube_array.rg16.256_256_6",
+   "last": "dEQP-VK.sparse_resources.device_group_image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.cube_array.rg16_snorm.256_256_6"
+  },
+  {
+   "index": 7,
+   "file": "sparse-0007.txt",
+   "count": 859,
+   "sha256": "3E9A575BF01E1744C402A09C00F7A2ECFB2BC8F816F5A71BDB5846B85C94CF13",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.device_group_image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.cube_array.rg16i.128_128_8",
+   "last": "dEQP-VK.sparse_resources.device_group_image_sparse_binding.multiple_sparse_memory_bind.cube_array.rg32i.128_128_8"
+  },
+  {
+   "index": 8,
+   "file": "sparse-0008.txt",
+   "count": 666,
+   "sha256": "F3DA1447FBE607DB4C4D309BF541361337570FFD949847B68D9A868F036259A0",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.device_group_image_sparse_binding.multiple_sparse_memory_bind.cube_array.rg32i.137_137_3",
+   "last": "dEQP-VK.sparse_resources.device_group_image_sparse_memory_aliasing.cube.r64i.137_137_1"
+  },
+  {
+   "index": 9,
+   "file": "sparse-0009.txt",
+   "count": 453,
+   "sha256": "9294BA28D012EC97EBC9D6B672492639A48C013A79A0CB64945B0C50CC3FFFF3",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.device_group_image_sparse_memory_aliasing.cube.r64i.256_256_1",
+   "last": "dEQP-VK.sparse_resources.device_group_image_sparse_residency.2d_array.g12x4_b12x4r12x4_2plane_444_unorm_3pack16.512_256_6"
+  },
+  {
+   "index": 10,
+   "file": "sparse-0010.txt",
+   "count": 651,
+   "sha256": "A38617666B0DDF1B386CFF0E69EAE67F092C67FB068EB4961EF56CFB3EA74FBB",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.device_group_image_sparse_residency.2d_array.g12x4b12x4g12x4r12x4_422_unorm_4pack16.1024_128_8",
+   "last": "dEQP-VK.sparse_resources.device_group_mipmap_sparse_residency.2d_array.g12x4_b12x4_r12x4_3plane_444_unorm_3pack16.1024_128_8"
+  },
+  {
+   "index": 11,
+   "file": "sparse-0011.txt",
+   "count": 521,
+   "sha256": "AAB6DFB1F080DB65020FE3E6A86A284E4CE4B31F651FD2C78F245603CBC24A52",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.device_group_mipmap_sparse_residency.2d_array.g12x4_b12x4_r12x4_3plane_444_unorm_3pack16.11_137_3",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d.astc_5x4_unorm_block.samples_1"
+  },
+  {
+   "index": 12,
+   "file": "sparse-0012.txt",
+   "count": 161,
+   "sha256": "4B56D414EBF0BD0A16D7D5D040A832A7068276782DB7294ECAE3D5140177B7B9",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d.astc_5x4_unorm_block.samples_16",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d.bc7_unorm_block.samples_16"
+  },
+  {
+   "index": 13,
+   "file": "sparse-0013.txt",
+   "count": 157,
+   "sha256": "5C4C65E328220EFCF65DEF41D16AFE293A674D8D3947FB943E2458894AD4E99E",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d.bc7_unorm_block.samples_2",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d.g16b16g16r16_422_unorm.samples_4"
+  },
+  {
+   "index": 14,
+   "file": "sparse-0014.txt",
+   "count": 156,
+   "sha256": "BA6538CFB504844140EC9460FE06C79B16BDCF83AE2BC9385C03623F458FEEC2",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d.g16b16g16r16_422_unorm.samples_8",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d.rg32ui.samples_8"
+  },
+  {
+   "index": 15,
+   "file": "sparse-0015.txt",
+   "count": 160,
+   "sha256": "C5B2E0FD5C9E12F4F645A6C2C94B28E1F3E72732612A01BDA0DF42748D5EC307",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d.rg8.samples_1",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.astc_5x5_unorm_block.samples_8"
+  },
+  {
+   "index": 16,
+   "file": "sparse-0016.txt",
+   "count": 159,
+   "sha256": "5102ABA7FFA664B0E59EF3680EF0476B45316C841E4C85C4F0064B62E154F1A7",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.astc_6x5_srgb_block.samples_1",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.eac_r11_unorm_block.samples_4"
+  },
+  {
+   "index": 17,
+   "file": "sparse-0017.txt",
+   "count": 163,
+   "sha256": "B5DDE779D1EB2C5846E7D7C79069FB70ED0C9F2EF57AB37B7677DCB9875A2447",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.eac_r11_unorm_block.samples_8",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.g8_b8r8_2plane_420_unorm.samples_16"
+  },
+  {
+   "index": 18,
+   "file": "sparse-0018.txt",
+   "count": 155,
+   "sha256": "673C48E42BD8E1298B4896634A02DE396AAF31F1FD3269FA3654CE69D300710A",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.g8_b8r8_2plane_420_unorm.samples_2",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.rg8ui.samples_16"
+  },
+  {
+   "index": 19,
+   "file": "sparse-0019.txt",
+   "count": 156,
+   "sha256": "562000DA466EACCD3FB3514301FAE1180336A26EBC90E88DEB71D8812F4566F1",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.2d_array.rg8ui.samples_2",
+   "last": "dEQP-VK.sparse_resources.image_block_shapes.cube.astc_5x5_srgb_block.samples_1"
+  },
+  {
+   "index": 20,
+   "file": "sparse-0020.txt",
+   "count": 160,
+   "sha256": "2BCB96863A02B87EE73477E8EDCDFAEED6F58A8566F811EC0029D8DCA9EE0682",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_block_shapes.cube.astc_5x5_unorm_block.samples_1",
+   "last": "dEQP-VK.sparse_resources.image_rebind.2d.r16_snorm.503_137_1"
+  },
+  {
+   "index": 21,
+   "file": "sparse-0021.txt",
+   "count": 140,
+   "sha256": "B3BB85B48C06C1A7022226FA0B842F074213BA99EFE34ABFBE440049FB20B5F5",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_rebind.2d.r16_snorm.512_256_1",
+   "last": "dEQP-VK.sparse_resources.image_rebind.2d_array.rg32i.128_128_8"
+  },
+  {
+   "index": 22,
+   "file": "sparse-0022.txt",
+   "count": 92,
+   "sha256": "CE453EDB0851794EF450E84B9E00226C9EA8E5230252A6DD45C5670B19AAF5F5",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.image_rebind.2d_array.rg32i.503_137_3",
+   "last": "dEQP-VK.sparse_resources.image_rebind.3d.rg16i.503_137_3"
+  },
+  {
+   "index": 23,
+   "file": "sparse-0023.txt",
+   "count": 63,
+   "sha256": "466FD02ABCD458CD2F2B30FE2C486C6D78AC1EED847287072921404C88525846",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_rebind.3d.rg16ui.128_128_8",
+   "last": "dEQP-VK.sparse_resources.image_rebind.cube.r16ui.256_256_1"
+  },
+  {
+   "index": 24,
+   "file": "sparse-0024.txt",
+   "count": 141,
+   "sha256": "BF8EF70FF92F6C045FFEEDDD2F8D51F819A2FE656DE39B369F8028130A2E541F",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_rebind.cube.r32i.128_128_1",
+   "last": "dEQP-VK.sparse_resources.image_rebind.cube_array.rg8.256_256_6"
+  },
+  {
+   "index": 25,
+   "file": "sparse-0025.txt",
+   "count": 142,
+   "sha256": "BE2DF4E69B0054532F56A5BCE389E43D9374F50FD02955E037FF8D6EE76FAB92",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_rebind.cube_array.rg8_snorm.128_128_8",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.1d_array.r16.1024_1_8"
+  },
+  {
+   "index": 26,
+   "file": "sparse-0026.txt",
+   "count": 142,
+   "sha256": "60FF829012505E5C91F923D150B9B261CB763F128D32F3DEA3B24B8650FE6484",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.1d_array.r16.11_1_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.2d.g16_b16_r16_3plane_422_unorm.512_256_1"
+  },
+  {
+   "index": 27,
+   "file": "sparse-0027.txt",
+   "count": 146,
+   "sha256": "22E6D32BA5851FF2F596FCC0AD48FC7622804605466FD60468EF9F27DEE69B6D",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.2d.g16_b16_r16_3plane_444_unorm.1024_128_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.2d_array.b10x6g10x6r10x6g10x6_422_unorm_4pack16.1024_128_8"
+  },
+  {
+   "index": 28,
+   "file": "sparse-0028.txt",
+   "count": 109,
+   "sha256": "8FAAF9A3A9AC9D4A54540CB70D355DC89BB814D4C589753D91DBE2179300B124",
+   "estimate_lab_s": 99.1,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.2d_array.b10x6g10x6r10x6g10x6_422_unorm_4pack16.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.2d_array.r64i.11_137_3"
+  },
+  {
+   "index": 29,
+   "file": "sparse-0029.txt",
+   "count": 99,
+   "sha256": "A476D64DBB814FA4CA3F2C29D83475FC6D3B9F3D3BF85E02AFBA5122245A2665",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.2d_array.r64i.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.3d.r64i.11_137_3"
+  },
+  {
+   "index": 30,
+   "file": "sparse-0030.txt",
+   "count": 105,
+   "sha256": "2B4516D5916800FC9CA531AE65C00DD8A6A6B10A2F6B470310BE8CB479CE5C11",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.3d.r64i.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.cube.r8.137_137_1"
+  },
+  {
+   "index": 31,
+   "file": "sparse-0031.txt",
+   "count": 109,
+   "sha256": "A78732BA7430FE86BC5DC6763274561E4F61EE351B478E7A500A106798E6A729",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.cube.r8.256_256_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.cube_array.r8ui.256_256_6"
+  },
+  {
+   "index": 32,
+   "file": "sparse-0032.txt",
+   "count": 63,
+   "sha256": "54A0F6E100D45758D701D9D8888910C3E7AD9BE518870F68327C0E8C99CC0366",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_bind_sparse_info.cube_array.rg16.128_128_8",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.1d.a8_unorm.512_1_1"
+  },
+  {
+   "index": 33,
+   "file": "sparse-0033.txt",
+   "count": 148,
+   "sha256": "53751FD0121B07BF75FA924B9A329F8CD441EEFDC94B8A7B75D24B284A7B38CA",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.1d.r16.1024_1_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.1d_array.rg32i.1024_1_8"
+  },
+  {
+   "index": 34,
+   "file": "sparse-0034.txt",
+   "count": 144,
+   "sha256": "572940678D947B8183ABCD0B7E33B9A995249540EE4652A2AA1E2EBA02B9E978",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.1d_array.rg32i.11_1_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.2d.r16_snorm.1024_128_1"
+  },
+  {
+   "index": 35,
+   "file": "sparse-0035.txt",
+   "count": 132,
+   "sha256": "E473F8F53083473DE8C87EB1AE4B96DDD3E376A3D0A477A7ECBC897CF44F87B8",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.2d.r16_snorm.11_137_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.2d_array.g12x4_b12x4r12x4_2plane_444_unorm_3pack16.11_137_3"
+  },
+  {
+   "index": 36,
+   "file": "sparse-0036.txt",
+   "count": 111,
+   "sha256": "B6FCDF526856CF489D6C688034738B47AF7012CF6CDF06587528012FB3C26FE6",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.2d_array.g12x4_b12x4r12x4_2plane_444_unorm_3pack16.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.2d_array.rg8_snorm.1024_128_8"
+  },
+  {
+   "index": 37,
+   "file": "sparse-0037.txt",
+   "count": 100,
+   "sha256": "AF0D87CABAE4F2BFA9513340E132343EDE1029F60215A2184650630E358396E3",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.2d_array.rg8_snorm.11_137_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.3d.rg8_snorm.11_137_3"
+  },
+  {
+   "index": 38,
+   "file": "sparse-0038.txt",
+   "count": 116,
+   "sha256": "A4CAA5FD2D13B745A5104D7E989F86374D9D523DDD9C759CA980B0BEA209B6C6",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.3d.rg8_snorm.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.cube.rgba16ui.128_128_1"
+  },
+  {
+   "index": 39,
+   "file": "sparse-0039.txt",
+   "count": 89,
+   "sha256": "9A8C90955D8795E2D2BB1506C789F8BC6EF6DF2B8B8DF05E7020D9131462633B",
+   "estimate_lab_s": 98.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.cube.rgba16ui.137_137_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.cube_array.rg8ui.256_256_6"
+  },
+  {
+   "index": 40,
+   "file": "sparse-0040.txt",
+   "count": 96,
+   "sha256": "FBDF39EAD4E1666E426A691B40619C9262484D425E3288DC1F587B127709D95F",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_image_opaque_memory_bind_info.cube_array.rgba16.128_128_8",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.1d.rg8i.512_1_1"
+  },
+  {
+   "index": 41,
+   "file": "sparse-0041.txt",
+   "count": 145,
+   "sha256": "FC644513EFB731A3B8ACE7ADC8166B62E1BF2C4CE3007FE9B9062BAB9AFC1E2C",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.1d.rg8ui.1024_1_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.2d.g10x6_b10x6_r10x6_3plane_420_unorm_3pack16.512_256_1"
+  },
+  {
+   "index": 42,
+   "file": "sparse-0042.txt",
+   "count": 148,
+   "sha256": "95AA2FA68B7D7CA6AD544758DAD4C9B4255237A6BCC2FF594C211ED7228B14CB",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.2d.g10x6_b10x6_r10x6_3plane_422_unorm_3pack16.1024_128_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.2d.rgba16.11_137_1"
+  },
+  {
+   "index": 43,
+   "file": "sparse-0043.txt",
+   "count": 120,
+   "sha256": "D24FA636BD54B78AC5077F269E3385737EFC94E8CA3E248658C7F15B3B2285C8",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.2d.rgba16.512_256_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.2d_array.r12x4g12x4b12x4a12x4_unorm_4pack16.11_137_3"
+  },
+  {
+   "index": 44,
+   "file": "sparse-0044.txt",
+   "count": 106,
+   "sha256": "33D8AB5B5FB15A5E5C6EE657067AF67D1A857A7FD4A66C7B3FDD87D92CEE0D81",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.2d_array.r12x4g12x4b12x4a12x4_unorm_4pack16.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.3d.r16_snorm.512_256_6"
+  },
+  {
+   "index": 45,
+   "file": "sparse-0045.txt",
+   "count": 113,
+   "sha256": "0DFC0BC8E971148589E67957FCD20444AB766B9B9E4C3DF5C55C6CC27D8C18AD",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.3d.r16i.1024_128_8",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.cube.r64i.137_137_1"
+  },
+  {
+   "index": 46,
+   "file": "sparse-0046.txt",
+   "count": 115,
+   "sha256": "B34436E21B3323DECBDB4770C22C3055ECB5DEDC139C91160CFB348334A90E39",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.cube.r64i.256_256_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.cube_array.r8ui.256_256_6"
+  },
+  {
+   "index": 47,
+   "file": "sparse-0047.txt",
+   "count": 77,
+   "sha256": "1B241A0917A11B864F0FDCB41F7EAFCA782A5C2BA432B91E8E836811596D5C5F",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_binding.multiple_sparse_memory_bind.cube_array.rg16.128_128_8",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.g10x6_b10x6r10x6_2plane_420_unorm_3pack16.128_128_1"
+  },
+  {
+   "index": 48,
+   "file": "sparse-0048.txt",
+   "count": 113,
+   "sha256": "AA7E345A5212F3598A47AC6995698E5AC743294176D610829C518A2A158CBC1B",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.g10x6_b10x6r10x6_2plane_420_unorm_3pack16.512_256_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.r64i.128_128_1"
+  },
+  {
+   "index": 49,
+   "file": "sparse-0049.txt",
+   "count": 94,
+   "sha256": "A500ED9B000FD30DE628857E15A8C6E9A9CF653CB66DC2E0C64DCC7C38546C74",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.r64i.503_137_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.rgba8_snorm.512_256_1"
+  },
+  {
+   "index": 50,
+   "file": "sparse-0050.txt",
+   "count": 107,
+   "sha256": "B16372B16532DDED95A59CA867B10A9DB12DF77341728F0D4BE7854A1DE2E174",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d.rgba8i.11_37_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d_array.r12x4g12x4_unorm_2pack16.503_137_3"
+  },
+  {
+   "index": 51,
+   "file": "sparse-0051.txt",
+   "count": 92,
+   "sha256": "E742578C0074C433C79C16B758B58A830BC3A33A2B27E47E0C66D58B6DCE1C07",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d_array.r12x4g12x4_unorm_2pack16.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d_array.rg8ui.503_137_3"
+  },
+  {
+   "index": 52,
+   "file": "sparse-0052.txt",
+   "count": 88,
+   "sha256": "2E606E73BC4CA8160998F644681E50944D260AD14A5314E684067E75A90B0BC9",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.2d_array.rg8ui.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.3d.r8ui.256_256_16"
+  },
+  {
+   "index": 53,
+   "file": "sparse-0053.txt",
+   "count": 91,
+   "sha256": "47B24CE4078532FAFD7B3ABF47269B1ED63588E9B87FC5AD26723DC41A261A6E",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.3d.r8ui.503_137_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube.r16i.128_128_1"
+  },
+  {
+   "index": 54,
+   "file": "sparse-0054.txt",
+   "count": 95,
+   "sha256": "76D707FBD4DF64A5EA32A9FE9D8CEAB9F724227DE7BEB7DC8526B5A09414F0AC",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube.r16i.137_137_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube.rgba32i.11_11_1"
+  },
+  {
+   "index": 55,
+   "file": "sparse-0055.txt",
+   "count": 83,
+   "sha256": "559B1C7277DF71F03B378610B86314B3C6D70AFDBE3C6AFF278F144D259EFF08",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube.rgba32i.128_128_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube_array.rg16i.256_256_6"
+  },
+  {
+   "index": 56,
+   "file": "sparse-0056.txt",
+   "count": 64,
+   "sha256": "7BB8756C68C0F094FF549A5C0D3FAA4BA481C15FFA8CAF897E009089C1C165F1",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube_array.rg16ui.11_11_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube_array.rgba8i.256_256_6"
+  },
+  {
+   "index": 57,
+   "file": "sparse-0057.txt",
+   "count": 125,
+   "sha256": "10ED1FF74325A752DA8D0AEC21A0D39447FE5C8789B2AAA7912CC14D6E2E4F75",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_memory_aliasing.cube_array.rgba8ui.11_11_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.2d.r8_snorm.1024_128_1"
+  },
+  {
+   "index": 58,
+   "file": "sparse-0058.txt",
+   "count": 117,
+   "sha256": "B903CF2D988FA817F1591F38247B03C436AB0F99284DE2DFA51D1A1E4EE5CACA",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.2d.r8_snorm.11_137_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.2d_array.g16_b16_r16_3plane_444_unorm.11_137_3"
+  },
+  {
+   "index": 59,
+   "file": "sparse-0059.txt",
+   "count": 111,
+   "sha256": "C1D71780829FCB8C08A3636139BB8C992EC11D8E79B213BB5D26478FAD594FF5",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.2d_array.g16_b16_r16_3plane_444_unorm.512_256_6",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.2d_array.rgba16.1024_128_8"
+  },
+  {
+   "index": 60,
+   "file": "sparse-0060.txt",
+   "count": 100,
+   "sha256": "02E0A8B36645430CE8E7A5733844AD4D7871367606B0B5A4E66E51749176B2F6",
+   "estimate_lab_s": 99.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.2d_array.rgba16.11_137_3",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.3d.rgba16.11_137_3"
+  },
+  {
+   "index": 61,
+   "file": "sparse-0061.txt",
+   "count": 108,
+   "sha256": "B13A4D07BCE02EFEF761FC478ECFAC622CFF8DC944FD441349A3423DF416ADE7",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.3d.rgba16.512_256_16",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.cube.rgba16ui.137_137_1"
+  },
+  {
+   "index": 62,
+   "file": "sparse-0062.txt",
+   "count": 97,
+   "sha256": "C706FB827B25579AE8941ECFF2B686C72E4EBF61152D27C1C58B0E519A0CE532",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.cube.rgba16ui.256_256_1",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.cube_array.rgba16i.256_256_6"
+  },
+  {
+   "index": 63,
+   "file": "sparse-0063.txt",
+   "count": 101,
+   "sha256": "3E1EF93A1820D22D3AA1AB7589088695BA1B500E50E4764E4491E699FB7A8303",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.cube_array.rgba16ui.128_128_8",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16_snorm_r8g8_unorm_r16_uint"
+  },
+  {
+   "index": 64,
+   "file": "sparse-0064.txt",
+   "count": 115,
+   "sha256": "4B24DB8F0AF415C5BC00BC5CB7A4E3C58524F74293C9F78E4F53314FDF3A74D4",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16_snorm_r8g8_unorm_r16_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_sint_r32_sint_r16g16_unorm"
+  },
+  {
+   "index": 65,
+   "file": "sparse-0065.txt",
+   "count": 109,
+   "sha256": "4F8C7EFDA6E8BB092312BEC3C192EDAD62CB3D5930B44E179DC077588A3BD496",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_sint_r32_sint_r32_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_snorm_r8g8b8a8_uint_r8g8b8a8_unorm"
+  },
+  {
+   "index": 66,
+   "file": "sparse-0066.txt",
+   "count": 116,
+   "sha256": "29C631318BD64F5BE6A1657E72A81C96ADCDEDA3888D6934FF1774BB399E4274",
+   "estimate_lab_s": 99.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_snorm_r8g8b8a8_unorm_r16g16_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_unorm_r32_uint_r32_sint"
+  },
+  {
+   "index": 67,
+   "file": "sparse-0067.txt",
+   "count": 104,
+   "sha256": "2ABB08F82B1866E412EEA1C194B4F3EDF87DCC48A8B026DBB2443264C08DCFBE",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16_unorm_r32_uint_r8g8b8a8_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16b16a16_unorm_r16g16b16a16_snorm_r32g32_uint"
+  },
+  {
+   "index": 68,
+   "file": "sparse-0068.txt",
+   "count": 109,
+   "sha256": "D1DF6EE25C0EEAA256085DFBF2A3E18A45D4D8F54B9A85D6D1FB59BD96E672FC",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r16g16b16a16_unorm_r16g16b16a16_uint_r16g16b16a16_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r32_uint_r16g16_unorm_r16g16_sint"
+  },
+  {
+   "index": 69,
+   "file": "sparse-0069.txt",
+   "count": 108,
+   "sha256": "70BC0B365B5219849DE836E02AB386B2CA36984B8E2EAF29C74CAA55D542ABE0",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r32_uint_r16g16_unorm_r16g16_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8_unorm_r8_snorm_r8_sint"
+  },
+  {
+   "index": 70,
+   "file": "sparse-0070.txt",
+   "count": 124,
+   "sha256": "FB740590E47579117A5DF9D16C2D4BE4FC1B18BBE7564BD8508BCFE5A94453BA",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8_unorm_r8_snorm_r8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8g8_uint_r8g8_unorm_r16_sint"
+  },
+  {
+   "index": 71,
+   "file": "sparse-0071.txt",
+   "count": 118,
+   "sha256": "5676424F0BC169ED0175689B7C7B347D33C29755DF21F07E3964A3B73379A1CD",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8g8_uint_r8g8_unorm_r16_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8g8b8a8_sint_r8g8b8a8_unorm_r8g8b8a8_snorm"
+  },
+  {
+   "index": 72,
+   "file": "sparse-0072.txt",
+   "count": 116,
+   "sha256": "0C962FD7AD0FFEF0131D9659254B26FA362C2018797213A350B3B8DFDB0B7B4B",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8g8b8a8_sint_r8g8b8a8_unorm_r8g8b8a8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8g8b8a8_uint_r32_uint_r16g16_uint"
+  },
+  {
+   "index": 73,
+   "file": "sparse-0073.txt",
+   "count": 111,
+   "sha256": "FAF24AA0A449938567F05D739D314AC4367AAF6D3EA9BA834C7F6FEC814123A4",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d.r8g8b8a8_uint_r32_uint_r16g16_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16_sint_r16_uint_r8g8_snorm"
+  },
+  {
+   "index": 74,
+   "file": "sparse-0074.txt",
+   "count": 80,
+   "sha256": "B851FE842501556A994EF56108D08FA4FE89A269696643E605257B440190CCCB",
+   "estimate_lab_s": 99.2,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16_sint_r16_uint_r8g8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16_uint_r16_sint_r8g8_unorm"
+  },
+  {
+   "index": 75,
+   "file": "sparse-0075.txt",
+   "count": 80,
+   "sha256": "B18DACF9EF8C6F1D6A4163BF679BC43981490C87AD3B408993250AA40F8D5C55",
+   "estimate_lab_s": 99.2,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16_uint_r16_snorm_r16_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_sint_r16g16_snorm_r16g16_unorm"
+  },
+  {
+   "index": 76,
+   "file": "sparse-0076.txt",
+   "count": 70,
+   "sha256": "95870EC495A893F26CA9B5FB290591178962F68EEA6EEB18DF26EEC382F49D15",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_sint_r16g16_snorm_r32_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_sint_r8g8b8a8_unorm_r8g8b8a8_uint"
+  },
+  {
+   "index": 77,
+   "file": "sparse-0077.txt",
+   "count": 71,
+   "sha256": "A2BBA04E2E66CCA9AF766670A58B4B2C548FA14B0B9769674174CA1F713E08CF",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_snorm_r16g16_sint_r16g16_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_snorm_r8g8b8a8_unorm_r8g8b8a8_snorm"
+  },
+  {
+   "index": 78,
+   "file": "sparse-0078.txt",
+   "count": 71,
+   "sha256": "2F07E20EE72E403426E86E9722C6E850BADA3AD1967E69BCD776171A09CC5B6E",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_snorm_r8g8b8a8_unorm_r8g8b8a8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_uint_r8g8b8a8_unorm_r8g8b8a8_sint"
+  },
+  {
+   "index": 79,
+   "file": "sparse-0079.txt",
+   "count": 71,
+   "sha256": "AD30591BA9D33DA0C37423B0465E1B6FE55DAEA5157E6D6CC07D2B35C6A08B91",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_uint_r8g8b8a8_unorm_r8g8b8a8_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_unorm_r8g8b8a8_unorm_r32_uint"
+  },
+  {
+   "index": 80,
+   "file": "sparse-0080.txt",
+   "count": 59,
+   "sha256": "987F1937B1DC7C30D3B7DED68E299EC687C9B3C9E5F0E97A9AAC09B9BE1D2EB5",
+   "estimate_lab_s": 99.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16_unorm_r8g8b8a8_unorm_r8g8b8a8_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16b16a16_uint_r32g32_sint_r32g32_uint"
+  },
+  {
+   "index": 81,
+   "file": "sparse-0081.txt",
+   "count": 66,
+   "sha256": "828365E80AC6BA89F83F48B9843EC6CAB3ED67FA59F8F7A77625551FC031C6E8",
+   "estimate_lab_s": 98.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r16g16b16a16_uint_r32g32_uint_r16g16b16a16_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r32_sint_r8g8b8a8_sint_r16g16_snorm"
+  },
+  {
+   "index": 82,
+   "file": "sparse-0082.txt",
+   "count": 68,
+   "sha256": "1FF3262E178E0CAFBEAE18EBA4E3A6C34CB4FEDCCDFFFFC46A452419B59A82FD",
+   "estimate_lab_s": 98.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r32_sint_r8g8b8a8_sint_r16g16_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r32_uint_r32_sint_r8g8b8a8_snorm"
+  },
+  {
+   "index": 83,
+   "file": "sparse-0083.txt",
+   "count": 61,
+   "sha256": "849FFDD612F10B2207EA1CA78DB9D64D15707A4F12F018F07C372FB64D3FD3CA",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r32_uint_r32_sint_r8g8b8a8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r32g32_uint_r16g16b16a16_snorm_r16g16b16a16_unorm"
+  },
+  {
+   "index": 84,
+   "file": "sparse-0084.txt",
+   "count": 81,
+   "sha256": "571CB6551E0F6DEC02EDC8736DD0B314D9971BDEBE1EA1AB19AF4C78001A669A",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r32g32_uint_r16g16b16a16_snorm_r32g32_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8_snorm_r16_sint_r16_uint"
+  },
+  {
+   "index": 85,
+   "file": "sparse-0085.txt",
+   "count": 86,
+   "sha256": "500B200BB89BBD035DD975108B7DF6A89FA9C356FAF3BAFD1F79893F527CC06F",
+   "estimate_lab_s": 99.2,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8_snorm_r16_sint_r16_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8_unorm_r16_sint_r8g8_sint"
+  },
+  {
+   "index": 86,
+   "file": "sparse-0086.txt",
+   "count": 81,
+   "sha256": "6B85E41671F8C6EEE845C28E509FCCEB634214E729C2052EB23A7FCB2337AAB4",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8_unorm_r16_sint_r8g8_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_sint_r32_uint_r16g16_uint"
+  },
+  {
+   "index": 87,
+   "file": "sparse-0087.txt",
+   "count": 75,
+   "sha256": "C766F9F54DE63438D367236638C7E490B6064D49A9067C14DBEB67A19EB1BC94",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_sint_r32_uint_r16g16_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_snorm_r32_uint_r8g8b8a8_sint"
+  },
+  {
+   "index": 88,
+   "file": "sparse-0088.txt",
+   "count": 72,
+   "sha256": "466D46A7F7A05FCAD89F55960DA760A86B269CF78CBB76A0C65FEC0594B823FF",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_snorm_r32_uint_r8g8b8a8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_uint_r32_uint_r8g8b8a8_sint"
+  },
+  {
+   "index": 89,
+   "file": "sparse-0089.txt",
+   "count": 72,
+   "sha256": "6367A90E55F5D2F9F2E41D3D58EAC3231C285EEBA54DD5D6DA7FC48ED9F7FAE4",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_uint_r32_uint_r8g8b8a8_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_unorm_r32_uint_r8g8b8a8_sint"
+  },
+  {
+   "index": 90,
+   "file": "sparse-0090.txt",
+   "count": 67,
+   "sha256": "6996AB67B21DE7413D5DBDA7E08CBA8D9DA63C1632696808630510967A73E63A",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.2d_array.r8g8b8a8_unorm_r32_uint_r8g8b8a8_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16_sint_r8g8_unorm_r8g8_snorm"
+  },
+  {
+   "index": 91,
+   "file": "sparse-0091.txt",
+   "count": 71,
+   "sha256": "41C5CA34ADE73B984F50CD99A2A9043B4180E9151BF06311620AD95FCD309A86",
+   "estimate_lab_s": 98.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16_sint_r8g8_unorm_r8g8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16_uint_r8g8_snorm_r8g8_sint"
+  },
+  {
+   "index": 92,
+   "file": "sparse-0092.txt",
+   "count": 68,
+   "sha256": "9744ADB7CEA85CF39B41AC35A9F63EB8F83EEDC1A65AE9B81694E32267135EB5",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16_uint_r8g8_snorm_r8g8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_sint_r16g16_uint_r32_uint"
+  },
+  {
+   "index": 93,
+   "file": "sparse-0093.txt",
+   "count": 57,
+   "sha256": "1CFDEF2A01B58B415DCB470B652627CD114B9F6EE28D78CA02D924CDE22F5C10",
+   "estimate_lab_s": 98.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_sint_r16g16_uint_r8g8b8a8_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_sint_r8g8b8a8_unorm_r32_uint"
+  },
+  {
+   "index": 94,
+   "file": "sparse-0094.txt",
+   "count": 58,
+   "sha256": "6F7AD794F649965101DFD881FA565A0181DA0DD5B0DD93F3920A0391449D6D47",
+   "estimate_lab_s": 99.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_sint_r8g8b8a8_unorm_r8g8b8a8_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_snorm_r8g8b8a8_snorm_r8g8b8a8_uint"
+  },
+  {
+   "index": 95,
+   "file": "sparse-0095.txt",
+   "count": 60,
+   "sha256": "B861525801650F35352DDBC78F2501467DA4381BCC0265D4AEE9A56E2D73BC40",
+   "estimate_lab_s": 98.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_snorm_r8g8b8a8_snorm_r8g8b8a8_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_uint_r8g8b8a8_sint_r16g16_unorm"
+  },
+  {
+   "index": 96,
+   "file": "sparse-0096.txt",
+   "count": 58,
+   "sha256": "C781AE303C204D515CC6EC4E087EACC95B754FAE1568D261A812EFC0A6608A18",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_uint_r8g8b8a8_sint_r32_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_unorm_r32_sint_r8g8b8a8_sint"
+  },
+  {
+   "index": 97,
+   "file": "sparse-0097.txt",
+   "count": 52,
+   "sha256": "F9261EF1D4D82E2D4555015B3AE29BD6FEB2397571B0547324B4F50289CDD190",
+   "estimate_lab_s": 97.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16_unorm_r32_sint_r8g8b8a8_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16b16a16_sint_r16g16b16a16_unorm_r16g16b16a16_snorm"
+  },
+  {
+   "index": 98,
+   "file": "sparse-0098.txt",
+   "count": 43,
+   "sha256": "B057A81E8711F842BD533486E6793A603372B6C9CC540EF50A0DE205E1F445DA",
+   "estimate_lab_s": 99.1,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16b16a16_sint_r16g16b16a16_unorm_r16g16b16a16_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16b16a16_uint_r16g16b16a16_unorm_r32g32_uint"
+  },
+  {
+   "index": 99,
+   "file": "sparse-0099.txt",
+   "count": 51,
+   "sha256": "9A1AB0600291EEB4FCE418F3CE10B2FA117CC60D303099010D54C18C1BF36A29",
+   "estimate_lab_s": 98.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r16g16b16a16_uint_r32g32_sint_r16g16b16a16_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32_sint_r16g16_uint_r8g8b8a8_uint"
+  },
+  {
+   "index": 100,
+   "file": "sparse-0100.txt",
+   "count": 54,
+   "sha256": "8101AB85232E1BFEF26BD993E217A065B6CC77DD927A8AD7FABAD7F1BAC94B7B",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32_sint_r16g16_uint_r8g8b8a8_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32_uint_r16g16_sint_r8g8b8a8_sint"
+  },
+  {
+   "index": 101,
+   "file": "sparse-0101.txt",
+   "count": 52,
+   "sha256": "2B49DF01B07562F16AF7810E2A0EE8F7086BA8624D56BB5B6A544802BC0462B2",
+   "estimate_lab_s": 98.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32_uint_r16g16_sint_r8g8b8a8_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32_uint_r8g8b8a8_uint_r16g16_sint"
+  },
+  {
+   "index": 102,
+   "file": "sparse-0102.txt",
+   "count": 46,
+   "sha256": "A51D4D73020BDFEAD4667C89CD68734B9949AB6B6F86E284BD829E9DA7CC8D55",
+   "estimate_lab_s": 98.5,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32_uint_r8g8b8a8_uint_r16g16_snorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32g32_uint_r16g16b16a16_uint_r16g16b16a16_unorm"
+  },
+  {
+   "index": 103,
+   "file": "sparse-0103.txt",
+   "count": 62,
+   "sha256": "45046185D1268007B120D9C3F77428A36FB0E1454286A8A4C35F28AC841AE03B",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r32g32_uint_r16g16b16a16_uint_r32g32_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8_sint_r8g8_snorm_r8g8_uint"
+  },
+  {
+   "index": 104,
+   "file": "sparse-0104.txt",
+   "count": 56,
+   "sha256": "E3D94CF4A17EA52E072C5C79CBCEDD6A283D1C1BF0FCD54C00D5CE38D3B5FE3D",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8_sint_r8g8_snorm_r8g8_unorm",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8_uint_r16_sint_r16_snorm"
+  },
+  {
+   "index": 105,
+   "file": "sparse-0105.txt",
+   "count": 75,
+   "sha256": "5823F10977F9CFAA20CD12D5888E7BE9446766E861A336EA64692B714CB201C6",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8_uint_r16_sint_r16_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8_unorm_r8g8_snorm_r16_unorm"
+  },
+  {
+   "index": 106,
+   "file": "sparse-0106.txt",
+   "count": 62,
+   "sha256": "CF148855BD8080B9DC43119D601B3AB68A6A972D959F06AE939F7DBB0131643D",
+   "estimate_lab_s": 98.2,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8_unorm_r8g8_snorm_r8g8_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_sint_r8g8b8a8_snorm_r32_uint"
+  },
+  {
+   "index": 107,
+   "file": "sparse-0107.txt",
+   "count": 54,
+   "sha256": "7B7559ACB3BAEFFD03A2A639077F675CFC043C41AFB42DC0499C4D4FB30727E8",
+   "estimate_lab_s": 98.8,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_sint_r8g8b8a8_snorm_r8g8b8a8_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_snorm_r32_sint_r16g16_unorm"
+  },
+  {
+   "index": 108,
+   "file": "sparse-0108.txt",
+   "count": 49,
+   "sha256": "1469A05C467BF34FA2898D7C4A5A2E1145DEB4B970621AEED3A3B6A321EFF5AA",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_snorm_r32_sint_r32_uint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_uint_r16g16_snorm_r32_uint"
+  },
+  {
+   "index": 109,
+   "file": "sparse-0109.txt",
+   "count": 55,
+   "sha256": "A37ABEFAFE25CBB064317F4E15731A6A5FEBD483D8A1F264ACCE02459F9D2C30",
+   "estimate_lab_s": 99.0,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_uint_r16g16_snorm_r8g8b8a8_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_uint_r8g8b8a8_unorm_r16g16_unorm"
+  },
+  {
+   "index": 110,
+   "file": "sparse-0110.txt",
+   "count": 58,
+   "sha256": "4278E6127FFE56477DEC5CD9720DA5488294D38B813341EF3F99F753F7CF0A93",
+   "estimate_lab_s": 97.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_uint_r8g8b8a8_unorm_r32_sint",
+   "last": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_unorm_r8g8b8a8_sint_r32_uint"
+  },
+  {
+   "index": 111,
+   "file": "sparse-0111.txt",
+   "count": 83,
+   "sha256": "192575B023AEDE0A1783F7EE4B6400589E5E7B5A7303D7ED361C8E5D342B87FB",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.image_sparse_residency.mutable.3d.r8g8b8a8_unorm_r8g8b8a8_sint_r8g8b8a8_snorm",
+   "last": "dEQP-VK.sparse_resources.mipmap_sparse_residency.2d.g8_b8r8_2plane_420_unorm.512_256_1"
+  },
+  {
+   "index": 112,
+   "file": "sparse-0112.txt",
+   "count": 121,
+   "sha256": "69474C28D01456A6023BF68A507CD07CD77833A768125235628F7037F58CCBF3",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.mipmap_sparse_residency.2d.g8_b8r8_2plane_422_unorm.1024_128_1",
+   "last": "dEQP-VK.sparse_resources.mipmap_sparse_residency.2d.rgba8ui.512_256_1"
+  },
+  {
+   "index": 113,
+   "file": "sparse-0113.txt",
+   "count": 122,
+   "sha256": "E39C4E59C4AB711F12B817F5AF99A3D519587A0A3B0BECCC14FE2B837AF6B65E",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.mipmap_sparse_residency.2d_array.b10x6g10x6r10x6g10x6_422_unorm_4pack16.1024_128_8",
+   "last": "dEQP-VK.sparse_resources.mipmap_sparse_residency.2d_array.r8i.11_137_3"
+  },
+  {
+   "index": 114,
+   "file": "sparse-0114.txt",
+   "count": 114,
+   "sha256": "B937226A877338DD31B732F3AED1BBEC2E8685CD40241DED8DF137C6C55DC6C7",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.mipmap_sparse_residency.2d_array.r8i.512_256_6",
+   "last": "dEQP-VK.sparse_resources.mipmap_sparse_residency.3d.rg32i.11_137_3"
+  },
+  {
+   "index": 115,
+   "file": "sparse-0115.txt",
+   "count": 129,
+   "sha256": "5C70BC5D7091F5AB3495169F5F945B0755A7C687686E39040C7D1A0BA841C2CC",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.mipmap_sparse_residency.3d.rg32i.256_256_16",
+   "last": "dEQP-VK.sparse_resources.mipmap_sparse_residency.cube.rgba32ui.137_137_1"
+  },
+  {
+   "index": 116,
+   "file": "sparse-0116.txt",
+   "count": 102,
+   "sha256": "0B7C4C201D58053C853EEDCAC2EDA25FD686D7883D04B65CB368A6992104006A",
+   "estimate_lab_s": 99.1,
+   "first": "dEQP-VK.sparse_resources.mipmap_sparse_residency.cube.rgba32ui.256_256_1",
+   "last": "dEQP-VK.sparse_resources.mipmap_sparse_residency.cube_array.rgba8_snorm.137_137_3"
+  },
+  {
+   "index": 117,
+   "file": "sparse-0117.txt",
+   "count": 109,
+   "sha256": "6FDA830FE395BE070BB997AA03BC4CBFC5A44490049F7D105DE07CFF58E82699",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.mipmap_sparse_residency.cube_array.rgba8_snorm.256_256_6",
+   "last": "dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba32ui.samples_8"
+  },
+  {
+   "index": 118,
+   "file": "sparse-0118.txt",
+   "count": 132,
+   "sha256": "372C6748443646BD92DB285DE137A1F9ADBE90343F826F21769DEA62AD8E9913",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.multisampled_image_sparse_residency.rgba8i.samples_16",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_fetch.r12x4_unorm_pack16.128_128_8"
+  },
+  {
+   "index": 119,
+   "file": "sparse-0119.txt",
+   "count": 108,
+   "sha256": "AF7DE807F8A4586D4F513976AE1720C6EE76E9271BBD304DADAE4367CF855B87",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_fetch.r12x4_unorm_pack16.503_137_3",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_fetch.rg8_snorm.11_37_3"
+  },
+  {
+   "index": 120,
+   "file": "sparse-0120.txt",
+   "count": 111,
+   "sha256": "D99FE695EDC85BF8F31DC4C537DC5D51CC9CBF235F8153ECA95708CF8A3C4F68",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_fetch.rg8_snorm.11_37_3_nontemporal",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_gather.g12x4b12x4g12x4r12x4_422_unorm_4pack16.128_128_8"
+  },
+  {
+   "index": 121,
+   "file": "sparse-0121.txt",
+   "count": 123,
+   "sha256": "6ABBA2C17EC247178A8C817DB9B61FEE1058F86CB9BAE7333519E8C8E2FFBCEF",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_gather.g12x4b12x4g12x4r12x4_422_unorm_4pack16.512_256_6",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_gather.r8i.11_37_3_nontemporal"
+  },
+  {
+   "index": 122,
+   "file": "sparse-0122.txt",
+   "count": 115,
+   "sha256": "D30C161F272B6665CBA13AD02E894ABDC917637678933EFE013CF398B051E716",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_gather.r8i.128_128_8",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_read.b8g8r8g8_422_unorm.128_128_8"
+  },
+  {
+   "index": 123,
+   "file": "sparse-0123.txt",
+   "count": 127,
+   "sha256": "76D6C151C95C4786D89B623CB557DE1B70238FD5CCE4723EC64FEE11CAA8F0E3",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_read.b8g8r8g8_422_unorm.512_256_6",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_read.r16ui.11_37_3"
+  },
+  {
+   "index": 124,
+   "file": "sparse-0124.txt",
+   "count": 107,
+   "sha256": "4794D8C658C1F3EB4EEF7D31C3F4C8B08C5FFF6DF21CF285FC853AF31170E274",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_read.r16ui.11_37_3_nontemporal",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_read.rgba16i.128_128_8"
+  },
+  {
+   "index": 125,
+   "file": "sparse-0125.txt",
+   "count": 119,
+   "sha256": "0734B1735C5AAB9462AD56D3C810FF42909D7E3E77E37CA9F37354E5A356A54F",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_read.rgba16i.503_137_3",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_explicit_lod.g8_b8r8_2plane_444_unorm.11_37_3"
+  },
+  {
+   "index": 126,
+   "file": "sparse-0126.txt",
+   "count": 125,
+   "sha256": "80B5C184AC1EFBBA3DD1821066B1568B2783E74632C362843D8DDA4C5850380A",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_explicit_lod.g8_b8r8_2plane_444_unorm.11_37_3_nontemporal",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_explicit_lod.rg32ui.503_137_3"
+  },
+  {
+   "index": 127,
+   "file": "sparse-0127.txt",
+   "count": 122,
+   "sha256": "54ED319FF75D9987483695AA8958D1FAAB2680991226FC5A691EAB0C05B04537",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_explicit_lod.rg32ui.512_256_6",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_implicit_lod.g16_b16_r16_3plane_422_unorm.128_128_8"
+  },
+  {
+   "index": 128,
+   "file": "sparse-0128.txt",
+   "count": 122,
+   "sha256": "1DE77F8BDE6CE64631247637772CC899966491E97021AB66769B4719B2D97954",
+   "estimate_lab_s": 99.7,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_implicit_lod.g16_b16_r16_3plane_422_unorm.512_256_6",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_implicit_lod.r8i.512_256_6"
+  },
+  {
+   "index": 129,
+   "file": "sparse-0129.txt",
+   "count": 115,
+   "sha256": "7A7A84ECB4CF39E5CA305841F9DA2D91DECF89A603DCFBF1DC5CDD7469CBA22C",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_array_sparse_sample_implicit_lod.r8ui.11_37_3",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_fetch.g10x6_b10x6_r10x6_3plane_420_unorm_3pack16.512_256_1"
+  },
+  {
+   "index": 130,
+   "file": "sparse-0130.txt",
+   "count": 121,
+   "sha256": "CBF5FC1E05008C9D67EFE77710070E335D27FFDFAF964E6108D4A08ADD6481E3",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_fetch.g10x6_b10x6_r10x6_3plane_422_unorm_3pack16.128_128_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_fetch.r16i.128_128_1"
+  },
+  {
+   "index": 131,
+   "file": "sparse-0131.txt",
+   "count": 102,
+   "sha256": "5ABCBE408A97DC432F3BA6D4CCC8C9789B4A47D34B03AF54A70A98FAF8791C5B",
+   "estimate_lab_s": 99.3,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_fetch.r16i.503_137_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_fetch.rgba16.512_256_1"
+  },
+  {
+   "index": 132,
+   "file": "sparse-0132.txt",
+   "count": 118,
+   "sha256": "9A09223FB66E6B0342DBF0FE3CC3197D16A3C07BD28229CF6E7AFC4B5E851C52",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_fetch.rgba16_snorm.11_37_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_gather.g8_b8_r8_3plane_444_unorm.11_37_1"
+  },
+  {
+   "index": 133,
+   "file": "sparse-0133.txt",
+   "count": 112,
+   "sha256": "97C9E564B0487FE602B8C7805F29B119A98405EF39812BDDEF8231D8410D995E",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_gather.g8_b8_r8_3plane_444_unorm.11_37_1_nontemporal",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_gather.rg16_snorm.11_37_1_nontemporal"
+  },
+  {
+   "index": 134,
+   "file": "sparse-0134.txt",
+   "count": 125,
+   "sha256": "142EF098CD37301D4C89369956C7D6974317257BDBCC63684912FEFF38B77141",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_gather.rg16_snorm.128_128_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_read.g12x4_b12x4_r12x4_3plane_422_unorm_3pack16.512_256_1"
+  },
+  {
+   "index": 135,
+   "file": "sparse-0135.txt",
+   "count": 111,
+   "sha256": "B10F26A0C0C70E9A0BF700ADAD8A873C1611B8A16D4B432401CA3D3D281AE7EB",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_read.g12x4_b12x4_r12x4_3plane_444_unorm_3pack16.11_37_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_read.r32i.512_256_1"
+  },
+  {
+   "index": 136,
+   "file": "sparse-0136.txt",
+   "count": 102,
+   "sha256": "C25FF85FF0A8F21DBF9692B8E28949BCADF37C1364ABA1B8FAA1F94EB0DF30CD",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_read.r32ui.11_37_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_read.rgba16ui.11_37_1_nontemporal"
+  },
+  {
+   "index": 137,
+   "file": "sparse-0137.txt",
+   "count": 125,
+   "sha256": "FC334BC3D28F21B560DE92E054AA45FFF598F4DFB37A7D1A0D70F3B406726656",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_read.rgba16ui.128_128_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_explicit_lod.r10x6_unorm_pack16.503_137_1"
+  },
+  {
+   "index": 138,
+   "file": "sparse-0138.txt",
+   "count": 135,
+   "sha256": "04CC37E5767F00F043CDE3052A5A61F97AA6BF5A1805CD06A77920ABE4CC689A",
+   "estimate_lab_s": 99.6,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_explicit_lod.r10x6_unorm_pack16.512_256_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_explicit_lod.rg8ui.503_137_1"
+  },
+  {
+   "index": 139,
+   "file": "sparse-0139.txt",
+   "count": 137,
+   "sha256": "AAB7CB06369F8861BD21D5F083770373F30C6BA085E78C536707A30C0857FAC5",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_explicit_lod.rg8ui.512_256_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_implicit_lod.g8_b8r8_2plane_444_unorm.512_256_1"
+  },
+  {
+   "index": 140,
+   "file": "sparse-0140.txt",
+   "count": 138,
+   "sha256": "05FDA7DDE2A110A3AFD8FBE97BC65946B6F9D20CF30D25EA5CD1C46199FCDEFF",
+   "estimate_lab_s": 99.4,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_implicit_lod.g8b8g8r8_422_unorm.128_128_1",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_implicit_lod.rg8ui.11_37_1"
+  },
+  {
+   "index": 141,
+   "file": "sparse-0141.txt",
+   "count": 113,
+   "sha256": "B42CFCB5FCBD77DEFE188755FEEA7E6FAA5F5601C1956AAC18BD7C2CB8823BD5",
+   "estimate_lab_s": 99.8,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.2d_sparse_sample_implicit_lod.rg8ui.11_37_1_nontemporal",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.3d_sparse_fetch.r8ui.256_256_16"
+  },
+  {
+   "index": 142,
+   "file": "sparse-0142.txt",
+   "count": 104,
+   "sha256": "CBCE4E49CFBE9FA340C8C678FFD0476DDCE3023840BBD8EC884A63913FAFF777",
+   "estimate_lab_s": 99.9,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.3d_sparse_fetch.r8ui.503_137_3",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.3d_sparse_read.r16.128_128_8"
+  },
+  {
+   "index": 143,
+   "file": "sparse-0143.txt",
+   "count": 105,
+   "sha256": "331F0E6BD46EA7D1C6B5F0091FF7D12793FA7B2F965D11DDBDC2900546F28D73",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.3d_sparse_read.r16.256_256_16",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.3d_sparse_read.rg8ui.128_128_8"
+  },
+  {
+   "index": 144,
+   "file": "sparse-0144.txt",
+   "count": 99,
+   "sha256": "58DB083BA283BCCF21BF32FA787E0B75C5E7D72BAF639BF332CF47FB71E08414",
+   "estimate_lab_s": 99.2,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.3d_sparse_read.rg8ui.256_256_16",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.cube_array_sparse_read.r8_snorm.11_11_3_nontemporal"
+  },
+  {
+   "index": 145,
+   "file": "sparse-0145.txt",
+   "count": 93,
+   "sha256": "0A835C5E9DE9DB79DFE44B343D3C490FEED8009F691A5986BDF9FC84F9326A85",
+   "estimate_lab_s": 99.5,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.cube_array_sparse_read.r8_snorm.128_128_8",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.cube_array_sparse_read.rgba32ui.256_256_6"
+  },
+  {
+   "index": 146,
+   "file": "sparse-0146.txt",
+   "count": 106,
+   "sha256": "7EFFBFD161406C7F6912778A1CDE466B2E1462D7CE17563D622BC0AE496F3356",
+   "estimate_lab_s": 100.0,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.cube_array_sparse_read.rgba8.11_11_3",
+   "last": "dEQP-VK.sparse_resources.shader_intrinsics.cube_sparse_read.rg32ui.11_11_1"
+  },
+  {
+   "index": 147,
+   "file": "sparse-0147.txt",
+   "count": 87,
+   "sha256": "63EA498791F837A59468C184692A1A6594B9512E9032AB043EB35078A73E5A3E",
+   "estimate_lab_s": 94.3,
+   "first": "dEQP-VK.sparse_resources.shader_intrinsics.cube_sparse_read.rg32ui.11_11_1_nontemporal",
+   "last": "dEQP-VK.sparse_resources.transfer_queue.2d.rgba8ui.512_256_1"
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+{
+    "route":  "direct",
+    "icd_source":  "C:\\BC250\\m15\\registration002\\amdgpu_wddm_radv.dll",
+    "icd_sha256":  "2A13235DB7B66B9C8DDE550CECBAFCD930AA0748F8C23252020A4EA0C4DA1729",
+    "experimental":  "sparse",
+    "perftest":  "rtwave64",
+    "deqp_sha256":  "E3DABB44EB8D252083C33B80C3E18897301EB4F7E788F95F6070BCF0AC473183",
+    "list_sha256":  "EEBB43439BBF601FEE063D60E350F1C7117ACC0BF2A449EEC5B2F5A38767580D",
+    "list_count":  140
+}

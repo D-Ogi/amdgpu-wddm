@@ -1,0 +1,6 @@
+list-rt-k97 run=rt-k97-wave64 route=direct icd=2A13235D exit=1 complete=True done=140/140 attempts=1 elapsed=31.3s
+counts: Pass=136 Fail=1 NotRun=3
+FAIL Fail dEQP-VK.ray_query.misc.dynamic_indexing
+FAIL NotRun dEQP-VK.ray_query.misc.dynamic_indexing_inbounds
+FAIL NotRun dEQP-VK.ray_query.misc.preserve_flip_facing
+FAIL NotRun dEQP-VK.ray_query.misc.shared_memory_consistency

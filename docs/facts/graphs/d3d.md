@@ -27,6 +27,7 @@ flowchart LR
   M565["M565"]
   M567["M567"]
   M569["M569<br/>icd"]
+  M571["M571<br/>games"]
   M572["M572"]
   M575["M575"]
   M576["M576<br/>display"]
@@ -39,6 +40,9 @@ flowchart LR
   M780["M780"]
   M782["M782"]
   M784["M784"]
+  M792["M792"]
+  M793["M793"]
+  M794["M794"]
   M576 --> M575
   M723 --> M697
   M569 --> M496
@@ -50,8 +54,12 @@ flowchart LR
   M753 --> M754
   M782 --> M780
   M784 --> M780
+  M792 --> M496
+  M792 --> M571
+  M793 --> M792
+  M794 --> M792
   M553 --> M546
   classDef other stroke-dasharray:4 3
-  class M553,M569,M576,M585,M723 other
+  class M553,M569,M571,M576,M585,M723 other
 ```
 

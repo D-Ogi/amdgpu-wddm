@@ -23,6 +23,27 @@ Observed runs take a few seconds: approximately3-4seconds with cached analysis,
 supports them. These timings are observations, not a universal time guarantee.
 No network, lab, CTS, benchmarks or soak are part of quick.
 
+## Offline self-tests in the fast profile
+
+The operator tools carry self-tests that need no lab and no network. Four of them are gate rows of the
+fast profile, so a regression in them fails `quick.cmd` instead of waiting for the next lab run.
+
+| Row | What it checks |
+|---|---|
+| `kd-dump-triage` | `tools/win/kd/analyze-kernel-dump.ps1 -SelfTest`, the dump triage parser |
+| `smartplug` | `tools/win/smartplug/selftest.py`, the plug configuration, scales and relay readback rule |
+| `conformance-shaders` | `tools/win/conformance-clients/check-shaders.ps1`, the tracked shader headers against the recorded dxc commands, and the record against an absolute toolchain path |
+| `quality-controls` | the controls of the gate scripts themselves |
+
+Three self-tests stay outside the fast profile, each for a stated reason. Run them by hand after a change
+to the tool they cover.
+
+| Self-test | Why it is not a row |
+|---|---|
+| `tools/win/monitors/selftest.ps1` | Two checks wait for a one-minute deadline, so the run takes about two minutes |
+| `tools/win/cts/test/run-tests.sh` | Needs bash, which the fast profile does not require |
+| `capshare --self-test` and `amdgpu_wddm_conformance --selftest` | Need their client built first, and each build runs them already |
+
 Analysis cache keys include commands, compiler tools, include search inventory,
 source and compiler-reported header hashes. Changed dependencies trigger analysis;
 failed runs leave no passing cache. Controls verify header invalidation and a real
