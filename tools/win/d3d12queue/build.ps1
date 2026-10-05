@@ -16,6 +16,18 @@ param(
     # Diagnostic variant: the copy verb opens a window, creates a flip-model swap chain on the queue, presents
     # two cleared frames and resizes the chain. It opens a window: run it on the lab, not unannounced elsewhere.
     [switch]$Present,
+    # Diagnostic variant: the copy verb opens a borderless window over the whole output, creates a flip-model
+    # swap chain at the output's size on the queue, and presents -FlipFrames frames of exact content, comparing
+    # the back buffer before each Present and reporting DXGI's present statistics. M15.14's scan-out candidate.
+    # It opens a fullscreen window and takes the foreground: run it on the lab, not unannounced elsewhere.
+    [switch]$Flip,
+    # -Flip: back buffers in the chain.
+    [ValidateRange(2, 3)][int]$FlipBuffers = 3,
+    # -Flip: frames presented, as many as the session's deadline allows.
+    [ValidateRange(1, 1200)][int]$FlipFrames = 120,
+    # -Flip: ask DXGI for exclusive fullscreen on the output instead of a borderless window. A refusal is traced
+    # and the run goes on borderless.
+    [switch]$FlipFullscreen,
     # Diagnostic variant: the copy verb maps a reserved buffer's tiles to a heap on the queue and sends a
     # pattern through it. The device must report tiled resources (see -RadvExperimental).
     [switch]$Sparse,
@@ -114,8 +126,8 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad, $ResetChurn, $RecordBench | Where-Object { $_ }).Count -gt 1) {
-    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection, GameLoad, ResetChurn and RecordBench each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Flip, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad, $ResetChurn, $RecordBench | Where-Object { $_ }).Count -gt 1) {
+    throw 'Draw, Scene, Present, Flip, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection, GameLoad, ResetChurn and RecordBench each replace the copy verb; choose one' }
 foreach ($name in 'ResetChurnThreads', 'ResetChurnBatches', 'ResetChurnSeconds', 'ResetChurnDraws', 'ResetChurnRenew') {
     if ($PSBoundParameters.ContainsKey($name) -and -not $ResetChurn) { throw "$name needs ResetChurn" } }
 foreach ($name in 'RecordBenchLists', 'RecordBenchDraws', 'RecordBenchExecutes', 'RecordBenchWorkUs', 'RecordBenchSeconds') {
@@ -128,10 +140,14 @@ if ($GameLoadRenderHoldMs) { $variant += "/DINTERACTIVE_GAMELOAD_RENDER_HOLD_MS=
 if ($GameLoadThrowAfterDetach -and -not $GameLoadRenderHoldMs) { throw 'GameLoadThrowAfterDetach needs GameLoadRenderHoldMs' }
 if ($GameLoadThrowAfterDetach) { $variant += '/DINTERACTIVE_GAMELOAD_THROW_AFTER_DETACH' }
 if ($PresentFormat -ne 'Bgra8' -and -not $Present) { throw 'PresentFormat needs Present' }
+foreach ($name in 'FlipBuffers', 'FlipFrames', 'FlipFullscreen') {
+    if ($PSBoundParameters.ContainsKey($name) -and -not $Flip) { throw "$name needs Flip" } }
 if ($PresentFormat -eq 'Rgb10a2') { $variant += '/DINTERACTIVE_PRESENT_RGB10A2' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 if ($Present) { $variant += '/DINTERACTIVE_PRESENT' }
+if ($Flip) { $variant += '/DINTERACTIVE_FLIP', "/DINTERACTIVE_FLIP_BUFFERS=$FlipBuffers", "/DINTERACTIVE_FLIP_FRAMES=$FlipFrames" }
+if ($FlipFullscreen) { $variant += '/DINTERACTIVE_FLIP_FULLSCREEN' }
 if ($Sparse) { $variant += '/DINTERACTIVE_SPARSE' }
 if ($RayQuery) { $variant += '/DINTERACTIVE_RAYQUERY' }
 if ($RayPipeline) { $variant += '/DINTERACTIVE_RAYPIPELINE' }

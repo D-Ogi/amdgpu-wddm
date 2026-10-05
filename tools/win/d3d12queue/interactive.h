@@ -222,7 +222,8 @@ struct Session {
         return "{\"schema\":1,\"sequence\":"+std::to_string(sequence)+",\"command\":\""+verb+"\",\"success\":"+(SUCCEEDED(hr)?"true":"false")+",\"hr\":\""+hr_text(hr)+"\",\"elapsed_ms\":"+std::to_string(GetTickCount64()-start)+",\"state\":{\"device\":"+(device?"true":"false")+",\"queue\":"+(queue?"true":"false")+"},\"copy_success\":"+(copy_success?"true":"false")+",\"gpu_pending\":"+(pending?"true":"false")+"}\n";
     }
 };
-#if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) + \
+#if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + \
+    defined(INTERACTIVE_FLIP) + defined(INTERACTIVE_SPARSE) + \
     defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) + defined(INTERACTIVE_RAYSTATE) + \
     defined(INTERACTIVE_RAYGROW) + defined(INTERACTIVE_RAYCOLLECTION) + defined(INTERACTIVE_GAMELOAD) + \
     defined(INTERACTIVE_RESETCHURN) + defined(INTERACTIVE_RECORDBENCH) > 1
@@ -236,6 +237,9 @@ struct Session {
 #endif
 #ifdef INTERACTIVE_PRESENT
 #include "interactive-present.h"
+#endif
+#ifdef INTERACTIVE_FLIP
+#include "interactive-flip.h"
 #endif
 #ifdef INTERACTIVE_SPARSE
 #include "interactive-sparse.h"
@@ -300,6 +304,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=scene(session);break;
 #elif defined(INTERACTIVE_PRESENT)
         case Verb::Copy:hr=present(session);break;
+#elif defined(INTERACTIVE_FLIP)
+        case Verb::Copy:hr=flip(session);break;
 #elif defined(INTERACTIVE_SPARSE)
         case Verb::Copy:hr=sparse(session);break;
 #elif defined(INTERACTIVE_RAYQUERY)

@@ -59,6 +59,51 @@ receipt before publishing the next command.
 | `exit` | Finish the session and release objects whose GPU work has retired |
 | `abort` | Request cancellation at an operation boundary or inside the bounded fence wait |
 
+`build.ps1 -Flip` replaces the `copy` operation with the fullscreen case of M15.14: the one shape in which
+the display hardware may read a buffer the application owns instead of a copy the compositor made. It takes
+output 0's desktop rectangle, opens a borderless `WS_POPUP` window exactly over it, takes the foreground and
+creates a flip-model swap chain of `-FlipBuffers` buffers (2 or 3) at that size in `B8G8R8A8_UNORM`, with
+`FLIP_DISCARD`, `SCALING_NONE` and no multisampling, on the session's queue. With `-FlipFullscreen` it also
+asks for exclusive fullscreen on that output and resizes the buffers; a refusal is traced and the run goes on
+borderless, because a borderless chain is just as eligible for a flip and the mode list is not this
+increment's subject.
+
+It then presents `-FlipFrames` frames with `Present(1, 0)`, each cleared to its own colour: every channel is
+0.0 or 1.0, so the clear has no rounding tie and each frame's `B8G8R8A8` word is exact, and the eight
+combinations cycle, so a frame still showing the previous one, or a buffer presented twice, differs in at
+least one channel. Before each Present the back buffer is copied to a READBACK buffer and compared: every
+texel at the first and the last frame, a moving 64-row band in between. The run ends two seconds before the
+session's deadline, on `abort.request`, or when the frames are done; `-FlipFullscreen` always restores the
+desktop before the chain is released.
+
+The receipt succeeds only if every frame was presented with `S_OK`, every compared texel was exact and no
+frame was lost to the deadline. An occluded present counts as refused and fails the run: a covered
+fullscreen window is a lab condition to fix, not a result. The trace carries DXGI's present statistics
+before and after (`PresentCount`, `PresentRefreshCount`, `SyncRefreshCount`, `GetLastPresentCount`), their
+deltas, the frames per second, and which back-buffer indices the chain handed out.
+
+What this client cannot show is whether the display hardware read those buffers. DXGI's statistics do not
+say, and a successful Present is returned on both paths. The witness is the kernel driver's scan-out
+counters around the run (`bc250kmd_cli log summary`, `scanout-trial.ps1`) together with the operator's
+screenshot. Nothing in the receipt should be read as a claim about DirectFlip.
+
+It opens a fullscreen window and takes the foreground. Run it on the lab, never unannounced elsewhere.
+
+`scanout-trial.ps1` is the lab trial around it. It reads `bc250kmd_cli log summary` before and after the run,
+starts the client with its session directory, drives the five commands through `controller.ps1`, waits for the
+process to be gone (and stops it if it is not, so that no fullscreen window outlives its trial), reads the
+counters again and writes one JSON report with the receipt, the client's present statistics, both counter
+snapshots and their delta. The counter lines it reads are `presents N, flips N of N address calls`, the
+scan-out admission line and the vidpn flip line; a line the running driver does not print is reported as
+absent, never as zero.
+
+The trial has two arms. Without `-Experiment` the shell keeps its registered composed-primary path: the
+control arm, in which every frame must present exactly and the scan-out counters must not move at all. With
+`-Experiment scanout-flip` the shell asks for a scan-out primary, and the delta then says which of the three
+outcomes happened: flips admitted, candidates refused (with the refusal reason that counted), or no candidate
+reaching `SetVidPnSourceAddress` at all, which places the stop in user mode. The script prints that as one
+`VERDICT` line and says nothing the numbers do not carry.
+
 `build.ps1 -Sparse` replaces the `copy` operation: a reserved buffer of four tiles is mapped to tiles
 2 to 5 of a heap with the queue's `UpdateTileMappings`, a pattern goes UPLOAD, reserved buffer,
 READBACK, and all 262144 bytes are compared. Only mapped tiles are written and read. The device must
