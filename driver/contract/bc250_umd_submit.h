@@ -48,6 +48,9 @@ extern "C" {
 
 #define BC250_UMD_ALLOC_VERSION     1u // legacy producer, cache intent unspecified
 #define BC250_UMD_ALLOC_VERSION_CACHE_POLICY 2u // same wire size; gem_flags is authoritative
+/* 3: same wire size again. The four scanout_* words below are read, and only then, so a version 2
+ * producer keeps its zeroed reserved tail and its old meaning. M15.14. */
+#define BC250_UMD_ALLOC_VERSION_SCANOUT 3u
 /* 2: version 1 plus node_ordinal, appended - ADR 0013's node layout, see the struct below. */
 #define BC250_UMD_CONTEXT_VERSION   2u
 #define BC250_UMD_SUBMIT_VERSION    1u
@@ -76,6 +79,21 @@ extern "C" {
                                                   * (radv_amdgpu_bo.c:819). OPEN QUESTION. */
 #define BC250_UMD_A_SHARED          0x00000008u  /* exported or imported across processes
                                                   * (ac_drm_bo_export/import). */
+#define BC250_UMD_A_SCANOUT         0x00000010u  /* this allocation is meant to be the argument of
+                                                  * SetVidPnSourceAddress: the display pipeline, not
+                                                  * the compositor, reads it. It has no amdgpu
+                                                  * original - on Linux the scanout surface is the
+                                                  * KMS plane's, described by a framebuffer object -
+                                                  * and it exists because WDDM hands the kernel
+                                                  * driver an allocation handle and nothing else at
+                                                  * flip time. The four scanout_* words must then
+                                                  * describe the surface, the version must be at
+                                                  * least BC250_UMD_ALLOC_VERSION_SCANOUT and the
+                                                  * heap must be AMDGPU_GEM_DOMAIN_VRAM: the
+                                                  * aperture is not a scanned-out segment. The flag
+                                                  * is a request, never a permission - the kernel
+                                                  * driver re-derives every one of these facts and
+                                                  * refuses the flip otherwise (M15.14). */
 
 struct bc250_umd_alloc_private {
     __u32 magic;                        /* BC250_UMD_ALLOC_MAGIC */
@@ -129,7 +147,18 @@ struct bc250_umd_alloc_private {
     __u32 metadata_size;                /* bytes of metadata[] that are meaningful */
     __u32 metadata[16];
 
-    __u32 reserved[11];
+    /* --- appended in version 3, inside version 1's reserved tail, so the wire size never changes --
+     * The scanned-out surface this allocation holds, for BC250_UMD_A_SCANOUT only. The kernel
+     * driver has no other way to learn it: a BC2A allocation carries bytes and a heap, while the
+     * display pipeline needs a geometry, a pitch and a pixel format. The format is a D3DDDIFORMAT,
+     * as LB7A's is, and must be a SCANOUT_PRIMARY row of driver/contract/amdgpu_wddm_surface_format.h.
+     * Zero in all four with the flag clear; a version 2 producer leaves them zero by construction. */
+    __u32 scanout_width;                /* pixels; must equal the POST mode's width */
+    __u32 scanout_height;               /* pixels; must equal the POST mode's height */
+    __u32 scanout_pitch;                /* bytes per row, as the image was laid out */
+    __u32 scanout_format;               /* D3DDDIFORMAT, a SCANOUT_PRIMARY row */
+
+    __u32 reserved[7];
 };
 
 /* ---------------------------------------------------------------------------------------------
