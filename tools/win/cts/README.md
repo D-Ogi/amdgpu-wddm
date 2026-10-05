@@ -112,7 +112,8 @@ explanation. The groups of the sweep list:
 The 4691 `device_group` cases answer NotSupported on any single-GPU machine. They are not capability gaps.
 
 `batches/smoke.txt` holds 23 cases, the fastest passing case of each group. It takes 2.3 s on the development
-PC. Run it first against each new ICD.
+PC. Run it first against each new ICD. On unit A (2026-10-05, from this directory) it gives 17 Pass and
+6 NotSupported, with the release ICD 72E1D192 and with the BD-068 fix ICD 45712A13 alike.
 
 ### The ray-tracing lists
 

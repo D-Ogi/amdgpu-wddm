@@ -57,6 +57,9 @@ The script also checks itself offline. This check starts no debugger and reads n
 pwsh -NoProfile -File tools/win/kd/analyze-kernel-dump.ps1 -SelfTest
 ```
 
+First lab run, 2026-10-05: a 0x116 minidump from the b18 install (1.6 MB), symbol server only, `kd` exit 0
+in 1.4 s, summary `Bugcheck code 00000116`.
+
 ### Why this one runs on the lab
 
 A debugger costs the development PC a lot of nonpaged kernel memory. Two measurements show it:
