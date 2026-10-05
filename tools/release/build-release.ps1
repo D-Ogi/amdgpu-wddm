@@ -10,8 +10,9 @@
 # and the catalog is signed. The package holds the public .cer only.
 # manifest.json lists every file of the package with its SHA256, and every installed component with its role,
 # install location, file version and SHA256 (the control application reads it from the install root).
-# Gates: the work ledger (no finished but unlanded work for a component of this release; override with
-# -AllowLedgerDebt -LedgerDebtReason, which is recorded in this log), every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
+# Gates: the work ledger (every check rule, plus no finished but unlanded work for a component of this release;
+# override with -AllowLedgerDebt -LedgerDebtReason, or -NoLedger -NoLedgerReason in a workspace without the
+# ledger; manifest.json records which of the three happened), every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1. Nothing here opens a window: child processes
 # run with CreateNoWindow and redirected output.
 [CmdletBinding()]
@@ -23,7 +24,9 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
-    [string]$LedgerDebtReason                    # required with -AllowLedgerDebt: recorded in the build log
+    [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
+    [switch]$NoLedger,                           # build in a workspace that has no work ledger at all
+    [string]$NoLedgerReason                      # required with -NoLedger: recorded in the build log and manifest
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
@@ -44,31 +47,52 @@ $signtool = Join-Path $sdk "bin\$KitVersion\x64\signtool.exe"
 $inf2cat = Join-Path $wdk "bin\$KitVersion\x86\Inf2Cat.exe"
 foreach ($t in $signtool, $inf2cat) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
 
-# Work ledger gate: a release must not ship a component whose finished fix is still unlanded.
-# The ledger is a local file of the workspace (BC250_ROOT), so no path of it reaches the package or
-# the public repository. It is skipped only when the workspace has no ledger (a clean checkout
-# somewhere else), and overridden only by -AllowLedgerDebt with a reason, which is logged here.
+# Work ledger gate: a release must not ship a component whose finished fix is still unlanded,
+# and must not be cut over a ledger that hides new work or claims a landing nobody can verify
+# (the checker runs every rule in release mode). The ledger is a local file of the workspace
+# (BC250_ROOT), so none of its contents reach the package or the public repository.
+# The gate is never skipped silently: without the checker the build stops unless -NoLedger
+# states why, and a failing gate needs -AllowLedgerDebt with a reason. manifest.json records
+# which of the three happened, so the package itself says whether it was gated.
 $ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
+$script:ledgerGate = 'enforced'
+$script:ledgerGateReason = ''
 if (-not (Test-Path -LiteralPath $ledgerTool)) {
-    Write-Host 'work ledger: no scratch\ledger\ledger.py in this workspace, gate skipped'
+    if (-not $NoLedger) {
+        throw ("work ledger: no $ledgerTool in this workspace (BC250_ROOT=$Root). The gate is " +
+               "required: point -Root at the workspace, or build with -NoLedger -NoLedgerReason '<why>'.")
+    }
+    if (-not $NoLedgerReason) { throw '-NoLedger needs -NoLedgerReason "<why this build has no ledger>"' }
+    $script:ledgerGate = 'absent'
+    $script:ledgerGateReason = $NoLedgerReason
+    Write-Host "work ledger: NO LEDGER in this workspace, gate skipped by -NoLedger"
+    Write-Host "work ledger: reason: $NoLedgerReason"
 } else {
     Write-Host "work ledger: checking $Version against the release components"
     $ledgerOut = & python $ledgerTool --root $Root check --release $Version 2>&1
-    $ledgerOk = ($LASTEXITCODE -eq 0)
+    $ledgerExit = $LASTEXITCODE
     $ledgerOut | ForEach-Object { "  $_" }
-    if (-not $ledgerOk) {
+    if ($ledgerExit -gt 1) {
+        # Exit 2 is a broken or missing ledger, not debt: -AllowLedgerDebt must not wave it through.
+        throw ("work ledger: the checker failed with exit $ledgerExit (a malformed or missing " +
+               "LEDGER.json, or no python). Fix the ledger: this is not release debt.")
+    }
+    if ($ledgerExit -ne 0) {
         if (-not $AllowLedgerDebt) {
-            throw ("work ledger: finished but unlanded work serves a component of this release (see the " +
-                   "lines above). Land it, or build with -AllowLedgerDebt -LedgerDebtReason '<why>'.")
+            throw ("work ledger: finished but unlanded work serves a component of this release, or the " +
+                   "ledger itself is inconsistent (see the lines above). Land it, or build with " +
+                   "-AllowLedgerDebt -LedgerDebtReason '<why>'.")
         }
         if (-not $LedgerDebtReason) {
             throw '-AllowLedgerDebt needs -LedgerDebtReason "<why this release ships with unlanded work>"'
         }
+        $script:ledgerGate = 'debt-accepted'
+        $script:ledgerGateReason = $LedgerDebtReason
         Write-Host "work ledger: DEBT ACCEPTED for $Version by -AllowLedgerDebt"
         Write-Host "work ledger: reason: $LedgerDebtReason"
         Write-Host "work ledger: accepted at $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')) UTC"
     } else {
-        Write-Host 'work ledger: no unlanded work for any component of this release'
+        Write-Host 'work ledger: clean: no unlanded work for any component of this release'
     }
 }
 
@@ -297,6 +321,10 @@ $manifest = [ordered]@{
     kmd_build = $sources.kmd_version
     kmd_abi = $sources.kmd_abi             # BC250_KMD_VERSION, what bc250kmd_cli info reports (start-confirm, verify)
     built_utc = [DateTime]::UtcNow.ToString('o')
+    # Which of the three the work-ledger gate did: enforced (clean), debt-accepted, or absent.
+    # The package states it itself, so a build that waved the gate cannot look like a gated one.
+    work_ledger_gate = $script:ledgerGate
+    work_ledger_gate_reason = $script:ledgerGateReason
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe
     sources = $sources.sources
