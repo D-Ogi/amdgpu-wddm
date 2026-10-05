@@ -134,25 +134,49 @@ process and the owners of other visible, uncloaked windows of at least 200x150 (
 shells, launchers and our own tools are excluded by name. The panel shows at most 3 applications: the
 foreground one first, then the ones on our GPU path.
 
+A green row needs the whole user-mode stack of one render path: the shell the runtime opened, the engine
+that shell loads and the ICD the engine draws with. The module names are the ones the release installs
+(`tools/release/release-sources.json`), and the x86 payload uses the same names, so 32-bit processes are
+covered by the same table.
+
 | Loaded | Row |
 |---|---|
-| `d3d12.dll` / `d3d12core.dll` + `amdgpu_wddm_d3d12.dll` | `D3D12  GPU (amdgpu-wddm vkd3d + RADV)` (green) |
-| `d3d11.dll` / `d3d10*.dll` + `amdgpu_wddm_d3d11.dll` | `D3D11  GPU (amdgpu-wddm DXVK + RADV)` (green) |
-| ... + `bc250d3d_zink.dll` / `bc250d3d.dll` | `GPU (zink, desktop route)` / `CPU (llvmpipe, desktop route)` (amber) |
+| `d3d12.dll` / `d3d12core.dll` + `amdgpu_wddm_d3d12.dll` + `amdgpu_wddm_vkd3d.dll` + `amdgpu_wddm_radv.dll` | `D3D12  GPU (amdgpu-wddm vkd3d + RADV)` (green) |
+| `d3d11.dll` / `d3d10*.dll` + `amdgpu_wddm_d3d11.dll` + `amdgpu_wddm_dxvk.dll` + `amdgpu_wddm_radv.dll` | `D3D11  GPU (amdgpu-wddm DXVK + RADV)` (green) |
+| ... shell, or shell and engine, without the rest | `our D3D11 shell loaded, no engine yet` / `... no ICD yet` |
+| ... + `bc250d3d_zink.dll` + `amdgpu_wddm_radv.dll` / `bc250d3d.dll` | `GPU (zink, desktop route)` (green) / `CPU (llvmpipe, desktop route)` (amber) |
 | ... + `bc250d3d_router.dll` only | `router loaded, no backend yet` |
 | `d3d10warp.dll` | `CPU (WARP)` (amber) |
 | `d3d9.dll` + `d3d9on12.dll` / `bc250umd.dll` | `via D3D9On12 (D3D12 path)` / `stub UMD, no D3D9 renderer` |
 | `vulkan-1.dll` + `vulkan_radeon.dll` | `Vulkan  GPU (RADV ICD)` (green) |
+| a Direct3D runtime or `dxgi.dll` mapped from outside `\Windows\` | `replacement DLL next to the app, not the system runtime` (amber) |
+| `d3d12.dll` in a 32-bit process | `no x86 D3D12 in this package` (amber) |
 
-An API runtime without a UMD gives `no UMD loaded`: many D3D12 games load `d3d11.dll` without drawing with
-it, so no claim is made. `d3d10warp.dll` is shared by D3D11 and D3D12; when both runtimes are loaded the WARP
-row cannot say which one uses it. A process the overlay cannot open for reading shows
-`API unknown (access)`. A change of the foreground application's paths is written to the log once.
+An API runtime with none of our modules gives `none of our UMDs loaded`: many D3D12 games load `d3d11.dll`
+without drawing with it, so no claim is made, and another adapter's UMD is not ours to name.
+`amdgpu_wddm_radv.dll` is the ICD our own shells load by name; the Vulkan row ignores it, because only the
+registered `vulkan_radeon.dll` proves the Vulkan loader chose RADV.
+
+A shell without its engine or ICD is a device still being created. If the load failed instead, the runtime
+falls back to WARP and `d3d10warp.dll` appears, which the WARP row then reports. `d3d10warp.dll` is shared by
+D3D11 and D3D12; when both runtimes are loaded the WARP row cannot say which one uses it.
+
+A `d3d11.dll`, `d3d12.dll`, `d3d9.dll`, `d3d10*.dll` or `dxgi.dll` mapped from outside the Windows directory
+is a translation layer placed next to the application. The application then does not go through the installed
+Windows driver (it is not native in the sense of the project's acceptance rule), so the row reports the
+replacement instead of a driver path, whatever else is mapped in the process. Paths come from
+`GetMappedFileName`, so the test is on the device path, not on a DOS path the process could change.
+
+A process the overlay cannot open for reading shows `API unknown (access)`. A change of the foreground
+application's paths is written to the log once.
 
 Cost: no KMD escape, no remote thread and no loader lock in the target. `EnumProcessModulesEx` reads the
 loader list with `ReadProcessMemory` while the target runs, and the names (`GetMappedFileName`, one query per
 module) are read again only when the module count changes or the cached list is 30 s old.
-`test-graphics-api.ps1` checks classification, ordering and rows on fake module lists; `build.ps1` runs it.
+`test-graphics-api.ps1` checks classification, side-loading, 32-bit answers, ordering and rows on fake
+module lists; `build.ps1` runs it. The panel is only a report of which modules are mapped: it does not say
+that the application draws anything, and `GraphicsPipelineProvider` above still answers the same question
+for DWM.
 
 ## Cached Vulkan inventory
 

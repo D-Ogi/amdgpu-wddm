@@ -45,39 +45,90 @@ namespace Bc250Mon
 
         public const int MaxApps = 3, MaxCandidates = 8;
 
-        // modules: lower-case file names of every image mapped in the process.
-        public static List<ApiPath> Classify(ICollection<string> modules)
+        // Runtime DLLs that Direct3D applications must get from the Windows directory. A copy of one of these
+        // next to the application replaces the system runtime (the translation layers shipped beside a game),
+        // so the application no longer goes through the installed Windows driver and a UMD module in the
+        // process proves nothing about its path. ReplacedRuntimes names the ones found outside \Windows\.
+        static readonly HashSet<string> Runtimes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "d3d12.dll", "d3d11.dll", "d3d10.dll", "d3d10_1.dll", "d3d9.dll", "dxgi.dll" };
+        public static bool IsRuntime(string moduleFileName) { return Runtimes.Contains(moduleFileName ?? ""); }
+        public const string SideLoaded = "replacement DLL next to the app, not the system runtime";
+
+        // The path of one mapped image, as GetMappedFileName gives it (\Device\HarddiskVolumeN\Windows\...).
+        public static bool IsSystemImage(string mappedPath)
+        {
+            string path = (mappedPath ?? "").Replace('/', '\\').ToLowerInvariant();
+            return path.Contains("\\windows\\system32\\") || path.Contains("\\windows\\syswow64\\")
+                || path.Contains("\\windows\\winsxs\\");
+        }
+
+        // modules: lower-case file names of every image mapped in the process. wow64: the process is 32-bit.
+        // replacedRuntimes: the subset of `modules` that are Direct3D runtimes mapped from outside \Windows\.
+        //
+        // A GPU claim needs the whole user-mode stack of one render path: the shell the runtime opened, the
+        // engine that shell loads and the ICD the engine draws with. Each shell loads its engine and ICD by
+        // name in one step (driver/umd/dxvk/umd-entry.cpp, driver/umd/d3d12/adapter-caps.cpp), so a shell on
+        // its own is a device still being created - or a load that failed, and then the runtime falls back to
+        // WARP and d3d10warp.dll is mapped as well, which the WARP row reports.
+        public static List<ApiPath> Classify(ICollection<string> modules, bool wow64 = false,
+                                             ICollection<string> replacedRuntimes = null)
         {
             Func<string, bool> has = modules.Contains;
+            Func<string, bool> replaced = n => replacedRuntimes != null && replacedRuntimes.Contains(n);
             var result = new List<ApiPath>();
-            bool warp = has("d3d10warp.dll");
+            bool warp = has("d3d10warp.dll"), icd = has("amdgpu_wddm_radv.dll");
+            if (replaced("dxgi.dll")) result.Add(Foreign("DXGI", SideLoaded));
             if (has("d3d12.dll") || has("d3d12core.dll"))
-                result.Add(has("amdgpu_wddm_d3d12.dll") ? Gpu("D3D12", "GPU (amdgpu-wddm vkd3d + RADV)")
-                    : warp ? Cpu("D3D12", "CPU (WARP)") : Idle("D3D12", "no UMD loaded"));
+            {
+                bool shell = has("amdgpu_wddm_d3d12.dll"), engine = has("amdgpu_wddm_vkd3d.dll");
+                if (replaced("d3d12.dll")) result.Add(Foreign("D3D12", SideLoaded));
+                else if (shell && engine && icd) result.Add(Gpu("D3D12", "GPU (amdgpu-wddm vkd3d + RADV)"));
+                else if (warp) result.Add(Cpu("D3D12", "CPU (WARP)"));
+                else if (shell) result.Add(Idle("D3D12", engine ? "our D3D12 shell and engine loaded, no ICD yet"
+                                                               : "our D3D12 shell loaded, no engine yet"));
+                // The x86 payload of the release has no D3D12 (BD-064): a 32-bit D3D12 application cannot
+                // reach our driver at all, which is a different answer from "the device is still starting".
+                else if (wow64) result.Add(Foreign("D3D12", "no x86 D3D12 in this package"));
+                else result.Add(Idle("D3D12", "none of our UMDs loaded"));
+            }
             bool d3d11 = has("d3d11.dll"), d3d10 = has("d3d10.dll") || has("d3d10_1.dll");
             if (d3d11 || d3d10)
             {
                 string api = d3d11 ? (d3d10 ? "D3D11+10" : "D3D11") : "D3D10";
-                if (has("amdgpu_wddm_d3d11.dll")) result.Add(Gpu(api, "GPU (amdgpu-wddm DXVK + RADV)"));
-                else if (has("bc250d3d_zink.dll")) result.Add(Gpu(api, "GPU (zink, desktop route)"));
-                else if (has("bc250d3d.dll")) result.Add(Cpu(api, "CPU (llvmpipe, desktop route)"));
-                else if (has("d3d11on12.dll")) result.Add(Idle(api, "via D3D11On12 (D3D12 path)"));
-                else if (warp) result.Add(Cpu(api, "CPU (WARP)"));
-                else if (has("bc250d3d_router.dll")) result.Add(Idle(api, "router loaded, no backend yet"));
-                else result.Add(Idle(api, "no UMD loaded"));
+                bool zink = has("bc250d3d_zink.dll");
+                bool shell = has("amdgpu_wddm_d3d11.dll"), engine = has("amdgpu_wddm_dxvk.dll");
+                if (replaced(d3d11 ? "d3d11.dll" : has("d3d10.dll") ? "d3d10.dll" : "d3d10_1.dll"))
+                    result.Add(Foreign(api, SideLoaded));
+                else
+                {
+                    if (shell && engine && icd) result.Add(Gpu(api, "GPU (amdgpu-wddm DXVK + RADV)"));
+                    else if (zink && icd) result.Add(Gpu(api, "GPU (zink, desktop route)"));
+                    else if (has("bc250d3d.dll")) result.Add(Cpu(api, "CPU (llvmpipe, desktop route)"));
+                    else if (has("d3d11on12.dll")) result.Add(Idle(api, "via D3D11On12 (D3D12 path)"));
+                    else if (warp) result.Add(Cpu(api, "CPU (WARP)"));
+                    else if (shell) result.Add(Idle(api, engine ? "our D3D11 shell and engine loaded, no ICD yet"
+                                                                : "our D3D11 shell loaded, no engine yet"));
+                    else if (zink) result.Add(Idle(api, "our zink UMD loaded, no ICD yet"));
+                    else if (has("bc250d3d_router.dll")) result.Add(Idle(api, "router loaded, no backend yet"));
+                    else result.Add(Idle(api, "none of our UMDs loaded"));
+                }
             }
             if (has("d3d9.dll"))
-                result.Add(has("d3d9on12.dll") ? Idle("D3D9", "via D3D9On12 (D3D12 path)")
-                    : has("bc250umd.dll") ? Cpu("D3D9", "stub UMD, no D3D9 renderer") : Idle("D3D9", "no UMD loaded"));
+                result.Add(replaced("d3d9.dll") ? Foreign("D3D9", SideLoaded)
+                    : has("d3d9on12.dll") ? Idle("D3D9", "via D3D9On12 (D3D12 path)")
+                    : has("bc250umd.dll") ? Cpu("D3D9", "stub UMD, no D3D9 renderer") : Idle("D3D9", "none of our UMDs loaded"));
             if (has("vulkan-1.dll"))
+                // Only the registered system ICD counts here: amdgpu_wddm_radv.dll is the copy our D3D shells
+                // load directly, it is not reached through the Vulkan loader and says nothing about vulkan-1.
                 result.Add(has("vulkan_radeon.dll") ? Gpu("Vulkan", "GPU (RADV ICD)")
-                    : has("vulkan_lvp.dll") ? Cpu("Vulkan", "CPU (lavapipe)") : Idle("Vulkan", "no ICD loaded"));
+                    : has("vulkan_lvp.dll") ? Cpu("Vulkan", "CPU (lavapipe)") : Idle("Vulkan", "none of our ICDs loaded"));
             if (has("opengl32.dll") && result.Count == 0)
                 result.Add(Cpu("OpenGL", "no OpenGL ICD in this package"));
             return result;
         }
         static ApiPath Gpu(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Good }; }
         static ApiPath Cpu(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Warn }; }
+        static ApiPath Foreign(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Warn }; }
         static ApiPath Idle(string api, string path) { return new ApiPath { Api = api, Path = path, Level = Level.Info }; }
 
         // The foreground process first, then processes that run on our GPU path, then the rest, by PID.
@@ -110,6 +161,8 @@ namespace Bc250Mon
         }
         readonly Dictionary<int, Cached> _cache = new Dictionary<int, Cached>();
         string _lastLogged;
+        int _self;
+        uint _session;
 
         public string Name { get { return "apps"; } }
         public TimeSpan Period { get { return TimeSpan.FromSeconds(3); } }
@@ -117,8 +170,9 @@ namespace Bc250Mon
         public void Poll(State state)
         {
             var panel = new Panel { Name = Name, Title = "Active 3D app", Order = 11 };
-            int self = Process.GetCurrentProcess().Id;
-            uint session = (uint)Process.GetCurrentProcess().SessionId;
+            if (_self == 0) using (var me = Process.GetCurrentProcess()) { _self = me.Id; _session = (uint)me.SessionId; }
+            int self = _self;
+            uint session = _session;
             int foreground = WindowPid(GetForegroundWindow());
             var pids = new List<int>();
             if (foreground > 0) pids.Add(foreground);
@@ -178,14 +232,17 @@ namespace Bc250Mon
                 bool wow;
                 var report = new AppReport { Pid = pid, Name = name, Wow64 = IsWow64Process(h, out wow) && wow };
                 var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var replaced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var buffer = new StringBuilder(1024);
                 foreach (var m in modules)
                 {
                     buffer.Length = 0;
-                    if (GetMappedFileNameW(h, m, buffer, buffer.Capacity) > 0)
-                        names.Add(Path.GetFileName(buffer.ToString()).ToLowerInvariant());
+                    if (GetMappedFileNameW(h, m, buffer, buffer.Capacity) <= 0) continue;
+                    string mapped = buffer.ToString(), file = Path.GetFileName(mapped).ToLowerInvariant();
+                    names.Add(file);
+                    if (IsRuntime(file) && !IsSystemImage(mapped)) replaced.Add(file);
                 }
-                report.Apis = Classify(names);
+                report.Apis = Classify(names, report.Wow64, replaced);
                 _cache[pid] = new Cached { CreateTime = create, ModuleCount = modules.Length, ScannedUtc = DateTime.UtcNow, Report = report };
                 return report;
             }
