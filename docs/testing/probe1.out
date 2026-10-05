@@ -1,0 +1,124 @@
+=== display class key of the BC-250
+device status OK class Display
+  UserModeDriverName (MultiString) = bc250umd.dll | C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll | C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll | C:\Program Files\amdgpu-wddm\d3d12\amdgpu_wddm_d3d12.dll
+  UserModeDriverNameWow = <absent>
+  UserModeDListDriverName = <absent>
+  OpenGLDriverName = <absent>
+  OpenGLDriverNameWow = <absent>
+  OpenGLVersion = <absent>
+  OpenGLFlags = <absent>
+  VulkanDriverName (MultiString) = C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json
+  VulkanDriverNameWow = <absent>
+  VulkanImplicitLayers = <absent>
+  OpenCLDriverName = <absent>
+  OpenCLDriverNameWow = <absent>
+  AmdgpuWddmSparseBinding = <absent>
+  DriverVersion (String) = 0.7.199.100
+  FeatureScore (DWord) = 248
+  HardwareInformation.qwMemorySize (QWord) = 8547139584
+  HardwareInformation.MemorySize (DWord) = -1
+  other value names: FeatureScore, DriverVersion, HardwareInformation.qwMemorySize, HardwareInformation.MemorySize, HardwareInformation.ChipType, HardwareInformation.DacType, HardwareInformation.AdapterString, HardwareInformation.BiosString
+=== amdgpu-wddm policy
+[HKLM:\SOFTWARE\amdgpu-wddm]
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\AppRouter]
+  Mode (String) = gpu-default
+  GpuUmdPath (String) = C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+  Allow (MultiString) = dxdiag.exe
+  Deny (MultiString) = witcher3.exe
+  RouteLogDirectory (String) = C:\BC250\tmp\approuter-fix\route-logs
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\D3D12]
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\D3D12\Applications]
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\D3D12\Applications\witcher3.exe]
+  Experiment (String) = present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\DesktopRouter]
+  CpuUmdPath (String) = C:\Program Files\amdgpu-wddm\desktop\bc250d3d.dll
+  DwmForceCpu (DWord) = 0
+  RequireKmdSwitches (DWord) = 1
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\HostedUmd]
+[Registry::HKEY_LOCAL_MACHINE\SOFTWARE\amdgpu-wddm\Release]
+  Version (String) = 0.7.199.100-tester.11
+  InstallDir (String) = C:\Program Files\amdgpu-wddm
+  InstallRoot (String) = C:\Program Files\amdgpu-wddm
+  InstalledUtc (String) = 2026-10-03T21:56:51.9352328Z
+  AppliedDefaults (String) = {"parameters":{"EnableMmio":1,"EnableVram":1,"EnableVramWrite":1,"EnableGart":1,"EnablePsp":1,"EnableGfx":1,"EnableIh":1,"EnableDcnWrite":1,"EnableVidPnFlip":1,"EnableGpuVa":1,"EnableGpuSubmit":1,"EnablePagingNode":1,"EnablePresentBlit":1,"EnableFullWddm":2,"EnableNativeSmu":1,"EnableNativePteCopy":1,"EnableHandleIdentityProbe":1,"EnableGpuPresentBlit":1,"EnableCddDwmInterop":1,"DpmMode":1,"DpmMaxMHz":1500,"KeepLog":0},"desktop_router":{"DwmForceCpu":0,"RequireKmdSwitches":1},"app_router":{"Mode":"allowlist","Allow":["dxdiag.exe"],"Deny":["witcher3.exe"]},"d3d12_applications":{"witcher3.exe":{"Experiment":"present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay"}}}
+=== Khronos
+[HKLM:\SOFTWARE\Khronos\Vulkan\Drivers]
+  C:\Program Files\amdgpu-wddm\vulkan\radeon_icd.json (DWord) = 0
+[HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers] absent
+[HKLM:\SOFTWARE\Khronos\Vulkan\ImplicitLayers]
+  C:\Program Files (x86)\Steam\SteamOverlayVulkanLayer64.json (DWord) = 0
+  C:\Program Files (x86)\Steam\SteamFossilizeVulkanLayer64.json (DWord) = 0
+[HKLM:\SOFTWARE\Khronos\OpenCL\Vendors]
+[HKLM:\SOFTWARE\WOW6432Node\Khronos\OpenCL\Vendors] absent
+=== KMD parameters (selected)
+  CuModeLastApplied = 24
+  CuModeLastReason = 0
+  DpmConfirmed = -805304868
+  DpmLastMode = 1
+  DpmLastReason = 0
+  DpmMaxMHz = 1500
+  DpmMode = 1
+  EnableCddDwmInterop = 1
+  EnableDcnWrite = 1
+  EnableFullWddm = 2
+  EnableGart = 1
+  EnableGfx = 1
+  EnableGpuPresentBlit = 1
+  EnableGpuSubmit = 1
+  EnableGpuVa = 1
+  EnableHandleIdentityProbe = 1
+  EnableHangBugcheck = 0
+  EnableIh = 1
+  EnableMmio = 1
+  EnableMmioWrite = 0
+  EnableNativePteCopy = 1
+  EnableNativeSmu = 1
+  EnablePagingNode = 1
+  EnablePresentBlit = 1
+  EnablePsp = 1
+  EnableVidPnFlip = 1
+  EnableVram = 1
+  EnableVramWrite = 1
+  InteropLastEnd = 3
+  InteropLastReason = 0
+  InteropLastState = 771
+  InteropSession = 189
+  KeepLog = 0
+  UnconfirmedStarts = 0
+=== GraphicsDrivers (HAGS etc.)
+  HwSchMode = <absent>
+  TdrDelay = 10
+  TdrLevel = <absent>
+  TdrDebugMode = <absent>
+  PlatformSupportMiracast = 1
+=== Our DLLs in SysWOW64 / System32
+  C:\Windows\System32\bc250umd.dll 4096 bytes
+  C:\Windows\SysWOW64\bc250umd.dll absent
+  C:\Windows\System32\bc250d3d_router.dll absent
+  C:\Windows\SysWOW64\bc250d3d_router.dll absent
+  C:\Windows\System32\amdgpu_wddm_d3d12.dll absent
+  C:\Windows\SysWOW64\amdgpu_wddm_d3d12.dll absent
+  C:\Windows\System32\amdgpu_wddm_d3d11.dll absent
+  C:\Windows\SysWOW64\amdgpu_wddm_d3d11.dll absent
+  C:\Windows\System32\vulkan-1.dll 1711544 bytes
+  C:\Windows\SysWOW64\vulkan-1.dll absent
+  C:\Windows\System32\opengl32.dll 933888 bytes
+  C:\Windows\SysWOW64\opengl32.dll 781312 bytes
+  C:\Windows\System32\OpenCL.dll 118784 bytes
+  C:\Windows\SysWOW64\OpenCL.dll 77824 bytes
+=== Hardware MFTs (video encode/decode) by enumeration flags
+  VIDEO_ENCODER hardware MFTs: hr 0x00000000, count 0
+  VIDEO_DECODER hardware MFTs: hr 0x00000000, count 0
+  VIDEO_PROCESSOR hardware MFTs: hr 0x00000000, count 0
+=== Display: video controller and monitors
+  BC-250 GPU (amdgpu-wddm): 1920x1200 @ 59 Hz, 32 bpp, driver 0.7.199.100, status OK
+  monitors (WmiMonitorID count): 0
+  screens: 1
+=== Installed release
+[HKLM:\SOFTWARE\amdgpu-wddm\Release]
+  Version (String) = 0.7.199.100-tester.11
+  InstallDir (String) = C:\Program Files\amdgpu-wddm
+  InstallRoot (String) = C:\Program Files\amdgpu-wddm
+  InstalledUtc (String) = 2026-10-03T21:56:51.9352328Z
+=== Scheduled task / power plan
+Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
