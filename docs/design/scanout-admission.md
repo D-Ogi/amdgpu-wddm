@@ -87,7 +87,7 @@ that revision did. The INF does not write the value, as it does not write `Offer
 and `WddmStart` logs which way it read.
 
 The switch exists for the release train, not for the feature: b18 carries three driver changes in one
-revision and one lab session validates them together, so a failure must be attributable to one of them
+revision and one lab session checks them together, so a failure must point to one of them
 without a rebuild (`scratch/train/TRAIN-b18.md` rule 4). It is not the whole lever for this wagon. No
 shipped shell asks for scan-out unless the operator sets `AMDGPU_WDDM_D3D12_EXPERIMENT`
 (`scanout-flip-1920x1200`), so the user-mode variable turns the path off for an application while this
@@ -109,15 +109,15 @@ crashed game leaves HUBP0 scanning VRAM that VidMm is free to hand to the next a
 back short of a reboot. The `vidpn-flip` gate drives both branches: the recorded allocation and any
 other one.
 
-The record is taken **before** the plane is programmed, and that order is the whole point of it. The
+The driver takes the record **before** it programs the plane, and that order is the whole point of it. The
 write to HUBP0 is what makes the new buffer the one the display core reads, so a record published after
 that write leaves a window in which `DestroyAllocation` compares the buffer it is about to free against
 the previous flip's object, misses, and frees a buffer the plane is reading. The other order costs
 nothing: a record taken for a buffer the plane has not reached yet only restores the firmware surface
 early, and the flip that follows undoes that. A programming sequence that fails puts the previous
-object back, unless a destroy has taken the record away meanwhile, because that destroy then owns the
+object back, unless a destroy took the record away first, because that destroy then owns the
 restore. The `vidpn-flip` gate drives the interleaving itself: its `DcnFlipSourceAddress` runs a destroy
-of the buffer being programmed, at the moment the plane becomes that buffer's.
+of the buffer it programs, at the moment the plane becomes that buffer's.
 
 ## What a refusal does, and what it does not
 
