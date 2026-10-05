@@ -226,7 +226,7 @@ struct Session {
     defined(INTERACTIVE_FLIP) + defined(INTERACTIVE_SPARSE) + \
     defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) + defined(INTERACTIVE_RAYSTATE) + \
     defined(INTERACTIVE_RAYGROW) + defined(INTERACTIVE_RAYCOLLECTION) + defined(INTERACTIVE_GAMELOAD) + \
-    defined(INTERACTIVE_RESETCHURN) + defined(INTERACTIVE_RECORDBENCH) > 1
+    defined(INTERACTIVE_RESETCHURN) + defined(INTERACTIVE_RECORDBENCH) + defined(INTERACTIVE_CONFORMANCE) > 1
 #error one variant of the copy verb per build
 #endif
 #ifdef INTERACTIVE_DRAW
@@ -259,6 +259,11 @@ struct Session {
 #endif
 #ifdef INTERACTIVE_RECORDBENCH
 #include "interactive-recordbench.h"
+#endif
+#ifdef INTERACTIVE_CONFORMANCE
+// The only variant outside this directory: conformance.h belongs to tools\win\conformance-clients and reaches the
+// compiler through that directory's include path (its build.ps1 passes both directories).
+#include "conformance.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
@@ -324,6 +329,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=resetchurn_run(session);break;
 #elif defined(INTERACTIVE_RECORDBENCH)
         case Verb::Copy:hr=recordbench_run(session);break;
+#elif defined(INTERACTIVE_CONFORMANCE)
+        case Verb::Copy:hr=conformance_run(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif

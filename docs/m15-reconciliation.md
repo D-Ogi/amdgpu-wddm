@@ -19,7 +19,8 @@ decision of 2026-09-28 their logs, configurations, hashes and metadata stay in t
 published; this file names the trial and its headline outcome only. The exceptions are the trials behind a
 `facts.md` row, whose write-ups and client-side records are committed as evidence: E47 and E49 (game sessions)
 and E50 (M778-M782: rendering, Present, FL 12_1, ROV, conservative rasterization, DXR). Section 4 lists what the
-rule means for closing M15.
+rule means for closing M15. The conformance client behind E50's ROV, conservative rasterization and indirect
+DispatchRays rows, which that write-up calls absent from the repository, is `tools/win/conformance-clients`.
 
 ## 1. Purpose and the owner's decisions it records
 

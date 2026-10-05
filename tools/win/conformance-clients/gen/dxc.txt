@@ -1,0 +1,10 @@
+dxc <BC250_ROOT>\toolchain\nuget\microsoft.windows.sdk.cpp\c\bin\10.0.26100.0\x64\dxc.exe
+dxc version dxcompiler.dll: 1.8 - 1.8.2502.11 (239921522); dxil.dll: 1.8(1.8.2502.11)
+dxc sha256 EF3B6B3BA1727B4825CEEDBAAB6A854EAA34061DF31F27D9EAFBCE544DF54AA2
+dxc -nologo -T vs_6_0 -E vs_main -Vn g_raster_vs -Fh gen\raster_vs.h shaders\raster.hlsl
+dxc -nologo -T ps_6_0 -E ps_fold -D ORDERED -Vn g_rov_ps_ordered -Fh gen\rov_ps_ordered.h shaders\raster.hlsl
+dxc -nologo -T ps_6_0 -E ps_fold -Vn g_rov_ps_plain -Fh gen\rov_ps_plain.h shaders\raster.hlsl
+dxc -nologo -T ps_6_0 -E ps_tag -Vn g_cr_ps_tag -Fh gen\cr_ps_tag.h shaders\raster.hlsl
+dxc -nologo -T ps_6_0 -E ps_inner -Vn g_cr_ps_inner -Fh gen\cr_ps_inner.h shaders\raster.hlsl
+dxc -nologo -T lib_6_3 -Vn g_dxr_lib -Fh gen\dxr_lib.h shaders\dxr.hlsl
+dxc -nologo -T cs_6_0 -E main -Vn g_dxr_args_cs -Fh gen\dxr_args_cs.h shaders\dxr_args.hlsl
