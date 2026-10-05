@@ -41,6 +41,8 @@ flowchart LR
   M581["M581"]
   M583["M583"]
   M665["M665"]
+  M773["M773"]
+  M792["M792"]
   M139 --> M50
   M252 --> M253
   M253 --> M166
@@ -51,6 +53,7 @@ flowchart LR
   M569 --> M546
   M583 --> M581
   M665 --> M569
+  M792 --> M773
   M510 --> M508
   M516 --> M515
   classDef other stroke-dasharray:4 3
