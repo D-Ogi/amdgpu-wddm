@@ -11,6 +11,7 @@ HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
         desc.MipLevels!=1 || desc.ArraySize!=1 || desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality ||
         !runtime_surface_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
+    out.primary=request.primary; out.vidpn_source=request.vidpn_source;
     out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
     out.phase=SurfacePhase::failed;
     HRESULT hr=allocate_runtime_surface(runtime,request,out.allocation);

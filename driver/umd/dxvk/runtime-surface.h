@@ -16,6 +16,12 @@ struct RuntimeSurface {
     SurfaceGpuMapping mapping{};
     RuntimeTexture texture{};
     D3D11_TEXTURE2D_DESC1 desc{};
+    // What the runtime said about this surface when it was created: a primary is the buffer of a
+    // flip-model or fullscreen swap chain, and vidpn_source is the video present source its primary
+    // descriptor named. An adopted (opened) surface is nobody's primary here: the record travels with
+    // the creator, not with the handle. CheckDirectFlipSupport reads both (M15.14).
+    bool primary=false;
+    UINT vidpn_source=0;
     UINT pitch=0;
     UINT64 bytes=0;
     SurfacePhase phase=SurfacePhase::empty;
