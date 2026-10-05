@@ -127,9 +127,9 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
-| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `tools`, `control`) and `C:\Windows\System32\bc250umd.dll` |
+| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`), `C:\Windows\System32\bc250umd.dll` and its 32-bit copy `C:\Windows\SysWOW64\bc250umd.dll` |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
-| Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` |
+| Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
@@ -149,7 +149,8 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - Vulkan applications run on the GPU through the Vulkan ICD.
 - Direct3D 11 applications and games run on the CPU (software rendering) by default, so they are slow. Only applications on the allowlist in
   `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` (value `Allow`, by default only `dxdiag.exe`) use the GPU. Use the Direct3D 12 mode of a game if it has one.
-- 32-bit applications do not have a driver yet.
+- 32-bit Direct3D 10/11 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the same
+  routing rules as 64-bit applications. 32-bit Direct3D 12 applications do not have a driver yet.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 
 ## If something fails

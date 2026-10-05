@@ -13,12 +13,14 @@
 # Gates: every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1. Nothing here opens a window: child processes
 # run with CreateNoWindow and redirected output.
+[CmdletBinding()]
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.199.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.199.100-tester.11',
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$DriverVer = '0.7.205.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.205.100-tester.11',
+    [string]$KitVersion = '10.0.26100.0',
+    [string]$SetupApp                            # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
@@ -53,17 +55,59 @@ foreach ($f in $sources.files) {
     Copy-Item -LiteralPath $src -Destination $dst
     '  {0}  {1,-12} {2}' -f $h.Substring(0, 8), $f.component, $f.path
 }
+# The D3D11 shell refuses an engine or ICD whose SHA-256 differs from its caps record (adapter-config.h,
+# AdapterConfigRecord2: engine_sha256 at byte 68, icd_sha256 at byte 100) before it loads them. b15 shipped a new ICD
+# with the old record and every D3D11 device failed (ERROR_CRC): check each record against its siblings here.
+foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse -File -Filter 'amdgpu_wddm_d3d11.config') {
+    $raw = [IO.File]::ReadAllBytes($cfg.FullName)
+    if ($raw.Length -ne 132 -or [BitConverter]::ToUInt32($raw, 0) -ne 0x4334314D) { throw "$($cfg.FullName): not a 132-byte M14C caps record" }
+    foreach ($pin in @(@{ name = 'amdgpu_wddm_dxvk.dll'; at = 68 }, @{ name = 'amdgpu_wddm_radv.dll'; at = 100 })) {
+        $want = -join ($raw[$pin.at..($pin.at + 31)] | ForEach-Object { $_.ToString('X2') })
+        $have = (Get-FileHash -LiteralPath (Join-Path $cfg.DirectoryName $pin.name) -Algorithm SHA256).Hash
+        if ($want -ne $have) { throw "$($cfg.FullName) pins $($pin.name) $($want.Substring(0, 8)), the package has $($have.Substring(0, 8)): regenerate the record (tools/build/write-umd-config.py)" }
+    }
+    '  caps record {0} pins its engine and ICD' -f $cfg.FullName.Substring($pkg.Length + 1)
+}
 
 Write-Host 'installer and documents'
+# The start-confirm task's scripts: it also writes the running-release witness (release-witness.ps1).
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'dwm-session.ps1', 'release-witness.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
     if ($f.Extension -eq '.cmd') { Copy-Item -LiteralPath $f.FullName -Destination $pkg } else { Copy-Item -LiteralPath $f.FullName -Destination $inst }
 }
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
-foreach ($f in 'start-confirm.ps1', 'start-confirm-core.ps1', 'dwm-session.ps1') { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
+foreach ($f in $taskScripts) { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
+# Release notes (GUI plan WU-044, C16): docs/testing/release-notes/<version>.md in English, with the four sections of the
+# release checklist; the setup window shows them before any change. A translation <version>.<lang>.md goes in as
+# RELEASE-NOTES.<lang>.md; without one the window shows the English text, labelled as English.
+$notesDir = Join-Path $repo 'docs\testing\release-notes'
+$notes = Join-Path $notesDir "$Version.md"
+if (-not (Test-Path -LiteralPath $notes)) { throw "no release notes for ${Version}: $notes" }
+$notesText = Get-Content -LiteralPath $notes -Raw
+foreach ($h in 'New', 'Fixed', 'Known issues', 'Settings affected') {
+    if ($notesText -notmatch ('(?m)^## ' + [regex]::Escape($h) + '\s*$')) { throw "release notes $notes lack the section '## $h'" }
+}
+Copy-Item -LiteralPath $notes -Destination (Join-Path $pkg 'RELEASE-NOTES.md')
+foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md") {
+    $lang = $t.Name.Substring($Version.Length + 1) -replace '\.md$', ''
+    if ($lang -notmatch '^[a-z]{2}$') { throw "release notes translation $($t.Name): expected <version>.<two-letter language>.md" }
+    Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
+}
+'  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
+# The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The installer's
+# continuation runs it from the staged closure after each restart that a setup-window run asked for.
+if ($SetupApp) {
+    $setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
+    if (-not (Test-Path -LiteralPath $setupExe)) { throw "-SetupApp ${SetupApp}: no amdgpu_wddm_setup.exe" }
+    $setupDst = Join-Path $pkg 'setup'
+    [void][IO.Directory]::CreateDirectory($setupDst)
+    foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File | Where-Object { $_.Extension -in '.exe', '.config' }) { Copy-Item -LiteralPath $f.FullName -Destination $setupDst }
+    '  setup window: {0} ({1})' -f $setupExe, (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.Substring(0, 8)
+}
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
 # The release's own third-party list (each bundled file and its licence file) and the licence texts, each from the
 # source that release-sources.json records (repository, path, commit) and refused unless its SHA256 matches.
@@ -174,6 +218,8 @@ function Get-InstallLocation([string]$PackagePath) {
     switch -Regex ($PackagePath) {
         '^payload/kmd/' { return "DriverStore (bc250kmd.inf)\$leaf" }
         '^payload/system32/' { return "%SystemRoot%\System32\$leaf" }
+        '^payload/syswow64/' { return "%SystemRoot%\SysWOW64\$leaf" }
+        '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
         '^payload/(\w+)/' { return "<InstallDir>\$($Matches[1])\$leaf" }
@@ -181,13 +227,23 @@ function Get-InstallLocation([string]$PackagePath) {
     return $null
 }
 $components = @()
-foreach ($f in $sources.files + @([pscustomobject]@{ component = 'tool'; path = 'payload/tools/start-confirm.ps1' }, [pscustomobject]@{ component = 'tool'; path = 'payload/tools/start-confirm-core.ps1' }, [pscustomobject]@{ component = 'tool'; path = 'payload/tools/dwm-session.ps1' }, [pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' })) {
+$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' })
+foreach ($f in $sources.files + $extra) {
     $p = Join-Path $pkg ($f.path -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
     $components += [ordered]@{ role = $f.component; package_path = $f.path; install_path = (Get-InstallLocation $f.path); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
 }
 # Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
 foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
+# The compatibility record (installer\compatibility.ps1, GUI plan C7): written from the final INF, installer and payload,
+# listed in manifest.json like every other file, and verified below once the manifest exists.
+. (Join-Path $PSScriptRoot 'installer\engine.ps1')
+. (Join-Path $PSScriptRoot 'installer\release-witness.ps1')
+. (Join-Path $PSScriptRoot 'installer\compatibility.ps1')
+$compat = New-CompatibilityRecord -PackageRoot $pkg -Version $Version -Firmware $firmware -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -DriverVer $DriverVer
+if (-not $compat.no_live_rebind.reboot_directive) { throw 'compatibility record: the packaged INF lacks the Reboot directive' }
+[IO.File]::WriteAllText((Join-Path $pkg $script:CompatibilityFile), ($compat | ConvertTo-Json -Depth 6))
+'  compatibility record: engine {0}, Reboot directive in [{1}], {2} firmware files, settings table schema {3}' -f $compat.engine.contract, ($compat.no_live_rebind.install_sections -join '], ['), @($compat.firmware.files).Count, $compat.settings.table_schema
 $files = @()
 foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object FullName) {
     $rel = $f.FullName.Substring($pkg.Length + 1) -replace '\\', '/'
@@ -220,6 +276,9 @@ $manifest = [ordered]@{
     files = $files
 }
 [IO.File]::WriteAllText((Join-Path $pkg 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8))
+$cv = Test-CompatibilityRecord -PackageRoot $pkg
+if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
+'  compatibility record verifies against the package'
 Compress-Archive -Path $pkg -DestinationPath $zip
 '{0} files, package {1}' -f $files.Count, $pkg
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash

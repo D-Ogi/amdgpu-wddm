@@ -1,35 +1,36 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.199.1",
-  "kmd_abi": "0x000700C7",
+  "kmd_version": "0.7.205.1",
+  "kmd_abi": "0x000700CD",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 0aec4c58 (kmd-t11)",
+    "kmd": "bc250-win 2e61d1fe (kmd205-thermal-subfloor)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
-    "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1",
-    "d3d12_icd": "mesa fork amdgpu-wddm/draw-path ae98c795",
+    "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/compile-limiter 220099f5",
+    "d3d12_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
     "d3d11_shell": "bc250-win m14/dxgi-private-hints 7abf21de",
     "d3d11_engine": "dxvk fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49",
-    "d3d11_icd": "mesa fork amdgpu-wddm/quiet-stderr 89ef0dc8",
+    "d3d11_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
+    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm 7ae6462f + x86 patch, engine dxvk ebeadc49, ICD mesa 091ad563 + x86 patch 9C645734; no x86 D3D12",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "files": [
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/bd060/build-kmd-t11/package/bc250kmd.inf",
-      "sha256": "FAA74E55C23D6BAF5B579BCCE6679FED3BE7D34842B82F297A0EA3DD5AC5837F",
+      "source": "scratch/subfloor/build-kmd/package/bc250kmd.inf",
+      "sha256": "E175FEC41288DC63BD934A002D5BC4256A902D7D38033CD58DB404126037E0FA",
       "size": 8013,
-      "role": "KMD 0.7.199.1 INF (commit 0aec4c58, kmd-t11: INF strings name the project); the release re-stamps DriverVer and adds the Reboot directive"
+      "role": "KMD 0.7.205.1 INF (commit 2e61d1fe, kmd205-thermal-subfloor on kmd204-warm87 36745de5); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/bd060/build-kmd-t11/package/bc250kmd.sys",
-      "sha256": "4862482EF5D8A4B08D0475D330B53A4D7454D841E4C78EAFECC6553E682C9F89",
-      "size": 480144,
-      "role": "KMD 0.7.199.1 (commit 0aec4c58, kmd-t11: BD-060 allocation counters, INF strings); re-signed with the release certificate, code unchanged"
+      "source": "scratch/subfloor/build-kmd/package/bc250kmd.sys",
+      "sha256": "E38F0B5FDCB034B4852A225FCAFDF0A4B1C2A7D7FABE6F66742B3C08F4D94480",
+      "size": 483216,
+      "role": "KMD 0.7.205.1 (commit 2e61d1fe, kmd205-thermal-subfloor: thermal-only points at 900 and 800 MHz / 820 mV below the 1000 MHz floor, owner 2026-10-05; on kmd204-warm87: DPM warm zone at 87 C, raises one level per 1-4 s from 70 C to 87 C, on kmd203-dpm-ramp, on kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
@@ -50,26 +51,26 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/m15/dp5-freeze/engine/amdgpu_wddm_vkd3d.dll",
-      "sha256": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
-      "size": 3696128,
-      "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/draw-path c3710ac1)"
+      "source": "scratch/m15/pso-cache/engine-artifact-6/amdgpu_wddm_vkd3d.dll",
+      "sha256": "5D4C1CB20C0B00DE3366EF5E87AA1E1BDBAD9D45A0FB15E8E9841E8AAF61BF14",
+      "size": 3701248,
+      "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/compile-limiter 220099f5: pipeline compile limiter, cache hits without a slot, 2 slots, 1 slot from 80 C die temperature; driver cache snapshot every 2 s off the compiling thread)"
     },
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/m15/dp5-freeze/icd/amdgpu_wddm_radv.dll",
-      "sha256": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC",
+      "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
+      "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
       "size": 22361600,
-      "role": "D3D12 ICD (mesa fork amdgpu-wddm/draw-path ae98c795)"
+      "role": "D3D12 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563: MESA_DISK_CACHE_SINGLE_FILE=1 keeps the shader disk cache, one writer thread)"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/approuter-fix/build-router-06a0975b/bc250d3d_router.dll",
-      "sha256": "F65C0E0419B4BE6D82212A269086E96FBFD649243847A3B0017A78646A19F3B8",
-      "size": 22016,
-      "role": "desktop/application router (amdgpu-wddm 06a0975b, driver/umd/router: gpu-default keeps Windows components on the CPU UMD)"
+      "source": "scratch/approuter-fix/build-router-631d25da/bc250d3d_router.dll",
+      "sha256": "692D9060203763F1278DA68E395932E606FEA74574CCD1A5071D2F76AFB62E3B",
+      "size": 22528,
+      "role": "desktop/application router (amdgpu-wddm 631d25da, driver/umd/router: gpu-default keeps Windows components and unresolved images on the CPU UMD)"
     },
     {
       "component": "desktop-umd",
@@ -98,23 +99,23 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_d3d11.dll",
-      "sha256": "7E9F1692157E79FEC9B0BC2E9F92E73BD4907D00ECBF4885E5B88ABC1B3F76A1",
-      "size": 598528,
-      "role": "GPU D3D11 shell (amdgpu-wddm m14/dxgi-private-hints 7abf21de: engine-private DXGI hints, static CRT; built against DXVK fork 0c187731; app-route-quiet)"
+      "source": "scratch/bd065/artifact/amdgpu_wddm_d3d11.dll",
+      "sha256": "AD750E519F9260F7CDC554B391880CF051DA4C168A5338521CD8C3FFE288D797",
+      "size": 605184,
+      "role": "GPU D3D11 shell (amdgpu-wddm bd065-shell-bgra-shadow 32b074a5 = BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, on m14/d3d11-composed-primaries 7ae6462f = 7abf21de engine-private DXGI hints, static CRT + 3274b3d3 shared A8/FP16/RGB10A2 runtime surfaces + composed RGB10A2/RGBA16F primaries that keep their VidPn source + surface step diagnostics; built against DXVK fork 0c187731)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_d3d11.config",
-      "sha256": "78C8B5E7670FB9A1B2F0E8B0FC0C28779D0D32F229852EC4B375906358992C1A",
+      "source": "scratch/m15/pso-cache/umd-config/config-72e1d192.bin",
+      "sha256": "4AEA1C550D42757F0489ECA274C5D4FE23AD599CD6AC237C8C7EC69CC932CA3F",
       "size": 132,
-      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD D73D827D (tools/build/write-umd-config.py; capabilities carried from fl12caps001, the exact-pair probe quietcaps001 is pending)"
+      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD 72E1D192 (tools/build/write-umd-config.py; capabilities carried from FD848638, the record of F9DCB33B; only the ICD pin changes)"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_dxvk.dll",
       "sha256": "7D28D8F57368C89082E65FD33991AE988B3523C7922909206F0598BF6FBB0554",
       "size": 4403200,
       "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49: r8 0c187731 + the initializer's throttle wait)"
@@ -122,10 +123,10 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/approuter-fix/d3d11-quiet/amdgpu_wddm_radv.dll",
-      "sha256": "D73D827D16D5304D481CF85A07EB38652B17AB3E88CC53A901A6F9757D204808",
-      "size": 22354944,
-      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/quiet-stderr 89ef0dc8, static CRT, an ancestor of the D3D12 ICD's ae98c795)"
+      "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
+      "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
+      "size": 22361600,
+      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563, static CRT): the same build as payload/d3d12/amdgpu_wddm_radv.dll, so a process using D3D11 and D3D12 loads one RADV build"
     },
     {
       "component": "vulkan-icd",
@@ -144,12 +145,84 @@
       "role": "Vulkan ICD manifest"
     },
     {
+      "component": "d3d9-stub-wow64",
+      "path": "payload/syswow64/bc250umd.dll",
+      "source": "scratch/wow64/artifact/stub/bc250umd.dll",
+      "sha256": "5114AE264CA2D3B6AA6762C9A69A160F7F5D1D8007A12C2B8AF78A39F9ED4123",
+      "size": 3584,
+      "role": "x86 UMD stub, D3D9 slot of UserModeDriverNameWow (driver/umd-stub, BD-064)"
+    },
+    {
+      "component": "desktop-umd-wow64",
+      "path": "payload/wow64/desktop/bc250d3d_router.dll",
+      "source": "scratch/wow64/artifact/router/bc250d3d_router.dll",
+      "sha256": "7D09B81ECD2B1BA976C10362FCD3638C9794E425EF35DC05A6E44C222B4FAD36",
+      "size": 130560,
+      "role": "x86 application router for 32-bit processes (amdgpu-wddm wow64/router-x86 on 631d25da: the Wow path values, the 64-bit policy keys read through KEY_WOW64_64KEY, plain export names; static CRT; BD-064)"
+    },
+    {
+      "component": "desktop-umd-wow64",
+      "path": "payload/wow64/desktop/bc250d3d.dll",
+      "source": "scratch/wow64/artifact/cpu/bc250d3d.dll",
+      "sha256": "81DC610BC4DF876DFE119C7BF027F2D08E46333C1F26823F20017D0D80D2FEE2",
+      "size": 56194048,
+      "role": "x86 CPU D3D11 UMD for 32-bit processes (mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c, unmodified, LLVM 23.1.2 x86; the router's fallback route; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.dll",
+      "sha256": "69AFE349D430E63029959DBE0D7C805F1D9AC5C7AB0C0A179DB91BF3F89430C6",
+      "size": 521728,
+      "role": "x86 GPU D3D11 shell for 32-bit processes (amdgpu-wddm 32b074a5 = 7ae6462f + BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, + the x86 export and test patch; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
+      "source": "scratch/m15/pso-cache/umd-config/config-x86-e03a79ca.bin",
+      "sha256": "388DA562248F5D4047B5EDC9EAD65CB321F50796280DB5CADDD4AC40F77B173B",
+      "size": 132,
+      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and ICD E03A79CA (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the ICD pin changes)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_dxvk.dll",
+      "sha256": "0D4AE6590EAB3D0116CECFDD0DCB5C237CF2BFA8C6EE3BA3054F56E7843E281C",
+      "size": 4005888,
+      "role": "x86 GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49, unmodified; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
+      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
+      "size": 20133888,
+      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563 + the x86 host-import and fallback-stub patch 9C645734, static CRT; BD-064)"
+    },
+    {
+      "component": "vulkan-icd-wow64",
+      "path": "payload/wow64/vulkan/vulkan_radeon.dll",
+      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
+      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
+      "size": 20133888,
+      "role": "x86 system Vulkan ICD for 32-bit processes (the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll; BD-064)"
+    },
+    {
+      "component": "vulkan-icd-wow64",
+      "path": "payload/wow64/vulkan/radeon_icd.json",
+      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "size": 131,
+      "role": "x86 Vulkan ICD manifest (the 64-bit manifest: library_path is relative to the manifest)"
+    },
+    {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/release/control-app/build/app-dd30a44d/bc250kmd_cli.exe",
+      "source": "scratch/release/control-app/build/app-7294c09d/bc250kmd_cli.exe",
       "sha256": "EE9C508119AEFDA461D25E99C9527476DDF6628C8B7E8E2A57257B4026894B14",
       "size": 219648,
-      "role": "KMD control CLI from the control-app build (release/control-app-t11 dd30a44d; the same bytes as d8347cf0): the same bc250kmd_cli.c as bc250control.dll, every form in cli-commands.json (test-cli-commands.ps1)"
+      "role": "KMD control CLI from the control-app build (gui/p1-control 7294c09d; the same bytes as dd30a44d and d8347cf0): the same bc250kmd_cli.c as bc250control.dll, every form in cli-commands.json (test-cli-commands.ps1)"
     },
     {
       "component": "tool",
@@ -162,24 +235,24 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/release/control-app/build/app-dd30a44d/amdgpu_wddm_control.exe",
-      "sha256": "BA751C0263D5C15E0ABB0D03783EF877751B88FB1F310E6E0E1D65C10ABB1130",
-      "size": 197120,
-      "role": "control application 0.4.4.1 (release/control-app-t11 dd30a44d)"
+      "source": "scratch/release/control-app/build/app-7294c09d/amdgpu_wddm_control.exe",
+      "sha256": "DB1CA2F23E287D0D4724EC61AA00133AB45472ECC0B22286B6641DF2AEDA8D46",
+      "size": 583168,
+      "role": "control application 0.5.0.0 (GUI phase 1, gui/p1-control 7294c09d)"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/release/control-app/build/app-dd30a44d/bc250control.dll",
-      "sha256": "7B16284CD01B9162FB71DFCB3BE501681FD23C2AB2A0F3634B0D224618E9CD0A",
+      "source": "scratch/release/control-app/build/app-7294c09d/bc250control.dll",
+      "sha256": "F2D7B0BBA3341A67824B0A51224550223BA9BE7E43CC38F8B3AF8B5FB001E4F0",
       "size": 147968,
-      "role": "control DLL for the control application (dd30a44d build, static CRT; the same bytes as d8347cf0 and tester.10's)"
+      "role": "control DLL for the control application (gui/p1-control 7294c09d build, static CRT)"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/release/control-app/build/app-dd30a44d/bc250control.dll",
-      "sha256": "7B16284CD01B9162FB71DFCB3BE501681FD23C2AB2A0F3634B0D224618E9CD0A",
+      "source": "scratch/release/control-app/build/app-7294c09d/bc250control.dll",
+      "sha256": "F2D7B0BBA3341A67824B0A51224550223BA9BE7E43CC38F8B3AF8B5FB001E4F0",
       "size": 147968,
       "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
     },

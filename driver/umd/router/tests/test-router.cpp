@@ -411,7 +411,10 @@ static void IdentityTests()
         printf("  note: no 8.3 alias on the layout volume either; fixture alias case skipped\n");
     cases.push_back({base + L"\\Windows2\\game.exe", base + L"\\Windows", Component::No, "Windows2 sibling"});
     cases.push_back({base + L"\\Windows.old\\game.exe", base + L"\\Windows", Component::No, "Windows.old sibling"});
-    cases.push_back({Layout + L"\\dwm\\dwm.exe", win, Component::No, "image outside the Windows directory"});
+    wchar_t self[MAX_PATH];
+    const DWORD selfn = GetModuleFileNameW(nullptr, self, MAX_PATH);
+    if (selfn && selfn < MAX_PATH)
+        cases.push_back({self, win, Component::No, "this test's image (outside the Windows directory)"});
 
     for (const Case &c : cases) {
         const Component got = ClassifyComponent(c.image.c_str(), c.windows_dir.empty() ? nullptr : c.windows_dir.c_str());
@@ -420,7 +423,17 @@ static void IdentityTests()
     }
     CHECK(ClassifyComponent(nullptr, win.c_str()) == Component::Unknown, "null image is not Unknown");
     CHECK(ClassifyComponent(cmdExe.c_str(), nullptr) == Component::Unknown, "null Windows directory is not Unknown");
-    RemoveDirectoryW(junction.c_str()); // removes the junction only, never its target
+    // Removes the junction only, never its target. A failure would leave a link into the Windows directory behind.
+    // Already absent counts only for the two not-found errors; any other state (query denied) fails.
+    if (!RemoveDirectoryW(junction.c_str())) {
+        const DWORD removeError = GetLastError();
+        const DWORD attributes = GetFileAttributesW(junction.c_str());
+        const DWORD queryError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+        const bool absent = attributes == INVALID_FILE_ATTRIBUTES &&
+                            (queryError == ERROR_FILE_NOT_FOUND || queryError == ERROR_PATH_NOT_FOUND);
+        CHECK(absent, "junction %ls not removed: RemoveDirectoryW error %lu, then attributes 0x%lx error %lu",
+              junction.c_str(), removeError, attributes, queryError);
+    }
 }
 
 // ---------------------------------------------------------------- scenarios

@@ -17,6 +17,8 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# One RunOnce argument as common.ps1 Format-CommandLine writes it (quoted unless plain path characters).
+function Format-RunOnceArg([string]$A) { if ($A -match '[^A-Za-z0-9_.:\\/=,+-]') { return '"' + $A + '"' } else { return $A } }
 function Get-Footprint {
     [ordered]@{
         programdata  = @(Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'amdgpu-wddm') -Recurse -Force -ErrorAction SilentlyContinue).Count
@@ -27,6 +29,8 @@ function Get-Footprint {
         bc250        = Test-Path -LiteralPath 'C:\BC250'
         programfiles = Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'amdgpu-wddm')
         stub         = Test-Path -LiteralPath (Join-Path $env:windir 'System32\bc250umd.dll')
+        stubwow      = Test-Path -LiteralPath (Join-Path $env:windir 'SysWOW64\bc250umd.dll')
+        khronoswow   = @((Get-Item -LiteralPath 'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers' -ErrorAction SilentlyContinue).Property | Where-Object { $_ -like '*amdgpu-wddm*' }).Count
         certs        = @(Get-ChildItem Cert:\LocalMachine\Root, Cert:\LocalMachine\TrustedPublisher | Where-Object { $_.Subject -like '*amdgpu-wddm*' }).Count
         bootopts     = [string](Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control' -Name SystemStartOptions).SystemStartOptions
     } | ConvertTo-Json -Compress
@@ -89,6 +93,16 @@ $rr.text
 Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-owned: exit $($rr.code)"
 
 Check ($r.text -match 'would: copy payload\\system32\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'stub copy is the safe replacement'
+# BD-064: 32-bit processes get the x86 builds: D3D9/10/11 slots (no x86 D3D12), the x86 Vulkan ICD, the router's Wow paths.
+Check ($r.text -match 'would: copy payload\\wow64 -> .+\\wow64 ') 'phase 2 installs the x86 builds (wow64)'
+Check ($r.text -match 'would: copy payload\\syswow64\\bc250umd\.dll -> .+\\SysWOW64\\bc250umd\.dll .*same SHA256: kept; in use: replaced by rename') 'the x86 stub goes to SysWOW64 by the safe replacement'
+Check ($r.text -match 'would: .+ UserModeDriverNameWow = bc250umd\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json') 'UserModeDriverNameWow: stub and two x86 routers, no D3D12 slot; VulkanDriverNameWow'
+Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
+Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
+'32-bit registration (test-wow64.ps1 under 5.1, HKCU scratch key)'
+$rw = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-wow64.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase)
+$rw.text
+Check ($rw.code -eq 0) "x86 images, install paths, exports, verify's registration check: exit $($rw.code)"
 Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'
 Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+download from linux-firmware [0-9a-f]{40}: git\.kernel\.org, gitlab\.com reachable') 'preflight: both firmware download hosts reachable'
 Check ($r.text -match 'would: get the 9 GPU firmware files from linux-firmware [0-9a-f]{40} into ') 'phase 2 shows the firmware download'
@@ -110,7 +124,7 @@ Check ($r.text -match 'driver settings before the driver package: \d+ of \d+ val
 Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
 $common = [IO.File]::ReadAllText((Join-Path $Package 'installer\common.ps1'))
 Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-1-5-32-545:\(OI\)\(CI\)RX") -and ($common -match "'/reset', '/T'") -and ($common -match 'function Set-StateDirAccess \{\s+if \(\$script:DryRunMode\) \{ return \}')) 'the state folder (logs, verify results) gets administrators/SYSTEM full and users read, children reset; not in a dry run'
-Check ([string]$m.kmd_abi -eq '0x000700C7' -or [version]($m.kmd_build) -lt [version]'0.7.199.0') "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
+Check (([string]$m.kmd_abi -eq '0x000700CC' -and [version]($m.kmd_build) -ge [version]'0.7.204.0') -or ([string]$m.kmd_abi -eq '0x000700CB' -and [version]($m.kmd_build) -ge [version]'0.7.203.0' -and [version]($m.kmd_build) -lt [version]'0.7.204.0') -or ([string]$m.kmd_abi -eq '0x000700CA' -and [version]($m.kmd_build) -ge [version]'0.7.202.0' -and [version]($m.kmd_build) -lt [version]'0.7.203.0') -or ([string]$m.kmd_abi -eq '0x000700C9' -and [version]($m.kmd_build) -ge [version]'0.7.201.0' -and [version]($m.kmd_build) -lt [version]'0.7.202.0') -or ([string]$m.kmd_abi -eq '0x000700C8' -and [version]($m.kmd_build) -ge [version]'0.7.200.0' -and [version]($m.kmd_build) -lt [version]'0.7.201.0') -or ([string]$m.kmd_abi -eq '0x000700C7' -and [version]($m.kmd_build) -lt [version]'0.7.200.0')) "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 # BD-060: nothing in the installer stops or restarts DWM or the GPU under the running desktop; the driver package
 # changes the GPU at the restart (INF Reboot directive), and only uninstall moves it in place (documented there).
@@ -174,7 +188,7 @@ foreach ($c in $cases) {
     if ($c.phase2) {
         Check (($r.text -match 'would: copy payload\\tools') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -match 'Dry run complete')) "$($c.name): phase 2 runs again"
         Check ($r.text -notmatch 'would: bcdedit /set') "$($c.name): phase 1 (test signing) is not repeated"
-        Check ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*verify\.cmd") "$($c.name): RunOnce verify armed again"
+        Check ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*powershell\.exe`" -NoProfile -ExecutionPolicy Bypass -File `"[^`"]*\\installer\\install\.ps1`" -HoldWindow -Verify") "$($c.name): RunOnce verify armed again (Windows PowerShell, no cmd.exe)"
         Check ($r.text -match 'would: .*\\Release: Version') "$($c.name): Release\Version rewritten"
     } else {
         Check ($r.text -notmatch 'would: copy payload|would: pnputil') "$($c.name): nothing is installed"
@@ -185,19 +199,30 @@ foreach ($c in $cases) {
 
 Check ($src -notmatch 'New-Item -Path [^\r\n]*-Force') 'install.ps1 never runs New-Item -Force on a registry key (it deletes the key''s values)'
 
-'verify before and after the restart (test state, phase installed)'
+'verify before and after the restart (test state, phase installed, the boot it was saved in)'
+$thisBoot = $null
+$v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction SilentlyContinue).BootId
+if ($null -ne $v) { $thisBoot = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$v), 0) }
 foreach ($c in @(
-        @{ name = 'verify before the restart'; utc = [DateTime]::UtcNow.ToString('o'); code = 7; expect = 'Restart pending: the installation finished' }
-        @{ name = 'verify after the restart'; utc = '2000-01-01T00:00:00.0000000Z'; code = 3; expect = 'BC-250 GPU not found' })) {
+        @{ name = 'verify before the restart'; utc = [DateTime]::UtcNow.ToString('o'); boot = $thisBoot; code = 7; expect = 'has not been confirmed: this is still the boot in which it was asked for' }
+        @{ name = 'verify after the restart'; utc = '2000-01-01T00:00:00.0000000Z'; boot = $thisBoot + 1; code = 3; expect = 'BC-250 GPU not found' })) {
     $dir = Join-Path $WorkBase ('state-verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
     [void][IO.Directory]::CreateDirectory($dir)
-    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = $c.utc }
+    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = $c.utc; restart_boot_id = $c.boot }
     [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
     $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
     try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-Verify') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
     Check ($r.code -eq $c.code) "$($c.name): exit $($r.code) (expected $($c.code))"
     Check ($r.text -match $c.expect) "$($c.name): '$($c.expect)'"
     Check ($r.text -notmatch 'waiting for the start-confirm task') "$($c.name): no wait for the task"
+    $reports = @(Get-ChildItem -LiteralPath (Join-Path $dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
+    if ($c.code -eq 3) {
+        # A failed verify writes a matching failed report: identity of one package and a non-empty result list.
+        $vr = $(if ($reports.Count -eq 1) { Get-Content -LiteralPath $reports[0].FullName -Raw | ConvertFrom-Json })
+        Check (($null -ne $vr) -and ($vr.schema -eq 'amdgpu-wddm.verify-report/1') -and ($vr.outcome -eq 'failed') -and ($vr.package_version -eq $pkgVersion) -and ($vr.release -eq $m.name) -and ($vr.manifest_sha256 -match '^[0-9A-F]{64}$') -and (@($vr.results).Count -ge 1) -and (@($vr.results | Where-Object { $_.pass -eq $false }).Count -ge 1) -and ($vr.failed -ge 1)) "$($c.name): one failed verify report bound to $pkgVersion with its failing result"
+    } else {
+        Check ($reports.Count -eq 0) "$($c.name): no verify report (no check ran)"
+    }
     if ($r.code -ne $c.code) { $r.text }
     Remove-Item -LiteralPath $dir -Recurse -Force
 }
@@ -257,7 +282,8 @@ foreach ($c in @(
     $dir = Join-Path $WorkBase ('state-resume-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + "-$n")
     [void][IO.Directory]::CreateDirectory($dir)
     $st = [ordered]@{ schema = 1; phase = 'driver-pending-restart'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z'
-        firmware_source_dir = $goodDir; command_line_parameters = [ordered]@{ DpmMaxMHz = 1200 }; install_switches = @('NoControlApp') }
+        firmware_source_dir = $goodDir; command_line_parameters = [ordered]@{ DpmMaxMHz = 1200 }; install_switches = @('NoControlApp')
+        restart_boot_id = $(if ($null -ne $thisBoot) { $thisBoot - 1 } else { 0 }) }   # the restart happened (R1: only a new boot continues)
     foreach ($k in $c.st.Keys) { $st[$k] = $c.st[$k] }
     [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json -Depth 4))
     $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
@@ -291,21 +317,87 @@ foreach ($c in @(
     Check ($r.code -eq $c.code) "takeover at $($c.phase): exit $($r.code) (expected $($c.code))"
     Check (($r.text -match "this package \($([regex]::Escape($pkgVersion))\) takes over the unfinished installation of 0\.7\.198\.100-tester\.10 \(phase $($c.phase)\)") -and ($r.text -match "options of this install, kept until it completes: -FirmwareDir $([regex]::Escape($goodDir)) -NoControlApp") -and ($r.text -notmatch 'tester10-fw')) "takeover at $($c.phase): the state names this package with its own options"
     if ($c.phase -eq 'testsigning-pending') {
-        Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> $([regex]::Escape((Join-Path $Package 'install.cmd')))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s'
+        # The run after the restart is this package's, from its continuation closure (GUI plan A1), not the folder it started from.
+        $closureCmd = [regex]::Escape('powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ' + (Format-RunOnceArg (Join-Path $dir "packages\$pkgVersion\installer\install.ps1")) + ' -HoldWindow')
+        Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*$closureCmd") -and ($r.text -match "would: stage the continuation closure: every file of this package and the firmware folder $([regex]::Escape($goodDir))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s, from its closure'
     } else {
         Check (($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit /set')) 'takeover at testsigning-active: phase 2 runs, test signing is not set again'
     }
     if ($r.code -ne $c.code) { $r.text }
     Remove-Item -LiteralPath $dir -Recurse -Force
 }
+
+# The setup window's contract with the engine (GUI plan, docs/gui/interfaces-setup.md).
+'engine units: RunOnce command line, closure, repair set, witness, compatibility record, lock (test-engine-units.ps1 under 5.1)'
+$r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-engine-units.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', $WorkBase)
+$r.text
+Check ($r.code -eq 0) "G-STAGE units, witness writer, C7 record, engine lock: exit $($r.code)"
+$pwsh = (Get-Process -Id $PID).Path
+'G-EVT and G-STAGE: events and terminal result of the engine (test-engine-events.ps1)'
+$r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-engine-events.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1200
+$r.text
+Check ($r.code -eq 0) "G-EVT, G-STAGE: exit $($r.code)"
+'G-OFF: prepared folder and kept repair set with the network unavailable (test-offline.ps1)'
+$r = Invoke-Headless -File $pwsh -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-offline.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase, '-FirmwareDir', $goodDir) -TimeoutSeconds 1800
+$r.text
+Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
+# The setup window, when the package carries it, against this package's real engine: a plan run and a dry run through
+# the window's own engine client, each screen in four languages without internals (--smoke-engine shows no window).
+$setupExe = Join-Path $Package 'setup\amdgpu_wddm_setup.exe'
+if (Test-Path -LiteralPath $setupExe) {
+    'setup window against the real engine (--smoke-engine: plan and dry run, no window)'
+    foreach ($c in @(
+            @{ name = 'plan'; flags = @('--plan'); engine = @('-Plan', '-DryRunIgnoreBoard', '-FirmwareDir', $goodDir); expect = @('result: bound', 'outcome: planned', 'view: Plan result.planned.title nothing-changed', 'decision: install') }
+            @{ name = 'dry run'; flags = @(); engine = @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-FirmwareDir', $goodDir); expect = @('result: bound', 'message: result.dry-run-complete', 'mutated: false', 'view: Information result.dry-run-complete.title') })) {
+        $out = Join-Path $WorkBase ('setup-smoke-' + ($c.name -replace ' ', '-') + '-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+        $stateDir = "$out-state"
+        [void][IO.Directory]::CreateDirectory($stateDir)
+        $env:AMDGPU_WDDM_TEST_STATE_DIR = $stateDir
+        try { $r = Invoke-Headless -File $setupExe -Arguments (@('--smoke-engine', $Package, $out) + $c.flags + @('--') + $c.engine) -TimeoutSeconds 900 } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+        $summary = [string](Get-Content -LiteralPath (Join-Path $out 'summary.txt') -Raw -ErrorAction SilentlyContinue)
+        $missing = @($c.expect | Where-Object { -not $summary.Contains($_) })
+        $screens = @([regex]::Matches($summary, '(?m)^screen (en|pl|ja|ko): \w+; internals none; missing strings none').Count)
+        Check (($r.code -eq 0) -and ($missing.Count -eq 0)) "setup window $($c.name): exit $($r.code)$(if ($missing.Count) { '; missing: ' + ($missing -join ', ') })"
+        Check ($summary -match '(?m)^unknown checks: \r?$') "setup window $($c.name): every check the engine reported has words"
+        Check ($summary -match '(?m)^events: \d+ ignored 0 problems 0') "setup window $($c.name): events in order, none ignored"
+        Check ($screens[0] -eq 4) "setup window $($c.name): the screen in EN, PL, JA and KO without internals or missing strings"
+        if (($r.code -ne 0) -or $missing.Count -or ($screens[0] -ne 4)) { $summary }
+        Remove-Item -LiteralPath $stateDir -Recurse -Force
+    }
+    $cr0 = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
+    Check (($cr0.continuation.setup_exe -eq 'setup/amdgpu_wddm_setup.exe') -and (@($m.files | Where-Object { $_.path -eq 'setup/amdgpu_wddm_setup.exe' }).Count -eq 1)) 'the compatibility record names the setup window as the continuation, manifest.json lists it'
+} else { '  (no setup window in this package: skipped)' }
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
+
+'package records: compatibility, release notes, witness writer, planned restarts only'
+$cr = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
+Check (($cr.schema -eq 'amdgpu-wddm.compatibility/1') -and $cr.no_live_rebind.reboot_directive -and (@($m.files | Where-Object { $_.path -eq 'compatibility.json' }).Count -eq 1)) 'compatibility.json: the Reboot directive recorded, listed in manifest.json'
+$notesText = Get-Content -LiteralPath (Join-Path $Package 'RELEASE-NOTES.md') -Raw
+Check (@('New', 'Fixed', 'Known issues', 'Settings affected' | Where-Object { $notesText -notmatch "(?m)^## $_\s*$" }).Count -eq 0) 'RELEASE-NOTES.md has New / Fixed / Known issues / Settings affected'
+Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\release-witness.ps1')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'installer\release-witness.ps1')).Hash) 'release-witness.ps1 ships next to the installed start-confirm task'
+Check (($sc0 -match "Write-RunningReleaseWitness -InstallRoot \(Split-Path \`$here\) -RecordedBy 'start-confirm'") -and ($sc0.IndexOf('Write-RunningReleaseWitness') -gt $sc0.IndexOf('if ($Probe) {'))) 'the start-confirm task writes the running-release witness (not in -Probe)'
+Check (($src -match "Write-RunningReleaseWitness -InstallRoot \`$InstallRoot -RecordedBy 'verify'")) 'verify writes the running-release witness'
+$forced = @(foreach ($s in $scripts) { if ($s.text -match 'Restart-Computer|shutdown(\.exe)?\s+/r') { $s.name } })
+Check ($forced.Count -eq 0) "no installer script forces a restart (planned ExitWindowsEx after the user's yes only)$(if ($forced.Count) { ': ' + ($forced -join ', ') })"
 
 'uninstall -DryRun'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun')
 $r.text
 Check ($r.code -eq 0) "uninstall -DryRun exit $($r.code)"
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run: no change, no elevation'
-
+'uninstall -DryRun over a test state (BD-064: the x86 parts go too)'
+$dir = Join-Path $WorkBase ('state-uninstall-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+[void][IO.Directory]::CreateDirectory($dir)
+$st = [ordered]@{ schema = 1; phase = 'verified'; package_version = [string]$m.version; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); stub_existed = $false; stub_wow_existed = $false; updated_utc = '2026-10-04T00:00:00Z' }
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRun', '-Yes', '-KeepTestSigning') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check ($r.code -eq 0) "uninstall -DryRun with a state: exit $($r.code)"
+Check (($r.text -match 'would: remove .+\\System32\\bc250umd\.dll') -and ($r.text -match 'would: remove .+\\SysWOW64\\bc250umd\.dll')) 'both stubs removed (neither was there before the install)'
+Check ($r.text -match "would: remove '[^']+\\wow64\\vulkan\\radeon_icd\.json' from HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers") 'the WOW6432Node Khronos entry removed'
+Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
+if ($r.code -ne 0) { $r.text }
+Remove-Item -LiteralPath $dir -Recurse -Force
 $after = Get-Footprint
 Check ($before -eq $after) "system footprint unchanged: $after"
 if ($fail) { "$fail check(s) failed"; exit 1 }

@@ -16,6 +16,9 @@ and NOTICE in the package root).
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `e9f5e701ac0412e1cf39e217075d1f8ed313d120` |
 | `desktop\bc250d3d_router.dll` | amdgpu-wddm `6bbcf4f6bcba577e5d9d170246128496c7eb087d` (`driver/umd/router`) |
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `driver/umd/dxvk` |
+| `syswow64\bc250umd.dll` | amdgpu-wddm `driver/umd-stub`, x86 build |
+| `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `631d25da` (`driver/umd/router`) with the BD-064 x86 changes (Wow path values, 64-bit policy view, plain export names), x86 build |
+| `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `32b074a5` (`driver/umd/dxvk`) with the BD-064 x86 changes (plain export name), x86 build |
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `d8347cf031d2ee3bc2a79b5b142d2612875d96a3` (branch `release/control-app-t11`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`; the build at `dd30a44d` gives the same bytes) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `dd30a44d94500e7002b297a3ca5e19c43e1d9ff1` (branch `release/control-app-t11`) |
@@ -37,6 +40,9 @@ and NOTICE in the package root).
 | `desktop\amdgpu_wddm_radv.dll` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `48546c732a832b5ed0c97d28fdcf335a9960cc06` | Mesa texts as above |
 | `desktop\bc250d3d.dll` | Mesa gallium llvmpipe and D3D10 UMD, D-Ogi/mesa-amdgpu-wddm @ `43d0907cba87cbc8d71026ca68ba7fd409fc3514` (branch `amdgpu-wddm/desktop-umd-bd058`), with LLVM 23.1.2 (llvm/llvm-project @ `llvmorg-23.1.2`) | Mesa texts as above; Apache-2.0 WITH LLVM-exception: `LLVM-Apache-2.0-WITH-LLVM-exception.txt` |
 | `desktop\bc250d3d_zink.dll` | Mesa gallium zink and D3D10 UMD, D-Ogi/mesa-amdgpu-wddm @ `8cb2284409219b0f4ece460623709ac7c8e91756` (branch `amdgpu-wddm/hosted-umd-bd058`) | Mesa texts as above |
+| `wow64\d3d11\amdgpu_wddm_dxvk.dll` | DXVK, D-Ogi/dxvk @ `ebeadc49` (branch `amdgpu-wddm/ddi-engine-inline-throttle`), x86 build, with the dxbc-spirv, OpenVR, SPIRV-Headers and Vulkan-Headers commits of `d3d11\amdgpu_wddm_dxvk.dll` | the texts of `d3d11\amdgpu_wddm_dxvk.dll` above |
+| `wow64\d3d11\amdgpu_wddm_radv.dll`, `wow64\vulkan\vulkan_radeon.dll`, `wow64\vulkan\radeon_icd.json` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `ae98c795516061670b4de42a12809d6967cfcf49` with the BD-064 x86 changes (`bc250_host_import` x86 layout, `APIENTRY` fallback stubs), x86 build, with zlib 1.3.1 (Meson wrap) | Mesa texts as above; Zlib: `zlib-LICENSE.txt` |
+| `wow64\desktop\bc250d3d.dll` | Mesa gallium llvmpipe and D3D10 UMD, D-Ogi/mesa-amdgpu-wddm @ `43d0907cba87cbc8d71026ca68ba7fd409fc3514`, x86 build, with LLVM 23.1.2 (llvm/llvm-project @ `llvmorg-23.1.2`, x86) | Mesa texts as above; Apache-2.0 WITH LLVM-exception: `LLVM-Apache-2.0-WITH-LLVM-exception.txt` |
 | `tools\vulkaninfo.exe` | vulkaninfo 1.4.335, KhronosGroup/Vulkan-Tools @ `vulkan-sdk-1.4.335.0` (`8542e6dcfc6daef20d561220f1d91a02c25d95b2`), the unmodified LunarG Vulkan SDK binary. Upstream has no NOTICE file | Apache-2.0: `Vulkan-Tools-LICENSE.txt` |
 
 The Mesa licence texts are the same files at all six Mesa commits above.
