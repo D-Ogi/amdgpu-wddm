@@ -24,7 +24,7 @@
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "public_commits": {
-    "note": "Built commit -> commit on a public branch, for every pair that differs. b18 has no such pair: each commit this release was built from is published at its own hash (D-Ogi/amdgpu-wddm kmd207-train 8433a001, m15/d3d12-iflip 694e6bac, m14/d3d11-iflip f93521ec, m15/video-encode-mft 70b6f838; D-Ogi/dxvk, D-Ogi/vkd3d-proton and D-Ogi/dxil-spirv on branch amdgpu-wddm/upstream-2026-10-05; D-Ogi/mesa-amdgpu-wddm 091ad563 on branch amdgpu-wddm/disk-cache-single-file, the ICD b17 shipped). The b17 pairs were 2e61d1fe -> 6c8c31c9, 36745de5 -> 7b8347ba, 7294c09d -> af01d499 and dd30a44d -> 9a6f26d2."
+    "note": "Built commit -> commit on a public branch, for every pair that differs. Each commit this release was built from is published at its own hash (D-Ogi/amdgpu-wddm kmd207-train 8433a001, m15/d3d12-iflip 694e6bac, m14/d3d11-iflip f93521ec, m15/video-encode-mft 70b6f838; D-Ogi/dxvk, D-Ogi/vkd3d-proton and D-Ogi/dxil-spirv on branch amdgpu-wddm/upstream-2026-10-05; D-Ogi/mesa-amdgpu-wddm 091ad563 on branch amdgpu-wddm/disk-cache-single-file, the ICD b17 shipped). One pair needs a word, and the two RADV builds differ in it: the x64 ICD was built from the working tree of ae98c795 plus the change that became 091ad563 (icd-build-2/recipe.json: HEAD ae98c795, 2 modified entries, worktree diff D1537DD5B08F9C3C6C94BAA2FC55405B8796B2E9C153632849576CC45084798B, which is byte for byte the output of 'git diff --binary ae98c795 091ad563'), two hours before that commit was made, so the x64 file carries ae98c795 in its Mesa version string while its source is the tree of 091ad563; the x86 ICD was built from the commit 091ad563 itself plus the x86 patch 9C645734, and carries 091ad563. THIRD-PARTY.md names 091ad563 for both and states the version-string difference. The b17 pairs were 2e61d1fe -> 6c8c31c9, 36745de5 -> 7b8347ba, 7294c09d -> af01d499 and dd30a44d -> 9a6f26d2."
   },
   "files": [
     {
@@ -73,7 +73,7 @@
       "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
       "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
       "size": 22361600,
-      "role": "D3D12 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563: MESA_DISK_CACHE_SINGLE_FILE=1 keeps the shader disk cache, one writer thread)"
+      "role": "D3D12 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563: MESA_DISK_CACHE_SINGLE_FILE=1 keeps the shader disk cache, one writer thread). Built from that tree before the commit was made, so the file reports the parent ae98c795 as its Mesa version; see public_commits.note"
     },
     {
       "component": "desktop-umd",
@@ -306,7 +306,7 @@
       "source": "docs/testing/licenses/Mesa-license.rst",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "docs/license.rst",
-      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "ref": "091ad563aa299985016e8afadc84c3405ce8d88d",
       "sha256": "0D1A0472ECC81830E75C20D59B0EA02841E3DB21255E0EBAD97AB682C54D6615"
     },
     {
@@ -314,7 +314,7 @@
       "source": "docs/testing/licenses/Mesa-MIT.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/MIT",
-      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "ref": "091ad563aa299985016e8afadc84c3405ce8d88d",
       "sha256": "323C587D0CCF10E376F8BF9A7F31FB4CA6078105194B42E0B1E0EE2BC9BDE71F"
     },
     {
@@ -322,7 +322,7 @@
       "source": "docs/testing/licenses/Mesa-BSL-1.0.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/BSL-1.0",
-      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "ref": "091ad563aa299985016e8afadc84c3405ce8d88d",
       "sha256": "9B9FEA7520A816107FCAC2598B7C0155222F16BC430E989706B22F4367F1DF7D"
     },
     {
@@ -330,7 +330,7 @@
       "source": "docs/testing/licenses/Mesa-SGI-B-2.0.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/SGI-B-2.0",
-      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "ref": "091ad563aa299985016e8afadc84c3405ce8d88d",
       "sha256": "686BF035A1FD22076416FD3B90370AC67771E884BF57F55693D51F8CE7C710A7"
     },
     {
@@ -338,7 +338,7 @@
       "source": "docs/testing/licenses/Mesa-Apache-2.0.txt",
       "repository": "D-Ogi/mesa-amdgpu-wddm",
       "path": "licenses/Apache-2.0",
-      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "ref": "091ad563aa299985016e8afadc84c3405ce8d88d",
       "sha256": "7E4D3FBA250D15E9E0AFA380D4B611828FA2560CC8FDEBE95BCF2F01A487DE12"
     },
     {
