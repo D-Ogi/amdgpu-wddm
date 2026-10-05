@@ -140,6 +140,12 @@ healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
 
+`DpmMode` 0 with `DpmLastReason` 3 (UNCONFIRMED) or 4 (UNCLEAN) is therefore the driver's own fallback, not a choice
+of the tester. The tester release installer reads it that way (BD-069, `tools/release/installer/common.ps1`
+`$script:DriverClosures`): `install.cmd -Repair` writes `DpmMode` 1 again, and every other install keeps the 0 and
+names the fallback in its report. The installer deletes no guard mark: the start that reads `DpmMode` 1 clears the
+marks of a request no longer made by itself, and every start overwrites `DpmLastReason`.
+
 ## Runtime tuning (0.7.185)
 
 Session 225 (Witcher 3 LOW, native 1080p, 0.7.184.1) ran 45.4 fps with the GPU 76.7 % busy on average while the

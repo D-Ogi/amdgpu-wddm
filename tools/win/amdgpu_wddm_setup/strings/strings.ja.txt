@@ -135,6 +135,8 @@ settings.decision.same|mt-safe|aaa8d3c8|変更なし
 settings.decision.update|mt|bae122db|新しい推奨値
 settings.decision.kept|mt|b4865f1f|現在の値を保持
 settings.decision.command|mt|898239d8|このインストールで選んだとおり
+settings.decision.reopened|mt|4342e37e|この修復で元に戻しました (ドライバーが無効にしていました)
+settings.decision.driver-closed|mt|c86f7ca5|ドライバーが無効にしました。修復すると元に戻ります
 
 # ---- consents ----
 consent.title|mt-safe|34a195af|開始する前に

@@ -28,7 +28,8 @@ namespace AmdgpuWddmSetup
             int other = 0, otherChanged = 0;
             foreach (var r in plan.Rows)
             {
-                var shown = r.Decision == "kept" || r.Decision == "same" ? (r.Current ?? r.Value) : r.Value;
+                // kept, same and driver-closed keep what the computer holds now; every other decision writes r.Value.
+                var shown = r.Decision == "kept" || r.Decision == "same" || r.Decision == "driver-closed" ? (r.Current ?? r.Value) : r.Value;
                 var decision = "settings.decision." + (r.Decision ?? "set");
                 string group = r.Group ?? "", name = r.Name ?? "";
                 SettingLine line = null;
@@ -44,7 +45,7 @@ namespace AmdgpuWddmSetup
                 if (line == null)
                 {
                     other++;
-                    if (r.Decision != "same" && r.Decision != "kept") otherChanged++;
+                    if (r.Decision != "same" && r.Decision != "kept" && r.Decision != "driver-closed") otherChanged++;
                     continue;
                 }
                 line.DecisionId = decision;

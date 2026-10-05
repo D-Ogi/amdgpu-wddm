@@ -200,7 +200,9 @@ function Get-PendingRestart($State, $Boot) {
 # version. A value given on its own command line wins. Every run saves its effective inputs; phase 2 clears them when
 # it completes.
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force')
+# -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
+# closure that the tester asked to reopen.
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair')
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
     $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
     $in = [pscustomobject]@{ firmware_dir = $null; parameters = @{}; switches = @(); restored = @() }
@@ -255,6 +257,9 @@ function Set-StateValueOnce($State, [string]$Name, $Value) {
 #   command   given on the install.cmd command line (-DpmMaxMHz, -CuMode): written
 #   installer installer-owned (paths, counters): always written
 #   restored  a value the driver package's INF writes that is not in the table: the value from before the install
+#   reopened      the driver closed this switch itself and this install is a repair: the default is written again
+#   driver-closed the driver closed this switch itself and this install is not a repair: the value stays, and the
+#                 report names the closure and its remedy instead of calling it a setting of the tester (BD-069)
 # The driver package (pnputil) writes 0 into every gate and counter of its AddReg: the decisions are taken on the values
 # from before it (install.ps1 keeps them in the state), the writes then restore what it reset.
 function ConvertTo-PairList($Map) {
@@ -269,10 +274,62 @@ function Test-RegistryValueSame($A, $B) {
     return ([int64]$A -eq [int64]$B)
 }
 function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | ForEach-Object { [string]$_ }) -join ', ') + ']' }; return [string]$V }
+
+# The driver's own safety closures (BD-069). The KMD writes a release default away itself after a start it must not
+# repeat, and leaves a record of that act in the same key. Without the record the installer reads the 0 as a value the
+# tester chose and keeps it, so a repair never brings the desktop back to the GPU.
+#   EnableGpuPresentBlit, EnableCddDwmInterop   both written 0 with InteropClosedReason = the reason, after a boot
+#       that died with the GPU desktop path in use (driver/kmd/interop.c InteropStart, driver/kmd/interop_policy.c
+#       bc250_interop_decide: persist_close; reason 4 'unclean' is the only one the policy persists today). The next
+#       start that finds a switch open again deletes the record itself (clear_closed), so a reopen writes the default
+#       and deletes the record, the way the control application's "Reopen the GPU desktop path" does.
+#   DpmMode   written 0 with DpmLastReason 3 (an earlier DPM start was never confirmed) or 4 (an earlier start ended
+#       above the floor): the two reasons of the guard (driver/shim/bc250_dpm.c bc250_dpm_decide force_fixed,
+#       driver/kmd/dpm.c PersistFallback). Every start overwrites DpmLastReason with what it decided and no guard
+#       reads it, so a reopen writes DpmMode 1 and deletes nothing.
+# The record alone is not a closure: the value has to be the one the driver writes. A value the tester set by hand,
+# with no record of a closure, stays 'kept' as before. The KMD's session marker stays the KMD's: the installer never
+# reads or writes it, and a marker that outlived its boot closes the switches again at the next start, which the
+# install's own verify then reports.
+$script:DriverClosures = @{
+    EnableGpuPresentBlit = @{ closed = 0; record = 'InteropClosedReason'; any_reason = $true; clear = @('InteropClosedReason')
+        names = @{ 2 = 'invalid-setting'; 4 = 'unclean'; 5 = 'registry' }
+        text = @{ 4 = 'the driver closed the GPU desktop path after a boot that ended with the path in use' }
+        fallback = 'the driver closed the GPU desktop path itself' }
+    EnableCddDwmInterop = @{ closed = 0; record = 'InteropClosedReason'; any_reason = $true; clear = @('InteropClosedReason')
+        names = @{ 2 = 'invalid-setting'; 4 = 'unclean'; 5 = 'registry' }
+        text = @{ 4 = 'the driver closed the GPU desktop path after a boot that ended with the path in use' }
+        fallback = 'the driver closed the GPU desktop path itself' }
+    DpmMode = @{ closed = 0; record = 'DpmLastReason'; any_reason = $false; clear = @()
+        names = @{ 3 = 'unconfirmed'; 4 = 'unclean' }
+        text = @{ 3 = 'the driver went back to the base clock after a start with the load-driven clock that was never confirmed'
+                  4 = 'the driver went back to the base clock after a start that ended above it' }
+        fallback = 'the driver went back to the base clock itself' }
+}
+# Pure: the driver closure behind one value, or $null. $Current is the whole key (Read-RegistryValues), because the
+# record sits next to the value. $Default is this release's default, so that a default equal to the closed value
+# cannot be read as a closure.
+function Get-DriverClosure([string]$Name, $Current, $Default) {
+    if ($Current -isnot [Collections.IDictionary]) { return $null }
+    $c = $script:DriverClosures[$Name]
+    if ($null -eq $c) { return $null }
+    if (-not $Current.ContainsKey($Name) -or -not $Current.ContainsKey($c.record)) { return $null }
+    if (-not (Test-RegistryValueSame $Current[$Name] $c.closed)) { return $null }
+    if (Test-RegistryValueSame $Default $c.closed) { return $null }
+    $code = $null
+    try { $code = [int]$Current[$c.record] } catch { return $null }
+    if ($c.any_reason) { if ($code -eq 0) { return $null } }
+    elseif (-not $c.names.ContainsKey($code)) { return $null }
+    $reason = "reason $code"
+    if ($c.names.ContainsKey($code)) { $reason = $c.names[$code] }
+    $text = $c.fallback
+    if ($c.text.ContainsKey($code)) { $text = $c.text[$code] }
+    return [pscustomobject]@{ record = $c.record; code = $code; reason = $reason; text = $text; clear = @($c.clear) }
+}
 # Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
 # the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).
 function Get-RegistryDefaultPlan {
-    param($Defaults, $Previous, [hashtable]$Current = @{}, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$After = $null, [string[]]$Restore = @())
+    param($Defaults, $Previous, [hashtable]$Current = @{}, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$After = $null, [string[]]$Restore = @(), [switch]$Reopen)
     $prev = @{}
     foreach ($p in ConvertTo-PairList $Previous) { $prev[$p.Name] = $p.Value }
     $plan = New-Object System.Collections.ArrayList
@@ -281,12 +338,27 @@ function Get-RegistryDefaultPlan {
         $seen[$d.Name] = $true
         $has = $Current.ContainsKey($d.Name)
         $cur = $null; if ($has) { $cur = $Current[$d.Name] }
+        # A driver closure is read before the 'update' and 'kept' rules: it is neither a value of the previous
+        # installer nor a choice of the tester (BD-069).
+        $closure = Get-DriverClosure $d.Name $Current $d.Value
         if ($Explicit.ContainsKey($d.Name)) { $decision = 'command'; $value = $Explicit[$d.Name] }
         elseif (-not $has) { $decision = 'set'; $value = $d.Value }
         elseif (Test-RegistryValueSame $cur $d.Value) { $decision = 'same'; $value = $d.Value }
+        elseif ($null -ne $closure) {
+            if ($Reopen) { $decision = 'reopened'; $value = $d.Value } else { $decision = 'driver-closed'; $value = $cur }
+        }
         elseif ($prev.ContainsKey($d.Name) -and (Test-RegistryValueSame $cur $prev[$d.Name])) { $decision = 'update'; $value = $d.Value }
         else { $decision = 'kept'; $value = $cur }
-        [void]$plan.Add([pscustomobject]@{ name = $d.Name; value = $value; default = $d.Value; current = $cur; present = $has; decision = $decision; write = ($decision -in @('command', 'set', 'update')) })
+        $e = [pscustomobject]@{ name = $d.Name; value = $value; default = $d.Value; current = $cur; present = $has; decision = $decision; write = ($decision -in @('command', 'set', 'update', 'reopened')) }
+        if ($decision -in @('reopened', 'driver-closed')) {
+            $e | Add-Member -NotePropertyName closure -NotePropertyValue $closure.text
+            $e | Add-Member -NotePropertyName closure_record -NotePropertyValue $closure.record
+            $e | Add-Member -NotePropertyName closure_code -NotePropertyValue $closure.code
+            $e | Add-Member -NotePropertyName closure_reason -NotePropertyValue $closure.reason
+            # The record of the closure goes with it, so that the next start does not find a stale one.
+            if ($decision -eq 'reopened' -and @($closure.clear).Count) { $e | Add-Member -NotePropertyName clear -NotePropertyValue @($closure.clear) }
+        }
+        [void]$plan.Add($e)
     }
     foreach ($e in $Explicit.GetEnumerator()) {
         if ($seen.ContainsKey($e.Key)) { continue }
@@ -303,8 +375,11 @@ function Get-RegistryDefaultPlan {
     }
     # Values outside the table that a reset between the judgement and the write may change (the INF's other AddReg
     # values): the value from before the reset is written back; a name that was absent keeps what the reset wrote.
+    # A record that a reopened closure clears is left out: written back, it would undo the clear (BD-069).
+    $cleared = @{}
+    foreach ($e in $plan) { if ($e.PSObject.Properties['clear']) { foreach ($n in @($e.clear)) { $cleared[$n] = $true } } }
     foreach ($n in @($Restore)) {
-        if ($seen.ContainsKey($n) -or -not $Current.ContainsKey($n)) { continue }
+        if ($seen.ContainsKey($n) -or $cleared.ContainsKey($n) -or -not $Current.ContainsKey($n)) { continue }
         $seen[$n] = $true
         [void]$plan.Add([pscustomobject]@{ name = $n; value = $Current[$n]; default = $null; current = $Current[$n]; present = $true; decision = 'restored'; write = $false })
     }
@@ -353,7 +428,8 @@ function Get-InfParameterNames([string]$InfPath) {
 # Display; restarting Windows recovers (dwm-session.ps1). A GPU restarted in place under the desktop takes DWM's devices
 # away (a device-loss event, observed apart from any DWM process restart). The BD-059 session marker
 # (Parameters\InteropSession) belongs to the KMD, and the installer never changes it: if a start closes the GPU desktop
-# path, "Reopen the GPU desktop path" in the control application opens it again (INSTALL.md).
+# path, "Reopen the GPU desktop path" in the control application opens it again (INSTALL.md), and so does a repair
+# install (the driver closures above).
 
 # The INF's Reboot directive in each install section that its models name: Windows 8 and later then install the
 # package but do not restart a device that is already started, pnputil answers 3010, and the device changes driver
@@ -425,6 +501,8 @@ function Format-RegistryPlan($Plan) {
             'set'       { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (new)" }
             'update'    { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (new default; not changed by the tester)" }
             'kept'      { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT (changed by the tester; default $(Format-RegistryValue $e.default))" }
+            'reopened'  { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (reopened by this repair: $($e.closure), $($e.closure_record) $($e.closure_code) $($e.closure_reason))" }
+            'driver-closed' { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT ($($e.closure), $($e.closure_record) $($e.closure_code) $($e.closure_reason); not a setting of the tester; default $(Format-RegistryValue $e.default); remedy: install.cmd -Repair)" }
             'command'   { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (command line)" }
             'installer' { $parts += "$($e.name)=$(Format-RegistryValue $e.value)" }
             'restored'  { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (as before the install)" }
@@ -446,6 +524,10 @@ function Read-RegistryValues([string]$Key) {
 function Write-RegistryPlan([string]$Key, $Plan) {
     Initialize-RegistryKey $Key
     foreach ($e in @($Plan)) {
+        # A reopened driver closure (BD-069) also clears the record the driver left next to the value.
+        if ($e.PSObject.Properties['clear']) {
+            foreach ($n in @($e.clear)) { Remove-ItemProperty -LiteralPath $Key -Name $n -Force -ErrorAction SilentlyContinue }
+        }
         if (-not $e.write) { continue }
         $v = $e.value
         if ($v -is [array]) { New-ItemProperty -LiteralPath $Key -Name $e.name -Value ([string[]]@($v | ForEach-Object { [string]$_ })) -PropertyType MultiString -Force | Out-Null }
@@ -974,12 +1056,17 @@ function Get-PreviousAppliedDefaults($RegistryDefaults, [string]$Record) {
 # Pure: rows from the plans. $Groups: a list of @{ group = <name>; plan = <Get-RegistryDefaultPlan result> }.
 function Get-SettingsImpact($Groups) {
     $rows = New-Object System.Collections.ArrayList
-    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0 }
+    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0; reopened = 0; driver_closed = 0 }
     foreach ($g in @($Groups)) {
         foreach ($e in @($g.plan)) {
             if ($e.decision -eq 'installer' -or $e.decision -eq 'restored') { continue }
-            switch ($e.decision) { 'kept' { $sum.kept++ } 'update' { $sum.updated++ } 'set' { $sum.added++ } 'same' { $sum.unchanged++ } 'command' { $sum.command++ } }
-            [void]$rows.Add([ordered]@{ group = $g.group; name = $e.name; decision = $e.decision; current = $e.current; value = $e.value; default = $e.default; present = [bool]$e.present })
+            switch ($e.decision) { 'kept' { $sum.kept++ } 'update' { $sum.updated++ } 'set' { $sum.added++ } 'same' { $sum.unchanged++ } 'command' { $sum.command++ }
+                'reopened' { $sum.reopened++ } 'driver-closed' { $sum.driver_closed++ } }
+            # closure: the driver's own act in plain words, for the window and the support report. The reason code
+            # stays in the installer's log (Format-RegistryPlan).
+            $closure = $null
+            if ($e.PSObject.Properties['closure']) { $closure = $e.closure }
+            [void]$rows.Add([ordered]@{ group = $g.group; name = $e.name; decision = $e.decision; current = $e.current; value = $e.value; default = $e.default; present = [bool]$e.present; closure = $closure })
         }
     }
     return [pscustomobject]@{ rows = $rows.ToArray(); summary = $sum }

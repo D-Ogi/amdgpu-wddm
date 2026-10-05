@@ -135,6 +135,8 @@ settings.decision.same|mt-safe|aaa8d3c8|변경 없음
 settings.decision.update|mt|bae122db|새 권장값
 settings.decision.kept|mt|b4865f1f|현재 값 유지
 settings.decision.command|mt|898239d8|이 설치에서 선택한 대로
+settings.decision.reopened|mt|4342e37e|이 복구로 되돌렸습니다 (드라이버가 껐던 항목입니다)
+settings.decision.driver-closed|mt|c86f7ca5|드라이버가 껐습니다. 복구하면 되돌아갑니다
 
 # ---- consents ----
 consent.title|mt-safe|34a195af|시작하기 전에

@@ -242,7 +242,19 @@ static class UnitTests
         old.Rows.Add(new SettingRow { Group = "app_router", Name = "Mode", Decision = "kept", Current = "allowlist", Value = "gpu-default" });
         Check(SettingsView.Lines(old)[0].TextId == "settings.d3d11.listed", "settings: a kept allowlist route says so");
         Check(!Regex.IsMatch(text, "Dpm|Enable|Dwm|Experiment|parameters"), "settings: no registry names in the window");
-        foreach (var d in new[] { "set", "same", "update", "kept", "command" }) Check(Strings.Has("settings.decision." + d), "settings: decision " + d + " has words");
+        foreach (var d in new[] { "set", "same", "update", "kept", "command", "reopened", "driver-closed" }) Check(Strings.Has("settings.decision." + d), "settings: decision " + d + " has words");
+        // BD-069: a switch the driver closed itself is the driver's act, not the user's choice, and this install
+        // changes nothing by keeping it; a repair sets it back.
+        var closed = new SettingsPlan();
+        closed.Rows.Add(new SettingRow { Group = "parameters", Name = "DpmMode", Decision = "driver-closed", Current = 0, Value = 0, Default = 1 });
+        closed.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableGpuPresentBlit", Decision = "driver-closed", Current = 0, Value = 0, Default = 1 });
+        var closedText = string.Join("\n", SettingsView.Lines(closed).Select(l => Strings.In("en", l.TextId, l.Args) + (l.DecisionId != null ? ": " + Strings.In("en", l.DecisionId) : "")));
+        Check(closedText.Contains("Automatic graphics clock: off: switched off by the driver"), "settings: a driver closure is reported as the driver's own act");
+        Check(closedText.Contains("1 other driver settings, 0 of them new or changed"), "settings: a driver closure is not a change of this install");
+        var reopened = new SettingsPlan();
+        reopened.Rows.Add(new SettingRow { Group = "parameters", Name = "DpmMode", Decision = "reopened", Current = 0, Value = 1, Default = 1 });
+        var reopenedText = string.Join("\n", SettingsView.Lines(reopened).Select(l => Strings.In("en", l.TextId, l.Args) + (l.DecisionId != null ? ": " + Strings.In("en", l.DecisionId) : "")));
+        Check(reopenedText.Contains("Automatic graphics clock: on: set back by this repair"), "settings: a repair reports the value it sets back");
     }
 
     static void Notes(string repo)

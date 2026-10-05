@@ -44,6 +44,62 @@ Check ((Get-Decision $p 'DpmMode').decision -eq 'same') 'DpmMode 1 unchanged'
 Check ((Get-Decision $p 'EnableCddDwmInterop').decision -eq 'kept') 'EnableCddDwmInterop 0 (tester) kept'
 Check ((Get-Decision $p 'EnableGpuPresentBlit').decision -eq 'set') 'EnableGpuPresentBlit absent: set'
 
+'the driver''s own safety closures (BD-069): a repair reopens them, another install reports them'
+# What the lab had after four 0x116 boots: the KMD wrote both interop switches 0 with InteropClosedReason 4
+# (unclean), and the DPM guard wrote DpmMode 0 with DpmLastReason 4.
+$afterClose = @{ EnableGpuPresentBlit = 0; EnableCddDwmInterop = 0; InteropClosedReason = 4; DpmMode = 0; DpmLastReason = 4; DpmMaxMHz = 1500 }
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $afterClose
+foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop') {
+    $d = Get-Decision $p $n
+    Check (($d.decision -eq 'driver-closed') -and ($d.value -eq 0) -and -not $d.write -and ($d.closure_record -eq 'InteropClosedReason') -and ($d.closure_code -eq 4) -and ($d.closure_reason -eq 'unclean') -and $d.closure) "$n 0 with InteropClosedReason 4, no repair: $($d.decision), reported as '$($d.closure)'"
+}
+$d = Get-Decision $p 'DpmMode'
+Check (($d.decision -eq 'driver-closed') -and ($d.value -eq 0) -and -not $d.write -and ($d.closure_record -eq 'DpmLastReason') -and ($d.closure_code -eq 4)) "DpmMode 0 with DpmLastReason 4 (the DPM guard), no repair: $($d.decision)"
+$text = Format-RegistryPlan $p
+Check (($text -match 'EnableGpuPresentBlit=0 KEPT \(the driver closed the GPU desktop path after a boot that ended with the path in use, InteropClosedReason 4 unclean; not a setting of the tester; default 1; remedy: install\.cmd -Repair\)') -and ($text -match 'DpmMode=0 KEPT \(the driver went back to the base clock .*DpmLastReason 4 unclean')) 'the plan text names the closure, its reason code and the remedy, not the tester'
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $afterClose -Reopen
+foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop') {
+    $d = Get-Decision $p $n
+    Check (($d.decision -eq 'reopened') -and ($d.value -eq 1) -and $d.write -and (@($d.clear) -contains 'InteropClosedReason')) "$n reopened by a repair: $($d.decision) -> $($d.value), clears $(@($d.clear) -join ',')"
+}
+$d = Get-Decision $p 'DpmMode'
+Check (($d.decision -eq 'reopened') -and ($d.value -eq 1) -and $d.write -and -not $d.PSObject.Properties['clear']) "DpmMode reopened by a repair: $($d.decision) -> $($d.value), no record to clear (every start overwrites DpmLastReason)"
+Check ((Format-RegistryPlan $p) -match 'EnableCddDwmInterop 0 -> 1 \(reopened by this repair: the driver closed the GPU desktop path after a boot that ended with the path in use, InteropClosedReason 4 unclean\)') 'the plan text of a repair names what it reopens and why'
+# A value the tester set by hand has no record of a closure: kept, with a repair too.
+$byHand = @{ EnableCddDwmInterop = 0; DpmMode = 0; DpmLastReason = 1 }
+foreach ($reopen in $false, $true) {
+    $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $byHand -Reopen:$reopen
+    Check (((Get-Decision $p 'EnableCddDwmInterop').decision -eq 'kept') -and ((Get-Decision $p 'DpmMode').decision -eq 'kept')) "set by the tester (no record; DpmLastReason 1 = DpmMode 0 as asked), repair $($reopen): both kept"
+}
+# A record next to a value that is not the one the driver writes: the value decides, not the record.
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ EnableGpuPresentBlit = 1; InteropClosedReason = 4; DpmMode = 1; DpmLastReason = 4; DpmMaxMHz = 1200 } -Reopen
+Check (((Get-Decision $p 'EnableGpuPresentBlit').decision -eq 'same') -and ((Get-Decision $p 'DpmMode').decision -eq 'same') -and ((Get-Decision $p 'DpmMaxMHz').decision -eq 'kept')) 'a record with the value already open: nothing to reopen (same), and the rest judged as before'
+# The DPM guard's other reason, and the reasons that are not the guard's.
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = 3 }) 'DpmMode'
+Check (($d.decision -eq 'driver-closed') -and ($d.closure_reason -eq 'unconfirmed')) "DpmMode 0 with DpmLastReason 3: $($d.decision) ($($d.closure_reason))"
+foreach ($reason in 0, 1, 2, 5, 6, 7) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = $reason } -Reopen) 'DpmMode'
+    Check ($d.decision -eq 'kept') "DpmMode 0 with DpmLastReason $reason (not a guard fallback): $($d.decision)"
+}
+# The record is deleted with the write, and the restore set does not write it back.
+$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
+try {
+    $k = "$key\Closure"
+    Initialize-RegistryKey $k
+    foreach ($e in $afterClose.GetEnumerator()) { New-ItemProperty -LiteralPath $k -Name $e.Key -Value ([int]$e.Value) -PropertyType DWord -Force | Out-Null }
+    $before = Read-RegistryValues $k
+    $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $before -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore @($before.Keys) -Reopen
+    Write-RegistryPlan $k $plan
+    $v = Read-RegistryValues $k
+    Check (($v.EnableGpuPresentBlit -eq 1) -and ($v.EnableCddDwmInterop -eq 1) -and ($v.DpmMode -eq 1)) "after the repair write: EnableGpuPresentBlit $($v.EnableGpuPresentBlit), EnableCddDwmInterop $($v.EnableCddDwmInterop), DpmMode $($v.DpmMode)"
+    Check (-not $v.ContainsKey('InteropClosedReason')) 'InteropClosedReason is gone, the way the driver reads it at the next start'
+    Check ($v.DpmLastReason -eq 4) 'DpmLastReason stays: it is the record of the last start, which the next start overwrites'
+    $again = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current (Read-RegistryValues $k) -Reopen
+    Check (@($again | Where-Object { $_.decision -in 'reopened', 'driver-closed' }).Count -eq 0) 'a second repair over the result finds no closure left'
+} finally { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue }
+Check (-not (Test-Path -LiteralPath $key)) 'closure scratch key removed'
+
 'allowlist'
 $plan = Get-RegistryDefaultPlan -Defaults $next.app_router -Previous $legacy.app_router -Current @{ Mode = 'allowlist'; Allow = [string[]]@('dxdiag.exe', 'game.exe'); Deny = [string[]]@('witcher3.exe') }
 Check ((Get-Decision $plan 'Allow').decision -eq 'kept') 'Allow with the tester''s game.exe kept'

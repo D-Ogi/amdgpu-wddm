@@ -137,6 +137,8 @@ settings.decision.same|src|-|unchanged
 settings.decision.update|src|-|new recommended value
 settings.decision.kept|src|-|your value is kept
 settings.decision.command|src|-|as you chose for this installation
+settings.decision.reopened|src|-|set back by this repair (the driver had switched it off)
+settings.decision.driver-closed|src|-|switched off by the driver; a repair sets it back
 
 # ---- consents ----
 consent.title|src|-|Before setup starts
