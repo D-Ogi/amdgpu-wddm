@@ -1960,14 +1960,17 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
 
     // Two lines since 0.7.208 (BD-070): the one line this was is 174 characters at its widest, 15
     // more than a log line holds, and the count that fell off the end was the live one. The
-    // allocation pair, the one that grows into six digits, now has the second line to itself. Both
-    // lines keep the prefix runcompare reads, and it takes the pairs from either of them.
+    // allocation pair, the one that grows into six digits, has a line to itself, and it goes
+    // first on purpose: both lines carry the same name, so a reader that keeps the last line of
+    // that name - and several of our own scripts do - still ends up with the pairs and the live
+    // count it always had. runcompare takes the pairs from either line and the live count from
+    // the line that ends in "alive", in any order.
+    GuardLog("wddm summary: objects created/destroyed: alloc %ld/%ld",
+             Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation]);
     GuardLog("wddm summary: objects created/destroyed: dev %ld/%ld ctx %ld/%ld proc %ld/%ld, %ld alive",
              Wddm->Calls[WddmDdiCreateDevice], Wddm->Calls[WddmDdiDestroyDevice],
              Wddm->Calls[WddmDdiCreateContext], Wddm->Calls[WddmDdiDestroyContext],
              Wddm->Calls[WddmDdiCreateProcess], Wddm->Calls[WddmDdiDestroyProcess], Wddm->ObjectCount);
-    GuardLog("wddm summary: objects created/destroyed: alloc %ld/%ld",
-             Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation]);
     {
         // The three move together under the lock; read apart, a concurrent create would look like a mismatch.
         ULONG indexed, misses;
