@@ -1,0 +1,48 @@
+probe_hash=15E8674A506EA4164B573DE51F747409414A4658090A43A7F10E9880B3ABCD7A
+driver_version=0.7.133.1
+installed_sha256=37A52F95CD90726D909FBF273D55B9336D766E2997668BA713B8ADC45BCF4A87
+
+
+CommittedBytes : 3343437824
+CommitLimit    : 42655780864
+AvailableBytes : 5077102592
+
+
+
+boot_before=2026-09-24T18:23:50
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+18:41:21 Tctl 66.8 C (raw 73DB0FEF)
+launcher_pid=4104
+18:41:24 Tctl 66.8 C (raw 73DB0FEF)
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000027930180000, current value 7000
+CreateAllocation2 BC2A [preserved] 0xC000000D  STATUS_INVALID_PARAMETER
+BULK_CREATE name=preserved bytes=6442450944 elapsed_ms=0 success=0
+-- teardown
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENT_SET_RESULT FAIL bytes=6442450944 samples=0 snapshots_only=1
+GPU_RESIDENCY_RESULT FAIL; physical relocation requires paging trace
+gpu_probe_exit=1
+
+
+CommittedBytes : 3359113216
+CommitLimit    : 42655780864
+AvailableBytes : 5070245888
+
+
+
+boot_after=2026-09-24T18:23:50
+Probe failed; inspect output without repeating
+At C:\BC250\tmp\resident-v5-large.ps1:60 char:17
++ ... ($code -ne 0){throw 'Probe failed; inspect output without repeating'}
++                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Probe failed; i...thout repeating:String) [], Ru 
+   ntimeException
+    + FullyQualifiedErrorId : Probe failed; inspect output without repeating
+ 

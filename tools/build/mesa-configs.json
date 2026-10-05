@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "about": "Meson option sets of the lab's Mesa builds, copied from the 'Build Options:' line of each recorded build's meson-logs/meson-log.txt, in that order. 'glslang' says whether the recorded build had glslangValidator on PATH ('required' by the configuration, 'on-path', 'not-on-path'). build-mesa.ps1 passes them verbatim and fails if the new log's line differs. docs/build.md quotes them; change both together.",
+  "configs": {
+    "radv": {
+      "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM)",
+      "needs_llvm": false,
+      "glslang": "required",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=amd",
+        "-Dgallium-drivers=[]",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "recorded_script": "experiments/E27-m9-inference/radv-main/build.cmd"
+    },
+    "radv-mt": {
+      "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM), static C runtime (the radv set plus -Db_vscrt=mt): the ICD runs inside every game, and a game that ships an older msvcp140.dll beside its exe hands it to every DLL that imports MSVCP140.dll by name",
+      "needs_llvm": false,
+      "glslang": "required",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=amd",
+        "-Dgallium-drivers=[]",
+        "-Db_vscrt=mt",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "recorded_script": "none yet: the radv set plus -Db_vscrt=mt, first built 2026-10-01"
+    },
+    "llvmpipe-umd": {
+      "description": "Desktop D3D10 UMD: Gallium d3d10umd frontend on llvmpipe/softpipe, statically linked LLVM, static CRT",
+      "needs_llvm": true,
+      "glslang": "not-on-path",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=enabled",
+        "-Dshared-llvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=[]",
+        "-Dgallium-drivers=llvmpipe,softpipe",
+        "-Dgallium-d3d10umd=true",
+        "-Dopengl=false",
+        "-Db_vscrt=mt",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled",
+        "-Dgallium-d3d10-dll-name=bc250d3d"
+      ],
+      "targets": [
+        "src/gallium/targets/d3d10umd/bc250d3d.dll",
+        "src/gallium/targets/d3d10umd/bc250_ttn_control.exe",
+        "src/gallium/targets/d3d10umd/bc250_lp_test_arit.exe"
+      ],
+      "recorded_script": "experiments/E26-wddm-desktop/build-mesa-main-llvm23.cmd"
+    },
+    "zink-umd": {
+      "description": "Native D3D10 UMD: Gallium d3d10umd frontend on Zink over the Vulkan ICD, no LLVM",
+      "needs_llvm": false,
+      "glslang": "on-path",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=[]",
+        "-Dgallium-drivers=zink",
+        "-Dgallium-d3d10umd=true",
+        "-Dgallium-d3d10-dll-name=bc250d3d_zink",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": ["src/gallium/targets/d3d10umd/bc250d3d_zink.dll"],
+      "recorded_script": "experiments/E34-native-d3d-zink/build.cmd"
+    },
+    "zink-gl": {
+      "description": "OpenGL through Zink (WGL): app-local opengl32.dll plus libgallium_wgl.dll, no LLVM",
+      "needs_llvm": false,
+      "glslang": "on-path",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=[]",
+        "-Dgallium-drivers=zink",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled"
+      ],
+      "targets": [
+        "src/gallium/targets/wgl/libgallium_wgl.dll",
+        "src/gallium/targets/libgl-gdi/opengl32.dll"
+      ],
+      "recorded_script": null
+    }
+  }
+}

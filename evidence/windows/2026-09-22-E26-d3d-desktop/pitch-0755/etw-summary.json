@@ -1,0 +1,74 @@
+{
+  "source": "scratch/dwm/pitch-etw.etl, decoded with tracerpt; event 494 counts",
+  "pitch_validation_count": 0,
+  "diagnostics": [
+    {
+      "count": 978,
+      "message": "WDDM2 driver calls WDDM1.x DDI!"
+    },
+    {
+      "count": 242,
+      "message": "There should be at least one broadcast context passed to signal."
+    },
+    {
+      "count": 7,
+      "message": "Failed to find DXGPROCESS"
+    },
+    {
+      "count": 6,
+      "message": "Cannot find the caller specified session adapter 0x%I64x%08I64x, returning 0x%I64x."
+    },
+    {
+      "count": 4,
+      "message": "Driver returned an invalid NTSTATUS code: 0x%I64x"
+    },
+    {
+      "count": 4,
+      "message": "Failed to get preferred mode from monitor EDID or DisplayID on adapter 0x%I64x, target 0x%I64x (status = 0x%I64x)"
+    },
+    {
+      "count": 2,
+      "message": "Can't reference adapter by luid (0x%I64x::0x%I64x)."
+    },
+    {
+      "count": 2,
+      "message": "Cannot find the file version resource in DxgkpGetFileVersion (ntStatus = %I64d)."
+    },
+    {
+      "count": 1,
+      "message": "The selected adapter is display only adapter"
+    },
+    {
+      "count": 1,
+      "message": "Adapter StopDevice has completed with status %1"
+    },
+    {
+      "count": 1,
+      "message": "Adapter AddDevice has completed with status %1"
+    },
+    {
+      "count": 1,
+      "message": "Failed (0x%I64x) to get display config buffer sizes when looking for internal target/priority. Trying with %d"
+    },
+    {
+      "count": 1,
+      "message": "Unable to get copy of most recent topology. (NtStatus = 0x%I64x, i_AdapterLuid = 0x%I64x%08I64x, i_TargetId = 0x%I64x, i_MonitorEvent = 0x%I64x)"
+    },
+    {
+      "count": 1,
+      "message": "GPU virtualization initialization has completed with status %1"
+    },
+    {
+      "count": 1,
+      "message": "Adapter StartDevice has completed with status %1"
+    },
+    {
+      "count": 1,
+      "message": "Failed to get pairing adapters from adapter 0x%I64x VidPn source 0x%I64x!"
+    }
+  ],
+  "broadcast_context_by_pid": {
+    "1508": 163,
+    "8504": 79
+  }
+}

@@ -1,13 +1,15 @@
 # Host test for driver\kmd\paging_window.c: the VRAM physical-to-MC conversion the SDMA paging packets need.
 #
 #   pwsh driver\kmd\test\run_paging_window.ps1
-#   pwsh driver\kmd\test\run_paging_window.ps1 -Out P:\BC-250\scratch\pagingwindow
+#   pwsh driver\kmd\test\run_paging_window.ps1 -Out $env:BC250_ROOT\scratch\pagingwindow
 #
 # The binary goes under -Out. Nothing is written to drive C:.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\pagingwindow',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\pagingwindow",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0'
 )
 

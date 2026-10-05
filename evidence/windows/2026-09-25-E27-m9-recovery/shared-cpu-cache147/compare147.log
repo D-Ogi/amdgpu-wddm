@@ -1,0 +1,114 @@
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66375 ready=1
+
+now=2026-09-25T05:06:20.6512187+02:00
+VirtualQuery describes VM attributes, NOT effective PAT/MTRR. No GPU submission. Paging may occur.
+MAPPING cached-control-before address=0000022D6A8F0000 base=0000022D6A8F0000 allocation_base=0000022D6A8F0000 region=4194304 state=0x1000 type=0x20000 protect=0x4 allocation_protect=0x4 wc=0 nocache=0
+WRITE cached-control-before bytes=4194304 qpc_start=41149329618 qpc_end=41149361383 frequency=10000000 ms=3.176500
+ORACLE cached-control-before words=1048576 mismatches=0
+READ cached-control-before pass=0 bytes=4194304 qpc_start=41149418653 qpc_end=41149431078 frequency=10000000 ms=1.242500 MiBps=3219.316 sum=2251494963806208 expected=2251494963806208
+READ cached-control-before pass=1 bytes=4194304 qpc_start=41149438546 qpc_end=41149450974 frequency=10000000 ms=1.242800 MiBps=3218.539 sum=2251494963806208 expected=2251494963806208
+READ cached-control-before pass=2 bytes=4194304 qpc_start=41149457566 qpc_end=41149470000 frequency=10000000 ms=1.243400 MiBps=3216.986 sum=2251494963806208 expected=2251494963806208
+D3DKMTEnumAdapters2 (count)        0x00000000  STATUS_SUCCESS
+    34 adapter(s)
+D3DKMTEnumAdapters2                0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:008D36AE  NumOfSources 0
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "C:\BC250\m13\mesa-main-umd\bc250d3d.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008B89  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+D3DKMTOpenAdapterFromLuid          0x00000000  STATUS_SUCCESS
+    hAdapter 0x40000080 for LUID 00000000:008D36AE
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000022D6A370000, current value 7000
+CREATE E26R version=1 bytes=12 shared=1 cpu_access=0 primary=0 surface=1024x1024 pitch=4096 size=4194304
+CreateAllocation2 shared           0x00000000  STATUS_SUCCESS
+IDENTITY pid=4764 device=400000C0 resource=40000180 allocation=400001C0
+    mapping 1024 page(s) of 0x400000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [shared-map] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000010000 (asked 0x0000000000000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [shared-map]    0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7002 (waited for 7002)
+D3DKMTLock2 [shared-map]           0x00000000  STATUS_SUCCESS
+    locked at CPU VA 0000022D6ACF0000
+MAPPING shared-Lock2 address=0000022D6ACF0000 base=0000022D6ACF0000 allocation_base=0000022D6ACF0000 region=4194304 state=0x1000 type=0x40000 protect=0x404 allocation_protect=0x404 wc=1 nocache=0
+WRITE shared-Lock2 bytes=4194304 qpc_start=41149607975 qpc_end=41149630487 frequency=10000000 ms=2.251200
+ORACLE shared-Lock2 words=1048576 mismatches=0
+READ shared-Lock2 pass=0 bytes=4194304 qpc_start=41151195240 qpc_end=41152754669 frequency=10000000 ms=155.942900 MiBps=25.650 sum=2251494963806208 expected=2251494963806208
+READ shared-Lock2 pass=1 bytes=4194304 qpc_start=41152760712 qpc_end=41154319239 frequency=10000000 ms=155.852700 MiBps=25.665 sum=2251494963806208 expected=2251494963806208
+READ shared-Lock2 pass=2 bytes=4194304 qpc_start=41154325431 qpc_end=41155890482 frequency=10000000 ms=156.505100 MiBps=25.558 sum=2251494963806208 expected=2251494963806208
+D3DKMTUnlock2 [shared-map]         0x00000000  STATUS_SUCCESS
+FreeGpuVirtualAddress              0x00000000  STATUS_SUCCESS
+DestroyAllocation2/resource        0x00000000  STATUS_SUCCESS
+DestroyPagingQueue                 0x00000000  STATUS_SUCCESS
+DestroyDevice                      0x00000000  STATUS_SUCCESS
+CloseAdapter                       0x00000000  STATUS_SUCCESS
+MAPPING cached-control-after address=0000022D6A8F0000 base=0000022D6A8F0000 allocation_base=0000022D6A8F0000 region=4194304 state=0x1000 type=0x20000 protect=0x4 allocation_protect=0x4 wc=0 nocache=0
+WRITE cached-control-after bytes=4194304 qpc_start=41155977697 qpc_end=41156003079 frequency=10000000 ms=2.538200
+ORACLE cached-control-after words=1048576 mismatches=0
+READ cached-control-after pass=0 bytes=4194304 qpc_start=41156053855 qpc_end=41156066323 frequency=10000000 ms=1.246800 MiBps=3208.213 sum=2251494963806208 expected=2251494963806208
+READ cached-control-after pass=1 bytes=4194304 qpc_start=41156073080 qpc_end=41156085516 frequency=10000000 ms=1.243600 MiBps=3216.468 sum=2251494963806208 expected=2251494963806208
+READ cached-control-after pass=2 bytes=4194304 qpc_start=41156091907 qpc_end=41156104343 frequency=10000000 ms=1.243600 MiBps=3216.468 sum=2251494963806208 expected=2251494963806208
+SHARED_MAP_RESULT PASS version=1
+VirtualQuery describes VM attributes, NOT effective PAT/MTRR. No GPU submission. Paging may occur.
+MAPPING cached-control-before address=000001BEA1660000 base=000001BEA1660000 allocation_base=000001BEA1660000 region=4194304 state=0x1000 type=0x20000 protect=0x4 allocation_protect=0x4 wc=0 nocache=0
+WRITE cached-control-before bytes=4194304 qpc_start=41156445744 qpc_end=41156475427 frequency=10000000 ms=2.968300
+ORACLE cached-control-before words=1048576 mismatches=0
+READ cached-control-before pass=0 bytes=4194304 qpc_start=41156526225 qpc_end=41156538671 frequency=10000000 ms=1.244600 MiBps=3213.884 sum=2251494963806208 expected=2251494963806208
+READ cached-control-before pass=1 bytes=4194304 qpc_start=41156545899 qpc_end=41156562566 frequency=10000000 ms=1.666700 MiBps=2399.952 sum=2251494963806208 expected=2251494963806208
+READ cached-control-before pass=2 bytes=4194304 qpc_start=41156568905 qpc_end=41156581786 frequency=10000000 ms=1.288100 MiBps=3105.349 sum=2251494963806208 expected=2251494963806208
+D3DKMTEnumAdapters2 (count)        0x00000000  STATUS_SUCCESS
+    34 adapter(s)
+D3DKMTEnumAdapters2                0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:008D36AE  NumOfSources 0
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "C:\BC250\m13\mesa-main-umd\bc250d3d.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008B89  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+D3DKMTOpenAdapterFromLuid          0x00000000  STATUS_SUCCESS
+    hAdapter 0x40000080 for LUID 00000000:008D36AE
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 000001BEA1A60000, current value 7000
+CREATE E26R version=2 bytes=16 shared=1 cpu_access=2 primary=0 surface=1024x1024 pitch=4096 size=4194304
+CreateAllocation2 shared           0x00000000  STATUS_SUCCESS
+IDENTITY pid=11288 device=400000C0 resource=40000180 allocation=400001C0
+    mapping 1024 page(s) of 0x400000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [shared-map] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000010000 (asked 0x0000000000000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [shared-map]    0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7002 (waited for 7002)
+D3DKMTLock2 [shared-map]           0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001BEA1A70000
+MAPPING shared-Lock2 address=000001BEA1A70000 base=000001BEA1A70000 allocation_base=000001BEA1A70000 region=4194304 state=0x1000 type=0x40000 protect=0x4 allocation_protect=0x4 wc=0 nocache=0
+WRITE shared-Lock2 bytes=4194304 qpc_start=41156720696 qpc_end=41156743278 frequency=10000000 ms=2.258200
+ORACLE shared-Lock2 words=1048576 mismatches=0
+READ shared-Lock2 pass=0 bytes=4194304 qpc_start=41156793425 qpc_end=41156805878 frequency=10000000 ms=1.245300 MiBps=3212.077 sum=2251494963806208 expected=2251494963806208
+READ shared-Lock2 pass=1 bytes=4194304 qpc_start=41156812974 qpc_end=41156826521 frequency=10000000 ms=1.354700 MiBps=2952.683 sum=2251494963806208 expected=2251494963806208
+READ shared-Lock2 pass=2 bytes=4194304 qpc_start=41156832683 qpc_end=41156845122 frequency=10000000 ms=1.243900 MiBps=3215.693 sum=2251494963806208 expected=2251494963806208
+D3DKMTUnlock2 [shared-map]         0x00000000  STATUS_SUCCESS
+FreeGpuVirtualAddress              0x00000000  STATUS_SUCCESS
+DestroyAllocation2/resource        0x00000000  STATUS_SUCCESS
+DestroyPagingQueue                 0x00000000  STATUS_SUCCESS
+DestroyDevice                      0x00000000  STATUS_SUCCESS
+CloseAdapter                       0x00000000  STATUS_SUCCESS
+MAPPING cached-control-after address=000001BEA1660000 base=000001BEA1660000 allocation_base=000001BEA1660000 region=4194304 state=0x1000 type=0x20000 protect=0x4 allocation_protect=0x4 wc=0 nocache=0
+WRITE cached-control-after bytes=4194304 qpc_start=41156906427 qpc_end=41156928954 frequency=10000000 ms=2.252700
+ORACLE cached-control-after words=1048576 mismatches=0
+READ cached-control-after pass=0 bytes=4194304 qpc_start=41156979662 qpc_end=41156992116 frequency=10000000 ms=1.245400 MiBps=3211.819 sum=2251494963806208 expected=2251494963806208
+READ cached-control-after pass=1 bytes=4194304 qpc_start=41156999982 qpc_end=41157015029 frequency=10000000 ms=1.504700 MiBps=2658.337 sum=2251494963806208 expected=2251494963806208
+READ cached-control-after pass=2 bytes=4194304 qpc_start=41157022392 qpc_end=41157034915 frequency=10000000 ms=1.252300 MiBps=3194.123 sum=2251494963806208 expected=2251494963806208
+SHARED_MAP_RESULT PASS version=2
+probe_exit=0
+health abi=1 version=0x00070093 flags=7 generation=40723385082 epoch=5 completed=27 age_ms=1167 ready_ms=42138
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66375 ready=1

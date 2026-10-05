@@ -1,0 +1,12 @@
+begin=2026-09-25T01:44:10
+boot=2026-09-25T00:53:18
+sample=2026-09-25T01:44:11 budget=0 health abi=1 version=0x00070091 flags=15 generation=29824235770 epoch=5 completed=87 age_ms=17 ready_ms=73928
+{"name":"kmd","title":"bc250kmd","order":30,"rows":[["Driver","installed","Good"],["Stage","50 first CommitVidPn","Info"],["History","10 20 30 31 32 33 34 35 39 50","Info"],["Unconfirmed","1 of 2","Warn"],["Confirm","confirmed after presentation progress","Info"]]}
+Did not observe genuine pending start
+At C:\BC250\tmp\health145-accept.ps1:27 char:23
++ if(-not $seenPending){throw 'Did not observe genuine pending start'}
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Did not observe genuine pending start:String) [] 
+   , RuntimeException
+    + FullyQualifiedErrorId : Did not observe genuine pending start
+ 

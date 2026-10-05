@@ -1,0 +1,8 @@
+now=2026-09-25T01:20:19
+boot=2026-09-25T00:53:18
+bc250mon pid=4228 start=2026-09-25T00:54:21
+dwm pid=1720 start=2026-09-25T00:54:20
+kmd_sha256=EBA6C25DCE0F9C5362321B9D4468AD956A16385BB018274D538654372BC90ADA
+budget=0
+full_policy=2
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66250 ready=1

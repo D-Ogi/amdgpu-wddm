@@ -1,0 +1,10 @@
+--- before/pnp.c
++++ after/pnp.c
+@@ -11,6 +11,7 @@
+     device->PhysicalDeviceObject = PhysicalDeviceObject;
+     device->Rotation = D3DKMDT_VPPR_IDENTITY;
+     ExInitializeFastMutex(&device->GartLock);
++    ExInitializePushLock(&device->GfxPagingLock);
+     *MiniportDeviceContext = device;
+     return STATUS_SUCCESS;
+ }

@@ -1,0 +1,4 @@
+paging_permutation.c
+paging_permutation_test.c
+Generowanie kodu...
+page permutations: 46233 cases, 0 snapshot-oracle failures

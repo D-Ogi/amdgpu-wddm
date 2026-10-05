@@ -1,0 +1,15 @@
+create 00000000 level a000
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+shared A-to-B red mismatches 0 of 2048
+shared B-to-A blue mismatches 0 of 2048
+shared control PASS
+buffer 00000000
+rtv 00000000
+staging 00000000
+map 00000000
+green mismatches 0 of 307200
+present 0 00000000
+device removed 00000000

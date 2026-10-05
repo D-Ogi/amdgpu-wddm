@@ -1,0 +1,248 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
+@@ -70,6 +70,11 @@
+ void
+ radv_wddm2_wsi_init(struct radeon_winsys *ws, struct wsi_device *wsi)
+ {
++   if (radv_wddm2_winsys(ws)->bc250) {
++      wsi->sw = true;
++      wsi->blit = NULL;
++      return;
++   }
+    wsi->win32.get_d3d12_device = radv_wddm2_wsi_get_d3d12_device;
+    wsi->win32.get_d3d12_command_queue = radv_wddm2_wsi_get_d3d12_command_queue;
+    wsi->win32.requires_blits = radv_wddm2_wsi_needs_blits;
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -2901,8 +2901,10 @@
+       }
+ 
+       if (wsi->sw) {
+-         wsi->WaitForFences(vk_device_to_handle(dev),
++         results[i] = wsi->WaitForFences(vk_device_to_handle(dev),
+                             1, &swapchain->fences[image_index], true, ~0ull);
++         if (results[i] != VK_SUCCESS)
++            continue;
+       }
+ 
+       const VkPresentRegionKHR *region = NULL;
+--- a/src/vulkan/wsi/wsi_common_win32.cpp
++++ b/src/vulkan/wsi/wsi_common_win32.cpp
+@@ -41,6 +41,7 @@
+ #include <dxguids/dxguids.h>
+ 
+ #include <dcomp.h>
++#include <dwmapi.h>
+ 
+ #if defined(__GNUC__)
+ #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"      // warning: cast to pointer from integer of different size
+@@ -78,7 +79,6 @@
+       ID3D12GraphicsCommandList *cmd_list;
+    } dxgi;
+    struct {
+-      HDC dc;
+       HBITMAP bmp;
+       int bmp_row_pitch;
+       void *ppvBits;
+@@ -111,7 +111,8 @@
+    VkResult                     status;
+    VkExtent2D                 extent;
+    HWND wnd;
+-   HDC chain_dc;
++   VkFormat format;
++   bool retired;
+    ID3D12Fence              **d3d12_blit_fences;
+    struct wsi_win32_image     images[0];
+ };
+@@ -216,9 +217,11 @@
+    caps->surfaceCapabilities.maxImageArrayLayers = 1;
+ 
+    caps->surfaceCapabilities.supportedCompositeAlpha =
+-      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR |
+-      VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR |
+-      VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
++      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
++   if (!wsi_device->sw && wsi_device->win32.get_d3d12_command_queue)
++      caps->surfaceCapabilities.supportedCompositeAlpha |=
++         VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR |
++         VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
+ 
+    VkImageUsageFlags image_usage = wsi_caps_get_image_usage();
+ 
+@@ -775,28 +778,22 @@
+    if (chain->dxgi)
+       return VK_SUCCESS;
+ 
+-   chain->chain_dc = GetDC(chain->wnd);
+-   image->sw.dc = CreateCompatibleDC(chain->chain_dc);
+-   HBITMAP bmp = NULL;
+-
+    BITMAPINFO info = { 0 };
+-   info.bmiHeader.biSize = sizeof(BITMAPINFO);
++   info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = create_info->imageExtent.width;
+-   info.bmiHeader.biHeight = -create_info->imageExtent.height;
++   info.bmiHeader.biHeight = -(LONG)create_info->imageExtent.height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+ 
+-   bmp = CreateDIBSection(image->sw.dc, &info, DIB_RGB_COLORS, &image->sw.ppvBits, NULL, 0);
+-   assert(bmp && image->sw.ppvBits);
+-
+-   SelectObject(image->sw.dc, bmp);
+-
++   image->sw.bmp = CreateDIBSection(NULL, &info, DIB_RGB_COLORS,
++                                    &image->sw.ppvBits, NULL, 0);
++   if (!image->sw.bmp || !image->sw.ppvBits)
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
+    BITMAP header;
+-   int status = GetObject(bmp, sizeof(BITMAP), &header);
+-   (void)status;
++   if (GetObject(image->sw.bmp, sizeof(header), &header) != sizeof(header))
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
+    image->sw.bmp_row_pitch = header.bmWidthBytes;
+-   image->sw.bmp = bmp;
+ 
+    return VK_SUCCESS;
+ }
+@@ -809,8 +806,6 @@
+    if (image->dxgi.swapchain_res)
+       image->dxgi.swapchain_res->Release();
+ 
+-   if (image->sw.dc)
+-      DeleteDC(image->sw.dc);
+    if(image->sw.bmp)
+       DeleteObject(image->sw.bmp);
+    wsi_destroy_image(&chain->base, &image->base);
+@@ -826,7 +821,6 @@
+    for (uint32_t i = 0; i < chain->base.image_count; i++)
+       wsi_win32_image_finish(chain, allocator, &chain->images[i]);
+ 
+-   DeleteDC(chain->chain_dc);
+ 
+    if (chain->surface->current_swapchain == chain)
+       chain->surface->current_swapchain = NULL;
+@@ -915,6 +909,10 @@
+                                         const VkAcquireNextImageInfoKHR *info,
+                                         uint32_t *out_image_index)
+ {
++   if (chain->retired)
++      return VK_ERROR_OUT_OF_DATE_KHR;
++   if (chain->status != VK_SUCCESS)
++      return chain->status;
+    if (wsi_win32_find_idle_image(chain, out_image_index))
+       return VK_SUCCESS;
+ 
+@@ -927,6 +925,10 @@
+    do {
+       int ret = u_cnd_monotonic_timedwait(
+          &chain->acquire_cond, &chain->acquire_mutex, &abs_timespec);
++      if (chain->retired)
++         return VK_ERROR_OUT_OF_DATE_KHR;
++      if (chain->status != VK_SUCCESS)
++         return chain->status;
+       if (ret == thrd_timedout)
+          return VK_TIMEOUT;
+       else if (ret != thrd_success)
+@@ -1044,16 +1046,57 @@
+    if (chain->dxgi)
+       return wsi_win32_queue_present_dxgi(chain, image, damage);
+ 
+-   char *ptr = (char *)image->base.cpu_map;
+-   char *dptr = (char *)image->sw.ppvBits;
+-
++   RECT rect;
++   VkResult result = VK_SUCCESS;
++   if (!GetClientRect(chain->wnd, &rect))
++      result = VK_ERROR_SURFACE_LOST_KHR;
++   else if ((uint32_t)(rect.right - rect.left) != chain->extent.width ||
++            (uint32_t)(rect.bottom - rect.top) != chain->extent.height)
++      result = VK_ERROR_OUT_OF_DATE_KHR;
++   if (result != VK_SUCCESS) {
++      wsi_win32_set_image_idle(chain, image);
++      return result;
++   }
++
++   const uint8_t *ptr = (const uint8_t *)image->base.cpu_map;
++   uint8_t *dptr = (uint8_t *)image->sw.ppvBits;
+    for (unsigned h = 0; h < chain->extent.height; h++) {
+-      memcpy(dptr, ptr, chain->extent.width * 4);
++      if (chain->format == VK_FORMAT_R8G8B8A8_UNORM) {
++         for (unsigned x = 0; x < chain->extent.width; x++) {
++            dptr[x * 4 + 0] = ptr[x * 4 + 2];
++            dptr[x * 4 + 1] = ptr[x * 4 + 1];
++            dptr[x * 4 + 2] = ptr[x * 4 + 0];
++            dptr[x * 4 + 3] = ptr[x * 4 + 3];
++         }
++      } else {
++         memcpy(dptr, ptr, chain->extent.width * 4);
++      }
+       dptr += image->sw.bmp_row_pitch;
+       ptr += image->base.row_pitches[0];
+    }
+-   if (!StretchBlt(chain->chain_dc, 0, 0, chain->extent.width, chain->extent.height, image->sw.dc, 0, 0, chain->extent.width, chain->extent.height, SRCCOPY))
+-      chain->status = VK_ERROR_MEMORY_MAP_FAILED;
++
++   HDC window_dc = GetDC(chain->wnd);
++   HDC memory_dc = window_dc ? CreateCompatibleDC(window_dc) : NULL;
++   HGDIOBJ previous = memory_dc ? SelectObject(memory_dc, image->sw.bmp) : NULL;
++   if (!window_dc)
++      result = VK_ERROR_SURFACE_LOST_KHR;
++   else if (!memory_dc || !previous || previous == HGDI_ERROR)
++      result = VK_ERROR_OUT_OF_HOST_MEMORY;
++   else if (!BitBlt(window_dc, 0, 0, chain->extent.width, chain->extent.height,
++                    memory_dc, 0, 0, SRCCOPY) || !GdiFlush())
++      result = VK_ERROR_SURFACE_LOST_KHR;
++   if (previous && previous != HGDI_ERROR)
++      SelectObject(memory_dc, previous);
++   if (memory_dc)
++      DeleteDC(memory_dc);
++   if (window_dc)
++      ReleaseDC(chain->wnd, window_dc);
++   if (result == VK_SUCCESS && FAILED(DwmFlush()))
++      result = VK_ERROR_SURFACE_LOST_KHR;
++
++   mtx_lock(&chain->acquire_mutex);
++   chain->status = result;
++   mtx_unlock(&chain->acquire_mutex);
+ 
+    wsi_win32_set_image_idle(chain, image);
+ 
+@@ -1193,6 +1236,17 @@
+ 
+    assert(create_info->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR);
+ 
++   if (create_info->oldSwapchain) {
++      struct wsi_win32_swapchain *old_chain =
++         (struct wsi_win32_swapchain *)create_info->oldSwapchain;
++      if (!old_chain->dxgi) {
++         mtx_lock(&old_chain->acquire_mutex);
++         old_chain->retired = true;
++         u_cnd_monotonic_broadcast(&old_chain->acquire_cond);
++         mtx_unlock(&old_chain->acquire_mutex);
++      }
++   }
++
+    const unsigned num_images = create_info->minImageCount;
+    struct wsi_win32_swapchain *chain;
+    size_t size = sizeof(*chain) + num_images * sizeof(chain->images[0]);
+@@ -1249,6 +1303,7 @@
+    chain->base.queue_present = wsi_win32_queue_present;
+    chain->base.present_mode = wsi_swapchain_get_present_mode(wsi_device, create_info);
+    chain->extent = create_info->imageExtent;
++   chain->format = create_info->imageFormat;
+ 
+    chain->wsi = wsi;
+    chain->status = VK_SUCCESS;
+--- a/src/vulkan/wsi/meson.build
++++ b/src/vulkan/wsi/meson.build
+@@ -29,7 +29,7 @@
+ 
+ if with_platform_windows
+   files_vulkan_wsi += files('wsi_common_win32.cpp')
+-  platform_deps += dep_dxheaders
++  platform_deps += [dep_dxheaders, cc.find_library('dwmapi')]
+ else
+   files_vulkan_wsi += files('wsi_common_headless.c')
+ endif

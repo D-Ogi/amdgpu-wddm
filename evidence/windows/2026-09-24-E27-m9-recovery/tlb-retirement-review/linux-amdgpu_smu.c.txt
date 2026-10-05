@@ -1,0 +1,7 @@
+ref/linux-src/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+2077: 	if (amdgpu_ip_version(adev, GC_HWIP, 0) >= IP_VERSION(9, 4, 2) &&
+2078: 	    !((adev->flags & AMD_IS_APU) && adev->gfx.imu.funcs) &&
+2079: 	    !amdgpu_sriov_vf(adev) && adev->gfx.rlc.funcs->stop)
+2080: 		adev->gfx.rlc.funcs->stop(adev);
+2081: 
+2082: 	return ret;

@@ -1,0 +1,18 @@
+M216 virtual Fill ordered publication, 2026-09-23.
+Dirty working tree over base-commit.txt; relevant sources included.
+Procedure in E27 README before implementation/testing.
+Actual GfxPagingBuildFillPage returns the CPU physical identity used for direct or
+GART packets. WddmBuildVirtualFill commits accepted table slices before translating
+another slice. No second translation to discover a completed packet destination.
+Final routing9106/0 (24 new). Omitted logical commits599 failures expected, exit1.
+Full WDK build/sign0785 pass. SYS SHA256
+848D497BDC87B1A4BF4AC33193F85D3B7BDBA0A40707FAD8E6E7DE28DC71FCCB
+Package scratch/build/bc250kmd-0785/package-umd NOT DEPLOYED.
+Host tests use actual builders/publication and modeled address translation/WDK
+fields. They cover table-half effects, private refusal, page bounds, local/system
+physical identity, GART packets, multi-buffer and multi-record DMA accounting.
+No new actual-walker self-remapping scenario or OS construction concurrency test.
+Outer DDI branch/counters compile/source only. Virtual byte-progress ABI remains
+32-bit; >4GiB virtual Fill still refused. This is not a hardware validation.
+No lab access/reboot/USB changes/private-data redaction. Transfer writes to tables,
+physical Transfer/aperture ops, OS error policy, cache and recovery remain open.

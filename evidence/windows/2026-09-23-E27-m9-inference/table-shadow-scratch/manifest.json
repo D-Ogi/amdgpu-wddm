@@ -1,0 +1,12 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; helpers not integrated into graph publication; no deployment",
+  "sha256": {
+    "driver/kmd/paging_pt_shadow.c": "697911cf57b827a36acb641e2a12de27bcebd069eff7bb7cbf698112cf290c94",
+    "driver/kmd/paging_pt_shadow.h": "c1358c26b3b1859d219e5a765a019a9716940ec268da072ab083cae804e5f6a7",
+    "driver/kmd/test/paging_pt_shadow_test.c": "675429a019225f1df5ccb134ad18f1bd53b44f4fea474fef2eda05891e11915a"
+  },
+  "host_exit": 0,
+  "routing_exit": 0,
+  "mutant_exit": 1
+}

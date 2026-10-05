@@ -1,0 +1,128 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.015 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 46
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [P:\BC-250\scratch\dwm\dwm-draw.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+Symbol search path is: P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+Executable search path is: P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+Windows 10 Version 22631 MP (12 procs) Free x64
+Product: WinNt, suite: SingleUserTS
+Edition build lab: 22621.1.amd64fre.ni_release.220506-1250
+Debug session time: Wed Sep 23 01:24:22.000 2026 (UTC + 2:00)
+System Uptime: not available
+Process Uptime: 0 days 0:00:13.000
+................................................................
+..........
+ReadVirtual() failed in GetXStateConfiguration() first read attempt (error == 0.)
+Invalid mini-dump Miscellaneous information in InitializeConfiguration()
+For analysis of this file, run !analyze -v
+*** WARNING: Unable to verify timestamp for ntdll.dll
+*** WARNING: Unable to verify timestamp for dwm.exe
+ntdll+0xa1f74:
+00007ffd`b1ef1f74 c3              ret
+0:000> cdb: Reading initial command '~5s; .frame /r 11; dv /t; du 0000009a87d9dcd0 L180; ub 00007ffd5de3dfff L15; q'
+Unable to load image C:\Windows\System32\win32u.dll, Win32 error 0n2
+*** WARNING: Unable to verify timestamp for win32u.dll
+*** WARNING: Unable to verify timestamp for user32.dll
+win32u+0x1644:
+00007ffd`af341644 c3              ret
+Cannot find frame 0x11, previous scope unchanged
+00 0000009a`87d9d6e8 00007ffd`b011170e     win32u+0x1644
+rax=000000000000100a rbx=0000000000000000 rcx=0000020920760880
+rdx=0000020920b01730 rsi=0000000000000001 rdi=0000000000100044
+rip=00007ffdaf341644 rsp=0000009a87d9d6e8 rbp=0000000000000000
+ r8=0000000000000000  r9=0000020920b3a9a0 r10=0000000000100044
+r11=0000000000000044 r12=0000020920b01730 r13=0000000000000001
+r14=0000020920b01730 r15=0000000000000000
+iopl=0         nv up ei pl zr na pe nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+win32u+0x1644:
+00007ffd`af341644 c3              ret
+Unable to enumerate locals, Win32 error 0n318
+Private symbols (symbols.pri) are required for locals.
+Type ".hh dbgerr005" for details.
+0000009a`87d9dcd0  "Assertion failed!..Program: C:\B"
+0000009a`87d9dd10  "C250\e26\early-context\bc250d3d."
+0000009a`87d9dd50  "dll.File: ../mesa-wddm2/src/gall"
+0000009a`87d9dd90  "ium/auxiliary/tgsi/tgsi_exec.c.L"
+0000009a`87d9ddd0  "ine: 5380..Expression: mach->Loo"
+0000009a`87d9de10  "pStackTop < TGSI_EXEC_MAX_LOOP_N"
+0000009a`87d9de50  "ESTING..For information on how y"
+0000009a`87d9de90  "our program can cause an asserti"
+0000009a`87d9ded0  "on.failure, see the Visual C++ d"
+0000009a`87d9df10  "ocumentation on asserts..(Press "
+0000009a`87d9df50  "Retry to debug the application -"
+0000009a`87d9df90  " JIT must be enabled)"
+bc250d3d!emit_vertex+0xb7 [inlined in bc250d3d!exec_instruction+0x13a1]:
+00007ffd`5de3df91 3b8fa4050400    cmp     ecx,dword ptr [rdi+405A4h]
+00007ffd`5de3df97 0f83e7160000    jae     bc250d3d!exec_instruction+0x2a94 (00007ffd`5de3f684)
+00007ffd`5de3df9d 85c9            test    ecx,ecx
+00007ffd`5de3df9f 7512            jne     bc250d3d!exec_instruction+0x13c3 (00007ffd`5de3dfb3)
+00007ffd`5de3dfa1 488b8cd780050400 mov     rcx,qword ptr [rdi+rdx*8+40580h]
+00007ffd`5de3dfa9 8b87a8050400    mov     eax,dword ptr [rdi+405A8h]
+00007ffd`5de3dfaf 42890481        mov     dword ptr [rcx+r8*4],eax
+00007ffd`5de3dfb3 8b87a0050400    mov     eax,dword ptr [rdi+405A0h]
+00007ffd`5de3dfb9 0187a8050400    add     dword ptr [rdi+405A8h],eax
+00007ffd`5de3dfbf 488b84d760050400 mov     rax,qword ptr [rdi+rdx*8+40560h]
+00007ffd`5de3dfc7 42ff0480        inc     dword ptr [rax+r8*4]
+00007ffd`5de3dfcb e9b4160000      jmp     bc250d3d!exec_instruction+0x2a94 (00007ffd`5de3f684)
+00007ffd`5de3dfd0 488bcf          mov     rcx,rdi
+00007ffd`5de3dfd3 e878c3ffff      call    bc250d3d!emit_primitive (00007ffd`5de3a350)
+00007ffd`5de3dfd8 e9a7160000      jmp     bc250d3d!exec_instruction+0x2a94 (00007ffd`5de3f684)
+00007ffd`5de3dfdd 83bf7807040020  cmp     dword ptr [rdi+40778h],20h
+00007ffd`5de3dfe4 7c19            jl      bc250d3d!exec_instruction+0x140f (00007ffd`5de3dfff)
+00007ffd`5de3dfe6 41b804150000    mov     r8d,1504h
+00007ffd`5de3dfec 488d150d7f1700  lea     rdx,[bc250d3d!`string' (00007ffd`5dfb5f00)]
+00007ffd`5de3dff3 488d0da68a1700  lea     rcx,[bc250d3d!`string' (00007ffd`5dfb6aa0)]
+00007ffd`5de3dffa e86d58f7ff      call    bc250d3d!_wassert (00007ffd`5ddb386c)
+quit:
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\stl.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\windows.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\winrt.natvis'

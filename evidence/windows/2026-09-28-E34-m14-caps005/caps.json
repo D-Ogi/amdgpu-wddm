@@ -1,0 +1,15 @@
+{
+    "adapter":  "adapter: AMD BC-250 (RADV GFX1013) (api 1.4.363)",
+    "driver":  "driver: radv, Mesa 26.3.0-devel (git-05e6c9622e)",
+    "icd_witness":  "icd: C:\\BC250\\m14\\caps005\\bc250radv.dll sha256 C38885C50A0A1A77B29281F0BB3D78196BF228765BD22AB93FDBB35ECBB85BCC",
+    "maximum_feature_level":  45312,
+    "doubles":  1,
+    "compute_raw_structured":  1,
+    "logic_op":  1,
+    "tile_based":  0,
+    "pixel_min_precision":  2,
+    "other_min_precision":  2,
+    "engine_sha256":  "DC65F15B9B0BE7977883EB83D6D6C4BC905C83D6939226BD18DD4BB6057AFD04",
+    "icd_sha256":  "C38885C50A0A1A77B29281F0BB3D78196BF228765BD22AB93FDBB35ECBB85BCC",
+    "engine_test_sha256":  "5D7DC7BEA61C1A5E4F40F8504AF492101F82A3B052023B4B52A96D86C2C51E91"
+}

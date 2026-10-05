@@ -1,0 +1,80 @@
+firmware=cyan_skillfish2_me.bin bytes=263424 sha256=D4ED4D968DE0D7720F7C8215D42FDAE727BF99CDF43CEE6F8F864DC2584B17E2
+firmware=cyan_skillfish2_mec2.bin bytes=268592 sha256=B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4
+firmware=cyan_skillfish2_sdma1.bin bytes=33792 sha256=BD1C0B0F6A6A4F17EDE034F2C844B6553FC444E08915C7BB500C09FDE59D6255
+firmware=cyan_skillfish2_pfp.bin bytes=263424 sha256=50E56DC1913571FF589425D2B059BDDFC5E8A2B4BC22D3EB78CAC75D1E0479A1
+firmware=cyan_skillfish2_ce.bin bytes=263296 sha256=5946EFBF7E46CCFE7E9F965DA56C35B1187469D1C1A49C8A9EFF433EB3AB4723
+firmware=cyan_skillfish2_mec.bin bytes=268592 sha256=B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4
+firmware=cyan_skillfish2_sdma.bin bytes=33792 sha256=15D0D3626DA7F2513F03B13BB7E02EEEECCAB276276AE27D0B6067B5F25E9E95
+firmware=cyan_skillfish2_rlc.bin bytes=25344 sha256=20ACEFDB6128A36275F4382425A109A7C9927F6053EAB685BB51164FF1D18CFB
+driver_version=0.7.107.1
+installed_sha256=236328FC5337185DE2D9CFA69189ABE4795B3629ECB82A5438F4636FEF039035
+boot_before=2026-09-24T04:30:34
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+04:32:36 Tctl 68.8 C (raw 75DB0FEF)
+
+
+
+EnableMmio        : 1
+EnableMmioWrite   : 0
+EnableVram        : 1
+EnableVramWrite   : 1
+EnableGart        : 1
+EnablePsp         : 1
+EnableGfx         : 1
+EnableIh          : 1
+EnableFullWddm    : 1
+EnableGpuVa       : 1
+EnableGpuSubmit   : 1
+EnablePresentBlit : 0
+EnableDcnWrite    : 0
+EnablePagingNode  : 1
+EnableVidPnFlip   : 0
+UnconfirmedStarts : 2
+KeepLog           : 1
+
+
+
+disable_begin=2026-09-24T04:32:36
+Microsoft PnP Utility
+
+Disabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041
+Device disabled successfully.
+
+enable_begin=2026-09-24T04:32:41
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041
+Device enabled successfully.
+
+
+
+Status  : Error
+Problem : CM_PROB_FAILED_POST_START
+
+
+
+
+
+EnableFullWddm    : 0
+LastStage         : 90
+StageHistory      : 10 20 30 90 
+UnconfirmedStarts : 2
+
+
+
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE among the 2 present:
+  ROOT\BasicRender  (Microsoft Basic Render Driver)
+  ROOT\BasicDisplay  (Microsoft Basic Display Driver)
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE
+boot_after=2026-09-24T04:30:34
+Full start device not healthy
+At C:\BC250\tmp\candidate07107-control.ps1:57 char:68
++ ... ].InstanceId).Status -ne 'OK'){throw 'Full start device not healthy'}
++                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Full start device not healthy:String) [], Runtim 
+   eException
+    + FullyQualifiedErrorId : Full start device not healthy
+ 

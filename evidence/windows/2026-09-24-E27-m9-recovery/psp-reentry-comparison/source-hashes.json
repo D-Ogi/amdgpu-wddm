@@ -1,0 +1,9 @@
+{
+  "bc250-win\\evidence\\windows\\2026-09-24-E27-m9-recovery\\candidate07104\\candidate07104-start.log": "8cf70afdc13e3429b7c04279901e204aad3086d5214e844a7ff501668ec4f141",
+  "bc250-win\\evidence\\windows\\2026-09-24-E27-m9-recovery\\warm07104-recovered\\ring-20260924-001459-614.log": "32998fac00a9e4cfd9b16137b3b34aeafa83cea11479f561a30208b8c1b6c18d",
+  "ref\\linux-src\\drivers\\gpu\\drm\\amd\\amdgpu\\gfx_v10_0.c": "41b4e75728f3ad25f69c179536f8b7ae30118026315216d5fd891f445a6a7e99",
+  "ref\\linux-src\\drivers\\gpu\\drm\\amd\\amdgpu\\amdgpu_psp.c": "8882e555989988c350d0df0206888c15095d237e4d1d81118c7e7d45399b5a91",
+  "bc250-win\\evidence\\linux\\2026-09-24-E28-wddm-reentry\\linux-first-load.log": "b4d67fa20c497aea54d1ebeae86f038cbae23bd9c7af698b18a417c34ee5a5bc",
+  "bc250-win\\evidence\\linux\\2026-09-24-E28-wddm-reentry\\linux-unload-trace.log": "117aa20c8881f226431ac494d55a7ea24e3da44dda9b85af4aee28c05d55565b",
+  "bc250-win\\evidence\\linux\\2026-09-24-E28-wddm-reentry\\linux-second-load.log": "03f69e47d5f68e0697658a23bd551bf8919ad574e38f63d6f3e0d33137ec244e"
+}

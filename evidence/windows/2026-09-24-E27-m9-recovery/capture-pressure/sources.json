@@ -1,0 +1,30 @@
+[
+  {
+    "path": "driver/kmd/paging_capture.c",
+    "sha256": "fe55da9934511ec82e2fd671e50c77a59cd3f19d6c933fd466b15fdba9aeea2b"
+  },
+  {
+    "path": "driver/kmd/paging_capture.h",
+    "sha256": "d20cbb0c0274b0af91ceb4326cf91830379193da3dc54913ee96fbf0c5700d56"
+  },
+  {
+    "path": "driver/kmd/wddm.c",
+    "sha256": "501fcc9c02bcaaa51722a1b62810f1fab082d5001b77ce60c73f99d73dce7b1a"
+  },
+  {
+    "path": "driver/kmd/bc250kmd_escape.h",
+    "sha256": "b016b6b2564f6030905cb103fc8ef611233bdaa6117f34bb919a7bc3df869d3a"
+  },
+  {
+    "path": "driver/kmd/bc250kmd.inf",
+    "sha256": "a0a2dbb7757d5105f26f4398e35ee0d42f2e5766ffeee388220b0d66ba3ece13"
+  },
+  {
+    "path": "experiments/E27-m9-inference/paging-route-test-prefix.c",
+    "sha256": "b3a4dff5f9e79f43a8a930ffe6147fbcada11d0e289aa303f0b5abd79acdfbd6"
+  },
+  {
+    "path": "experiments/E27-m9-inference/paging-route-test-suffix.c",
+    "sha256": "a0e04b6cb52a664a29182587c581e8c6dbb468a51cd8bb3369f80dd778c7fda3"
+  }
+]

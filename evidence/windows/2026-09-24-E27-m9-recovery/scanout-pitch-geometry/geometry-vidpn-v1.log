@@ -1,0 +1,5 @@
+Extracted publication and vsync functions from P:\bc-250\bc250-win\driver\kmd\wddm.c
+vidpn_flip_actual.c
+dcn_translate.c
+Generowanie kodu...
+vidpn publication: 109 checks, 0 failures

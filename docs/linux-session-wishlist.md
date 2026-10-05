@@ -1,31 +1,44 @@
 # Wishlist for the next Linux session on unit A
 
-Unit A now boots Windows from NVMe; Linux means booting the diagnostic stick (`tools/diagusb`) again, which
-cost the owner a trip to the machine until E13 boot 4; since then the stick stays plugged in and is steered from Windows (L18), and the owner is needed only when a step hangs the machine. This file collects what should be measured the next time that
-happens, so that one session covers everything. Add an item the moment you notice "this would have been easy
-to capture under Linux"; when an item is done, move it to the bottom with the evidence directory next to it.
-Items are questions with a reason, not commands: the procedure is written when the session is planned.
+**Status: active, reviewed 2026-09-24 through M438.**
+This is the current Linux measurement backlog, not an unexecuted boot plan.
+The owner authorizes switching between Windows on NVMe and Linux on the connected
+USB without asking again. Use the established loader/grub.cfg steering; record
+boot history and preserve evidence before switching. Owner intervention is needed
+only when remote recovery is unavailable.
 
-Rules of the session stay as always: named registers only, streamed logs, boot history recorded (cold or
-warm, what ran before), secrets and serials redacted before commit.
+Prioritize L34/L17 for startup-state differences, L32 for matched inference and
+L33 for shader visibility. L25-L27 cover memory/concurrency work. Display, power,
+video and USB housekeeping rows remain a backlog, not prerequisites for M9.
+Older milestone motivations below are historical context where explicitly marked;
+an open row does not mean no measurement exists. Preserve its partial evidence.
+Move completed questions to Done; revise scope when only a remainder is open.
+
+Use named registers, streamed logs and recorded cold/warm history. Do not repeat
+the known failed reset experiment as if a working reset were available. Write a
+specific procedure before any potentially hanging unload/reload comparison.
 
 ## Open
 
 | # | What to capture | Why we want it | Noticed |
 |---|---|---|---|
+| L37 | M12 matched application baseline: release CTS vulkan-cts-1.4.6.2 (f6a29701220f34dd1407513bfe80d74ca7b392ce), same Mesa revision as the Windows candidate, vulkaninfo capabilities/queues, sparse mappings and unbound pages (L27), Zink/piglit quick, clvk OpenCL subset, fixed E33 workloads and translator versions | Explain every CTS/capability difference on our unit, including compute-only queues and cooperative matrices; community gpuinfo reports are not parity evidence. Record1000MHz/VID116, commands, assets, all repeats and output images | 2026-09-25 |
+| L38 | Display audio on unit A: whether amdgpu enables DP/HDMI audio on this part (`dmesg`, `aplay -l`, the Azalia device on the PCI bus), the DCCG audio DTO registers by their `dcn_2_0_1_offset.h` names through `regcalc` before and after a sound plays; and one run of the community Vulkan compute H.264/HEVC encoder (`ref/bc250-encoding-decoding-fix__WARN-*`, v0.5.1) at 1080p with its own fps report, same clocks as the Windows comparisons | No fact about display audio under Windows exists, and a community module claims the DTO must be programmed by hand; the encoder is a real Vulkan compute workload on this silicon with published figures, a candidate comparative workload for the M12 benchmark set (its code is GPL, read only) | 2026-09-27, owner question. **Partly answered 2026-10-05 (M788, E54).** The reference-clock half is measured on unit A under Windows: `CLK4_0_CLK4_CLK2_CURRENT_CNT` reads 600.000 MHz. The community traced the audio defect to two kernel causes, and upstream has fixed both. One was a 730 MHz nominal reference from the wrong clock manager. The other was a VBIOS spread-spectrum flag that this board does not honour. The "programmed by hand" claim is a workaround for those two defects, not a property of the hardware. Still open: the DTO registers themselves, whether DP audio works on unit A, and the encoder run |
+| L39 | GPU memory bandwidth under amdgpu + RADV with `tools/win/vkmembw` built for Linux (the same C file and shaders; replace the `vulkan-1.dll` loader with `libvulkan.so.1`), local and host placements, warm and cold clock, next to `pp_dpm_mclk`, `pp_dpm_fclk` and the raw metrics table (L31) read during the run | Under our Windows driver the GPU copies at 386-389 GB/s at 1000 and 2000 MHz (M776, E48), while amdgpu reports "mclk/fclk 450 MHz" idle and under load (M90): either that value is another unit of the same state, or Linux runs the memory lower; the comparison also prices any Linux-versus-Windows gap in GPU-bound frames | 2026-10-01. **Narrowed 2026-10-05 (M789).** The community resolves it from the specification side. The GDDR6 runs at 1750 MHz with `tCL` 24, and 256-bit at 14 Gbps is about 448 GB/s of peak. So 386-389 GB/s is about 86 % of peak, and the 450 MHz is a misreport. This row now wants one instrument on both sides, not a cause |
+| L35 | Read the complete unit A BIOS/SPI flash twice, with a verified procedure/build that does not unlock ROM/chip protection; record tool/chip identity, capacity, native exits, byte comparison and hashes. Own AmdSetup extraction is complete (M438) | Obtain our own complete firmware baseline for offline comparison. Stock flashrom init/read can change protections; no SPI hardware command was executed in E30 | 2026-09-24, owner request; narrowed after M438 |
 | L1 | A second pre-driver sweep after a **recorded cold start**, and a third after a recorded warm restart from a session in which amdgpu had run | Confirms or refutes the cause given in M19 (uninitialized flops vary per power-up; PSP mailbox state survives a warm restart). The E02/E03 runs did not record the boot history | 2026-09-21 |
-| L2 | Engine state after amdgpu has run and the machine is warm-restarted **without** loading amdgpu: `CP_ME_CNTL`, `CP_MEC_CNTL`, `RLC_CNTL`, `RLC_STAT`, `SDMA0/1_F32_CNTL`, `SDMA0/1_STATUS_REG`, `GRBM_STATUS*`, PSP `C2PMSG_64/81` | Tells whether microcode and PSP state survive a warm restart. If they do, the first ring experiments under Windows can run before we have a PSP path of our own (init-sequence.md, observation 1) | 2026-09-21 |
-| L3 | The PSP ring itself: the 11 command frames and their command buffers (command id, firmware type, sizes, order), plus `amdgpu_firmware_info` and names + SHA-256 of the `cyan_skillfish2_*.bin` files in use | The register trace shows only the ring write pointer moving 11 times. To load firmware under Windows we need the exact commands and order on this unit, and which firmware versions they carried | 2026-09-21 Partly (E13): `amdgpu_firmware_info` and the hashes of the firmware files are in `boot*/state.txt`; the PSP ring's frames are still open. |
-| L4 | Ring contents right after init with packet decode (KIQ, gfx, compute, SDMA): ring buffers, MQDs, write-back areas. `umr` on the stick if it can be built for Alpine, otherwise raw dumps like the `rings` directory of E03 but taken immediately after each ring test | Everything amdgpu does after the KIQ is up travels in packets the register trace cannot see (queue mapping, ring tests). This is the template for milestone M5 | 2026-09-21 Partly (E13): ring buffers and MQDs of every ring, before and after amdgpu's IB tests, in `boot*/rings*`; no packet decode yet, no `umr` on the stick. |
+| L2 | Engine state after amdgpu has run and the machine is warm-restarted **without** loading amdgpu: `CP_ME_CNTL`, `CP_MEC_CNTL`, `RLC_CNTL`, `RLC_STAT`, `SDMA0/1_F32_CNTL`, `SDMA0/1_STATUS_REG`, `GRBM_STATUS*`, PSP `C2PMSG_64/81` | Compare firmware, PSP and engine state across boot histories for the current WDDM reentry investigation. The original motivation of borrowing Linux-loaded firmware before implementing Windows PSP is superseded by the working Windows initialization path (M317); that is no longer a milestone prerequisite | 2026-09-21 |
+| L3 | The PSP ring itself: the 11 command frames and their command buffers (command id, firmware type, sizes, order), plus `amdgpu_firmware_info` and names + SHA-256 of the `cyan_skillfish2_*.bin` files in use | The register trace shows only the ring write pointer moving 11 times. The original Windows bring-up prerequisite is superseded by M317. Raw frames remain useful for comparing PSP behavior across repeated initialization; retain existing firmware hashes instead of recollecting them without a reason | 2026-09-21 Partly (E13): `amdgpu_firmware_info` and the hashes of the firmware files are in `boot*/state.txt`; the PSP ring's frames are still open. |
+| L4 | Ring contents right after init with packet decode (KIQ, gfx, compute, SDMA): ring buffers, MQDs, write-back areas. `umr` on the stick if it can be built for Alpine, otherwise raw dumps like the `rings` directory of E03 but taken immediately after each ring test | Everything amdgpu does after the KIQ is up travels in packets the register trace cannot see (queue mapping, ring tests). The original M5 prerequisite is historical; remaining decode would support queue-state and reentry comparisons | 2026-09-21 Partly (E13): ring buffers and MQDs of every ring, before and after amdgpu's IB tests, in `boot*/rings*`; no packet decode yet, no `umr` on the stick. |
 | L5 | The same trace instrument armed around **one minimal submission**: an SDMA write-linear and a gfx/compute NOP + `WRITE_DATA` to `SCRATCH_REG0`, with ring dumps before and after | The smallest complete "first command" reference: doorbell value, write pointer handling, fence write-back | 2026-09-21 Partly (E13): amdgpu's own IB tests under the event trace (facts M40); the register-level trace of one hand-made submission is still open. Boot 4: a hand-made compute dispatch through raw ioctls (`dispatch.py`) under the event trace, with the ring dumped afterwards (facts M49, `boot4-readonly-after-windows/dispatch/`), and RADV's command stream for one dispatch (E14, `cs/`). |
-| L6 | Register trace of a **GPU reset** (`amdgpu_gpu_recover` through debugfs) and of suspend/resume if the platform supports it | A Windows driver needs a reset path for TDR from the first day it runs an engine; amdgpu's sequence on this SoC (mode2 through SMU? PSP reload?) is unknown to us. **Reset: done 2026-09-21, facts M53 - amdgpu performs no reset on this part and its resume hangs the machine at the RLC start.** Suspend/resume: facts M56 (s2idle only, no RTC alarm, one resume by the power button; GPU function after resume untested, no register trace across the sleep) | 2026-09-21 |
+| L6 | Suspend/resume GPU function and register trace, only if needed for the current recovery design | Remaining scope only: M56 recorded s2idle and one button wake, but did not validate GPU function after wake. Reset findings are closed below; this row is not a request to rerun amdgpu_gpu_recover | 2026-09-21; reviewed 2026-09-24 |
 | L7 | Memory layout as amdgpu sees it: `GCMC_VM_FB_LOCATION_BASE/TOP`, `GCMC_VM_FB_OFFSET`, VRAM and GTT managers from debugfs (`amdgpu_vram_mm`, `amdgpu_gtt_mm`), where the GART table and the TMR sit, and the firmware framebuffer address and size from `screen_info` / efifb | Needed for M4 (GART) and to compare with what Windows reports through post-display ownership in E05: same framebuffer, same physical address? | 2026-09-21 Partly (E13): VRAM and GTT managers and `mem_info_*` in `boot*/state.txt`. |
-| L8 | Display state after mode set: DTN log (`amdgpu_dm_dtn_log`), EDID, link rate and lane count, which `DIG`/`UNIPHY`/`OTG` instances carry the DisplayPort output | Mode setting of our own is late, but the capture is free while Linux is up, and it names the instances our DMU register reads should look at | 2026-09-21 Partly (E13): the DTN log in `boot*/state.txt`; EDID left out on purpose. 2026-09-22: the flip-specific half of this row moved out to L20 to L24, which name registers instead of log text. |
-| L10 | SMU tables: the driver table that `TransferTableSmu2Dram` fills (raw bytes + amdgpu's decoded metrics at the same moment), `GetEnabledSmuFeatures` result, fan and thermal limits if any. **2026-09-22 (ADR 0010, point 6):** the whole power-management surface in one pass - `pp_dpm_sclk`, `pp_dpm_mclk`, `pp_dpm_fclk`, `pp_dpm_pcie`, `pp_features`, `power_dpm_state`, `power_dpm_force_performance_level`, `pp_power_profile_mode`, `pp_od_clk_voltage`, `amdgpu_pm_info`, raw `gpu_metrics` and hwmon, sampled idle and under load at each operating point the tables offer; and the SMU **messages** amdgpu itself sends, read off a kprobe on `amdgpu:smu_cmn_send_smc_msg_with_param` (`ref/linux-src/drivers/gpu/drm/amd/pm/swsmu/smu_cmn.c:421`; swsmu has no tracepoint, so a kprobe is the only way to see them). Reading only - no message is sent by hand, and no clock is changed outside `docs/hardware.md`'s limits | Gives the overlay real power and clock telemetry under Windows through the mailbox we already drive, and a second temperature source to check M23 against. ADR 0010 point 6: "power management through the SMU will move the frame rate more than any line of driver code", and our allow-list of SMU messages (M22) was assembled from `cyan_skillfish_ppt.c`, never from what the driver actually sends on this unit | 2026-09-21 Partly (E13): `amdgpu_pm_info` and the raw `gpu_metrics` in `boot*/state.txt`. Boot 4: power and thermal readings idle and under load at 1000 and 1500 MHz, and the `pp_od_clk_voltage` interface (facts M47, M52). 2026-09-22 extended for ADR 0010: the operating points (M15, M47) and the 1000 against 1500 MHz comparison (M52) are already measured, so what is still open is the message stream, the feature mask and the per-level residency. **2026-09-22 (E21): the message-stream half is done** - the `smu_cmn_send_smc_msg_with_param` kprobe under a 20 s RADV load saw only `TransferTableSmu2Dram` (table 6), never a clock or feature message, so this driver runs no DPM at all under load on this part (facts M90, `evidence/linux/2026-09-22-E21-linux-reference-4/load/`). Still open: `GetEnabledSmuFeatures`, fan/thermal limits, and the metrics table's raw bytes next to amdgpu's decode (wishlist row (d) below). |
+| L8 | Display state after mode set: DTN log (`amdgpu_dm_dtn_log`), EDID, link rate and lane count; inherited GOP and post-amdgpu DISPCLK/pixel-clock data alongside totals and active dimensions; which `DIG`/`UNIPHY`/`OTG` instances carry the DisplayPort output | Mode setting of our own is late, but the capture is free while Linux is up, and it names the instances our DMU register reads should look at | 2026-09-21 Partly (E13): the DTN log in `boot*/state.txt`; EDID left out on purpose. 2026-09-22: the flip-specific half of this row moved out to L20 to L24, which name registers instead of log text. |
+| L10 | SMU tables: the driver table that `TransferTableSmu2Dram` fills (raw bytes + amdgpu's decoded metrics at the same moment), `GetEnabledSmuFeatures` result, fan, thermal and reported PPT/TDC limits if available through existing read interfaces (do not infer live limits from a BIOS feature mask). **2026-09-22 (ADR 0010, point 6):** the whole power-management surface in one pass - `pp_dpm_sclk`, `pp_dpm_mclk`, `pp_dpm_fclk`, `pp_dpm_pcie`, `pp_features`, `power_dpm_state`, `power_dpm_force_performance_level`, `pp_power_profile_mode`, `pp_od_clk_voltage`, `amdgpu_pm_info`, raw `gpu_metrics` and hwmon, sampled idle and under load at each operating point the tables offer; and the SMU **messages** amdgpu itself sends, read off a kprobe on `amdgpu:smu_cmn_send_smc_msg_with_param` (`ref/linux-src/drivers/gpu/drm/amd/pm/swsmu/smu_cmn.c:421`; swsmu has no tracepoint, so a kprobe is the only way to see them). Reading only - no message is sent by hand, and no clock is changed outside `docs/hardware.md`'s limits | Gives the overlay real power and clock telemetry under Windows through the mailbox we already drive, and a second temperature source to check M23 against. ADR 0010 point 6: "power management through the SMU will move the frame rate more than any line of driver code", and our allow-list of SMU messages (M22) was assembled from `cyan_skillfish_ppt.c`, never from what the driver actually sends on this unit | 2026-09-21 Partly (E13): `amdgpu_pm_info` and the raw `gpu_metrics` in `boot*/state.txt`. Boot 4: power and thermal readings idle and under load at 1000 and 1500 MHz, and the `pp_od_clk_voltage` interface (facts M47, M52). 2026-09-22 extended for ADR 0010: the operating points (M15, M47) and the 1000 against 1500 MHz comparison (M52) are already measured, so what is still open is the message stream, the feature mask and the per-level residency. **2026-09-22 (E21): the message-stream half is done** - the `smu_cmn_send_smc_msg_with_param` kprobe under a 20 s RADV load saw only `TransferTableSmu2Dram` (table 6), never a clock or feature message, so this driver runs no DPM at all under load on this part (facts M90, `evidence/linux/2026-09-22-E21-linux-reference-4/load/`). Still open: `GetEnabledSmuFeatures`, fan/thermal limits, and the metrics table's raw bytes next to amdgpu's decode (L31 below). |
 | L12 | M.2 root port `00:15.0` over several **cold** starts: `LnkSta`, `LnkCtl2`, AER counters, with and without the SSD seen by the firmware | M21: the NVMe link is intermittent. A pattern (only cold, only first power-up) decides whether a firmware setting or another SSD is the answer | 2026-09-21 |
 | L14 | Rebuild the stick with the fixed SSH host key and with the trace + sweep instruments of E03 as first-class commands | Housekeeping: every Linux session so far started with a known-hosts dance and ad-hoc scripts | 2026-09-21 E13 found the cause of the changing host key: sshd on the stick does not load the fixed ed25519 key (`ssh-keygen -y` asks for a passphrase), so only the per-boot RSA and ECDSA keys are served. |
 | L16 | State right after the PSP load and before gfx init: `SDMA0/1_F32_CNTL`, `RLC_CNTL`, `RLC_STAT`, `RLC_GPM_STAT`, `RLC_PG_CNTL` read at t = 0.31 s of amdgpu's init (needs a patched module or a kprobe after `psp_load_fw`), and whatever the PSP reports about where SDMA, the MEC jump tables and the RLC image went | Under Windows the PSP itself releases SDMA and starts the RLC during the load, and its responses carry a TMR address for the CP images only (facts M34, M35). The E03 trace holds amdgpu's own accesses, not the state in between, so it cannot show whether Linux sees the same | E10, 2026-09-21 |
-| L17 | amdgpu's unload on this part (`hw_fini`), traced, with a kernel console that survives a hang (netconsole or serial) | `modprobe -r amdgpu` hung the machine in E13 (facts M42), so there is no Linux reference for the teardown our undo path imitates. **Done 2026-09-21, facts M54: the unload traced twice, rc 0.** Still open, facts M55: the second load in one boot hangs the machine and has no register trace yet (kprobes on `amdgpu:amdgpu_device_wreg/rreg`, registered before the module loads, are the plan) | 2026-09-21 |
+| L17 | Trace a second amdgpu load in one boot, only with a procedure that captures progress before a possible hang | M54 already traced successful unload twice. M55 records second-load failure without a complete access trace. Remaining reload evidence may explain Windows KIQ reentry; coordinate with L34 rather than repeat the completed unload measurement | 2026-09-21; scope corrected 2026-09-24 |
 | L18 | The boot entry the session needs as the stick's default, or a mode that starts the network and nothing else | The owner's keyboard does not work in GRUB; E13 had to edit `grub.cfg` on the stick to get a boot without amdgpu. `bc250.mode=off` starts no network. Workaround in use since boot 4: the stick is steered from Windows (`set default=<n>` in `grub.cfg`, the loader renamed to `bootx64.efi.off` to fall through to NVMe), so a session no longer needs the owner's keyboard; the rebuild is still wanted | 2026-09-21 |
 | L19 | The video block as IP discovery describes it: `grep . /sys/bus/pci/devices/0000:01:00.0/ip_discovery/die/0/12/0/*` (major, minor, revision, base addresses), and the same for every other hardware id the E01 listing shows only as a directory name | E01 recorded the directory tree, not the files in it. Hardware id 12 is UVD/VCN, which amdgpu leaves without a driver block on this family (`case IP_VERSION(2, 0, 3): break;`), so the version and bases are the only thing Linux can tell us about it. Read-only, seconds; wanted before anybody decides whether hardware video is ever worth an experiment (roadmap, M12) | 2026-09-21 |
 | L22 | The failure signature of a **bad** flip, sampled for 10 s across a flip to a different VRAM offset and a different pitch: `mmHUBP<n>_DCHUBP_CNTL` bit `0x1C` `HUBP_UNDERFLOW_STATUS` (a field, not a register - `ref/linux-src/drivers/gpu/drm/amd/include/asic_reg/dcn/dcn_2_0_1_sh_mask.h`; note that `regcalc grep UNDERFLOW` over `dcn_2_0_1_offset.h` finds only `mmAZALIA_UNDERFLOW_FILLER_SAMPLE`, so there is **no** DCHUBBUB underflow counter register to read on this part), `mmOTG0/1_OTG_STATUS`, `mmDCHUBBUB_CTRL_STATUS`, and whether the pipe recovers by itself or stays wedged | We need to recognise a wrong scanout address before we ever write one under Windows. The guess is that it is a display underflow and not a GPU hang, but that is an inference and there is no working GPU reset on this part (M53), so the cost of being wrong is the owner's power button | 2026-09-22 |
@@ -38,10 +51,18 @@ warm, what ran before), secrets and serials redacted before commit.
 | L31 | The SMU metrics table's raw bytes (`TransferTableSmu2Dram`, table 6) read right after the message, next to amdgpu's own decode of the same table into `gpu_metrics`/`pp_dpm_sclk`/hwmon | M90 confirms the message and that no other one is ever sent, but the table's field layout on this part is still only amdgpu's word for it (`gpu_metrics.txt` in E21's evidence is already the raw bytes for one moment - what is missing is amdgpu's decode captured in the same run to check the offsets against) | 2026-09-22, from E21, and the table-dump half of L10 |
 | L32 | `SPI_PG_ENABLE_STATIC_WGP_MASK`, `CC_GC_SHADER_ARRAY_CONFIG`, `RLC_PG_CNTL` and `RLC_PG_ALWAYS_ON_WGP_MASK` per shader array at each step of amdgpu's init (after PSP load, at `gfx_v10_0_constants_init`, after `rlc_resume`, after init), and the same with the 40 CU write at the constants stage but without the `RLC_PG_ALWAYS_ON_WGP_MASK` write | M17 shows the SPI mask going `0xFFFF -> 0x7` with no host write. KMD 174 writes it at the constants stage (docs/design/cu-mode.md) and needs to know whether firmware rewrites it later, and whether CC + SPI alone give the full speed-up | 2026-09-30 |
 
+| L32 | Both models b9564 benchmark JSON pp512/tg128 r3 t6 ngl99 at verified1000MHz, full defaults and model/ICD hashes | Complete the comparable Linux baseline for M321: Windows TinyLlama1082.32/115.06 remains below Linux1119.59/154.92, but old Linux text lacks full defaults and matched stories15M clock evidence. Preserve both versions and report configuration differences | 2026-09-23; refreshed 2026-09-24 |
+
+| L33 | Run E27 shader-coherency-probe.c on Linux with the same E14 inthash SPIR-V,1000MHz, normal16rounds and --stale-input-control; capture hashes, native exits, memory types and driver revision | M264 Windows positive shader visibility has a CPU oracle and stale-input control; obtain the same-silicon Linux reference without claiming timings comparable | 2026-09-23 |
+
+| L34 | State and original AMD access ordering immediately around KIQ scheduler setup on the first load and, if a justified reload procedure is run, on the second load: `RLC_CP_SCHEDULERS`, RLC/CP/MEC state and selected queue, with kernel/source/firmware identity | M32607103 warm Windows startup last persisted scheduler before the original read/write pair; M327 adds access checkpoints. Need evidence of differing entry conditions, not speculative register writes. Prefer existing E13 traces first, then a targeted trace that avoids read-sensitive registers and preserves output across failure | 2026-09-24 |
+
 ## Done
 
 | # | What to capture | Why we want it | Noticed | Result |
 |---|---|---|---|---|
+| L36 (pre-driver) | Named THM BAR temperature access compared with k10temp before amdgpu | Validate the startup temperature backend | 2026-09-24 | Done in M438:72 samples,19 temperature values, all matched. Windows/later-state validation is separate. `evidence/linux/2026-09-24-E30-startup-thermal-bios/` |
+| L35 (AmdSetup) | Read our own runtime UEFI variable and decode UMA | Replace donor-setting assumptions with unit A evidence | 2026-09-24 | Done in M438: private hash-verified variable, UMA fields all Auto. Full SPI extraction remains open above. |
 | L9 | A clean init trace: the E03 instrument again, but with **no sweep before amdgpu loads** (or a sweep from the corrected allow-list without `*_SEM`, `*_HEADER_DUMP`, `GRBM_GFX_CNTL`) | M25: our pre-driver sweep acquired the VM invalidation semaphores and latched a GRBM read error, so the E03 trace and its "before" state describe a machine we had already disturbed. The timeout in M24 is the visible part; what else the sweep changed for amdgpu is unknown until a clean trace exists | 2026-09-21  | Done: facts M41 (all 10018 writes of E03 reproduced, no VM flush timeout without the sweep). `evidence/linux/2026-09-21-E13-reference-2/` |
 | L11 | Interrupt plumbing: `/proc/interrupts` for amdgpu, MSI-X table and capability as programmed, IH ring registers and `IH_DOORBELL_RPTR` after some load | Reference for M6 | 2026-09-21  | Done: facts M40 (MSI-X, 12 interrupts and 12 vectors for 12 fences, client/source/ring ids). `evidence/linux/2026-09-21-E13-reference-2/` |
 | L13 | The PSP/CCP function `1022:143E`: `lspci -vv`, which Linux driver binds, its BARs | Under Windows it sits without a driver. Know what it is before deciding to ignore it | 2026-09-21  | Done: `boot*/pre.txt` (no Linux driver binds `1022:143e`; its two memory regions are disabled, MSI and MSI-X off). `evidence/linux/2026-09-21-E13-reference-2/` |
@@ -50,6 +71,101 @@ warm, what ran before), secrets and serials redacted before commit.
 | L21 | The **firmware's** DMU state, read before amdgpu is loaded, by a read-only raw BAR5 sweep, and the same set read back through amdgpu's own accessor: which `HUBP`/`OTG` instance the UEFI GOP pipe lights, and whether the surface address matches the framebuffer address the driver already holds | E13's DTN log describes only amdgpu's own mode set; Windows inherits the firmware's pipe, which is a different layout (M86) | 2026-09-22  | Done: facts M85 (address encoding, positive control against M31), M86 (firmware lights HUBP0 alone, single-pipe, against amdgpu's ODM split). `evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt`, `dmupost.txt`, `dmu/` |
 | L23 | Whether the DC surface address registers hold a byte address or a shifted one | The encoding has to be proven before `SetVidPnSourceAddress` computes one, not assumed from the shape of two dwords | 2026-09-22  | Done: facts M85 - system physical byte address (the firmware's `0x270000000` is the VRAM carve-out base of M31 exactly; amdgpu's flip addresses are consistent with the same base). `evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt`, `dmupost.txt` |
 | L24 | The display interrupts on the IH ring: which `client_id`/`src_id` DCN 2.0.1 raises for a vblank and for a HUBP flip completion, the vector payload, how many vectors one flip costs | M40 has no display vector at all; ADR 0010 point 3 wants a real vertical-sync interrupt for games | 2026-09-22  | Done, and not what was expected: facts M88 - this kernel uses `OTG0_IHC_V_UPDATE_NO_LOCK` (client 4, src `0x57`), one per frame; neither candidate from L24 (`0x4F`, `0x3C`) is ever enabled, which is now wishlist row L28. `evidence/linux/2026-09-22-E21-linux-reference-4/flip/` |
+
+| L6 (reset portion) | Behavior of amdgpu GPU recovery on this part | Establish whether Linux offers a usable reset path | 2026-09-21 | Closed with a negative result: facts M53; no working reset and recovery hangs at RLC startup. This is not a successful reset reference. Suspend/resume remainder stays in L6. |
+| L17 (unload portion) | Trace amdgpu hw_fini/unload | Reference for Windows retirement | 2026-09-21 | Done: facts M54, unload traced twice with rc0. Second-load failure remains L17 and state comparison L34. |
+
+
+### M333 refinement of L34/L17
+
+Capture smu_hw_fini/smu_disable_dpms/gfx_v10_0_rlc_stop entry/return and named RLC accesses, tied to the exact booted kernel/module/source. The generic source has a conditional SMU-layer stop that prior E13 unload register traces do not witness. Cyan Skillfish lacks the feature-control and RLC-notify callbacks, so do not infer an omitted Vangogh SMU command. Arm tracing before module load and preserve failure output. This extends the existing reentry work, not another completed unload-only run.
+
+
+### M334 runtime update (E28)
+
+L14 SSH host-key stability is implemented on unit A: an unencrypted key installed through trusted Windows and pinned in a separate private Linux target configuration; strict matching succeeds on both interfaces. Reboot-to-reboot persistence remains to be exercised.
+
+L17/L34 now have a first-load control, successful unload with SMUcleanup RLC stop/write witness and a second-load register trace ending after RLC enable before SSH loss. Deferred module filters work on this kernel; the old blanket explanation for E13 missing reload events is superseded. Warm startup still fails. Next compare the observed RLC/firmware state and reset requirements, not another identical uninstrumented reload. See facts M334.
+
+
+### 2026-09-24 - Deferred reset-dispatch runtime comparison (M351)
+
+Local Linux6.18.0 source analysis is complete in facts M351. It is not the
+exact E28runtime6.18.52 source. Before any further Linux GPU recovery trial,
+obtain that exact source and instrument selected reset method and actual
+callback execution, including null PSP MODE1 fallback. A return0 alone cannot
+prove hardware reset. Deferred pending the narrower Windows MMIO readback
+comparison; do not treat a Linux reset as a known working positive control.
+
+
+### M372 - Deferred per-engine SDMA reset observation
+
+Extend the existing reset-dispatch comparison with SDMA5 stop_queue -> actual
+soft_reset_engine -> restore_queue tracing, both instances, source-matched to
+the running kernel. Capture mmGRBM_SOFT_RESET assertion/release and post-reset
+HALT/RB/IB/UTC_L1/FREEZE state while backing remains retained. Require first-load
+and ring-content controls; a callback return0 or generic soft_reset stub is not
+a working reset witness. Deferred until Windows lifecycle composition is ready;
+no additional identical Linux reload trial is requested.
+
+### M385 - Reference source acquired; runtime dispatch remains open
+
+The upstream6.18.52 reentry/reset sources and Alpine6.18.52-r0 recipe are now pinned in factsM385. Seven distro patches and x86_64config match recipeSHA512; none touchesamdgpu. Source-acquisition part of the M351/M372 deferral is complete. Confirm installed module/package provenance at next Linux session; no bit-identical module build is claimed. Runtime plan must capture SDMA reset mask/debug-disable state, actual amdgpu_job_timedout -> amdgpu_ring_reset -> sdma_v5_0_reset_queue -> amdgpu_sdma_reset_engine -> soft_reset_engine/restore path and real post-reset completions. Source6.18.52 broadens PER_QUEUE advertisement; do not assume the6.18 policy or a successful reset. For retirement, capture earlier power/clock ungating relative to IRQ disable. No new reload/reset trial performed.
+
+### M386 - Trigger distinction and prepared probe
+
+Manual amdgpu_gpu_recover reads force full reset in6.18.52; they are not the per-queue trigger. Prepared experiments/E27-m9-inference/sdma-reset-probe.py plus gen-sdma-reset-packets.c use the upstream libdrm memory-poll/CPU-release pattern, with a marker and a pre-released control. Host construction validated only. Before use, finish source-matched function entry/return traces and runtime timeout/reset-mask checks; require fresh-context content after any reset. Do not accept fence completion alone or execute repeated waits without inspecting the first trial.
+
+### M388 - Per-queue reset reference obtained
+
+The per-queue portion of M351/M372 is measured in facts M388 (E29): actual timeout dispatch, stop/reset/restore and fresh SDMA/compute content pass on one queue. This supersedes any blanket reading of L6 as all reset paths failing: the historical full-reset failure remains valid. Both-instance coverage, register comparison and whole-GPU warm reload remain open; no identical reload trial is needed. Linux session remains active.
+
+### L35 - Unit A BIOS extraction on the next Linux visit
+
+Plan the read alongside the next Linux session; this row does not request an
+immediate OS switch. Before accessing SPI, record the exact flashrom build and
+supported programmer/chip read procedure in the experiment plan. Use read-only
+flash operations, without forced access, protection changes, erase or programming.
+An unsupported or ambiguous chip detection needs investigation before a read.
+
+Keep two independent full reads and their unmodified logs outside the repository
+under `<BC250_ROOT>/firmware/bios/unit-a/` (`BC250_ROOT` is the workspace root, by default the
+parent directory of this repository), with timestamps, capacity, SHA256 and a
+byte-for-byte comparison. Investigate any difference before using either image as
+a baseline. Retain raw NVRAM privately; publish only redacted analysis and permitted
+evidence metadata. A software read is not a programmer-made recovery backup.
+
+The donor-image Setup/PSP/AGESA/GOP analysis is now complete in workspace
+`firmware/bios/analysis/`; scripts live in its `scripts/` directory. Compare our
+image and variables with those results rather than repeating the static work.
+Read `AmdSetup` through the runtime UEFI read interface, retaining its variable
+attributes and raw private bytes separately from a possible efivarfs attribute
+prefix. Compare its UMA fields with the live carve-out and decoded SPI state;
+do not assume donor-image Auto values are our unit's values. If the runtime
+variable is unavailable, record that result and investigate the SPI copy offline.
+
+An advertised UMA option alone does not prove that 12 GiB trains or is resident.
+M430's source projection also leaves only about 11.5864 GiB for applications
+inside a nominal 12 GiB carve-out under the current reservations. Preserve the
+owner's original 12 GiB residency target; see
+[BIOS follow-up](research/bios-analysis-followup.md). This task makes no BIOS,
+SPI, CMOS or NVRAM changes.
+
+## E30 / M438 partial completion (2026-09-24)
+
+L36: Linux pre-amdgpu BAR temperature access is validated against k10temp in72
+samples including19 temperature values. Raw BAR/timed decoded comparison is in
+[M438 evidence](../evidence/linux/2026-09-24-E30-startup-thermal-bios/RESULT.md).
+The Linux question is answered for this startup state; Windows and later-state
+acceptance remain, not another identical Linux sweep.
+
+L35: own AmdSetup read/hash transfer completed, UMA fields allAuto. Private files
+are in workspace firmware/bios/unit-a/E30-20260924/. Full SPI reads remain open:
+stock flashrom1.6 init/read can clear ROM/chip protection, so first prepare a
+verified read-only procedure/build with those actions excluded. No flashrom
+hardware invocation occurred; package installation also hit main-index DNS
+failures. Do not repeat stock -p internal -r assuming its name guarantees no
+protection changes. No other open wishlist row is closed by this visit.
 
 
 ### 2026-09-26 - L37 scratch reference (M510)

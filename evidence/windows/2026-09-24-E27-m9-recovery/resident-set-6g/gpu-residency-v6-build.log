@@ -1,0 +1,4 @@
+gpu-residency-probe.c
+gpu-residency-probe [bytes] [vram|gtt] [--resident-only]
+Default: <=1GiB, 3 eviction cycles, 300s watchdog.
+Resident-only: <=12GiB in <=1GiB members retained together, no pressure allocation; full GPU readback and complete-set residency/budget snapshots every64MiB. No continuous-residency claim.

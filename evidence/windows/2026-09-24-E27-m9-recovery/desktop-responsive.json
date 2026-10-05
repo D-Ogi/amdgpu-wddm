@@ -1,0 +1,12 @@
+{
+  "utc": "2026-09-23T23:53:09.934397+00:00",
+  "owner_observation": "Desktop visible, mouse responds",
+  "original_session": 21191,
+  "terminal_exit": 255,
+  "configured_routes_tcp22": [
+    false,
+    false,
+    false
+  ],
+  "next_action": "Confirm current IPv4 and sshd locally; no reset or new GPU start"
+}

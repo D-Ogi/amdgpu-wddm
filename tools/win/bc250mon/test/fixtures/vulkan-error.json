@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "CapturedUtc": "2026-09-24T12:00:00Z",
+  "Collector": "synthetic fixture, not hardware evidence",
+  "IcdPath": "C:\\BC250\\fixture\\radv\\radeon_icd.json",
+  "DetailsPath": "vulkan-inventory.txt",
+  "Status": "error",
+  "Error": "synthetic timeout after 40 s; partial report retained",
+  "TimedOut": true,
+  "ExitCode": null
+}

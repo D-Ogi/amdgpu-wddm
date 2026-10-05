@@ -1,0 +1,51 @@
+
+
+Path : C:\BC250\m9\quiet-submit\vulkan_radeon.dll
+Hash : 4E05F1DF627CD6D9D64FE7F1ADDA29673D5B3B96B3750A08034A7EE88460C9EA
+
+
+
+
+
+Path : C:\BC250\m8\vulkan_radeon.dll
+Hash : 71CB633DD40BB3FF54E4989B077726C27C8948FB1F7286829FF9B6AEA0934AA8
+
+
+
+
+
+Path : C:\BC250\m9\llama\llama-completion.exe
+Hash : 181C8E6F1E18E90A8228D98BCBB0A611A8F74B8721E47B74F97B87AF7614F856
+
+
+
+
+
+Path : C:\BC250\m9\models\stories15M-q4_0.gguf
+Hash : 66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739
+
+
+
+{
+  "file_format_version": "1.0.0",
+  "ICD": {
+    "library_path": "C:\\BC250\\m9\\quiet-submit\\vulkan_radeon.dll",
+    "api_version": "1.4.0"
+  }
+}
+
+Name              Length
+----              ------
+ggml-vulkan.dll 58063872
+
+
+
+Name                                 Length
+----                                 ------
+run-vulkaninfo.cmd                      524
+vulkan-1.dll                        1711544
+vulkaninfo.exe                      2925496
+vulkan_radeon.before-address32.dll 23252480
+vulkan_radeon.dll                  23252480
+
+

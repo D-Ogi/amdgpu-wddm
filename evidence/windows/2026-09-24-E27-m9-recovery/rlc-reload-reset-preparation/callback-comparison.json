@@ -1,0 +1,7 @@
+{
+  "method": "Compare function bodies, normalize whitespace and shim delay symbol only",
+  "match": true,
+  "reference_sha256": "6a51b1ea97a856ecd45009931115d73ea46b136dc99c5da3c8cebb80c0f347ea",
+  "shim_sha256": "e1da7eafc4d1b2926e77ed0a7d1bb783d7a07f89f30da1dedd0631187cb7d682",
+  "normalized_body": "WREG32_FIELD15(GC,0,GRBM_SOFT_RESET,SOFT_RESET_RLC,1);udelay(50);WREG32_FIELD15(GC,0,GRBM_SOFT_RESET,SOFT_RESET_RLC,0);udelay(50);"
+}

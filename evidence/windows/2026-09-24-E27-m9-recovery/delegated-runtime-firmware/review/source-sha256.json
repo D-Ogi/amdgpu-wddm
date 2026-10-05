@@ -1,0 +1,14 @@
+{
+  "driver/contract/bc250_umd_private.h": "dacd9bdb58ce4cb0a110402415a2a464e789d9470ff62cbab60d387d2c2a1655",
+  "driver/contract/bc250_umd_firmware.h": "95b9eb3b0b417c6d982b66e89462761c1ca213adb56168995676e274d6001d36",
+  "driver/kmd/firmware_metadata.h": "f15aacf495dfc657278d5f38a2e8cc43ba67908f71b27a25818142351416c7a3",
+  "driver/kmd/psp.c": "0dda51f332feed6c94c3a9c7ac82996a0302e50c945ac34cb1a1d1b7fcebc3bf",
+  "driver/kmd/smu.c": "e49da2cfba12cc356cc0d51a2006e9eb99ea4349e30e0ca1de1e03f73ece017b",
+  "driver/kmd/smu.h": "b1d23cb8b0b8c97d5d1fafafd49e25ee9570c1c37977a3c5d65b4eb30f6dfb2a",
+  "driver/kmd/umd_caps.h": "dcae3152781b3e564b7aca66ca3450380dc1f70874eac8c8d2c3ba6f738b6570",
+  "driver/kmd/test/umd_caps_test.c": "4686a6168aedb93fec89c5861a302abffba4bb2cdaeb480d8332d42545f81312",
+  "driver/kmd/test/firmware_metadata_test.c": "d9c303ef5b853a67f96b4a59da4f9fd2f4bd0d88c8af834a280b318e9663d4ef",
+  "driver/kmd/test/generate-firmware-metadata-test.py": "d1c47dc3f18378b5a603d721c78345eeb208088a9e31ddbb1d5e35b4eb7e2444",
+  "driver/kmd/test/run_firmware_metadata.ps1": "df33fbd13ad7dbc156e566f86aade4f1f8909516344127fbc2fa174622b327e3",
+  "driver/shim/test/smu_native_test.c": "3f3d141ee1fed3f9ab28a66f323441e844f1c8bec14299fde72b538628baa81d"
+}

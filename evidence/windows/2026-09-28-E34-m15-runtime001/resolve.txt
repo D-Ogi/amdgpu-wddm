@@ -1,0 +1,173 @@
+FUNCTION RVA 199f0 ?ResolveUMDAndVersion@CCreateDeviceCache@@QEAAJAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@AEAV?$shared_ptr@VCUMDAdapter@NDXGI@@@3@PEA_K@Z
+000199f0 4055                     push     rbp
+000199f2 53                       push     rbx
+000199f3 56                       push     rsi
+000199f4 57                       push     rdi
+000199f5 4154                     push     r12
+000199f7 4156                     push     r14
+000199f9 488dac2458ffffff         lea      rbp, [rsp - 0xa8]
+00019a01 4881eca8010000           sub      rsp, 0x1a8
+00019a08 488b0541361b00           mov      rax, qword ptr [rip + 0x1b3641]
+00019a0f 4833c4                   xor      rax, rsp
+00019a12 48898590000000           mov      qword ptr [rbp + 0x90], rax
+00019a19 498bf1                   mov      rsi, r9
+00019a1c 4d8bf0                   mov      r14, r8
+00019a1f 488bfa                   mov      rdi, rdx
+00019a22 488bd9                   mov      rbx, rcx
+00019a25 0f57c0                   xorps    xmm0, xmm0
+00019a28 f30f7f442438             movdqu   xmmword ptr [rsp + 0x38], xmm0
+00019a2e 488d542438               lea      rdx, [rsp + 0x38]
+00019a33 498bc8                   mov      rcx, r8
+00019a36 e8d175ffff               call     0x1100c ; ??4?$shared_ptr@VVersionedDXCoreAdapter@@@std@@QEAAAEAV01@$$QEAV01@@Z+0
+00019a3b 488b4c2440               mov      rcx, qword ptr [rsp + 0x40]
+00019a40 4885c9                   test     rcx, rcx
+00019a43 7405                     je       0x19a4a
+00019a45 e8063a0000               call     0x1d450 ; ?_Decref@_Ref_count_base@std@@QEAAXXZ+0
+00019a4a 48832600                 and      qword ptr [rsi], 0
+00019a4e 48ff15fb281400           call     qword ptr [rip + 0x1428fb]
+00019a55 0f1f440000               nop      dword ptr [rax + rax]
+00019a5a 488bc8                   mov      rcx, rax
+00019a5d 41b904000000             mov      r9d, 4
+00019a63 4c8d442448               lea      r8, [rsp + 0x48]
+00019a68 418d51fe                 lea      edx, [r9 - 2]
+00019a6c 48ff15f5281400           call     qword ptr [rip + 0x1428f5]
+00019a73 0f1f440000               nop      dword ptr [rax + rax]
+00019a78 85c0                     test     eax, eax
+00019a7a 0f84dd000000             je       0x19b5d
+00019a80 41bc01000000             mov      r12d, 1
+00019a86 4484642448               test     byte ptr [rsp + 0x48], r12b
+00019a8b 0f84cc000000             je       0x19b5d
+00019a91 488364243800             and      qword ptr [rsp + 0x38], 0
+00019a97 488b4b10                 mov      rcx, qword ptr [rbx + 0x10]
+00019a9b 4885c9                   test     rcx, rcx
+00019a9e 7441                     je       0x19ae1
+00019aa0 488d542438               lea      rdx, [rsp + 0x38]
+00019aa5 e89ec3feff               call     0x5e48 ; ??$QueryInterface@UIDXGIAdapter4@@@IUnknown@@QEAAJPEAPEAUIDXGIAdapter4@@@Z+0
+00019aaa 85c0                     test     eax, eax
+00019aac 7833                     js       0x19ae1
+00019aae 488b4c2438               mov      rcx, qword ptr [rsp + 0x38]
+00019ab3 488b01                   mov      rax, qword ptr [rcx]
+00019ab6 49ba70e95932e5b714a4     movabs   r10, 0xa414b7e53259e970
+00019ac0 488d542450               lea      rdx, [rsp + 0x50]
+00019ac5 488b8090000000           mov      rax, qword ptr [rax + 0x90]
+00019acc ff15562f1400             call     qword ptr [rip + 0x142f56]
+00019ad2 85c0                     test     eax, eax
+00019ad4 7872                     js       0x19b48
+00019ad6 f6858000000004           test     byte ptr [rbp + 0x80], 4
+00019add 7469                     je       0x19b48
+00019adf eb72                     jmp      0x19b53 ; ?ResolveUMDAndVersion@CCreateDeviceCache@@QEAAJAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@AEAV?$shared_ptr@VCUMDAdapter@NDXGI@@@3@PEA_K@Z+163
+00019ae1 488b4328                 mov      rax, qword ptr [rbx + 0x28]
+00019ae5 c644243000               mov      byte ptr [rsp + 0x30], 0
+00019aea 488b4808                 mov      rcx, qword ptr [rax + 8]
+00019aee 4885c9                   test     rcx, rcx
+00019af1 7426                     je       0x19b19
+00019af3 488b01                   mov      rax, qword ptr [rcx]
+00019af6 49ba70abd43a223ea1ec     movabs   r10, 0xeca13e223ad4ab70
+00019b00 4c8d4c2430               lea      r9, [rsp + 0x30]
+00019b05 4d8bc4                   mov      r8, r12
+00019b08 ba08000000               mov      edx, 8
+00019b0d 488b4038                 mov      rax, qword ptr [rax + 0x38]
+00019b11 ff15112f1400             call     qword ptr [rip + 0x142f11]
+00019b17 eb28                     jmp      0x19b41 ; ?ResolveUMDAndVersion@CCreateDeviceCache@@QEAAJAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@AEAV?$shared_ptr@VCUMDAdapter@NDXGI@@@3@PEA_K@Z+151
+00019b19 488b08                   mov      rcx, qword ptr [rax]
+00019b1c 488b01                   mov      rax, qword ptr [rcx]
+00019b1f 49ba70135978199f94fa     movabs   r10, 0xfa949f1978591370
+00019b29 4c8d4c2430               lea      r9, [rsp + 0x30]
+00019b2e 4d8bc4                   mov      r8, r12
+00019b31 ba0a000000               mov      edx, 0xa
+00019b36 488b4030                 mov      rax, qword ptr [rax + 0x30]
+00019b3a ff15e82e1400             call     qword ptr [rip + 0x142ee8]
+00019b40 90                       nop      
+00019b41 807c243000               cmp      byte ptr [rsp + 0x30], 0
+00019b46 750b                     jne      0x19b53
+00019b48 b931007a88               mov      ecx, 0x887a0031
+00019b4d e80a230000               call     0x1be5c ; ?ThrowFailure@@YAXJ@Z+0
+00019b52 90                       nop      
+00019b53 488d4c2438               lea      rcx, [rsp + 0x38]
+00019b58 e8fb53ffff               call     0xef58 ; ??1?$CComPtrBase@UIUseCounted@@@ATL@@QEAA@XZ+0
+00019b5d 488bcb                   mov      rcx, rbx
+00019b60 e86bd1ffff               call     0x16cd0 ; ?LoadUMD@CCreateDeviceCache@@QEAAJXZ+0
+00019b65 8bc8                     mov      ecx, eax
+00019b67 e8d8270000               call     0x1c344 ; ?UnsupportedOrDeviceRemoved@NDXGI@@YAJJ@Z+0
+00019b6c 85c0                     test     eax, eax
+00019b6e 0f888c000000             js       0x19c00
+00019b74 488bcb                   mov      rcx, rbx
+00019b77 e80cbdffff               call     0x15888 ; ?GetVendorId@CCreateDeviceCache@@QEBAIXZ+0
+00019b7c 488bd7                   mov      rdx, rdi
+00019b7f e8d0a4ffff               call     0x14054 ; ?FillAPIVersions@CCreateDeviceCache@@QEAAXAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@I@Z+0
+00019b84 488b4b60                 mov      rcx, qword ptr [rbx + 0x60]
+00019b88 41bc04007a88             mov      r12d, 0x887a0004
+00019b8e 48394b58                 cmp      qword ptr [rbx + 0x58], rcx
+00019b92 7508                     jne      0x19b9c
+00019b94 418bcc                   mov      ecx, r12d
+00019b97 e8c0220000               call     0x1be5c ; ?ThrowFailure@@YAXJ@Z+0
+00019b9c 488b0f                   mov      rcx, qword ptr [rdi]
+00019b9f 483b4f08                 cmp      rcx, qword ptr [rdi + 8]
+00019ba3 7458                     je       0x19bfd
+00019ba5 488b4358                 mov      rax, qword ptr [rbx + 0x58]
+00019ba9 483b4f08                 cmp      rcx, qword ptr [rdi + 8]
+00019bad 7431                     je       0x19be0
+00019baf 448b11                   mov      r10d, dword ptr [rcx]
+00019bb2 448b5904                 mov      r11d, dword ptr [rcx + 4]
+00019bb6 458bca                   mov      r9d, r10d
+00019bb9 49c1e110                 shl      r9, 0x10
+00019bbd 4d0bcb                   or       r9, r11
+00019bc0 49c1e110                 shl      r9, 0x10
+00019bc4 4c8b00                   mov      r8, qword ptr [rax]
+00019bc7 498bd0                   mov      rdx, r8
+00019bca 4881e20000ffff           and      rdx, 0xffffffffffff0000
+00019bd1 493bd1                   cmp      rdx, r9
+00019bd4 764a                     jbe      0x19c20
+00019bd6 4883c008                 add      rax, 8
+00019bda 483b4360                 cmp      rax, qword ptr [rbx + 0x60]
+00019bde 75e4                     jne      0x19bc4
+00019be0 8364242000               and      dword ptr [rsp + 0x20], 0
+00019be5 4c8d05e48d1400           lea      r8, [rip + 0x148de4]
+00019bec ba04007a88               mov      edx, 0x887a0004
+00019bf1 488d0d78a01b00           lea      rcx, [rip + 0x1ba078]
+00019bf8 e897eaffff               call     0x18694 ; ?RecordJournal@CModule@@QEAAXIPEBD_NW4RecordJournalOptions@@@Z+0
+00019bfd 418bc4                   mov      eax, r12d
+00019c00 488b8d90000000           mov      rcx, qword ptr [rbp + 0x90]
+00019c07 4833cc                   xor      rcx, rsp
+00019c0a e83187feff               call     0x2340 ; __security_check_cookie+0
+00019c0f 4881c4a8010000           add      rsp, 0x1a8
+00019c16 415e                     pop      r14
+00019c18 415c                     pop      r12
+00019c1a 5f                       pop      rdi
+00019c1b 5e                       pop      rsi
+00019c1c 5b                       pop      rbx
+00019c1d 5d                       pop      rbp
+00019c1e c3                       ret      
+00019c1f cc                       int3     
+00019c20 498bd0                   mov      rdx, r8
+00019c23 48c1ea20                 shr      rdx, 0x20
+00019c27 413bd2                   cmp      edx, r10d
+00019c2a 750f                     jne      0x19c3b
+00019c2c 498bd0                   mov      rdx, r8
+00019c2f 48c1ea10                 shr      rdx, 0x10
+00019c33 0fb7d2                   movzx    edx, dx
+00019c36 413bd3                   cmp      edx, r11d
+00019c39 7409                     je       0x19c44
+00019c3b 4883c108                 add      rcx, 8
+00019c3f e965ffffff               jmp      0x19ba9 ; ?ResolveUMDAndVersion@CCreateDeviceCache@@QEAAJAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@AEAV?$shared_ptr@VCUMDAdapter@NDXGI@@@3@PEA_K@Z+1b9
+00019c44 4c8906                   mov      qword ptr [rsi], r8
+00019c47 488b10                   mov      rdx, qword ptr [rax]
+00019c4a 488b4358                 mov      rax, qword ptr [rbx + 0x58]
+00019c4e 48894360                 mov      qword ptr [rbx + 0x60], rax
+00019c52 488b4340                 mov      rax, qword ptr [rbx + 0x40]
+00019c56 488990b8000000           mov      qword ptr [rax + 0xb8], rdx
+00019c5d 488b4340                 mov      rax, qword ptr [rbx + 0x40]
+00019c61 4889442438               mov      qword ptr [rsp + 0x38], rax
+00019c66 488b4348                 mov      rax, qword ptr [rbx + 0x48]
+00019c6a 4889442440               mov      qword ptr [rsp + 0x40], rax
+00019c6f 4883634000               and      qword ptr [rbx + 0x40], 0
+00019c74 4883634800               and      qword ptr [rbx + 0x48], 0
+00019c79 488d542438               lea      rdx, [rsp + 0x38]
+00019c7e 498bce                   mov      rcx, r14
+00019c81 e88673ffff               call     0x1100c ; ??4?$shared_ptr@VVersionedDXCoreAdapter@@@std@@QEAAAEAV01@$$QEAV01@@Z+0
+00019c86 488b4c2440               mov      rcx, qword ptr [rsp + 0x40]
+00019c8b 4885c9                   test     rcx, rcx
+00019c8e 7405                     je       0x19c95
+00019c90 e8bb370000               call     0x1d450 ; ?_Decref@_Ref_count_base@std@@QEAAXXZ+0
+00019c95 33c0                     xor      eax, eax
+00019c97 e964ffffff               jmp      0x19c00 ; ?ResolveUMDAndVersion@CCreateDeviceCache@@QEAAJAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@AEAV?$shared_ptr@VCUMDAdapter@NDXGI@@@3@PEA_K@Z+210

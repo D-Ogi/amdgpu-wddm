@@ -1,0 +1,51 @@
+{
+  "kmd_sha256": "0C0DA4E13FF110606265274B063D3B6034459A294FE2A552FD5806E0971B05EB",
+  "version": "0.7.153.1",
+  "os_restarted": false,
+  "dwm_retained": true,
+  "transition_worker_exit": 1,
+  "early_capture_complete": false,
+  "state_images": 64,
+  "state_pixels": 262144,
+  "draws": 4096,
+  "warp111_exact_match": true,
+  "additional_graphics_cases": 8,
+  "additional_graphics_pixels": 32768,
+  "node0_before": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "node0_after": [
+    2147,
+    2147,
+    0,
+    0
+  ],
+  "paging_before": [
+    275,
+    275,
+    0,
+    0
+  ],
+  "paging_after": [
+    783,
+    783,
+    0,
+    0
+  ],
+  "final": {
+    "utc": "2026-09-27T04:51:27.2532034Z",
+    "health": "health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=641 age_ms=990 ready_ms=503121\r\n",
+    "umd": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+    "dwm": [
+      4596
+    ],
+    "guard": 0,
+    "task_present": false,
+    "active_tests": [],
+    "temperature": "06:51:30 Tctl 66.1 C (raw 733B0FEF)\r\n"
+  }
+}

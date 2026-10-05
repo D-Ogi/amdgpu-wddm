@@ -1,0 +1,83 @@
+{
+  "sdma_control_trials": [
+    [
+      "0",
+      "0",
+      "0x00000000",
+      "0",
+      "1",
+      "1",
+      "4096",
+      "1"
+    ],
+    [
+      "1",
+      "0",
+      "0x00000000",
+      "0",
+      "2",
+      "2",
+      "4096",
+      "1"
+    ],
+    [
+      "2",
+      "0",
+      "0x00000000",
+      "0",
+      "3",
+      "3",
+      "65536",
+      "1"
+    ],
+    [
+      "3",
+      "0",
+      "0x00000000",
+      "0",
+      "4",
+      "4",
+      "65536",
+      "1"
+    ]
+  ],
+  "m8_matches": [
+    "0x7018cdd513a22325",
+    "0x7018cdd513a22325",
+    "0xbc33291b528dfab4",
+    "0x3ee3408930ca6e61",
+    "0x24396beb3a1a7367",
+    "0x24396beb3a1a7367",
+    "0x0eb467ee3ae0f043",
+    "0xe9fc02f21706317a"
+  ],
+  "native_exits": {
+    "m8": 0,
+    "stories15M": 0,
+    "tinyllama": 0,
+    "worker": 0
+  },
+  "stories15M": {
+    "reference_match": true,
+    "offloaded_layers": 7,
+    "reference_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  "tinyllama": {
+    "reference_match": true,
+    "offloaded_layers": 23,
+    "reference_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  "gfx": [
+    2354,
+    2354,
+    0,
+    0
+  ],
+  "sdma": [
+    22318,
+    22318,
+    0,
+    0
+  ],
+  "os_and_dwm_retained": true
+}

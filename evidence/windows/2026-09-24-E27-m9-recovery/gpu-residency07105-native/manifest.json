@@ -1,0 +1,22 @@
+{
+  "control-validation.json": "279d1532fcc080e6fb50af60dfc9d9c5bba0ba9ff6f242e371fe17c4545f9569",
+  "gpu-residency-probe.c": "94beff66f8a361926b23b30171fd198f616015f4925bf7f626b26c8d9777d215",
+  "gpu-residency07105-native-large.log": "c40453ab2a8cf942c13aebc69beee270ca37c5866bdff6d5940cf34e488a48e6",
+  "gpu-residency07105-native-large.ps1": "2177c7f7db893e3dee4de62365ec7efd1294d73c808e9f93be1af1738b47e0be",
+  "gpu-residency07105-native-small.log": "43671a79fa68625cb385404e68f5c50ab456af8ef8df8f0d7dccb0ffcd67e1f2",
+  "gpu-residency07105-native-small.ps1": "48857bfcce75be0015ff2ceeac82bba6a03fef5898007f7cceb181903f9ede25",
+  "residency07105-plan.md": "7e65efbf4fb99060ae26bbc5dda3e7f0d26d83ea7286abf55002e2e3f1109d03",
+  "RESULT.md": "8b87691d49580528745938a4430413372ef3c567c9ad1debbb7b535436b7c390",
+  "validate-gpu-residency.py": "e5c9c26e89379a481e143daedbc1782aef0a14000637f9006a33f34aeeb4fde8",
+  "validation.json": "737dd57d245f3996bc5d2df78bca77ffa0e26d827dd974562ea154753db91368",
+  "vram1g-after.log": "97b7e894c8f038e7280a25be34b8e3d5a19d442c1324640442f919b59be5e8d1",
+  "vram1g-before.log": "ef17e4e8a5ae83be35fb5721b470a99c7e21b5ab21e562bd0b281d5b72aa60f5",
+  "vram1g.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "vram1g.exit": "9aca8dfce962538fb8131d73f84cada05e4dc79f5a0d3612c511b1150f3e33e2",
+  "vram1g.out": "82d31b4dd187d671551d5a44ff6d2d6dc63aca308ec4b50d1408fc6e1bed51e2",
+  "vram64k-after.log": "dcbb19fa3839bd715e36b239beafd0f4bb995889c26d9794054644517146a2da",
+  "vram64k-before.log": "09f8e32251d1c9820ae32043d4d5b354327f11c852946de9b6900f290e36f414",
+  "vram64k.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "vram64k.exit": "9aca8dfce962538fb8131d73f84cada05e4dc79f5a0d3612c511b1150f3e33e2",
+  "vram64k.out": "6a14f3e3d2de4f9e3d54a2f1e7633186c379d6e1daff87dc53a9a8d2d98a5d7e"
+}

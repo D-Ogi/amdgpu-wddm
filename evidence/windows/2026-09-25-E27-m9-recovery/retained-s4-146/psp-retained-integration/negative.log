@@ -1,0 +1,3 @@
+test.c
+FAIL 603: p->Retained==prepared && prepared->References==2
+retained PSP negative control: 193 checks, 1 failures

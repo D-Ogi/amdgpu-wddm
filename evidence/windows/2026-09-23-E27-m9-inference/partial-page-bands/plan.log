@@ -1,0 +1,9 @@
+paging_permutation.c
+paging_permutation_test.c
+Generowanie kodu...
+partial-page graph composition: 8192 full-byte snapshot cases, cumulative failures 0
+partial-page bands: 32768 byte-coverage cases, cumulative failures 0
+duplicate-destination graphs: 69904 classified, 19072 accepted, cumulative failures 0
+page copy graphs: 280391, budgets 3..8, cumulative failures 0
+1GiB page identities: 262144, normalization CPU seconds 0.014000
+page permutations: 46233 cases, 0 snapshot-oracle failures

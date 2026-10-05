@@ -1,0 +1,90 @@
+[
+  {
+    "run": "stories15M-1",
+    "exit": "0",
+    "matches_linux_gpu": true,
+    "sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+    "offload": [
+      "7/7",
+      "7/7"
+    ],
+    "progress_count": 1221
+  },
+  {
+    "run": "stories15M-2",
+    "exit": "0",
+    "matches_linux_gpu": true,
+    "sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+    "offload": [
+      "7/7",
+      "7/7"
+    ],
+    "progress_count": 1221
+  },
+  {
+    "run": "stories15M-3",
+    "exit": "0",
+    "matches_linux_gpu": true,
+    "sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+    "offload": [
+      "7/7",
+      "7/7"
+    ],
+    "progress_count": 1221
+  },
+  {
+    "run": "stories15M-4",
+    "exit": "0",
+    "matches_linux_gpu": true,
+    "sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+    "offload": [
+      "7/7",
+      "7/7"
+    ],
+    "progress_count": 1221
+  },
+  {
+    "run": "tinyllama-1",
+    "exit": "0",
+    "matches_linux_gpu": true,
+    "sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518",
+    "offload": [
+      "23/23",
+      "23/23"
+    ],
+    "progress_count": 1109
+  },
+  {
+    "run": "tinyllama-2",
+    "exit": "0",
+    "matches_linux_gpu": true,
+    "sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518",
+    "offload": [
+      "23/23",
+      "23/23"
+    ],
+    "progress_count": 1109
+  },
+  {
+    "run": "tinyllama-3",
+    "exit": "-1073740791",
+    "matches_linux_gpu": false,
+    "sha256": "88f3d7bbf386f9db83765c0ed1e0731fc7ceef58919d9f61778b2e55669af4b7",
+    "offload": [
+      "23/23",
+      "23/23"
+    ],
+    "progress_count": 557
+  },
+  {
+    "run": "tinyllama-4",
+    "exit": "0",
+    "matches_linux_gpu": false,
+    "sha256": "1ee5a1664a16f8016dc1effb8541309dc03f45bc32967ee199b8d5be9a84389f",
+    "offload": [
+      "23/23",
+      "23/23"
+    ],
+    "progress_count": 1109
+  }
+]

@@ -1,4 +1,4 @@
-E24 run 007, 2026-09-22, bc250kmd 0.7.32 (585fa3c). Fresh boot 13:02:16. Gates: full table, GPU VA, engines, submit, blit, paging node. Flip gate closed. Pressure 64, then 256, then 512 MB, same shape as runs 005 and 006.
+E24 run 007, 2026-09-22, bc250kmd 0.7.32 (d39fd80). Fresh boot 13:02:16. Gates: full table, GPU VA, engines, submit, blit, paging node. Flip gate closed. Pressure 64, then 256, then 512 MB, same shape as runs 005 and 006.
 
 The bring-up returned (CP 342 us, SDMA 190 us, interrupt sources 24 us). A CP fence afterwards moved the IH ring (0 vectors to 2, rptr = wptr = 0x40). Four VIRTUAL_FILLs were built, 872,415,232 bytes, at the same physical addresses as run 005, at shadow offsets 0x0, 0x140, 0x640 and 0xB40. Three SubmitCommandVirtual calls arrived on node 1 and named those offsets (va 0x0 size 320, va 0x140 size 1280, va 0x640 size 2560). Each was completed in software: "no paging buffer this driver wrote to contains it". The summary stayed "shadow holds buffer 0x0 to 0x0" after the fills, 0 hardware submitted, 0 switches. No TDR, no bugcheck, clean undo, 67-73 C.
 

@@ -1,0 +1,23 @@
+health abi=1 version=0x00070093 flags=7 generation=42661852504 epoch=5 completed=440 age_ms=7896 ready_ms=670995
+UnconfirmedStarts = 0 (flushed to disk)
+boot_before=2026-09-25T03:57:55.5000000+02:00
+Microsoft PnP Utility
+
+Disabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\[INSTANCE]
+Device disabled successfully.
+
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\[INSTANCE]
+Device enabled successfully.
+
+health abi=1 version=0x00070093 flags=7 generation=49529103383 epoch=3 completed=0 age_ms=18446744073709551615 ready_ms=7468
+new_dwm=2004
+Expected module not loaded
+At C:\BC250\tmp\deploy.ps1:30 char:65
++ ... odules[0].FileName -ne $expected){throw 'Expected module not loaded'}
++                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Expected module not loaded:String) [], RuntimeEx 
+   ception
+    + FullyQualifiedErrorId : Expected module not loaded
+ 

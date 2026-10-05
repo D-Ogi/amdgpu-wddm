@@ -1,0 +1,20 @@
+[
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c",
+    "old": "be183ab50bf887f897fd7b4ed230b0689020558a8681c903d0c45ecdc7103879",
+    "new": "dffa2a6f320e3c814a2ad2130b447320e3e98ba06c724d0b94327de9b29050fe"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_context.c",
+    "old": "9c3008e45574d17724b7622bdd308151bdd18fb2217725b734f411e88712a305",
+    "new": "75a14ded04d9d8e3aaf5b482fae9da20a841c7b51a1b4dd14d5bf6031a7abcbf"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_types.h",
+    "old": "bc85bd149257e3796d768a208e813e03baa3a5b7e8b3f5d5e10b9c5b3abeb5f6",
+    "new": "734a9716f2ace34d5efcf634b29a2664eda40704f412d20cdbafea9b5745f1c7"
+  }
+]

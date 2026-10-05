@@ -1,0 +1,14 @@
+{
+    "bad_source_rejected":  true,
+    "original_fallback_pass":  true,
+    "registry_not_touched":  true,
+    "ps_version":  "5.1.26100.9444",
+    "flush_signature_valid":  true,
+    "marker_roundtrip":  true,
+    "already_restored_without_backup_pass":  true,
+    "candidate_preserved":  true,
+    "existing_backup_preserved":  true,
+    "unexpected_file_preserved":  true,
+    "copy_hash_match":  true,
+    "marker_overwrite_rejected":  true
+}

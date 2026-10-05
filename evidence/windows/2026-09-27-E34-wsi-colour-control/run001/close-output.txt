@@ -1,0 +1,7 @@
+{
+    "utc":  "2026-09-27T13:31:33.5158434Z",
+    "process_alive":  false,
+    "reason":  "",
+    "captured":  true,
+    "exit_code":  0
+}

@@ -1,0 +1,94 @@
+--- before/umd_blob.c
++++ after/umd_blob.c
+@@ -55,6 +55,8 @@
+     out->heap = 0;
+     out->flags = 0;
+     out->exact_va = 0;
++    out->gem_flags = 0;
++    out->cache_policy_valid = 0;
+ }
+ 
+ static void ClearContext(struct umd_context_view* out)
+@@ -108,9 +110,17 @@
+         out->requested_va = requested;
+         out->heap = heap;
+         out->flags = flags;
++        out->gem_flags = Rd64(p + 40);
++        out->cache_policy_valid = version >= 2;
+         out->exact_va = (flags & UMD_BLOB_A_EXACT_VA) != 0;
+     }
+     return UMD_BLOB_OK;
++}
++
++int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation)
++{
++    return allocation != 0 && allocation->cache_policy_valid && allocation->heap == UMD_BLOB_HEAP_GTT &&
++        (allocation->gem_flags & (UMD_BLOB_GEM_NO_CPU_ACCESS | UMD_BLOB_GEM_GTT_USWC)) == 0;
+ }
+ 
+ int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, struct umd_context_view* out)
+--- before/umd_blob.h
++++ after/umd_blob.h
+@@ -27,6 +27,9 @@
+ 
+ #define UMD_BLOB_HEAP_GTT       0x2u          // AMDGPU_GEM_DOMAIN_GTT
+ #define UMD_BLOB_HEAP_VRAM      0x4u          // AMDGPU_GEM_DOMAIN_VRAM
++#define UMD_BLOB_GEM_NO_CPU_ACCESS 0x2ull // AMDGPU_GEM_CREATE_NO_CPU_ACCESS
++#define UMD_BLOB_GEM_GTT_USWC      0x4ull // AMDGPU_GEM_CREATE_CPU_GTT_USWC
++
+ #define UMD_BLOB_IP_GFX         0u
+ #define UMD_BLOB_IP_COMPUTE     1u
+ #define UMD_BLOB_IP_DMA         2u
+@@ -66,6 +69,8 @@
+     unsigned long long requested_va;  // recorded. This reader does not place it: VidMm does, later.
+     unsigned long heap;               // UMD_BLOB_HEAP_GTT or UMD_BLOB_HEAP_VRAM
+     unsigned long flags;
++    unsigned long long gem_flags;    // full BC2A cache/access intent, no truncation
++    int cache_policy_valid;           // BC2A v2+, v1 retains legacy WC behavior
+     int exact_va;
+ };
+ 
+@@ -85,6 +90,10 @@
+     int single_ib;
+ };
+ 
++// Cached backing store is requested only for CPU-accessible GTT without USWC.
++// VRAM and command-buffer USWC allocations retain write-combined backing store.
++int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation);
++
+ // On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
+ int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);
+ 
+--- before/wddm.c
++++ after/wddm.c
+@@ -1810,6 +1810,9 @@
+     if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
+     RtlZeroMemory(caps, Query->OutputDataSize);
+     // Page directories live in a local memory segment, where CPU_VIRTUAL is documented as not allowed.
++    // bc250_pte_from_dxgk preserves CacheCoherent as AMDGPU_PTE_SNOOPED for
++    // system pages. Advertise this when requesting cached GTT backing store.
++    caps->CacheCoherentMemorySupported = 1;
+     caps->PageTableUpdateMode = DXGK_PAGETABLEUPDATE_GPU_PHYSICAL;
+     caps->VirtualAddressBitCount = BC250_WDDM_VA_BITS;
+     caps->PageTableLevelCount = BC250_WDDM_LEVEL_COUNT;
+@@ -2300,14 +2303,14 @@
+             info->EvictionSegmentSet = 0;
+             info->PhysicalAdapterIndex = 0;
+             WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
+-            /* Cached is a write-back CPU mapping, and the system PTE is not snooped unless
+-             * VidMm sets CacheCoherent. A command buffer wants write-combined. The run after
+-             * this change still timed out, and the CPU saw a real PACKET3 at the start of the
+-             * IB, so the cache was not what kept the fence from arriving. */
++            // RADV's CPU_GTT_USWC requests write-combined storage; without it,
++            // CPU-accessible GTT requires cached backing store. VidMm supplies
++            // CacheCoherent PTEs, which the encoder maps to AMDGPU_PTE_SNOOPED.
++            info->FlagsWddm2.Cached = (UINT)UmdBlobAllocCpuCached(&view);
+             info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
+             if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
+-                GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX", view.bytes, view.heap, align,
+-                         view.requested_va);
++                GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u", view.bytes, view.heap, align,
++                         view.requested_va,view.gem_flags,info->FlagsWddm2.Cached);
+             continue;
+         }
+ 

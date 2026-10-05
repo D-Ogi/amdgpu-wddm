@@ -1,0 +1,23 @@
+{
+    "exists":  false,
+    "task_result":  null,
+    "cleanup":  false,
+    "result":  {
+                   "status":  "registered-diagnostic",
+                   "tree_closed":  true,
+                   "phases":  [
+                                  "Capture",
+                                  "Install",
+                                  "Cpu",
+                                  "Gpu",
+                                  "Verify"
+                              ],
+                   "runtime_functional":  false,
+                   "registered":  true,
+                   "baseline_restored":  false,
+                   "elapsed":  91.0060616
+               },
+    "state":  "Missing",
+    "utc":  "2026-09-28T19:59:30.4810778Z"
+}
+

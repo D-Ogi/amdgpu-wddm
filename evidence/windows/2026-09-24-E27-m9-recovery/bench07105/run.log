@@ -1,0 +1,32 @@
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+boot_before=2026-09-24T03:35:18
+driver_version=0.7.105.1
+04:00:29 Tctl 70.8 C (raw 77DB0FEF)
+installed_sha256=40D7E3790C8168A08B5BF21379EDC49D3B6288B477DBBEFFCED422E64C187008
+input_file=llama-bench.exe sha256=333741E180F23CF016A618CA633402448E44BDFBB0BB078870671B2C40CBCAB8
+input_file=stories15M-q4_0.gguf sha256=66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739
+input_file=tinyllama-1.1b-chat-v1.0.Q4_0.gguf sha256=DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556
+icd_hash=6B589A8686DF6FFBB2BE447845222A3607E7E162B89923FA5976FCD9FD412754
+04:00:33 Tctl 70.8 C (raw 77DB0FEF)
+04:00:35 Tctl 70.8 C (raw 77DB0FEF)
+04:00:38 Tctl 71.0 C (raw 781B0FEF)
+04:00:40 Tctl 71.2 C (raw 785B0FEF)
+04:00:43 Tctl 71.5 C (raw 789B0FEF)
+04:00:46 Tctl 71.6 C (raw 78BB0FEF)
+04:00:48 Tctl 71.0 C (raw 781B0FEF)
+04:00:51 Tctl 71.0 C (raw 781B0FEF)
+task_state=Ready
+stories15M exit=0
+    "samples_ns": [ 295345400, 252633800, 193819200 ],
+    "samples_ts": [ 433.391, 506.662, 660.409 ]
+  }
+]
+tinyllama exit=0
+    "samples_ns": [ 1057891800, 1043205100, 1151714100 ],
+    "samples_ts": [ 120.995, 122.699, 111.139 ]
+  }
+]
+limited_run_complete
+boot_after=2026-09-24T03:35:18

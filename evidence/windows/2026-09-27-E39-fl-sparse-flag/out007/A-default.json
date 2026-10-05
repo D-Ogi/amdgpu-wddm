@@ -1,0 +1,26 @@
+{
+  "dxgi.dll": "C:/BC250/m12/fl-probe001/dxgi.dll",
+  "adapters": [
+    {
+      "index": 0, "description": "AMD BC-250 (RADV GFX1013)", "vendor": "0x1002", "device": "0x13fe",
+      "software": false, "dedicated_video_memory": 8406929408, "shared_system_memory": 4203462656,
+      "create_device_hr": "0x00000000",
+      "feature_levels_hr": "0x00000000", "max_feature_level": "11_1",
+      "shader_model_hr": "0x00000000", "highest_shader_model": "0x68",
+      "options_hr": "0x00000000",
+      "tiled_resources_tier": 0, "resource_binding_tier": 3, "conservative_rasterization_tier": 3,
+      "rovs_supported": true, "typed_uav_load_additional_formats": true, "output_merger_logic_op": true,
+      "resource_heap_tier": 2, "double_precision": true, "min_precision": 2,
+      "options1_hr": "0x00000000", "wave_ops": true, "wave_lane_count_min": 32, "wave_lane_count_max": 64, "total_lane_count": 1536,
+      "options5_hr": "0x00000000", "raytracing_tier": 11, "render_passes_tier": 0,
+      "options6_hr": "0x00000000", "variable_shading_rate_tier": 0,
+      "options7_hr": "0x00000000", "mesh_shader_tier": 0, "sampler_feedback_tier": 90,
+      "options12_hr": "0x00000000", "enhanced_barriers": true
+    }
+  ],
+  "d3d12.dll": "C:/BC250/m12/fl-probe001/d3d12.dll",
+  "d3d12core.dll": "C:/BC250/m12/fl-probe001/d3d12core.dll",
+  "vulkan-1.dll": "C:/Windows/SYSTEM32/vulkan-1.dll",
+  "devices_created": 1
+}
+

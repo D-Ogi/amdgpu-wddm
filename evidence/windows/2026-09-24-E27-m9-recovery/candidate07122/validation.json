@@ -1,0 +1,6 @@
+{
+  "first_all_boundaries": true,
+  "warm_rlc_resume_returned": true,
+  "warm_before_visibility_persisted": true,
+  "warm_after_visibility_absent": true
+}

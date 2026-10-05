@@ -1,0 +1,98 @@
+{
+  "stories15M": [
+    {
+      "n_prompt": 512,
+      "n_gen": 0,
+      "tokens_per_second": 48335.303607,
+      "stddev": 231.450725,
+      "samples": [
+        48132.5,
+        48285.9,
+        48587.5
+      ],
+      "previous105_tps": 48980.311409,
+      "change_percent": -1.3168715825711996,
+      "nonresult_field_changes": {}
+    },
+    {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "tokens_per_second": 518.464972,
+      "stddev": 123.664345,
+      "samples": [
+        402.442,
+        504.387,
+        648.566
+      ],
+      "previous105_tps": 533.487457,
+      "change_percent": -2.815902192804498,
+      "nonresult_field_changes": {}
+    }
+  ],
+  "tinyllama": [
+    {
+      "n_prompt": 512,
+      "n_gen": 0,
+      "tokens_per_second": 1101.768139,
+      "stddev": 4.402597,
+      "samples": [
+        1104.18,
+        1096.69,
+        1104.44
+      ],
+      "previous105_tps": 1101.12822,
+      "change_percent": 0.05811484878663897,
+      "nonresult_field_changes": {}
+    },
+    {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "tokens_per_second": 118.749903,
+      "stddev": 4.633251,
+      "samples": [
+        120.856,
+        121.956,
+        113.438
+      ],
+      "previous105_tps": 118.277614,
+      "change_percent": 0.39930548480628936,
+      "nonresult_field_changes": {}
+    }
+  ],
+  "before": {
+    "gfx": [
+      "2900",
+      "2900",
+      "0",
+      "0"
+    ],
+    "paging": [
+      "80888",
+      "80888",
+      "0",
+      "0"
+    ],
+    "capture": [
+      "76",
+      "0"
+    ]
+  },
+  "after": {
+    "gfx": [
+      "13265",
+      "13265",
+      "0",
+      "0"
+    ],
+    "paging": [
+      "103353",
+      "103353",
+      "0",
+      "0"
+    ],
+    "capture": [
+      "101",
+      "0"
+    ]
+  }
+}

@@ -1,0 +1,152 @@
+1e38:warn:openvr_instance_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_instance_apply_application_workarounds: Detected game witcher3.exe, adding 2 configs, removing 0 configs.
+1e38:info:vkd3d_instance_apply_application_workarounds: Detected game witcher3.exe, adding shader quirks for specific shaders.
+1e38:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+1e38:info:vkd3d_config_flags_init_once: VKD3D_CONFIG=''.
+1e38:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+1e38:info:vkd3d_instance_init: vkd3d-proton - build: 472989aabdcf3e3.
+1e38:warn:openvr_device_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+1e38:warn:vkd3d_init_depth_stencil_formats: Mapping VK_FORMAT_D24_UNORM_S8_UINT to VK_FORMAT_D32_SFLOAT_S8_UINT.
+1e38:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+1e38:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Enabling fast paths for advanced ExecuteIndirect() graphics and compute (EXT_dgc).
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports VK_EXT_mutable_descriptor_type.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports ultra-fast path for descriptor copies.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports packed metadata path for descriptor copies.
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+1e38:fixme:d3d12_device_caps_init_feature_options1: TotalLaneCount = 1536, may be inaccurate.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+083c:info:vkd3d_pipeline_library_disk_thread_main: Performing async setup of stream archive ...
+083c:info:vkd3d_pipeline_library_disk_cache_merge: No write cache exists. No need to merge any disk caches.
+083c:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 2.361 ms.
+083c:info:vkd3d_pipeline_library_disk_cache_initial_setup: Failed to map read-only cache: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+083c:info:vkd3d_pipeline_library_disk_thread_main: Done performing async setup of stream archive.
+1e38:warn:openvr_instance_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+1e38:info:vkd3d_instance_init: vkd3d-proton - build: 472989aabdcf3e3.
+1e38:warn:openvr_device_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+1e38:warn:vkd3d_init_depth_stencil_formats: Mapping VK_FORMAT_D24_UNORM_S8_UINT to VK_FORMAT_D32_SFLOAT_S8_UINT.
+1e38:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+1e38:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Enabling fast paths for advanced ExecuteIndirect() graphics and compute (EXT_dgc).
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports VK_EXT_mutable_descriptor_type.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports ultra-fast path for descriptor copies.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports packed metadata path for descriptor copies.
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+1e38:fixme:d3d12_device_caps_init_feature_options1: TotalLaneCount = 1536, may be inaccurate.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1064:info:vkd3d_pipeline_library_disk_thread_main: Performing async setup of stream archive ...
+1064:info:vkd3d_pipeline_library_disk_cache_merge: No write cache exists. No need to merge any disk caches.
+1064:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 0.183 ms.
+1064:info:vkd3d_pipeline_library_disk_cache_initial_setup: Failed to map read-only cache: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1064:info:vkd3d_pipeline_library_disk_thread_main: Done performing async setup of stream archive.
+1e38:warn:d3d12core_GetDebugInterface: Returning DXGI_ERROR_SDK_COMPONENT_MISSING.
+1e38:warn:openvr_instance_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+1e38:info:vkd3d_instance_init: vkd3d-proton - build: 472989aabdcf3e3.
+1e38:warn:openvr_device_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+1e38:warn:vkd3d_init_depth_stencil_formats: Mapping VK_FORMAT_D24_UNORM_S8_UINT to VK_FORMAT_D32_SFLOAT_S8_UINT.
+1e38:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+1e38:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Enabling fast paths for advanced ExecuteIndirect() graphics and compute (EXT_dgc).
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports VK_EXT_mutable_descriptor_type.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports ultra-fast path for descriptor copies.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports packed metadata path for descriptor copies.
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+1e38:fixme:d3d12_device_caps_init_feature_options1: TotalLaneCount = 1536, may be inaccurate.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+2f2c:info:vkd3d_pipeline_library_disk_thread_main: Performing async setup of stream archive ...
+2f2c:info:vkd3d_pipeline_library_disk_cache_merge: No write cache exists. No need to merge any disk caches.
+2f2c:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 0.291 ms.
+2f2c:info:vkd3d_pipeline_library_disk_cache_initial_setup: Failed to map read-only cache: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+2f2c:info:vkd3d_pipeline_library_disk_thread_main: Done performing async setup of stream archive.
+1e38:warn:openvr_instance_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+1e38:info:vkd3d_instance_init: vkd3d-proton - build: 472989aabdcf3e3.
+1e38:warn:openvr_device_extensions: Failed to open VR registry key, status 2.
+1e38:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+1e38:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+1e38:warn:vkd3d_init_depth_stencil_formats: Mapping VK_FORMAT_D24_UNORM_S8_UINT to VK_FORMAT_D32_SFLOAT_S8_UINT.
+1e38:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+1e38:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Enabling fast paths for advanced ExecuteIndirect() graphics and compute (EXT_dgc).
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports VK_EXT_mutable_descriptor_type.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports ultra-fast path for descriptor copies.
+1e38:info:vkd3d_bindless_state_get_bindless_flags: Device supports packed metadata path for descriptor copies.
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+1e38:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+1e38:fixme:d3d12_device_caps_init_feature_options1: TotalLaneCount = 1536, may be inaccurate.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+1e38:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1e38:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+1e38:warn:d3d12_device_CheckFeatureSupport: Assuming device does not support tile based rendering.
+0854:info:vkd3d_pipeline_library_disk_thread_main: Performing async setup of stream archive ...
+1e38:err:d3d12_shared_fence_open_export_kmt: Failed to get exported semaphore handle, vr -13.
+1e38:err:d3d12_shared_fence_open_export_kmt: Failed to get exported semaphore handle, vr -13.
+1e38:err:d3d12_shared_fence_open_export_kmt: Failed to get exported semaphore handle, vr -13.
+1e38:err:d3d12_shared_fence_open_export_kmt: Failed to get exported semaphore handle, vr -13.
+0854:info:vkd3d_pipeline_library_disk_cache_merge: No write cache exists. No need to merge any disk caches.
+0854:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 0.193 ms.
+0854:info:vkd3d_pipeline_library_disk_cache_initial_setup: Failed to map read-only cache: C:\BC250\m12\witcher3-dx12-001\vkd3d-cache\vkd3d-proton.witcher3.exe.cache.
+0854:info:vkd3d_pipeline_library_disk_thread_main: Done performing async setup of stream archive.
+1e38:warn:d3d12_device_CheckFeatureSupport: Assuming device does not support tile based rendering.
+1e38:fixme:d3d12_command_queue_init: Ignoring priority 0x64.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_state_object_find_association: Conflicting local root signatures defined for same export, using NULL local root signature.
+1e38:warn:d3d12_device_QueryInterface: {db6f6ddb-ac77-4e88-8253-819df9bbf140} not implemented, returning E_NOINTERFACE.
+1e38:info:dxgi_vk_swap_chain_init: Creating swapchain (1920 x 1200), BufferCount = 3.
+1e38:info:dxgi_vk_swap_chain_init_sync_objects: Ensure maximum latency of 3 frames with KHR_present_wait.
+1e38:info:dxgi_vk_swap_chain_init_sleep_state: Timer interval is 0.5 ms.
+0854:info:vkd3d_pipeline_library_disk_thread_main: Pipeline cache marked dirty. Flush is scheduled.
+0a04:warn:d3d12_pipeline_state_init_graphics_create_info: DSV format is DXGI_FORMAT_UNKNOWN.
+3044:info:dxgi_vk_swap_chain_SetTargetFrameRate: Set target frame rate to 30.0 FPS.
+2708:info:dxgi_vk_swap_chain_recreate_swapchain_in_present_task: Got 3 swapchain images.
+2708:info:dxgi_vk_swap_chain_recreate_swapchain_in_present_task: Got 3 swapchain images.
+0854:info:vkd3d_pipeline_library_disk_thread_main: Flushing disk cache (wakeup counter since last flush = 19). It seems like application has stopped creating new PSOs for the time being.
+0854:info:vkd3d_pipeline_library_disk_thread_main: Pipeline cache marked dirty. Flush is scheduled.
+0854:info:vkd3d_pipeline_library_disk_thread_main: Flushing disk cache (wakeup counter since last flush = 19). It seems like application has stopped creating new PSOs for the time being.

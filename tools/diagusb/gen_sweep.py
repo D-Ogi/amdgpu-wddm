@@ -23,7 +23,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "regcalc"))
 from regcalc import HDR_DIR, RegMap  # noqa: E402
 
-from gen_probes import SPEC  # noqa: E402  (ip, header, registers) - reuse the header mapping
+from gen_probes import SPEC, denied  # noqa: E402  (ip, header, registers) - reuse the header mapping
 
 BAR5_SIZE = 0x80000
 # Indexed data ports and ucode/RAM windows: a read moves an internal pointer. Never swept.
@@ -55,7 +55,8 @@ def build():
                 continue
             off = (rm.segs[idx] + mm) * 4
             short = name[2:] if name.startswith("mm") else name
-            if off >= BAR5_SIZE or SKIP.search(short) or off in bad or (ip, off) in seen:
+            # denied(): the UVD/VCN window, by rule and not by luck (gen_probes.py, facts M787).
+            if off >= BAR5_SIZE or SKIP.search(short) or off in bad or (ip, off) in seen or denied(off):
                 continue
             seen.add((ip, off))
             regs.append([ip, short, off])

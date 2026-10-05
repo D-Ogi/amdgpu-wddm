@@ -1,0 +1,145 @@
+{"sequence":0,"elapsed_ms":0,"phase":"after","api":"Effective RADV_EXPERIMENTAL absent","hr":"00000000"}
+{"sequence":1,"elapsed_ms":16,"phase":"before","api":"create-device","hr":"00000000"}
+{"sequence":1,"elapsed_ms":16,"phase":"before","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":16,"phase":"after","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"before","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"after","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"before","api":"GetDesc1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":31,"phase":"after","api":"GetDesc1","hr":"00000000"}
+runtime=system32/d3d12.dll adapter=BC-250
+{"sequence":1,"elapsed_ms":31,"phase":"before","api":"D3D12CreateDevice FL12_1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":4125,"phase":"after","api":"D3D12CreateDevice FL12_1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":4125,"phase":"after","api":"Reported TiledResourcesTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":4125,"phase":"after","api":"Reported ResourceBindingTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":4125,"phase":"after","api":"Reported ConservativeRasterizationTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":4125,"phase":"after","api":"Reported MaxSupportedFeatureLevel c100","hr":"00000000"}
+{"sequence":1,"elapsed_ms":4125,"phase":"after","api":"create-device","hr":"00000000"}
+{"sequence":2,"elapsed_ms":10063,"phase":"before","api":"create-queue","hr":"00000000"}
+{"sequence":2,"elapsed_ms":10063,"phase":"before","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":10094,"phase":"after","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":10094,"phase":"after","api":"create-queue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17406,"phase":"before","api":"copy","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17406,"phase":"before","api":"CheckFeatureSupport OPTIONS5","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17406,"phase":"after","api":"CheckFeatureSupport OPTIONS5","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"Reported RaytracingTier 11","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"before","api":"CheckFeatureSupport SHADER_MODEL","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"CheckFeatureSupport SHADER_MODEL","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"Reported HighestShaderModel 65","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"Expected pattern 12 hits of 64, margin kept","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"before","api":"QueryInterface ID3D12Device5","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"QueryInterface ID3D12Device5","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"before","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"before","api":"GetGPUVirtualAddress UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"after","api":"GetGPUVirtualAddress UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17422,"phase":"before","api":"CreateCommittedResource shader table UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"after","api":"CreateCommittedResource shader table UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"before","api":"GetGPUVirtualAddress shader table","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"after","api":"GetGPUVirtualAddress shader table","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"before","api":"GetRaytracingAccelerationStructurePrebuildInfo bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"after","api":"GetRaytracingAccelerationStructurePrebuildInfo bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"before","api":"GetRaytracingAccelerationStructurePrebuildInfo top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"after","api":"GetRaytracingAccelerationStructurePrebuildInfo top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"after","api":"Prebuild bottom level 384 bytes scratch 248, top level 448 bytes scratch 280","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17438,"phase":"before","api":"CreateCommittedResource bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17453,"phase":"after","api":"CreateCommittedResource bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17453,"phase":"before","api":"CreateCommittedResource top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17453,"phase":"after","api":"CreateCommittedResource top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17453,"phase":"before","api":"CreateCommittedResource scratch","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17469,"phase":"after","api":"CreateCommittedResource scratch","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17469,"phase":"before","api":"CreateCommittedResource OUTPUT","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17469,"phase":"after","api":"CreateCommittedResource OUTPUT","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17469,"phase":"before","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"GetGPUVirtualAddress bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"GetGPUVirtualAddress bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Bottom level GPU address 0x0000000000020000","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"GetGPUVirtualAddress top level, scratch, OUTPUT","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"GetGPUVirtualAddress top level, scratch, OUTPUT","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"Map READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Map READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"before","api":"Unmap READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Unmap READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17485,"phase":"after","api":"Destination holds prefill before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17500,"phase":"before","api":"D3D12SerializeRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17500,"phase":"after","api":"D3D12SerializeRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17500,"phase":"before","api":"CreateRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17500,"phase":"after","api":"CreateRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17500,"phase":"before","api":"CreateStateObject RAYTRACING_PIPELINE lib_6_3","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17531,"phase":"after","api":"CreateStateObject RAYTRACING_PIPELINE lib_6_3","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17531,"phase":"before","api":"QueryInterface ID3D12StateObjectProperties","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17531,"phase":"after","api":"QueryInterface ID3D12StateObjectProperties","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17531,"phase":"before","api":"GetShaderIdentifier raygen","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"after","api":"GetShaderIdentifier raygen","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"before","api":"GetShaderIdentifier miss","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"after","api":"GetShaderIdentifier miss","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"before","api":"GetShaderIdentifier group","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"after","api":"GetShaderIdentifier group","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"before","api":"Map shader table","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"after","api":"Map shader table","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"before","api":"Unmap shader table","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"after","api":"Unmap shader table","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"before","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"after","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17547,"phase":"before","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"after","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"before","api":"QueryInterface ID3D12GraphicsCommandList4","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"after","api":"QueryInterface ID3D12GraphicsCommandList4","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"before","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"after","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"before","api":"BuildRaytracingAccelerationStructure bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"after","api":"BuildRaytracingAccelerationStructure bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":17563,"phase":"before","api":"ResourceBarrier UAV after bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":18688,"phase":"after","api":"ResourceBarrier UAV after bottom level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":18688,"phase":"before","api":"BuildRaytracingAccelerationStructure top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":18688,"phase":"after","api":"BuildRaytracingAccelerationStructure top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":18688,"phase":"before","api":"ResourceBarrier UAV after top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19360,"phase":"after","api":"ResourceBarrier UAV after top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19360,"phase":"before","api":"SetComputeRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19360,"phase":"after","api":"SetComputeRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19360,"phase":"before","api":"SetPipelineState1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"SetPipelineState1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"SetComputeRootShaderResourceView top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"SetComputeRootShaderResourceView top level","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"SetComputeRootUnorderedAccessView OUTPUT","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"SetComputeRootUnorderedAccessView OUTPUT","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"DispatchRays 8 8 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"DispatchRays 8 8 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"ResourceBarrier UNORDERED_ACCESS to COPY_SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"ResourceBarrier UNORDERED_ACCESS to COPY_SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"CopyBufferRegion OUTPUT to READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"CopyBufferRegion OUTPUT to READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"after","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19375,"phase":"before","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"before","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"before","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"before","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"before","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"before","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"before","api":"Unmap READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"Unmap READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19391,"phase":"after","api":"Ray pipeline 64 of 64 words equal, 12 hits, first difference -1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19406,"phase":"before","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19406,"phase":"after","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":3,"elapsed_ms":19406,"phase":"after","api":"copy","hr":"00000000"}
+{"sequence":4,"elapsed_ms":23235,"phase":"before","api":"status","hr":"00000000"}
+{"sequence":4,"elapsed_ms":23235,"phase":"before","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":23235,"phase":"after","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":23235,"phase":"after","api":"status","hr":"00000000"}
+{"sequence":5,"elapsed_ms":30531,"phase":"before","api":"exit","hr":"00000000"}
+{"sequence":5,"elapsed_ms":30531,"phase":"after","api":"exit","hr":"00000000"}

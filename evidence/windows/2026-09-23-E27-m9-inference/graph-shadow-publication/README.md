@@ -1,0 +1,9 @@
+# Graph shadow update at actual private/DMA publication
+
+PAGING_GRAPH_BATCH describes captured physical identities, system/local flags and exactly one emitted equal-offset batch. VidMm embeds a separate logical scratch slot in its existing instance and applies a batch under exclusive CpuUpdateLock, with readiness checked under that lock. No per-commit allocation, kernel-stack page or retained caller pointer.
+
+WddmPublishPagingRecordCore accepts an optional graph descriptor. DMA/private header validation precedes logical commit; command copy and pointer/capacity advance follow it. A graph cannot be combined with another metadata operation in the same call, avoiding a later commit failure after mutation. Existing DDI builders pass NULL: selecting/capturing general local/table graphs is not wired yet.
+
+The focused test initializes three real shadow tables through VidMmStart/CPU updates, obtains a cycle from the real planner and builds each direct-copy packet through GfxPagingBuildCopyPage. Short DMA/private capacity preserves all1536logical entries and DMA bytes. Accepted publication advances buffers, publishes exact packet bytes, and updates the shadow. Independent decoding/replay of the four actual SDMA packets agrees with all1536logical entries, while live CPU/GPU backing retains the original contents. Stop releases mappings and lock depth returns to zero.
+
+Routing22513checks PASS; focused6165checks PASS. Generated omission of logical commits gives focused6165checks/1536failures, exit1. WDK development build passes; revision101 unchanged, not installed. No claim of GPU execution or OS callback lifetime proof. General endpoint graph capture and retained plan lifetime across self-modifying table transfers remain required. Both configured TCP22routes remain unavailable.

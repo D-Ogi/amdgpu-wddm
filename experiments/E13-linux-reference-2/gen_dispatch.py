@@ -3,15 +3,16 @@
 dispatch needs, parsed out of the original headers and the original libdrm test source. No ioctl number, struct
 offset, register offset, shader word or PM4 constant is typed in this file.
 
-Sources (all read-only, all outside the repo):
+Sources (all read-only, all outside the repo, under BC250_ROOT - the workspace root, by default the
+parent directory of this repository):
 
-  A  P:/BC-250/ref/mesa/include/drm-uapi/drm.h              DRM_IOCTL_BASE, DRM_COMMAND_BASE, struct drm_gem_close
-  B  P:/BC-250/ref/mesa/include/drm-uapi/amdgpu_drm.h       DRM_AMDGPU_* command numbers, AMDGPU_* constants and the
+  A  <BC250_ROOT>/ref/mesa/include/drm-uapi/drm.h              DRM_IOCTL_BASE, DRM_COMMAND_BASE, struct drm_gem_close
+  B  <BC250_ROOT>/ref/mesa/include/drm-uapi/amdgpu_drm.h       DRM_AMDGPU_* command numbers, AMDGPU_* constants and the
                                                             layout of every struct the ioctls take
-  C  P:/BC-250/ref/libdrm/tests/amdgpu/shader_code_gfx10.h  bufferclear_cs_shader_gfx10[], sh_reg_base_gfx10
-  D  P:/BC-250/ref/libdrm/tests/amdgpu/shader_code_gfx9.h   bufferclear_cs_shader_registers_gfx9[]
-  E  P:/BC-250/ref/libdrm/tests/amdgpu/shader_test_util.c   the PACKET3 opcodes and the dispatch packet stream
-  F  P:/BC-250/ref/linux-src/drivers/gpu/drm/amd/amdgpu/nvd.h   PACKET3_SET_UCONFIG_REG_START (libdrm has no name
+  C  <BC250_ROOT>/ref/libdrm/tests/amdgpu/shader_code_gfx10.h  bufferclear_cs_shader_gfx10[], sh_reg_base_gfx10
+  D  <BC250_ROOT>/ref/libdrm/tests/amdgpu/shader_code_gfx9.h   bufferclear_cs_shader_registers_gfx9[]
+  E  <BC250_ROOT>/ref/libdrm/tests/amdgpu/shader_test_util.c   the PACKET3 opcodes and the dispatch packet stream
+  F  <BC250_ROOT>/ref/linux-src/drivers/gpu/drm/amd/amdgpu/nvd.h   PACKET3_SET_UCONFIG_REG_START (libdrm has no name
                                                             for it), cross-check of PACKET3_SET_SH_REG_START
   G  tools/regcalc (over third_party/linux-amdgpu)          the authoritative register offsets, repo rule 1
 
@@ -33,6 +34,7 @@ Run:  python experiments/E13-linux-reference-2/gen_dispatch.py
 
 import ast
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -41,9 +43,11 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "regcalc"))
 from regcalc import RegMap                                             # noqa: E402  repo rule 1
 
-UAPI = Path(r"P:\BC-250\ref\mesa\include\drm-uapi")
-LIBDRM = Path(r"P:\BC-250\ref\libdrm\tests\amdgpu")
-NVD = Path(r"P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\nvd.h")
+# BC250_ROOT is the workspace root; by default the parent directory of this repository.
+ROOT = Path(os.environ.get("BC250_ROOT", str(REPO.parent)))
+UAPI = ROOT / "ref" / "mesa" / "include" / "drm-uapi"
+LIBDRM = ROOT / "ref" / "libdrm" / "tests" / "amdgpu"
+NVD = ROOT / "ref" / "linux-src" / "drivers" / "gpu" / "drm" / "amd" / "amdgpu" / "nvd.h"
 
 LIBDRM_TAG = "libdrm-2.4.114"
 LIBDRM_COMMIT = "b9ca37b3134861048986b75896c0915cbf2e97f9"

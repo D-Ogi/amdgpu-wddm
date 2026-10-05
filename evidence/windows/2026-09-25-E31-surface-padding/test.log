@@ -1,0 +1,62 @@
+task_exit=0
+displayconfig sizes flags 2 err 0 paths 1 modes 2
+displayconfig query flags 2 err 0 paths 1 modes 2
+path src 0 dst 2424833 mode 1/0 flags 1 refresh 154000000/2568800
+displayconfig sizes flags 1 err 0 paths 1 modes 2
+displayconfig query flags 1 err 0 paths 1 modes 2
+path src 0 dst 2424833 mode 1/0 flags 1 refresh 154000000/2568800
+create 00000000 level a000
+UMD_MODULE=C:\BC250\m10\surface-padding\bc250d3d.dll
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+completion A-clear PASS ms=0
+shared A-to-B red mismatches 0 of 2048 extent 64x32
+completion B-clear PASS ms=0
+shared B-to-A blue mismatches 0 of 2048 extent 64x32
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+completion A-clear PASS ms=0
+shared A-to-B red mismatches 0 of 47124 extent 1428x33
+completion B-clear PASS ms=0
+shared B-to-A blue mismatches 0 of 47124 extent 1428x33
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+completion A-clear PASS ms=0
+shared A-to-B red mismatches 0 of 47810 extent 1366x35
+completion B-clear PASS ms=0
+shared B-to-A blue mismatches 0 of 47810 extent 1366x35
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+completion A-clear PASS ms=0
+shared A-to-B red mismatches 0 of 1 extent 1x1
+completion B-clear PASS ms=0
+shared B-to-A blue mismatches 0 of 1 extent 1x1
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+completion A-clear PASS ms=16
+shared A-to-B red mismatches 0 of 4355 extent 67x65
+completion B-clear PASS ms=0
+shared B-to-A blue mismatches 0 of 4355 extent 67x65
+shared control PASS
+buffer 00000000
+rtv 00000000
+staging 00000000
+completion green-copy PASS ms=0
+map 00000000
+green mismatches 0 of 307200
+present 0 00000000
+device removed 00000000
+loaded_umd_path=C:\BC250\m10\surface-padding\bc250d3d.dll
+loaded_umd_sha256=CB1480EC67DB4DC22193E65AAB158680D00063332077205CE307B4474B1986C6
+CACHE147_SHARED_PIXEL_CONTROL_PASS
+health abi=1 version=0x00070093 flags=15 generation=29846309707 epoch=5 completed=236 age_ms=846 ready_ms=95107

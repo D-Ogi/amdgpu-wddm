@@ -2,7 +2,7 @@ E16 run 001, 2026-09-21, unit A, Windows boot 2026-09-21T18:28:12 (one boot for 
 Files are copied from C:\BC250\e16\out as they were written (the *.log files are UTF-16, PowerShell redirection).
 Nothing was redacted: the only matches of the redaction patterns are driver versions and two public class GUIDs.
 
-Builds: bc250kmd 0.7.1.0 (commit b491cf0) for step 1, bc250kmd 0.7.2.0 (commit e971351) for the gate-open run,
+Builds: bc250kmd 0.7.1.0 (commit fcada88) for step 1, bc250kmd 0.7.2.0 (commit d1d56a2) for the gate-open run,
 both from a clean worktree, plain package (no UserModeDriverName).
 
 What happened, in order (local time, file):

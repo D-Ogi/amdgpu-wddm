@@ -1,0 +1,11 @@
+{
+  "source": "unit A System32/D3D12Core.dll",
+  "version": "10.0.22621.5415",
+  "sha256": "1F35DA8A0EE5A7C4C7914507E61998F40C3269EBC4198271E609DED762360872",
+  "pe_age": 1,
+  "dbi_age": 1,
+  "pdb_info_age": 3,
+  "symbol_guid_match": true,
+  "symbol_guid": "REDACTED",
+  "method": "PE/PDB parsing and Capstone, no live debugger"
+}

@@ -1,0 +1,3 @@
+# Run015 interrupted during repeated CP initialization
+
+No OS restart before the attempt: same boot04:04:03 as successful014. Local stream proves gate/garT/PSP/IH/GFX1..5 returned; last boundary STEP_BEGINgfx-6 at04:15:46. SSH then unavailable. On recovery Windows boot is04:20:42 and events41/6008 report unexpected shutdown; no bugcheck1001 observed. Only initial remote files survived; no evidence any application started. Quiet ICD candidate remains untested. Remote log loss does not override the flushed local stage trace. Display-only restored04:24:29,allruntimegatesclosed,UnconfirmedStarts0. Do not infer exact instruction or teardown cause from stage number.

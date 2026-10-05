@@ -65,7 +65,7 @@ OUT=${BC250_OUT:-/tmp/bc250-$STAMP}
 HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || HERE=.
 T=/sys/kernel/tracing
 DBG=/sys/kernel/debug
-TEMP_LIMIT_MC=85000            # millidegrees C, the hard limit from P:\BC-250\CLAUDE.md
+TEMP_LIMIT_MC=85000            # millidegrees C, the hard limit from <BC250_ROOT>\CLAUDE.md
 OVERTEMP="$OUT/OVERTEMP"
 
 mkdir -p "$OUT" "$OUT/rings" "$OUT/dmu"

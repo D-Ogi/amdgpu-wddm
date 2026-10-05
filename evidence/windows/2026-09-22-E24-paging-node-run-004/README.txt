@@ -1,4 +1,4 @@
-E24 run 004, 2026-09-22 11:11-11:15: bc250kmd 0.7.25 (5dcf020) on unit A, owner at the monitor, first
+E24 run 004, 2026-09-22 11:11-11:15: bc250kmd 0.7.25 (3910bed) on unit A, owner at the monitor, first
 bring-up of the 11:06 boot (the freshness guard of M78 passed).
 
 Two questions in one run, the cheap control first: does the IH ring deliver anything at all in a device start

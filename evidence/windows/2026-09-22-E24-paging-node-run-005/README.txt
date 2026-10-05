@@ -1,4 +1,4 @@
-E24 run 005, 2026-09-22 11:38-11:42: bc250kmd 0.7.26 (4042b0e) on unit A, owner at the monitor, first bring-up
+E24 run 005, 2026-09-22 11:38-11:42: bc250kmd 0.7.26 (ee6c104) on unit A, owner at the monitor, first bring-up
 of the 11:29:35 boot (the freshness guard of M78 passed).
 
 The run that run 004 was supposed to be, on a driver that survives it: the same eight stages with the node and

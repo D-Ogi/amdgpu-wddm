@@ -1,0 +1,20 @@
+startup-log-014.txt
+   667      1.577 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+startup-log-014.txt
+   672      1.577 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+startup-log-015.txt
+   677      1.652 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+startup-log-015.txt
+   682      1.652 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+startup-log-021.txt
+   802      8.903 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+startup-log-021.txt
+   807      8.903 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+startup-log-021.txt
+   808      8.957 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+startup-log-021.txt
+   813      8.957 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+startup-log-021.txt
+   814      9.019 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+startup-log-021.txt
+   819      9.019 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0

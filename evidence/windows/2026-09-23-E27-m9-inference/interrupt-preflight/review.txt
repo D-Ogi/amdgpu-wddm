@@ -1,0 +1,32 @@
+M237 2026-09-23: interrupt connection preflight; source/host only.
+MS local revision7515063cea4c9e98db6a92986c5b4ddb0463fd16.
+StartDevice explicitly requires enabling adapter interrupts.
+SynchronizeExecution may return STATUS_UNSUCCESSFUL if not connected yet.
+ISR documentation requires synchronization of shared state through that callback.
+Thus callback pointer presence alone does not establish connection.
+
+New GpuStartupInterruptProbe only sets caller's BOOLEAN and returns TRUE.
+Coordinator calls SynchronizeExecution(message0) before GART planning/firmware/
+hardware. Requires native success, returned TRUE and actual callback delivery.
+Keeps native failure; success with no delivery or false callback => NOT_READY.
+InterruptConnected report means synchronization callback ran, not GPU interrupt
+delivery. No fallback enabling hardware after refusal.
+
+319 checks pass using extracted coordinator and probe with modeled callbacks.
+No-preflight mutation333checks/7failures: different paths run additional phase
+assertions because rejected starts now execute. Full WDK build/sign passes.
+DEVONLY retains0793, SYS4423AA7E9167DCEC996563F7F18344F22953A6943536959CFEBFEF4A59074DB4.
+No deployment; official0793 unchanged; no lab access.
+
+Reviewed Bc250DpcRoutine: all WDDM downstream paths refuse NULL Wddm before
+touching state. IH independent of Wddm. Does not prove concurrent lifetime.
+
+Source hazard found: bc250_ih_hw_init enables RB_ENABLE/ENABLE_INTR before
+IhExecute copies DpcAdev and sets Active. IhInterrupt returns FALSE while Active0.
+An interrupt in that interval can be ignored. Lost notification is a hypothesis,
+not a measured lab failure. Publishing Active earlier without restructuring would
+allow a DPC during ring initialization. Next: split hardware preparation/final
+enable, publish valid DPC state and activate under interrupt synchronization;
+handle synchronization failure and stop transitions. Do not move allocations or
+blocking teardown into DIRQL callback. Existing shim register order must remain
+verified against the upstream trace. Coordinator remains unwired pending this.

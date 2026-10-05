@@ -1,0 +1,19 @@
+{
+  "utc": "2026-09-27T11:57:25.2858886Z",
+  "elapsed": 5.2167571,
+  "pid": 5608,
+  "candidate_modules": [
+    {
+      "path": "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+      "sha256": "CC6AAFAFEB0C320C421AFBF9CAF5351E4F01608623FECD439F22C766F7A19BD3",
+      "name": "bc250d3d.dll"
+    },
+    {
+      "path": "C:\\BC250\\m13\\dwm-hosted029\\bc250d3d_zink.dll",
+      "sha256": "5C74BF98F2362127173C53F7808950D4B6676E1B1C901A341163F7032AE78965",
+      "name": "bc250d3d_zink.dll"
+    }
+  ],
+  "claim_exists": true,
+  "enable_exists": true
+}

@@ -1,0 +1,38 @@
+{
+    "utc":  "2026-09-27T10:09:29.4098604Z",
+    "attempt":  1,
+    "elapsed":  2.8304400999999997,
+    "painted":  true,
+    "heartbeat":  {
+                      "frames":  10,
+                      "paint_red":  10,
+                      "paint_blue":  10,
+                      "paint_moving":  2,
+                      "qpc_before":  627020078487,
+                      "qpc_after":  627020078500,
+                      "qpc_frequency":  10000000,
+                      "utc_filetime":  134349773684772645
+                  },
+    "reader":  {
+                   "start":  "2026-09-27T10:09:29.4236894Z",
+                   "pid":  2712
+               },
+    "exit_code":  0,
+    "image":  {
+                  "pass":  true,
+                  "pixels":  8000,
+                  "mismatches":  0,
+                  "regions":  [
+                                  {
+                                      "region":  "red",
+                                      "mismatches":  0,
+                                      "pixels":  1400
+                                  },
+                                  {
+                                      "region":  "overlap",
+                                      "mismatches":  0,
+                                      "pixels":  6600
+                                  }
+                              ]
+              }
+}

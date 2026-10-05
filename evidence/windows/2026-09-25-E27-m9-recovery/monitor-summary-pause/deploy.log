@@ -1,0 +1,46 @@
+{
+    "StartedUtc":  "2026-09-25T01:34:34.5527018Z",
+    "OldPid":  4268,
+    "OldSha":  "4F5597D3C34AF92A205CB3CC4AF031B1EB2983C6F477E89334EE04B5D2F7A875",
+    "DwmPid":  1548,
+    "DwmStart":  "2026-09-25T03:28:12.4173373+02:00",
+    "Boot":  "2026-09-25T03:27:10.5000000+02:00",
+    "NewPid":  6048,
+    "NewSha":  "E75DDCC8AADFED045BC4D453054917922976E07698F0F12486FF21ED1EA2D8AE",
+    "ControlSha":  "02412B52C68E4B02030BBD26E33CD948FADDE74AADD14406813B2EB46B2B0962",
+    "Stop":  false,
+    "CompletedUtc":  "2026-09-25T01:34:38.7062535Z"
+}
+{
+    "name":  "kmd",
+    "title":  "bc250kmd",
+    "order":  30,
+    "rows":  [
+                 [
+                     "Driver",
+                     "installed",
+                     "Good"
+                 ],
+                 [
+                     "Stage",
+                     "50 first CommitVidPn",
+                     "Info"
+                 ],
+                 [
+                     "History",
+                     "10 20 30 31 32 33 34 35 39 50",
+                     "Info"
+                 ],
+                 [
+                     "Unconfirmed",
+                     "0 of 2",
+                     "Good"
+                 ],
+                 [
+                     "Confirm",
+                     "nothing to confirm",
+                     "Info"
+                 ]
+             ]
+}
+overlay_deployment_complete

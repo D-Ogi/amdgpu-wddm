@@ -1,0 +1,1 @@
+PASS: TEMP source index, TEMP dimension index, ADDR control, inactive lanes

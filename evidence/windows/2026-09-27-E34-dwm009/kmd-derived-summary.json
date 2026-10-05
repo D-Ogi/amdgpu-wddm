@@ -1,0 +1,12 @@
+{
+  "kmd-start.log": [
+    "823717  21564.437 wddm summary: blit gate open, 594 blits, 0 skips, 594 sources translated contiguous",
+    "823718  21564.437 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 497 scanout remaps (0 failed), last blit 27 ",
+    "823719  21564.437 wddm summary: widest blit 1200 rows"
+  ],
+  "kmd-end.log": [
+    "825259  21590.083 wddm summary: blit gate open, 594 blits, 0 skips, 594 sources translated contiguous",
+    "825260  21590.083 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 497 scanout remaps (0 failed), last blit 27 ",
+    "825261  21590.083 wddm summary: widest blit 1200 rows"
+  ]
+}

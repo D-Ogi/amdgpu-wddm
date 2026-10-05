@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "P:\BC-250\bc250-win\experiments\E27-m9-inference\validate-resident-set.py", line 44, in <module>
+    print(json.dumps(validate(Path(sys.argv[1]), int(sys.argv[2])), indent=2))
+                     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "P:\BC-250\bc250-win\experiments\E27-m9-inference\validate-resident-set.py", line 24, in validate
+    assert allocations == [(sample, i, size, 1) for sample in range(1, samples + 1) for i, size in enumerate(sizes)]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

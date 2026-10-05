@@ -1,7 +1,7 @@
 # Host test of driver\kmd\gpu_clock.h (BD-056, CalibrateGpuClock's TSC read), and a compile check of the same
 # header with the kernel flags.
 #
-#   pwsh driver\kmd\test\run_gpu_clock.ps1 -Out P:\BC-250\scratch\gpu-clock
+#   pwsh driver\kmd\test\run_gpu_clock.ps1 -Out $env:BC250_ROOT\scratch\gpu-clock
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
     [string]$Out = "$Root\scratch\gpu-clock",

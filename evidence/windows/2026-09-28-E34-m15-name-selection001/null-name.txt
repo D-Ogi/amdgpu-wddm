@@ -1,0 +1,12 @@
+FUNCTION RVA 194300 ?IsNullUmdDriver@@YAHAEBU_UNICODE_STRING@@@Z
+00194300 0fb701                   movzx    eax, word ptr [rcx]
+00194303 33d2                     xor      edx, edx
+00194305 6685c0                   test     ax, ax
+00194308 740e                     je       0x194318
+0019430a 6683f804                 cmp      ax, 4
+0019430e 0f8492e30b00             je       0x2526a6
+00194314 8bc2                     mov      eax, edx
+00194316 c3                       ret      
+00194317 cc                       int3     
+00194318 ba01000000               mov      edx, 1
+0019431d ebf5                     jmp      0x194314 ; ?IsNullUmdDriver@@YAHAEBU_UNICODE_STRING@@@Z+14

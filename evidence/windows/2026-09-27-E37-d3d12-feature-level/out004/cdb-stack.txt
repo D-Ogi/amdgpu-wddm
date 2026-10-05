@@ -1,0 +1,88 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\BC-250\scratch\m12\dxvk-build\src\dxgi
+OK                                             P:\BC-250\scratch\m12\vkd3d-build\libs\vkd3d
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\m12\vkd3d-package001
+OK                                             P:\BC-250\scratch\fl-probe-2026-09-27
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.016 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.016 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 46
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [P:\BC-250\scratch\fl-probe-2026-09-27\A004.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\m12\vkd3d-package001
+OK                                             P:\BC-250\scratch\fl-probe-2026-09-27
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\BC-250\scratch\m12\dxvk-build\src\dxgi
+OK                                             P:\BC-250\scratch\m12\vkd3d-build\libs\vkd3d
+Symbol search path is: srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols;P:\BC-250\scratch\m12\dxvk-build\src\dxgi;P:\BC-250\scratch\m12\vkd3d-build\libs\vkd3d
+Executable search path is: P:\BC-250\scratch\m12\vkd3d-package001;P:\BC-250\scratch\fl-probe-2026-09-27
+Windows 10 Version 22631 MP (12 procs) Free x64
+Product: WinNt, suite: SingleUserTS
+Edition build lab: 22621.1.amd64fre.ni_release.220506-1250
+Debug session time: Sun Sep 27 01:43:16.000 2026 (UTC + 2:00)
+System Uptime: not available
+Process Uptime: 0 days 0:00:31.000
+.................................
+ReadVirtual() failed in GetXStateConfiguration() first read attempt (error == 0.)
+Invalid mini-dump Miscellaneous information in InitializeConfiguration()
+For analysis of this file, run !analyze -v
+ntdll!NtWaitForAlertByThreadId+0x14:
+00007fff`10eb49f4 c3              ret
+0:000> cdb: Reading initial command '.reload; ~0 kb 40; ln dxgi+0x193c2; q'
+.................................
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e47ea5     : 00000000`00000000 00000277`db0c03b0 00000085`3e13d1d8 00000000`00000000 : ntdll!NtWaitForAlertByThreadId+0x14
+00007ffe`ddb493c2     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlAcquireSRWLockExclusive+0x165
+00007ffe`ddb4ced5     : 00007ffe`7d62a8d8 00000000`00000000 00007ffe`7d62a8d8 00000085`3e13d848 : dxgi!Ordinal15+0x193c2
+00007ffe`ddb4d008     : 00000000`00000000 00000085`3e13d848 00007ffe`ddb30000 00000277`db100710 : dxgi!Ordinal15+0x1ced5
+*** WARNING: Unable to verify timestamp for vulkan_radeon.dll
+00007ffe`7cd9560c     : 00000000`00000000 00007ffe`ddb4cf50 00000085`3e13d900 00000277`db0d0a70 : dxgi!CreateDXGIFactory2+0xb8
+(Inline Function)     : --------`-------- --------`-------- --------`-------- --------`-------- : vulkan_radeon!vk_dxgi_get_factory+0x3f [P:\bc-250\scratch\mesa-radv-main-20260924\src\vulkan\runtime\vk_dxgi.cpp @ 51]
+00000000`00000000     : 00007ffe`ddb4cf50 00000085`3e13d900 00000277`db0d0a70 00000000`00000000 : vulkan_radeon!vk_dxgi_adapter_foreach+0x6c [P:\bc-250\scratch\mesa-radv-main-20260924\src\vulkan\runtime\vk_dxgi.cpp @ 61]
+(00007ffe`ddb30000)   dxgi!Ordinal15+0x193c2   |  (00007ffe`ddb4cf40)   dxgi!CreateDXGIFactory
+quit:
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\stl.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\windows.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\winrt.natvis'

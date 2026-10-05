@@ -1,35 +1,155 @@
-# bc250-win
+# amdgpu-wddm
 
-Windows GPU support for the ASRock BC-250 (AMD Cyan Skillfish APU, GFX 10.1.3, PCI `1002:13FE`).
+An open Windows (WDDM) driver stack for AMD GPUs, developed first on the ASRock BC-250 (AMD Cyan Skillfish APU,
+GFX 10.1.3, PCI `1002:13FE`, VRAM carve-out, no resizable BAR): a WDDM kernel-mode driver built around AMD's own
+amdgpu code, and user-mode drivers that put Mesa's RADV, DXVK and vkd3d-proton behind the standard Windows
+graphics runtimes. It is a test-signed development stack measured on one lab unit ("unit A"), not a driver for
+end users. The working name inside the workspace is `bc250-win`. Not affiliated with or endorsed by AMD, ASRock
+or Microsoft.
 
-**Status: milestone M0 - nothing in this repo has been confirmed on hardware yet.** The current state always lives in `docs/facts.md` and `docs/00-goal-and-roadmap.md`.
+## What "native" means here
 
-## Starting point
+Applications call the standard D3D11, D3D12 and DXGI runtimes in System32, which load the installed driver of
+the adapter; nothing of ours is placed next to the application (the M13 criterion of the
+[roadmap](docs/00-goal-and-roadmap.md)). Inside that driver, DXVK (D3D11), vkd3d-proton (D3D12) and RADV
+(Vulkan) are internal backends, loaded by our user-mode driver, not by the application: the owner's decision,
+recorded in [ADR 0017](docs/adr/0017-graphics-stack-direction-after-m12.md) items 1, 2, 4 and 5. That is the
+intended architecture. What is measured today is less:
 
-Linux (`amdgpu` + Mesa RADV) fully drives this hardware. The existing Windows driver attempt (`Keshas-dev/AMD-BC-250-Windows-Driver`) stalled on the conclusion "registers are firmware-locked". Our analysis (`docs/predecessor-analysis.md`) indicates this is an artifact of a register addressing bug, not a hardware property. This repo starts over with a different method:
+- **D3D11:** the system runtime renders on the GPU through our user-mode driver in bounded test clients
+  ([M736](docs/facts/d3d.md#m736), [M747](docs/facts/d3d.md#m747), [M752](docs/facts/d3d.md#m752)) and creates a device at FL 12_1
+  ([M770](docs/facts/d3d.md#m770)). A router or a trial route hands only the test process to that driver; any other
+  D3D11 process gets FL 10_0 at most, the level of the CPU desktop driver ([M780](docs/facts/d3d.md#m780)). DWM itself composes on the GPU
+  through a separate hosted driver ([M772](docs/facts/games.md#m772)).
+- **D3D12:** the system runtime loads our registered D3D12 driver and renders through it. Measured so far:
+  - copy, draw, scene and Present exact ([M778](docs/facts/d3d.md#m778), [M779](docs/facts/d3d.md#m779));
+  - a device at FL 12_1 under the driver's defaults ([M780](docs/facts/d3d.md#m780));
+  - ROV and conservative rasterization tier 3 exact ([M781](docs/facts/d3d.md#m781));
+  - DXR exact when a per-application switch enables it ([M782](docs/facts/d3d.md#m782));
+  - The Witcher 3 next-gen DX12 edition with RT, every screenshot correct ([M775](docs/facts/games.md#m775),
+    [M777](docs/facts/games.md#m777)).
 
-1. **Linux on the same physical unit is the reference.** Every Windows measurement is compared with a Linux measurement.
-2. **Addresses and sequences come from AMD's MIT-licensed code, never from hand calculation.** See `tools/regcalc` and `docs/02-register-addressing.md`.
-3. **Every hardware claim carries a status and evidence.** See `docs/01-evidence-rules.md`.
+  These are functional tests on one unit, not a conformance run. The earlier Witcher 3 results
+  ([M571](docs/facts/games.md#m571), [M573](docs/facts/games.md#m573)) were per-application: vkd3d-proton and DXVK's `dxgi.dll` sat next
+  to the game, which is exactly what the native design removes.
+
+## Status (as of 2026-10-02)
+
+Every row cites [docs/facts.md](docs/facts.md), where each fact links its evidence. Open means open. Roadmap:
+M0-M6, M8 and M10 are closed; M7, M9, M11, M12 and M13 are open. M14 and M15 are proposed numbers (ADR 0017);
+their criteria and the state of each are in [docs/m15-reconciliation.md](docs/m15-reconciliation.md).
+
+| Area | State | Facts | Limits and open items |
+|---|---|---|---|
+| Kernel driver | Full WDDM lab driver with GPU submission and display scanout. CPU-desktop baseline KMD 171; the sessions of M775, M777 and M781 ran 0.7.185.1 to 0.7.193.1, the game sessions with DPM up to 2000 MHz | [M727](docs/facts/kmd.md#m727), [M775](docs/facts/games.md#m775), [M781](docs/facts/d3d.md#m781) | Development, test-signed stack: not general Windows driver compatibility or certified recovery. TDR recovery is not implemented ([M179](docs/facts/kmd.md#m179)): a GPU hang ends in a bugcheck (M15.12 in the [reconciliation](docs/m15-reconciliation.md)). KMD 171 was built from revision `75b8ab6f`, not from `main` ([provenance](evidence/windows/2026-09-28-E34-m14-kmd171/RESULT.md)); the driver registered today, 0.7.197.1, comes from `0cbef549`, which is in this repository's history, with the source of every binary in [Registered on unit A](#registered-on-unit-a) |
+| GPU desktop | DWM composes on the GPU through a router, hosted Zink and RADV. This has been the lab's default desktop since 2026-10-01, after the ladder T1-T7: correct images; the 8-bit Present client exact and the 10-bit one within 1 LSB; The Witcher 3 (with the game's FSR 2 upscaling) at 35.5 frames/s against 21.1 on the CPU-composed desktop. G0 is met for the DWM050 path | [M723](docs/facts/display.md#m723), [M724](docs/facts/display.md#m724), [M771](docs/facts/display.md#m771), [M772](docs/facts/games.md#m772) | Full M13 ([gates](docs/m13-accelerated-desktop-roadmap.md)) is open, among them the lifecycle transitions of M13.6 |
+| Vulkan ICD | RADV with a WDDM2 winsys, the lab's registered Vulkan driver. Compute hashes equal CPU and Linux (M8); llama.cpp text equals the Linux GPU text; first picture (M10, CPU presentation). The whole CTS sparse-resources list: 10778 pass, 8299 not supported, 0 fail of 19078 | [M139](docs/facts/icd.md#m139), [M163](docs/facts/icd.md#m163), [M476](docs/facts/display.md#m476), [M665](docs/facts/icd.md#m665), [M773](docs/facts/icd.md#m773) | Only two CTS groups have run: basic compute (75 pass, 5 not supported, 0 fail of 80, [M480](docs/facts/icd.md#m480)) and sparse resources (M773). The must-pass list and Linux parity are open; a native-sparse control hung on an earlier kernel driver ([M483](docs/facts/icd.md#m483)). M9 performance and paging open |
+| Native D3D11 (proposed M14) | System-runtime GPU rendering at FL 11_1, images byte-equal to per-application DXVK on the same GPU; native window Present and resize; error propagation and recovery; a device at FL 12_1 with tiled resources tier 3, ROVs and conservative rasterization tier 3 reported, tiled operations exact | [M736](docs/facts/d3d.md#m736), [M739](docs/facts/d3d.md#m739), [M747](docs/facts/d3d.md#m747), [M752](docs/facts/d3d.md#m752), [M756](docs/facts/d3d.md#m756), [M770](docs/facts/d3d.md#m770) | Test clients only, reached through a router or a trial route; an ordinary D3D11 process gets FL 10_0 at most, the level of the CPU desktop driver ([M780](docs/facts/d3d.md#m780)). Not measured: the 5 % bound against per-application DXVK (ADR 0017), threading (M14.6). Not implemented: residency, offer and reclaim (M14.8). FL 12_1 is a functional witness, not a conformance run. No broad game compatibility |
+| Native D3D12 (proposed M15) | The system `d3d12.dll` and `dxgi.dll` load our D3D12 driver (shell, vkd3d-proton engine, hosted RADV), which is registered between sessions. Measured through it: buffer copy, draw and indexed scene exact; 8-bit swap-chain Present and ResizeBuffers with exact frames, and 10-bit within 1 LSB under GPU composition; a device at FL 12_1; ROV and conservative rasterization exact; DXR, when its switch is set. The Witcher 3 next-gen DX12 edition runs at low, high and high with RT (45.3, 31.3 and 9.3 frames/s at native 1080p, every shot correct), also started from Steam | [M771](docs/facts/display.md#m771), [M775](docs/facts/games.md#m775), [M777](docs/facts/games.md#m777), [M778](docs/facts/d3d.md#m778)-[M782](docs/facts/d3d.md#m782) | Functional tests on one unit, not full D3D12 compatibility. No run of a D3D12 conformance suite or of a DXR subset. Stability is open (M15.8): game sessions have ended in 0x116 bugchecks, and a hang cannot be recovered (M15.12). Also open: the streaming-noise acceptance of M15.7 and the per-application comparison of M15.9. The shell, engine and ICD registered on the lab are published, each in [Registered on unit A](#registered-on-unit-a); three other deployed binaries still have no commit anywhere (M15.10). Criteria and status: [reconciliation](docs/m15-reconciliation.md) |
+| D3D12 engine | The vkd3d-proton fork, built as `amdgpu_wddm_vkd3d.dll` and loaded by the D3D12 shell behind the runtime's DDI in every native trial. Standalone controls: GPU copy/readback and DXIL compute on RADV | [M757](docs/facts/d3d.md#m757), [M759](docs/facts/d3d.md#m759), [M778](docs/facts/d3d.md#m778)-[M782](docs/facts/d3d.md#m782) | The engine registered since 2026-10-02 is `c3710ac1` on `amdgpu-wddm/registered-2026-10-02` of the fork |
+| Per-app D3D12 | vkd3d-proton and DXVK's `dxgi.dll` next to the game: The Witcher 3 next-gen DX12 menu and in-game scene on our ICD, with an experimental sparse flag | [M571](docs/facts/games.md#m571), [M573](docs/facts/games.md#m573), [M580](docs/facts/games.md#m580) | No longer the M15 route (owner, 2026-09-28; native D3D12 above). It stays the reference for the per-application comparison of M15.9. Its frame rates came from the retired CPU present path ([M577](docs/facts/games.md#m577), [M610](docs/facts/games.md#m610)) and do not compare with the native ones |
+| Ray tracing | Vulkan: ray-query and `TraceRays` CTS controls, and hardware BVH intersection in the compiled program. Native DXR through the system runtime: inline ray query, state objects, DispatchRays and indirect DispatchRays exact. The Witcher 3 renders with RT on through it | [M760](docs/facts/icd.md#m760)-[M762](docs/facts/icd.md#m762), [M775](docs/facts/games.md#m775), [M777](docs/facts/games.md#m777), [M782](docs/facts/d3d.md#m782) | RaytracingTier 1.1 is reported only with the shell's `raytracing-tier` switch (environment variable or per-application profile). The default is tier 0 ([M780](docs/facts/d3d.md#m780)). No DXR conformance subset; collections, `AddToStateObject` and local root arguments are not measured. With RT the game runs at 9.1-9.3 frames/s at native 1080p, the 3D engine 98 % busy |
+| FL 12_1 | Reached through the system runtime. D3D12: a device at FL 12_1 with no switch, 12_2 refused, tiled resources tier 3 under the driver's default sparse policy, and a reserved-resource round trip exact. ROV and conservative rasterization tier 3, inner coverage included, exact. D3D11: a device at FL 12_1, tiled operations exact | [M770](docs/facts/d3d.md#m770), [M773](docs/facts/icd.md#m773), [M780](docs/facts/d3d.md#m780), [M781](docs/facts/d3d.md#m781) | Functional witnesses, not conformance: no D3D12 or D3D11 conformance-suite run at this level, and no D3D12-level tiled-resources subset. Vulkan sparse CTS has 0 fails, but 8299 of 19078 cases are not supported, 4715 of them because they need a second device (M773). The ROV and conservative client has not been rerun on the triplets registered after 2026-10-01 (M781). FL 12_2 is not offered: no mesh shaders, sampler feedback or VRS |
+| Linux reference | amdgpu and RADV on the same unit: register baseline, Vulkan compute hashes, llama.cpp and clock/throughput numbers | [M1](docs/facts/hardware.md#m1), [M50](docs/facts/linux.md#m50)-[M52](docs/facts/hardware.md#m52) | No working GPU reset under Linux either ([M53](docs/facts/linux.md#m53)). M12's Linux-parity comparisons (CTS, performance) are open |
+
+## Layers
+
+```
+application: D3D11 / D3D12 / DXGI calls, nothing of ours next to it
+  -> Microsoft runtime in System32: d3d11.dll, d3d12.dll + D3D12Core.dll, dxgi.dll
+  -> our user-mode driver (the adapter's UserModeDriverName)
+       D3D11: shell amdgpu_wddm_d3d11.dll (driver/umd/dxvk)             + engine amdgpu_wddm_dxvk.dll
+       D3D12: shell amdgpu_wddm_d3d12.dll (driver/umd/d3d12, engine-ddi/) + engine amdgpu_wddm_vkd3d.dll
+       desktop today: a router sends DWM to bc250d3d_zink.dll (Mesa d3d10umd on Zink over hosted RADV)
+                      and other D3D10/11 processes to bc250d3d.dll (the same frontend on llvmpipe, CPU)
+  -> hosted RADV amdgpu_wddm_radv.dll, driven through the runtime's callbacks
+  -> dxgkrnl (VidMm, VidSch) -> bc250kmd.sys (driver/kmd) -> GPU
+Vulkan applications: Vulkan loader -> vulkan_radeon.dll (system ICD) -> dxgkrnl -> bc250kmd.sys -> GPU
+```
+
+| File | Role | Built by | State of the name |
+|---|---|---|---|
+| `bc250kmd.sys`, service `bc250kmd` | kernel-mode driver | `driver/kmd/build.ps1` | Baseline, not renamed |
+| `bc250d3d.dll` | desktop D3D10/11 UMD on llvmpipe | `tools/build/mesa-configs.json` `llvmpipe-umd` | Baseline for D3D10/11 processes other than DWM, and DWM's CPU fallback route ([M771](docs/facts/display.md#m771)) |
+| `bc250d3d_zink.dll` | the same frontend on Zink over hosted RADV | `mesa-configs.json` `zink-umd` | Deployed: DWM composes on it since 2026-10-01 ([M772](docs/facts/games.md#m772)) |
+| `vulkan_radeon.dll` | system Vulkan ICD | `mesa-configs.json` `radv` | Baseline (upstream RADV name) |
+| `amdgpu_wddm_radv.dll` | hosted RADV loaded by the D3D11 and D3D12 shells | no recipe: a `vulkan_radeon.dll` build staged under this name | Registered beside the D3D12 shell ([M780](docs/facts/d3d.md#m780)); was `bc250radv.dll` |
+| `bc250d3d_router.dll` | the registered D3D10/11 UMD: routes DWM and applications to one of the UMDs here | `tools/build/build-umd-router.ps1` | Registered since 2026-10-01 (allowlist policy) |
+| `amdgpu_wddm_d3d11.dll` | D3D10/11 DDI shell | `tools/build/build-umd-dxvk.ps1` | Candidate, renamed from `bc250d3d11.dll` (M756); reached by test clients through a router or a trial route ([M770](docs/facts/d3d.md#m770)), not by other applications |
+| `amdgpu_wddm_dxvk.dll` | DXVK engine | `tools/build/dxvk-configs.json` `ddi-engine` | Candidate, renamed from `bc250dxvk.dll` (M755) |
+| `amdgpu_wddm_d3d12.dll` | D3D12 DDI shell over the vkd3d-proton engine (`engine-ddi/`) | `tools/build/build-umd-d3d12.ps1` | Registered as the adapter's D3D12 user-mode driver on unit A ([M780](docs/facts/d3d.md#m780)); it began as the diagnostic shell of M763 |
+| `amdgpu_wddm_vkd3d.dll` | vkd3d-proton engine | `tools/build/vkd3d-configs.json` `ddi-engine` | Registered beside the D3D12 shell ([M780](docs/facts/d3d.md#m780)); renamed from `bc250vkd3d.dll`. Standalone controls M757, M759 |
+
+## Registered on unit A
+
+What is installed on the lab unit as of 2026-10-03T15:53Z, with the revision each binary was built from. The
+SHA-256 column is the first four bytes of the file's hash, which is how the lab's own records name a build.
+
+| Binary | SHA-256 | Repository, branch | Commit | Registered since |
+|---|---|---|---|---|
+| `bc250kmd.sys` 0.7.197.1 (INF `6268C3B2`, CAT `170C3694`, ABI `0x000700C5`) | `982DB3CF` | this repo, `bd055-dpm-thermal` | `0cbef549` | 2026-10-03T15:53Z |
+| `bc250kmd_cli.exe` | `BAF3A62A` | this repo, `bd055-dpm-thermal` | `0cbef549` | 2026-10-03T15:53Z |
+| `amdgpu_wddm_d3d12.dll`, the D3D12 shell | `5A1B7BAF` | this repo, `m15/replay-wake` | `e9f5e701` | 2026-10-02T17:13Z |
+| `amdgpu_wddm_vkd3d.dll`, the D3D12 engine | `D79FEC49` | [vkd3d-proton fork](https://github.com/D-Ogi/vkd3d-proton), `amdgpu-wddm/registered-2026-10-02` | `c3710ac1` | 2026-10-02T15:58Z |
+| `amdgpu_wddm_radv.dll`, hosted RADV for the D3D12 route | `F9DCB33B` | [Mesa fork](https://github.com/D-Ogi/mesa-amdgpu-wddm), `amdgpu-wddm/registered-2026-10-02` | `ae98c795` | 2026-10-02T15:58Z |
+| `bc250d3d_zink.dll`, the compositor's UMD | `18BFC610` | Mesa fork, `amdgpu-wddm/desktop-umd-wc-shadow` plus three uncommitted changes | - | 2026-10-02T08:30Z |
+| hosted RADV under that UMD | `66FE8F31` | Mesa fork, `amdgpu-wddm/radv-wddm2-hosted-main` | `48546c73` | 2026-10-01T01:50Z |
+| `bc250d3d.dll`, the CPU D3D10/11 UMD | `10D9C983` | Mesa fork, `amdgpu-wddm/desktop-umd-fp16-table` | `fbfd023f` | 2026-10-02T08:38Z |
+| `bc250d3d_router.dll`, the application router | `674AD261` | this repo, `main`, `driver/umd/router` | `6bbcf4f6` | 2026-10-01T04:26Z |
+| the allowlisted D3D11 route: shell, engine, ICD | `E748418C`, `8E9B3187`, `D672813F` | shell: this repo; engine: [DXVK fork](https://github.com/D-Ogi/dxvk), `amdgpu-wddm/ddi-engine-fl12`; ICD: Mesa fork, `amdgpu-wddm/radv-wddm2-hosted` plus one uncommitted change | shell `4b273f3e`, engine `0c187731` | 2026-10-01T04:26Z |
+
+Two of those binaries have no commit, and that is the open part of M15.10 in the
+[reconciliation](docs/m15-reconciliation.md): the compositor's Zink UMD and the D3D11 route's ICD were built from
+working trees whose changes are not committed anywhere. The other binaries can be
+rebuilt from the revision named here. A rebuild does not reproduce the hash: the kernel driver and the D3D12 shell are built
+without `/Brepro`, so the PE timestamp, the PDB signature and the Authenticode signature differ on every build
+(two builds of the same tree gave different hashes, same size). What is checked instead is the per-file source
+manifest that `driver/kmd/build.ps1` writes beside the driver. The router is not signed, and a build from
+`driver/umd/router` differs from `674AD261` only in its timestamps and PDB GUID (`tools/build/pe_compare.py`,
+[driver/umd/router](driver/umd/router/README.md#reproducing-674ad261)).
+
+## Repositories
+
+| Repository | Branches | What it holds |
+|---|---|---|
+| [D-Ogi/amdgpu-wddm](https://github.com/D-Ogi/amdgpu-wddm) (this one) | `main` | Kernel-mode driver, UMD shells, contracts, tools, experiments, evidence and facts |
+| [D-Ogi/mesa-amdgpu-wddm](https://github.com/D-Ogi/mesa-amdgpu-wddm) | `amdgpu-wddm/*`, listed in `README-amdgpu-wddm.md` on `amdgpu-wddm/readme` | RADV with the WDDM2 winsys and the `d3d10umd` UMD builds (llvmpipe, Zink). The ICD of the D3D12 route is `amdgpu-wddm/registered-2026-10-02`, the compositor's hosted ICD `amdgpu-wddm/radv-wddm2-hosted-main` and the CPU desktop UMD `amdgpu-wddm/desktop-umd-fp16-table`; the development heads past them are `amdgpu-wddm/draw-path` and `amdgpu-wddm/desktop-umd-wc-shadow` |
+| [D-Ogi/dxvk](https://github.com/D-Ogi/dxvk/tree/amdgpu-wddm/ddi-engine) | `amdgpu-wddm/ddi-engine`, `amdgpu-wddm/ddi-engine-fl12` | DXVK as the D3D11 engine `amdgpu_wddm_dxvk.dll`, engine ABI 1.4 ([commit map](docs/dxvk-engine-commit-map.md)); the engine of the allowlisted D3D11 route is `0c187731` on `ddi-engine-fl12`, which reports FL 12_1 |
+| [D-Ogi/vkd3d-proton](https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine-1.3-rtcfg) | `amdgpu-wddm/registered-2026-10-02`, `amdgpu-wddm/ddi-engine`, `amdgpu-wddm/ddi-engine-1.3-rtcfg`, `amdgpu-wddm/quiet-stdio-2026-10-02`, `amdgpu-wddm/draw-path`, and two more listed in the fork's README | vkd3d-proton as the D3D12 engine `amdgpu_wddm_vkd3d.dll`: frozen ABI 1.0 on `ddi-engine`, then ABI 1.2 and 1.3 (imported memory, private instances, linear images) with the dxil-spirv structurizer fix on `ddi-engine-1.3-rtcfg`, which has since merged upstream (2026-09-30). The engine registered on the lab is `c3710ac1` on `registered-2026-10-02`, a branch that does not move; `draw-path` continues past it |
+| [D-Ogi/dxil-spirv](https://github.com/D-Ogi/dxil-spirv/tree/amdgpu-wddm/rtcfg-loop-merge) | `amdgpu-wddm/rtcfg-loop-merge` | dxil-spirv with the geometry stream passed to stream output, upstream's `f2d1b55` loop fixup, and a structurizer fix for frozen loops that left two loops sharing one merge block; pinned by the vkd3d-proton branch above |
+| [D-Ogi/dxbc-spirv](https://github.com/D-Ogi/dxbc-spirv/tree/amdgpu-wddm/ddi-engine) | `amdgpu-wddm/ddi-engine` | DXVK's shader compiler with two geometry-shader stream fixes, pinned by the DXVK engine branch |
 
 ## Repo map
 
 | Path | Contents |
 |---|---|
-| `docs/` | Goal, roadmap, rules, architecture, ADRs, predecessor analysis |
-| `docs/facts.md` | The only list of established facts. Each entry has a status and an evidence link |
-| `experiments/` | Experiments `Exx`: hypothesis, procedure, expected result, result |
-| `evidence/` | Raw dumps from hardware (Linux and Windows). Immutable once added |
-| `journal/` | Lab notebook, one file per day. Chronology, not a source of facts |
-| `regs/` | Generated address tables (do not edit by hand) |
-| `tools/regcalc/` | Register address calculator driven by kernel headers, with tests |
-| `tools/diagusb/` | Bootable diagnostic USB: probes the board under Linux, shows results as QR codes |
-| `tools/win/` | Measurement tools for Windows |
-| `SECURITY.md`, `NOTICE`, `CONTRIBUTING.md` | How to tell genuine releases from fakes; required attribution; inbound license for contributions |
-| `driver/` | The driver: `kmd` (WDDM miniport), `shim` (Linux compatibility layer), `amdgpu-import` (AMD code), `umd` |
+| `docs/` | Goal and roadmap, evidence rules, ADRs (`adr/`), design notes (`design/`), research notes, [build guide](docs/build.md) |
+| `docs/facts.md`, `docs/facts/` | The only list of established facts, generated from the facts graph in `docs/facts/data/`, one page per area. Each entry has a status, an evidence link and its relations to other facts |
+| `experiments/`, `evidence/` | Experiments `Exx` (hypothesis, procedure, expected result, result); raw results from hardware, immutable once added |
+| `journal/`, `regs/` | Lab notebook by day (chronology, not a source of facts); generated register tables (never edited by hand) |
+| `driver/kmd/`, `driver/contract/` | The WDDM kernel-mode driver `bc250kmd`; the private KMD/UMD contract (caps, allocation, context, submission) |
+| `driver/shim/`, `driver/amdgpu-import/` | AMD's imported, unmodified amdgpu code and the slice of the Linux API it needs |
+| `driver/icd/` | RADV WDDM2 winsys patches; the component branches live in the Mesa fork |
+| `driver/umd/`, `driver/umd-stub/` | The D3D10/11 shell over DXVK (`dxvk/`), the diagnostic D3D12 shell (`d3d12/`, with `engine-ddi/`); the stub UMD of M7 stage A |
+| `tools/regcalc/`, `tools/diagusb/` | Register address calculator with tests; bootable diagnostic USB for Linux probes, results as QR codes |
+| `tools/build/`, `tools/quality/` | Build recipes (LLVM, Mesa, DXVK, vkd3d-proton, UMD shells); build quality gates |
+| `tools/win/`, other `tools/` | Windows measurement and lab tools; firmware fetch, package check, run comparison, Windows install |
 | `third_party/` | Foreign code kept in the repo, with provenance and license |
+| `LICENSE.md`, `NOTICE`, `THIRD-PARTY.md`, `SECURITY.md`, `CONTRIBUTING.md` | License, required notice, third-party licenses, authenticity, inbound license for contributions |
 
-## Quick start
+## Starting point
+
+Linux (`amdgpu` + Mesa RADV) fully drives this hardware. The earlier Windows attempt (`Keshas-dev/AMD-BC-250-Windows-Driver`)
+stalled on "registers are firmware-locked", which our [analysis](docs/predecessor-analysis.md) traces to a register addressing bug. The method:
+
+1. **Linux on the same physical unit is the reference.** Every Windows measurement is compared with a Linux one.
+2. **Addresses and sequences come from AMD's MIT-licensed code, never from hand calculation** (`tools/regcalc`, [addressing](docs/02-register-addressing.md)).
+3. **Every hardware claim carries a status and evidence** ([evidence rules](docs/01-evidence-rules.md)).
+
+## Build
+
+[docs/build.md](docs/build.md) builds the kernel-mode driver, LLVM, the Mesa components, DXVK and vkd3d-proton
+from pinned sources. Register lookups need only Python:
 
 ```
 python tools/regcalc/regcalc.py lookup mmGRBM_STATUS mmSPI_PG_ENABLE_STATIC_WGP_MASK

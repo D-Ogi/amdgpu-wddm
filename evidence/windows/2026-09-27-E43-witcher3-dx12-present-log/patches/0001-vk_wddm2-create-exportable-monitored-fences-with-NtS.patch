@@ -1,0 +1,93 @@
+From 59f53088f1f99ffc295f8bc078b00f6ac50631e3 Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 03:36:29 +0200
+Subject: [PATCH 1/2] vk_wddm2: create exportable monitored fences with
+ NtSecuritySharing
+
+An exportable semaphore (VkExportSemaphoreCreateInfo) reaches the sync
+type init with VK_SYNC_IS_SHAREABLE only; VK_SYNC_IS_SHARED is set by the
+runtime after the first successful export. The monitored fence was created
+with Shared/NtSecuritySharing derived from IS_SHARED, so D3DKMTShareObjects
+(which requires NtSecuritySharing at creation, d3dkmthk) failed silently,
+shared_handle stayed NULL and vkGetSemaphoreWin32HandleKHR returned
+VK_ERROR_UNKNOWN from DuplicateHandle(NULL). vkd3d-proton logged this as
+"d3d12_shared_fence_open_export_kmt: Failed to get exported semaphore
+handle, vr -13" for every shared D3D12 fence.
+
+Derive the flags from IS_SHAREABLE, check the ShareObjects status (destroy
+the object and fail init on error) and report a missing NT handle at export
+time as VK_ERROR_FEATURE_NOT_PRESENT instead of VK_ERROR_UNKNOWN.
+---
+ src/vulkan/runtime/vk_wddm2_monitored_fence.c | 30 +++++++++++++++----
+ 1 file changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/src/vulkan/runtime/vk_wddm2_monitored_fence.c b/src/vulkan/runtime/vk_wddm2_monitored_fence.c
+index 09f876a2..245a4b53 100644
+--- a/src/vulkan/runtime/vk_wddm2_monitored_fence.c
++++ b/src/vulkan/runtime/vk_wddm2_monitored_fence.c
+@@ -99,13 +99,22 @@ vk_wddm2_monitored_fence_init(struct vk_device *device,
+    struct vk_wddm2_monitored_fence *fence = to_wddm2_monitored_fence(sync);
+    NTSTATUS status;
+ 
++   /* An exportable semaphore (VkExportSemaphoreCreateInfo) arrives here with
++    * VK_SYNC_IS_SHAREABLE only; the runtime sets VK_SYNC_IS_SHARED after the
++    * first successful export. D3DKMTShareObjects needs NtSecuritySharing at
++    * creation time, so the object must be created shareable now, otherwise
++    * the export below has no NT handle to duplicate (vkd3d-proton's
++    * D3D12_FENCE export then failed with VK_ERROR_UNKNOWN).
++    */
++   const bool shareable = (sync->flags & VK_SYNC_IS_SHAREABLE) != 0;
++
+    D3DKMT_CREATESYNCHRONIZATIONOBJECT2 create = {
+       .hDevice = device->wddm2_handle,
+       .Info = {
+          .Type = D3DDDI_MONITORED_FENCE,
+          .Flags = {
+-            .Shared = (sync->flags & VK_SYNC_IS_SHARED) != 0,
+-            .NtSecuritySharing = (sync->flags & VK_SYNC_IS_SHARED) != 0,
++            .Shared = shareable,
++            .NtSecuritySharing = shareable,
+             /* This gets us 64-bit fences */
+             .NoGPUAccess = false,
+          },
+@@ -122,16 +131,23 @@ vk_wddm2_monitored_fence_init(struct vk_device *device,
+    fence->handle = create.hSyncObject;
+    fence->value_map = create.Info.MonitoredFence.FenceValueCPUVirtualAddress;
+ #ifdef _WIN32
+-   {
+-      if (!device->bc250_host.dispatch) {
++   if (shareable && !device->bc250_host.dispatch) {
+       OBJECT_ATTRIBUTES oa = { sizeof(OBJECT_ATTRIBUTES) };
+-      WDDM2_DISPATCH(ShareObjects(
++      status = WDDM2_DISPATCH(ShareObjects(
+          1,
+          &fence->handle,
+          &oa,
+          D3DDDI_SYNC_OBJECT_ALL_ACCESS,
+          &fence->shared_handle
+       ));
++      if (unlikely(!NT_SUCCESS(status))) {
++         const D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy = {
++            .hSyncObject = fence->handle,
++         };
++         BC250_WDDM_CALL(&device->bc250_host, DestroySynchronizationObject, &destroy);
++         fence->handle = 0;
++         fence->shared_handle = NULL;
++         return NTSTATUS_to_VkResult(device, status);
+       }
+    }
+ #endif
+@@ -338,6 +354,10 @@ vk_wddm2_monitored_fence_export_opaque_win32_handle(struct vk_device *device,
+ {
+    struct vk_wddm2_monitored_fence *fence = to_wddm2_monitored_fence(sync);
+ 
++   if (!fence->shared_handle)
++      return vk_errorf(device, VK_ERROR_FEATURE_NOT_PRESENT,
++                       "monitored fence was not created shareable");
++
+    HANDLE process = GetCurrentProcess();
+    BOOL ok = DuplicateHandle(process, (HANDLE)fence->shared_handle,
+                              process, (HANDLE *)handle, 0,
+-- 
+2.27.0.windows.1
+

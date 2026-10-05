@@ -1,0 +1,284 @@
+exit=-1073740791
+hardware D3D11CreateDevice=00000000
+module bc250d3d_zink.dll: C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+module vulkan_radeon.dll: C:\BC250\m10\wsi-final\vulkan_radeon.dll
+second hardware device=00000000
+
+BC250 private Vulkan instance=0000025BEF423530 screen=0000025BEF408560
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x40001080
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 private Vulkan instance=0000025BEF4B5960 screen=0000025BEF4A3370
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=0000025BF1CC4600 screen=0000025BEFC63000
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000025BEFC289A8 queue=40002100 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80000240
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80000200
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x40002280
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=0000025BEFC63000 runtime=0000025BEFC289A8
+BC250 D3D device stage 3
+allocation handle=0x80000340
+allocation handle=0x80000300
+allocation handle=0x40002300
+allocation handle=0x40002340
+allocation handle=0x40002380
+allocation handle=0x400023c0
+allocation handle=0x40002400
+allocation handle=0x40002440
+allocation handle=0x80000540
+allocation handle=0x80000500
+allocation handle=0x40002480
+allocation handle=0x400024c0
+allocation handle=0x40002500
+allocation handle=0x40002540
+allocation handle=0x40002580
+allocation handle=0x400025c0
+allocation handle=0x40002600
+allocation handle=0x40002640
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+BC250 destroy private Vulkan instance=0000025BEF4B5960
+BC250 private Vulkan instance=0000025BEF4B5960 screen=0000025BF1E27420
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x400030c0
+allocation handle=0x40003140
+allocation handle=0x400031c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 private Vulkan instance=0000025BEFBF32F0 screen=0000025BF1E83520
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40003b40
+allocation handle=0x40003bc0
+allocation handle=0x40003c40
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=0000025BEFC28500 screen=0000025BF205A320
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000025BEFBE5D28 queue=40003e40 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80001e80
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80001f00
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x80001f40
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=0000025BF205A320 runtime=0000025BEFBE5D28
+BC250 D3D device stage 3
+allocation handle=0x80002880
+allocation handle=0x80002840
+allocation handle=0x40003ec0
+allocation handle=0x40003f00
+allocation handle=0xc0000ac0
+allocation handle=0x80002940
+allocation handle=0x40003f40
+allocation handle=0x40003f80
+allocation handle=0x40003fc0
+allocation handle=0x40004000
+allocation handle=0x40004040
+allocation handle=0x40004080
+allocation handle=0x80002a80
+allocation handle=0x80002a40
+allocation handle=0x400040c0
+allocation handle=0x40004100
+allocation handle=0x40004140
+allocation handle=0x40004180
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+BC250 destroy private Vulkan instance=0000025BEFBF32F0
+allocation handle=0x40004200
+BC250 Allocate hr=00000000 inputRT=0000025BEFBC31A0 callbackRT=0000025BEFBC31A0 miscShared=1 format=32 primary=0 allocation=40004300 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40004300 pitch=256 bytes=16384
+BC250 zink import type=2 modifier=0 identity=0000025BEFC289A8 va=4295348224
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\runtime-control.exe",
+        "Hash":  "D624FAE36995D3F77AD21379261FCE9512838AEEF8BC695A4571B712B9796704"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\bc250d3d_zink.dll",
+        "Hash":  "5ED82491B098BA9CDBCA82E6AC5957161F6298CEFBB5E925B20A5FC6FF3FEA5E"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+
+Name                                 Length
+----                                 ------
+runtime-shared-control.exe.8400.dmp 1936000
+CPU UMD file restored
+[
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime009\\vulkan_radeon.dll",
+        "Hash":  "C798E45E93CA25E50DDE1FCC183E091E4BFD43D2DCDC0D6DC3CAA646A4EAACDE"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime009\\bc250d3d_zink.dll",
+        "Hash":  "5ED82491B098BA9CDBCA82E6AC5957161F6298CEFBB5E925B20A5FC6FF3FEA5E"
+    }
+]
+DWM before=1052 after=1052
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798

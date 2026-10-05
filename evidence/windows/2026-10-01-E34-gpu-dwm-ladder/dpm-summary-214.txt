@@ -1,0 +1,5 @@
+kmd 186154   1686.937 dpm: summary dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 73.5 C busy 10.0% avg 29.3% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 erro
+kmd 190075   1697.590 dpm: summary dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 73.5 C busy 46.7% avg 34.9% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 erro
+kmd 192083   1702.956 dpm: summary dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 73.6 C busy 55.8% avg 38.4% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 erro
+kmd 193997   1708.246 dpm: summary dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 73.6 C busy 37.5% avg 31.0% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 erro
+kmd 195606   1713.726 dpm: summary dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 73.8 C busy 29.2% avg 34.2% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 erro

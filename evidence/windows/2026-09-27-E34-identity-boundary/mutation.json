@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "mutation": "Release object-list lock before snapshots[i]=opened->Allocation; reacquire immediately afterward.",
+  "base": "37b7c68",
+  "test_sha256": "1bda8b996124175905d0883c6d4d7f53d0d8587f6846c13e425a4f5533c26f90"
+}

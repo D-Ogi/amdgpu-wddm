@@ -1,0 +1,6 @@
+test.c
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+clock verified: 1000 MHz, VID 101 (request 820 mV)
+clock verified: 1500 MHz, VID 104 (request 900 mV)
+10 scenarios, 2 failures

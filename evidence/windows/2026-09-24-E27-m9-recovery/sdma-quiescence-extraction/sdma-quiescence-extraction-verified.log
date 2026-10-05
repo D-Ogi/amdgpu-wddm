@@ -1,0 +1,295 @@
+verify the generated tables against their imports
+extract_table --check: driver/shim/generated/gfx10_golden_cyan_skillfish.inc matches driver/amdgpu-import/reference/gfx_v10_0.c:3582-3615 (34 entries, sha256 2fe3bb3ab7461345)
+extract_table --check: driver/shim/generated/sdma5_golden_cyan_skillfish.inc matches driver/amdgpu-import/reference/sdma_v5_0.c:188-215 (28 entries, sha256 499a48f753ddc451)
+compile (user mode, host replay test)
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+compile (kernel flags, same shim sources, no link)
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+extract the reference trace 0.5496 to 0.5505
+extract the reference trace 1.5601 to 1.5609
+run
+BC-250 M5 part B shim replay: GFX10 CP/KIQ, SDMA and interrupt bring-up on unit A (experiment E03)
+  writes in the bring-up window       : 354
+  writes in the interrupt window      : 35 (after dropping the 18 declared above)
+  registers seeded from traced reads  : 100 + 24
+  distinct offsets the windows name   : 260 (reads and writes, for the fini survey)
+  address-carrying registers excepted : 24 names
+
+== stage 0: nv_common_hw_init, t = 0.0383 ==
+  all 3 writes identical to the trace
+  0 wrong
+
+== derived: async_gfx_ring = true, pp_gfxoff = true (what the trace says) ==
+  gfx_setup 0, sdma_setup 0, gfx_hw_init 0, sdma_hw_init 0
+  bring-up: all 354 writes identical, 24 of them address exceptions
+  address-carrying registers, checked against this test's own allocations:
+    0 of 12 wrong
+  irq_init_mec_pipes + irq_hw_init + selfring aperture + irq_late_init: 0
+  interrupts: all 35 writes identical, 0 of them address exceptions
+
+== dumps ==
+  wrote P:\BC-250\scratch\m9\sdma-quiescence-extraction-verified\dumps/kiq-mqd.txt
+  wrote P:\BC-250\scratch\m9\sdma-quiescence-extraction-verified\dumps/kiq-pm4.txt
+  wrote P:\BC-250\scratch\m9\sdma-quiescence-extraction-verified\dumps/gfx-clear-state.txt
+
+== GART page table entries ==
+  the E03 trace contains no GART table content and no bind, so these are checked
+  against the formula and the flag chain, not against unit A
+  flags for a cached kernel GTT page     : 0003000000000077
+  six bad inputs, all refused with the table untouched
+  0 wrong
+
+== stage C: the indirect buffer and a VMID's page directory ==
+  no trace holds either of these, so they are checked against AMD's own packet and
+  register names; the end-to-end run goes through the CP stub's IB support
+  0 wrong
+
+== the compute MQDs against unit A's own ==
+  20 of 31 fields per MQD compared, 11 excepted (10 addresses + cp_hqd_active)
+  dwords the CP wrote into unit A's MQDs outside those fields: 56 over 8 MQDs
+  0 fields differ
+
+== teardown, then the whole bring-up again ==
+  before: 17 doorbells, 47 packets decoded, KIQ wptr 1024
+  split CP/RLC stop: 0 failures before storage destruction
+  after the undo: 21 doorbells, 58 packets, KIQ wptr 2048
+  CP_ME_CNTL 15000000, CP_MEC_CNTL 50000000, RLC_CNTL 00000000, SDMA0/1_F32_CNTL 00000001 00000001
+
+== registers the teardown touches that no trace window names ==
+    NEW       GC.CP_HQD_DEQUEUE_REQUEST          0x0C884 R/W
+  33 offsets touched, 32 of them named by a trace window, 1 new
+  the rings were freed and allocated again: the KIQ moved from 0x1000 to 0x124000
+
+== the second bring-up ==
+  after the re-run: 35 doorbells, 93 packets, KIQ wptr 1024, stub hits 29
+  the second bring-up succeeded, 353 writes (the first made 354)
+  no stale KIQ fetch survived the teardown            : yes
+  all nine queues sampled a read pointer of 0        : yes
+  ring tests passed across the undo and the re-run: 13
+  where the two runs differ in how often they write a register:
+    GC.RLC_SPM_MC_CNTL                 0x3B1C4   first 1, second 0
+    (217 distinct offsets; they account for 353 of the second run's 353 writes and 354 of the first's 354)
+
+== registers the second bring-up touches that no trace window names ==
+  233 offsets touched, 233 of them named by a trace window, 0 new
+  0 wrong
+
+== a compute queue that does not answer the unmap ==
+  compute ring 5 (1.1.1) will keep CP_HQD_ACTIVE = 1 through the unmap, read pointer 256
+  the queue that did not answer kept its read pointer  : yes
+  the other seven were put back to 0                   : yes
+  0 wrong
+
+== a previous instance that left the KIQ up (0.6.1's teardown) ==
+  the KIQ at 0x245000 left active, read pointer 0x737, MEC halted
+  the bring-up recovered and succeeded, 360 writes, KIQ now at 0x366000
+  one stale fetch, at 0x246000, inside the freed ring, and the queue came back: yes
+  the stale read pointer is gone: MQD 0, register 0x400 (what the queue has consumed since): yes
+
+== registers the recovering bring-up touches that no trace window names ==
+    NEW       GC.CP_HQD_DEQUEUE_REQUEST          0x0C884 R/W
+  234 offsets touched, 233 of them named by a trace window, 1 new
+  0 wrong
+
+== the SDMA engines across a second bring-up (experiment E15) ==
+  sdma0: 4 submissions leave the engine at 0x100 bytes
+  sdma1: 3 submissions leave the engine at 0xC0 bytes
+  an engine halted mid-queue makes the undo return -16        : yes
+
+  == the second bring-up, rings at fresh addresses ==
+  sdma0: ring 0x5A3000 -> 0x6C5000, write pointer adopted at 0x100
+  sdma1: ring 0x5A5000 -> 0x6C7000, write pointer adopted at 0xC0
+  both engines ran again, and no doorbell was ignored  : yes
+  four write pointers no engine should ever hold, all refused  : yes
+
+== registers the SDMA second bring-up touches that no trace window names ==
+  233 offsets touched, 233 of them named by a trace window, 0 new
+  0 wrong
+
+== stage 0: nv_common_hw_init, t = 0.0383 ==
+  all 3 writes identical to the trace
+  0 wrong
+
+== control: async_gfx_ring = false (the non-async gfx ring path) ==
+  gfx_setup 0, sdma_setup 0, gfx_hw_init 0, sdma_hw_init 0
+  bring-up [248] shim 0x0C3B4 = 40000458   trace GC.CP_RB_DOORBELL_RANGE_LOWER          0x0C168 = 00000458
+  bring-up [249] shim 0x0C168 = 00000458   trace GC.CP_RB_DOORBELL_RANGE_UPPER          0x0C16C = 0FFFFFFC
+  bring-up [250] shim 0x0C16C = 0FFFFFFC   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000
+  bring-up [251] shim 0x08088 = 00000000   trace GC.SCRATCH_REG0                        0x30100 = CAFEDEAD
+  bring-up [252] shim 0x30100 = CAFEDEAD   trace GC.CP_MAX_CONTEXT                      0x0C2B8 = 00000007
+  bring-up [253] shim 0x0C2B8 = 00000007   trace GC.CP_DEVICE_ID                        0x0C12C = 00000001
+  bring-up [254] shim 0x0C12C = 00000001   trace GC.CP_ME_CNTL                          0x086D8 = 00000000
+  bring-up [255] shim 0x086D8 = 00000000   trace GC.SCRATCH_REG0                        0x30100 = CAFEDEAD
+  bring-up [264] shim 0x30100 = CAFEDEAD   trace GC.SDMA0_CHICKEN_BITS                  0x049F4 = 03AB0107
+  bring-up [265] shim 0x049F4 = 03AB0107   trace GC.SDMA0_GB_ADDR_CONFIG                0x049F8 = 00000044
+  bring-up [266] shim 0x049F8 = 00000044   trace GC.SDMA0_GB_ADDR_CONFIG_READ           0x049FC = 00000044
+  bring-up [267] shim 0x049FC = 00000044   trace GC.SDMA0_GFX_RB_WPTR_POLL_CNTL         0x04B9C = 00403000
+  bring-up [268] shim 0x04B9C = 00403000   trace GC.SDMA0_PAGE_RB_WPTR_POLL_CNTL        0x04D1C = 00403000
+  bring-up [269] shim 0x04D1C = 00403000   trace GC.SDMA0_RLC0_RB_WPTR_POLL_CNTL        0x04E9C = 00403000
+  bring-up [270] shim 0x04E9C = 00403000   trace GC.SDMA0_RLC1_RB_WPTR_POLL_CNTL        0x0501C = 00403000
+  bring-up [271] shim 0x0501C = 00403000   trace GC.SDMA0_RLC2_RB_WPTR_POLL_CNTL        0x0519C = 00403000
+  bring-up [272] shim 0x0519C = 00403000   trace GC.SDMA0_RLC3_RB_WPTR_POLL_CNTL        0x0531C = 00403000
+  bring-up [273] shim 0x0531C = 00403000   trace GC.SDMA0_RLC4_RB_WPTR_POLL_CNTL        0x0549C = 00403000
+  bring-up [274] shim 0x0549C = 00403000   trace GC.SDMA0_RLC5_RB_WPTR_POLL_CNTL        0x0561C = 00403000
+  bring-up [275] shim 0x0561C = 00403000   trace GC.SDMA0_RLC6_RB_WPTR_POLL_CNTL        0x0579C = 00403000
+  bring-up [276] shim 0x0579C = 00403000   trace GC.SDMA0_RLC7_RB_WPTR_POLL_CNTL        0x0591C = 00403000
+  bring-up [277] shim 0x0591C = 00403000   trace GC.SDMA0_UTCL1_PAGE                    0x04AA0 = 004C5C00
+  bring-up [278] shim 0x04AA0 = 004C5C00   trace GC.SDMA1_CHICKEN_BITS                  0x061F4 = 03AB0107
+  bring-up [279] shim 0x061F4 = 03AB0107   trace GC.SDMA1_GB_ADDR_CONFIG                0x061F8 = 00000044
+  bring-up [280] shim 0x061F8 = 00000044   trace GC.SDMA1_GB_ADDR_CONFIG_READ           0x061FC = 00000044
+  bring-up [281] shim 0x061FC = 00000044   trace GC.SDMA1_GFX_RB_WPTR_POLL_CNTL         0x0639C = 00403000
+  bring-up [282] shim 0x0639C = 00403000   trace GC.SDMA1_PAGE_RB_WPTR_POLL_CNTL        0x0651C = 00403000
+  bring-up [283] shim 0x0651C = 00403000   trace GC.SDMA1_RLC0_RB_WPTR_POLL_CNTL        0x0669C = 00403000
+  bring-up [284] shim 0x0669C = 00403000   trace GC.SDMA1_RLC1_RB_WPTR_POLL_CNTL        0x0681C = 00403000
+  bring-up [285] shim 0x0681C = 00403000   trace GC.SDMA1_RLC2_RB_WPTR_POLL_CNTL        0x0699C = 00403000
+  bring-up [286] shim 0x0699C = 00403000   trace GC.SDMA1_RLC3_RB_WPTR_POLL_CNTL        0x06B1C = 00403000
+  bring-up [287] shim 0x06B1C = 00403000   trace GC.SDMA1_RLC4_RB_WPTR_POLL_CNTL        0x06C9C = 00403000
+  bring-up [288] shim 0x06C9C = 00403000   trace GC.SDMA1_RLC5_RB_WPTR_POLL_CNTL        0x06E1C = 00403000
+  bring-up [289] shim 0x06E1C = 00403000   trace GC.SDMA1_RLC6_RB_WPTR_POLL_CNTL        0x06F9C = 00403000
+  bring-up [290] shim 0x06F9C = 00403000   trace GC.SDMA1_RLC7_RB_WPTR_POLL_CNTL        0x0711C = 00403000
+  bring-up [291] shim 0x0711C = 00403000   trace GC.SDMA1_UTCL1_PAGE                    0x062A0 = 004C5C00
+  bring-up [292] shim 0x062A0 = 004C5C00   trace GC.SDMA0_F32_CNTL                      0x04A28 = 00000000
+  bring-up [293] shim 0x04A28 = 00000000   trace GC.SDMA1_F32_CNTL                      0x06228 = 00000000
+  bring-up [294] shim 0x06228 = 00000000   trace GC.SDMA0_PHASE0_QUANTUM                0x04A30 = 00002000
+  bring-up [295] shim 0x04A30 = 00002000   trace GC.SDMA0_PHASE1_QUANTUM                0x04A34 = 00002000
+  bring-up ... 58 further mismatches not listed
+  bring-up produced 355 writes, the window has 354
+  address-carrying registers, checked against this test's own allocations:
+    0 of 12 wrong
+  irq_init_mec_pipes + irq_hw_init + selfring aperture + irq_late_init: 0
+  interrupts: all 35 writes identical, 0 of them address exceptions
+
+== stage 0: nv_common_hw_init, t = 0.0383 ==
+  all 3 writes identical to the trace
+  0 wrong
+
+== control: pp_gfxoff = false (rlc_start writes RLC_PG_CNTL a second time) ==
+  gfx_setup 0, sdma_setup 0, gfx_hw_init 0, sdma_hw_init 0
+  bring-up [201] shim 0x3B10C = 00800000   trace GC.RLC_CNTL                            0x3B000 = 00000001
+  bring-up [202] shim 0x3B000 = 00000001   trace GC.RLC_CP_SCHEDULERS                   0x3B2A8 = 585048C8
+  bring-up [203] shim 0x3B2A8 = 585048C8   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000009
+  bring-up [204] shim 0x08088 = 00000009   trace GC.CP_PQ_WPTR_POLL_CNTL                0x0C20C = 00000000
+  bring-up [205] shim 0x0C20C = 00000000   trace GC.CP_HQD_PQ_DOORBELL_CONTROL          0x0C860 = 00000000
+  bring-up [206] shim 0x0C860 = 00000000   trace GC.CP_HQD_EOP_BASE_ADDR                0x0C8B8 = 000065F0
+  bring-up [207] shim 0x0C8B8 = 00001010   trace GC.CP_HQD_EOP_BASE_ADDR_HI             0x0C8BC = 00000000
+  bring-up [208] shim 0x0C8BC = 00000000   trace GC.CP_HQD_EOP_CONTROL                  0x0C8C0 = 00000008
+  bring-up [209] shim 0x0C8C0 = 00000008   trace GC.CP_MQD_BASE_ADDR                    0x0C824 = 008CD000
+  bring-up [210] shim 0x0C824 = 00000000   trace GC.CP_MQD_BASE_ADDR_HI                 0x0C828 = 000000F4
+  bring-up [211] shim 0x0C828 = 000000F4   trace GC.CP_MQD_CONTROL                      0x0C8AC = 00000100
+  bring-up [212] shim 0x0C8AC = 00000100   trace GC.CP_HQD_PQ_BASE                      0x0C844 = 00008000
+  bring-up [213] shim 0x0C844 = 00000010   trace GC.CP_HQD_PQ_BASE_HI                   0x0C848 = 00000000
+  bring-up [214] shim 0x0C848 = 00000000   trace GC.CP_HQD_PQ_CONTROL                   0x0C868 = D0308911
+  bring-up [215] shim 0x0C868 = D0308911   trace GC.CP_HQD_PQ_RPTR_REPORT_ADDR          0x0C850 = 004015E0
+  bring-up [216] shim 0x0C850 = 00000000   trace GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI       0x0C854 = 00000000
+  bring-up [217] shim 0x0C854 = 00000000   trace GC.CP_HQD_PQ_WPTR_POLL_ADDR            0x0C858 = 00401600
+  bring-up [218] shim 0x0C858 = 00000008   trace GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI         0x0C85C = 00000000
+  bring-up [219] shim 0x0C85C = 00000000   trace GC.CP_MEC_DOORBELL_RANGE_LOWER         0x0C170 = 00000000
+  bring-up [220] shim 0x0C170 = 00000000   trace GC.CP_MEC_DOORBELL_RANGE_UPPER         0x0C174 = 00000450
+  bring-up [221] shim 0x0C174 = 00000450   trace GC.CP_HQD_PQ_DOORBELL_CONTROL          0x0C860 = 40000000
+  bring-up [222] shim 0x0C860 = 40000000   trace GC.CP_HQD_PQ_WPTR_LO                   0x0C8FC = 00000000
+  bring-up [223] shim 0x0C8FC = 00000000   trace GC.CP_HQD_PQ_WPTR_HI                   0x0C900 = 00000000
+  bring-up [224] shim 0x0C900 = 00000000   trace GC.CP_HQD_VMID                         0x0C830 = 00000000
+  bring-up [225] shim 0x0C830 = 00000000   trace GC.CP_HQD_PERSISTENT_STATE             0x0C834 = 0BE05301
+  bring-up [226] shim 0x0C834 = 0BE05301   trace GC.CP_HQD_ACTIVE                       0x0C82C = 00000001
+  bring-up [227] shim 0x0C82C = 00000001   trace GC.CP_PQ_STATUS                        0x0C2E0 = 00000002
+  bring-up [228] shim 0x0C2E0 = 00000002   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000
+  bring-up [229] shim 0x08088 = 00000000   trace GC.CP_MEC_CNTL                         0x08234 = 00000000
+  bring-up [230] shim 0x08234 = 00000000   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000004
+  bring-up [231] shim 0x08088 = 00000004   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000   differing bits 00000004
+  bring-up [232] shim 0x08088 = 00000000   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000005   differing bits 00000005
+  bring-up [233] shim 0x08088 = 00000005   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000   differing bits 00000005
+  bring-up [234] shim 0x08088 = 00000000   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000006   differing bits 00000006
+  bring-up [235] shim 0x08088 = 00000006   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000   differing bits 00000006
+  bring-up [236] shim 0x08088 = 00000000   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000007   differing bits 00000007
+  bring-up [237] shim 0x08088 = 00000007   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000   differing bits 00000007
+  bring-up [238] shim 0x08088 = 00000000   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000104   differing bits 00000104
+  bring-up [239] shim 0x08088 = 00000104   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000000   differing bits 00000104
+  bring-up [240] shim 0x08088 = 00000000   trace GC.GRBM_GFX_CNTL                       0x08088 = 00000105   differing bits 00000105
+  bring-up ... 105 further mismatches not listed
+  bring-up produced 355 writes, the window has 354
+  address-carrying registers, checked against this test's own allocations:
+    0 of 12 wrong
+  irq_init_mec_pipes + irq_hw_init + selfring aperture + irq_late_init: 0
+  interrupts: all 35 writes identical, 0 of them address exceptions
+
+== stage 0: nv_common_hw_init, t = 0.0383 ==
+  all 3 writes identical to the trace
+  0 wrong
+
+== control: the CP stub off (no packet is executed, so every ring test times out) ==
+  gfx_setup 0, sdma_setup 0, gfx_hw_init -62, sdma_hw_init -62
+  bring-up produced 247 writes, the window has 354
+
+== stage 0: nv_common_hw_init, t = 0.0383 ==
+  all 3 writes identical to the trace
+  0 wrong
+
+== control: one compute EOP enable per ring instead of per pipe ==
+  gfx_setup 0, sdma_setup 0, gfx_hw_init 0, sdma_hw_init 0
+  bring-up: all 354 writes identical, 24 of them address exceptions
+  address-carrying registers, checked against this test's own allocations:
+    0 of 12 wrong
+  irq_init_mec_pipes + irq_hw_init + selfring aperture + irq_late_init: 0
+  interrupts [ 17] shim 0x0C214 = 05000000   trace GC.CPC_INT_CNTL                        0x0C2D0 = 25000000
+  interrupts [ 18] shim 0x0C218 = 05000000   trace GC.CP_ME2_PIPE1_INT_CNTL               0x0C228 = 20000000
+  interrupts [ 19] shim 0x0C21C = 05000000   trace GC.SDMA0_CNTL                          0x049F0 = 000400E3
+  interrupts [ 20] shim 0x0C220 = 05000000   trace GC.SDMA1_CNTL                          0x061F0 = 000400E3
+  interrupts [ 21] shim 0x0C2D0 = 25000000   trace NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_LOW 0x03850 = D0000000
+  interrupts [ 22] shim 0x0C228 = 20000000   trace NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH 0x0384C = 00000000
+  interrupts [ 23] shim 0x049F0 = 000400E3   trace NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_CNTL 0x03854 = 00000003
+  interrupts [ 24] shim 0x061F0 = 000400E3   trace GC.CP_INT_CNTL_RING0                   0x0C1A8 = 04800000
+  interrupts [ 25] shim 0x03850 = D0000000   trace GC.CP_ME1_PIPE0_INT_CNTL               0x0C214 = 05800000
+  interrupts [ 26] shim 0x0384C = 00000000   trace GC.CP_ME1_PIPE1_INT_CNTL               0x0C218 = 05800000
+  interrupts [ 27] shim 0x03854 = 00000003   trace GC.CP_ME1_PIPE2_INT_CNTL               0x0C21C = 05800000
+  interrupts [ 28] shim 0x0C1A8 = 04800000   trace GC.CP_ME1_PIPE3_INT_CNTL               0x0C220 = 05800000
+  interrupts [ 29] shim 0x0C214 = 05800000   trace GC.CP_INT_CNTL_RING0                   0x0C1A8 = 04C00000
+  interrupts [ 30] shim 0x0C218 = 05800000   trace GC.CP_INT_CNTL_RING0                   0x0C1A8 = 05C00000
+  interrupts [ 31] shim 0x0C21C = 05800000   trace GC.CP_ME1_PIPE0_INT_CNTL               0x0C214 = 05800000
+  interrupts [ 32] shim 0x0C220 = 05800000   trace GC.CP_ME1_PIPE1_INT_CNTL               0x0C218 = 05800000
+  interrupts [ 33] shim 0x0C1A8 = 04C00000   trace GC.CP_ME1_PIPE2_INT_CNTL               0x0C21C = 05800000
+  interrupts [ 34] shim 0x0C1A8 = 05C00000   trace GC.CP_ME1_PIPE3_INT_CNTL               0x0C220 = 05800000
+  interrupts produced 39 writes, the window has 35
+
+== the same bring-up, but reads answered from unit A under Windows ==
+  4512 registers overlaid from P:\BC-250\bc250-win\evidence\windows\2026-09-21-E10-run-001\sweep-GC-loaded-111010.log
+  bring-up returned 0, 354 writes (against the trace's 354)
+  0 writes differ from the Linux trace when the run starts from the Windows state
+  3 GRBM-windowed writes not compared: the sweep took no selection, see the comment
+  (this is information for the hardware run, not a failure)
+
+== summary ==
+  bring-up: produced 354, window 354, compared 354, mismatches 0
+  interrupts: produced 35, window 35, compared 35, mismatches 0
+  address exceptions (offset only)    : 24
+  address registers wrong             : 0
+  reads with no value on unit A       : 0
+  doorbells rung                      : 14
+  ring tests the CP stub satisfied    : 11 (expected 11)
+  ring-test packets the stub rejected : 0 (must be 0)
+  PM4 packets decoded at a doorbell   : 35
+  unexpected non-zero MQD dwords      : 0
+  stage 0 writes wrong                : 0
+  GART page table checks wrong        : 0
+  stage C (IB and VMID root) wrong    : 0
+  MQD fields differing from unit A    : 0
+  teardown-and-rerun checks wrong     : 0
+  stuck-queue checks wrong            : 0
+  unclean-start recovery wrong        : 0
+  SDMA pointer-adoption checks wrong  : 0
+  mismatches, control async_gfx_ring  : 98
+  mismatches, control pp_gfxoff       : 145
+  control with the CP stub off        : gfx_hw_init returned -62
+  mismatches, control irq per ring    : 18 (39 writes, not 35)
+  RLC reload reset: 22 scenarios, 0 failures (both access orders checked; busy-clear is modeled)
+  TLB observation: 8 scenarios, 0 failures (identical traced/untraced register accesses)
+  GART phase extraction: 2 paths, 285 writes compared, 0 failures
+  SDMA quiescence: 6 scenarios, 0 failures (freeze/idle/order/unfreeze)
+
+  verdict: EXACT MATCH over 354 + 35 writes (24 address exceptions); the four controls all fail, as they should
+
+replay_gfx.exe exit code 0

@@ -1,6 +1,6 @@
 E02 run 001, unit A, 2026-09-21. Windows 11 Pro 22631.3880 (unactivated, test signing on), installed with
 tools/wininstall, booted from the NVMe. GPU function driver: Microsoft Basic Display Adapter (BasicDisplay).
-Reader: tools/win/bc250rd at commit 993567b, read-only, allow-listed offsets only. Logs were streamed to the
+Reader: tools/win/bc250rd at commit 8f34cc8, read-only, allow-listed offsets only. Logs were streamed to the
 development PC over SSH while the reads ran.
 
 gpu-device-state.txt        PnP state, bound driver, assigned resources, other AMD functions, video controller

@@ -1,0 +1,108 @@
+{"sequence":0,"elapsed_ms":0,"phase":"after","api":"Effective RADV_EXPERIMENTAL absent","hr":"00000000"}
+{"sequence":1,"elapsed_ms":0,"phase":"before","api":"create-device","hr":"00000000"}
+{"sequence":1,"elapsed_ms":0,"phase":"before","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":32,"phase":"after","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":32,"phase":"before","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":32,"phase":"after","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":32,"phase":"before","api":"GetDesc1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":32,"phase":"after","api":"GetDesc1","hr":"00000000"}
+runtime=system32/d3d12.dll adapter=BC-250
+{"sequence":1,"elapsed_ms":32,"phase":"before","api":"D3D12CreateDevice FL11_0","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15719,"phase":"after","api":"D3D12CreateDevice FL11_0","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15719,"phase":"after","api":"Reported TiledResourcesTier 0","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15719,"phase":"after","api":"Reported ResourceBindingTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15719,"phase":"after","api":"Reported ConservativeRasterizationTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15719,"phase":"after","api":"Reported MaxSupportedFeatureLevel b100","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15719,"phase":"after","api":"create-device","hr":"00000000"}
+{"sequence":2,"elapsed_ms":21094,"phase":"before","api":"create-queue","hr":"00000000"}
+{"sequence":2,"elapsed_ms":21094,"phase":"before","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":21125,"phase":"after","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":21125,"phase":"after","api":"create-queue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"before","api":"copy","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"after","api":"Pattern seed 753135b3","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"before","api":"D3D12SerializeRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"after","api":"D3D12SerializeRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"before","api":"CreateRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"after","api":"CreateRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":26750,"phase":"before","api":"CreateGraphicsPipelineState","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27063,"phase":"after","api":"CreateGraphicsPipelineState","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27063,"phase":"before","api":"CreateCommittedResource SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27063,"phase":"after","api":"CreateCommittedResource SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27063,"phase":"before","api":"CreateCommittedResource TARGET","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27078,"phase":"after","api":"CreateCommittedResource TARGET","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27078,"phase":"before","api":"CreateCommittedResource DEPTH","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27078,"phase":"after","api":"CreateCommittedResource DEPTH","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27078,"phase":"before","api":"CreateDescriptorHeap RTV","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27078,"phase":"after","api":"CreateDescriptorHeap RTV","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"CreateDescriptorHeap DSV","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"after","api":"CreateDescriptorHeap DSV","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"CreateDescriptorHeap SRV shader visible","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"after","api":"CreateDescriptorHeap SRV shader visible","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"CreateRenderTargetView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"after","api":"CreateRenderTargetView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"CreateDepthStencilView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"after","api":"CreateDepthStencilView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"CreateShaderResourceView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"after","api":"CreateShaderResourceView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"GetCopyableFootprints","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"after","api":"GetCopyableFootprints","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27094,"phase":"before","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27110,"phase":"after","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27110,"phase":"before","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27110,"phase":"after","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27110,"phase":"before","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"before","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"before","api":"Map READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"Map READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"Destination holds complement before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"before","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"after","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27125,"phase":"before","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"before","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"CopyTextureRegion UPLOAD to SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"ResourceBarrier COPY_DEST to PIXEL_SHADER_RESOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"SetGraphicsRootSignature","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"SetPipelineState","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"SetDescriptorHeaps","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27141,"phase":"after","api":"SetGraphicsRoot32BitConstant","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"SetGraphicsRootDescriptorTable","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"IASetPrimitiveTopology","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"IASetVertexBuffers","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"IASetIndexBuffer","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"RSSetViewports","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"OMSetRenderTargets with depth","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"ClearRenderTargetView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27157,"phase":"after","api":"ClearDepthStencilView","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27313,"phase":"after","api":"DrawIndexedInstanced pass 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27328,"phase":"after","api":"DrawIndexedInstanced pass 2","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27328,"phase":"after","api":"DrawIndexedInstanced pass 3","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27328,"phase":"after","api":"DrawIndexedInstanced pass 4","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27328,"phase":"after","api":"ResourceBarrier RENDER_TARGET to COPY_SOURCE","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27328,"phase":"after","api":"CopyTextureRegion TARGET to READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27328,"phase":"before","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27360,"phase":"after","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27360,"phase":"before","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"before","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"before","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"before","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"before","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"Compare 4096 exact words","hr":"00000000"}
+{"sequence":3,"elapsed_ms":27407,"phase":"after","api":"copy","hr":"00000000"}
+{"sequence":4,"elapsed_ms":32172,"phase":"before","api":"status","hr":"00000000"}
+{"sequence":4,"elapsed_ms":32172,"phase":"before","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":32172,"phase":"after","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":32172,"phase":"after","api":"status","hr":"00000000"}
+{"sequence":5,"elapsed_ms":37907,"phase":"before","api":"exit","hr":"00000000"}
+{"sequence":5,"elapsed_ms":37907,"phase":"after","api":"exit","hr":"00000000"}

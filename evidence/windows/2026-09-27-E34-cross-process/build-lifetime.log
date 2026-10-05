@@ -1,0 +1,46 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\BC-250\bc250-win\experiments\E34-native-d3d-zink\..\..\..\scratch\m13-native-zink-build'
+[1/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_fence.c.obj
+[2/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_render_pass.c.obj
+[3/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_blit.c.obj
+[4/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_kopper.c.obj
+[5/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_clear.c.obj
+[6/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_batch.c.obj
+[7/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_query.c.obj
+[8/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_descriptors.c.obj
+[9/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_bo.c.obj
+[10/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_surface.c.obj
+[11/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_program.c.obj
+[12/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_resource.c.obj
+[13/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_screen.c.obj
+[14/18] Compiling C++ object src/gallium/drivers/zink/libzink.a.p/zink_synchronization.cpp.obj
+[15/18] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_context.c.obj
+[16/18] Compiling C++ object src/gallium/drivers/zink/libzink.a.p/zink_draw.cpp.obj
+[17/18] Linking static target src/gallium/drivers/zink/libzink.a
+[18/18] Linking target src/gallium/targets/d3d10umd/bc250d3d_zink.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d_zink.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d_zink.exp
+
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+kmd-commands PASS 0.71s
+kmd-contract PASS 0.42s
+radv-contract PASS 0.29s
+umd-contract PASS 0.26s
+blob-abi PASS 1.09s
+surface-control PASS 0.37s
+kmd-analysis PASS 0.63s
+umd-analysis PASS 1.14s

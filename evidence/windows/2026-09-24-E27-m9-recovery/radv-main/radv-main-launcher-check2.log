@@ -1,0 +1,14 @@
+load_backend: loaded RPC backend from C:\BC250\m9\llama\ggml-rpc.dll
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x287a6d9
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = AMD BC-250 (RADV GFX1013) (radv) | uma: 1 | fp16: 1 | bf16: 0 | warp size: 32 | shared memory: 65536 | int dot: 0 | matrix cores: none
+load_backend: loaded Vulkan backend from C:\BC250\m9\llama\ggml-vulkan.dll
+load_backend: loaded CPU backend from C:\BC250\m9\llama\ggml-cpu-haswell.dll
+Available devices:
+  Vulkan0: AMD BC-250 (RADV GFX1013) (12026 MiB, 12026 MiB free)
+launcher_exit=0

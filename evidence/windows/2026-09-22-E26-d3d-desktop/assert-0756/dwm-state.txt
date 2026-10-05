@@ -1,0 +1,165 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+Deferred                                       srv*P:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.032 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 46
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [P:\BC-250\scratch\dwm\dwm-draw.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+Deferred                                       srv*P:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd;srv*P:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: P:\bc-250\scratch\mesa-d3d-build\src\gallium\targets\d3d10umd
+Windows 10 Version 22631 MP (12 procs) Free x64
+Product: WinNt, suite: SingleUserTS
+Edition build lab: 22621.1.amd64fre.ni_release.220506-1250
+Debug session time: Wed Sep 23 01:24:22.000 2026 (UTC + 2:00)
+System Uptime: not available
+Process Uptime: 0 days 0:00:13.000
+................................................................
+..........
+ReadVirtual() failed in GetXStateConfiguration() first read attempt (error == 0.)
+Invalid mini-dump Miscellaneous information in InitializeConfiguration()
+For analysis of this file, run !analyze -v
+ntdll!NtAlpcSendWaitReceivePort+0x14:
+00007ffd`b1ef1f74 c3              ret
+0:000> cdb: Reading initial command '~5s; kv 18; du 00007ffd5dfb5f00; dt bc250d3d!tgsi_exec_machine 0000020936f02010; q'
+win32u!NtUserWaitMessage+0x14:
+00007ffd`af341644 c3              ret
+Child-SP          RetAddr               : Args to Child                                                           : Call Site
+0000009a`87d9d6e8 00007ffd`b011170e     : 0000009a`87d9d740 00000000`00000000 00000000`00000000 00000000`00000001 : win32u!NtUserWaitMessage+0x14
+0000009a`87d9d6f0 00007ffd`b011157c     : 0000c42a`00000000 00000000`00000000 00007ffd`b018ba30 00000000`00000000 : user32!DialogBox2+0x172
+0000009a`87d9d7a0 00007ffd`b018dc36     : 00000000`00010007 0000009a`87d9d8d9 0000009a`87d9db10 00000209`2a9e3558 : user32!InternalDialogBox+0x178
+0000009a`87d9d800 00007ffd`b018c599     : 0000009a`00007f01 00007ffd`00000000 0000009a`00012012 00000000`000002f1 : user32!SoftModalMessageBox+0x826
+0000009a`87d9d940 00007ffd`b018d378     : 00000000`00000041 00000000`00000800 00007ffd`5dfa77a0 00000000`0000000e : user32!MessageBoxWorker+0x341
+0000009a`87d9daf0 00007ffd`b018d3fe     : 00000209`00000003 00007ffd`5e7db000 00000209`36f43550 00007ffd`b0112419 : user32!MessageBoxTimeoutW+0x198
+0000009a`87d9dbf0 00007ffd`5de13a41     : 0000009a`87d9dcd0 00007ffd`5de13e67 00000000`00000000 00007ffd`5dfa77a0 : user32!MessageBoxW+0x4e
+0000009a`87d9dc30 00007ffd`5de0b22c     : 00000000`00000000 00007ffd`5dfa77a0 00000000`00012012 00007ffd`5de3dfff : bc250d3d!__acrt_MessageBoxW+0x65
+0000009a`87d9dc70 00007ffd`5ddb27fc     : 00000000`00001504 00007ffd`5de3dfff 00007ffd`5dfb5f00 0000009a`00000001 : bc250d3d!__acrt_show_wide_message_box+0x78
+(Inline Function) --------`--------     : --------`-------- --------`-------- --------`-------- --------`-------- : bc250d3d!__crt_char_traits<wchar_t>::show_message_box+0x17 (Inline Function @ 00007ffd`5ddb27fc)
+0000009a`87d9dca0 00007ffd`5de3dfff     : 00000209`36f02010 0000009a`87d9e280 00000209`36f02010 00000209`36f02010 : bc250d3d!common_assert_to_message_box<wchar_t>+0x74
+0000009a`87d9e180 00007ffd`5de4bc46     : 00000209`36f02010 00000000`00000000 00000000`00000000 00000209`36f02010 : bc250d3d!exec_instruction+0x140f
+0000009a`87d9e360 00007ffd`5dda0856     : 00000209`36f02010 00000209`26e7ac70 00000209`2a4e3520 0000009a`87d9e4a0 : bc250d3d!tgsi_exec_machine_run+0x1f6
+0000009a`87d9e390 00007ffd`5dd7e605     : 00000000`00000000 00000000`00000003 00000000`00000000 00000000`00000008 : bc250d3d!exec_run+0x166
+(Inline Function) --------`--------     : --------`-------- --------`-------- --------`-------- --------`-------- : bc250d3d!shade_quad+0x65 (Inline Function @ 00007ffd`5dd7e605)
+0000009a`87d9e3c0 00007ffd`5dd9cffb     : 00000000`00000010 00000000`00000000 00000000`00000003 00007ffd`5dd9e38c : bc250d3d!shade_quads+0xc5
+0000009a`87d9e400 00007ffd`5dd9f94a     : 00000000`000000d6 00000000`00000000 00000000`ffffffed 00000000`00000002 : bc250d3d!flush_spans+0x1bb
+0000009a`87d9e460 00007ffd`5dd9f7bb     : 00000000`000000d6 00000209`26e7ac48 00000209`00000000 00000000`0000000b : bc250d3d!subtriangle+0x13a
+0000009a`87d9e4d0 00007ffd`5dd87a6a     : 00000209`26e74510 00000000`00000040 00000209`2a8c5870 00000000`00000000 : bc250d3d!sp_setup_tri+0x31b
+0000009a`87d9e590 00007ffd`5de9055b     : 00000000`3f800000 00000209`25dfd2d0 00000000`00000000 00000000`00000000 : bc250d3d!sp_vbuf_draw_elements+0x21a
+0000009a`87d9e5e0 00007ffd`5de89edf     : 00000209`00000054 00000209`25debbe0 00000000`00000000 0000009a`87d9e740 : bc250d3d!draw_pt_emit+0x16b
+(Inline Function) --------`--------     : --------`-------- --------`-------- --------`-------- --------`-------- : bc250d3d!emit+0x1a (Inline Function @ 00007ffd`5de89edf)
+0000009a`87d9e640 00007ffd`5de8a372     : 00000209`29cd8f50 00000000`00000000 00000209`203c0000 00000209`26e734d0 : bc250d3d!fetch_pipeline_generic+0x3df
+0000009a`87d9e880 00007ffd`5de88d84     : 00000209`26e734d0 00000000`00000001 00000000`00000003 00000000`00000000 : bc250d3d!fetch_pipeline_run+0x82
+00007ffd`5dfb5f00  "../mesa-wddm2/src/gallium/auxili"
+00007ffd`5dfb5f40  "ary/tgsi/tgsi_exec.c"
+   +0x000 Temps            : [4096] tgsi_exec_vector
+   +0x40000 ImmsReserved     : ??
+   +0x40008 Imms             : ???? 
+   +0x40010 Inputs           : ???? 
+   +0x40018 Outputs          : ???? 
+   +0x40020 InputSampleOffsetApply : ???? 
+   +0x40028 SysSemanticToIndex : [47] ??
+   +0x400f0 SystemValue      : [8] tgsi_exec_vector
+   +0x402f0 Addrs            : [3] tgsi_exec_vector
+   +0x403b0 Sampler          : ???? 
+   +0x403b8 Image            : ???? 
+   +0x403c0 Buffer           : ???? 
+   +0x403c8 ImmLimit         : ??
+   +0x403d0 Consts           : [32] ???? 
+   +0x404d0 ConstsSize       : [32] ??
+   +0x40550 Tokens           : ???? 
+   +0x40558 ShaderType       : ??
+   +0x40560 Primitives       : [4] ???? 
+   +0x40580 PrimitiveOffsets : [4] ???? 
+   +0x405a0 NumOutputs       : ??
+   +0x405a4 MaxOutputVertices : ??
+   +0x405a8 OutputVertexOffset : ??
+   +0x405ac OutputPrimCount  : [4] ??
+   +0x405c0 InterpCoefs      : ???? 
+   +0x405d0 QuadPos          : tgsi_exec_vector
+   +0x40610 Face             : ??
+   +0x40614 flatshade_color  : ??
+   +0x40618 LocalMem         : ???? 
+   +0x40620 LocalMemSize     : ??
+   +0x40624 NonHelperMask    : ??
+   +0x40628 CondMask         : ??
+   +0x4062c LoopMask         : ??
+   +0x40630 ContMask         : ??
+   +0x40634 FuncMask         : ??
+   +0x40638 ExecMask         : ??
+   +0x4063c KillMask         : ??
+   +0x40640 Switch           : tgsi_switch_record
+   +0x40670 BreakType        : ??
+   +0x40674 CondStack        : [32] ??
+   +0x406f4 CondStackTop     : ??
+   +0x406f8 LoopStack        : [32] ??
+   +0x40778 LoopStackTop     : ??
+   +0x4077c LoopLabelStack   : [32] ??
+   +0x407fc LoopLabelStackTop : ??
+   +0x40800 ContStack        : [32] ??
+   +0x40880 ContStackTop     : ??
+   +0x40890 SwitchStack      : [32] tgsi_switch_record
+   +0x40e90 SwitchStackTop   : ??
+   +0x40e94 BreakStack       : [64] ??
+   +0x40f94 BreakStackTop    : ??
+   +0x40f98 FuncStack        : [32] ??
+   +0x41018 FuncStackTop     : ??
+   +0x4101c CallStack        : [32] tgsi_call_record
+   +0x4131c CallStackTop     : ??
+   +0x41320 Instructions     : ???? 
+   +0x41328 NumInstructions  : ??
+   +0x41330 Declarations     : ???? 
+   +0x41338 NumDeclarations  : ??
+   +0x4133c SamplerViews     : [128] tgsi_declaration_sampler_view
+   +0x4153c UsedGeometryShader : 0
+   +0x41540 pc               : 0n10
+Memory read error 0000020936f43348
+quit:
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\stl.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\windows.natvis'
+NatVis script unloaded from 'P:\BC-250\toolchain\windbg\x64\amd64\Visualizers\winrt.natvis'

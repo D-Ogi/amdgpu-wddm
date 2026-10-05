@@ -1,0 +1,14 @@
+M222 physical copy slice identity, 2026-09-23.
+Dirty worktree over base-commit.txt; relevant snapshots included; E27 procedure preceded tests.
+GfxPagingBuildCopyPage resolves one slice under GfxPagingLock and returns captured
+physical addresses/system flags/byte count only after complete packet construction.
+Local overlap uses staging, disjoint local direct copy, system endpoints mapped copy.
+System physical aliases explicitly refuse pending mapped staging. Refusal clears metadata.
+11537 checks/0 failures (16 new); full WDK dev build/sign passes, retains0787.
+Package scratch/build/copy-slice-dev DO NOT DEPLOY. Official0787 unchanged.
+SYS SHA2560D898377430E4ED1E11563E229E53C04354EE17F80911270AC0861DDFE87EE7C.
+Tests cover actual builder/resolvers/emitter with modeled MDLs/device: captured identities,
+FirstPage/progress, both mixed directions/twoMDLs, local stage/direct, capacity/missingstage,
+page-boundary/overflow/systemalias refusal, cleared outputs and balanced locks.
+No DDI publication/shadow commit, whole-transfer overlap or GPU/OS lifetime acceptance.
+No lab access, reboot, USB changes or private-data redaction.

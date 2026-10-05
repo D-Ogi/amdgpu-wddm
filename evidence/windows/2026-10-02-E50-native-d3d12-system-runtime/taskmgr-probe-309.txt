@@ -1,0 +1,47 @@
+=== inventory
+utc 20261002T171432Z
+os Windows 10 Pro build 22631.6199 23H2
+C:\Windows\System32\Taskmgr.exe size=5451576 version=10.0.22621.6133 (WinBuild.160101.0800) sha256=4043A48F5A326AD7811255F8ACE0F1B90D6AEE38B98D41BE92B181F8A4F1FD46
+C:\Windows\System32\d3d11.dll size=2476552 version=10.0.22621.5415 (WinBuild.160101.0800) sha256=697BE4DB1E5E3106C61F63363D82CD2FF2A922BB2887A5FD6E23234620B7904A
+C:\Windows\System32\d3d12.dll size=158480 version=10.0.22621.5415 (WinBuild.160101.0800) sha256=9992F5B26F9DDE36F3EC911EF6C404CF7C89C94FD56C152815252800CF5140CC
+C:\Windows\System32\D3D12Core.dll size=2104680 version=10.0.22621.5415 (WinBuild.160101.0800) sha256=1F35DA8A0EE5A7C4C7914507E61998F40C3269EBC4198271E609DED762360872
+C:\Windows\System32\dxgi.dll size=1017976 version=10.0.22621.5415 (WinBuild.160101.0800) sha256=DDC578A287120BAC2BFCCBAECBDE5EB41E397B023853340204A3B4FAD98BDA3B
+C:\Windows\System32\dxcore.dll size=228752 version=10.0.22621.5415 (WinBuild.160101.0800) sha256=D8C3ACCBFF9CC78DF216038C79B52450EA01ABDFFB272D4606BEE664BFA7387F
+taskmgr running: False
+class key 0000: DriverDesc="" DriverVersion=0.7.193.1 MatchingDeviceId=pci\ven_1002&dev_13fe
+  AmdgpuWddmSparseBinding=absent
+  UserModeDriverName[1] bc250umd.dll sha256=absent
+  UserModeDriverName[2] C:\BC250\m15\gpu-dwm-003\bc250d3d_router.dll sha256=674AD261
+    sibling amdgpu_wddm_vkd3d.dll sha256=absent
+    sibling amdgpu_wddm_radv.dll sha256=66FE8F31
+  UserModeDriverName[3] C:\BC250\m15\gpu-dwm-003\bc250d3d_router.dll sha256=674AD261
+    sibling amdgpu_wddm_vkd3d.dll sha256=absent
+    sibling amdgpu_wddm_radv.dll sha256=66FE8F31
+  UserModeDriverName[4] C:\BC250\m15\registration002\amdgpu_wddm_d3d12.dll sha256=5A1B7BAF
+    sibling amdgpu_wddm_vkd3d.dll sha256=D79FEC49
+    sibling amdgpu_wddm_radv.dll sha256=F9DCB33B
+  router CpuUmdPath=C:\BC250\m15\desktop-umd173-007\bc250d3d.dll sha256=10D9C983
+  router DwmForceCpu=0
+  router RequireKmdSwitches=1
+=== api
+CreateDXGIFactory1 hr=0x00000000
+adapter 0: "BC-250 GPU (bc250kmd, display-only, lab build)" vendor=0x1002 device=0x13FE luid=00000000:0093C5E3 flags=0x0
+  D3D12CreateDevice(FL 11_0, device) hr=0x00000000 -> version "12"
+  CheckFeatureSupport(FEATURE_LEVELS) hr=0x00000000 MaxSupportedFeatureLevel=12_1
+  D3D12CreateDevice(FL 12_2, NULL) hr=0x887A0004
+  D3D12CreateDevice(FL 12_1, NULL) hr=0x00000001
+  D3D12CreateDevice(FL 12_0, NULL) hr=0x00000001
+  D3D12CreateDevice(FL 11_1, NULL) hr=0x00000001
+  D3D12CreateDevice(FL 11_0, NULL) hr=0x00000001
+  => 26100+ Task Manager FL string: 12_1
+  D3D11CreateDevice(FL 12_1, NULL) hr=0x887A0004 obtained=none
+  D3D11CreateDevice(FL 12_0, NULL) hr=0x887A0004 obtained=none
+  D3D11CreateDevice(FL 11_1, NULL) hr=0x887A0004 obtained=none
+  D3D11CreateDevice(FL 11_0, NULL) hr=0x887A0004 obtained=none
+  D3D11CreateDevice(FL 10_1, NULL) hr=0x887A0004 obtained=none
+  D3D11CreateDevice(FL 10_0, NULL) hr=0x00000001 obtained=10_0
+  => 22621 Task Manager FL string: 10_0
+adapter 1: "Microsoft Basic Render Driver" vendor=0x1414 device=0x008C luid=00000000:0000923A flags=0x2
+  software adapter, skipped
+=== api-stderr (d3d12-caps and failure lines, first 40)
+output: C:\BC250\tmp\taskmgr-dx-native-caps309

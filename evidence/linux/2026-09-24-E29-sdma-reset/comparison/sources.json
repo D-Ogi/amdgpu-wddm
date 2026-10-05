@@ -1,0 +1,14 @@
+{
+  "amdgpu_rlc.c": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_rlc.c",
+    "sha256": "32a5c62305d6e45b01c9ebf0df6bad2fb2b68eafe9764365aaf077cf341267fe"
+  },
+  "amdgpu_ctx.c": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_ctx.c",
+    "sha256": "eec114e55c4cdff29326c3c37e014c2a375a90b10466ecde4526e919cafdd63d"
+  },
+  "amdgpu_fence.c": {
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c",
+    "sha256": "7beb6bf374d019a41338107eec81401215f4c03840e8a4b09372ee3bb43aad9e"
+  }
+}

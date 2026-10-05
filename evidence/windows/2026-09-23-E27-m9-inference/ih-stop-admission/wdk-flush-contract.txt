@@ -1,0 +1,16 @@
+WDK10.0.26100.0/km/wdm.h SHA256 c6a2a650c9799791accc407800861f672aea75ff0f1f60e2d3bf62d836275732
+endif
+
+
+
+#if (NTDDI_VERSION >= NTDDI_WINXPSP2)
+_IRQL_requires_max_(APC_LEVEL)
+NTKERNELAPI
+VOID
+KeFlushQueuedDpcs (
+    VOID
+    );
+#endif
+
+//
+// Device que

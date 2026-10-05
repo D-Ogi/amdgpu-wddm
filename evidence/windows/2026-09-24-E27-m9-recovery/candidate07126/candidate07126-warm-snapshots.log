@@ -1,0 +1,250 @@
+
+
+LastStage         : 61
+StageHistory      : 10 20 30 31 32 33 34 35 39 50 60 61 
+UnconfirmedStarts : 2
+KeepStatus        : 0
+KeepLog           : 1
+EnableFullWddm    : 0
+
+
+
+snapshot=ring-20260924-094254-024.log
+bc250kmd 0x0007007E log snapshot: 110 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.016 stage 10
+     1      0.018 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.020 stage 20
+     3      0.128 stage 30
+     4      0.130 stage 31
+     5      0.132 stage 32
+     6      0.132 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.132 stage 33
+     8      0.134 stage 34
+     9      0.134 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.136 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.136 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.136 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.136 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.136 gart: ready, dummy page at 0x26FFFA000
+    15      0.136 psp: ready
+    16      0.136 gpumem: ready, doorbells at 0xD0000000
+    17      0.136 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.136 ih: ready
+    19      0.138 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.145 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.145 startup: entering interrupt connection
+    22      0.148 startup: entering firmware preparation
+    23      0.158 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    24      0.158 gfx: unpublished translation bootstrap entered with engines halted
+    25      0.158 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    26      0.158 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    27      0.158 startup: entering GART initialization
+    28      0.170 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    29      0.170 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.170 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    31      0.170 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    32      0.170 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.170 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.172 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    35      0.172 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.172 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    37      0.172 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    38      0.172 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.172 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    40      0.172 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    41      0.172 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.172 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    43      0.172 startup: entering PSP initialization
+    44      0.221 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.221 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    46      0.242 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    47      0.242 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    48      0.242 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    49      0.242 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 268 us, in TMR at 0x0
+    50      0.242 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.242 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    52      0.244 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1955 us, in TMR at 0x0
+    53      0.244 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    54      0.244 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.246 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1940 us, in TMR at 0x0
+    56      0.246 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.246 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.252 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5862 us, in TMR at 0xF5FF842000
+    59      0.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    60      0.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.258 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5880 us, in TMR at 0xF5FF883000
+    62      0.258 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.258 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.264 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5912 us, in TMR at 0xF5FF8C4000
+    65      0.264 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    66      0.264 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.270 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5928 us, in TMR at 0xF5FF800000
+    68      0.270 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    69      0.270 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.270 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    71      0.270 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    72      0.270 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.276 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6013 us, in TMR at 0xF5FF800000
+    74      0.276 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    75      0.276 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.276 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    77      0.276 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    78      0.276 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.278 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    80      0.278 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.278 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.278 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    83      0.278 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.278 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    85      0.278 startup: entering IH initialization
+    86      0.282 ih: init: rc 0, 18 writes
+    87      0.282 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    88      0.282 startup: entering GFX initialization
+    89      0.284 startup: entering GFX stage 1
+    90      0.290 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    91      0.290 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    92      0.292 startup: entering GFX stage 2
+    93      0.296 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+    94      0.296 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    95      0.298 startup: entering GFX stage 3
+    96      0.300 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+    97      0.300 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    98      0.304 startup: entering GFX stage 4
+    99      0.306 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+   100      0.306 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   101      0.308 startup: entering GFX stage 5
+   102      0.312 startup: RLC boundary acquire-paging-lock
+   103      0.314 startup: RLC boundary acquire-gart-lock
+   104      0.318 startup: RLC boundary locks-acquired
+   105      0.320 startup: RLC boundary before-rlc-resume
+   106      0.322 startup: RLC boundary after-rlc-resume
+   107      0.326 startup: RLC boundary before-gfx-visibility
+   108      0.328 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   109      0.330 startup: visibility observer returned after-invalidate-request
+snapshot=ring-20260924-094254-022.log
+bc250kmd 0x0007007E log snapshot: 109 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.016 stage 10
+     1      0.018 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.020 stage 20
+     3      0.128 stage 30
+     4      0.130 stage 31
+     5      0.132 stage 32
+     6      0.132 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.132 stage 33
+     8      0.134 stage 34
+     9      0.134 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.136 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.136 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.136 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.136 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.136 gart: ready, dummy page at 0x26FFFA000
+    15      0.136 psp: ready
+    16      0.136 gpumem: ready, doorbells at 0xD0000000
+    17      0.136 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.136 ih: ready
+    19      0.138 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.145 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.145 startup: entering interrupt connection
+    22      0.148 startup: entering firmware preparation
+    23      0.158 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    24      0.158 gfx: unpublished translation bootstrap entered with engines halted
+    25      0.158 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    26      0.158 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    27      0.158 startup: entering GART initialization
+    28      0.170 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    29      0.170 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.170 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    31      0.170 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    32      0.170 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.170 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.172 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    35      0.172 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.172 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    37      0.172 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    38      0.172 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.172 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    40      0.172 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    41      0.172 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.172 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    43      0.172 startup: entering PSP initialization
+    44      0.221 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.221 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    46      0.242 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    47      0.242 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    48      0.242 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    49      0.242 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 268 us, in TMR at 0x0
+    50      0.242 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.242 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    52      0.244 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1955 us, in TMR at 0x0
+    53      0.244 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    54      0.244 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.246 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1940 us, in TMR at 0x0
+    56      0.246 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.246 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.252 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5862 us, in TMR at 0xF5FF842000
+    59      0.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    60      0.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.258 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5880 us, in TMR at 0xF5FF883000
+    62      0.258 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.258 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.264 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5912 us, in TMR at 0xF5FF8C4000
+    65      0.264 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    66      0.264 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.270 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5928 us, in TMR at 0xF5FF800000
+    68      0.270 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    69      0.270 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.270 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    71      0.270 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    72      0.270 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.276 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6013 us, in TMR at 0xF5FF800000
+    74      0.276 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    75      0.276 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.276 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    77      0.276 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    78      0.276 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.278 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    80      0.278 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.278 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.278 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    83      0.278 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.278 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    85      0.278 startup: entering IH initialization
+    86      0.282 ih: init: rc 0, 18 writes
+    87      0.282 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    88      0.282 startup: entering GFX initialization
+    89      0.284 startup: entering GFX stage 1
+    90      0.290 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    91      0.290 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    92      0.292 startup: entering GFX stage 2
+    93      0.296 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+    94      0.296 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    95      0.298 startup: entering GFX stage 3
+    96      0.300 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+    97      0.300 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    98      0.304 startup: entering GFX stage 4
+    99      0.306 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+   100      0.306 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   101      0.308 startup: entering GFX stage 5
+   102      0.312 startup: RLC boundary acquire-paging-lock
+   103      0.314 startup: RLC boundary acquire-gart-lock
+   104      0.318 startup: RLC boundary locks-acquired
+   105      0.320 startup: RLC boundary before-rlc-resume
+   106      0.322 startup: RLC boundary after-rlc-resume
+   107      0.326 startup: RLC boundary before-gfx-visibility
+   108      0.328 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+[interface identity redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00009121
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x0007007E (milestone 7 revision 126)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     337
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+info_exit=0
+boot=2026-09-24T11:44:14

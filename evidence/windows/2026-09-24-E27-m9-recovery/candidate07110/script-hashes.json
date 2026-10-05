@@ -1,0 +1,7 @@
+{
+  "candidate07110-install.ps1": "c47b3e57e8df1380c209d5ddedd5c605655d62ee0d43b9e08860af739fce3dcb",
+  "candidate07110-control-confirmed.ps1": "7c14dba4bba30e12ddceb28fb8c18c03453197c4d7bb16882ec4c34dcb42ebe7",
+  "candidate07110-stop.ps1": "2741688d63acd9a36ced53af6838c142b994653e652487bb0f7accdf8d798c88",
+  "candidate07110-warm.ps1": "f4515e9a77f3ddb95519f1661a17c0f2adc6ef26371193a5da4161bfa435ce50",
+  "gpu-residency07110-control.ps1": "fdad7b832fe1ac4a30992d534de19b918a7f1dd4f2a74e1892ae7bb5e14c18f1"
+}

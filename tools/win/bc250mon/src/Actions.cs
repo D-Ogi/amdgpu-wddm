@@ -24,12 +24,6 @@ namespace Bc250Mon
             Add("stop.set", "STOP tests", true, a => { state.StopRequested = true; return null; });
             Add("stop.clear", "Clear stop", true, a => { state.StopRequested = false; return null; });
             Add("clock.cool", "1000 MHz / 820 mV", true, a => SetClock(driver, 1000, 820));
-            Add("clock.stock", "Stock 1500 MHz", true, a =>
-            {
-                driver.Smu(Driver.MsgRequestGfxclk, 1500);
-                driver.Smu(Driver.MsgUnforceGfxVid, 0);
-                return "clock 1500 MHz, voltage back under SMU control";
-            });
             Add("clock.set", "Set clock", false, a => SetClock(driver, Convert.ToUInt32(a["mhz"]), Convert.ToUInt32(a["mv"])));
             // The miniport's start budget (ADR 0006 point 3). KmdProvider clears it by itself once the desktop
             // has been up long enough; these two are for driving it by hand from mon.py during an install.
@@ -43,9 +37,8 @@ namespace Bc250Mon
 
         static string SetClock(Driver driver, uint mhz, uint mv)
         {
-            // Same order as amdgpu: frequency first, then the voltage. The driver checks the limits again.
-            driver.Smu(Driver.MsgRequestGfxclk, mhz);
-            driver.Smu(Driver.MsgForceGfxVid, Driver.VidFromMillivolts(mv));
+            // KMD owns ordering, limits, temperature and readback for the whole transaction.
+            driver.SetClock(mhz, mv);
             return "clock " + mhz + " MHz, " + mv + " mV";
         }
 

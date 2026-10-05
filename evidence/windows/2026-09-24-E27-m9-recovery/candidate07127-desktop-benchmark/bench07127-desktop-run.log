@@ -1,0 +1,36 @@
+
+  Id StartTime                  CPU
+  -- ---------                  ---
+4448 9/24/2026 1:58:18 PM 95.109375
+
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+boot_before=2026-09-24T11:44:14
+driver_version=0.7.127.1
+14:08:32 Tctl 66.5 C (raw 739B0FEF)
+installed_sha256=476858800F28A5C103E43FECCC8595C6042BA2479EE18FCFCC3D9FD313953E90
+input_file=llama-bench.exe sha256=333741E180F23CF016A618CA633402448E44BDFBB0BB078870671B2C40CBCAB8
+input_file=stories15M-q4_0.gguf sha256=66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739
+input_file=tinyllama-1.1b-chat-v1.0.Q4_0.gguf sha256=DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556
+icd_hash=6B589A8686DF6FFBB2BE447845222A3607E7E162B89923FA5976FCD9FD412754
+14:08:38 Tctl 66.6 C (raw 73BB0FEF)
+14:08:42 Tctl 66.8 C (raw 73DB0FEF)
+14:08:46 Tctl 66.8 C (raw 73DB0FEF)
+14:08:49 Tctl 66.8 C (raw 73DB0FEF)
+task_state=Ready
+stories15M exit=0
+    "samples_ns": [ 314985500, 315264600, 321102300 ],
+    "samples_ts": [ 406.368, 406.008, 398.627 ]
+  }
+]
+Get-Content : Cannot find path 'C:\BC250\m9\bench07127-desktop\tinyllama.exit' because it does 
+not exist.
+At C:\BC250\tmp\bench07127-desktop-run.ps1:56 char:14
++  $exit=[int](Get-Content "$out\$name.exit")
++              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\BC250\m9\ben...\tinyllama.exit:String) [Get-Con 
+   tent], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+ 

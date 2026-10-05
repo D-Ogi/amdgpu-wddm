@@ -1,0 +1,46 @@
+{
+  "checks": [
+    {
+      "name": "kmd-commands",
+      "status": "PASS",
+      "seconds": 0.4411977
+    },
+    {
+      "name": "kmd-contract",
+      "status": "PASS",
+      "seconds": 0.3617949
+    },
+    {
+      "name": "radv-contract",
+      "status": "PASS",
+      "seconds": 0.2279584
+    },
+    {
+      "name": "umd-contract",
+      "status": "PASS",
+      "seconds": 0.2285264
+    },
+    {
+      "name": "blob-abi",
+      "status": "PASS",
+      "seconds": 0.7049
+    },
+    {
+      "name": "surface-control",
+      "status": "PASS",
+      "seconds": 0.2235765
+    },
+    {
+      "name": "kmd-analysis",
+      "status": "PASS",
+      "seconds": 0.5975981
+    },
+    {
+      "name": "umd-analysis",
+      "status": "PASS",
+      "seconds": 4.2508733
+    }
+  ],
+  "status": "PASS",
+  "seconds": 7.054756
+}

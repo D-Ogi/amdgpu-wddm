@@ -1,0 +1,29 @@
+health abi=1 version=0x00070093 flags=7 generation=49529103383 epoch=5 completed=228 age_ms=23510 ready_ms=384194
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66375 ready=1
+boot=2026-09-25T03:57:55.5000000+02:00
+now=2026-09-25T05:27:04.2238829+02:00
+summary_paused=False
+{"UnconfirmedStarts":1,"EnableFullWddm":2}
+process=dwm pid=3636
+umd=C:\BC250\m13\mesa-quiet147-umd\bc250d3d.dll
+hash=FF864DB8CBD6512DDD5538941A6332A9F85AF0D6EA287A5C3FC4A2C2C771E6D5
+umd_log_bytes=13660
+BC250 Perf frame 117 gap_ms 16.132 draws 3 draw_ms 0.175 max_draw_ms 0.118 present_ms 0.333 render_wait_ms 0.001
+BC250 Perf frame 118 gap_ms 16.699 draws 3 draw_ms 0.132 max_draw_ms 0.076 present_ms 0.300 render_wait_ms 0.001
+BC250 Perf frame 119 gap_ms 16.769 draws 3 draw_ms 0.125 max_draw_ms 0.068 present_ms 0.341 render_wait_ms 0.001
+BC250 Perf frame 120 gap_ms 16.659 draws 3 draw_ms 0.126 max_draw_ms 0.070 present_ms 0.333 render_wait_ms 0.001
+BC250 Perf frame 180 gap_ms 16.696 draws 3 draw_ms 0.128 max_draw_ms 0.071 present_ms 0.342 render_wait_ms 0.001
+process=LogonUI pid=12212
+umd=C:\BC250\m13\mesa-quiet147-umd\bc250d3d.dll
+hash=FF864DB8CBD6512DDD5538941A6332A9F85AF0D6EA287A5C3FC4A2C2C771E6D5
+umd_log_bytes=119536
+BC250 Perf frame 11 gap_ms 30008.494 draws 4 draw_ms 0.868 max_draw_ms 0.698 present_ms 0.050 render_wait_ms 0.745
+BC250 Perf frame 12 gap_ms 30042.195 draws 4 draw_ms 1.042 max_draw_ms 0.864 present_ms 0.044 render_wait_ms 1.041
+BC250 Perf frame 13 gap_ms 30026.482 draws 4 draw_ms 1.477 max_draw_ms 1.240 present_ms 0.054 render_wait_ms 0.839
+BC250 Perf frame 14 gap_ms 30040.908 draws 4 draw_ms 1.168 max_draw_ms 0.991 present_ms 0.052 render_wait_ms 1.008
+BC250 Perf frame 15 gap_ms 30025.291 draws 4 draw_ms 1.525 max_draw_ms 1.298 present_ms 0.061 render_wait_ms 1.009
+
+Microsoft Windows Performance Recorder Version 10.0.22621 (CoreSystem)
+Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+
+WPR is not recording

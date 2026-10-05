@@ -1,0 +1,56 @@
+test.c
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL stop synchronizes exactly once
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL storage retired after halt/drain
+FAIL stop synchronizes exactly once
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL stop synchronizes exactly once
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL storage retired after halt/drain
+FAIL stop synchronizes exactly once
+FAIL failure retains backing and quarantines
+FAIL failure retains complete owner description
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL stop synchronizes exactly once
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL storage retired after halt/drain
+FAIL stop synchronizes exactly once
+FAIL failure retains backing and quarantines
+FAIL failure retains complete owner description
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL stop synchronizes exactly once
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL storage retired after halt/drain
+FAIL stop synchronizes exactly once
+FAIL failure retains backing and quarantines
+FAIL failure retains complete owner description
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL stop synchronizes exactly once
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL stop synchronizes exactly once
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL storage retired after halt/drain
+FAIL stop synchronizes exactly once
+FAIL failure retains backing and quarantines
+FAIL failure retains complete owner description
+FAIL no hardware teardown without verified ISR exclusion and device
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL ISR joined and DPC drained before hardware teardown
+FAIL storage retired after halt/drain
+171 checks, 54 failures

@@ -1,0 +1,182 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -54,6 +54,7 @@
+ 
+ 
+ #include <d3dkmthk.h>
++#include <new>
+ 
+ static thread_local Device *Bc250RuntimeDevice;
+ struct Bc250RuntimeScope {
+@@ -468,6 +469,68 @@
+  * ----------------------------------------------------------------------
+  */
+ 
++struct Bc250CreateGuard {
++   Device *device;
++   bool complete = false;
++   explicit Bc250CreateGuard(Device *value) : device(value) {}
++   ~Bc250CreateGuard() {
++      if (complete) return;
++      auto *pipe = device->pipe;
++      if (pipe) {
++         pipe->bind_fs_state(pipe, NULL);
++         pipe->bind_vs_state(pipe, NULL);
++         if (device->cso) {
++            cso_unbind_context(device->cso);
++            cso_destroy_context(device->cso);
++            device->cso = NULL;
++         }
++         if (device->empty_fs)
++            DeleteEmptyShader(device, MESA_SHADER_FRAGMENT, device->empty_fs);
++         if (device->empty_vs)
++            DeleteEmptyShader(device, MESA_SHADER_VERTEX, device->empty_vs);
++         device->empty_fs = device->empty_vs = NULL;
++         pipe_resource_reference(&device->zero_vertex_buffer, NULL);
++         pipe->destroy(pipe);
++         device->pipe = NULL;
++      }
++      if (device->owned_screen) {
++         device->owned_screen->destroy(device->owned_screen);
++         device->owned_screen = NULL;
++      }
++      if (device->hContext) {
++         D3DDDICB_DESTROYCONTEXT destroy = {};
++         destroy.hContext = device->hContext;
++         HRESULT hr = device->KTCallbacks.pfnDestroyContextCb(device->hDevice, &destroy);
++         fprintf(stderr, "BC250 create cleanup context hr=%08lx\n", hr);
++         device->hContext = 0;
++      }
++      if (device->pagingQueue) {
++         D3DDDI_DESTROYPAGINGQUEUE destroy = {};
++         destroy.hPagingQueue = device->pagingQueue;
++         HRESULT hr = device->KTCallbacks.pfnDestroyPagingQueueCb(device->hDevice, &destroy);
++         fprintf(stderr, "BC250 create cleanup paging hr=%08lx\n", hr);
++         device->pagingQueue = 0;
++      }
++      delete (Bc250HostProbeState *)device->hosted_state;
++      device->hosted_state = NULL;
++      fprintf(stderr, "BC250 create cleanup finished\n");
++   }
++};
++
++static bool
++Bc250FailCreate(const char *stage)
++{
++   char requested[32] = {};
++   if (!GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0) ||
++       !GetEnvironmentVariableA("BC250_HOSTED_RENDER", NULL, 0))
++      return false;
++   DWORD length = GetEnvironmentVariableA("BC250_HOST_TEST_CREATE", requested, sizeof(requested));
++   if (!length || length >= sizeof(requested) || strcmp(requested, stage))
++      return false;
++   fprintf(stderr, "BC250 injected create failure stage=%s\n", stage);
++   return true;
++}
++
+ HRESULT APIENTRY
+ CreateDevice(D3D10DDI_HADAPTER hAdapter,                 // IN
+              __in D3D10DDIARG_CREATEDEVICE *pCreateData) // IN
+@@ -510,6 +573,7 @@
+    pDevice->KTCallbacks = *pCreateData->pKTCallbacks;
+    pDevice->UMCallbacks = *pCreateData->pUMCallbacks;
+    pDevice->pDXGIBaseCallbacks = pCreateData->DXGIBaseDDI.pDXGIBaseCallbacks;
++   Bc250CreateGuard createGuard(pDevice);
+ 
+    // This Zink-only diagnostic DLL is loaded through D3D_DRIVER_TYPE_SOFTWARE.
+    // That runtime cannot service native WDDM presentation callbacks. RADV owns
+@@ -529,6 +593,7 @@
+    DebugPrintf("BC250 initial CreateContextVirtual %08lx\n", contextResult);
+    if (FAILED(contextResult)) return contextResult;
+    pDevice->hContext = context.hContext;
++   if (Bc250FailCreate("context")) return E_OUTOFMEMORY;
+ 
+    }
+ 
+@@ -546,7 +611,9 @@
+       if (!d3d10_hosted_bootstrap(&host)) return E_FAIL;
+    }
+    if (hostedRender) {
+-      auto *state=new Bc250HostProbeState{};
++      auto *state=new (std::nothrow) Bc250HostProbeState;
++      if (!state) return E_OUTOFMEMORY;
++      memset(state, 0, sizeof(*state));
+       state->device=pDevice;
+       state->thread=GetCurrentThreadId();
+       char testLoss[16]={};
+@@ -559,37 +626,33 @@
+       host.size=sizeof(host); host.identity=pDevice->hDevice;
+       host.userdata=state; host.dispatch=Bc250HostDispatch;
+       pDevice->owned_screen=d3d10_create_hosted_screen(&host);
+-      if (!pDevice->owned_screen) { delete state; pDevice->hosted_state=NULL; }
+    } else {
+       pDevice->owned_screen = d3d10_create_screen();
+    }
+-   if (!pDevice->owned_screen) return E_OUTOFMEMORY;
++   if (!pDevice->owned_screen || Bc250FailCreate("screen")) return E_OUTOFMEMORY;
+    struct pipe_screen *screen = pDevice->owned_screen;
+    fprintf(stderr, "BC250 device screen=%p runtime=%p\n", screen, pDevice->hDevice);
+    DebugPrintf("BC250 Renderer: %s\n", screen->get_name(screen));
+    fprintf(stderr,"BC250 D3D device stage 3\n"); fflush(stderr);
+    struct pipe_context *pipe = screen->context_create(screen, NULL, 0);
+-   if (!pipe) {
+-      screen->destroy(screen);
+-      pDevice->owned_screen = NULL;
+-      return E_OUTOFMEMORY;
+-   }
++   if (!pipe) return E_OUTOFMEMORY;
+    pDevice->pipe = pipe;
++   if (Bc250FailCreate("pipe")) return E_OUTOFMEMORY;
+    static const float zero_vertex[4] = {0, 0, 0, 0};
+    pDevice->zero_vertex_buffer = pipe_buffer_create_with_data(
+        pipe, PIPE_BIND_VERTEX_BUFFER, PIPE_USAGE_IMMUTABLE,
+        sizeof(zero_vertex), zero_vertex);
+-   if (!pDevice->zero_vertex_buffer) {
+-      pipe->destroy(pipe);
+-      return E_OUTOFMEMORY;
+-   }
++   if (!pDevice->zero_vertex_buffer || Bc250FailCreate("buffer")) return E_OUTOFMEMORY;
+    fprintf(stderr,"BC250 D3D device stage 4\n"); fflush(stderr);
+    pDevice->cso = cso_create_context(pipe, CSO_NO_VBUF);
++   if (!pDevice->cso || Bc250FailCreate("cso")) return E_OUTOFMEMORY;
+ 
+    fprintf(stderr,"BC250 D3D device stage 5\n"); fflush(stderr);
+    pDevice->empty_vs = CreateEmptyShader(pDevice, MESA_SHADER_VERTEX);
++   if (!pDevice->empty_vs || Bc250FailCreate("empty_vs")) return E_OUTOFMEMORY;
+    fprintf(stderr,"BC250 D3D device stage 6\n"); fflush(stderr);
+    pDevice->empty_fs = CreateEmptyShader(pDevice, MESA_SHADER_FRAGMENT);
++   if (!pDevice->empty_fs || Bc250FailCreate("empty_fs")) return E_OUTOFMEMORY;
+ 
+    fprintf(stderr,"BC250 D3D device stage 7\n"); fflush(stderr);
+    pipe->bind_vs_state(pipe, pDevice->empty_vs);
+@@ -746,6 +809,7 @@
+       Bc250Entry<_Blt>::Call;
+ 
+    // E26: the linear shared-resource path is implemented for the tested formats.
++   createGuard.complete = true;
+    return S_OK;
+ }
+ 
+--- a/src/gallium/frontends/d3d10umd/Shader.cpp
++++ b/src/gallium/frontends/d3d10umd/Shader.cpp
+@@ -75,8 +75,10 @@
+    ureg_END(ureg);
+ 
+    tokens = ureg_get_tokens(ureg, &nr_tokens);
+-   if (!tokens)
++   if (!tokens) {
++      ureg_destroy(ureg);
+       return NULL;
++   }
+ 
+    ureg_destroy(ureg);
+ 
+@@ -99,8 +101,6 @@
+       handle = NULL;
+       assert(0);
+    }
+-   assert(handle);
+-
+    ureg_free_tokens(tokens);
+ 
+    return handle;

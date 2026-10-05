@@ -1,0 +1,8 @@
+{
+  "driver/kmd/wddm.c": "826f0fa999f69149a9af2e1c7caaab6ab427aeacd0d1dd5ef9146b8b0caabe80",
+  "experiments/E27-m9-inference/paging-route-test-prefix.c": "2418e236e17a572fc4445647ab8f6de28c4eed26ec50ff26dfe4716daefe99df",
+  "experiments/E27-m9-inference/paging-route-test-suffix.c": "95f6f531b3294e1c654985430ecabf9fd9c8798292c554a996a4d9776f0c0b42",
+  "experiments/E27-m9-inference/generate-paging-route-test.py": "5ac579afc7cd6328ce024bf61ecba334072c52d87cea0fcb73000ade54f8685a",
+  "experiments/E27-m9-inference/capture-summary-plan.md": "2af60c70e686b0624a7c4185a32cb426fe54ff0ab35b21c1b26ae640dd2a7dbc",
+  "ref\\linux-src\\drivers\\gpu\\drm\\amd\\amdgpu\\gfx_v10_0.c": "41b4e75728f3ad25f69c179536f8b7ae30118026315216d5fd891f445a6a7e99"
+}

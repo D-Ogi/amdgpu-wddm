@@ -1,0 +1,360 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -52,28 +52,184 @@
+ extern "C" struct pipe_screen *d3d10_create_screen(void);
+ 
+ 
+-struct Bc250HostProbeState { Device *device; DWORD thread; };
++#include <d3dkmthk.h>
++
++struct Bc250HostProbeState {
++   Device *device;
++   DWORD thread;
++   HANDLE contexts[16];
++   unsigned calls[64];
++};
++
++static HANDLE Bc250HostContext(Bc250HostProbeState *s, UINT token)
++{
++   return token && token <= 16 ? s->contexts[token - 1] : NULL;
++}
++
++static HRESULT Bc250HostOperation(Bc250HostProbeState *s, uint32_t op, void *argument)
++{
++   auto &cb = s->device->KTCallbacks;
++   HANDLE rt = s->device->hDevice;
++   if (!argument) return E_INVALIDARG;
++#define HOST_CALL(name, arg) (cb.pfn##name##Cb ? cb.pfn##name##Cb(rt, arg) : E_NOTIMPL)
++   switch (op) {
++   case BC250_HOST_CREATE_PAGING: {
++      auto *a = (bc250_host_paging *)argument;
++      D3DDDICB_CREATEPAGINGQUEUE b = {};
++      HRESULT hr = HOST_CALL(CreatePagingQueue, &b);
++      a->queue=b.hPagingQueue; a->sync=b.hSyncObject; a->cpu_address=b.FenceValueCPUVirtualAddress;
++      return hr;
++   }
++   case BC250_HOST_DESTROY_PAGING: {
++      D3DDDI_DESTROYPAGINGQUEUE b = {};
++      b.hPagingQueue=((bc250_host_paging *)argument)->queue;
++      return HOST_CALL(DestroyPagingQueue, &b);
++   }
++   case BC250_HOST_CreateAllocation2: {
++      auto *a=(D3DKMT_CREATEALLOCATION *)argument;
++      D3DDDICB_ALLOCATE b = {};
++      b.pPrivateDriverData=a->pPrivateDriverData; b.PrivateDriverDataSize=a->PrivateDriverDataSize;
++      b.NumAllocations=a->NumAllocations; b.pAllocationInfo2=a->pAllocationInfo2;
++      HRESULT hr=HOST_CALL(Allocate, &b);
++      a->hResource=b.hKMResource;
++      return hr;
++   }
++   case BC250_HOST_DestroyAllocation2: {
++      auto *a=(D3DKMT_DESTROYALLOCATION2 *)argument;
++      if (a->hResource || a->Flags.Value) return E_NOTIMPL;
++      D3DDDICB_DEALLOCATE b = {};
++      b.NumAllocations=a->AllocationCount; b.HandleList=a->phAllocationList;
++      return HOST_CALL(Deallocate, &b);
++   }
++   case BC250_HOST_ReserveGpuVirtualAddress:
++      return HOST_CALL(ReserveGpuVirtualAddress, (D3DDDI_RESERVEGPUVIRTUALADDRESS *)argument);
++   case BC250_HOST_MapGpuVirtualAddress:
++      return HOST_CALL(MapGpuVirtualAddress, (D3DDDI_MAPGPUVIRTUALADDRESS *)argument);
++   case BC250_HOST_MakeResident:
++      return HOST_CALL(MakeResident, (D3DDDI_MAKERESIDENT *)argument);
++   case BC250_HOST_FreeGpuVirtualAddress: {
++      auto *a=(D3DKMT_FREEGPUVIRTUALADDRESS *)argument;
++      D3DDDICB_FREEGPUVIRTUALADDRESS b = {};
++      b.BaseAddress=a->BaseAddress; b.Size=a->Size;
++      return HOST_CALL(FreeGpuVirtualAddress, &b);
++   }
++   case BC250_HOST_Evict: {
++      auto *a=(D3DKMT_EVICT *)argument;
++      D3DDDICB_EVICT b = {};
++      b.NumAllocations=a->NumAllocations; b.AllocationList=a->AllocationList; b.Flags=a->Flags;
++      HRESULT hr=HOST_CALL(Evict, &b); a->NumBytesToTrim=b.NumBytesToTrim; return hr;
++   }
++   case BC250_HOST_Lock2: {
++      auto *a=(D3DKMT_LOCK2 *)argument;
++      D3DDDICB_LOCK2 b = {};
++      b.hAllocation=a->hAllocation; b.Flags.Value=a->Flags.Value;
++      HRESULT hr=HOST_CALL(Lock2, &b); a->pData=b.pData; return hr;
++   }
++   case BC250_HOST_Unlock2: {
++      D3DDDICB_UNLOCK2 b = {};
++      b.hAllocation=((D3DKMT_UNLOCK2 *)argument)->hAllocation;
++      return HOST_CALL(Unlock2, &b);
++   }
++   case BC250_HOST_CreateContextVirtual: {
++      auto *a=(D3DKMT_CREATECONTEXTVIRTUAL *)argument;
++      unsigned slot=0; while (slot<16 && s->contexts[slot]) ++slot;
++      if (slot==16) return E_OUTOFMEMORY;
++      D3DDDICB_CREATECONTEXTVIRTUAL b = {};
++      b.NodeOrdinal=a->NodeOrdinal; b.EngineAffinity=a->EngineAffinity; b.Flags=a->Flags;
++      b.pPrivateDriverData=a->pPrivateDriverData; b.PrivateDriverDataSize=a->PrivateDriverDataSize;
++      HRESULT hr=HOST_CALL(CreateContextVirtual, &b);
++      if (SUCCEEDED(hr)) { s->contexts[slot]=b.hContext; a->hContext=slot+1; }
++      return hr;
++   }
++   case BC250_HOST_DestroyContext: {
++      auto *a=(D3DKMT_DESTROYCONTEXT *)argument;
++      D3DDDICB_DESTROYCONTEXT b = {};
++      b.hContext=Bc250HostContext(s,a->hContext);
++      if (!b.hContext) return E_INVALIDARG;
++      HRESULT hr=HOST_CALL(DestroyContext, &b);
++      if (SUCCEEDED(hr)) s->contexts[a->hContext-1]=NULL;
++      return hr;
++   }
++   case BC250_HOST_CreateSynchronizationObject2: {
++      auto *a=(D3DKMT_CREATESYNCHRONIZATIONOBJECT2 *)argument;
++      if (a->Info.Flags.Shared || a->Info.Flags.NtSecuritySharing) return E_NOTIMPL;
++      D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 b = {};
++      b.Info=a->Info;
++      HRESULT hr=HOST_CALL(CreateSynchronizationObject2, &b);
++      a->Info=b.Info; a->hSyncObject=b.hSyncObject; return hr;
++   }
++   case BC250_HOST_DestroySynchronizationObject: {
++      D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT b = {};
++      b.hSyncObject=((D3DKMT_DESTROYSYNCHRONIZATIONOBJECT *)argument)->hSyncObject;
++      return HOST_CALL(DestroySynchronizationObject, &b);
++   }
++   case BC250_HOST_WaitForSynchronizationObjectFromCpu: {
++      auto *a=(D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *)argument;
++      D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU b = {};
++      b.ObjectCount=a->ObjectCount; b.ObjectHandleArray=a->ObjectHandleArray;
++      b.FenceValueArray=a->FenceValueArray; b.hAsyncEvent=a->hAsyncEvent; b.Flags=a->Flags;
++      return HOST_CALL(WaitForSynchronizationObjectFromCpu, &b);
++   }
++   case BC250_HOST_SignalSynchronizationObjectFromCpu: {
++      auto *a=(D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMCPU *)argument;
++      D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMCPU b = {};
++      b.ObjectCount=a->ObjectCount; b.ObjectHandleArray=a->ObjectHandleArray; b.FenceValueArray=a->FenceValueArray;
++      return HOST_CALL(SignalSynchronizationObjectFromCpu, &b);
++   }
++   case BC250_HOST_WaitForSynchronizationObjectFromGpu: {
++      auto *a=(D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU *)argument;
++      D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU b = {};
++      b.hContext=Bc250HostContext(s,a->hContext); if (!b.hContext) return E_INVALIDARG;
++      b.ObjectCount=a->ObjectCount; b.ObjectHandleArray=a->ObjectHandleArray;
++      b.MonitoredFenceValueArray=a->MonitoredFenceValueArray;
++      return HOST_CALL(WaitForSynchronizationObjectFromGpu, &b);
++   }
++   case BC250_HOST_SignalSynchronizationObjectFromGpu2: {
++      auto *a=(D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 *)argument;
++      if (a->BroadcastContextCount > D3DDDI_MAX_BROADCAST_CONTEXT || a->Flags.Value) return E_NOTIMPL;
++      HANDLE contexts[D3DDDI_MAX_BROADCAST_CONTEXT] = {};
++      for (UINT i=0;i<a->BroadcastContextCount;++i) {
++         contexts[i]=Bc250HostContext(s,a->BroadcastContextArray[i]); if (!contexts[i]) return E_INVALIDARG;
++      }
++      D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 b = {};
++      b.ObjectCount=a->ObjectCount; b.ObjectHandleArray=a->ObjectHandleArray;
++      b.BroadcastContextCount=a->BroadcastContextCount; b.BroadcastContextArray=contexts;
++      b.MonitoredFenceValueArray=a->MonitoredFenceValueArray;
++      return HOST_CALL(SignalSynchronizationObjectFromGpu2, &b);
++   }
++   case BC250_HOST_SubmitCommand: {
++      auto *a=(D3DKMT_SUBMITCOMMAND *)argument;
++      if (a->BroadcastContextCount>D3DDDI_MAX_BROADCAST_CONTEXT || a->NumPrimaries>D3DDDI_MAX_WRITTEN_PRIMARIES || a->Flags.NullRendering || a->Flags.PresentRedirected || a->Flags.NoKmdAccess || a->Flags.Reserved || a->PresentHistoryToken || a->NumHistoryBuffers) return E_NOTIMPL;
++      D3DDDICB_SUBMITCOMMAND b = {};
++      b.Commands=a->Commands; b.CommandLength=a->CommandLength;
++      b.pPrivateDriverData=a->pPrivateDriverData; b.PrivateDriverDataSize=a->PrivateDriverDataSize;
++      b.BroadcastContextCount=a->BroadcastContextCount;
++      for (UINT i=0;i<a->BroadcastContextCount;++i) {
++         b.BroadcastContext[i]=Bc250HostContext(s,a->BroadcastContext[i]); if (!b.BroadcastContext[i]) return E_INVALIDARG;
++      }
++      b.NumPrimaries=a->NumPrimaries;
++      for (UINT i=0;i<a->NumPrimaries;++i) b.WrittenPrimaries[i]=a->WrittenPrimaries[i];
++      return HOST_CALL(SubmitCommand, &b);
++   }
++   default: return E_NOTIMPL;
++   }
++#undef HOST_CALL
++}
++
+ static int32_t Bc250HostDispatch(void *userdata, uint32_t operation, void *argument)
+ {
+-   auto *state = (Bc250HostProbeState *)userdata;
+-   if (GetCurrentThreadId() != state->thread) return (int32_t)0xc000000d;
+-   auto *device = state->device;
+-   auto *paging = (bc250_host_paging *)argument;
+-   HRESULT hr = E_NOTIMPL;
+-   if (operation == BC250_HOST_CREATE_PAGING) {
+-      D3DDDICB_CREATEPAGINGQUEUE create = {};
+-      hr = device->KTCallbacks.pfnCreatePagingQueueCb(device->hDevice, &create);
+-      paging->queue = create.hPagingQueue;
+-      paging->sync = create.hSyncObject;
+-      paging->cpu_address = create.FenceValueCPUVirtualAddress;
+-   } else if (operation == BC250_HOST_DESTROY_PAGING) {
+-      D3DDDI_DESTROYPAGINGQUEUE destroy = {};
+-      destroy.hPagingQueue = paging->queue;
+-      hr = device->KTCallbacks.pfnDestroyPagingQueueCb(device->hDevice, &destroy);
+-   }
+-   fprintf(stderr, "BC250 hosted callback op=%u runtime=%p hr=%08lx\n", operation, device->hDevice, hr);
+-   return SUCCEEDED(hr) ? 0 : (int32_t)0xc0000001;
+-}
++   auto *s=(Bc250HostProbeState *)userdata;
++   if (GetCurrentThreadId()!=s->thread) {
++      fprintf(stderr,"BC250 hosted wrong-thread op=%u\n",operation);
++      return (int32_t)0xc000000d;
++   }
++   HRESULT hr=Bc250HostOperation(s,operation,argument);
++   unsigned count=operation<64 ? ++s->calls[operation] : 0;
++   if (count<=2 || FAILED(hr)) fprintf(stderr,"BC250 hosted op=%u count=%u hr=%08lx\n",operation,count,hr);
++   if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
++   return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb : (int32_t)0xc0000001;
++}
++
+ extern "C" bool d3d10_hosted_bootstrap(struct bc250_host *host);
+ 
+ static void APIENTRY DestroyDevice(D3D10DDI_HDEVICE hDevice);
+--- a/src/gallium/targets/d3d10umd/d3d10_gdi.c
++++ b/src/gallium/targets/d3d10umd/d3d10_gdi.c
+@@ -64,6 +64,83 @@
+    return debug_screen_wrap(screen);
+ }
+ 
++static bool
++bc250_hosted_content(PFN_vkGetInstanceProcAddr gipa, VkInstance instance, VkPhysicalDevice physical)
++{
++   PFN_vkCreateDevice create = (PFN_vkCreateDevice)gipa(instance,"vkCreateDevice");
++   PFN_vkGetDeviceProcAddr gdpa = (PFN_vkGetDeviceProcAddr)gipa(instance,"vkGetDeviceProcAddr");
++   PFN_vkGetPhysicalDeviceMemoryProperties props = (PFN_vkGetPhysicalDeviceMemoryProperties)gipa(instance,"vkGetPhysicalDeviceMemoryProperties");
++   float priority=1.0f;
++   VkDeviceQueueCreateInfo qi={.sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,.queueFamilyIndex=0,.queueCount=1,.pQueuePriorities=&priority};
++   VkDeviceCreateInfo ci={.sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,.queueCreateInfoCount=1,.pQueueCreateInfos=&qi};
++   VkDevice device=VK_NULL_HANDLE;
++   VkResult result=create(physical,&ci,NULL,&device);
++   fprintf(stderr,"BC250 hosted device result=%d\n",result);
++   if(result!=VK_SUCCESS) return false;
++#define LOAD(name) PFN_vk##name name=(PFN_vk##name)gdpa(device,"vk" #name)
++   LOAD(DestroyDevice); LOAD(GetDeviceQueue); LOAD(CreateBuffer); LOAD(DestroyBuffer);
++   LOAD(GetBufferMemoryRequirements); LOAD(AllocateMemory); LOAD(FreeMemory); LOAD(BindBufferMemory);
++   LOAD(MapMemory); LOAD(UnmapMemory); LOAD(InvalidateMappedMemoryRanges);
++   LOAD(CreateCommandPool); LOAD(DestroyCommandPool); LOAD(AllocateCommandBuffers);
++   LOAD(BeginCommandBuffer); LOAD(EndCommandBuffer); LOAD(CmdFillBuffer); LOAD(CmdPipelineBarrier);
++   LOAD(CreateFence); LOAD(DestroyFence); LOAD(QueueSubmit); LOAD(WaitForFences);
++#undef LOAD
++   VkBuffer buffer=VK_NULL_HANDLE;
++   VkDeviceMemory memory=VK_NULL_HANDLE;
++   VkCommandPool pool=VK_NULL_HANDLE;
++   VkFence fence=VK_NULL_HANDLE;
++   bool ok=false;
++   VkBufferCreateInfo bi={.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,.size=16384,.usage=VK_BUFFER_USAGE_TRANSFER_DST_BIT};
++#define CHECK(call) do { result=(call); if(result!=VK_SUCCESS) { fprintf(stderr,"BC250 hosted %s result=%d\n",#call,result); goto done; } } while(0)
++   CHECK(CreateBuffer(device,&bi,NULL,&buffer));
++   VkMemoryRequirements req;
++   GetBufferMemoryRequirements(device,buffer,&req);
++   VkPhysicalDeviceMemoryProperties mp;
++   props(physical,&mp);
++   uint32_t type=UINT32_MAX;
++   for(uint32_t i=0;i<mp.memoryTypeCount;i++)
++      if((req.memoryTypeBits&(1u<<i)) && (mp.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {type=i;break;}
++   if(type==UINT32_MAX) goto done;
++   VkMemoryAllocateInfo ai={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.allocationSize=req.size,.memoryTypeIndex=type};
++   CHECK(AllocateMemory(device,&ai,NULL,&memory));
++   CHECK(BindBufferMemory(device,buffer,memory,0));
++   VkCommandPoolCreateInfo pi={.sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,.queueFamilyIndex=0};
++   CHECK(CreateCommandPool(device,&pi,NULL,&pool));
++   VkCommandBufferAllocateInfo ca={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,.commandPool=pool,.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,.commandBufferCount=1};
++   VkCommandBuffer command;
++   CHECK(AllocateCommandBuffers(device,&ca,&command));
++   VkCommandBufferBeginInfo begin={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
++   CHECK(BeginCommandBuffer(command,&begin));
++   CmdFillBuffer(command,buffer,0,16384,0x39c57a16);
++   VkMemoryBarrier barrier={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,.dstAccessMask=VK_ACCESS_HOST_READ_BIT};
++   CmdPipelineBarrier(command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,1,&barrier,0,NULL,0,NULL);
++   CHECK(EndCommandBuffer(command));
++   VkFenceCreateInfo fi={.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
++   CHECK(CreateFence(device,&fi,NULL,&fence));
++   VkQueue queue;
++   GetDeviceQueue(device,0,0,&queue);
++   VkSubmitInfo si={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&command};
++   CHECK(QueueSubmit(queue,1,&si,fence));
++   CHECK(WaitForFences(device,1,&fence,VK_TRUE,10000000000ull));
++   uint32_t *mapped=NULL;
++   CHECK(MapMemory(device,memory,0,VK_WHOLE_SIZE,0,(void **)&mapped));
++   VkMappedMemoryRange range={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,.memory=memory,.size=VK_WHOLE_SIZE};
++   result=InvalidateMappedMemoryRanges(device,1,&range);
++   unsigned mismatches=0;
++   if(result==VK_SUCCESS) for(unsigned i=0;i<4096;i++) mismatches+=mapped[i]!=0x39c57a16;
++   UnmapMemory(device,memory);
++   ok=result==VK_SUCCESS && mismatches==0;
++   fprintf(stderr,"BC250 hosted content words=4096 mismatches=%u result=%d pass=%d\n",mismatches,result,ok);
++done:
++   if(fence) DestroyFence(device,fence,NULL);
++   if(pool) DestroyCommandPool(device,pool,NULL);
++   if(buffer) DestroyBuffer(device,buffer,NULL);
++   if(memory) FreeMemory(device,memory,NULL);
++   DestroyDevice(device,NULL);
++#undef CHECK
++   return ok;
++}
++
+ /* Enumeration-only hosted bootstrap. Keep its module until instance teardown. */
+ bool
+ d3d10_hosted_bootstrap(struct bc250_host *host)
+@@ -94,6 +171,12 @@
+       result = enumerate(instance, &count, NULL);
+       fprintf(stderr, "BC250 hosted enumerate result=%d devices=%u\n", result, count);
+       ok = result == VK_SUCCESS && count == 1;
++      if (ok) {
++         VkPhysicalDevice physical;
++         count=1;
++         result=enumerate(instance,&count,&physical);
++         ok=result==VK_SUCCESS && bc250_hosted_content(gipa,instance,physical);
++      }
+       destroy(instance, NULL);
+    }
+    util_dl_close(lib);
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -1,13 +1,13 @@
+ /* SPDX-License-Identifier: MIT
+  * Private BC250 bootstrap contract, not a registered Vulkan extension.
+  * Both endpoints are built together against the same WDK and x64 ABI.
+- * Version 1 supports adapter enumeration/paging only, never rendering.
++ * Version 2 carries device-scoped runtime operations.
+  */
+ #ifndef BC250_HOST_BOOTSTRAP_H
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 1u
++#define BC250_HOST_VERSION 2u
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
+ struct bc250_host_paging {
+@@ -23,4 +23,35 @@
+    void *userdata;
+    int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
+ };
++#define BC250_HOST_CreateAllocation2 16u
++#define BC250_HOST_DestroyAllocation2 17u
++#define BC250_HOST_ReserveGpuVirtualAddress 18u
++#define BC250_HOST_MapGpuVirtualAddress 19u
++#define BC250_HOST_FreeGpuVirtualAddress 20u
++#define BC250_HOST_MakeResident 21u
++#define BC250_HOST_Evict 22u
++#define BC250_HOST_Lock2 23u
++#define BC250_HOST_Unlock2 24u
++#define BC250_HOST_CreateContextVirtual 25u
++#define BC250_HOST_DestroyContext 26u
++#define BC250_HOST_CreateSynchronizationObject2 27u
++#define BC250_HOST_DestroySynchronizationObject 28u
++#define BC250_HOST_WaitForSynchronizationObjectFromCpu 29u
++#define BC250_HOST_SignalSynchronizationObjectFromCpu 30u
++#define BC250_HOST_WaitForSynchronizationObjectFromGpu 31u
++#define BC250_HOST_SignalSynchronizationObjectFromGpu 32u
++#define BC250_HOST_SignalSynchronizationObjectFromGpu2 33u
++#define BC250_HOST_SubmitCommand 34u
++#define BC250_HOST_UpdateGpuVirtualAddress 35u
++#define BC250_HOST_GetDeviceState 36u
++#define BC250_HOST_QueryResourceInfoFromNtHandle 37u
++#define BC250_HOST_OpenResourceFromNtHandle 38u
++#define BC250_HOST_OpenSyncObjectFromNtHandle2 39u
++#define BC250_HOST_CreateHwQueue 40u
++#define BC250_HOST_DestroyHwQueue 41u
++#define BC250_HOST_SubmitCommandToHwQueue 42u
++#define BC250_HOST_SubmitWaitForSyncObjectsToHwQueue 43u
++#define BC250_HOST_SubmitSignalSyncObjectsToHwQueue 44u
++#define BC250_WDDM_CALL(host, name, argument) \
++   ((host)->dispatch ? (host)->dispatch((host)->userdata, BC250_HOST_##name, (void *)(argument)) : WDDM2_DISPATCH(name(argument)))
+ #endif

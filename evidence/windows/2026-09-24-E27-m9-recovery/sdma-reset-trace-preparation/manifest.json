@@ -1,0 +1,14 @@
+[
+  {
+    "file": "sdma-reset-probes.txt",
+    "sha256": "b89430190e16c084f9c2bf099a30cfda20a27fc5707ab83ac25df1cc545cda9d"
+  },
+  {
+    "file": "prepare-sdma-reset-trace.sh",
+    "sha256": "3e9e6eb3d83c546fc8cefa0ae9e79a0845af885a38ec8b4fc3f16d4af37393e6"
+  },
+  {
+    "file": "run-sdma-reset-trace.sh",
+    "sha256": "8f0da37ab2fa8005c8600903dd6946b21a81c45a7830c12586700e826e689131"
+  }
+]

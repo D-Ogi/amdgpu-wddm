@@ -1,0 +1,50 @@
+{
+  "SchemaVersion": 1,
+  "Status": "partial",
+  "CapturedUtc": "2026-09-24T12:00:00Z",
+  "Collector": "synthetic fixture, not hardware evidence",
+  "ToolSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "IcdPath": "C:\\BC250\\fixture\\radv\\radeon_icd.json",
+  "IcdSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "IcdLibraryPath": "C:\\BC250\\fixture\\actual-system\\vulkan_radeon.dll",
+  "IcdLibrarySha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "IcdVerified": true,
+  "LoaderEvidence": "synthetic fixture witness",
+  "KmdVersion": "0.7.136.1",
+  "DeviceCount": 1,
+  "Device": {
+    "Name": "Synthetic BC-250 fixture",
+    "ApiVersion": "1.3.0",
+    "DriverName": "RADV",
+    "DriverInfo": "synthetic Mesa fixture",
+    "DriverVersion": "0.0.1",
+    "DeviceType": "INTEGRATED_GPU"
+  },
+  "InstanceExtensionCount": 12,
+  "DeviceExtensionCount": 123,
+  "LayerCount": 1,
+  "Layers": [
+    "VK_LAYER_SYNTHETIC_fixture"
+  ],
+  "Formats": null,
+  "Features": [
+    {
+      "Name": "timelineSemaphore",
+      "Supported": true
+    },
+    {
+      "Name": "bufferDeviceAddress",
+      "Supported": true
+    },
+    {
+      "Name": "shaderFloat16",
+      "Supported": true
+    },
+    {
+      "Name": "sparseBinding",
+      "Supported": false
+    }
+  ],
+  "DetailsPath": "vulkan-inventory.txt",
+  "Error": "synthetic timeout; system ICD observed, requested override ignored"
+}

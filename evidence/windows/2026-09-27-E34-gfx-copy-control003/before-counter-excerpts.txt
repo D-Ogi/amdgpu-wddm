@@ -1,0 +1,4 @@
+465378   4471.937 wddm summary: objects created/destroyed: dev 54/47 ctx 66/61 proc 27/23 alloc 5191/6998, 33 alive
+465381   4471.937 wddm summary: node 0 hardware: 153451 submitted, 152666 completed, 0 timeouts, 0 refused
+465385   4471.937 wddm summary: node 1 (paging, open): 79022 hardware submitted, 79022 completed, 0 timeouts, 0 refused
+465413   4471.937 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)

@@ -1,0 +1,26 @@
+[
+  {
+    "model": "stories15M",
+    "test": "pp512",
+    "avg_ts": 37162.41764,
+    "stddev_ts": 426.030912
+  },
+  {
+    "model": "stories15M",
+    "test": "tg128",
+    "avg_ts": 474.48888,
+    "stddev_ts": 110.825387
+  },
+  {
+    "model": "tinyllama",
+    "test": "pp512",
+    "avg_ts": 1092.704753,
+    "stddev_ts": 4.157013
+  },
+  {
+    "model": "tinyllama",
+    "test": "tg128",
+    "avg_ts": 113.881983,
+    "stddev_ts": 4.998327
+  }
+]

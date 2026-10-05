@@ -1,0 +1,37 @@
+FUNCTION RVA 14054 ?FillAPIVersions@CCreateDeviceCache@@QEAAXAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@I@Z
+00014054 48895c2408               mov      qword ptr [rsp + 8], rbx
+00014059 4889742410               mov      qword ptr [rsp + 0x10], rsi
+0001405e 4489442418               mov      dword ptr [rsp + 0x18], r8d
+00014063 57                       push     rdi
+00014064 4883ec20                 sub      rsp, 0x20
+00014068 488bda                   mov      rbx, rdx
+0001406b 488d3dd24a1400           lea      rdi, [rip + 0x144ad2]
+00014072 488b12                   mov      rdx, qword ptr [rdx]
+00014075 be34000000               mov      esi, 0x34
+0001407a 48895308                 mov      qword ptr [rbx + 8], rdx
+0001407e 4c8d4f04                 lea      r9, [rdi + 4]
+00014082 483b5310                 cmp      rdx, qword ptr [rbx + 0x10]
+00014086 7412                     je       0x1409a
+00014088 410fb709                 movzx    ecx, word ptr [r9]
+0001408c 8b07                     mov      eax, dword ptr [rdi]
+0001408e 894a04                   mov      dword ptr [rdx + 4], ecx
+00014091 8902                     mov      dword ptr [rdx], eax
+00014093 4883430808               add      qword ptr [rbx + 8], 8
+00014098 eb0b                     jmp      0x140a5 ; ?FillAPIVersions@CCreateDeviceCache@@QEAAXAEAV?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@I@Z+51
+0001409a 4c8bc7                   mov      r8, rdi
+0001409d 488bcb                   mov      rcx, rbx
+000140a0 e85730ffff               call     0x70fc ; ??$_Emplace_reallocate@AEBIAEBG@?$vector@USupportedVersion@@V?$allocator@USupportedVersion@@@std@@@std@@QEAAPEAUSupportedVersion@@QEAU2@AEBIAEBG@Z+0
+000140a5 488b5308                 mov      rdx, qword ptr [rbx + 8]
+000140a9 4883c720                 add      rdi, 0x20
+000140ad 4883ee01                 sub      rsi, 1
+000140b1 75cb                     jne      0x1407e
+000140b3 448a4c2440               mov      r9b, byte ptr [rsp + 0x40]
+000140b8 4c8bc2                   mov      r8, rdx
+000140bb 4c2b03                   sub      r8, qword ptr [rbx]
+000140be 488b0b                   mov      rcx, qword ptr [rbx]
+000140c1 49c1f803                 sar      r8, 3
+000140c5 488b5c2430               mov      rbx, qword ptr [rsp + 0x30]
+000140ca 488b742438               mov      rsi, qword ptr [rsp + 0x38]
+000140cf 4883c420                 add      rsp, 0x20
+000140d3 5f                       pop      rdi
+000140d4 e91b5fffff               jmp      0x9ff4 ; ??$_Sort_unchecked@PEAUSupportedVersion@@U?$greater@USupportedVersion@@@std@@@std@@YAXPEAUSupportedVersion@@0_JU?$greater@USupportedVersion@@@0@@Z+0

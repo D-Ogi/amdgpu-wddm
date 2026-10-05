@@ -1,0 +1,10 @@
+{
+    "restoration_succeeded":  true,
+    "utc":  "2026-09-27T18:17:45.6762209Z",
+    "trial_seconds":  122.26857229999999,
+    "success":  true,
+    "gpu_pid":  7768,
+    "markers":  8,
+    "measured_seconds":  90.2468993,
+    "failure":  null
+}

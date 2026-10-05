@@ -1,0 +1,1 @@
+1fc522: lea rdx, [rip - 0x16ad29]; UserModeDriverName at 91800; (2078840, 'DpiGetAdapterInfo')

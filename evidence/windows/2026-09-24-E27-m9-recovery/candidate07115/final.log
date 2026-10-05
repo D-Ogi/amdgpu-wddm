@@ -1,0 +1,36 @@
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-0012CAE7
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070073 (milestone 7 revision 115)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     36
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio closed, mmio writes off, vram closed, vram writes off, gart closed, psp closed, gfx closed, ih closed
+UnconfirmedStarts = 0
+
+
+EnableMmio           : 0
+EnableMmioWrite      : 0
+EnableVram           : 0
+EnableVramWrite      : 0
+EnableGart           : 0
+EnablePsp            : 0
+EnableGfx            : 0
+EnableIh             : 0
+EnableFullWddm       : 0
+EnableGpuVa          : 0
+EnableGpuSubmit      : 0
+EnablePresentBlit    : 0
+EnableDcnWrite       : 0
+EnablePagingNode     : 0
+EnableVidPnFlip      : 0
+EnableRlcReloadReset : 0
+LastStage            : 61
+UnconfirmedStarts    : 0
+
+
+
+boot=2026-09-24T07:07:39
+final_verified

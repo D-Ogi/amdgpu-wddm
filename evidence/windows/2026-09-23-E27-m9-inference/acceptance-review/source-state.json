@@ -1,0 +1,15 @@
+{
+  "base_revision": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "worktree_sha256": {
+    "driver/kmd/gfx.c": "11a9018173e8ac00cfaa9f380e1cefc93847e29f120358f7ec04eee25b9153f7",
+    "driver/kmd/wddm.c": "029414c068009e76c792870fd4bceb2ddc5e5b454c3e196c73054fea846d262b",
+    "driver/kmd/paging_capture.h": "fff634704a620e026211e5a4ea3dda0470da837b55d4314cfd809315bf98c6e2",
+    "driver/kmd/paging_permutation.c": "4725e902f20d71ac53d094899ed3146caadd6d7bdbf070fe269c8e5135f322e2"
+  },
+  "routes_tcp22": [
+    false,
+    false
+  ],
+  "probe_timeout_seconds_per_route": 3,
+  "hardware_mutations": false
+}

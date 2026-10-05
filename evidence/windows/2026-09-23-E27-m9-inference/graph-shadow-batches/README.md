@@ -1,0 +1,9 @@
+# Graph batches applied to logical table metadata
+
+PagingPtShadowApplyPageMoves consumes the actual planner's normalized identities and one complete batch. It preflights scratch-group completeness through PagingPermutationBatch and every referenced physical identity before changing metadata. SAVE/COPY/RESTORE apply in emitted order. System sources contribute unknown bytes; system or unregistered ordinary destinations do not create table registrations. Caller owns stable captured arrays and separate scratch under exclusive shadow ownership. No allocation or hardware access occurs in this helper.
+
+Eight new fixtures use an eight-page cycle: local/mixed metadata, full/partial byte bands, and budgets3/16. Actual PagingPageGraphPlan and PagingPermutationBatch produce respectively seven independently completed swap batches or one minimal cycle batch. Scratch is overwritten between batches. Final known bits and known values match an independent initial snapshot, including untouched bytes and an unregistered page. Two atomicity checks also confirm an invalid trailing node or incomplete SAVE cannot change a prefix.
+
+Host2672416checks PASS; kernel compile PASS; actual KMD routing16348checks PASS. A generated mutation reverses execution order after valid preflight:61361failures, native exit1. Generated test logging is capped at10failures while all checks run. Production source is not mutated by the control. Full WDK development build passes; manifest records its hash, revision101 unchanged, not deployed.
+
+This composes planner and shadow helpers; it is not yet called by WDDM publication. Remaining integration must reserve scratch, bind the exact accepted GPU packet batch to these metadata operations, and preserve captured physical plans when copies change translation tables across multipass calls. OS cancellation, retirement and device-stop ownership remain required. No claim that local/mixed/table virtual alias handling is complete.

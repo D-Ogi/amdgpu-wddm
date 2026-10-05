@@ -10,6 +10,11 @@ Measurement tools that run on the BC-250 under Windows, and the scripts on the d
 | `triage/` | Debugger-free first look at a kernel minidump: bugcheck, faulting module and offset, modules on the stack |
 | `dxgimodes/` | Read-only probe: the display modes that dxgkrnl (`D3DKMTGetDisplayModeList`) and DXGI (`GetDisplayModeList1`) report for each output and format. No window |
 | `kd/` | Kernel debugger (`kd.exe`) as a background server plus a non-interactive command sender; also opens dump files |
+| `kmtprobe/` | Raw `D3DKMT*` driver of the full WDDM miniport: one allocation at a chosen GPU VA, residency, lock, optional PM4 submission (ADR 0008 stages B and C) |
+| `d3d11mt/` | Multithreaded D3D11 client: deferred contexts, concurrent resource creation, integer-exact checksum equal across vendors, module witness (which UMD a routed application loaded) |
+| `monfence/` | Positive control for a WDDM 2.0 monitored fence written by the GPU itself (RELEASE_MEM to `FenceValueGPUVirtualAddress`): CPU value, CPU-wait wake, GPU-wait release, four threads, and its latency against the kernel `SignalSynchronizationObjectFromGpu` path; `run-lab.ps1` adds the IH VM-fault and vidmm coherence readings |
+| `redirblt-probe/` | The DWM redirected-blt handshake (dwmapi ordinal 100) and `D3DKMTPresent` variants from a non-runtime client, with an ETW decoder for the Present / Blit_Info / token / GDI-surface rows (ADR 0018 Path B) |
+| `cpupower/` | Read-only CPU power probe: the active scheme's processor settings (`powercfg /qh ... SUB_PROCESSOR`) and the processor performance counters over a chosen number of seconds. Writes no setting (facts M786, E53) |
 
 ## Reaching the target
 
@@ -23,7 +28,7 @@ python tools/win/target.py addr                     just the address (exit code 
 python tools/win/target.py wait 600                 block until it answers again after a reboot
 python tools/win/target.py ps script.ps1 [args]     copy a PowerShell script over and run it
 python tools/win/target.py push a.exe b.sys --to C:\BC250\bc250rd
-python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log P:\BC-250\scratch\
+python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log $env:BC250_ROOT\scratch\
 ```
 
 Inline PowerShell through Git Bash gets mangled (`$_`, quotes, backslashes): put anything with punctuation in
@@ -32,7 +37,8 @@ a `.ps1` file and use `ps`. There is no scp on the target, so `push` and `pull` 
 ### Configuration
 
 The addresses and key paths are **not** in this repository. They come from a JSON file outside it, by default
-`P:/BC-250/secrets/client/target.json` (`BC250_TARGET_CONFIG` points elsewhere). Importing `target.py` never
+`<BC250_ROOT>/secrets/client/target.json` (`BC250_TARGET_CONFIG` points elsewhere; `BC250_ROOT` is the
+workspace root, by default the parent directory of this repository). Importing `target.py` never
 reads it; only connecting does, so the tests and anything that just imports the module work without it.
 
 ```json
@@ -49,7 +55,7 @@ reads it; only connecting does, so the tests and anything that just imports the 
 
 `addresses` is tried in order and is the only required field; the rest fall back to the defaults above.
 `identity` and `known_hosts` may be relative, in which case they resolve against the configuration file's own
-directory. Optional: `port` (22), `probe_timeout` (3 s for the port-22 probe), `connect_timeout` (15 s),
+directory. Optional: `port` (22), `probe_timeout` (3 s for the port-22 probe), `address_cache_seconds` (300: a probe result is reused that long from `target-last-address.json` next to the configuration, because OpenSSH 9.8+ penalises connections closed before authentication and locked the operator PC out after ~20 probes a minute; `target.py forget` drops it), `connect_timeout` (15 s),
 `connection_attempts` (3, because the Wi-Fi dongle drops out).
 
 `BC250_TARGET_ADDR` forces one address and skips the probe, for a port forward or a target that is up but

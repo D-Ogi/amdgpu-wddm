@@ -3,7 +3,8 @@
 Milestone M6 research note. Target: run a compute dispatch from a kernel-owned MEC compute
 queue in VMID 0 that writes a known pattern to GART-mapped memory.
 
-Everything below is read-only research. Nothing in `P:\BC-250\bc250-win` was touched.
+Everything below is read-only research. Nothing in `<BC250_ROOT>\bc250-win` was touched.
+(`BC250_ROOT` is the workspace root, by default the parent directory of this repository.)
 
 ## 0. Source provenance
 
@@ -17,7 +18,7 @@ Everything below is read-only research. Nothing in `P:\BC-250\bc250-win` was tou
 | Commit (tag target, `libdrm-2.4.114^{}`) | `b9ca37b3134861048986b75896c0915cbf2e97f9` |
 | Commit date | Thu Nov 3 09:33:36 2022 +0100 |
 | Commit subject | `build: bump version to 2.4.114` |
-| Local path | `P:\BC-250\ref\libdrm` (shallow clone, depth 1, detached HEAD) |
+| Local path | `<BC250_ROOT>\ref\libdrm` (shallow clone, depth 1, detached HEAD) |
 
 Naming note: the team brief referred to `shader_code_nv10.h`. That file does not exist at this
 tag. As of the 2022 refactor the shader binaries live in **`tests/amdgpu/shader_code_gfx10.h`**
@@ -28,7 +29,7 @@ the gfx10 path easy to read in isolation.
 
 ### Linux kernel
 
-`P:\BC-250\ref\linux-src`, mainline v6.18. Note for later sections: this checkout has **no
+`<BC250_ROOT>\ref\linux-src`, mainline v6.18. Note for later sections: this checkout has **no
 `drivers/gpu/drm/amd/amdkfd/`** and **no `mes_v10_1.c`**, and `v10_structs.h` lives under
 `drivers/gpu/drm/amd/include/`, not under `amdgpu/`.
 
@@ -39,7 +40,7 @@ the gfx10 path easy to read in isolation.
 At 2.4.114 the selection is **not** by ASIC family. It is purely by the GFX IP major version
 reported by the kernel.
 
-`P:\BC-250\ref\libdrm\tests\amdgpu\shader_test_util.c:95-116`:
+`<BC250_ROOT>\ref\libdrm\tests\amdgpu\shader_test_util.c:95-116`:
 
 ```c
 r = amdgpu_query_hw_ip_info(device_handle, ip, 0, &info);
@@ -53,10 +54,10 @@ default: printf("SKIP ... unsupported gfx version %d\n", ...); return;
 ```
 
 `hw_ip_version_major` comes straight from the IP block descriptor:
-`P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\amdgpu_kms.c:556`
+`<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\amdgpu\amdgpu_kms.c:556`
 (`result->hw_ip_version_major = adev->ip_blocks[i].version->major;`), and for every gfx10 ASIC
 that is the single `gfx_v10_0_ip_block` with `.major = 10`
-(`P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\gfx_v10_0.c:10241-10247`).
+(`<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\amdgpu\gfx_v10_0.c:10241-10247`).
 
 **Conclusion: Cyan Skillfish (GC 10.1.3) selects `AMDGPU_TEST_GFX_V10`, i.e. the
 `bufferclear_cs_shader_gfx10` path. There is no Navi10-only gate.**
@@ -89,7 +90,7 @@ gfx10. Only the ISA words and a couple of extra registers differ.
 
 ### The one we want
 
-**`P:\BC-250\ref\libdrm\tests\amdgpu\shader_code_gfx10.h:27-31`** -
+**`<BC250_ROOT>\ref\libdrm\tests\amdgpu\shader_code_gfx10.h:27-31`** -
 `static const uint32_t bufferclear_cs_shader_gfx10[]`, **9 dwords (36 bytes)**, 4 dwords per
 source line over lines 28-30 plus one on line 30.
 
@@ -160,7 +161,7 @@ not optional. The kernel's own `nvd.h` does not define this macro, so we have to
 ourselves.
 
 Opcodes used (`shader_test_util.c:12-19`, all matching
-`P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\nvd.h`):
+`<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\amdgpu\nvd.h`):
 
 | Name | Value | Kernel citation |
 | --- | --- | --- |
@@ -181,10 +182,10 @@ SH packet offset = (GC_BASE__INST0_SEG<n> + mmREG) - PACKET3_SET_SH_REG_START
 ```
 
 - `GC_BASE__INST0_SEG0 = 0x00001260`, `GC_BASE__INST0_SEG1 = 0x0000A000`
-  (`P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\include\cyan_skillfish_ip_offset.h:315-316`)
+  (`<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\include\cyan_skillfish_ip_offset.h:315-316`)
 - all `mmCOMPUTE_*` have `BASE_IDX 0`
   (e.g. `mmCOMPUTE_PGM_LO_BASE_IDX 0`, `mmCOMPUTE_DISPATCH_INITIATOR_BASE_IDX 0`, in
-  `P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\include\asic_reg\gc\gc_10_1_0_offset.h`)
+  `<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\include\asic_reg\gc\gc_10_1_0_offset.h`)
 - `mmCP_COHER_START_DELAY = 0x207b` with `BASE_IDX 1` (same header), so
   `0xA000 + 0x207b - 0xc000 = 0x7b`, matching libdrm.
 
@@ -248,7 +249,7 @@ no-op. There is no `CLEAR_STATE` anywhere on this path.
 (`while (i & 7) ptr_cmd[i++] = 0xffff1000;`) emits **nothing** here, because 72 is already a
 multiple of 8. `0xffff1000` is a type-3 NOP with COUNT `0x3FFF`, the same value the kernel uses as
 `gfx_v10_0_ring_funcs_compute.nop`
-(`P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\gfx_v10_0.c:9890`).
+(`<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\amdgpu\gfx_v10_0.c:9890`).
 
 ### 3.4 Where each address and constant goes
 
@@ -368,7 +369,7 @@ wrong, and leaves only the queue and the dispatch itself.
 
 - A kernel ring IB with no `amdgpu_vm` runs in **VMID 0**:
   `AMDGPU_JOB_GET_VMID(job)` is `((job) ? (job)->vmid : 0)`
-  (`P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\amdgpu_job.h:42`), and
+  (`<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\amdgpu\amdgpu_job.h:42`), and
   `amdgpu_ib.c:139` reads `int vmid = AMDGPU_JOB_GET_VMID(job);` with `job == NULL` on the ring
   test path. `amdgpu_ib.c:221-227` skips `amdgpu_vm_flush()` entirely when `job == NULL`.
 - The KIQ `MAP_QUEUES` packet hardcodes `VMID(0)` for compute queues:
@@ -376,7 +377,7 @@ wrong, and leaves only the queue and the dispatch itself.
   `cp_mqd_control` VMID to 0 (`gfx_v10_0.c:6961-6963`) and `mqd->cp_hqd_vmid = 0`
   (`gfx_v10_0.c:7001`). **So a KIQ-mapped kernel compute queue is a VMID 0 queue by construction.**
 - VMID 0 = the GART aperture. `gfxhub_v2_0_init_gart_aperture_regs()`,
-  `P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\amdgpu\gfxhub_v2_0.c:134-149`, programs GCVM
+  `<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\amdgpu\gfxhub_v2_0.c:134-149`, programs GCVM
   context 0 from `adev->gmc.gart_start` / `gart_end` directly, and
   `gfxhub_v2_0_enable_system_domain()` (`:254-264`) gives context 0
   **`PAGE_TABLE_DEPTH = 0`**, i.e. a flat single-level GART page table. Contexts 1..15 get
@@ -437,7 +438,7 @@ So the command stream is responsible for **all** of:
 `COMPUTE_SHADER_CHKSUM`, and `COMPUTE_DISPATCH_INITIATOR` (which is the last dword of
 `DISPATCH_DIRECT`, not a separate `SET_SH_REG`). Which is exactly what the libdrm sequence does.
 
-MQD field names, `P:\BC-250\ref\linux-src\drivers\gpu\drm\amd\include\v10_structs.h`,
+MQD field names, `<BC250_ROOT>\ref\linux-src\drivers\gpu\drm\amd\include\v10_structs.h`,
 `struct v10_compute_mqd` starts at `:675`:
 
 | Register | MQD field | Line |
@@ -581,7 +582,7 @@ Practical attribution, assuming we copy the shader words and the register/packet
 1. **The shader binary is Navi10-compiled and we cannot re-verify the ISA encoding from any
    source in `ref/`.** The decode in section 2 is my own bit-field arithmetic against the GFX10.1
    encodings, cross-checked against the structurally identical gfx9 shader. The mesa checkout at
-   `P:\BC-250\ref\mesa` does **not** contain the generated `sid.h` register tables or
+   `<BC250_ROOT>\ref\mesa` does **not** contain the generated `sid.h` register tables or
    `amdgfxregs.h`, so `V_008F0C_*` and the `IMG_FORMAT_*` enum could not be cited from a file.
    Risk: if `FORMAT = 0x4B` is not 32_32_32_32 UINT on 10.1.3, the `BUFFER_STORE_FORMAT_XYZW`
    writes the wrong width or nothing.

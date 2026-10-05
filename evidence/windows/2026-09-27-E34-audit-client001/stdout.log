@@ -1,0 +1,12 @@
+checkpoint_ack marker=1 tick=22125406
+checkpoint_ack marker=2 tick=22125937
+checkpoint_ack marker=3 tick=22125953
+pixels expected=ff00ff00 bad=0 total=76800
+checkpoint_ack marker=4 tick=22125968
+checkpoint_ack marker=5 tick=22125968
+deliberate_cpu_copy frames=12 bytes=3686400
+checkpoint_ack marker=6 tick=22126390
+checkpoint_ack marker=7 tick=22126390
+pixels expected=ff00ffff bad=0 total=76800
+checkpoint_ack marker=8 tick=22126390
+PASS GPU clears, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints

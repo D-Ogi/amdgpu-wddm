@@ -1,0 +1,151 @@
+diff --git a/driver/kmd/gfx_blt.c b/driver/kmd/gfx_blt.c
+index 68bc542..199798f 100644
+--- a/driver/kmd/gfx_blt.c
++++ b/driver/kmd/gfx_blt.c
+@@ -164,3 +164,9 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
+     *written=capacity;
+     return result;
+ }
++
++void Bc250GfxPresentInvalidate(void* record, unsigned int capacity)
++{
++    unsigned char* p=(unsigned char*)record;
++    if (p && capacity>=4) p[0]=p[1]=p[2]=p[3]=0;
++}
+diff --git a/driver/kmd/gfx_blt.h b/driver/kmd/gfx_blt.h
+index 2d264c3..021ad91 100644
+--- a/driver/kmd/gfx_blt.h
++++ b/driver/kmd/gfx_blt.h
+@@ -57,3 +57,7 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
+     unsigned long long SourceBase, unsigned long long DestinationBase,
+     unsigned int Offset, unsigned int* Next, unsigned int* Buffer,
+     unsigned int CapacityDwords, unsigned int* Written);
++
++/* Called by the Present producer on every new call, never by submit/re-submit.
++ * Clear recognition before any early return or alternate command path. */
++void Bc250GfxPresentInvalidate(void* Record, unsigned int Capacity);
+diff --git a/driver/kmd/test/gfx_blt_test.c b/driver/kmd/test/gfx_blt_test.c
+index 4c3c658..82e3a0f 100644
+--- a/driver/kmd/test/gfx_blt_test.c
++++ b/driver/kmd/test/gfx_blt_test.c
+@@ -203,6 +203,17 @@ int main(void)
+         CHECK(!Bc250GfxPresentMatches(record,24,sourceBase+4,64));
+         CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,32));
+         memcpy(original,record,sizeof(record));
++        Bc250GfxPresentInvalidate(NULL,24);
++        for(i=0;i<4;i++) {
++            Bc250GfxPresentInvalidate(record,i);
++            CHECK(!memcmp(record,original,sizeof(record)));
++        }
++        Bc250GfxPresentInvalidate(record,24);
++        CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,64));
++        CHECK(!memcmp(record+4,original+4,sizeof(record)-4));
++        CHECK(Bc250GfxPresentRecord(record,24,sourceBase,64));
++        CHECK(Bc250GfxPresentMatches(record,24,sourceBase,64));
++        CHECK(Bc250GfxPresentMatches(record,24,sourceBase,64)); /* resubmit does not consume */
+         for(i=0;i<24;i++){
+             record[i]^=1;CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,64));
+             memcpy(record,original,sizeof(record));
+diff --git a/driver/kmd/wddm.c b/driver/kmd/wddm.c
+index 15f216e..f5994c1 100644
+--- a/driver/kmd/wddm.c
++++ b/driver/kmd/wddm.c
+@@ -609,6 +609,16 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
+         // it would race the drain and free it twice. The removal and the decision are one critical section.
+         KeAcquireSpinLock(&wddm->Lock, &irql);
+         if (wddm->Stopping) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
++        if (Object->Magic==BC250_WDDM_MAGIC_ALLOCATION) {
++            LIST_ENTRY* entry;
++            // Invalidate all open snapshots before this pool address can be
++            // reused by a different allocation with identical geometry.
++            for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
++                BC250_WDDM_OBJECT* opened=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
++                if (opened->Magic==BC250_WDDM_MAGIC_OPENED && opened->BackingAllocation==Object)
++                    opened->BackingAllocation=NULL;
++            }
++        }
+         RemoveEntryList(&Object->Link);
+         wddm->ObjectCount--;
+         KeReleaseSpinLock(&wddm->Lock, irql);
+@@ -2447,7 +2457,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
+     // run 003): dxgkrnl had nowhere to put the two surfaces of a Blt, and a driver that cannot name the source
+     // cannot show it. Still no patch-location list: with virtual addressing there is nothing to patch.
+     pCreateContext->ContextInfo.AllocationListSize =
+-        (!umd || parentWddm->GpuPresentGate) ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
++        !umd ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
+     object->AllocationListSize = pCreateContext->ContextInfo.AllocationListSize;
+     // Review 14: the adapter declares GpuMmu, so no context should come without virtual addressing. If one does, it
+     // has a list, no patch list and no Patch DDI behind it - say so here rather than leave it to a 0x113 later.
+@@ -4244,7 +4254,7 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
+         pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(ULONG) &&
+         *(const ULONG*)pSubmitCommand->pDmaBufferPrivateData == BC250_GFX_PRESENT_MAGIC)
+     {
+-        if (wddm == NULL || !wddm->GpuPresentGate || context == NULL ||
++        if (wddm == NULL || !wddm->GpuPresentGate || context == NULL || context->UmdContext ||
+             node != BC250_WDDM_NODE_3D || context->RootPhysical == 0 ||
+             pSubmitCommand->DmaBufferUmdPrivateDataSize != 0 || KeGetCurrentIrql() > APC_LEVEL ||
+             !Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
+@@ -4266,8 +4276,10 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
+     }
+ 
+     // Only driver-built, non-UMD present packets enter the CPU presentation path.
+-    // The scheduler has now selected this context's root and made its allocations
+-    // resident. Complete the fence only after all copied rows are visible.
++    // The scheduler has selected this context's root. Residency is owned by the
++    // device residency list, not the Present allocation list. CDD/system callers
++    // must retain both surfaces there through completion. Complete the fence only
++    // after all copied rows are visible.
+     if (context != NULL && !context->UmdContext && pSubmitCommand->Flags.Present &&
+         pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
+         pSubmitCommand->pDmaBufferPrivateData != NULL &&
+@@ -4904,7 +4916,10 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
+     UINT i,next=Present->MultipassOffset,written=0;
+     BC250_GFX_BLIT_RESULT result;
+     NTSTATUS status=STATUS_INVALID_PARAMETER;
+-    if (Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
++    // BC2C UMD admission is withheld until source AND destination residency on
++    // that exact submitting device is established. ACQUIRE_MEM is not a wait
++    // for another queue, and an allocation-list entry does not confer residency.
++    if (Context->UmdContext || Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
+         !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
+         (Present->SubRectCnt && !Present->pDstSubRects)) return status;
+     if (!Present->pDmaBuffer || ((ULONG_PTR)Present->pDmaBuffer&3u) ||
+@@ -4968,6 +4983,11 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
+ {
+     BC250_WDDM_OBJECT* context = WddmObject(hContext, BC250_WDDM_MAGIC_CONTEXT);
+ 
++    // A recycled OS private buffer may still contain a previous BGP1. Clear at
++    // producer entry, including early-return/non-Blt paths. Do not clear during
++    // submission: a legal scheduler resubmission must retain the same record.
++    Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
++
+     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
+     // software packet below; its pixels are copied only at SubmitCommandVirtual.
+     // Colour fill remains unimplemented in this diagnostic path.
+diff --git a/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md b/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md
+index 2325ddb..c6ef74e 100644
+--- a/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md
++++ b/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md
+@@ -24,8 +24,9 @@ More becomes STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER. An empty list intersection
+ produces an acquire plus NOP IB with ordinary hardware completion. Small or unaligned DMA
+ capacity is returned as insufficient without publishing a record.
+ 
+-With the gate enabled, UMD contexts request a Present allocation list as well as
+-the existing BC2S private capacity. No interop capability is advertised. Runtime
++BC2C UMD contexts are rejected by both GPU Present producer and consumer until
++source and destination residency on their exact submitting device is established.
++Their allocation-list sizing remains unchanged. No interop capability is advertised. Runtime
+ allocation admission, authoritative GetHandleData identity for CDD/shared opens,
+ CPU/GPU producer visibility, lifetime and scheduling across contexts, multipass
+ callbacks, private-data delivery, and the exact signed build still require lab
+@@ -46,3 +47,10 @@ host-tested with independent pixel decoding at seven aligned capacities.
+ Cache invalidation does not establish producer completion or residency: WDDM2
+ Present allocation lists do not make allocations resident. Exact source and
+ destination residency on the submitting device remain an admission obligation.
++
++At each Present callback entry the recognition word is cleared before early
++returns or alternate paths can reuse a stale BGP1. Submit never clears it, so
++scheduler resubmission retains the record. DestroyAllocation clears backing
++snapshots in all opened objects under the adapter list lock before freeing the
++allocation. These measures prevent stale recognition and pool-address reuse;
++they do not establish residency, OS handle resolution or DDI lifetime guarantees.

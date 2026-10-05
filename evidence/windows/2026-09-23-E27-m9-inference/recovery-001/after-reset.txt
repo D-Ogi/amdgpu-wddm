@@ -1,0 +1,38 @@
+time 2026-09-23T02:09:18
+boot 2026-09-23T01:57:26
+
+
+EnableFullWddm    : 0
+EnableGpuSubmit   : 1
+EnableGart        : 1
+EnablePsp         : 1
+EnableGfx         : 1
+EnableIh          : 1
+UnconfirmedStarts : 0
+LastStage         : 61
+
+
+
+
+Name            Length LastWriteTime       
+----            ------ -------------       
+gate.txt             0 9/23/2026 1:52:36 AM
+temperature.txt     39 9/23/2026 1:52:36 AM
+
+
+FILE gate.txt
+boot     2026-09-23T00:53:51
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+driver   0.7.56.1   (oem65.inf)
+umd      UserModeDriverName bc250umd.dll | bc250umd.dll | bc250umd.dll
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+keeplog  KeepLog 1  KeepStatus 0x00000000  files 151
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 1  EnablePsp 1  EnableGfx 1  EnableIh 1
+gates    EnableDcnWrite 0  EnableVidPnFlip 0
+video    BC-250 GPU (bc250kmd, display-only, lab build) | status OK | availability 3 | mode 1920 x 1200 x 4294967296 colors | ram 0 | dll bc250umd.dll,bc250umd.dll,bc250umd.dll
+events   Display 4101 (TDR)     1
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+FILE temperature.txt
+01:52:36 Tctl 66.2 C (raw 735B0FEF)
+

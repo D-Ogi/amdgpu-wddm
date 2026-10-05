@@ -1,0 +1,33 @@
+--- a/src/gallium/frontends/d3d10umd/Debug.cpp
++++ b/src/gallium/frontends/d3d10umd/Debug.cpp
+@@ -26,6 +26,18 @@
+ void
+ DebugPrintf(const char *format, ...)
+ {
++    // Per-entrypoint disk I/O and OutputDebugString exceptions can dominate
++    // CPU composition. Full tracing is explicit; errors and sampled frame
++    // timings remain available without enabling it. Read once per process.
++    static const bool verbose = []() {
++       char value[8] = {};
++       DWORD n = GetEnvironmentVariableA("BC250_UMD_VERBOSE", value, sizeof value);
++       return n == 1 && value[0] == '1';
++    }();
++    const bool retained = strstr(format, "BC250 SetError") ||
++       strstr(format, "BC250 Renderer") || strstr(format, "BC250 Perf") ||
++       strstr(format, "Assertion") || strstr(format, "0x%08lX");
++    if (!verbose && !retained) return;
+     char buf[4096];
+ 
+     va_list ap;
+@@ -33,9 +45,9 @@
+     vsnprintf(buf, sizeof buf, format, ap);
+     va_end(ap);
+ 
+-    OutputDebugStringA(buf);
++    if (IsDebuggerPresent()) OutputDebugStringA(buf);
+     static volatile LONG lines = 0;
+-    if (InterlockedIncrement(&lines) <= 10000 || strstr(buf, "BC250 SetError") || strstr(buf, "BC250 Perf")) {
++    if (InterlockedIncrement(&lines) <= 10000 || retained) {
+        char path[MAX_PATH];
+        snprintf(path, sizeof(path), "C:\\BC250\\e26\\umdlogs\\mesa-%lu.txt", GetCurrentProcessId());
+        HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,

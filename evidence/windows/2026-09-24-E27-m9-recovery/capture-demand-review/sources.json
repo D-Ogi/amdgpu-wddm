@@ -1,0 +1,30 @@
+[
+  {
+    "path": "bc250-win\\driver\\kmd\\wddm.c",
+    "sha256": "1bcd4bd5077ffd3b582703e6c923ecaddead20b6dc2cecbffee98a76f4ff4b05"
+  },
+  {
+    "path": "bc250-win\\driver\\kmd\\gfx.c",
+    "sha256": "f070a2b8f6f823f2cf8a3963d06be2f398bb05bd50fc2083a3140c9ae75825b7"
+  },
+  {
+    "path": "bc250-win\\driver\\kmd\\paging_capture.c",
+    "sha256": "a0bc1afd7db76f7e47d36d79dea85878f6ccbb8dfd60ac3991819573ea7118bd"
+  },
+  {
+    "path": "bc250-win\\driver\\kmd\\vidmm.c",
+    "sha256": "08a6d0b5de84657d1eb8728510311fb986696feb73bf963d9972b2cb5c3c52eb"
+  },
+  {
+    "path": "ref\\windows-driver-docs-ddi\\wdk-ddi-src\\content\\d3dkmddi\\nc-d3dkmddi-dxgkddi_buildpagingbuffer.md",
+    "sha256": "bf75e020620aa0d7cf2d4bd27495565c01075e42b8323f4e2c4a65c14e8b1602"
+  },
+  {
+    "path": "ref\\windows-driver-docs-ddi\\wdk-ddi-src\\content\\d3dkmddi\\ns-d3dkmddi-_dxgk_buildpagingbuffer_transfervirtual.md",
+    "sha256": "f8ef595450dab9e56436a9d0a66a6b0a6e10ea00de10c399aa6bdb031de6032b"
+  },
+  {
+    "path": "ref\\windows-driver-docs-ddi\\wdk-ddi-src\\content\\d3dkmddi\\ns-d3dkmddi-_dxgk_querysegmentout.md",
+    "sha256": "e0901b9bbaa385bd38704d0062b775342826e4b92266ba40717ae722b330bbfe"
+  }
+]

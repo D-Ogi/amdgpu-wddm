@@ -1,0 +1,2 @@
+shader-coherency-probe.c
+usage: shader-coherency-probe <shader-dir> [--stale-input-control] [--memory-type N] [--evict-input] [--alias-intermediate] [--disjoint-alias-control] [--evict-alias]

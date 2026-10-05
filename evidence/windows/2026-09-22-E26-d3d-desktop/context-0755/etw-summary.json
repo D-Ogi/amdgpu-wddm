@@ -1,0 +1,21 @@
+{
+  "source": "context-etw.etl via tracerpt, event494",
+  "empty_broadcast_context_count": 0,
+  "counts": {
+    "Can't reference adapter by luid (0x%I64x::0x%I64x).": 2,
+    "The selected adapter is display only adapter": 1,
+    "Adapter StopDevice has completed with status %1": 1,
+    "Driver returned an invalid NTSTATUS code: 0x%I64x": 4,
+    "Failed to get preferred mode from monitor EDID or DisplayID on adapter 0x%I64x, target 0x%I64x (status = 0x%I64x)": 4,
+    "Cannot find the caller specified session adapter 0x%I64x%08I64x, returning 0x%I64x.": 6,
+    "Adapter AddDevice has completed with status %1": 1,
+    "Failed (0x%I64x) to get display config buffer sizes when looking for internal target/priority. Trying with %d": 1,
+    "Unable to get copy of most recent topology. (NtStatus = 0x%I64x, i_AdapterLuid = 0x%I64x%08I64x, i_TargetId = 0x%I64x, i_MonitorEvent = 0x%I64x)": 1,
+    "GPU virtualization initialization has completed with status %1": 1,
+    "Adapter StartDevice has completed with status %1": 1,
+    "WDDM2 driver calls WDDM1.x DDI!": 966,
+    "Cannot find the file version resource in DxgkpGetFileVersion (ntStatus = %I64d).": 10,
+    "Failed to get pairing adapters from adapter 0x%I64x VidPn source 0x%I64x!": 1,
+    "Failed to find DXGPROCESS": 7
+  }
+}

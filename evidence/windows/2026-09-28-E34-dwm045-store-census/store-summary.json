@@ -1,0 +1,422 @@
+{
+  "boundaries": {
+    "render-start": 5588,
+    "dynamic-2-capture-start": 45816,
+    "dynamic-2-capture-end": 49485,
+    "dynamic-8-capture-start": 90827,
+    "dynamic-8-capture-end": 94281,
+    "render-end": 121594,
+    "final-capture-start": 121832,
+    "final-capture-end": 122859
+  },
+  "lifetime": {
+    "pending_store_ids": [],
+    "store_checkpoint_counters": true,
+    "store_totals_scope": "whole parsed prefix, including records before start marker",
+    "interval_store_span_bytes": 1152128,
+    "interval_boundary_store_ids": [],
+    "completed_store_span_bytes": 1215156,
+    "events": 122859,
+    "requests": 18016,
+    "successful": 18016,
+    "failed": 0,
+    "ended": 18008,
+    "live_map_ids": [
+      5,
+      8,
+      11,
+      14,
+      18,
+      1286,
+      1565,
+      1850
+    ],
+    "object_replacements": 203,
+    "staging_successes": 2544,
+    "sequenced": true,
+    "checkpoint_count": 113,
+    "last_checkpoint": {
+      "event": "checkpoint",
+      "seq": 122859,
+      "time_ns": 9205691740000,
+      "marker": 8,
+      "requests": 18016,
+      "successful": 18016,
+      "failed": 0,
+      "ended": 18008,
+      "pending": 0,
+      "live": 8,
+      "stores_begun": 34353,
+      "stores_ended": 34353
+    },
+    "interval_delta": {
+      "requests": 17347,
+      "successful": 17347,
+      "failed": 0,
+      "ended": 17347
+    },
+    "scope": "sequenced map and instrumented writer spans; uninstrumented writers and application stores through DDI maps require separate evidence"
+  },
+  "render_stores": 32166,
+  "render_store_spans": {
+    "zink_descriptors_update/get_descriptor": {
+      "count": 16425,
+      "bytes": 262800,
+      "sizes": {
+        "16": 16425
+      }
+    },
+    "zink_descriptors_update_masked_buffer/get_descriptor": {
+      "count": 15711,
+      "bytes": 874496,
+      "sizes": {
+        "16": 7922,
+        "96": 7789
+      }
+    },
+    "update_separable/get_descriptor": {
+      "count": 30,
+      "bytes": 1200,
+      "sizes": {
+        "16": 21,
+        "96": 9
+      }
+    }
+  },
+  "render_image_write_count": 2230,
+  "live_buffers": [
+    {
+      "map": 5,
+      "resource_id": 3,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "zink_descriptors_update": 2820,
+        "zink_descriptors_update_masked_buffer": 2691,
+        "update_separable": 2
+      },
+      "span_bytes": 194368,
+      "mapped_resource_writers": {
+        "zink_descriptors_update": 2820,
+        "zink_descriptors_update_masked_buffer": 2691,
+        "update_separable": 2
+      },
+      "mapped_resource_span_bytes": 194368
+    },
+    {
+      "map": 8,
+      "resource_id": 6,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "zink_descriptors_update": 2435,
+        "zink_descriptors_update_masked_buffer": 2317
+      },
+      "span_bytes": 167792,
+      "mapped_resource_writers": {
+        "zink_descriptors_update": 2435,
+        "zink_descriptors_update_masked_buffer": 2317
+      },
+      "mapped_resource_span_bytes": 167792
+    },
+    {
+      "map": 11,
+      "resource_id": 9,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "update_separable": 52,
+        "zink_descriptors_update": 2505,
+        "zink_descriptors_update_masked_buffer": 2381
+      },
+      "span_bytes": 174448,
+      "mapped_resource_writers": {
+        "update_separable": 52,
+        "zink_descriptors_update": 2505,
+        "zink_descriptors_update_masked_buffer": 2381
+      },
+      "mapped_resource_span_bytes": 174448
+    },
+    {
+      "map": 14,
+      "resource_id": 12,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "zink_descriptors_update": 2545,
+        "zink_descriptors_update_masked_buffer": 2445,
+        "update_separable": 6
+      },
+      "span_bytes": 176976,
+      "mapped_resource_writers": {
+        "zink_descriptors_update": 2545,
+        "zink_descriptors_update_masked_buffer": 2445,
+        "update_separable": 6
+      },
+      "mapped_resource_span_bytes": 176976
+    },
+    {
+      "map": 18,
+      "resource_id": 16,
+      "footprint": [
+        1048576,
+        1,
+        1
+      ],
+      "bind": "8070",
+      "writers": {},
+      "span_bytes": 0,
+      "mapped_resource_writers": {
+        "zink_buffer_subdata": 2
+      },
+      "mapped_resource_span_bytes": 20
+    },
+    {
+      "map": 1286,
+      "resource_id": 1284,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "zink_descriptors_update": 2335,
+        "zink_descriptors_update_masked_buffer": 2206
+      },
+      "span_bytes": 160096,
+      "mapped_resource_writers": {
+        "zink_descriptors_update": 2335,
+        "zink_descriptors_update_masked_buffer": 2206
+      },
+      "mapped_resource_span_bytes": 160096
+    },
+    {
+      "map": 1565,
+      "resource_id": 1563,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "zink_descriptors_update": 2385,
+        "zink_descriptors_update_masked_buffer": 2324
+      },
+      "span_bytes": 167504,
+      "mapped_resource_writers": {
+        "zink_descriptors_update": 2385,
+        "zink_descriptors_update_masked_buffer": 2324
+      },
+      "mapped_resource_span_bytes": 167504
+    },
+    {
+      "map": 1850,
+      "resource_id": 1848,
+      "footprint": [
+        24000,
+        1,
+        1
+      ],
+      "bind": "8008000",
+      "writers": {
+        "zink_descriptors_update": 2490,
+        "zink_descriptors_update_masked_buffer": 2412
+      },
+      "span_bytes": 173952,
+      "mapped_resource_writers": {
+        "zink_descriptors_update": 2490,
+        "zink_descriptors_update_masked_buffer": 2412
+      },
+      "mapped_resource_span_bytes": 173952
+    }
+  ],
+  "render_images": {
+    "matched": 2230,
+    "origins": {
+      "update_subresource": 2230
+    },
+    "copies": 2230,
+    "boxes": {
+      "[320, 240, 1]": 866,
+      "[160, 120, 1]": 866,
+      "[184, 101, 1]": 1,
+      "[27, 14, 1]": 36,
+      "[216, 148, 1]": 6,
+      "[200, 109, 1]": 1,
+      "[1, 1, 1]": 1,
+      "[2048, 1, 1]": 1,
+      "[920, 955, 1]": 84,
+      "[45, 14, 1]": 34,
+      "[232, 156, 1]": 6,
+      "[67, 14, 1]": 35,
+      "[248, 164, 1]": 6,
+      "[80, 14, 1]": 35,
+      "[264, 172, 1]": 6,
+      "[21, 14, 1]": 35,
+      "[200, 180, 1]": 6,
+      "[216, 188, 1]": 6,
+      "[232, 140, 1]": 5,
+      "[248, 148, 1]": 5,
+      "[264, 156, 1]": 5,
+      "[200, 164, 1]": 5,
+      "[216, 172, 1]": 5,
+      "[232, 180, 1]": 4,
+      "[248, 188, 1]": 5,
+      "[264, 140, 1]": 5,
+      "[200, 148, 1]": 5,
+      "[216, 156, 1]": 5,
+      "[232, 164, 1]": 5,
+      "[248, 172, 1]": 5,
+      "[264, 180, 1]": 5,
+      "[200, 188, 1]": 5,
+      "[216, 140, 1]": 5,
+      "[200, 101, 1]": 1,
+      "[232, 148, 1]": 5,
+      "[248, 156, 1]": 4,
+      "[264, 164, 1]": 4,
+      "[200, 172, 1]": 4,
+      "[216, 180, 1]": 4,
+      "[232, 188, 1]": 4,
+      "[248, 140, 1]": 5,
+      "[264, 148, 1]": 5,
+      "[200, 156, 1]": 5,
+      "[216, 164, 1]": 5,
+      "[232, 172, 1]": 5,
+      "[248, 180, 1]": 5,
+      "[264, 188, 1]": 5,
+      "[200, 140, 1]": 5,
+      "[200, 149, 1]": 1,
+      "[184, 109, 1]": 1,
+      "[460, 1123, 1]": 55,
+      "[216, 109, 1]": 1,
+      "[248, 117, 1]": 1
+    }
+  },
+  "acks": [
+    {
+      "marker": 1,
+      "label": "render-start",
+      "ack_ms": 58.6006
+    },
+    {
+      "marker": 2,
+      "label": "dynamic-2-capture-start",
+      "ack_ms": 118.8006
+    },
+    {
+      "marker": 3,
+      "label": "dynamic-2-capture-end",
+      "ack_ms": 62.939
+    },
+    {
+      "marker": 4,
+      "label": "dynamic-8-capture-start",
+      "ack_ms": 56.3124
+    },
+    {
+      "marker": 5,
+      "label": "dynamic-8-capture-end",
+      "ack_ms": 86.7432
+    },
+    {
+      "marker": 6,
+      "label": "render-end",
+      "ack_ms": 33.0216
+    },
+    {
+      "marker": 7,
+      "label": "final-capture-start",
+      "ack_ms": 114.53
+    },
+    {
+      "marker": 8,
+      "label": "final-capture-end",
+      "ack_ms": 25.2647
+    }
+  ],
+  "render_buffer_accessible_footprints": [
+    {
+      "origin": "resource_map",
+      "box": "[240012, 1, 1]",
+      "bind": "8010",
+      "maps": 31
+    },
+    {
+      "origin": "resource_map",
+      "box": "[16000, 1, 1]",
+      "bind": "8020",
+      "maps": 6876
+    },
+    {
+      "origin": "resource_map",
+      "box": "[160000, 1, 1]",
+      "bind": "8010",
+      "maps": 6876
+    },
+    {
+      "origin": "update_subresource",
+      "box": "[4000, 1, 1]",
+      "bind": "8040",
+      "maps": 31
+    },
+    {
+      "origin": "update_subresource",
+      "box": "[192, 1, 1]",
+      "bind": "8040",
+      "maps": 76
+    },
+    {
+      "origin": "resource_map",
+      "box": "[32, 1, 1]",
+      "bind": "8040",
+      "maps": 2
+    },
+    {
+      "origin": "resource_map",
+      "box": "[2080, 1, 1]",
+      "bind": "8040",
+      "maps": 4
+    },
+    {
+      "origin": "resource_map",
+      "box": "[128, 1, 1]",
+      "bind": "8040",
+      "maps": 1
+    },
+    {
+      "origin": "update_subresource",
+      "box": "[48, 1, 1]",
+      "bind": "8040",
+      "maps": 6
+    },
+    {
+      "origin": "resource_map",
+      "box": "[96, 1, 1]",
+      "bind": "8040",
+      "maps": 1
+    }
+  ],
+  "render_image_binds": {
+    "8": 2228,
+    "a": 2
+  },
+  "scope": "Measured instrumented spans and map footprints, not an exhaustive census of CPU memory traffic. Render store window includes diagnostic capture subintervals; render image/map categories exclude those subintervals."
+}

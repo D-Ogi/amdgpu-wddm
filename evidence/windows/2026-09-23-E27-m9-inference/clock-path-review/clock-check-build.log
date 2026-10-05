@@ -1,0 +1,10 @@
+driver: compile
+driver: link
+cli: compile and link
+driver: sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bc250rd-clock-check\bc250rd.sys
+      792  bc250-lab-test.cer
+   180224  bc250rd_cli.exe
+    43408  bc250rd.sys
+   185288  reglist.txt

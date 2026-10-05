@@ -1,4 +1,4 @@
-E24 run 001, 2026-09-22 09:41:54 - 09:48: bc250kmd 0.7.24 (85fbf5c) on unit A, owner at the monitor.
+E24 run 001, 2026-09-22 09:41:54 - 09:48: bc250kmd 0.7.24 (f14c11c) on unit A, owner at the monitor.
 run-001-script.sh is the script as run. run-001-console.txt is the console up to the point where it stopped
 producing output; the run was aborted from this side after the target stopped answering.
 

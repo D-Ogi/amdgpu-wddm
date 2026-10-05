@@ -1,0 +1,15 @@
+{
+  "linux_revision": "7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+  "microsoft_docs_revision": "110f60eaf2ac5836e644d320c1e92c1011f2af5e",
+  "sha256": {
+    "ref/linux-src/drivers/gpu/drm/amd/display/dc/optc/dcn10/dcn10_optc.c": "07773cf3b3cf54ce97c1e965d21832f1daa88b48d262083ecc85ed308243acd3",
+    "ref/linux-src/drivers/gpu/drm/amd/display/dc/optc/dcn20/dcn20_optc.c": "4a8c069904aaa4a88742e09a70234c91c838f2aa3f2cad11a3cd0fc038331685",
+    "ref/linux-src/drivers/gpu/drm/amd/display/dc/optc/dcn201/dcn201_optc.c": "f49409860f3d52b1c853be4cc00a9a1bb90d64d3cece2f4dbb797f0cf4072ef8",
+    "ref/linux-src/drivers/gpu/drm/amd/display/dc/hubp/dcn20/dcn20_hubp.c": "6b7871c2739d31dc2cab761e5e2fd20fb39f2f4e6b6b28d696d4f80e7abc4507",
+    "ref/linux-src/drivers/gpu/drm/amd/display/dc/core/dc.c": "732f1b4df9c6ddef01499ee5f25c06213297e5d1d7c5145099e842a047edda49",
+    "ref/linux-src/drivers/gpu/drm/amd/display/dc/core/dc_hw_sequencer.c": "ad4944e466cd86f2548d302974a68c18a9a8d7b4007ac10867f80afd4e4e81dc",
+    "ref/windows-driver-docs/windows-driver-docs-pr/kernel/avoid-polling-devices.md": "98221d77e97f1b25424c4093eef366d46271391b844eafcd6800b0577eebc8fc",
+    "bc250-win/third_party/linux-amdgpu/dcn_2_0_1_sh_mask.h": "2541d91db2cbd5402e072757811a8269393c71a514611c95fa59813cf2dc2ddc",
+    "bc250-win/driver/kmd/regs.generated.h": "0462deb252852f57a2017601fa5a952a7c490f3135a9eb837bb9cc75cfe16554"
+  }
+}

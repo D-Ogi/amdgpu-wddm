@@ -1,0 +1,73 @@
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+icd_hash=4E05F1DF627CD6D9D64FE7F1ADDA29673D5B3B96B3750A08034A7EE88460C9EA
+14:59:44 Tctl 71.9 C (raw 78FB0FEF)
+14:59:46 Tctl 71.6 C (raw 78BB0FEF)
+14:59:49 Tctl 71.4 C (raw 787B0FEF)
+14:59:51 Tctl 71.2 C (raw 785B0FEF)
+14:59:54 Tctl 71.1 C (raw 783B0FEF)
+14:59:56 Tctl 71.1 C (raw 783B0FEF)
+14:59:59 Tctl 71.1 C (raw 783B0FEF)
+15:00:02 Tctl 71.1 C (raw 783B0FEF)
+15:00:04 Tctl 71.2 C (raw 785B0FEF)
+15:00:07 Tctl 71.2 C (raw 785B0FEF)
+15:00:10 Tctl 71.5 C (raw 789B0FEF)
+15:00:13 Tctl 71.5 C (raw 789B0FEF)
+15:00:15 Tctl 71.5 C (raw 789B0FEF)
+15:00:18 Tctl 71.4 C (raw 787B0FEF)
+15:00:21 Tctl 71.5 C (raw 789B0FEF)
+15:00:23 Tctl 71.4 C (raw 787B0FEF)
+15:00:26 Tctl 71.2 C (raw 785B0FEF)
+15:00:28 Tctl 71.2 C (raw 785B0FEF)
+15:00:31 Tctl 71.1 C (raw 783B0FEF)
+15:00:34 Tctl 71.1 C (raw 783B0FEF)
+15:00:36 Tctl 71.2 C (raw 785B0FEF)
+15:00:39 Tctl 71.2 C (raw 785B0FEF)
+15:00:41 Tctl 71.2 C (raw 785B0FEF)
+15:00:44 Tctl 71.2 C (raw 785B0FEF)
+15:00:46 Tctl 71.1 C (raw 783B0FEF)
+15:00:49 Tctl 71.1 C (raw 783B0FEF)
+15:00:51 Tctl 71.0 C (raw 781B0FEF)
+15:00:54 Tctl 71.0 C (raw 781B0FEF)
+15:00:57 Tctl 70.8 C (raw 77DB0FEF)
+15:01:00 Tctl 70.9 C (raw 77FB0FEF)
+15:01:02 Tctl 71.0 C (raw 781B0FEF)
+task_state=Ready
+type2-positive exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    275.2 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    180.9 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type2-stale exit=1
+coherency00  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0x6747a9c9b5e067b5 match=yes t_submit_to_idle_us=    759.7 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+coherency01  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0xd7bd083bb8a604c8 match=NO  t_submit_to_idle_us=    241.2 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+COHERENCY completed=1 mismatches=1
+type2-repeat exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    227.6 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    243.4 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type3-positive exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    237.0 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    211.1 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type3-stale exit=1
+coherency00  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0x6747a9c9b5e067b5 match=yes t_submit_to_idle_us=    924.7 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+coherency01  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0xd7bd083bb8a604c8 match=NO  t_submit_to_idle_us=    233.7 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+COHERENCY completed=1 mismatches=1
+type3-repeat exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    214.2 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    210.5 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type5-positive exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    188.0 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    310.5 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type5-stale exit=1
+coherency00  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0x6747a9c9b5e067b5 match=yes t_submit_to_idle_us=    771.1 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+coherency01  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0xd7bd083bb8a604c8 match=NO  t_submit_to_idle_us=    193.7 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+COHERENCY completed=1 mismatches=1
+type5-repeat exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    255.1 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    190.0 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+memory_types_run_complete

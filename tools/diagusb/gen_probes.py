@@ -8,6 +8,7 @@ what the hand-computed addresses of the previous driver attempt really hit.
 Run:  python tools/diagusb/gen_probes.py
 """
 
+import functools
 import hashlib
 import json
 import sys
@@ -18,6 +19,39 @@ sys.path.insert(0, str(HERE.parent / "regcalc"))
 from regcalc import HDR_DIR, RegMap  # noqa: E402
 
 KERNEL_REF = "torvalds/linux master 93f51579e7df (fetched 2026-09-21)"
+
+# The UVD/VCN window is denied, not merely absent. VCN 2.0.3 is present on this part and its island is
+# power- and clock-gated: a community report has the first VCN MMIO access wedging the machine, and the PSP
+# refusing the VCN firmware (facts M787). amdgpu adds no driver block for it either (facts M46), so nothing
+# here needs it. Today no probe and no allow-list entry falls inside the window, but both lists are
+# generated, so the rule belongs in the generators. The band is computed from the IP base table, never typed:
+# it runs from UVD0's first segment to the next segment of another IP, in BAR5 byte offsets.
+DENY_IP = "UVD0"
+
+
+@functools.lru_cache(maxsize=None)
+def deny_range(ip_header=None):
+    """(low, high) BAR5 byte offsets of the denied UVD/VCN window. High is exclusive.
+
+    Cached: denied() is called once per candidate register of the sweep (6138 of them), and each
+    parse of the IP table costs about 0.6 ms. Without the cache the sweep spends 3.6 s in here.
+    The IP header does not change inside a run.
+    """
+    from regcalc import DEFAULT_IP_HEADER, parse_ip_bases  # noqa: PLC0415  (one import site)
+    bases = parse_ip_bases(HDR_DIR / (ip_header or DEFAULT_IP_HEADER))
+    mine = sorted({seg for inst in bases[DENY_IP].values() for seg in inst.values() if seg})
+    if not mine:
+        raise SystemExit(f"{DENY_IP} has no segment base in the IP table: fix deny_range, do not guess")
+    others = sorted({seg for ip, insts in bases.items() if ip != DENY_IP
+                     for inst in insts.values() for seg in inst.values() if seg > mine[-1]})
+    if not others:
+        raise SystemExit(f"no IP segment above {DENY_IP}: the deny band has no end, fix deny_range")
+    return mine[0] * 4, others[0] * 4
+
+
+def denied(byte_offset, ip_header=None):
+    low, high = deny_range(ip_header)
+    return low <= byte_offset < high
 
 # (ip, header, [(register, banked_by_se_sh)])
 # Read-only sampling of these registers has no side effects (no read-to-clear, no index/data pairs).
@@ -119,7 +153,13 @@ def build():
         for name, banked in names:
             if name not in rm.regs:
                 raise SystemExit(f"{name} not found in {header}: fix SPEC, do not guess")
-            regs.append({"n": name[2:], "ip": ip, "off": rm.byte_offset(name), "banked": banked})
+            off = rm.byte_offset(name)
+            if denied(off):
+                low, high = deny_range()
+                raise SystemExit(f"{name} is at 0x{off:05X}, inside the denied UVD/VCN window "
+                                 f"0x{low:05X}-0x{high - 1:05X}: a read there can hang the SoC (facts M787). "
+                                 f"Take it out of SPEC.")
+            regs.append({"n": name[2:], "ip": ip, "off": off, "banked": banked})
     offs = [r["off"] for r in regs]
     if len(set(offs)) != len(offs):
         raise SystemExit("duplicate offsets in SPEC")

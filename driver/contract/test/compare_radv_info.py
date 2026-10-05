@@ -23,6 +23,7 @@ committed evidence copy. Exit status 0 when the only differences are the documen
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -31,7 +32,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]          # ...\bc250-win
 DEFAULT_REFERENCE = (REPO / "evidence" / "linux" / "2026-09-21-E14-vulkan-compute-reference" /
                      "radv-info.txt")
-DEFAULT_EXE = Path(r"P:\BC-250\scratch\contract\bc250_caps_test.exe")
+# BC250_ROOT is the workspace root; by default the parent directory of this repository.
+ROOT = Path(os.environ.get("BC250_ROOT", str(REPO.parent)))
+DEFAULT_EXE = ROOT / "scratch" / "contract" / "bc250_caps_test.exe"
 
 # Keys that are expected to differ, each with the reason. Anything NOT in here must match.
 #

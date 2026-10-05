@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 467 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x016960  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x015930  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x02A520  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x035A00  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\linear-ddi-kmd\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\linear-ddi-kmd\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\linear-ddi-kmd\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7655  bc250kmd.inf
+   328592  bc250kmd.sys
+  952F05B7142D18A4E526622F160F9B8477380EF20E5AD42106D45F567D7FF556  package\bc250kmd.sys

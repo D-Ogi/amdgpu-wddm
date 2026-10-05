@@ -1,0 +1,92 @@
+--- a/src/gallium/drivers/zink/zink_types.h
++++ b/src/gallium/drivers/zink/zink_types.h
+@@ -1732,9 +1732,17 @@
+    ZINK_DS3_BLEND_LOGIC,
+ };
+ 
++struct zink_bc250_map_bucket {
++   unsigned target, width, height, depth, format, bind, usage;
++   unsigned box_width, box_height, box_depth, runtime, user_ptr;
++   uint64_t calls, bytes;
++};
++
+ struct zink_context {
+    struct pipe_context base;
+    bool bc250_audit;
++   struct zink_bc250_map_bucket bc250_map_buckets[128];
++   uint64_t bc250_map_overflow;
+    uint64_t bc250_audit_flushes, bc250_image_maps, bc250_image_map_bytes;
+    uint64_t bc250_buffer_maps, bc250_buffer_map_bytes, bc250_persistent_maps;
+    struct threaded_context *tc;
+--- a/src/gallium/drivers/zink/zink_resource.c
++++ b/src/gallium/drivers/zink/zink_resource.c
+@@ -2638,6 +2638,28 @@
+    }
+ }
+ 
++static void
++bc250_audit_map_bucket(struct zink_context *ctx, struct pipe_resource *pres,
++                       unsigned usage, const struct pipe_box *box, uint64_t bytes)
++{
++   struct zink_resource *res = zink_resource(pres);
++   struct zink_bc250_map_bucket key = {0};
++   key.target=pres->target; key.width=pres->width0; key.height=pres->height0;
++   key.depth=pres->depth0; key.format=pres->format; key.bind=pres->bind;
++   key.usage=usage | (res->base.is_user_ptr ? PIPE_MAP_PERSISTENT : 0);
++   key.box_width=box->width; key.box_height=box->height; key.box_depth=box->depth;
++   key.runtime=res->obj->bc250_runtime; key.user_ptr=res->base.is_user_ptr;
++   for (unsigned i=0; i<ARRAY_SIZE(ctx->bc250_map_buckets); ++i) {
++      struct zink_bc250_map_bucket *bucket=&ctx->bc250_map_buckets[i];
++      if (!bucket->calls) *bucket=key;
++      if (!memcmp(bucket, &key, offsetof(struct zink_bc250_map_bucket, calls))) {
++         bucket->calls++; bucket->bytes+=bytes;
++         return;
++      }
++   }
++   ctx->bc250_map_overflow++;
++}
++
+ static void *
+ zink_buffer_map(struct pipe_context *pctx,
+                     struct pipe_resource *pres,
+@@ -2651,7 +2673,8 @@
+    if (ctx->bc250_audit) {
+       ctx->bc250_buffer_maps++;
+       ctx->bc250_buffer_map_bytes += (uint64_t)box->width;
+-      if (usage & PIPE_MAP_PERSISTENT) ctx->bc250_persistent_maps++;
++      bc250_audit_map_bucket(ctx, pres, usage, box, (uint64_t)box->width);
++      if ((usage & PIPE_MAP_PERSISTENT) || zink_resource(pres)->base.is_user_ptr) ctx->bc250_persistent_maps++;
+    }
+    struct zink_screen *screen = zink_screen(pctx->screen);
+    struct zink_resource *res = zink_resource(pres);
+@@ -2865,7 +2888,8 @@
+    if (ctx->bc250_audit) {
+       ctx->bc250_image_maps++;
+       ctx->bc250_image_map_bytes += (uint64_t)util_format_get_2d_size(pres->format, util_format_get_stride(pres->format, box->width), box->height) * box->depth;
+-      if (usage & PIPE_MAP_PERSISTENT) ctx->bc250_persistent_maps++;
++      bc250_audit_map_bucket(ctx, pres, usage, box, (uint64_t)util_format_get_2d_size(pres->format, util_format_get_stride(pres->format, box->width), box->height) * box->depth);
++      if ((usage & PIPE_MAP_PERSISTENT) || zink_resource(pres)->base.is_user_ptr) ctx->bc250_persistent_maps++;
+    }
+    struct zink_screen *screen = zink_screen(pctx->screen);
+    struct zink_resource *res = zink_resource(pres);
+--- a/src/gallium/drivers/zink/zink_context.c
++++ b/src/gallium/drivers/zink/zink_context.c
+@@ -108,6 +108,18 @@
+            (unsigned long long)ctx->bc250_image_maps, (unsigned long long)ctx->bc250_image_map_bytes,
+            (unsigned long long)ctx->bc250_buffer_maps, (unsigned long long)ctx->bc250_buffer_map_bytes,
+            (unsigned long long)ctx->bc250_persistent_maps);
++   fprintf(stderr, "BC250 audit bucket_summary ctx=%p sample=%llu overflow=%llu\n",
++           (void *)ctx, (unsigned long long)sequence, (unsigned long long)ctx->bc250_map_overflow);
++   for (unsigned i=0; i<ARRAY_SIZE(ctx->bc250_map_buckets); ++i) {
++      const struct zink_bc250_map_bucket *b=&ctx->bc250_map_buckets[i];
++      if (!b->calls) break;
++      fprintf(stderr, "BC250 audit bucket ctx=%p sample=%llu id=%u target=%u size=%ux%ux%u format=%u bind=%x usage=%x box=%ux%ux%u runtime=%u user_ptr=%u calls=%llu bytes=%llu\n",
++              (void *)ctx, (unsigned long long)sequence, i, b->target,
++              b->width, b->height, b->depth, b->format, b->bind, b->usage,
++              b->box_width, b->box_height, b->box_depth, b->runtime, b->user_ptr,
++              (unsigned long long)b->calls, (unsigned long long)b->bytes);
++   }
++
+ }
+ 
+ static void

@@ -1,0 +1,37 @@
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+boot_before=2026-09-23T15:39:09
+icd_hash=6B589A8686DF6FFBB2BE447845222A3607E7E162B89923FA5976FCD9FD412754
+16:08:09 Tctl 71.4 C (raw 787B0FEF)
+16:08:11 Tctl 71.5 C (raw 789B0FEF)
+16:08:14 Tctl 71.5 C (raw 789B0FEF)
+16:08:17 Tctl 71.4 C (raw 787B0FEF)
+16:08:19 Tctl 71.4 C (raw 787B0FEF)
+16:08:22 Tctl 71.5 C (raw 789B0FEF)
+16:08:24 Tctl 71.1 C (raw 783B0FEF)
+16:08:27 Tctl 71.4 C (raw 787B0FEF)
+16:08:30 Tctl 71.8 C (raw 78DB0FEF)
+16:08:32 Tctl 71.8 C (raw 78DB0FEF)
+16:08:35 Tctl 72.0 C (raw 791B0FEF)
+16:08:37 Tctl 71.4 C (raw 787B0FEF)
+16:08:40 Tctl 70.9 C (raw 77FB0FEF)
+task_state=Ready
+m8 exit=0
+mlp          n=10240     hash=0x0eb467ee3ae0f043 cpu_hash=0x0eb467ee3ae0f043 match=yes t_submit_to_idle_us=    840.1 first_words=c1568000 c1167000 bf100000 c18f1800 4122a000 bee60000 c0e08000 c15b9000 argmax_hash=0x66d441abf069e3a2 argmax_cpu=0x66d441abf069e3a2 hist=25,27,10,3,619,252,1,3,28,56
+reduce       n=1025      hash=0xe9fc02f21706317a cpu_hash=0xe9fc02f21706317a match=yes t_submit_to_idle_us=    128.4 first_words=d3f84200 a0684200 6cd84200 39484200 05b84200 d2284200 9e984200 6b084200
+
+8 test(s) run, 0 mismatch(es)
+stories15M exit=0
+stories15M reference_match
+ Once upon a time, there was a little girl named Lily. She loved to play outside and explore the world around her. One day, she went on a walk in the forest and saw a big, scary bear. She was scared and didn't know what to do.
+Suddenly, she heard a voice behind her. It was her mom! "Lily, come here right now!" her mom said. Lily turned around and saw her mom standing there
+
+tinyllama exit=0
+tinyllama reference_match
+6. The capital of Australia is Canberra.
+
+
+
+limited_run_complete
+boot_after=2026-09-23T15:39:09

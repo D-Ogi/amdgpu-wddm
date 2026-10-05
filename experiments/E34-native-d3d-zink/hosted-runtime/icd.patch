@@ -1,0 +1,824 @@
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -1,9 +1,9 @@
+ /*
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
+  *
+  * based in part on anv driver which is:
+- * Copyright © 2015 Intel Corporation
++ * Copyright Â© 2015 Intel Corporation
+  *
+  * SPDX-License-Identifier: MIT
+  */
+@@ -1466,11 +1466,6 @@
+    VkResult result;
+    struct radv_device *device;
+ 
+-   /* Bootstrap contract has no allocation/submission dispatch yet. Do not
+-    * let any rendering path interpret a runtime token as a KMT device. */
+-   if (instance->bc250_host.dispatch)
+-      return VK_ERROR_FEATURE_NOT_PRESENT;
+-
+    bool overallocation_disallowed = false;
+ 
+    vk_foreach_struct_const (sType, ext, pCreateInfo->pNext) {
+@@ -1564,6 +1559,7 @@
+ 
+    device->vk.sync = device->ws->get_sync_provider(device->ws);
+ 
++   device->vk.bc250_host = instance->bc250_host;
+    if (device->ws->get_wddm2_handle)
+       vk_device_set_wddm2_handle(&device->vk, device->ws->get_wddm2_handle(device->ws));
+ 
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -1,10 +1,10 @@
+ /*
+- * Copyright © 2020 Valve Corporation
++ * Copyright Â© 2020 Valve Corporation
+  *
+  * based on amdgpu winsys.
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
+- * Copyright © 2022 Collabora, Ltd
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2022 Collabora, Ltd
+  *
+  * Permission is hereby granted, free of charge, to any person obtaining a
+  * copy of this software and associated documentation files (the "Software"),
+@@ -391,7 +391,7 @@
+       .MaximumAddress = max,
+       .Size = reserved_size + (address ? 0 : alignment - granularity),
+    };
+-   status = WDDM2_DISPATCH(ReserveGpuVirtualAddress(&reserve));
++   status = BC250_WDDM_CALL(&ws->host, ReserveGpuVirtualAddress, &reserve);
+    if (!NT_SUCCESS(status))
+       return 0;
+ 
+@@ -404,7 +404,7 @@
+          .Zero = 1,
+       },
+    };
+-   status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++   status = BC250_WDDM_CALL(&ws->host, MapGpuVirtualAddress, &map);
+    if (NT_SUCCESS(status)) {
+       /* Initial zero mapping is asynchronous, just like physical BO mapping.
+        * Do not return the BO before that paging operation has retired. */
+@@ -414,7 +414,7 @@
+          .ObjectHandleArray = &ws->paging_fence_h,
+          .FenceValueArray = &map.PagingFenceValue,
+       };
+-      status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++      status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromCpu, &wait);
+    }
+    if (!NT_SUCCESS(status)) {
+       const D3DKMT_FREEGPUVIRTUALADDRESS release = {
+@@ -422,7 +422,7 @@
+          .BaseAddress = reserve.VirtualAddress,
+          .Size = reserve.Size,
+       };
+-      WDDM2_DISPATCH(FreeGpuVirtualAddress(&release));
++      BC250_WDDM_CALL(&ws->host, FreeGpuVirtualAddress, &release);
+       return 0;
+    }
+ 
+@@ -476,7 +476,7 @@
+       .BaseAddress = high,
+       .Size = align64(bo->base.size, 65536),
+    };
+-   NTSTATUS status = WDDM2_DISPATCH(ReserveGpuVirtualAddress(&reserve));
++   NTSTATUS status = BC250_WDDM_CALL(&ws->host, ReserveGpuVirtualAddress, &reserve);
+    if (!NT_SUCCESS(status))
+       return false;
+    bo->sparse_high_va = high;
+@@ -487,7 +487,7 @@
+       .SizeInPages = bo->base.size / 4096,
+       .Protection.Zero = 1,
+    };
+-   status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++   status = BC250_WDDM_CALL(&ws->host, MapGpuVirtualAddress, &map);
+    if (!NT_SUCCESS(status))
+       return false;
+ 
+@@ -501,7 +501,7 @@
+          .SizeInPages = bytes / 4096,
+          /* Read-only; every chunk aliases offset zero of the shared BO. */
+       };
+-      status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++      status = BC250_WDDM_CALL(&ws->host, MapGpuVirtualAddress, &map);
+       if (!NT_SUCCESS(status))
+          return false;
+       fence = map.PagingFenceValue;
+@@ -515,7 +515,7 @@
+       .ObjectHandleArray = &ws->paging_fence_h,
+       .FenceValueArray = &fence,
+    };
+-   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromCpu, &wait);
+    if (!NT_SUCCESS(status))
+       return false;
+    bo->base.va = high;
+@@ -562,14 +562,14 @@
+          .BaseAddress = bo->reserved_va,
+          .Size = bo->reserved_size,
+       };
+-      WDDM2_DISPATCH(FreeGpuVirtualAddress(&low));
++      BC250_WDDM_CALL(&ws->host, FreeGpuVirtualAddress, &low);
+       if (bo->sparse_high_va) {
+          const D3DKMT_FREEGPUVIRTUALADDRESS high = {
+             .hAdapter = ws->adapter_h,
+             .BaseAddress = bo->sparse_high_va,
+             .Size = align64(bo->base.size, 65536),
+          };
+-         WDDM2_DISPATCH(FreeGpuVirtualAddress(&high));
++         BC250_WDDM_CALL(&ws->host, FreeGpuVirtualAddress, &high);
+       }
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+       goto error_va_reserve;
+@@ -705,7 +705,7 @@
+       goto error_create;
+    }*/
+ 
+-   status = WDDM2_DISPATCH(CreateAllocation2(&create));
++   status = BC250_WDDM_CALL(&ws->host, CreateAllocation2, &create);
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "CreateAllocation2 failed 0x%X\n", status);
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+@@ -740,7 +740,7 @@
+          .Write = !(flags & RADEON_FLAG_READ_ONLY),
+       },
+    };
+-   status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++   status = BC250_WDDM_CALL(&ws->host, MapGpuVirtualAddress, &map);
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "mapping 0x%" PRIx64 " failed: 0x%X\n", bo->base.va, status);
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+@@ -759,7 +759,7 @@
+             .MustSucceed = 1,
+          },
+       };
+-      status = WDDM2_DISPATCH(MakeResident(&make_resident));
++      status = BC250_WDDM_CALL(&ws->host, MakeResident, &make_resident);
+       if (!NT_SUCCESS(status)) {
+          fprintf(stderr, "MakeResident failed\n");
+          result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+@@ -775,7 +775,7 @@
+       .ObjectHandleArray = &ws->paging_fence_h,
+       .FenceValueArray = &paging_fence_value,
+    };
+-   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromCpu, &wait);
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "WaitForSynchronizationObjectFromCpu failed\n");
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+@@ -794,7 +794,7 @@
+    //radv_wddm2_bo_va_free(ws, flags, bo->base.va, bo->base.size);
+ 
+    fprintf(stderr, "destroy allocation\n");
+-   status = WDDM2_DISPATCH(DestroyAllocation2(&destroy));
++   status = BC250_WDDM_CALL(&ws->host, DestroyAllocation2, &destroy);
+    assert(NT_SUCCESS(status));
+ 
+ error_ptr_alloc:
+@@ -857,7 +857,7 @@
+       .hDevice = ws->device_h,
+       .hNtHandle = (HANDLE)handle,
+    };
+-   status = WDDM2_DISPATCH(QueryResourceInfoFromNtHandle(&query_info));
++   status = BC250_WDDM_CALL(&ws->host, QueryResourceInfoFromNtHandle, &query_info);
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "QueryResourceInfoFromNtHandle failed 0x%X\n", status);
+       result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+@@ -895,7 +895,7 @@
+       .PrivateRuntimeDataSize = query_info.PrivateRuntimeDataSize,
+       .pPrivateRuntimeData = runtime_data,
+    };
+-   status = WDDM2_DISPATCH(OpenResourceFromNtHandle(&open_resource));
++   status = BC250_WDDM_CALL(&ws->host, OpenResourceFromNtHandle, &open_resource);
+    if (!NT_SUCCESS(status)) {
+       result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+       goto error_import;
+@@ -952,7 +952,7 @@
+          .Write = 1,
+       },
+    };
+-   status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++   status = BC250_WDDM_CALL(&ws->host, MapGpuVirtualAddress, &map);
+    if (!NT_SUCCESS(status)) {
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+       goto error_import;
+@@ -971,7 +971,7 @@
+          .MustSucceed = 1,
+       },
+    };
+-   status = WDDM2_DISPATCH(MakeResident(&make_resident));
++   status = BC250_WDDM_CALL(&ws->host, MakeResident, &make_resident);
+    if (!NT_SUCCESS(status)) {
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+       goto error_map;
+@@ -984,7 +984,7 @@
+       .ObjectHandleArray = &ws->paging_fence_h,
+       .FenceValueArray = &make_resident.PagingFenceValue,
+    };
+-   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromCpu, &wait);
+    if (!NT_SUCCESS(status)) {
+       result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+       goto error_map;
+@@ -1001,7 +1001,7 @@
+          .BaseAddress = bo->base.va,
+          .Size = bo->base.size,
+       };
+-      WDDM2_DISPATCH(FreeGpuVirtualAddress(&unmap));
++      BC250_WDDM_CALL(&ws->host, FreeGpuVirtualAddress, &unmap);
+    }
+ error_import:
+    if (bo->resource_handle) {
+@@ -1009,7 +1009,7 @@
+          .hDevice = ws->device_h,
+          .hResource = bo->resource_handle,
+       };
+-      WDDM2_DISPATCH(DestroyAllocation2(&destroy));
++      BC250_WDDM_CALL(&ws->host, DestroyAllocation2, &destroy);
+    }
+    free(pdata);
+ error_alloc:
+@@ -1056,7 +1056,7 @@
+       .hDevice = bo->ws->device_h,
+       .hAllocation = bo->base.handle,
+    };
+-   status = WDDM2_DISPATCH(Lock2(&lock));
++   status = BC250_WDDM_CALL(&bo->ws->host, Lock2, &lock);
+    if (!NT_SUCCESS(status))
+       return NULL;
+ 
+@@ -1078,7 +1078,7 @@
+       .hDevice = bo->ws->device_h,
+       .hAllocation = bo->base.handle,
+    };
+-   status = WDDM2_DISPATCH(Unlock2(&unlock));
++   status = BC250_WDDM_CALL(&bo->ws->host, Unlock2, &unlock);
+    assert(NT_SUCCESS(status));
+    
+    bo->map = NULL;
+@@ -1125,7 +1125,7 @@
+          .AllocationList = &bo->base.handle,
+          .Flags.EvictOnlyIfNecessary = false,
+       };
+-      status = WDDM2_DISPATCH(Evict(&evict));
++      status = BC250_WDDM_CALL(&ws->host, Evict, &evict);
+       if (!NT_SUCCESS(status))
+          return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    }
+@@ -1147,7 +1147,7 @@
+          .AllocationList = &bo->base.handle,
+          .Flags.EvictOnlyIfNecessary = false,
+       };
+-      status = WDDM2_DISPATCH(Evict(&evict));
++      status = BC250_WDDM_CALL(&ws->host, Evict, &evict);
+       if (!NT_SUCCESS(status)) {
+          fprintf(stderr, "*****  Evict failed\n");
+          return;
+@@ -1162,14 +1162,14 @@
+          .BaseAddress = bo->sparse_high_va,
+          .Size = align64(bo->base.size, 65536),
+       };
+-      status = WDDM2_DISPATCH(FreeGpuVirtualAddress(&high));
++      status = BC250_WDDM_CALL(&ws->host, FreeGpuVirtualAddress, &high);
+    }
+    const D3DKMT_FREEGPUVIRTUALADDRESS unmap = {
+       .hAdapter = ws->adapter_h,
+       .BaseAddress = bo->reserved_va ? bo->reserved_va : bo->base.va,
+       .Size = bo->reserved_size ? bo->reserved_size : bo->base.size,
+    };
+-   status = WDDM2_DISPATCH(FreeGpuVirtualAddress(&unmap));
++   status = BC250_WDDM_CALL(&ws->host, FreeGpuVirtualAddress, &unmap);
+ 
+    if (!bo->base.is_virtual) {
+       const D3DKMT_DESTROYALLOCATION2 destroy = {
+@@ -1178,7 +1178,7 @@
+          .phAllocationList = bo->resource_handle ? NULL : &bo->base.handle,
+          .AllocationCount = bo->resource_handle ? 0 : 1,
+       };
+-      status = WDDM2_DISPATCH(DestroyAllocation2(&destroy));
++      status = BC250_WDDM_CALL(&ws->host, DestroyAllocation2, &destroy);
+       //assert(NT_SUCCESS(status));
+ 
+       if (ws->debug_all_bos)
+@@ -1300,7 +1300,7 @@
+          .ObjectHandleArray = &queue->vm_fence.handle,
+          .FenceValueArray = &boundary,
+       };
+-      status = WDDM2_DISPATCH(SubmitSignalSyncObjectsToHwQueue(&signal));
++      status = BC250_WDDM_CALL(&ws->host, SubmitSignalSyncObjectsToHwQueue, &signal);
+    } else {
+       const D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal = {
+          .BroadcastContextCount = 1,
+@@ -1309,7 +1309,7 @@
+          .ObjectHandleArray = &queue->vm_fence.handle,
+          .MonitoredFenceValueArray = &boundary,
+       };
+-      status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu2(&signal));
++      status = BC250_WDDM_CALL(&ws->host, SignalSynchronizationObjectFromGpu2, &signal);
+    }
+    if (!NT_SUCCESS(status)) {
+       result = VK_ERROR_DEVICE_LOST;
+@@ -1331,7 +1331,7 @@
+          .NumOperations =
+             util_dynarray_num_elements(&group->operations, D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION),
+       };
+-      status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
++      status = BC250_WDDM_CALL(&ws->host, UpdateGpuVirtualAddress, &update);
+       if (!NT_SUCCESS(status)) {
+          result = VK_ERROR_DEVICE_LOST;
+          goto done;
+@@ -1345,7 +1345,7 @@
+          .ObjectHandleArray = &queue->vm_fence.handle,
+          .FenceValueArray = &completed,
+       };
+-      status = WDDM2_DISPATCH(SubmitWaitForSyncObjectsToHwQueue(&wait));
++      status = BC250_WDDM_CALL(&ws->host, SubmitWaitForSyncObjectsToHwQueue, &wait);
+    } else {
+       const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait = {
+          .hContext = queue->context_h,
+@@ -1353,7 +1353,7 @@
+          .ObjectHandleArray = &queue->vm_fence.handle,
+          .MonitoredFenceValueArray = &completed,
+       };
+-      status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromGpu(&wait));
++      status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromGpu, &wait);
+    }
+    if (!NT_SUCCESS(status)) {
+       result = VK_ERROR_DEVICE_LOST;
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+@@ -1,9 +1,9 @@
+ /*
+- * Copyright © 2020 Valve Corporation
++ * Copyright Â© 2020 Valve Corporation
+  *
+  * based on amdgpu winsys.
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
+  *
+  * Permission is hereby granted, free of charge, to any person obtaining a
+  * copy of this software and associated documentation files (the "Software"),
+@@ -183,20 +183,21 @@
+    return ptr;
+ }
+ 
+-static bool vk_wddm2_fence_wait(uint32_t device_h, struct vk_wddm2_fence *fence);
++static bool vk_wddm2_fence_wait(struct radv_wddm2_winsys *ws, struct vk_wddm2_fence *fence);
+ 
+ static void
+ radv_wddm2_queue_destroy(struct radv_wddm2_queue *queue)
+ {
++   struct radv_wddm2_winsys *ws = queue->bc250_ws;
+    radv_wddm2_sparse_groups_clear(queue);
+    util_dynarray_fini(&queue->sparse_ops);
+    if (queue->bc250_progress.handle) {
+       if (queue->bc250_progress.wait_value)
+-         vk_wddm2_fence_wait(queue->bc250_ws->device_h, &queue->bc250_progress);
++         vk_wddm2_fence_wait(queue->bc250_ws, &queue->bc250_progress);
+       D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy_progress = {
+          .hSyncObject = queue->bc250_progress.handle,
+       };
+-      WDDM2_DISPATCH(DestroySynchronizationObject(&destroy_progress));
++      BC250_WDDM_CALL(&ws->host, DestroySynchronizationObject, &destroy_progress);
+       queue->bc250_progress.handle = 0;
+    }
+    free(queue->bc250_ibs);
+@@ -212,21 +213,21 @@
+       D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy_fence = {
+          .hSyncObject = queue->vm_fence.handle,
+       };
+-      WDDM2_DISPATCH(DestroySynchronizationObject(&destroy_fence));
++      BC250_WDDM_CALL(&ws->host, DestroySynchronizationObject, &destroy_fence);
+       queue->vm_fence.handle = 0;
+    }
+    if (queue->context_h) {
+       D3DKMT_DESTROYCONTEXT context_destroy = {
+          .hContext = queue->context_h,
+       };
+-      WDDM2_DISPATCH(DestroyContext(&context_destroy));
++      BC250_WDDM_CALL(&ws->host, DestroyContext, &context_destroy);
+       queue->context_h = 0;
+    }
+    if (queue->handle) {
+       D3DKMT_DESTROYHWQUEUE queue_destroy = {
+          .hHwQueue = queue->handle,
+       };
+-      WDDM2_DISPATCH(DestroyHwQueue(&queue_destroy));
++      BC250_WDDM_CALL(&ws->host, DestroyHwQueue, &queue_destroy);
+       queue->handle = 0;
+    }
+ }
+@@ -294,12 +295,13 @@
+       .ClientHint = D3DKMT_CLIENTHINT_VULKAN,
+    };
+ 
+-   status = WDDM2_DISPATCH(CreateContextVirtual(&create_context));
++   status = BC250_WDDM_CALL(&ws->host, CreateContextVirtual, &create_context);
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "Create context failed 0x%X for IP %i and device 0x%x\n", status, hw_ip, ws->device_h);
+       return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    queue->context_h = create_context.hContext;
++   queue->bc250_ws = ws;
+ 
+    /* bc250kmd has no hardware-queue DDIs. SubmitCommand is the packet path. */
+    if (ws->bc250) {
+@@ -311,7 +313,7 @@
+          },
+       };
+       queue->bc250_ws = ws;
+-      status = WDDM2_DISPATCH(CreateSynchronizationObject2(&create_progress));
++      status = BC250_WDDM_CALL(&ws->host, CreateSynchronizationObject2, &create_progress);
+       if (!NT_SUCCESS(status))
+          goto failed;
+       queue->bc250_progress.handle = create_progress.hSyncObject;
+@@ -322,7 +324,7 @@
+       create_progress.hSyncObject = 0;
+       create_progress.Info.MonitoredFence.FenceValueCPUVirtualAddress = NULL;
+       create_progress.Info.MonitoredFence.FenceValueGPUVirtualAddress = 0;
+-      status = WDDM2_DISPATCH(CreateSynchronizationObject2(&create_progress));
++      status = BC250_WDDM_CALL(&ws->host, CreateSynchronizationObject2, &create_progress);
+       if (!NT_SUCCESS(status))
+          goto failed;
+       queue->vm_fence.handle = create_progress.hSyncObject;
+@@ -346,7 +348,7 @@
+          .pPrivateDriverData = &create_queue_pdd,
+          .PrivateDriverDataSize = sizeof(create_queue_pdd),
+       };
+-      status = WDDM2_DISPATCH(CreateHwQueue(&create_queue));
++      status = BC250_WDDM_CALL(&ws->host, CreateHwQueue, &create_queue);
+       if (!NT_SUCCESS(status)) {
+          fprintf(stderr, "Create queue failed 0x%X for IP %i and device 0x%x\n", status, hw_ip, ws->device_h);
+          goto failed;
+@@ -363,7 +365,7 @@
+             },
+          }
+       };
+-      status = WDDM2_DISPATCH(CreateSynchronizationObject2(&create_sync));
++      status = BC250_WDDM_CALL(&ws->host, CreateSynchronizationObject2, &create_sync);
+       if (unlikely(!NT_SUCCESS(status))) {
+          fprintf(stderr, "CreateSynchronizationObject2 failed with NTSTATUS 0x%x\n", status);
+          goto failed;
+@@ -423,7 +425,7 @@
+ }
+ 
+ static bool
+-vk_wddm2_fence_wait(uint32_t device_h, struct vk_wddm2_fence *fence)
++vk_wddm2_fence_wait(struct radv_wddm2_winsys *ws, struct vk_wddm2_fence *fence)
+ {
+    VkResult result;
+    NTSTATUS status;
+@@ -440,13 +442,13 @@
+       return false;
+ 
+    const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait = {
+-      .hDevice = device_h,
++      .hDevice = ws->device_h,
+       .ObjectCount = 1,
+       .ObjectHandleArray = &fence->handle,
+       .FenceValueArray = &fence->wait_value,
+       .hAsyncEvent = async_event,
+    };
+-   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromCpu, &wait);
+ 
+    if (unlikely(!NT_SUCCESS(status))) {
+       vk_async_event_close(async_event);
+@@ -460,13 +462,13 @@
+       fprintf(stderr, "async wait event: 0x%x\n", result);
+ 
+    D3DKMT_GETDEVICESTATE get_state = {
+-      .hDevice = device_h,
++      .hDevice = ws->device_h,
+       .StateType = D3DKMT_DEVICESTATE_EXECUTION,
+    };
+ 
+    if (get_state.ExecutionState == D3DKMT_DEVICEEXECUTION_ERROR_DMAPAGEFAULT) {
+       get_state.StateType = D3DKMT_DEVICESTATE_PAGE_FAULT;
+-      status = WDDM2_DISPATCH(GetDeviceState(&get_state));
++      status = BC250_WDDM_CALL(&ws->host, GetDeviceState, &get_state);
+       D3DKMT_DEVICEPAGEFAULT_STATE fault = get_state.PageFaultState;
+ 
+       fprintf(stderr, "faulted VA: 0x%" PRIx64 ", error: 0x%x (vendor specific: %i), flags: %i, stage: %i\n",
+@@ -485,7 +487,7 @@
+    bool ret = true;
+ 
+    if (ctx->per_ip[ip_type].last_submission.handle)
+-      ret = vk_wddm2_fence_wait(ctx->ws->device_h, &ctx->per_ip[ip_type].last_submission);
++      ret = vk_wddm2_fence_wait(ctx->ws, &ctx->per_ip[ip_type].last_submission);
+ 
+    return ret;
+ }
+@@ -922,7 +924,7 @@
+     * too; this one makes the order obvious.
+     */
+    _mm_sfence();
+-   status = WDDM2_DISPATCH(SubmitCommand(&cmd));
++   status = BC250_WDDM_CALL(&ws->host, SubmitCommand, &cmd);
+    if (!NT_SUCCESS(status))
+       fprintf(stderr, "bc250: SubmitCommand 0x%X (%u ibs packed, %u bytes)\n", status, n, bytes);
+    else if (ws->bc250_trace_submits) {
+@@ -976,6 +978,7 @@
+                      uint32_t signal_count, const struct vk_sync_signal *signals)
+ {
+    struct radv_wddm2_ctx *ctx = radv_wddm2_ctx(_ctx);
++   struct radv_wddm2_winsys *ws = ctx->ws;
+    struct radv_wddm2_queue *queue = &ctx->per_ip[submit->ip_type].queue;
+    struct radv_wddm2_queue *ace_queue = &ctx->ace_queue;
+    NTSTATUS status;
+@@ -1005,7 +1008,7 @@
+             .ObjectHandleArray = handles,
+             .FenceValueArray = values,
+          };
+-         status = WDDM2_DISPATCH(SubmitWaitForSyncObjectsToHwQueue(&wait));
++         status = BC250_WDDM_CALL(&ws->host, SubmitWaitForSyncObjectsToHwQueue, &wait);
+       } else {
+          D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait = {
+             .hContext = queue->context_h,
+@@ -1013,7 +1016,7 @@
+             .ObjectHandleArray = handles,
+             .MonitoredFenceValueArray = values,
+          };
+-         status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromGpu(&wait));
++         status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromGpu, &wait);
+       }
+ 
+       STACK_ARRAY_FINISH(handles);
+@@ -1040,7 +1043,7 @@
+                          slot->retire_value, wait_count, signal_count);
+       struct vk_wddm2_fence reuse = queue->bc250_progress;
+       reuse.wait_value = slot->retire_value;
+-      if (reuse.wait_value && !vk_wddm2_fence_wait(ctx->ws->device_h, &reuse))
++      if (reuse.wait_value && !vk_wddm2_fence_wait(ctx->ws, &reuse))
+          return VK_ERROR_DEVICE_LOST;
+       status = radv_wddm2_bc250_submit(ctx, queue, submit);
+       if (!NT_SUCCESS(status)) {
+@@ -1055,7 +1058,7 @@
+          .BroadcastContextArray = &queue->context_h,
+          .MonitoredFenceValueArray = &next_value,
+       };
+-      status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu2(&progress_signal));
++      status = BC250_WDDM_CALL(&ws->host, SignalSynchronizationObjectFromGpu2, &progress_signal);
+       if (!NT_SUCCESS(status)) {
+          queue->bc250_submit_failed = true; // accepted IB has no retirement value: never reuse its slot
+          return VK_ERROR_DEVICE_LOST;
+@@ -1089,7 +1092,7 @@
+             .pPrivateDriverData = pdd.buffer,
+             .PrivateDriverDataSize = pdd.offset,
+          };
+-         status = WDDM2_DISPATCH(SubmitCommandToHwQueue(&wddm2_submit));
++         status = BC250_WDDM_CALL(&ws->host, SubmitCommandToHwQueue, &wddm2_submit);
+       } else {
+          D3DKMT_SUBMITCOMMAND wddm2_submit = {
+             .Commands = first_ib.va,
+@@ -1099,7 +1102,7 @@
+             .BroadcastContextCount = 1,
+             .BroadcastContext[0] = queue->context_h,
+          };
+-         status = WDDM2_DISPATCH(SubmitCommand(&wddm2_submit));          
++         status = BC250_WDDM_CALL(&ws->host, SubmitCommand, &wddm2_submit);          
+       }
+       if (!NT_SUCCESS(status)) {
+          fprintf(stderr, "SubmitCommand: VK_ERROR_DEVICE_LOST\n");
+@@ -1127,7 +1130,7 @@
+             .ObjectHandleArray = handles,
+             .FenceValueArray = values,
+          };
+-         status = WDDM2_DISPATCH(SubmitSignalSyncObjectsToHwQueue(&signal));
++         status = BC250_WDDM_CALL(&ws->host, SubmitSignalSyncObjectsToHwQueue, &signal);
+       } else {
+          D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal = {
+             .ObjectCount = signal_count,
+@@ -1136,7 +1139,7 @@
+             .BroadcastContextArray = &queue->context_h,
+             .MonitoredFenceValueArray = values,
+          };
+-         status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu2(&signal));
++         status = BC250_WDDM_CALL(&ws->host, SignalSynchronizationObjectFromGpu2, &signal);
+       }
+ 
+       STACK_ARRAY_FINISH(handles);
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -1,11 +1,11 @@
+ #include <stdlib.h>
+ /*
+- * Copyright © 2020 Valve Corporation
++ * Copyright Â© 2020 Valve Corporation
+  *
+  * based on amdgpu winsys.
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
+- * Copyright © 2022 Collabora, Ltd
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2022 Collabora, Ltd
+  *
+  * Permission is hereby granted, free of charge, to any person obtaining a
+  * copy of this software and associated documentation files (the "Software"),
+@@ -719,7 +719,7 @@
+       .hDevice = ws->device_h,
+       .StateType = D3DKMT_DEVICESTATE_PAGE_FAULT,
+    };
+-   status = WDDM2_DISPATCH(GetDeviceState(&get_state));
++   status = BC250_WDDM_CALL(&ws->host, GetDeviceState, &get_state);
+    fprintf(stderr, "GetDeviceState: 0x%X\n", status);
+    if (unlikely(!NT_SUCCESS(status)))
+       return false;
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -1,13 +1,13 @@
+ /* SPDX-License-Identifier: MIT
+  * Private BC250 bootstrap contract, not a registered Vulkan extension.
+  * Both endpoints are built together against the same WDK and x64 ABI.
+- * Version 1 supports adapter enumeration/paging only, never rendering.
++ * Version 2 carries device-scoped runtime operations.
+  */
+ #ifndef BC250_HOST_BOOTSTRAP_H
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 1u
++#define BC250_HOST_VERSION 2u
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
+ struct bc250_host_paging {
+@@ -23,4 +23,35 @@
+    void *userdata;
+    int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
+ };
++#define BC250_HOST_CreateAllocation2 16u
++#define BC250_HOST_DestroyAllocation2 17u
++#define BC250_HOST_ReserveGpuVirtualAddress 18u
++#define BC250_HOST_MapGpuVirtualAddress 19u
++#define BC250_HOST_FreeGpuVirtualAddress 20u
++#define BC250_HOST_MakeResident 21u
++#define BC250_HOST_Evict 22u
++#define BC250_HOST_Lock2 23u
++#define BC250_HOST_Unlock2 24u
++#define BC250_HOST_CreateContextVirtual 25u
++#define BC250_HOST_DestroyContext 26u
++#define BC250_HOST_CreateSynchronizationObject2 27u
++#define BC250_HOST_DestroySynchronizationObject 28u
++#define BC250_HOST_WaitForSynchronizationObjectFromCpu 29u
++#define BC250_HOST_SignalSynchronizationObjectFromCpu 30u
++#define BC250_HOST_WaitForSynchronizationObjectFromGpu 31u
++#define BC250_HOST_SignalSynchronizationObjectFromGpu 32u
++#define BC250_HOST_SignalSynchronizationObjectFromGpu2 33u
++#define BC250_HOST_SubmitCommand 34u
++#define BC250_HOST_UpdateGpuVirtualAddress 35u
++#define BC250_HOST_GetDeviceState 36u
++#define BC250_HOST_QueryResourceInfoFromNtHandle 37u
++#define BC250_HOST_OpenResourceFromNtHandle 38u
++#define BC250_HOST_OpenSyncObjectFromNtHandle2 39u
++#define BC250_HOST_CreateHwQueue 40u
++#define BC250_HOST_DestroyHwQueue 41u
++#define BC250_HOST_SubmitCommandToHwQueue 42u
++#define BC250_HOST_SubmitWaitForSyncObjectsToHwQueue 43u
++#define BC250_HOST_SubmitSignalSyncObjectsToHwQueue 44u
++#define BC250_WDDM_CALL(host, name, argument) \
++   ((host)->dispatch ? (host)->dispatch((host)->userdata, BC250_HOST_##name, (void *)(argument)) : WDDM2_DISPATCH(name(argument)))
+ #endif
+--- a/src/vulkan/runtime/vk_device.h
++++ b/src/vulkan/runtime/vk_device.h
+@@ -1,5 +1,6 @@
++#include "util/bc250_host_bootstrap.h"
+ /*
+- * Copyright © 2020 Intel Corporation
++ * Copyright Â© 2020 Intel Corporation
+  *
+  * Permission is hereby granted, free of charge, to any person obtaining a
+  * copy of this software and associated documentation files (the "Software"),
+@@ -241,6 +242,7 @@
+ 
+    /* Set by vk_device_set_wddm2_handle() */
+    uint32_t wddm2_handle;
++   struct bc250_host bc250_host;
+ 
+    /** Implicit pipeline cache, or NULL */
+    struct vk_pipeline_cache *mem_cache;
+--- a/src/vulkan/runtime/vk_wddm2_monitored_fence.c
++++ b/src/vulkan/runtime/vk_wddm2_monitored_fence.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright © 2021 Intel Corporation
++ * Copyright Â© 2021 Intel Corporation
+  *
+  * Permission is hereby granted, free of charge, to any person obtaining a
+  * copy of this software and associated documentation files (the "Software"),
+@@ -115,7 +115,7 @@
+          },
+       }
+    };
+-   status = WDDM2_DISPATCH(CreateSynchronizationObject2(&create));
++   status = BC250_WDDM_CALL(&device->bc250_host, CreateSynchronizationObject2, &create);
+    if (unlikely(!NT_SUCCESS(status)))
+        return NTSTATUS_to_VkResult(device, status);
+ 
+@@ -123,6 +123,7 @@
+    fence->value_map = create.Info.MonitoredFence.FenceValueCPUVirtualAddress;
+ #ifdef _WIN32
+    {
++      if (!device->bc250_host.dispatch) {
+       OBJECT_ATTRIBUTES oa = { sizeof(OBJECT_ATTRIBUTES) };
+       WDDM2_DISPATCH(ShareObjects(
+          1,
+@@ -131,6 +132,7 @@
+          D3DDDI_SYNC_OBJECT_ALL_ACCESS,
+          &fence->shared_handle
+       ));
++      }
+    }
+ #endif
+ 
+@@ -153,7 +155,7 @@
+    const D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy = {
+       .hSyncObject = fence->handle,
+    };
+-   ASSERTED NTSTATUS status = WDDM2_DISPATCH(DestroySynchronizationObject(&destroy));
++   ASSERTED NTSTATUS status = BC250_WDDM_CALL(&device->bc250_host, DestroySynchronizationObject, &destroy);
+    assert(NT_SUCCESS(status));
+ }
+ 
+@@ -175,7 +177,7 @@
+          .AllowFenceRewind = true,
+       },
+    };
+-   NTSTATUS status = WDDM2_DISPATCH(SignalSynchronizationObjectFromCpu(&signal));
++   NTSTATUS status = BC250_WDDM_CALL(&device->bc250_host, SignalSynchronizationObjectFromCpu, &signal);
+    if (unlikely(!NT_SUCCESS(status))) {
+       vk_wddm2_monitored_fence_finish(device, sync);
+       return NTSTATUS_to_VkResult(device, status);
+@@ -251,7 +253,7 @@
+       },
+       .hAsyncEvent = async_event,
+    };
+-   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   status = BC250_WDDM_CALL(&device->bc250_host, WaitForSynchronizationObjectFromCpu, &wait);
+ 
+    STACK_ARRAY_FINISH(handles);
+    STACK_ARRAY_FINISH(wait_values);
+@@ -303,7 +305,7 @@
+       },
+    };
+ 
+-   status = WDDM2_DISPATCH(OpenSyncObjectFromNtHandle2(&open));
++   status = BC250_WDDM_CALL(&device->bc250_host, OpenSyncObjectFromNtHandle2, &open);
+    if (unlikely(!NT_SUCCESS(status)))
+       return NTSTATUS_to_VkResult(device, status);
+ 
+@@ -355,13 +357,15 @@
+ VkResult
+ vk_wddm2_check_device_status(struct vk_device *device)
+ {
++   if (device->bc250_host.dispatch)
++      return VK_SUCCESS;
+    NTSTATUS status;
+ 
+    D3DKMT_GETDEVICESTATE get_state = {
+       .hDevice = device->wddm2_handle,
+       .StateType = D3DKMT_DEVICESTATE_EXECUTION,
+    };
+-   status = WDDM2_DISPATCH(GetDeviceState(&get_state));
++   status = BC250_WDDM_CALL(&device->bc250_host, GetDeviceState, &get_state);
+    if (unlikely(!NT_SUCCESS(status))) {
+       return vk_errorf(device, VK_ERROR_UNKNOWN,
+                        "D3DKMTGetDeviceState failed");
+@@ -382,7 +386,7 @@
+       return vk_device_set_lost(device, "Device DMA fault");
+    case D3DKMT_DEVICEEXECUTION_ERROR_DMAPAGEFAULT:
+       get_state.StateType = D3DKMT_DEVICESTATE_PAGE_FAULT;
+-      status = WDDM2_DISPATCH(GetDeviceState(&get_state));
++      status = BC250_WDDM_CALL(&device->bc250_host, GetDeviceState, &get_state);
+       if (unlikely(!NT_SUCCESS(status))) {
+          return vk_errorf(device, VK_ERROR_UNKNOWN,
+                           "D3DKMTGetDeviceState failed");
+@@ -423,7 +427,7 @@
+       .ObjectHandleArray = handles,
+       .MonitoredFenceValueArray = wait_values,
+    };
+-   NTSTATUS status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromGpu(&gpu_wait));
++   NTSTATUS status = BC250_WDDM_CALL(&queue->base.device->bc250_host, WaitForSynchronizationObjectFromGpu, &gpu_wait);
+ 
+    STACK_ARRAY_FINISH(handles);
+    STACK_ARRAY_FINISH(wait_values);
+@@ -464,7 +468,7 @@
+       .ObjectHandleArray = handles,
+       .MonitoredFenceValueArray = signal_values,
+    };
+-   NTSTATUS status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu(&gpu_signal));
++   NTSTATUS status = BC250_WDDM_CALL(&queue->base.device->bc250_host, SignalSynchronizationObjectFromGpu, &gpu_signal);
+ 
+    STACK_ARRAY_FINISH(handles);
+    STACK_ARRAY_FINISH(signal_values);

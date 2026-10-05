@@ -1,0 +1,9 @@
+create 00000000 level a000
+buffer 00000000
+rtv 00000000
+staging 00000000
+map 00000000
+green mismatches 0 of 307200
+present 0 087a0001
+present 1 887a0005
+device removed 887a0006

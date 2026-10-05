@@ -1,0 +1,33 @@
+boot=2026-09-24T11:44:14
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   [PCI instance redacted]
+# interface  [PCI interface redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-0287A6D9
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x0007007F (milestone 7 revision 127)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 63, flips 13936 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+  Id StartTime            Responding
+  -- ---------            ----------
+4448 9/24/2026 1:58:18 PM       True
+
+
+15:23:24 Tctl 66.8 C (raw 73DB0FEF)
+
+
+EnableFullWddm    : 0
+UnconfirmedStarts : 0
+EnablePresentBlit : 1
+EnableDcnWrite    : 1
+EnableVidPnFlip   : 1
+EnableGpuSubmit   : 1
+EnablePagingNode  : 1
+EnableMmioWrite   : 0
+
+
+

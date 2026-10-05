@@ -1,0 +1,28 @@
+compile (user mode, host test)
+  Generowanie kodu...
+  Generowanie kodu...
+link
+  psp_v11_0_8.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_rreg
+  bc250_gmc.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_rreg
+  bc250_psp.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_rreg
+  gfxhub_v2_0.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_rreg
+  mmhub_v2_0.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_rreg
+  bc250_gmc.obj : error LNK2019: nierozpoznany symbol zewnętrzny bc250_shim_wreg przywołany w funkcji bc250_gmc_flush_gpu_tlb_observed
+  gfxhub_v2_0.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_wreg
+  mmhub_v2_0.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_wreg
+  psp_v11_0_8.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_wreg
+  bc250_gmc.obj : error LNK2019: nierozpoznany symbol zewnętrzny bc250_shim_udelay przywołany w funkcji bc250_gmc_flush_gpu_tlb_observed
+  bc250_psp.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_udelay
+  psp_v11_0_8.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_udelay
+  psp_v11_0_8.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_log
+  shim.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_log
+  bc250_gmc.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_log
+  bc250_psp.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_log
+  gfxhub_v2_0.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_log
+  mmhub_v2_0.obj : error LNK2001: nierozpoznany symbol zewnętrzny bc250_shim_log
+  P:\BC-250\scratch\build\bd025\metadata\firmware_metadata_test.exe : fatal error LNK1120: liczba nierozpoznanych elementów zewnętrznych: 4
+Exception: P:\BC-250\bc250-win\driver\kmd\test\run_firmware_metadata.ps1:32
+Line |
+  32 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | link.exe failed (1120)

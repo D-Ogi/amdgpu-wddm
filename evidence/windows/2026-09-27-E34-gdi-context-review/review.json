@@ -1,0 +1,29 @@
+{
+  "source_trial": "M682 DWM038",
+  "review_only_no_lab_access": true,
+  "startup_files": 158,
+  "retained_context_lines_and_occurrence_counts": {
+    "wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0\r": 2,
+    "wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0\r": 2,
+    "wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0\r": 5,
+    "wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 80\r": 8
+  },
+  "gdi_va_matches": [
+    {
+      "file": "startup-log-003.txt",
+      "line": 349,
+      "sha256": "6515901e77d6a5f331db99a44a4fc900355acc3e74f59f1f4a72615733af532d",
+      "guard_event": 300
+    },
+    {
+      "file": "startup-log-004.txt",
+      "line": 349,
+      "sha256": "3a61c43d62205714fdbb8e86ee8f99728acb47ba37e0094cf1ca456d77c92224",
+      "guard_event": 300
+    }
+  ],
+  "distinct_gdi_guard_events": 1,
+  "kmd_source": "933f383a46c761d0f4c37bbdf91c2a0cbdd017b8",
+  "contract": "WDK10.0.26100 DXGK_CREATECONTEXTFLAGS, ref/ddi-display/d3dkmddi.md:19935",
+  "limitations": "Bounded first-call logging, repeated snapshots, no owner PID or RenderGdi invocation witness."
+}

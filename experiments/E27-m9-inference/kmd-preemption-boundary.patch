@@ -1,0 +1,345 @@
+--- a/driver/kmd/wddm.c
++++ b/driver/kmd/wddm.c
+@@ -223,6 +223,8 @@
+     // that assert now only pins wddm->NodeCount's gate-closed starting value, not the array width.
+     volatile LONG SubmittedFence[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG SubmittedNode[BC250_WDDM_NODE_COUNT_MAX];
++    volatile LONG ActiveSubmissions[BC250_WDDM_NODE_COUNT_MAX];
++    volatile LONG LastReportedFence[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG CompletionPending[BC250_WDDM_NODE_COUNT_MAX];    // set by the submit, cleared by the DPC
+     volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value";
+                                          // shared across nodes on purpose (design note section 5): a lab
+@@ -235,6 +237,8 @@
+     volatile LONG PreemptionFence[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG PreemptionNode[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG PreemptionPending[BC250_WDDM_NODE_COUNT_MAX];
++    BOOLEAN ReportActive;
++    BOOLEAN ReportAgain;
+     KDPC ReportDpc;
+ 
+     // ADR 0008 stage D (docs/design/paging-node.md section 5): node 1's own hardware channel, parallel to stage
+@@ -599,15 +603,13 @@
+ 
+ // The submit side. It records and queues; it must not report, because a DDI that calls back into dxgkrnl from
+ // inside the submit path re-enters the scheduler with the submit still on the stack.
+-static void WddmCompleteFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT NodeOrdinal)
+-{
+-    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+-
+-    if (wddm == NULL || NodeOrdinal >= BC250_WDDM_NODE_COUNT_MAX) return;
+-    InterlockedExchange(&wddm->SubmittedNode[NodeOrdinal], (LONG)NodeOrdinal);
+-    InterlockedExchange(&wddm->SubmittedFence[NodeOrdinal], (LONG)FenceId);
+-    InterlockedExchange(&wddm->CompletionPending[NodeOrdinal], 1);
+-    WddmQueueReport(wddm);
++// Caller holds Lock. Publish completion atomically with clearing hardware-pending state:
++// otherwise a preemption DPC can observe idle hardware before its completion is queued.
++static void WddmRecordCompletionLocked(BC250_WDDM* Wddm, UINT FenceId, UINT NodeOrdinal)
++{
++    Wddm->SubmittedNode[NodeOrdinal] = (LONG)NodeOrdinal;
++    Wddm->SubmittedFence[NodeOrdinal] = (LONG)FenceId;
++    Wddm->CompletionPending[NodeOrdinal] = 1;
+ }
+ 
+ // Same for a preemption. The DDI may not report inline either, and the fence it wants to name as last completed
+@@ -615,11 +617,20 @@
+ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT NodeOrdinal)
+ {
+     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
++    KIRQL irql;
++    BOOLEAN busy;
++    LONG active;
+ 
+     if (wddm == NULL || NodeOrdinal >= BC250_WDDM_NODE_COUNT_MAX) return;
+-    InterlockedExchange(&wddm->PreemptionNode[NodeOrdinal], (LONG)NodeOrdinal);
+-    InterlockedExchange(&wddm->PreemptionFence[NodeOrdinal], (LONG)FenceId);
+-    InterlockedExchange(&wddm->PreemptionPending[NodeOrdinal], 1);
++    KeAcquireSpinLock(&wddm->Lock, &irql);
++    wddm->PreemptionNode[NodeOrdinal] = (LONG)NodeOrdinal;
++    wddm->PreemptionFence[NodeOrdinal] = (LONG)FenceId;
++    wddm->PreemptionPending[NodeOrdinal] = 1;
++    busy = NodeOrdinal == BC250_WDDM_NODE_COPY ? wddm->PagingHwPending : wddm->HwPending;
++    active = wddm->ActiveSubmissions[NodeOrdinal];
++    KeReleaseSpinLock(&wddm->Lock, irql);
++    GuardLog("wddm: preemption queued fence %u node %u hardware pending %u active submits %ld",
++             FenceId, NodeOrdinal, busy, active);
+     WddmQueueReport(wddm);
+ }
+ 
+@@ -639,13 +650,14 @@
+     BOOLEAN deferred;
+     KIRQL irql;
+ 
+-    if (wddm == NULL) return;
++    if (wddm == NULL || NodeOrdinal >= BC250_WDDM_NODE_COUNT_MAX) return;
+     KeAcquireSpinLock(&wddm->Lock, &irql);
+     deferred = paging ? wddm->PagingHwPending : wddm->HwPending;
+     if (deferred && paging) { wddm->PagingDeferredValid = TRUE; wddm->PagingDeferredFence = FenceId; }
+     else if (deferred) { wddm->DeferredValid = TRUE; wddm->DeferredFence = FenceId; }
++    else WddmRecordCompletionLocked(wddm, FenceId, NodeOrdinal);
+     KeReleaseSpinLock(&wddm->Lock, irql);
+-    if (!deferred) WddmCompleteFence(Device, FenceId, NodeOrdinal);
++    if (!deferred) WddmQueueReport(wddm);
+ }
+ 
+ // Has the fence of the submission in flight arrived? Called from the IH DPC (pnp.c), from the submit and from the
+@@ -667,12 +679,13 @@
+         wddm->HwPending = FALSE;
+         wddm->DeferredValid = FALSE;
+         KeCancelTimer(&wddm->SubmitTimer);
++        WddmRecordCompletionLocked(wddm, fence, node);
+     }
+     KeReleaseSpinLock(&wddm->Lock, irql);
+     if (!done) return;
+     if (InterlockedIncrement(&wddm->HwCompleted) <= BC250_WDDM_LOG_CALLS)
+         GuardLog("wddm: hardware fence arrived, reporting fence %u", fence);
+-    WddmCompleteFence(Device, fence, node);
++    WddmQueueReport(wddm);
+ }
+ 
+ static KDEFERRED_ROUTINE WddmSubmitDpcRoutine;
+@@ -699,6 +712,7 @@
+         seq = wddm->HwSeq;
+         wddm->HwPending = FALSE;
+         wddm->DeferredValid = FALSE;
++        WddmRecordCompletionLocked(wddm, fence, node);
+     }
+     KeReleaseSpinLock(&wddm->Lock, irql);
+     if (!timedOut) return;
+@@ -708,7 +722,7 @@
+     GfxSubmitFail(device);
+     GuardLog("wddm: HARDWARE FENCE TIMEOUT after %u ms (sequence %u): fence %u completed in software, ring path closed",
+              (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
+-    WddmCompleteFence(device, fence, node);
++    WddmQueueReport(wddm);
+ }
+ 
+ // PASSIVE_LEVEL (SubmitCommandVirtual). TRUE = the packet is on the ring and its completion will come by itself.
+@@ -855,12 +869,13 @@
+         wddm->PagingDeferredValid = FALSE;
+         wddm->PagingHwPending = FALSE;
+         KeCancelTimer(&wddm->PagingSubmitTimer);
++        WddmRecordCompletionLocked(wddm, fence, BC250_WDDM_NODE_COPY);
+     }
+     KeReleaseSpinLock(&wddm->Lock, irql);
+     if (!done) return;
+     if (InterlockedIncrement(&wddm->PagingHwCompleted) <= BC250_WDDM_LOG_CALLS)
+         GuardLog("wddm: paging hardware fence arrived, reporting fence %u", fence);
+-    WddmCompleteFence(Device, fence, BC250_WDDM_NODE_COPY);
++    WddmQueueReport(wddm);
+ }
+ 
+ static KDEFERRED_ROUTINE WddmPagingSubmitDpcRoutine;
+@@ -886,6 +901,7 @@
+         wddm->PagingDeferredValid = FALSE;
+         seq = wddm->PagingHwSeq;
+         wddm->PagingHwPending = FALSE;
++        WddmRecordCompletionLocked(wddm, fence, BC250_WDDM_NODE_COPY);
+     }
+     KeReleaseSpinLock(&wddm->Lock, irql);
+     if (!timedOut) return;
+@@ -895,7 +911,7 @@
+     GfxPagingSubmitFail(device);
+     GuardLog("wddm: PAGING HARDWARE FENCE TIMEOUT after %u ms (sequence %u): fence %u completed in software, node 1 ring path closed",
+              (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
+-    WddmCompleteFence(device, fence, BC250_WDDM_NODE_COPY);
++    WddmQueueReport(wddm);
+ }
+ 
+ // DISPATCH_LEVEL (Bc250WddmSubmitCommand, node 1). TRUE = the packet is on SDMA0's ring and its completion will
+@@ -942,6 +958,7 @@
+     BC250_WDDM* wddm;
+     DXGKARGCB_NOTIFY_INTERRUPT_DATA data;
+     LONG fence;
++    KIRQL reportIrql;
+     UINT node;
+ 
+     UNREFERENCED_PARAMETER(Dpc);
+@@ -949,35 +966,80 @@
+     UNREFERENCED_PARAMETER(Arg2);
+     if (device == NULL || (wddm = (BC250_WDDM*)device->Wddm) == NULL) return;
+     if (WddmStopping(wddm)) return;
++    // The same KDPC may be requeued from another processor while this invocation
++    // reports to dxgkrnl. Keep publication and preemption ordered across invocations.
++    KeAcquireSpinLock(&wddm->Lock, &reportIrql);
++    if (wddm->ReportActive)
++    {
++        wddm->ReportAgain = TRUE;
++        KeReleaseSpinLock(&wddm->Lock, reportIrql);
++        return;
++    }
++    wddm->ReportActive = TRUE;
++    KeReleaseSpinLock(&wddm->Lock, reportIrql);
+ 
+     // ADR 0008 stage D: both nodes' pending completion/preemption are checked, not only node 0's - the array
+     // slot a gate-closed device never sets stays 0, so this loop reports nothing new for node 1 until the gate
+     // opens and something actually submits to it (design note section 5).
+     for (node = 0; node < BC250_WDDM_NODE_COUNT_MAX; node++)
+     {
+-        if (InterlockedExchange(&wddm->CompletionPending[node], 0) != 0)
++        KIRQL irql;
++        BOOLEAN complete, preempt;
++        UINT preemptFence = 0, lastFence = 0;
++
++        KeAcquireSpinLock(&wddm->Lock, &irql);
++        complete = wddm->CompletionPending[node] != 0;
++        fence = wddm->SubmittedFence[node];
++        wddm->CompletionPending[node] = 0;
++        KeReleaseSpinLock(&wddm->Lock, irql);
++        if (complete)
+         {
+-            fence = InterlockedCompareExchange(&wddm->SubmittedFence[node], 0, 0);
+-            InterlockedExchange(&wddm->LastCompletedFence, fence);
+             RtlZeroMemory(&data, sizeof(data));
+             data.InterruptType = DXGK_INTERRUPT_DMA_COMPLETED;
+             data.DmaCompleted.SubmissionFenceId = (UINT)fence;
+-            data.DmaCompleted.NodeOrdinal = (UINT)InterlockedCompareExchange(&wddm->SubmittedNode[node], 0, 0);
+-            data.DmaCompleted.EngineOrdinal = 0;    // "for adapters that are not part of a link, always 0"
++            data.DmaCompleted.NodeOrdinal = node;
++            data.DmaCompleted.EngineOrdinal = 0;
+             WddmReport(device, &data);
++            InterlockedExchange(&wddm->LastCompletedFence, fence);
++            InterlockedExchange(&wddm->LastReportedFence[node], fence);
+         }
+ 
+-        if (InterlockedExchange(&wddm->PreemptionPending[node], 0) != 0)
++        // DMA-buffer-boundary preemption cannot be acknowledged while that buffer is
++        // executing or while its completion has yet to reach dxgkrnl. ActiveSubmissions
++        // also covers GfxSubmitIb before it installs HwPending. Completion and submit
++        // exit requeue this DPC, so no spinning or timer is needed while we defer.
++        KeAcquireSpinLock(&wddm->Lock, &irql);
++        preempt = wddm->PreemptionPending[node] != 0 &&
++                  wddm->ActiveSubmissions[node] == 0 && wddm->CompletionPending[node] == 0 &&
++                  !(node == BC250_WDDM_NODE_COPY ? wddm->PagingHwPending : wddm->HwPending);
++        if (preempt)
++        {
++            preemptFence = (UINT)wddm->PreemptionFence[node];
++            lastFence = (UINT)wddm->LastReportedFence[node];
++            wddm->PreemptionPending[node] = 0;
++        }
++        KeReleaseSpinLock(&wddm->Lock, irql);
++        if (preempt)
+         {
+             RtlZeroMemory(&data, sizeof(data));
+             data.InterruptType = DXGK_INTERRUPT_DMA_PREEMPTED;
+-            data.DmaPreempted.PreemptionFenceId = (UINT)InterlockedCompareExchange(&wddm->PreemptionFence[node], 0, 0);
+-            data.DmaPreempted.LastCompletedFenceId = (UINT)InterlockedCompareExchange(&wddm->LastCompletedFence, 0, 0);
+-            data.DmaPreempted.NodeOrdinal = (UINT)InterlockedCompareExchange(&wddm->PreemptionNode[node], 0, 0);
++            data.DmaPreempted.PreemptionFenceId = preemptFence;
++            data.DmaPreempted.LastCompletedFenceId = lastFence;
++            data.DmaPreempted.NodeOrdinal = node;
+             data.DmaPreempted.EngineOrdinal = 0;
++            GuardLog("wddm: preemption report fence %u node %u last completed %u at DMA boundary",
++                     preemptFence, node, lastFence);
+             WddmReport(device, &data);
+         }
+     }
++    KeAcquireSpinLock(&wddm->Lock, &reportIrql);
++    wddm->ReportActive = FALSE;
++    if (wddm->ReportAgain)
++    {
++        wddm->ReportAgain = FALSE;
++        if (!wddm->Stopping) KeInsertQueueDpc(&wddm->ReportDpc, NULL, NULL);
++    }
++    KeReleaseSpinLock(&wddm->Lock, reportIrql);
+ }
+ 
+ // ---- the software VSync ------------------------------------------------------------------------------------------
+@@ -2407,8 +2469,7 @@
+     return STATUS_SUCCESS;
+ }
+ 
+-static DXGKDDI_SUBMITCOMMAND Bc250WddmSubmitCommand;
+-static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
++static NTSTATUS Bc250WddmSubmitCommandImpl(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
+ {
+     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+     BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
+@@ -2437,6 +2498,32 @@
+         return STATUS_SUCCESS;
+     WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
+     return STATUS_SUCCESS;
++}
++
++static DXGKDDI_SUBMITCOMMAND Bc250WddmSubmitCommand;
++static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
++{
++    BC250_WDDM* wddm = WddmOf(hAdapter);
++    BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
++    UINT node = context != NULL ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
++    BOOLEAN tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
++    NTSTATUS status;
++    KIRQL irql;
++    if (tracked)
++    {
++        KeAcquireSpinLock(&wddm->Lock, &irql);
++        wddm->ActiveSubmissions[node]++;
++        KeReleaseSpinLock(&wddm->Lock, irql);
++    }
++    status = Bc250WddmSubmitCommandImpl(hAdapter, pSubmitCommand);
++    if (tracked)
++    {
++        KeAcquireSpinLock(&wddm->Lock, &irql);
++        wddm->ActiveSubmissions[node]--;
++        KeReleaseSpinLock(&wddm->Lock, irql);
++        WddmQueueReport(wddm);
++    }
++    return status;
+ }
+ 
+ // A UMD context's command buffer is the IB named in its BC2S blob. dxgkrnl copies that blob to the front of
+@@ -2579,8 +2666,7 @@
+ 
+ static void WddmPresentBlit(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Present);
+ 
+-static DXGKDDI_SUBMITCOMMANDVIRTUAL Bc250WddmSubmitCommandVirtual;
+-static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
++static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
+                                               _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* pSubmitCommand)
+ {
+     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+@@ -2698,17 +2784,40 @@
+     return STATUS_SUCCESS;
+ }
+ 
++static DXGKDDI_SUBMITCOMMANDVIRTUAL Bc250WddmSubmitCommandVirtual;
++static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* pSubmitCommand)
++{
++    BC250_WDDM* wddm = WddmOf(hAdapter);
++    BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
++    UINT node = context != NULL ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
++    BOOLEAN tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
++    NTSTATUS status;
++    KIRQL irql;
++    if (tracked)
++    {
++        KeAcquireSpinLock(&wddm->Lock, &irql);
++        wddm->ActiveSubmissions[node]++;
++        KeReleaseSpinLock(&wddm->Lock, irql);
++    }
++    status = Bc250WddmSubmitCommandVirtualImpl(hAdapter, pSubmitCommand);
++    if (tracked)
++    {
++        KeAcquireSpinLock(&wddm->Lock, &irql);
++        wddm->ActiveSubmissions[node]--;
++        KeReleaseSpinLock(&wddm->Lock, irql);
++        WddmQueueReport(wddm);
++    }
++    return status;
++}
++
+ static DXGKDDI_PREEMPTCOMMAND Bc250WddmPreemptCommand;
+ static NTSTATUS Bc250WddmPreemptCommand(_In_ const HANDLE hAdapter, _In_ const DXGKARG_PREEMPTCOMMAND* pPreemptCommand)
+ {
+     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+     BC250_WDDM* wddm = WddmOf(hAdapter);
+ 
+-    // Nothing is ever running here, which is the case the documentation covers explicitly: report the preemption
+-    // with the last fence that completed, rather than submit a preemption fence. The report is not made here: it
+-    // is recorded and handed to the same DPC the completions go through, which publishes any pending completion
+-    // first, so that LastCompletedFenceId is the fence dxgkrnl has just been told about and not the one before
+-    // it. A failure return would bugcheck, so this returns success whatever the DPC finds.
++    // Defer notification until the submitted DMA buffer has retired and its completion
++    // has been published. Immediate idle reporting was only valid for stage A.
+     if (WddmFirstCalls(wddm, WddmDdiPreemptCommand))
+         GuardLog("wddm: PreemptCommand fence %u node %u", pPreemptCommand->PreemptionFenceId, pPreemptCommand->NodeOrdinal);
+     WddmPreemptFence(device, pPreemptCommand->PreemptionFenceId, pPreemptCommand->NodeOrdinal);

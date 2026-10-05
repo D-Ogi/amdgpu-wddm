@@ -1,0 +1,39 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+@@ -1065,6 +1065,13 @@
+       }
+       slot->retire_value = next_value;
+       queue->bc250_progress.wait_value = next_value;
++      if (ws->host.dispatch) {
++         struct bc250_host_progress progress = {queue->context_h, queue->bc250_progress.handle, next_value};
++         if (ws->host.dispatch(ws->host.userdata, BC250_HOST_PUBLISH_PROGRESS, &progress) < 0) {
++            queue->bc250_submit_failed = true;
++            return VK_ERROR_DEVICE_LOST;
++         }
++      }
+       queue->bc250_gather_index = (queue->bc250_gather_index + 1u) % BC250_GATHER_SLOTS;
+    } else if (submit->cs_count > 0) {
+       struct radv_winsys_ib first_ib = {};
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -7,7 +7,7 @@
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 3u
++#define BC250_HOST_VERSION 4u
+ #define BC250_HOST_IMPORT_STYPE 0x42434832u
+ struct bc250_host_import {
+    uint32_t sType;
+@@ -18,6 +18,11 @@
+ };
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
++#define BC250_HOST_PUBLISH_PROGRESS 3u
++struct bc250_host_progress {
++   uint32_t context, sync;
++   uint64_t value;
++};
+ struct bc250_host_paging {
+    uint32_t queue, sync;
+    void *cpu_address;

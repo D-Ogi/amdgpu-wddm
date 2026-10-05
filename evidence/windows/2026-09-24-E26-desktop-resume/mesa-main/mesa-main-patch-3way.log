@@ -1,0 +1,7 @@
+error: patch failed: src/gallium/auxiliary/nir/tgsi_to_nir.c:1338
+Falling back to three-way merge...
+Applied patch to 'src/gallium/auxiliary/nir/tgsi_to_nir.c' with conflicts.
+P:/bc-250/scratch/m13/mesa-current-gallium.patch:1068: new blank line at EOF.
++
+U src/gallium/auxiliary/nir/tgsi_to_nir.c
+warning: 1 line adds whitespace errors.

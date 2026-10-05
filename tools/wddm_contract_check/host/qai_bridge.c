@@ -10,9 +10,9 @@
  * static DDIs, so the harness calls DxgkDdiQueryAdapterInfo exactly the way dxgkrnl does, through the
  * table pointer, rather than through a symbol wddm.c would have had to expose for testing.
  *
- * The adapter this runs against is a BC250_DEVICE filled in with unit A's measured geometry (facts M31
- * for the carve-out, the firmware mode of E16). No register is read and none could be: Device->Mmio
- * stays NULL, and no DDI in wddm.c touches hardware by design (ADR 0008 stage A).
+ * Adapter geometry is supplied explicitly. The default retains the historical 8 GiB host fixture;
+ * larger fixtures are synthetic, not measurements or predictions of firmware layout. No discovery
+ * or register access is performed by this initializer: Device->Mmio remains NULL.
  */
 #include "bc250kmd.h"
 #include "qai_bridge.h"
@@ -23,35 +23,54 @@ static BC250_DEVICE                 g_Device;
 static DRIVER_INITIALIZATION_DATA   g_Table;
 static BOOLEAN                      g_Started;
 
-/* Unit A, as the driver would have found it: 8 GB of VRAM at system physical 0x270000000, MC base
- * 0xF400000000 (facts M31), the firmware's 1920x1200 mode at the bottom of it (E16 run 001). */
-#define BC250H_VRAM_LENGTH      0x200000000ull
-#define BC250H_VRAM_PHYSICAL    0x270000000ull
-#define BC250H_VRAM_MC_BASE     0xF400000000ull
-#define BC250H_FB_WIDTH         1920u
-#define BC250H_FB_HEIGHT        1200u
-#define BC250H_FB_PITCH         7680u
+/* Geometry belongs to the caller, not to a hidden assumption in the bridge. */
+int bc250h_fixture_geometry(unsigned gib, struct bc250h_geometry* geometry)
+{
+    if (geometry == NULL || (gib != 8 && gib != 12 && gib != 16)) return 0;
+    geometry->vram_length = (unsigned long long)gib << 30;
+    geometry->vram_physical = gib == 8 ? 0x270000000ull :
+                              gib == 12 ? 0x670000000ull : 0x1270000000ull;
+    geometry->vram_mc_base = gib == 8 ? 0xF400000000ull :
+                             gib == 12 ? 0xE800000000ull : 0xDC00000000ull;
+    geometry->fb_width = 1920;
+    geometry->fb_height = 1200;
+    geometry->fb_pitch = 7680;
+    return 1;
+}
 
 int bc250h_start(int vram_enabled)
 {
+    struct bc250h_geometry geometry;
+    if (!bc250h_fixture_geometry(8, &geometry)) return 4;
+    return bc250h_start_geometry(vram_enabled, &geometry);
+}
+
+int bc250h_start_geometry(int vram_enabled, const struct bc250h_geometry* geometry)
+{
     if (g_Started) return 1;
+    if (geometry == NULL || !geometry->vram_length || !geometry->fb_width ||
+        !geometry->fb_height || (geometry->fb_pitch & 3u) ||
+        (ULONGLONG)geometry->fb_width * 4 > geometry->fb_pitch ||
+        (ULONGLONG)geometry->fb_pitch * geometry->fb_height > geometry->vram_length ||
+        geometry->vram_physical > MAXULONGLONG - geometry->vram_length ||
+        geometry->vram_mc_base > MAXULONGLONG - geometry->vram_length) return 4;
     RtlZeroMemory(&g_Device, sizeof(g_Device));
     RtlZeroMemory(&g_Table, sizeof(g_Table));
 
-    g_Device.Post.Width = BC250H_FB_WIDTH;
-    g_Device.Post.Height = BC250H_FB_HEIGHT;
-    g_Device.Post.Pitch = BC250H_FB_PITCH;
+    g_Device.Post.Width = geometry->fb_width;
+    g_Device.Post.Height = geometry->fb_height;
+    g_Device.Post.Pitch = geometry->fb_pitch;
     g_Device.Post.ColorFormat = D3DDDIFMT_X8R8G8B8;
-    g_Device.Post.PhysicAddress.QuadPart = (LONGLONG)BC250H_VRAM_PHYSICAL;
+    g_Device.Post.PhysicAddress.QuadPart = (LONGLONG)geometry->vram_physical;
     g_Device.Post.TargetId = BC250_CHILD_UID;
     g_Device.Post.AcpiId = 0;
 
     if (vram_enabled)
     {
         g_Device.VramEnabled = TRUE;
-        g_Device.VramLength = BC250H_VRAM_LENGTH;
-        g_Device.VramPhysical.QuadPart = (LONGLONG)BC250H_VRAM_PHYSICAL;
-        g_Device.VramMcBase = BC250H_VRAM_MC_BASE;
+        g_Device.VramLength = geometry->vram_length;
+        g_Device.VramPhysical.QuadPart = (LONGLONG)geometry->vram_physical;
+        g_Device.VramMcBase = geometry->vram_mc_base;
     }
 
     /* The shims must answer before WddmStart runs: it calls VidMmStart. */
@@ -566,21 +585,23 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
     g_Shim.submit_fail++;
 }
 
-void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId)
+NTSTATUS VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId)
 {
     UNREFERENCED_PARAMETER(Device);
     UNREFERENCED_PARAMETER(SegmentOffset);
     UNREFERENCED_PARAMETER(SegmentLength);
     UNREFERENCED_PARAMETER(VramSegmentId);
     g_Shim.vidmm_start++;
+    return STATUS_SUCCESS;
 }
 
 void VidMmStop(void) { g_Shim.vidmm_stop++; }
 
-void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update)
+NTSTATUS VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update)
 {
     UNREFERENCED_PARAMETER(Update);
     g_Shim.vidmm_update_page_table++;
+    return STATUS_SUCCESS;
 }
 
 void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root)

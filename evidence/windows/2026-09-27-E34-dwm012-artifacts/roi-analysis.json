@@ -1,0 +1,72 @@
+{
+  "red": {
+    "pixels": 1400,
+    "baseline": [
+      [
+        [
+          255,
+          0,
+          0
+        ],
+        1400
+      ]
+    ],
+    "gpu": [
+      [
+        [
+          255,
+          0,
+          0
+        ],
+        1400
+      ]
+    ],
+    "screen": [
+      [
+        [
+          255,
+          0,
+          0
+        ],
+        1400
+      ]
+    ],
+    "baseline_gpu_mismatch": 0,
+    "gpu_screen_mismatch": 0
+  },
+  "overlap": {
+    "pixels": 6600,
+    "baseline": [
+      [
+        [
+          127,
+          0,
+          128
+        ],
+        6600
+      ]
+    ],
+    "gpu": [
+      [
+        [
+          127,
+          0,
+          128
+        ],
+        6600
+      ]
+    ],
+    "screen": [
+      [
+        [
+          127,
+          0,
+          128
+        ],
+        6600
+      ]
+    ],
+    "baseline_gpu_mismatch": 0,
+    "gpu_screen_mismatch": 0
+  }
+}

@@ -2,7 +2,7 @@
 /*
  * driver/contract/test/bc250_caps_stubs.c - the stubbed query layer.
  *
- * ac_gpu_info.c is compiled from P:\BC-250\ref\mesa unmodified, so its object file references
+ * ac_gpu_info.c is compiled from <BC250_ROOT>\ref\mesa unmodified, so its object file references
  * every symbol the whole file needs, not just the ones the functions we call need. Twelve of
  * those live in Mesa translation units that would drag in addrlib, the NIR compiler and the
  * generic util library. Linking all of that to answer "does Mesa recognise this chip" would be
@@ -15,7 +15,7 @@
  * returns 0 is a bug waiting to be believed.
  *
  * This is the boundary the task set: a thin stub layer is fine, forking Mesa is not. Nothing in
- * P:\BC-250\ref\mesa is modified, patched or copied. If this file ever has to contain real logic
+ * <BC250_ROOT>\ref\mesa is modified, patched or copied. If this file ever has to contain real logic
  * rather than an abort, that is the signal to stop and report it.
  *
  * Verified against Mesa main, origin/main 3ae3d2e.

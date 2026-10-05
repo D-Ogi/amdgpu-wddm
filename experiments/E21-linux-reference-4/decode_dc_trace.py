@@ -1,9 +1,13 @@
 # Name the amdgpu_dc_wreg/rreg lines of a flip trace with regcalc (DMU header), and print the writes
 # around every write of a HUBPREQ surface address or an OTG master update lock.
-import re, sys
-sys.path.insert(0, "P:/BC-250/bc250-win/tools/regcalc")
+# BC250_ROOT is the workspace root, by default the parent directory of this repository.
+import os, re, sys
+from pathlib import Path
+ROOT = Path(os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent)))
+REPO = ROOT / "bc250-win"
+sys.path.insert(0, str(REPO / "tools" / "regcalc"))
 from regcalc import RegMap
-rm = RegMap(ip="DMU", reg_header="P:/BC-250/bc250-win/third_party/linux-amdgpu/dcn_2_0_1_offset.h")
+rm = RegMap(ip="DMU", reg_header=str(REPO / "third_party" / "linux-amdgpu" / "dcn_2_0_1_offset.h"))
 gc = RegMap()
 path = sys.argv[1]
 want = re.compile(r"PRIMARY_SURFACE_ADDRESS|MASTER_UPDATE_LOCK|SURFACE_INUSE|FLIP_CONTROL|SURFACE_PITCH|GLOBAL_SYNC|VUPDATE|VERTICAL_INTERRUPT")

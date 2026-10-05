@@ -7,10 +7,14 @@
 //     StageHistory       REG_SZ     the stages of this boot, oldest first
 //
 // This file holds the reader (KmdRegistry), the stage names (KmdStages) and the panel (KmdProvider). The
-// confirmation of ADR 0006 point 3 lives here too: this process runs in the interactive session, so the fact
-// that it is polling at all is the evidence that the desktop came up.
+// confirmation policy lives here too: full WDDM requires typed completed-presentation progress;
+// display-only retains the stage61 interval. The interactive process alone proves neither.
 using System;
 using System.Globalization;
+using System.Diagnostics;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using System.IO;
 using Microsoft.Win32;
 
@@ -49,7 +53,7 @@ namespace Bc250Mon
         };
 
         // Also mirrored from driver/kmd/bc250kmd.h, and checked by test_stages.py.
-        public const int FirstPresentDone = 61;             // StageFirstPresentDone: from here a start is trustworthy
+        public const int FirstPresentDone = 61;             // StageFirstPresentDone: display-only confirmation prerequisite
         public const int MaxUnconfirmedStarts = 2;          // BC250_MAX_UNCONFIRMED_STARTS: the driver refuses to start
 
         public static string Name(int number)
@@ -150,14 +154,25 @@ namespace Bc250Mon
             return s;
         }
 
+        // .NET Framework RegistryKey.Flush ignores RegFlushKey's return value
+        // (Microsoft referencesource registrykey.cs). Check native persistence.
+        [DllImport("advapi32.dll", ExactSpelling = true)]
+        static extern int RegFlushKey(SafeRegistryHandle key);
+
         /// <summary>Tell the driver that a human saw the desktop: UnconfirmedStarts = 0. Throws if it cannot.</summary>
         public void Confirm()
         {
             using (var service = _hive.OpenSubKey(_subPath, true))
             {
                 if (service == null) throw new InvalidOperationException("bc250kmd is not installed (" + Path + ")");
+                // Writable CreateSubKey obtains read/write access, including
+                // KEY_QUERY_VALUE required by RegFlushKey.
                 using (var parameters = service.CreateSubKey("Parameters"))
+                {
                     parameters.SetValue("UnconfirmedStarts", 0, RegistryValueKind.DWord);
+                    int error = RegFlushKey(parameters.Handle);
+                    if (error != 0) throw new Win32Exception(error, "Cannot persist UnconfirmedStarts = 0");
+                }
             }
         }
 
@@ -177,12 +192,15 @@ namespace Bc250Mon
 
     public sealed class KmdProvider : IProvider
     {
-        // ADR 0006 point 3: a start counts as good once the desktop has been up for this long. This process is
-        // started at logon in the interactive session, so its own age is the desktop's age.
+        // Full WDDM observes completed presentation; display-only retains stage61.
         public const int ConfirmAfterSeconds = 60;
 
         readonly KmdRegistry _kmd;
         readonly int _startTick = Environment.TickCount;
+        readonly Stopwatch _healthClock = Stopwatch.StartNew();
+        readonly StartConfirmationPolicy _healthPolicy = new StartConfirmationPolicy();
+        string _lastHealthError;
+        bool _retryFullConfirmation;
         bool? _wasInstalled;
         string _lastError;
 
@@ -210,6 +228,7 @@ namespace Bc250Mon
 
             if (!s.Installed)
             {
+                ResetAutoConfirmation();
                 // The normal state of the lab today. Say it once in the log, then stay quiet.
                 p.Rows.Add(new Row("Driver", "not installed"));
                 AddKeyRow(p);
@@ -226,6 +245,7 @@ namespace Bc250Mon
             AddKeyRow(p);
             if (s.Error != null)
             {
+                ResetAutoConfirmation();
                 p.Rows.Add(new Row("Key", s.Error, Level.Error));
                 if (_lastError != s.Error) state.Log(Name, Level.Error, "cannot read " + _kmd.Path + ": " + s.Error);
                 _lastError = s.Error;
@@ -236,6 +256,7 @@ namespace Bc250Mon
 
             if (!s.Started)
             {
+                ResetAutoConfirmation();
                 p.Rows.Add(new Row("Stage", "never started (no Parameters key)"));
                 state.SetPanel(p);
                 return;
@@ -259,7 +280,58 @@ namespace Bc250Mon
         // stayed unconfirmed and the next device cycle would have run into the guard.
         int _pendingStarts = -1, _pendingSince;
 
+        void ResetAutoConfirmation()
+        {
+            _healthPolicy.Reset();
+            _pendingStarts = -1;
+        }
+
         string Confirm(State state, KmdSnapshot s, int starts)
+        {
+            // A failed checked flush can leave a cached registry zero. Keep the
+            // full-WDDM retry pending until a typed confirmed reply says success.
+            if (starts == 0 && !_retryFullConfirmation)
+            { ResetAutoConfirmation(); return "nothing to confirm"; }
+            try
+            {
+                StartHealthSnapshot health = Driver.ReadStartHealth();
+                _lastHealthError = null;
+                if ((health.Flags & 1) == 0)
+                {
+                    _healthPolicy.Reset();
+                    _retryFullConfirmation = false;
+                    // Only an affirmative, validated DDO reply permits the legacy
+                    // stage61 policy. An old DLL/ABI or missing query never does.
+                    return ConfirmDisplayOnly(state, s, starts);
+                }
+                _pendingStarts = -1;
+                if ((health.Flags & 8) != 0)
+                {
+                    _healthPolicy.Reset(); _retryFullConfirmation = false;
+                    _lastHealthError = null;
+                    return "confirmed by driver";
+                }
+                if (!_healthPolicy.Observe(_healthClock.ElapsedMilliseconds, health))
+                    return "waiting for presentation progress, " + (_healthPolicy.ObservedMilliseconds / 1000) + " s of 60";
+                ulong generation = _healthPolicy.Generation, epoch = _healthPolicy.Epoch;
+                _retryFullConfirmation = true;
+                StartHealthSnapshot confirmed = Driver.ConfirmStartHealth(generation, epoch);
+                _retryFullConfirmation = false;
+                _healthPolicy.Reset(); _lastHealthError = null;
+                state.Log(Name, Level.Good, "full-WDDM start confirmed after 60 s observed progress: generation " +
+                    confirmed.Generation + ", epoch " + confirmed.Epoch + ", completed " + confirmed.Completed);
+                return "confirmed after presentation progress";
+            }
+            catch (Exception e)
+            {
+                ResetAutoConfirmation();
+                if (_lastHealthError != e.Message) state.Log(Name, Level.Warn, "automatic start confirmation waiting: " + e.Message);
+                _lastHealthError = e.Message;
+                return "waiting: " + e.Message;
+            }
+        }
+
+        string ConfirmDisplayOnly(State state, KmdSnapshot s, int starts)
         {
             if (starts == 0) { _pendingStarts = -1; return "nothing to confirm"; }
             if (!s.LastStage.HasValue || s.LastStage.Value != KmdStages.FirstPresentDone)

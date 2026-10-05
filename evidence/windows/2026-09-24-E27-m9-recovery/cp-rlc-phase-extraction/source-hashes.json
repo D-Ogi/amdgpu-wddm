@@ -1,0 +1,7 @@
+{
+  "driver/shim/bc250_gfx.c": "2edd581bbe5dee70ce53fdd62cce99f860fae77197674e533cc1b877fcca6ec5",
+  "driver/shim/include/bc250_gfx.h": "7a078f69690dc6226dfcadabf68e4fafeb8094d57b0af623d353a07aa2f4def8",
+  "driver/shim/test/replay_gfx.c": "ddc9fafd80f6321a5c1ffbd9d2245db5d8d50a93af7efd0809014f8ef53356db",
+  "driver/kmd/gpumem.c": "84add985daf325a5e93b139a6c59dcee26b442f509e78a856a8bf1f142c17800",
+  "driver/kmd/gfx.c": "0cc30a63dbb4dd95b33f5bdb272083bff03fd654d54b4b85e4b7779d36ed6cb2"
+}

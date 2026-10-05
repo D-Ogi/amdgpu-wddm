@@ -1,0 +1,18 @@
+{
+    "clock":  "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66875 ready=1\r\n",
+    "boot":  "2026-09-27T12:58:57.5000000+02:00",
+    "health":  "health abi=1 version=0x000700A4 flags=15 generation=163991222646 epoch=5 completed=1197 age_ms=338 ready_ms=72899\r\n",
+    "dwm_start":  "2026-09-27T15:32:13.1228228Z",
+    "dwm_pid":  12852,
+    "modules":  [
+                    {
+                        "sha256":  "5C74BF98F2362127173C53F7808950D4B6676E1B1C901A341163F7032AE78965",
+                        "path":  "C:\\BC250\\m13\\dwm-hosted038\\bc250d3d_zink.dll"
+                    },
+                    {
+                        "sha256":  "F0C7CEADBA41302221EF925E4A35A642926088D7CA3A2774852BB294726BD361",
+                        "path":  "C:\\BC250\\m11\\resource-close\\bc250d3d.dll"
+                    }
+                ],
+    "utc":  "2026-09-27T15:33:31.4018679Z"
+}

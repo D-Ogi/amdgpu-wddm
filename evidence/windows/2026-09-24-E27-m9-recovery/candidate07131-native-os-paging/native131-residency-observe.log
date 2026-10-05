@@ -1,0 +1,24 @@
+
+  Id     CPU StartTime            Responding
+  --     --- ---------            ----------
+7240 65.6875 9/24/2026 4:57:43 PM       True
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1384 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001AC4C5D0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001AC4C5D0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001AC4C5C0000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 1385
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1385 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001AC4C5D0000
+
+

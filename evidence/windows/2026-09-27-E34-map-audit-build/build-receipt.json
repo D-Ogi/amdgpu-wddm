@@ -1,0 +1,19 @@
+{
+  "source": "a63dade027d6e16c626ac2daab4fc2ea3dcaa690",
+  "parent": "9f8a1ff989bfc9cf18b8845009c7caefdb99a7d8",
+  "source_clean": true,
+  "build": "Incremental complete UMD target:23 steps, exit0; preserved build.cmd and build.log",
+  "artifact": {
+    "name": "bc250d3d_zink.dll",
+    "sha256": "B17855E4FFACEF6F200E7137C1B7D2F903C8B5153DDD8D24B121165C6DB93C5B",
+    "bytes": 15176192
+  },
+  "host_control": {
+    "source": "control.c",
+    "compiler": "MSVC /std:c11 /O2 /W4 /WX",
+    "exit_code": 0,
+    "observed_stdout": "PASS keys=4097 capacity=8192 requests=4098 bytes=33579016 growth_calls=9 initial_OOM=preserved growth_OOM=preserved duplicate_under_OOM=pass relocation=pass",
+    "note": "Counts precede one final duplicate after explicit storage relocation, also asserted."
+  },
+  "lab_deployed": false
+}

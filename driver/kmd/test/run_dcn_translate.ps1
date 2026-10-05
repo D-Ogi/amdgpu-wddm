@@ -3,13 +3,15 @@
 # own kernel flags so a change here cannot pass this test and fail the real driver build.
 #
 #   pwsh driver\kmd\test\run_dcn_translate.ps1
-#   pwsh driver\kmd\test\run_dcn_translate.ps1 -Out P:\BC-250\scratch\dcntranslate
+#   pwsh driver\kmd\test\run_dcn_translate.ps1 -Out $env:BC250_ROOT\scratch\dcntranslate
 #
 # Everything is written under -Out, never into the repository and never onto drive C:.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\dcntranslate',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\dcntranslate",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0'
 )
 

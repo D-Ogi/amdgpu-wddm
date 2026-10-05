@@ -1,0 +1,12 @@
+--- before/pnp.c
++++ after/pnp.c
+@@ -12,6 +12,9 @@
+     device->Rotation = D3DKMDT_VPPR_IDENTITY;
+     ExInitializeFastMutex(&device->GartLock);
+     ExInitializePushLock(&device->GfxPagingLock);
++    KeInitializeSpinLock(&device->GfxAccessLock);
++    KeInitializeEvent(&device->GfxAccessDrained, NotificationEvent, TRUE);
++    device->GfxAccessClosed = TRUE;
+     *MiniportDeviceContext = device;
+     return STATUS_SUCCESS;
+ }

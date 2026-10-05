@@ -1,0 +1,8 @@
+BC250 audit lifetime event=checkpoint seq=5588 time_ns=9100602005100 marker=1 requests=669 successful=669 failed=0 ended=661 pending=0 live=8 stores_begun=1790 stores_ended=1790
+BC250 audit lifetime event=checkpoint seq=45816 time_ns=9122895006000 marker=2 requests=5921 successful=5921 failed=0 ended=5913 pending=0 live=8 stores_begun=14015 stores_ended=14015
+BC250 audit lifetime event=checkpoint seq=49485 time_ns=9126177193000 marker=3 requests=6470 successful=6470 failed=0 ended=6462 pending=0 live=8 stores_begun=15024 stores_ended=15024
+BC250 audit lifetime event=checkpoint seq=90827 time_ns=9169816119300 marker=4 requests=13044 successful=13044 failed=0 ended=13036 pending=0 live=8 stores_begun=25813 stores_ended=25813
+BC250 audit lifetime event=checkpoint seq=94281 time_ns=9172986553600 marker=5 requests=13552 successful=13552 failed=0 ended=13544 pending=0 live=8 stores_begun=26776 stores_ended=26776
+BC250 audit lifetime event=checkpoint seq=121594 time_ns=9202204555900 marker=6 requests=17860 successful=17860 failed=0 ended=17852 pending=0 live=8 stores_begun=33956 stores_ended=33956
+BC250 audit lifetime event=checkpoint seq=121832 time_ns=9202629575700 marker=7 requests=17897 successful=17897 failed=0 ended=17889 pending=0 live=8 stores_begun=34019 stores_ended=34019
+BC250 audit lifetime event=checkpoint seq=122859 time_ns=9205691740000 marker=8 requests=18016 successful=18016 failed=0 ended=18008 pending=0 live=8 stores_begun=34353 stores_ended=34353

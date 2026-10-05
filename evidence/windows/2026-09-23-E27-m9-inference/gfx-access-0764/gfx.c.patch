@@ -1,0 +1,332 @@
+--- before/gfx.c
++++ after/gfx.c
+@@ -158,6 +158,54 @@
+     ULONG PagingSubmitSeq;
+ } BC250_GFX;
+ 
++// DPC-safe CPU lifetime references. Admission and pointer lookup share a device
++// spin lock; users release it before touching rings/fences. No reference holder
++// waits for GPU progress or acquires GartLock. Lifecycle writers already own
++// GfxPagingLock then GartLock, close admission and wait at <= APC_LEVEL for these
++// bounded CPU accesses before changing/freeing the engine state. This is not a
++// hardware-DMA drain and does not replace halt/reset or retained backing pages.
++static BC250_GFX* GfxAccessAcquire(_In_ const BC250_DEVICE* Device)
++{
++    BC250_DEVICE* device = (BC250_DEVICE*)Device;
++    BC250_GFX* gfx = NULL;
++    KIRQL irql;
++    KeAcquireSpinLock(&device->GfxAccessLock, &irql);
++    if (!device->GfxAccessClosed && device->Gfx != NULL)
++    {
++        gfx = (BC250_GFX*)device->Gfx;
++        if (device->GfxAccessUsers++ == 0) KeClearEvent(&device->GfxAccessDrained);
++    }
++    KeReleaseSpinLock(&device->GfxAccessLock, irql);
++    return gfx;
++}
++
++static void GfxAccessRelease(_In_ const BC250_DEVICE* Device)
++{
++    BC250_DEVICE* device = (BC250_DEVICE*)Device;
++    KIRQL irql;
++    KeAcquireSpinLock(&device->GfxAccessLock, &irql);
++    NT_ASSERT(device->GfxAccessUsers != 0);
++    if (--device->GfxAccessUsers == 0) KeSetEvent(&device->GfxAccessDrained, IO_NO_INCREMENT, FALSE);
++    KeReleaseSpinLock(&device->GfxAccessLock, irql);
++}
++
++static void GfxAccessClose(_Inout_ BC250_DEVICE* Device)
++{
++    KIRQL irql;
++    KeAcquireSpinLock(&Device->GfxAccessLock, &irql);
++    Device->GfxAccessClosed = TRUE;
++    KeReleaseSpinLock(&Device->GfxAccessLock, irql);
++    (void)KeWaitForSingleObject(&Device->GfxAccessDrained, Executive, KernelMode, FALSE, NULL);
++}
++
++static void GfxAccessOpen(_Inout_ BC250_DEVICE* Device)
++{
++    KIRQL irql;
++    KeAcquireSpinLock(&Device->GfxAccessLock, &irql);
++    Device->GfxAccessClosed = FALSE;
++    KeReleaseSpinLock(&Device->GfxAccessLock, irql);
++}
++
+ // sdma_v5_0_gfx_resume_instance() ends with amdgpu_ring_test_helper(ring); the shim leaves that to the miniport, because an
+ // SDMA ring test touches no register (bc250_sdma.h). Without it stage 7 proves that registers can be written and nothing
+ // more: in E15 run 001 both engines were dead after a re-init behind an rc 0 in 56 us (facts M59). Not in a plan, where
+@@ -228,6 +276,7 @@
+ 
+ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
+ {
++    GfxAccessClose(Gfx->Sequence.Device);
+     if (!Gfx->SetUp) return;
+     Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
+     // The caller holds GfxPagingLock exclusively before touching engine state.
+@@ -297,6 +346,7 @@
+     long sdma = 0;
+ 
+     *Undo = 0;
++    GfxAccessClose(Device);
+ 
+     if (Gfx->StagesDone >= BC250_GFX_STAGE_CP)
+     {
+@@ -456,6 +506,8 @@
+         gfx->Sequence.MaxWrites = 0;
+         adev->backend = previousBackend;
+     }
++    if (Data->Op == BC250_GFX_OP_RUN && NT_SUCCESS(status) && gfx != NULL && !gfx->Failed &&
++        gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS) GfxAccessOpen(Device);
+     if (gfx != NULL) Data->StagesDone = gfx->StagesDone;
+     GuardLog("gfx: op %u to stage %u -> 0x%08X, result %d, %u writes, %u doorbells", Data->Op, Data->LastStage, status, result,
+              Data->WriteCount, Data->DoorbellCount);
+@@ -493,14 +545,26 @@
+            gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS;
+ }
+ 
++static BOOLEAN GfxSubmitReadyAccess(_In_ const BC250_DEVICE* Device)
++{
++    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
++
++    return GfxSubmitArmed(gfx) && gfx->SubmitInFlight == 0;
++}
++
+ BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device)
+ {
+-    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+-
+-    return GfxSubmitArmed(gfx) && gfx->SubmitInFlight == 0;
+-}
+-
+-BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device)
++    BOOLEAN result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return FALSE;
++    }
++    result = GfxSubmitReadyAccess(Device);
++    GfxAccessRelease(Device);
++    return result;
++}
++
++static BOOLEAN GfxSubmitBusyAccess(_In_ const BC250_DEVICE* Device)
+ {
+     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+ 
+@@ -510,7 +574,19 @@
+     return GfxSubmitArmed(gfx) && gfx->SubmitInFlight != 0;
+ }
+ 
+-void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
++BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device)
++{
++    BOOLEAN result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return FALSE;
++    }
++    result = GfxSubmitBusyAccess(Device);
++    GfxAccessRelease(Device);
++    return result;
++}
++
++static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
+ {
+     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+ 
+@@ -523,18 +599,40 @@
+                  gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
+ }
+ 
+-BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
++void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
++{
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return;
++    }
++    GfxSubmitFailAccess(Device);
++    GfxAccessRelease(Device);
++}
++
++static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+ {
+     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+ 
+-    // One read of a GTT page the CP writes. No register, no lock, no allocation: everything a DISPATCH_LEVEL caller
+-    // may not do is somewhere else. SubmitAdev is only ever non-NULL between a submission and the teardown that frees
++    // One read of a GTT page the CP writes. The outer lifetime reference protects
++    // the device and fence page against concurrent FINI or Stop. SubmitAdev is only ever non-NULL between a submission and the teardown that frees
+     // the page, and pnp.c drains ih.c's DPCs before that teardown runs (see the field's comment).
+     if (gfx == NULL || gfx->SubmitAdev == NULL || Seq == 0) return FALSE;
+     if ((ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) != Seq) return FALSE;
+     // The sequence numbers only count up, so a slot holding Seq means that submission and every earlier one is done.
+     if (gfx->SubmitSeq == Seq) InterlockedExchange(&gfx->SubmitInFlight, 0);
+     return TRUE;
++}
++
++BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
++{
++    BOOLEAN result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return FALSE;
++    }
++    result = GfxFenceArrivedAccess(Device, Seq);
++    GfxAccessRelease(Device);
++    return result;
+ }
+ 
+ // With GartLock held, the gfx sequence installed as adev->backend and a GpuMem sequence open. GfxSubmitIb is this plus
+@@ -1105,14 +1203,26 @@
+ // DISPATCH_LEVEL submit validates those records, then copies selected words into
+ // the live SDMA ring. No command storage is shared across OS DMA buffers.
+ 
++static BOOLEAN GfxPagingNodeGateAccess(_In_ const BC250_DEVICE* Device)
++{
++    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
++
++    return gfx != NULL && gfx->PagingGate;
++}
++
+ BOOLEAN GfxPagingNodeGate(_In_ const BC250_DEVICE* Device)
+ {
+-    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+-
+-    return gfx != NULL && gfx->PagingGate;
+-}
+-
+-BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device)
++    BOOLEAN result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return FALSE;
++    }
++    result = GfxPagingNodeGateAccess(Device);
++    GfxAccessRelease(Device);
++    return result;
++}
++
++static BOOLEAN GfxPagingSubmitReadyAccess(_In_ const BC250_DEVICE* Device)
+ {
+     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+ 
+@@ -1122,7 +1232,19 @@
+            gfx->PagingSubmitInFlight == 0 && gfx->PagingReady;
+ }
+ 
+-void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
++BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device)
++{
++    BOOLEAN result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return FALSE;
++    }
++    result = GfxPagingSubmitReadyAccess(Device);
++    GfxAccessRelease(Device);
++    return result;
++}
++
++static void GfxPagingSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
+ {
+     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+ 
+@@ -1136,11 +1258,21 @@
+                  gfx->PagingDevicePtr != NULL ? (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) : 0);
+ }
+ 
+-BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
++void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
++{
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return;
++    }
++    GfxPagingSubmitFailAccess(Device);
++    GfxAccessRelease(Device);
++}
++
++static BOOLEAN GfxPagingFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+ {
+     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+ 
+-    // One read of a GTT page SDMA0 writes, no register, no lock, no allocation - the node-1 twin of
++    // One read of a GTT page SDMA0 writes, under the outer CPU lifetime reference - the node-1 twin of
+     // GfxFenceArrived. PagingDevicePtr is only ever non-NULL between GfxEscape's capture and the teardown that
+     // frees the fence page, and pnp.c drains ih.c's DPCs before that teardown runs, exactly as SubmitAdev's own
+     // comment states.
+@@ -1148,6 +1280,18 @@
+     if ((ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) != Seq) return FALSE;
+     if (gfx->PagingSubmitSeq == Seq) InterlockedExchange(&gfx->PagingSubmitInFlight, 0);
+     return TRUE;
++}
++
++BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
++{
++    BOOLEAN result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        return FALSE;
++    }
++    result = GfxPagingFenceArrivedAccess(Device, Seq);
++    GfxAccessRelease(Device);
++    return result;
+ }
+ 
+ // Translation/emission adapters for the portable page-wise builder. System-page
+@@ -1244,7 +1388,7 @@
+     amdgpu_ring_write_multiple((struct amdgpu_ring*)Context,Words,(int)Count);
+ }
+ 
+-NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
++static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
+                           ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
+ {
+     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+@@ -1257,7 +1401,7 @@
+     *Seq = 0;
+     if (gfx == NULL) return STATUS_DEVICE_NOT_READY;
+     if (gfx->PagingSubmitFailed) return STATUS_DEVICE_HARDWARE_ERROR;
+-    if (!GfxPagingSubmitReady(Device)) return STATUS_DEVICE_BUSY;
++    if (!GfxPagingSubmitReadyAccess(Device)) return STATUS_DEVICE_BUSY;
+     if (!PagingPrivateVisit(PrivateData,PrivateBytes,Start,ByteCount,VirtualAddress,NULL,NULL))
+         return STATUS_INVALID_PARAMETER;
+ 
+@@ -1310,6 +1454,20 @@
+     *Seq = seq;
+     GuardLog("gfx: paging submit, %lu dwords from private buffer at 0x%llX, seq %lu", dwords, Start, seq);
+     return STATUS_SUCCESS;
++}
++
++NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
++                          ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
++{
++    NTSTATUS result;
++    if (GfxAccessAcquire(Device) == NULL)
++    {
++        *Seq = 0;
++        return STATUS_DEVICE_NOT_READY;
++    }
++    result = GfxSubmitPagingAccess(Device, PrivateData, PrivateBytes, Start, ByteCount, VirtualAddress, Seq);
++    GfxAccessRelease(Device);
++    return result;
+ }
+ 
+ // With GartLock held. For gart.c and psp.c: a restore or an unload under a set-up GFX sequence is refused.
+@@ -1379,6 +1537,7 @@
+     gfx->PagingGate = (GuardReadSetting(L"EnablePagingNode", 0) == 1);
+     KeInitializeSpinLock(&gfx->Sdma0RingLock);
+     Device->Gfx = gfx;
++    GfxAccessOpen(Device);
+     GuardLog("gfx: ready, GPU submission %s, paging node %s", gfx->SubmitGate ? "allowed" : "off",
+              gfx->PagingGate ? "allowed" : "off");
+     return STATUS_SUCCESS;
+@@ -1396,6 +1555,7 @@
+     KeEnterCriticalRegion();
+     ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+     ExAcquireFastMutex(&Device->GartLock);
++    GfxAccessClose(Device);
+     gfx = (BC250_GFX*)Device->Gfx;
+     Device->Gfx = NULL;
+     if (gfx != NULL && (gfx->StagesDone != 0 || gfx->SetUp))

@@ -1,13 +1,15 @@
 # Host test for caller-owned logical page-table state; no hardware accesses.
 #
 #   pwsh driver\kmd\test\run_paging_pt_shadow.ps1
-#   pwsh driver\kmd\test\run_paging_pt_shadow.ps1 -Out P:\BC-250\scratch\pagingptshadow
+#   pwsh driver\kmd\test\run_paging_pt_shadow.ps1 -Out $env:BC250_ROOT\scratch\pagingptshadow
 #
 # The binary goes under -Out. Nothing is written to drive C:.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\pagingptshadow',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\pagingptshadow",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0'
 )
 

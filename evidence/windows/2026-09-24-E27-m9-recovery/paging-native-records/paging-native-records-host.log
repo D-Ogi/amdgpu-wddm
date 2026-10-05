@@ -1,0 +1,8 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS: 32 mixed DMA layouts, direct/native/direct order, isolated roots, whole-IB boundaries and disjoint CSA backing
+PASS: independent pending DMA buffers, exact physical/virtual ranges, nonzero offsets, zero VA, malformed/truncated/gapped/overlapping records rejected before any callback
+compile-check (kernel flags, same source, no link)
+
+paging_private_test.exe exit code 0

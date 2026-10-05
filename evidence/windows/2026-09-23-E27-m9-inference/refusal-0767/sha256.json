@@ -1,0 +1,18 @@
+{
+  "build-0767.txt": "378a81e97b3ecc1788aafd137d9acb127121db9836f2ca7678b11025f8901454",
+  "build-refusal-test.cmd": "d6ae335bd546aba28c1108cf619283d5a5e935c84157ac6017beba3f670f899a",
+  "change.patch": "872f4f8ed088141a1ff1e2e2e7345ce52f6335af9b380e5e366affd5ccb3726e",
+  "generate-refusal-test.py": "7d10a399762ceef1c917bb7a1a89064d30fbabfec9beea74c67f8b175c304b8a",
+  "preemption-0767.txt": "70fe71a343bcd115c1bc92b04cbc79647fecd95930c8746e12a94b0a3fa0dd69",
+  "preemption-test-prefix.c": "7a7e2b0ee19d27178524f722eed3f617da4e246e237cd4aa0eb41299567a50cf",
+  "preemption-test-suffix.c": "a816f1430523746642e1d55241014d1926b65ef6a3480de1f4e6696a2ef122b5",
+  "README.md": "5e51e627189653d041ab615aae46c574c4ba87f5a439f9e597c99233551041c8",
+  "refusal-after.c": "999ba88c51a4d22a6414f41fb691d771c4dc0be16b73610e5cf8b93a9f24d3c8",
+  "refusal-test-suffix.c": "2393257f890611bff410c26d68bfc12634efe36fb2dfe14fae47312d5b767d49",
+  "refusal-test.txt": "3d18fe928c9335f3241cc95e4372b5920fe63b0cc2046e1a3e5f47506dfe418b",
+  "report-after.c": "925a48dec2dbd3a5dedf76e911ee4dadd37d2c4cf35684653a4f25009604283b",
+  "watchdog-test-prefix.c": "5c170c1186e43aac13b94f9e44da2940d87ed63d24351e6850e4e30c8fab7f7d",
+  "watchdog-test-suffix.c": "18cd15b47599f700a05001b0628dfeef6eb61217f7233bf15c3d5301d00ca5f3",
+  "wddm-after.c": "ac1ae57f6697835bf2ab90bf114f0d861b48ceee9033c8f4b4994bb8a96162e8",
+  "wddm-before.c": "e1817c3e20578fa91af172c83037c28d435e3654a68bcbf21f015464738ed566"
+}

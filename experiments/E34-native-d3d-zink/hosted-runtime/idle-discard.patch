@@ -1,0 +1,11 @@
+--- a/src/gallium/drivers/zink/zink_resource.c
++++ b/src/gallium/drivers/zink/zink_resource.c
+@@ -2501,7 +2501,7 @@
+ 
+    util_range_set_empty(&res->valid_buffer_range);
+    if (!zink_resource_has_usage(res))
+-      return false;
++      return true;
+ 
+    struct zink_resource_object *new_obj = resource_object_create(screen, &res->base.b, NULL, NULL, NULL, 0, NULL, 0);
+    if (!new_obj) {

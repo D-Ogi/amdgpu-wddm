@@ -1,0 +1,34 @@
+pid=2004
+BC250 Perf frame 110 gap_ms 30039.327 draws 4 draw_ms 0.344 max_draw_ms 0.091 present_ms 0.045 render_wait_ms 0.002
+BC250 Perf frame 111 gap_ms 30042.018 draws 4 draw_ms 0.377 max_draw_ms 0.121 present_ms 0.049 render_wait_ms 1.448
+BC250 Perf frame 112 gap_ms 30006.415 draws 4 draw_ms 0.347 max_draw_ms 0.094 present_ms 0.048 render_wait_ms 1.577
+BC250 Perf frame 113 gap_ms 30025.585 draws 4 draw_ms 0.346 max_draw_ms 0.097 present_ms 0.043 render_wait_ms 1.696
+BC250 Perf frame 114 gap_ms 30024.611 draws 4 draw_ms 0.293 max_draw_ms 0.082 present_ms 0.047 render_wait_ms 1.891
+BC250 Perf frame 115 gap_ms 30009.065 draws 4 draw_ms 0.350 max_draw_ms 0.091 present_ms 0.050 render_wait_ms 1.704
+BC250 Perf frame 116 gap_ms 30024.477 draws 4 draw_ms 0.337 max_draw_ms 0.090 present_ms 0.047 render_wait_ms 1.603
+BC250 Perf frame 117 gap_ms 30043.100 draws 4 draw_ms 0.486 max_draw_ms 0.140 present_ms 0.050 render_wait_ms 1.954
+BC250 Perf frame 118 gap_ms 4312.068 draws 3 draw_ms 0.536 max_draw_ms 0.293 present_ms 0.055 render_wait_ms 56.189
+BC250 Perf frame 119 gap_ms 89.054 draws 3 draw_ms 0.381 max_draw_ms 0.168 present_ms 0.055 render_wait_ms 62.212
+BC250 Perf frame 120 gap_ms 88.389 draws 3 draw_ms 0.357 max_draw_ms 0.157 present_ms 0.053 render_wait_ms 65.174
+BC250 Perf frame 180 gap_ms 16.983 draws 3 draw_ms 0.105 max_draw_ms 0.054 present_ms 0.065 render_wait_ms 0.001
+BC250 Perf frame 240 gap_ms 16.995 draws 5 draw_ms 0.152 max_draw_ms 0.072 present_ms 0.049 render_wait_ms 0.001
+BC250 Perf frame 300 gap_ms 85.492 draws 4 draw_ms 0.133 max_draw_ms 0.074 present_ms 0.046 render_wait_ms 0.003
+BC250 Perf frame 360 gap_ms 16.549 draws 4 draw_ms 0.126 max_draw_ms 0.073 present_ms 0.049 render_wait_ms 0.001
+BC250 Perf frame 420 gap_ms 71.522 draws 3 draw_ms 0.265 max_draw_ms 0.164 present_ms 0.054 render_wait_ms 59.965
+pid=12212
+BC250 Perf frame 8 gap_ms 30012.262 draws 4 draw_ms 0.760 max_draw_ms 0.551 present_ms 0.051 render_wait_ms 0.004
+BC250 Perf frame 9 gap_ms 30024.896 draws 4 draw_ms 0.778 max_draw_ms 0.577 present_ms 0.043 render_wait_ms 0.003
+BC250 Perf frame 10 gap_ms 30027.672 draws 4 draw_ms 0.912 max_draw_ms 0.688 present_ms 0.052 render_wait_ms 0.004
+BC250 Perf frame 11 gap_ms 30005.846 draws 4 draw_ms 0.993 max_draw_ms 0.707 present_ms 0.066 render_wait_ms 0.004
+BC250 Perf frame 12 gap_ms 30025.944 draws 4 draw_ms 0.974 max_draw_ms 0.760 present_ms 0.047 render_wait_ms 0.004
+BC250 Perf frame 13 gap_ms 30037.853 draws 4 draw_ms 1.102 max_draw_ms 0.803 present_ms 0.047 render_wait_ms 0.004
+BC250 Perf frame 14 gap_ms 30040.968 draws 4 draw_ms 0.778 max_draw_ms 0.581 present_ms 0.045 render_wait_ms 0.004
+BC250 Perf frame 15 gap_ms 8050.845 draws 18 draw_ms 1.368 max_draw_ms 0.296 present_ms 0.067 render_wait_ms 0.004
+BC250 Perf frame 16 gap_ms 82.659 draws 12 draw_ms 0.730 max_draw_ms 0.098 present_ms 0.060 render_wait_ms 0.004
+BC250 Perf frame 17 gap_ms 5101.837 draws 2 draw_ms 0.181 max_draw_ms 0.114 present_ms 0.057 render_wait_ms 0.004
+BC250 Perf frame 18 gap_ms 40.998 draws 2 draw_ms 0.169 max_draw_ms 0.093 present_ms 0.042 render_wait_ms 0.004
+BC250 Perf frame 19 gap_ms 33383.863 draws 0 draw_ms 0.000 max_draw_ms 0.000 present_ms 0.046 render_wait_ms 0.004
+BC250 Perf frame 20 gap_ms 325.823 draws 8 draw_ms 1.145 max_draw_ms 0.692 present_ms 0.051 render_wait_ms 0.005
+BC250 Perf frame 21 gap_ms 29784.371 draws 6 draw_ms 1.057 max_draw_ms 0.685 present_ms 0.045 render_wait_ms 0.003
+BC250 Perf frame 22 gap_ms 30020.650 draws 4 draw_ms 1.004 max_draw_ms 0.803 present_ms 0.045 render_wait_ms 0.003
+BC250 Perf frame 23 gap_ms 30022.771 draws 4 draw_ms 1.041 max_draw_ms 0.789 present_ms 0.046 render_wait_ms 0.004

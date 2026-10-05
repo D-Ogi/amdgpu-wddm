@@ -1,0 +1,14 @@
+{
+  "source_revision": "7515063cea4c9e98db6a92986c5b4ddb0463fd16",
+  "scope": "Local Microsoft documentation review; no driver or hardware execution",
+  "files": [
+    {
+      "name": "nc-d3dkmddi-dxgkddi_buildpagingbuffer.md",
+      "sha256": "bf75e020620aa0d7cf2d4bd27495565c01075e42b8323f4e2c4a65c14e8b1602"
+    },
+    {
+      "name": "ns-d3dkmddi-_dxgkarg_buildpagingbuffer.md",
+      "sha256": "13d461b6380b776077501c862d544bb22e79886732965222b07aed971e24eae9"
+    }
+  ]
+}

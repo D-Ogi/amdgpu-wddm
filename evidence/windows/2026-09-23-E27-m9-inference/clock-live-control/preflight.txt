@@ -1,0 +1,7 @@
+2026-09-23 unit A, before CLI copy/query:
+mon.py stop?: no stop request, exit0.
+temp.py:12:17:30 Tctl67.0C(raw741B0FEF),exit0.
+Overlay status announced SMU queries, no clock change/reboot.
+target.py push copied CLI only to C:\BC250\tmp\m9-clock-check.
+Source and remote SHA256A056C897F9515BE08ADEE41C55F34B67CAE521922B9A2E2F9D2105A95879739D.
+No driver/task replacement, no clock or voltage request, no reboot or USB changes.

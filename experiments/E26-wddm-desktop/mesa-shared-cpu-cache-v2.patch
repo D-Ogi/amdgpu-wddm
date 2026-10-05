@@ -1,0 +1,20 @@
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -89,8 +89,15 @@
+       info.Flags.Primary = resource->primary; info.VidPnSourceId = resource->vidpn;
+       D3DDDICB_ALLOCATE allocate = {};
+       allocate.hResource = resource->hRTResource;
+-      struct ResourcePrivate { UINT magic, version, shared; };
+-      ResourcePrivate group = {0x52363245, 1, resource->shared ? 1u : 0u}; // "E26R"
++      // E26R v2 requires KMD 0.7.147.1 or later. CPU-read shared surfaces
++      // use cached system backing; primary surfaces must never request Cached.
++      // Match Primary to the same resource property used in ALLOCATIONINFO2.
++      struct ResourcePrivate { UINT magic, version, shared, cpuAccessFlags; };
++      static_assert(sizeof(ResourcePrivate) == 16, "E26R v2 ABI");
++      const UINT primaryFlag = resource->primary ? 1u : 0u;
++      const UINT cpuReadFlag = resource->shared ? 2u : 0u;
++      ResourcePrivate group = {0x52363245, 2, resource->shared ? 1u : 0u,
++                               primaryFlag | cpuReadFlag};
+       allocate.pPrivateDriverData = &group; allocate.PrivateDriverDataSize = sizeof(group);
+       DebugPrintf("BC250 Allocate input runtime %p size %llu primary %u\n", resource->hRTResource, data.size, resource->primary);
+       allocate.NumAllocations = 1; allocate.pAllocationInfo2 = &info;

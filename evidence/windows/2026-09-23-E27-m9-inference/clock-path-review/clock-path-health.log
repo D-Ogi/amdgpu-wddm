@@ -1,0 +1,8 @@
+boot=2026-09-23T04:20:42
+driver=bc250rd state=Running start=Auto
+driver=bc250kmd state=Running start=Manual
+clock_task_result=0
+clock_task_last_run=2026-09-23T04:21:21
+2026-09-23T03:59:33 applied 1000 MHz 820 mV after 4 tries
+2026-09-23T04:05:15 applied 1000 MHz 820 mV after 4 tries
+2026-09-23T04:21:57 applied 1000 MHz 820 mV after 4 tries

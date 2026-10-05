@@ -1,0 +1,329 @@
+file=C:\BC250\kmdlog\ring-20260923-190942-519.log
+sha256=43744DC1C9F3CDED9BCDBAFC567ADE6F03A9A8E2F703CE825ABBB9EFCFA9D500
+bytes=86236
+762499   3684.266 wddm summary: SubmitCommandVirtual by node: 0: 21136, 1: 610230, 0 private-buffer refusals
+762500   3684.266 wddm summary: BuildPagingBuffer: 106 transfers, 112155 fills, 96974553088 bytes, 515673 insufficient-buffer
+762501   3684.266 wddm summary: aperture map batches 0, unmap batches 0
+762502   3684.266 wddm summary: paging TLB invalidations 57743, PTE update batches 397953
+762503   3684.266 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+762504   3684.266 wddm summary: presents 11565, flips 3051 of 4177 address calls (0 arrived above DISPATCH_LEVEL)
+762505   3684.266 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+762506   3684.266 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+762507   3684.266 wddm summary: widest blit 0 rows
+762508   3684.266 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+762509   3684.266 wddm summary: vsync not enabled by ControlInterrupt, 225406 ticks, 41448 reported to dxgkrnl
+762510   3684.266 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+762511   3684.266 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+762512   3684.266 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+762513   3684.266 vidmm summary: level 0: 1024 calls, 262656 entries, 512 valid
+762514   3684.266 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+762515   3684.266 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+762516   3684.266 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+762517   3684.266 vidmm summary: system leaf encoding coherent 40498 noncoherent 5694458 snoop mismatches 0
+762518   3684.266 vidmm summary: 1028 cpu-virtual calls, 0 gpu-physical calls
+762519   3684.266 vidmm summary: 264704 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 4186 roots
+762520   3685.938 wddm: malformed virtual present rejected
+762521   3685.970 wddm: software vsync off after 225513 ticks
+762522   3685.970 gfx: paging submit, 469 dwords from private buffer at 0x3C0, seq 627191
+762523   3685.970 gfx: paging submit, 15 dwords from private buffer at 0xB14, seq 627192
+762524   3685.972 gfx: paging submit, 39 dwords from private buffer at 0xB50, seq 627193
+762525   3685.972 gfx: paging submit, 15 dwords from private buffer at 0xBEC, seq 627194
+762526   3685.986 gfx: paging submit, 31 dwords from private buffer at 0xC28, seq 627195
+762527   3685.986 gfx: paging submit, 16 dwords from private buffer at 0xCA4, seq 627196
+762528   3685.986 gfx: paging submit, 16 dwords from private buffer at 0xCE4, seq 627197
+762529   3685.986 gfx: paging submit, 16 dwords from private buffer at 0xD24, seq 627198
+762530   3686.002 stage 70
+762531   3686.004 wddm summary: ---- DDI calls: name, count, first log line ----
+762532   3686.004 wddm summary: QueryAdapterInfo                   17  first at 165
+762533   3686.004 wddm summary: GetNodeMetadata                     2  first at 173
+762534   3686.004 wddm summary: CreateDevice                     4188  first at 180
+762535   3686.004 wddm summary: DestroyDevice                    4188  first at 501
+762536   3686.004 wddm summary: CreateContext                    4187  first at 182
+762537   3686.004 wddm summary: DestroyContext                   4187  first at 489
+762538   3686.004 wddm summary: CreateProcess                    2025  first at 179
+762539   3686.004 wddm summary: DestroyProcess                   2025  first at 538
+762540   3686.004 wddm summary: SetRootPageTable                 4187  first at 204
+762541   3686.004 wddm summary: CreateAllocation                 8559  first at 241
+762542   3686.004 wddm summary: DestroyAllocation                8687  first at 494
+762543   3686.004 wddm summary: DescribeAllocation              12531  first at 296
+762544   3686.004 wddm summary: GetStandardAllocationDriverData  16708  first at 239
+762545   3686.004 wddm summary: OpenAllocation                   8559  first at 243
+762546   3686.004 wddm summary: CloseAllocation                  8559  first at 493
+762547   3686.004 wddm summary: BuildPagingBuffer              815950  first at 184
+762548   3686.004 wddm summary: SubmitCommandVirtual           631375  first at 224
+762549   3686.004 wddm summary: PreemptCommand                     22  first at 471079
+762550   3686.004 wddm summary: Present                         11566  first at 360
+762551   3686.004 wddm summary: SetVidPnSourceAddress            4177  first at 348
+762552   3686.004 wddm summary: ControlInterrupt                82882  first at 352
+762553   3686.004 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+762554   3686.004 wddm summary: adapter info type   1       1  first at 165
+762555   3686.004 wddm summary: adapter info type  15       1  first at 166
+762556   3686.004 wddm summary: adapter info type  47       1  first at 167
+762557   3686.004 wddm summary: adapter info type  13       1  first at 168
+762558   3686.004 wddm summary: adapter info type  14       4  first at 169
+762559   3686.004 wddm summary: adapter info type  11       2  first at 176
+762560   3686.004 wddm summary: adapter info type  10       1  first at 178
+762561   3686.004 wddm summary: adapter info type  16       1  first at 178
+762562   3686.004 wddm summary: adapter info type   0       5  first at 14675
+762563   3686.004 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+762564   3686.004 wddm summary: paging operation  11  404929  first at 184
+762565   3686.004 wddm summary: paging operation  12   58046  first at 232
+762566   3686.004 wddm summary: paging operation   9  112304  first at 251
+762567   3686.004 wddm summary: paging operation   2    4183  first at 495
+762568   3686.004 wddm summary: paging operation   8  236488  first at 16373
+762569   3686.004 wddm summary: objects created/destroyed: dev 4188/4188 ctx 4187/4187 proc 2025/2025 alloc 8559/8687, 0 alive
+762570   3686.004 wddm summary: allocations opened/closed: 8559/8559 calls
+762571   3686.004 wddm summary: submissions 0 physical + 631375 virtual, 22 preemptions, last completed fence 610238
+762572   3686.004 wddm summary: node 0 hardware: 16960 submitted, 16960 completed, 0 timeouts, 0 refused
+762573   3686.004 wddm summary: umd: 205 allocs (0 refused), 9 contexts, 16960 submits on the ring, 0 not run
+762574   3686.004 wddm profile: umd calls 16960, elapsed ticks 3549909, QPC frequency 10000000
+762575   3686.004 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+762576   3686.004 wddm summary: node 1 (paging, open): 610238 hardware submitted, 610238 completed, 0 timeouts, 0 refused
+762577   3686.004 wddm summary: SubmitCommandVirtual by node: 0: 21137, 1: 610238, 0 private-buffer refusals
+762578   3686.004 wddm summary: BuildPagingBuffer: 106 transfers, 112155 fills, 96974553088 bytes, 515673 insufficient-buffer
+762579   3686.004 wddm summary: aperture map batches 0, unmap batches 0
+762580   3686.004 wddm summary: paging TLB invalidations 57748, PTE update batches 397961
+762581   3686.004 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+762582   3686.004 wddm summary: presents 11566, flips 3051 of 4177 address calls (0 arrived above DISPATCH_LEVEL)
+762583   3686.004 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+762584   3686.004 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+762585   3686.004 wddm summary: widest blit 0 rows
+762586   3686.004 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+762587   3686.004 wddm summary: vsync not enabled by ControlInterrupt, 225513 ticks, 41452 reported to dxgkrnl
+762588   3686.004 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+762589   3686.004 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+762590   3686.004 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+762591   3686.004 wddm: stop, last completed fence 610238, 225513 vsync ticks, 0 objects freed at the stop
+762592   3686.006 ih: IH_RB_CNTL 0x403101A0
+762593   3686.006 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+762594   3686.006 amdgpu[0]: free PSP TMR buffer
+
+762595   3686.030 psp: unload: destroy TMR 0, ring stop 0
+762596   3686.030 gart: firmware state restored at stop (282 writes)
+762597   3686.030 stage 79
+file=C:\BC250\kmdlog\ring-20260923-180816-735.log
+sha256=5664B30FE10FE6369605E20DC26E97BFA82BA40FC81ED250C39C27C72375BA38
+bytes=10879
+    90      0.230 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    91      0.230 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    92      0.230 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    93      0.230 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    94      0.230 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    95      0.230 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    96      0.230 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    97      0.230 gfx: CP step 2: rc 0, 17 writes, 232 us
+    98      0.230 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+    99      0.230 startup: CP step 2 returned 0x00000000 result 0
+   100      0.232 startup: entering CP step 3
+   101      0.232 amdgpu[0]: CP resume kcq-enable begin
+
+   102      0.232 amdgpu[0]: CP resume kcq-enable end result=0
+
+   103      0.232 gfx: CP step 3: rc 0, 1 writes, 46 us
+   104      0.232 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   105      0.232 startup: CP step 3 returned 0x00000000 result 0
+   106      0.234 startup: entering CP step 4
+   107      0.234 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   108      0.234 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   109      0.234 gfx: CP step 4: rc 0, 4 writes, 23 us
+   110      0.234 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   111      0.234 startup: CP step 4 returned 0x00000000 result 0
+   112      0.236 startup: entering CP step 5
+   113      0.236 amdgpu[0]: CP resume kgq-enable begin
+
+   114      0.236 amdgpu[0]: CP resume kgq-enable end result=0
+
+   115      0.236 gfx: CP step 5: rc 0, 1 writes, 21 us
+   116      0.236 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   117      0.236 startup: CP step 5 returned 0x00000000 result 0
+   118      0.238 startup: entering CP step 6
+   119      0.238 amdgpu[0]: CP resume gfx-start begin
+
+   120      0.238 amdgpu[0]: CP resume gfx-start end result=0
+
+   121      0.238 gfx: CP step 6: rc 0, 3 writes, 19 us
+   122      0.238 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   123      0.238 startup: CP step 6 returned 0x00000000 result 0
+   124      0.240 startup: entering CP step 7
+   125      0.240 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   126      0.240 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   127      0.240 gfx: CP step 7: rc 0, 1 writes, 9 us
+   128      0.240 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   129      0.240 startup: CP step 7 returned 0x00000000 result 0
+   130      0.240 startup: entering CP step 8
+   131      0.242 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   132      0.242 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   133      0.242 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   134      0.242 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   135      0.242 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   136      0.242 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   137      0.242 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   138      0.242 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   139      0.242 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   140      0.242 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   141      0.242 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   142      0.242 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   143      0.242 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   144      0.242 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   145      0.242 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   146      0.242 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   147      0.242 gfx: CP step 8: rc 0, 8 writes, 64 us
+   148      0.242 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   149      0.242 startup: CP step 8 returned 0x00000000 result 0
+   150      0.244 startup: entering GFX stage 7
+   151      0.244 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 93 us
+   152      0.244 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   153      0.246 startup: entering GFX stage 8
+   154      0.246 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 23 us
+   155      0.246 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   156      0.246 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+file=C:\BC250\kmdlog\ring-20260923-180816-737.log
+sha256=D0F6CA7535A74152C81EFCF0CBBBD040D08DBC0D38B79BFB29929987CE85758D
+bytes=10926
+
+    91      0.230 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    92      0.230 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    93      0.230 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    94      0.230 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    95      0.230 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    96      0.230 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    97      0.230 gfx: CP step 2: rc 0, 17 writes, 232 us
+    98      0.230 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+    99      0.230 startup: CP step 2 returned 0x00000000 result 0
+   100      0.232 startup: entering CP step 3
+   101      0.232 amdgpu[0]: CP resume kcq-enable begin
+
+   102      0.232 amdgpu[0]: CP resume kcq-enable end result=0
+
+   103      0.232 gfx: CP step 3: rc 0, 1 writes, 46 us
+   104      0.232 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   105      0.232 startup: CP step 3 returned 0x00000000 result 0
+   106      0.234 startup: entering CP step 4
+   107      0.234 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   108      0.234 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   109      0.234 gfx: CP step 4: rc 0, 4 writes, 23 us
+   110      0.234 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   111      0.234 startup: CP step 4 returned 0x00000000 result 0
+   112      0.236 startup: entering CP step 5
+   113      0.236 amdgpu[0]: CP resume kgq-enable begin
+
+   114      0.236 amdgpu[0]: CP resume kgq-enable end result=0
+
+   115      0.236 gfx: CP step 5: rc 0, 1 writes, 21 us
+   116      0.236 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   117      0.236 startup: CP step 5 returned 0x00000000 result 0
+   118      0.238 startup: entering CP step 6
+   119      0.238 amdgpu[0]: CP resume gfx-start begin
+
+   120      0.238 amdgpu[0]: CP resume gfx-start end result=0
+
+   121      0.238 gfx: CP step 6: rc 0, 3 writes, 19 us
+   122      0.238 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   123      0.238 startup: CP step 6 returned 0x00000000 result 0
+   124      0.240 startup: entering CP step 7
+   125      0.240 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   126      0.240 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   127      0.240 gfx: CP step 7: rc 0, 1 writes, 9 us
+   128      0.240 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   129      0.240 startup: CP step 7 returned 0x00000000 result 0
+   130      0.240 startup: entering CP step 8
+   131      0.242 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   132      0.242 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   133      0.242 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   134      0.242 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   135      0.242 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   136      0.242 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   137      0.242 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   138      0.242 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   139      0.242 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   140      0.242 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   141      0.242 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   142      0.242 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   143      0.242 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   144      0.242 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   145      0.242 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   146      0.242 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   147      0.242 gfx: CP step 8: rc 0, 8 writes, 64 us
+   148      0.242 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   149      0.242 startup: CP step 8 returned 0x00000000 result 0
+   150      0.244 startup: entering GFX stage 7
+   151      0.244 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 93 us
+   152      0.244 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   153      0.246 startup: entering GFX stage 8
+   154      0.246 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 23 us
+   155      0.246 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   156      0.246 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   157      0.248 startup: both engines ready
+log          17 lines since this driver load, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table display-only
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 0
+     2      0.004 stage 20
+     3      0.306 stage 30
+     4      0.308 stage 31
+     5      0.308 stage 32
+     6      0.308 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.308 stage 33
+     8      0.310 stage 34
+     9      0.310 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.310 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    11      0.310 stage 35
+    12      0.312 stage 39
+    13      0.324 stage 50
+    14      0.644 stage 60
+    15      0.646 stage 61
+    16     36.536 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+             17 lines printed
+log_exit=0

@@ -5,10 +5,12 @@
 #
 # -Generate rewrites driver\kmd\umd_caps.c from the unit A filler, then runs the compare.
 # The binary goes under -Out. Nothing is written to drive C:.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\umdcaps',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\umdcaps",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Generate
 )

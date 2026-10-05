@@ -1,0 +1,57 @@
+{
+  "trace_lost_events": 10931,
+  "dwm_pid": 12804,
+  "matched_dma_start_stop": 551,
+  "unmatched_dma_stop": 0,
+  "pending_dma_start": 0,
+  "contexts": {
+    "0xffffdd81fe6808a0": {
+      "Context/win:Start": 1,
+      "QueuePacket/win:Start": 6,
+      "QueuePacket/win:Info": 6,
+      "DmaPacket/win:Start": 2,
+      "DmaPacket/win:Info": 2,
+      "DmaPacket/win:Stop": 2,
+      "QueuePacket/win:Stop": 6,
+      "Context/win:Stop": 1
+    },
+    "0xffffdd81f8cc1280": {
+      "Context/win:Start": 2,
+      "Context/win:Stop": 2
+    },
+    "0xffffdd81f8e4edd0": {
+      "Context/win:Start": 2,
+      "Context/win:Stop": 2
+    },
+    "0xffffdd81fbfc0450": {
+      "Context/win:Start": 1,
+      "QueuePacket/win:Start": 1888,
+      "QueuePacket/win:Info": 2423,
+      "QueuePacket/win:Stop": 1888
+    },
+    "0xffffdd81f97cd5a0": {
+      "Context/win:Start": 1,
+      "QueuePacket/win:Start": 1727,
+      "QueuePacket/win:Info": 1727,
+      "DmaPacket/win:Start": 549,
+      "DmaPacket/win:Info": 549,
+      "DmaPacket/win:Stop": 549,
+      "QueuePacket/win:Stop": 1727
+    },
+    "0xffffdd81f3c5a840": {
+      "Context/win:Start": 1,
+      "QueuePacket/win:Start": 2,
+      "QueuePacket/win:Info": 3,
+      "QueuePacket/win:Stop": 2,
+      "Context/win:Stop": 1
+    },
+    "0xffffdd81f9aa0b30": {
+      "Context/win:Start": 1,
+      "Context/win:Stop": 1
+    },
+    "0xffffdd81f9f09a10": {
+      "Context/win:Start": 1,
+      "Context/win:Stop": 1
+    }
+  }
+}

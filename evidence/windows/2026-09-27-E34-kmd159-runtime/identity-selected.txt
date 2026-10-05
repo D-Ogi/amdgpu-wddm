@@ -1,0 +1,26 @@
+startup-log-014.txt
+   326      0.564 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   359      0.570 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   409      1.274 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   438      1.284 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   465      1.294 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   492      1.306 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   597      1.367 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   637      1.379 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   683      1.712 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   692      1.803 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   699      1.817 wddm: identity bind kind 0 flags 0 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   706      2.383 wddm: identity bind kind 0 flags 0 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-161.txt
+  3593    166.636 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1

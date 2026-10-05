@@ -1,0 +1,29 @@
+[
+  {
+    "name": "llvmpipe12.bmp",
+    "sha256": "35b12102fd4749399ac7850ccf3cf8c83fe547993466214a60c0dab62394f785",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 0
+  },
+  {
+    "name": "llvmpipe2.bmp",
+    "sha256": "a805a501185478abda671aa3e2286c54ffc0ab030dffc8043d5b2aca100403dc",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 0
+  },
+  {
+    "name": "llvmpipe-control0.bmp",
+    "sha256": "b3370b081901687dc0c1337f423dc6edd1d0b1b269f0daea1bc1a9f1f8a29cd6",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 275148
+  }
+]

@@ -1,0 +1,29 @@
+M240 2026-09-23. Source/host evidence, no lab access.
+IhCloseInterruptAdmission joins ISR via synchronized Active0 callback, then
+flushes DPCs. Requires native success, TRUE and actual callback invocation.
+Failure still closes Active and flushes, but does not authorize hardware
+teardown or freeing; sets IhQuietFALSE and sticky GpuStopUnconfirmed.
+Fini now preserves full ring description and backing on synchronization or
+hardware-halt failure. Only confirmed retirement tears down and releases.
+IhStop uses Fini for the normal path; failed GartDevice still closes/drains
+software admission and quarantines. Never-initialized/null cases remain safe.
+Diagnostic INIT/PLAN refuses sticky quarantine; FINI/STATE remain available.
+Same-object containment only; remove/reload containment remains unresolved.
+
+Actual close callback/helper, Fini and IhStop extracted into host test.
+177 checks pass. Model includes late ISR that already read Active and queues
+before synchronized callback, no callback, false result, native sync failure,
+lookup failure, nonquiet hardware and later successful halt retaining quarantine.
+No-sync mutation171checks/54failures (fewer sync-side checks executed).
+Activation95 and dependent stop1676 regressions pass; historical old stop
+mutation889 failures expected in regression log.
+WDK says KeFlushQueuedDpcs maxAPC_LEVEL, compatible with held fast mutex.
+Full WDK build/sign passes:
+scratch/build/ih-stop-dev/package-umd
+SYS34FD24E3E92EE25D8CAE75C017BE631B90651C7B60657B76C1BE0E6466556A18
+Retains0793 DEVONLY; official0793 unchanged, not deployed.
+Models do not prove OS DPC scheduling, actual halt, ISR disconnection or reload
+containment. Next integrate coordinator into WddmStart/admission with cleanup
+of unpublished VidMm state, and prevent destructive diagnostic reinitialization
+while OS resources are live. M9 remaining contract/hardware/performance scope
+unchanged.

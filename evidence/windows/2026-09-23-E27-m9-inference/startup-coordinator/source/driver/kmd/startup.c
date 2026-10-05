@@ -1,0 +1,98 @@
+// Device-owned initialization. Sequences remain in the existing subsystem APIs.
+#include "bc250kmd.h"
+#include "startup.h"
+
+NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
+{
+    struct _BC250_PSP_FIRMWARE* firmware=NULL;
+    struct amdgpu_device* adev=NULL;
+    PAGING_APERTURE aperture;
+    BOOLEAN enabled=FALSE;
+    NTSTATUS status=STATUS_DEVICE_NOT_READY;
+
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    if (!Device) { status=STATUS_INVALID_PARAMETER; goto Done; }
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL || Device->Started || Device->Wddm) {
+        status=STATUS_INVALID_DEVICE_STATE;
+        goto Done;
+    }
+    if (Device->GpuStopUnconfirmed) { status=STATUS_DEVICE_HARDWARE_ERROR; goto Done; }
+    if (!Device->FullWddm || !Device->Mmio || !Device->MmioGartEnabled ||
+        !Device->MmioPspEnabled || !Device->MmioIhEnabled || !Device->MmioGfxEnabled ||
+        !Device->VramWriteEnabled || !Device->Gart || !Device->Psp ||
+        !Device->Ih || !Device->GpuMem || !Device->InterruptIsMessage ||
+        !Device->Dxgk.DxgkCbSynchronizeExecution || !Device->Dxgk.DxgkCbNotifyInterrupt ||
+        !Device->Dxgk.DxgkCbQueueDpc || !Device->Dxgk.DxgkCbNotifyDpc ||
+        !Device->WddmAperture.bytes || !GfxStartupResources(Device,FALSE)) goto Done;
+
+    // Planning only: refuse to re-enable/zero an already live GART, PSP or IH.
+    ExAcquireFastMutex(&Device->GartLock);
+    status=GartDevice(Device,&adev,&enabled);
+    if (NT_SUCCESS(status) && (enabled || PspIsLoaded(Device) || IhIsActive(Device)))
+        status=STATUS_INVALID_DEVICE_STATE;
+    ExReleaseFastMutex(&Device->GartLock);
+    if (!NT_SUCCESS(status)) goto Done;
+
+    status=GartCaptureAperture(Device,&aperture);
+    if (!NT_SUCCESS(status)) goto Done;
+    if (aperture.mc!=Device->WddmAperture.mc || aperture.table!=Device->WddmAperture.table ||
+        aperture.bytes!=Device->WddmAperture.bytes) {
+        status=STATUS_INVALID_DEVICE_STATE;
+        goto Done;
+    }
+
+    status=PspPrepareFirmware(Device,&Report->Psp,&firmware);
+    if (!NT_SUCCESS(status)) goto Done;
+
+    Report->Attempted |= BC250_START_GART;
+    status=GartInitializeHardware(Device,&Report->Gart);
+    if (!NT_SUCCESS(status)) goto Unwind;
+    Report->Completed |= BC250_START_GART;
+
+    Report->Attempted |= BC250_START_PSP;
+    status=PspInitializePrepared(Device,firmware,&Report->Psp);
+    if (!NT_SUCCESS(status)) goto Unwind;
+    Report->Completed |= BC250_START_PSP;
+
+    Report->Attempted |= BC250_START_IH;
+    status=IhInitializeHardware(Device,&Report->Ih);
+    if (!NT_SUCCESS(status)) goto Unwind;
+    Report->Completed |= BC250_START_IH;
+
+    Report->Attempted |= BC250_START_GFX;
+    status=GfxInitializeHardware(Device,&Report->Gfx);
+    if (!NT_SUCCESS(status)) goto Unwind;
+    Report->Completed |= BC250_START_GFX;
+
+    status=GartCaptureAperture(Device,&aperture);
+    if (!NT_SUCCESS(status)) goto Unwind;
+    if (aperture.mc!=Device->WddmAperture.mc || aperture.table!=Device->WddmAperture.table ||
+        aperture.bytes!=Device->WddmAperture.bytes) {
+        status=STATUS_INVALID_DEVICE_STATE;
+        goto Unwind;
+    }
+    if (!GfxStartupResources(Device,TRUE)) {
+        status=STATUS_DEVICE_NOT_READY;
+        goto Unwind;
+    }
+    Report->Ready=TRUE;
+    goto Done;
+
+Unwind:
+    // Even a failed first phase may own GPU-visible storage. Use the complete
+    // dependency-aware stop chain, not only the successfully completed phases.
+    // These stops preserve/quarantine backing on an unconfirmed hardware halt.
+    IhStop(Device);
+    GfxStop(Device);
+    PspStop(Device);
+    GartStop(Device);
+    Report->Unwound=TRUE;
+Done:
+    PspReleaseFirmware(firmware);
+    Report->Status=status;
+    Report->StopUnconfirmed=Device ? Device->GpuStopUnconfirmed : FALSE;
+    if (Device) GuardLog("startup: attempted 0x%lX completed 0x%lX status 0x%08X ready %u unwind %u quarantine %u",
+        Report->Attempted,Report->Completed,status,Report->Ready,Report->Unwound,Report->StopUnconfirmed);
+    return status;
+}

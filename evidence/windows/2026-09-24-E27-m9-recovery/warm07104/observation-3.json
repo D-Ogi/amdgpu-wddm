@@ -1,0 +1,23 @@
+{
+  "utc": "2026-09-24T00:20:22.096203+00:00",
+  "routes": [
+    {
+      "route": 0,
+      "tcp22": false
+    },
+    {
+      "route": 1,
+      "tcp22": false
+    },
+    {
+      "route": 2,
+      "tcp22": false
+    },
+    {
+      "route": 3,
+      "tcp22": false
+    }
+  ],
+  "original_session": 55183,
+  "monitor_response": "pending"
+}

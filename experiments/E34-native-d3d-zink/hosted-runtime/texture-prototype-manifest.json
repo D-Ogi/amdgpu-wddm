@@ -1,0 +1,32 @@
+[
+  {
+    "path": "src/gallium/auxiliary/nir/tgsi_to_nir.c",
+    "before_lf_sha256": "639c6bc060096e8dae3b556acfdbfb1ce7a8e22174c8e3d69adfb6d472bbd518",
+    "after_lf_sha256": "d04c6c103806f87d2d895bae83fe17b9c2503637f573d9f9624003859f86b760"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_compiler.c",
+    "before_lf_sha256": "18673fe40d215bccb5e7e162fee9196d1cb114b01a57c787fec7b9f096a7c5d7",
+    "after_lf_sha256": "5b03af3b370de417ad29fc6eafc8b6d27a13a99d42a05f44875be8424e747966"
+  },
+  {
+    "path": "src/gallium/drivers/zink/nir_to_spirv/nir_to_spirv.c",
+    "before_lf_sha256": "67a2715692ec99a5111fd1a8a3a0784ac688dc95eea3c6d370e906ff67b68ac1",
+    "after_lf_sha256": "55e4452edf861ec3d83c09bee31e2b231e2e119577e6ea6c95df5559a5c2b2d5"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_types.h",
+    "before_lf_sha256": "4287e28e69806223d7a69083c0d2968366bb01d1e66fe1c7633544cf52ceada7",
+    "after_lf_sha256": "c602d61f79236f33ea8bc61d6f420c638f99665924a4c7b344760dc0bccb06d6"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_lf_sha256": "9a50010def7dea8fd3938ec5bb2b3a8671b359076838501efd88632ee66fac7a",
+    "after_lf_sha256": "278cd9ea09128d251a260651fec7703348b4378624c7f323a83aeed77faf3501"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Draw.cpp",
+    "before_lf_sha256": "6b76bbe852a7f7d6893126b8344281f7eb5a57c40e57c1e7a9d6d044139fbb47",
+    "after_lf_sha256": "18641f33e11bdb794f1c2c14baa20c1038cb98cf7a3f7cf7e48562cec3a25c14"
+  }
+]

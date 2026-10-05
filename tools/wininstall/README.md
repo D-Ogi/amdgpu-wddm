@@ -14,14 +14,16 @@ then moved into the board. The first boot configures itself from an answer file.
 ## Use
 
 ```powershell
-pwsh tools\wininstall\make_payload.ps1 -SecretsDir P:\BC-250\secrets -OpenSshZip <OpenSSH-Win64.zip>
+pwsh tools\wininstall\make_payload.ps1 -SecretsDir $env:BC250_ROOT\secrets -OpenSshZip <OpenSSH-Win64.zip>
 
 # elevated; first without -Execute, read the plan, then with it
 pwsh tools\wininstall\install_to_disk.ps1 -DiskNumber 7 -ExpectedDiskName 'WD Blue SN570*' -DataLetter H `
-    -ImageFile <install.wim|install.esd> -PayloadDir P:\BC-250\secrets\win\payload `
-    -WorkDir P:\BC-250\scratch\win-install -DriverDir <extra drivers> `
+    -ImageFile <install.wim|install.esd> -PayloadDir $env:BC250_ROOT\secrets\win\payload `
+    -WorkDir $env:BC250_ROOT\scratch\win-install -DriverDir <extra drivers> `
     -WipeDisk -ExpectedDiskSizeGB 1863 -WindowsSizeGB 500 [-Execute]
 ```
+
+`BC250_ROOT` is the workspace root, by default the parent directory of this repository.
 
 Without `-WipeDisk` the script shrinks the named data partition and installs next to it, touching nothing
 else except the disk's EFI system partition (which it backs up first).

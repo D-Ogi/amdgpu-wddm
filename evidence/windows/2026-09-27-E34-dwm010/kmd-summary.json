@@ -1,0 +1,4 @@
+{
+  "kmd-start.log": "842496  22318.769 wddm summary: blit gate open, 604 blits, 0 skips, 604 sources translated contiguous",
+  "kmd-end.log": "844122  22344.406 wddm summary: blit gate open, 604 blits, 0 skips, 604 sources translated contiguous"
+}

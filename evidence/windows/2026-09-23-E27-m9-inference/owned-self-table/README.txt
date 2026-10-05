@@ -1,0 +1,8 @@
+M300 - Owned transfer changing its own translation tables, host only
+Base revision: bed764da5192be7132d646be0e6331c1edeb30fd, working tree modifications; test snapshots included.
+
+Procedure: actual VidMm CPU initialization and logical walker map source pages [4,5,6] to destination [5,6,4]. Page4 is the leaf table resolving these addresses. The 64-DWORD ring budget forces bounded scratch-complete groups. Full and offset17 partial transfers use the actual context-owned wrapper, capture, emitter and publisher. Independent emitted-packet replay updates an initial byte snapshot. Every callback compares all1536 logical PTEs with replay. The full-copy first callback changes its own source translation and requires another callback, verified explicitly. The final bytes still match the original sources, and terminal release is verified.
+
+Results: default30909 checks PASS. Negative generated OmitLogicalCommit focused5215checks/2080failures, native1; production source not mutated. See focused.log for passing combined emitter/owned/self-table count. Initial fixture attempts failed because test PTEs exceeded declared segment length and ring reservation was too small; corrected fixtures have positive-control real walks before transfer.
+
+Only test generation/fixtures changed this turn, no new production binary or deployment. Latest development SYS remains M299 DD4FF8E2073E398DFC27195FC2B820E64E7060BBF4FF8E9B54BDFAD5D677F180. Actual OS/GPU cancellation/lifetime/cache, warm initialization, unequal-offset dependencies and performance acceptance remain open. Lab not accessed or mutated this turn; owner sshd response pending. This is a construction-order host test, not GPU execution.

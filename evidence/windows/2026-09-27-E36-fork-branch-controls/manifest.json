@@ -1,0 +1,37 @@
+{
+  "mesa_fork_clone": "github.com/D-Ogi/mesa-amdgpu-wddm (local P:/BC-250/mesa-wddm)",
+  "upstream_base": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "branches": {
+    "amdgpu-wddm/radv-wddm2-consolidated": "940ab0eb9678f2c173d5bee3fadce9cffdd5d850",
+    "amdgpu-wddm/d3d10umd-consolidated": "71f2e28c1b14f60ecbe11e543279bc76ea0c1237"
+  },
+  "tags": [
+    "amdgpu-wddm-radv-wddm2-consolidated-2026-09-27b",
+    "amdgpu-wddm-d3d10umd-consolidated-2026-09-27b"
+  ],
+  "build_host": "development PC, tools/build/build-mesa.ps1 (recipes recipe-radv.json, recipe-zink-umd.json)",
+  "artifacts": {
+    "vulkan_radeon.dll": {
+      "sha256": "FAD08ECB16C9CFFDCB8D09D408C8ABC428B348D948D945D78DE30892D88A65AF",
+      "bytes": 24252928,
+      "config": "radv",
+      "target_path": "C:/BC250/m13/fork-consolidated001/vulkan_radeon.dll"
+    },
+    "bc250d3d_zink.dll": {
+      "sha256": "848BCBF5FD3B864B183F2194308FA70D254C615B5B30BDBC602C34C9EDC00287",
+      "bytes": 15105536,
+      "config": "zink-umd",
+      "target_path": "C:/BC250/m13/fork-consolidated001/bc250d3d_zink.dll"
+    }
+  },
+  "recorded_controls": {
+    "runtime-flip-control.exe": "E58D29517DB7C5E29B30F73E19F9EAB4C6C376AC411E2E28E6871E74224642BA (C:/BC250/m13/hosted-runtime016, M545/M546)",
+    "router.dll": "C:/BC250/m13/runtime-probe001/router.dll (E34 process router)",
+    "vkcompute.exe": "C:/BC250/m8/vkcompute.exe with C:/BC250/m8/spv (E14)"
+  },
+  "baselines_restored": {
+    "system ICD C:/BC250/m10/wsi-final/vulkan_radeon.dll": "9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798",
+    "CPU UMD C:/BC250/m11/resource-close/bc250d3d.dll": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "app-slot UMD C:/BC250/m13/runtime-probe001/bc250d3d_zink.dll": "346A5140 (prefix; the M546 candidate slot content, unchanged)"
+  }
+}

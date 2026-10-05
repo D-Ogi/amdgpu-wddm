@@ -62,10 +62,12 @@ overrides it.
 
 ## The object lifecycle section
 
-As far as any E16 run has got, dxgkrnl builds a system process, one or two devices and a
-context on the adapter, takes all of it down again and stops the device - run 004 did the
-whole thing in 2 ms. Those few milliseconds are the only evidence there is about what
-dxgkrnl wanted, so `show` and `diff` unpack them:
+In E16 run 004, the furthest of the runs this tool was written for, dxgkrnl built a system
+process, one or two devices and a context on the adapter, took all of it down again and
+stopped the device, the whole object graph in 2 ms (M65). Later runs got further: from run 005 on the start stayed up and went on to
+`BuildPagingBuffer` and `SetRootPageTable` (M67), and run 009 ran the desktop's kernel side
+end to end (M71). For the early runs those few milliseconds are the only evidence there is
+about what dxgkrnl wanted, so `show` and `diff` unpack them:
 
 - each `Create*` and `Destroy*` in order, with the gap from the previous one in
   milliseconds, taken from the log's own seconds column;
@@ -95,11 +97,12 @@ it is still part of `Reserved`.
 `EXPECTED_AFTER_SYSTEM_CONTEXT` in `runcompare.py`: six entries, each with the reason it
 is there. It is small and meant to be edited.
 
-**It has been observed on no run yet.** No E16 run has got past `DestroyProcess`, so the
-list is a reading of the DDI table `driver/kmd/wddm.c` builds and of the WDK, not a
-measurement, and every line that prints a name from it says so. When a run does get
-further, correct the list from what that run shows and set `EXPECTED_ORDER_OBSERVED` to
-that run's id; the wording changes by itself.
+**It is still unconfirmed.** E16 runs 005 and later did get past `DestroyProcess` (M67,
+M71), but nobody has yet checked the list against them: `EXPECTED_ORDER_OBSERVED` in
+`runcompare.py` is still `None`. Until it is set, the list is a reading of the DDI table
+`driver/kmd/wddm.c` built at stage A and of the WDK, not a measurement, and every line that
+prints a name from it says so. To confirm it, correct the list from what one of those runs
+shows and set `EXPECTED_ORDER_OBSERVED` to that run's id; the wording changes by itself.
 
 Two things the log cannot give this section: it carries no object handle, so creations
 and destructions are paired by kind and by count and never one named object to another;

@@ -1,0 +1,18 @@
+M214 physical table Fill shadow commit, 2026-09-23.
+Base commit in base-commit.txt plus dirty working tree; source snapshots included.
+Procedure in E27 README preceded implementation/tests.
+Paging shadow suite:70999 checks/0 failures, kernel-flags compile passes.
+Final routing suite:9082 checks/0 failures (7 new against M213).
+-OmitLogicalCommit now omits update/copy/fill commits:596 failures expected, exit1.
+Fill-specific known-entry/new-known/refusal assertions reject the mutation.
+Full build/sign0783 passes, package scratch/build/bc250kmd-0783/package-umd.
+SYS SHA256 0F7DB7993B4961FDB54530295EFEE63EC68B33AE04353CBCE1C9829CECB7259E.
+NOT DEPLOYED. No lab access, reset, USB change or private-data redaction.
+Helper scans registered table slots, full-PTE pattern writes become known, partial
+known writes preserve other DWORD. Unknown half writes remain conservatively unknown,
+including two separate half writes; no per-half knowledge tracking is claimed.
+VidMm commit holds exclusive CpuUpdateLock, checks table physical extent before mutation.
+Private header acceptance precedes commit; commit precedes DMA copy/pointer advancement.
+Tests inspect actual extracted helper/publication, not live GPU or OS interleavings.
+Virtual fill and other writes/copies into table storage still need equivalent treatment.
+No GPU retirement, coherence, OS lifetime, recovery or performance acceptance claim.

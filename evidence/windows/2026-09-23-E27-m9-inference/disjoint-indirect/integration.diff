@@ -1,0 +1,90 @@
+--- before/gfx.c
++++ after/gfx.c
+@@ -26,6 +26,7 @@
+ //
+ // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
+ #include "bc250kmd.h"
++#include "paging_intervals.h"
+ #include "bc250kmd_escape.h"
+ #include "regs.generated.h"
+ #include "bc250_gmc.h"
+@@ -1571,6 +1572,51 @@
+     return PagingResolvePhysical(stream,stream->Destination,Address,Bytes,Mc);
+ }
+ 
++static int PagingSourceIdentity(void* Context,PAGING_U64 Address,unsigned Bytes,PAGING_U64* Physical)
++{
++    BC250_PHYSICAL_STREAM* stream=(BC250_PHYSICAL_STREAM*)Context;
++    PAGING_U64 mc;
++    if (!PagingResolveSource(Context,Address,Bytes,&mc)) return 0;
++    if (mc&PAGING_SYSTEM_ADDRESS) *Physical=mc&~PAGING_SYSTEM_ADDRESS;
++    else *Physical=mc-stream->Common.Device->VramMcBase+(ULONGLONG)stream->Common.Device->VramPhysical.QuadPart;
++    return 1;
++}
++static int PagingDestinationIdentity(void* Context,PAGING_U64 Address,unsigned Bytes,PAGING_U64* Physical)
++{
++    BC250_PHYSICAL_STREAM* stream=(BC250_PHYSICAL_STREAM*)Context;
++    PAGING_U64 mc;
++    if (!PagingResolveDestination(Context,Address,Bytes,&mc)) return 0;
++    if (mc&PAGING_SYSTEM_ADDRESS) *Physical=mc&~PAGING_SYSTEM_ADDRESS;
++    else *Physical=mc-stream->Common.Device->VramMcBase+(ULONGLONG)stream->Common.Device->VramPhysical.QuadPart;
++    return 1;
++}
++
++// Classification only. Workspace never reaches hardware and is released before
++// packets are built. Sorting physical spans avoids quadratic all-pairs PFN checks.
++NTSTATUS GfxPagingCheckDisjoint(BC250_DEVICE* Device,const BC250_PAGING_ENDPOINT* Source,
++    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,BOOLEAN* Disjoint)
++{
++    BC250_PHYSICAL_STREAM stream;BC250_GFX* gfx;PAGING_INTERVAL* work;
++    ULONGLONG src=Source->Mdl?0:Source->Address,dst=Destination->Mdl?0:Destination->Address;
++    unsigned count=PagingIntervalCapacity(src,Bytes);int separate=0;
++    NTSTATUS status=STATUS_INVALID_PARAMETER;
++    *Disjoint=FALSE;
++    if (!count) return status;
++    work=(PAGING_INTERVAL*)ExAllocatePool2(POOL_FLAG_PAGED,(SIZE_T)count*sizeof(*work),BC250_GFX_TAG);
++    if (!work) return STATUS_INSUFFICIENT_RESOURCES;
++    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
++    gfx=(BC250_GFX*)Device->Gfx;
++    if (gfx && gfx->PagingReady && gfx->PagingWindowReady) {
++        RtlZeroMemory(&stream,sizeof(stream));stream.Common.Device=Device;stream.Common.Gfx=gfx;
++        stream.Source=Source;stream.Destination=Destination;
++        if (PagingIntervalsDisjoint(&stream,PagingSourceIdentity,PagingDestinationIdentity,
++                src,dst,Bytes,work,count,&separate)) {status=STATUS_SUCCESS;*Disjoint=(BOOLEAN)separate;}
++    }
++    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
++    ExFreePoolWithTag(work,BC250_GFX_TAG);
++    return status;
++}
++
+ // Validate the complete requested interval before the first batch can escape.
+ // O(1): PFN contents are still checked page by page under the OS MDL lifetime.
+ BOOLEAN GfxPagingEndpointValid(const BC250_DEVICE* Device,
+--- before/wddm.c
++++ after/wddm.c
+@@ -2806,8 +2806,12 @@
+     // Indirect physical page lists can contain arbitrary cross-page alias cycles.
+     // Dependency analysis/snapshot storage is pending; do not emit a corrupt prefix.
+     if ((source.Mdl || source.Aperture) && (destination.Mdl || destination.Aperture) &&
+-        (source.Aperture || destination.Aperture || source.Mdl!=destination.Mdl) && total>PAGE_SIZE)
+-        return STATUS_INVALID_PARAMETER;
++        (source.Aperture || destination.Aperture || source.Mdl!=destination.Mdl) && total>PAGE_SIZE) {
++        BOOLEAN disjoint=FALSE;
++        status=GfxPagingCheckDisjoint(Device,&source,&destination,total,&disjoint);
++        if (!NT_SUCCESS(status)) return status;
++        if (!disjoint) return STATUS_INVALID_PARAMETER; // Cross-page alias scheduling remains open.
++    }
+     if (!source.Mdl && !destination.Mdl && !source.Aperture && !destination.Aperture) {
+         overlap=source.Address<=destination.Address ? destination.Address-source.Address<total :
+             source.Address-destination.Address<total;
+--- before/bc250kmd.h
++++ after/bc250kmd.h
+@@ -479,6 +479,8 @@
+ NTSTATUS GfxPagingBuildCopyPage(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,
+     const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes,
+     PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice);
++NTSTATUS GfxPagingCheckDisjoint(BC250_DEVICE* Device,const BC250_PAGING_ENDPOINT* Source,
++    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,BOOLEAN* Disjoint);
+ BOOLEAN GfxPagingEndpointValid(const BC250_DEVICE* Device,
+     const BC250_PAGING_ENDPOINT* Endpoint, ULONGLONG Bytes);
+ BOOLEAN WddmPreparePhysicalTransfer(const BC250_DEVICE* Device,

@@ -1,0 +1,16 @@
+11: kd> .sympath+ P:\bc-250\scratch\g0-hosted\kmd163-final001
+Expanded Symbol search path is: p:\bc-250\scratch\build\bc250kmd;p:\bc-250\scratch\build\bc250rd;srv*p:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols;p:\bc-250\scratch\g0-hosted\kmd163-final001
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\build\bc250kmd
+OK                                             P:\BC-250\scratch\build\bc250rd
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\bc-250\scratch\g0-hosted\kmd163-final001
+11: kd> .reload /f bc250kmd.sys
+11: kd> dt bc250kmd!amdgpu_device ffffd38c0eea0880 gfx.fence_mem
+Cannot find specified field members.
+11: kd> db ffffd38c0ee97000+0x3c6 L2
+ffffd38c`0ee973c6  01 00                                            ..
+11: kd> db ffffd38c0ee97000+0x3d4 L2
+ffffd38c`0ee973d4  01 00                                            ..

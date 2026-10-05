@@ -1,0 +1,161 @@
+{
+ "artifacts": {
+  "candidate ICD 0CD4A98D": "0CD4A98DD80AE1248CFA1E6D4C1EB650DCF217FA9A840C002EDC4BB7EB0ADB47 (fork amdgpu-wddm/radv-wddm2-wsi-kmt 1d7ac9ca on aa8296c0; build log scratch/mesa-fork-2026-09-27/build-radv-kmt6.log)",
+  "registered ICD before and after": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (E38)",
+  "vkcube.exe": "87A96AF3A4677C4AE0BC293625B9F18BFE80A41362992BC03CA2AA3CADE37721",
+  "PresentMon 2.6.0": "B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF (session BC250KMT, no CSV produced)",
+  "raw DxgKrnl trace": "89269D3D1B98E267648141795151E3A94CDC158BCB39AC85646371827146C830 (dxgkrnl.etl, 367001600 bytes, session BC250WSIKmt004; private, scratch run004 and C:/BC250/m12/wsi-kmt-004 on the target)",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD 152 unchanged (generation 575721647, epoch 165), UMD 8279AC7F, CPU DWM 4596, clock 1000 MHz VID 116, BlitGate open, blit counter 721",
+  "screenshots": "private in scratch/wsi-kmt-2026-09-27/run004; hashes in capture-hashes.json"
+ },
+ "files": {
+  "capture-hashes.json": {
+   "sha256": "0557920b26a92e08928caadfb074d14ac9a50a20c2ace6f8e2b99fb5568f1d51",
+   "bytes": 510
+  },
+  "patches/0001-wsi-wddm2-log-who-owns-VidPn-source-0-when-the-prese.patch": {
+   "sha256": "cdba8c0a2a694decc7fe9b2347be3f9e145ad4d389b34b8b3f9daed280fb8363",
+   "bytes": 3302
+  },
+  "present-stats.json": {
+   "sha256": "512e27da1b12bdd94194a2aeb5c0fe7ca3ecf83324c827c650b3c425789c65e1",
+   "bytes": 697
+  },
+  "RESULT.md": {
+   "sha256": "48a511e7185e0f8a891cf0b9b67c662169da5763ae1d3b4fa353ea6b7240a2d6",
+   "bytes": 5209
+  },
+  "run004/after-A-kmt-log-summary.blit-lines.txt": {
+   "sha256": "899aeaa760a0c0c8de2ac632dabe2ebdcd45a00604bf097291a9910572562c74",
+   "bytes": 1342
+  },
+  "run004/after-B-cpu-log-summary.blit-lines.txt": {
+   "sha256": "7ec6557f64753c49d0299dfaa2ffa7b723be3d4a3269a62030a7ad7cec5cf47c",
+   "bytes": 1342
+  },
+  "run004/after-clock.txt": {
+   "sha256": "c92a4e5be2f82b1abf12bb3f0cb3cf20b10e245f140945d6dd7754a0ff932224",
+   "bytes": 75
+  },
+  "run004/after-health.txt": {
+   "sha256": "e31394a2f98ac032f0b73e94a07635bd904f12f71242e4781d0ca91c794899dd",
+   "bytes": 114
+  },
+  "run004/after-log-summary.blit-lines.txt": {
+   "sha256": "91f31114e97f42db52efa156adbe8b09635603fb94de6cc81080a3c3ec770b6c",
+   "bytes": 2684
+  },
+  "run004/before-clock.txt": {
+   "sha256": "22dfa7152a508a1d304268aace2177704bf556ad2801b709140f5f00f4a1cbee",
+   "bytes": 75
+  },
+  "run004/before-health.txt": {
+   "sha256": "1dbdccd68e076d1695ca9c978e7d20bbc97c1668b0731e26c25cf882c940e8f0",
+   "bytes": 113
+  },
+  "run004/before-log-summary.blit-lines.txt": {
+   "sha256": "4d54c35f7be6fd1b9fd7041f768b460af9d52c4a49b8fac24ff31a13bfc1706c",
+   "bytes": 5282
+  },
+  "run004/decode.log": {
+   "sha256": "af0ff9ea5f43ea7088909b7133beb77b3d9d742b289d76d3b00ee2f8969907ad",
+   "bytes": 392
+  },
+  "run004/done-kmt-004.json": {
+   "sha256": "d8bc4ab9ef82c0ad2508d1810915aee0f37fbee5d9e0be52a5d9bc63f4bcaafb",
+   "bytes": 67
+  },
+  "run004/dxgkrnl-present-events.csv": {
+   "sha256": "cfc1c7be91b1da7e312db7896cc0956d6f291a51d0325db0470fd94c2ea8e323",
+   "bytes": 209619
+  },
+  "run004/dxgkrnl-presenthistory-events.csv": {
+   "sha256": "6bc99e08a7b3f0c5f4fe01ab9b18ee285eb5319b49a9f55e174c3d26d5e9d384",
+   "bytes": 4405
+  },
+  "run004/logman-query-kmt004.txt": {
+   "sha256": "d1249b90b6fef44e78a0d06a8c8d9f893464e8ae1d31c6c0a5814cf3057d627d",
+   "bytes": 1885
+  },
+  "run004/logman-start-kmt004.txt": {
+   "sha256": "9154b5ed74215245825774eb266dd48509e5a8daecbfc41f6c7e80127084c3c1",
+   "bytes": 37
+  },
+  "run004/logman-stop-kmt004.txt": {
+   "sha256": "9154b5ed74215245825774eb266dd48509e5a8daecbfc41f6c7e80127084c3c1",
+   "bytes": 37
+  },
+  "run004/logman-stop.txt": {
+   "sha256": "9154b5ed74215245825774eb266dd48509e5a8daecbfc41f6c7e80127084c3c1",
+   "bytes": 37
+  },
+  "run004/modules-A-kmt.json": {
+   "sha256": "6811172a0a641884604b508cd34d6a328545aef9a57b3e786ffb060cb4e2f3ad",
+   "bytes": 239
+  },
+  "run004/modules-B-cpu.json": {
+   "sha256": "6811172a0a641884604b508cd34d6a328545aef9a57b3e786ffb060cb4e2f3ad",
+   "bytes": 239
+  },
+  "run004/present-A-kmt.csv": {
+   "sha256": "bc69e59024d3829673562c9f27c7435b46bfd48fc67405ce918bb5fb20b12fb5",
+   "bytes": 165758
+  },
+  "run004/present-B-cpu.csv": {
+   "sha256": "e33997f03cd10dadee032c88eb4852ce9d42cc09369f215c9df09b8b6f86952b",
+   "bytes": 46927
+  },
+  "run004/run-kmt-004.log": {
+   "sha256": "7d959fe55101d17a0aa6438abd740ded9ff48464b1502f581ac0cc479eacdc6d",
+   "bytes": 3467
+  },
+  "run004/vkcube-A-kmt.stderr.wddm2-lines.txt": {
+   "sha256": "0196b753be05c1a160abd10a4c92a3b2c124f65a41a0ea8cc17ae351d25c546b",
+   "bytes": 893
+  },
+  "run004/vkcube-B-cpu.stderr.wddm2-lines.txt": {
+   "sha256": "4c59d1fc660dabec3ab52e28adbaf14bc1386c5ffb1589cf24a6eb8fb134d2a8",
+   "bytes": 52
+  },
+  "scripts/cleanup-kmt-004.ps1": {
+   "sha256": "75b4a5b4394f757f07f7ee6020f150a4ece2c0c7d2622b4d76697f727f2a5975",
+   "bytes": 1379
+  },
+  "scripts/decode-004.ps1": {
+   "sha256": "40d5c6028074e6cbdcd683bfa23ff1f486ea723c650b7abb94a9c984cfda5bf6",
+   "bytes": 1901
+  },
+  "scripts/finish-e46.py": {
+   "sha256": "8ca65924c59f478ad20a9ec634b5df166d53a18f9ffb75f54be8f34f97ffaf1a",
+   "bytes": 3941
+  },
+  "scripts/labcheck.ps1": {
+   "sha256": "e958c5d29d9c3569b43992285e14b658d997521d7636c390d4cc2aefe5b7f7ec",
+   "bytes": 1142
+  },
+  "scripts/launch-kmt-004.ps1": {
+   "sha256": "246095a4d6ca86e4c300e461608a889bddbd64b6a02fb89c58ca0220cc4e64bf",
+   "bytes": 2013
+  },
+  "scripts/makenext.py": {
+   "sha256": "8e91ad9c26d9e8d652e107ae5e89a883debefdc8839335baf50c6efbba7b9e89",
+   "bytes": 1536
+  },
+  "scripts/pull-004.py": {
+   "sha256": "71bc4ef0dca9128c96b9dadc4dda415c322668c0c8024924bf1172201c8a837f",
+   "bytes": 1850
+  },
+  "scripts/run-kmt-004.ps1": {
+   "sha256": "43cb576d80908e244b88e7e94bbe8245a45f873ec11f6bf2a1bc902d6e3912cd",
+   "bytes": 11400
+  },
+  "scripts/status-kmt-004.ps1": {
+   "sha256": "3d776b96f6aa37278bdaccb12825b391e4076c788b52c6648959071671af4e0c",
+   "bytes": 659
+  },
+  "scripts/worker-kmt-004.ps1": {
+   "sha256": "87da575572d16be08db38976873ba34cc8dac435c94694b3fa600d46bc50dedd",
+   "bytes": 375
+  }
+ }
+}

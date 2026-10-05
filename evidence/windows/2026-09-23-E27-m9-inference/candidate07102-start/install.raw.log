@@ -1,0 +1,35 @@
+é?AØè¨$ErrorActionPreference=Stop : The term 'é?AØè¨$ErrorActionPreference=Stop' is not 
+recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\BC250\tmp\candidate07102-install.ps1:1 char:1
++ é?AØè¨$ErrorActionPreference='Stop'
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (é?AØè¨$ErrorActionPreference=Stop:String) [], Comm 
+   andNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+candidate_sha256=3B80D2EA3260CE053C11E888A274F909896E28D66D1CF6872B5213EDD5FFA760
+boot_before=2026-09-23T19:27:05
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+20:07:21 Tctl 66.0 C (raw 731B0FEF)
+
+guard recovery: logs secured, all hardware gates verified closed
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem76.inf
+Driver package installed on device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041
+
+Total driver packages:  1
+Added driver packages:  1
+pnputil_exit=0
+device_status=OK
+driver_version=0.7.102.1
+installed_sha256=3B80D2EA3260CE053C11E888A274F909896E28D66D1CF6872B5213EDD5FFA760
+closed_gates_verified
+boot_after=2026-09-23T19:27:05
+dwm_processes=1
+display_only_install_passed

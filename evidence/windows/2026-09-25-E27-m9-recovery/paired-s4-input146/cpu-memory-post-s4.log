@@ -1,0 +1,18 @@
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66500 ready=1
+
+{"Name":"_Total","PercentProcessorPerformance":109,"PercentofMaximumFrequency":100,"PercentProcessorUtility":108}
+{"Name":"_Total","PercentProcessorPerformance":108,"PercentofMaximumFrequency":100,"PercentProcessorUtility":109}
+{"Name":"_Total","PercentProcessorPerformance":109,"PercentofMaximumFrequency":100,"PercentProcessorUtility":108}
+{"Name":"_Total","PercentProcessorPerformance":109,"PercentofMaximumFrequency":100,"PercentProcessorUtility":109}
+{"Name":"_Total","PercentProcessorPerformance":107,"PercentofMaximumFrequency":43,"PercentProcessorUtility":12}
+{"Name":"_Total","PercentProcessorPerformance":44,"PercentofMaximumFrequency":43,"PercentProcessorUtility":0}
+{"Name":"_Total","PercentProcessorPerformance":75,"PercentofMaximumFrequency":43,"PercentProcessorUtility":1}
+utc=2026-09-25T02:46:24.8034858Z
+read pass=0 bytes=67108864 elapsed_ms=5.648 correct=True
+read pass=1 bytes=67108864 elapsed_ms=5.800 correct=True
+read pass=2 bytes=67108864 elapsed_ms=5.621 correct=True
+read pass=3 bytes=67108864 elapsed_ms=5.590 correct=True
+alu duration_s=5 threads=12 iterations=30707800000 checksum=6151194366455772135 sink=35184367894528
+done=2026-09-25T02:46:29.8578245Z
+benchmark_exit=
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=76000 ready=1

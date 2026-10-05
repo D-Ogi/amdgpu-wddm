@@ -1,0 +1,79 @@
+{
+  "sys_sha256": "E7AF5A02A3DEDA2CAD25E7D6A789FDA3C2406666D537F583D8ACAB14BDA49652",
+  "host_checks": 875868,
+  "host_failures": 0,
+  "old_coarse_check_failures": 1,
+  "shader_hashes": [
+    "0x7018cdd513a22325",
+    "0x7018cdd513a22325",
+    "0xbc33291b528dfab4",
+    "0x3ee3408930ca6e61",
+    "0x24396beb3a1a7367",
+    "0x24396beb3a1a7367",
+    "0x0eb467ee3ae0f043",
+    "0xe9fc02f21706317a"
+  ],
+  "stories15M": {
+    "full_reference_match": true,
+    "layers": 7,
+    "reference_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  "tinyllama": {
+    "full_reference_match": true,
+    "layers": 23,
+    "reference_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  "residency_readbacks": [
+    [
+      "1073741824",
+      "1024"
+    ],
+    [
+      "1073741824",
+      "2048"
+    ],
+    [
+      "1073741824",
+      "3072"
+    ],
+    [
+      "1073741824",
+      "4096"
+    ]
+  ],
+  "gfx": [
+    6706,
+    6706,
+    0,
+    0
+  ],
+  "sdma": [
+    30672,
+    30672,
+    0,
+    0
+  ],
+  "native_transfers_fills_bytes": [
+    100,
+    90,
+    13118906368
+  ],
+  "final_time": "2026-09-24T17:21:23",
+  "capture_reserved_heap": [
+    0,
+    0
+  ],
+  "native_exits": "all zero; worker, eight shaders, both models,64MiB/1GiB residency",
+  "exact_disjoint_checks": 82,
+  "restore_ms": [
+    2328,
+    1562,
+    1469
+  ],
+  "previous131_restore_ms": [
+    8000,
+    7719,
+    7703
+  ],
+  "os_dwm_retained": true
+}

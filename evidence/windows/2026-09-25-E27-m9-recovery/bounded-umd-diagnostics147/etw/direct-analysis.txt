@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "version": "1",
+    "mode": "active",
+    "pid": "3104",
+    "session": "1",
+    "window_station": "WinSta0",
+    "input_desktop": "Winlogon",
+    "attached_desktop": "Winlogon",
+    "utc": "2026-09-25T03:21:53.0524508Z",
+    "qpc_frequency": "10000000",
+    "qpc_start": "50472998241",
+    "duration_ms": "3000",
+    "original": "960:600",
+    "input_size": "40",
+    "transport": "SetCursorPos-direct"
+  },
+  "sample_count": 188,
+  "distinct_observed": 61,
+  "coordinate_changes": 187,
+  "matches": 188,
+  "sample_gap_us": {
+    "n": 187,
+    "min": 13969.8,
+    "p50": 16005.3,
+    "p95": 17783.2,
+    "max": 21105.9
+  },
+  "logical_delay_us": {
+    "n": 188,
+    "min": 6978,
+    "p50": 7211,
+    "p95": 7648,
+    "max": 8342
+  }
+}
+input window [1932756.3, 4932756.3]
+counts {'Microsoft-Windows-Win32k/WakeMIT/win:Info': 177, 'Microsoft-Windows-Win32k/ProcessQueuedMouseEvents/win:Start': 177, 'Microsoft-Windows-Win32k/ProcessQueuedMouseEvents/win:Stop': 177, 'Microsoft-Windows-Win32k/QueueInputMessage/win:Info': 177, 'Microsoft-Windows-Win32k/RetrieveInputMessage/win:Info': 177}
+timings {}
+gaps {}
+graphics window [1725306.0, 4725306.0]
+counts {'Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info': 180, 'Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT_STATS_DELTAS/win:Info': 179, 'Microsoft-Windows-Dwm-Core/SCHEDULE_RENDERTIME/win:Info': 179, 'Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Start': 179, 'Microsoft-Windows-Win32k/QueueInputMessage/win:Info': 177, 'Microsoft-Windows-Win32k/RetrieveInputMessage/win:Info': 177, 'Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Stop': 179, 'Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start': 176, 'Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop': 176, 'Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENTHISTORYTOKEN_GDISYSMEM/win:Info': 5}
+timings {'SCHEDULE_WFVB': {'n': 179, 'min': 5008, 'p50': 12608, 'p95': 13367, 'max': 15529}, 'SCHEDULE_RENDER': {'n': 179, 'min': 1091, 'p50': 1919, 'p95': 2206, 'max': 3689}, 'SCHEDULE_PRESENT': {'n': 176, 'min': 1201, 'p50': 1968, 'p95': 2386, 'max': 4028}, 'SCHEDULE_WFW': {'n': 179, 'min': 13, 'p50': 14, 'p95': 17, 'max': 1313}}
+gaps {'Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info': {'n': 179, 'min': 16451, 'p50': 16679, 'p95': 16817, 'max': 16873}, 'Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Start': {'n': 178, 'min': 16311, 'p50': 16678, 'p95': 16968, 'max': 17064}, 'Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start': {'n': 175, 'min': 15358, 'p50': 16726, 'p95': 17261, 'max': 33429}}

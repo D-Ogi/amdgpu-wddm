@@ -1,0 +1,62 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x1b6b5a9
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000600
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000680
+allocation handle=0x40000700
+allocation handle=0x400007c0
+allocation handle=0x40000840
+allocation handle=0x400008c0
+allocation handle=0x40000940
+allocation handle=0x400009c0
+allocation handle=0x40000a40
+allocation handle=0x40000ac0
+allocation handle=0x40000b40
+allocation handle=0x40000bc0
+allocation handle=0x40000c40
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40000cc0
+bc250: gather capacity=4096 bytes required=896 ibs=2
+allocation handle=0x40000d40
+bc250: gather capacity=4096 bytes required=896 ibs=2
+allocation handle=0x40000dc0
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40000e40
+bc250: gather capacity=4096 bytes required=2016 ibs=2
+allocation handle=0x40000ec0
+bc250: gather capacity=4096 bytes required=2016 ibs=2
+allocation handle=0x40000f40
+bc250: gather capacity=4096 bytes required=1216 ibs=2
+device        AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06802063 api 1.4.363
+queue family  0 flags 0xF, timestamps 64 valid bits, period 10.000 ns
+memory        11 types, 2 heaps
+  type  0 heap 1 flags 0x001
+  type  1 heap 1 flags 0x001
+  type  2 heap 0 flags 0x006
+  type  3 heap 1 flags 0x007
+  type  4 heap 1 flags 0x007
+  type  5 heap 0 flags 0x00E
+  type  6 heap 0 flags 0x00E
+  type  7 heap 1 flags 0x0C1
+  type  8 heap 0 flags 0x0C6
+  type  9 heap 1 flags 0x0C7
+  type 10 heap 0 flags 0x0CE
+  heap 0 size 4008 MiB flags 0x0
+  heap 1 size 8017 MiB flags 0x1
+placement local: src/dst type 0 (heap 1, flags 0x001), readback type 5 (flags 0x00E)
+  buffers 256 MiB x2, 16777216 elements of 16 bytes, 4096 groups x 256 = 1048576 invocations, 5 iterations
+  negative control: copy and read one element short, both checks must fail
+  write  n=5 gpu_ms min 0.714 median 0.719 max 0.726 sum 3.6 | GB/s median 373.1 best 376.1 | cpu_ms 4.1 (0.826 per dispatch)
+  copy   n=5 gpu_ms min 1.390 median 1.392 max 1.399 sum 7.0 | GB/s median 385.8 best 386.3 | cpu_ms 7.8 (1.552 per dispatch)
+  read   n=5 gpu_ms min 0.762 median 0.763 max 0.766 sum 3.8 | GB/s median 373.8 best 374.3 | cpu_ms 4.6 (0.912 per dispatch)
+  copy mismatch at byte 0xFFFFFF0: 0x00000000, expected 0x9DC88645
+  copy mismatch at byte 0xFFFFFF4: 0x00000000, expected 0x9DC88644
+  copy mismatch at byte 0xFFFFFF8: 0x00000000, expected 0x9DC88647
+  copy mismatch at byte 0xFFFFFFC: 0x00000000, expected 0x9DC88646
+  check copy FAILED (4 mismatches in the first and last MiB), read sum FAILED (613779BB 603779BC 633779B9 623779BA)
+result FAILED

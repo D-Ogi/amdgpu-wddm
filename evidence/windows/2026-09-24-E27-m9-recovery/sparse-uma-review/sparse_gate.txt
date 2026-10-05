@@ -1,0 +1,13 @@
+radv_sparse_enabled(const struct radv_physical_device *pdev)
+{
+   const struct radv_instance *instance = radv_physical_device_instance(pdev);
+
+   if (pdev->info.compiler_info.has_smem_with_null_prt_bug && !pdev->info.address_prt_wa_control_bit)
+      return false;
+
+   if (instance->queue_disable_flags & RADV_QUEUE_DISABLE_SPARSE)
+      return false;
+
+   return pdev->info.has_sparse || (instance->experimental_flags & RADV_EXPERIMENTAL_SPARSE);
+}
+

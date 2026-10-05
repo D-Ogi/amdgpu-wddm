@@ -1,0 +1,10 @@
+kernel=6.18.52-0-lts
+boot_epoch=1790243135
+linux_package=not_registered_in_ram_apk_database
+module_sha256=5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4
+module_vermagic=6.18.52-0-lts SMP preempt mod_unload modversions 
+module_srcversion=Python 3.14.7
+tracefs_kprobe_events=available
+preload_temperature_mC=57850
+preload_temperature_mC=70500
+linux_preflight_complete

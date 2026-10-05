@@ -1,0 +1,8 @@
+{
+    "started":  false,
+    "restore_without_marker_noop":  true,
+    "rollback159_present":  true,
+    "ps5_parse_pass":  true,
+    "hashes_pass":  true,
+    "utc":  "2026-09-27T08:51:57.8724462Z"
+}

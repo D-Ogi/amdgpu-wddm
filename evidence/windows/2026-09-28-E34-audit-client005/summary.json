@@ -1,0 +1,119 @@
+{
+  "descriptor_gpu_interval": {
+    "completed": 32,
+    "bytes": 1792,
+    "mapped_resource_ids": [
+      3,
+      6,
+      9,
+      12,
+      52,
+      57,
+      62
+    ],
+    "duration_ns": 551853100
+  },
+  "whole_prefix_descriptor_writes": 36,
+  "whole_prefix_descriptor_span_bytes": 2016,
+  "startup_subdata": [
+    {
+      "store": 19,
+      "map": 15,
+      "writer": "zink_buffer_subdata",
+      "kind": "buffer_subdata",
+      "offset": 0,
+      "bytes": 4,
+      "mapped_offset": 0,
+      "mapped_resource_id": 16,
+      "staging": true,
+      "begin_seq": 13,
+      "end_seq": 14,
+      "crossing_markers": []
+    },
+    {
+      "store": 23,
+      "map": 22,
+      "writer": "zink_buffer_subdata",
+      "kind": "buffer_subdata",
+      "offset": 0,
+      "bytes": 16,
+      "mapped_offset": 4096,
+      "mapped_resource_id": 16,
+      "staging": true,
+      "begin_seq": 18,
+      "end_seq": 19,
+      "crossing_markers": []
+    }
+  ],
+  "pending_store_ids": [],
+  "checkpoint_counters": true,
+  "log_bytes": 64439,
+  "store_records": 76,
+  "phases": {
+    "gpu": {
+      "start_marker": 1,
+      "end_marker": 2,
+      "successful_maps": 3,
+      "image_write_ids": [],
+      "full_frame_write_ids": [],
+      "full_frame_read_ids": []
+    },
+    "gpu_readback": {
+      "start_marker": 3,
+      "end_marker": 4,
+      "successful_maps": 2,
+      "image_write_ids": [],
+      "full_frame_write_ids": [],
+      "full_frame_read_ids": [
+        89,
+        94
+      ]
+    },
+    "cpu_copy": {
+      "start_marker": 5,
+      "end_marker": 6,
+      "successful_maps": 12,
+      "image_write_ids": [
+        97,
+        100,
+        103,
+        106,
+        109,
+        112,
+        115,
+        118,
+        121,
+        124,
+        127,
+        130
+      ],
+      "full_frame_write_ids": [
+        97,
+        100,
+        103,
+        106,
+        109,
+        112,
+        115,
+        118,
+        121,
+        124,
+        127,
+        130
+      ],
+      "full_frame_read_ids": []
+    },
+    "cpu_readback": {
+      "start_marker": 7,
+      "end_marker": 8,
+      "successful_maps": 1,
+      "image_write_ids": [],
+      "full_frame_write_ids": [],
+      "full_frame_read_ids": [
+        133
+      ]
+    }
+  },
+  "known_application_copy_bytes": 3686400,
+  "scope": "Measured small textured client only; not desktop G0 or a performance result"
+}

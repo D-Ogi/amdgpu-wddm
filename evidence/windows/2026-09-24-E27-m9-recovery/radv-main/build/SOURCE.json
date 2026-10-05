@@ -1,0 +1,12 @@
+{
+  "upstream": "https://gitlab.freedesktop.org/mesa/mesa",
+  "main": "f333dd6d1c85297ac41773eaeb9b02f16acf1919",
+  "wddm2_upstream": "https://gitlab.freedesktop.org/lfrb/mesa",
+  "wddm2": "801c9763c6043f0de8408e905a5324eea06d81d7",
+  "common_ancestor": "b860e0132f97dfe0b30c63b51a78ae6beae99428",
+  "compiler": "ACO",
+  "llvm": false,
+  "dll_sha256": "DB886B8D53E6BEE89665287AF5EE19A1868E5874868C795F6B11472FBB4A3986",
+  "patch_sha256": "f621c358e936f2af3a534c14b164c2b293ed2f7905ca060c868bccd41e1e41fe",
+  "patch_scope": "WDDM2 branch integration, BC250 private ABI/cache-intent/queue fixes, current-main API adaptation, sparse capability gate"
+}

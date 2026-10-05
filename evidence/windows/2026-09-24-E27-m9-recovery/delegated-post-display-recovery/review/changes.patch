@@ -1,0 +1,652 @@
+--- frozen137/driver/kmd/display.c
++++ working/driver/kmd/display.c
+@@ -90,6 +90,7 @@
+     PVOID mapping = Device->Framebuffer;
+     SIZE_T length = Device->FramebufferLength;
+ 
++    Device->SystemDisplayReady = FALSE;
+     Device->Framebuffer = NULL;
+     Device->FramebufferLength = 0;
+     Device->FramebufferCacheProtect = 0;
+@@ -808,12 +809,24 @@
+ {
+     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+ 
+-    UNREFERENCED_PARAMETER(TargetId);
++    NTSTATUS status;
+     UNREFERENCED_PARAMETER(Flags);
++    device->SystemDisplayReady=FALSE;
++    *Width=0;*Height=0;*ColorFormat=D3DDDIFMT_UNKNOWN;
++    // Single inherited output, advertised as always connected by QueryChildStatus.
++    if (TargetId!=BC250_CHILD_UID && TargetId!=D3DDDI_ID_UNINITIALIZED) return STATUS_NOT_SUPPORTED;
++    if (!device->Framebuffer || !IsPostFormatSupported(device->Post.ColorFormat) ||
++        !device->Post.Width || !device->Post.Height ||
++        (ULONGLONG)device->Post.Width*4>device->Post.Pitch ||
++        (ULONGLONG)device->Post.Pitch*device->Post.Height>device->FramebufferLength)
++        return STATUS_DEVICE_NOT_READY;
++    status=DcnRestorePostDisplay(device);
++    if (!NT_SUCCESS(status)) return status;
+     *Width = device->Post.Width;
+     *Height = device->Post.Height;
+     *ColorFormat = device->Post.ColorFormat;
+-    return (device->Framebuffer != NULL) ? STATUS_SUCCESS : STATUS_UNSUCCESSFUL;
++    device->SystemDisplayReady=TRUE;
++    return STATUS_SUCCESS;
+ }
+ 
+ void Bc250SystemDisplayWrite(_In_ const PVOID MiniportDeviceContext, _In_ const PVOID Source, _In_ const UINT SourceWidth,
+@@ -823,8 +836,10 @@
+     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+     UINT y, width, height;
+ 
+-    if (device->Framebuffer == NULL || PositionX >= device->Post.Width || PositionY >= device->Post.Height) return;
++    if (!device->SystemDisplayReady || device->Framebuffer == NULL ||
++        PositionX >= device->Post.Width || PositionY >= device->Post.Height) return;
+     width = min(SourceWidth, device->Post.Width - PositionX);
++    width = min(width, SourceStride / 4);
+     height = min(SourceHeight, device->Post.Height - PositionY);
+     for (y = 0; y < height; y++)
+         RtlCopyMemory((UCHAR*)device->Framebuffer + (SIZE_T)(PositionY + y) * device->Post.Pitch + (SIZE_T)PositionX * 4,
+--- frozen137/driver/kmd/pnp.c
++++ working/driver/kmd/pnp.c
+@@ -128,12 +128,20 @@
+ 
+     GuardStage(StageStopEnter);
+     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
++    device->SystemDisplayReady=FALSE;
++    device->PostDisplayStopAttempted=FALSE;
++    device->PostDisplayStopStatus=STATUS_DEVICE_NOT_READY;
+     device->Started = FALSE;
+     device->ModeActive = FALSE;
+     device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
+     device->CommitSeen = FALSE;
+     device->PresentSeen = FALSE;
+     WddmStop(device);       // first: it logs what dxgkrnl called, and nothing below it is allowed to have run
++    // Display-only starts have no WDDM object and therefore no WddmStop restore.
++    if (!device->PostDisplayStopAttempted) {
++        device->PostDisplayStopStatus=DcnStop(device);
++        device->PostDisplayStopAttempted=TRUE;
++    }
+     IhStop(device);         // no interrupt of ours from here on
+     GfxPrepareStop(device); // halt engines, retain storage through firmware/translation retirement
+     PspStop(device);
+@@ -142,9 +150,6 @@
+     GartStop(device);       // final firmware restore and owner destruction
+     if (device->FullWddm) GfxTraceRlcState(device,"after-gart-stop");
+     VramStop(device);
+-    // ADR 0011, consequences: if a flip ever moved HUBP0 off the firmware's own address, put it back before
+-    // BAR5 goes away. A no-op, logged as one, when nothing ever flipped (dcn.c's DcnStop).
+-    DcnStop(device);
+     MmioStop(device);
+     DisplayUnmapFramebuffer(device);
+     GuardStage(StageStopDone);
+@@ -162,12 +167,18 @@
+ {
+     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+ 
+-    // The mode is the one we were given; the target is the one dxgkrnl is releasing now. Post.TargetId is the
+-    // previous owner's name for it, or D3DDDI_ID_UNINITIALIZED after a reload (E16 step 1), and means nothing to
+-    // the next owner.
++    NTSTATUS status;
++    UNREFERENCED_PARAMETER(TargetId); // one active output; return its actual id below
++    RtlZeroMemory(DisplayInfo,sizeof(*DisplayInfo));
++    // Local dispmprt contract: failure makes dxgkrnl call ordinary StopDevice.
++    // Never publish a framebuffer that DCN failed to latch. Ordinary StopDevice
++    // still finishes teardown and returns its own completion result.
++    status=Bc250StopDevice(MiniportDeviceContext);
++    if (!NT_SUCCESS(status)) return status;
++    if (!NT_SUCCESS(device->PostDisplayStopStatus)) return device->PostDisplayStopStatus;
+     *DisplayInfo = device->Post;
+-    DisplayInfo->TargetId = TargetId;
+-    return Bc250StopDevice(MiniportDeviceContext);
++    DisplayInfo->TargetId = BC250_CHILD_UID;
++    return STATUS_SUCCESS;
+ }
+ 
+ void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
+--- frozen137/driver/kmd/dcn.c
++++ working/driver/kmd/dcn.c
+@@ -525,31 +525,92 @@
+     DcnFlipCore(Device, Data->Physical, Data->Restore != 0, Data->Fill, Data->FillColor, Data);
+ }
+ 
+-// The stop path's undo (pnp.c, ADR 0011 consequences): called unconditionally, a no-op (logged as one) unless
+-// the most recent flip left HUBP0 somewhere other than the firmware's address. Runs with a scratch output
+-// struct - the caller (pnp.c) has nowhere to put one and nothing to do with it beyond the log line here.
+-void DcnStop(_Inout_ BC250_DEVICE* Device)
+-{
+-    BC250_ESCAPE_DCNFLIP scratch;
+-
+-    // Idempotent: WddmStop already runs this once, earlier in pnp.c's stop order (docs/design/vidpn-flip.md
+-    // section 8), so the ordinary case finds Device->DcnScanoutMap already NULL here. Unconditional, ahead of
+-    // the DcnDiverged check below, for the same reason WddmStop's own call is unconditional - a caller that
+-    // skipped WddmStop (there is none today) must not find a dangling mapping either.
++// Restore is shared by orderly stop and the bugcheck display. Only cached
++// nonpaged state, checked MMIO, interlocked counters and bounded processor stalls
++// are used. In particular, no pool, scheduler wait, log, software lock or GPU
++// reset is reachable here. OS bugcheck/stop serialization owns the display.
++static NTSTATUS DcnReadScanoutPhysical(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Physical)
++{
++    ULONG high, low, highAgain, attempt;
++    ULONGLONG physical;
++    NTSTATUS status;
++
++    *Physical = 0;
++    if (Device->Mmio == NULL) return STATUS_DEVICE_NOT_READY;
++    // A latch between the two halves must not manufacture an address. Bounded
++    // retries only: the caller can run at DPC and never waits for the next frame.
++    for (attempt = 0; attempt < 3; ++attempt)
++    {
++        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH, &high);
++        if (!NT_SUCCESS(status)) return status;
++        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE, &low);
++        if (!NT_SUCCESS(status)) return status;
++        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH, &highAgain);
++        if (!NT_SUCCESS(status)) return status;
++        high &= HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK;
++        highAgain &= HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK;
++        if (high != highAgain) continue;
++        physical = ((ULONGLONG)high << 32) | low;
++        *Physical = physical;
++        return STATUS_SUCCESS;
++    }
++    return STATUS_DEVICE_NOT_READY;
++}
++
++static NTSTATUS DcnCheckPostSurface(_In_ const BC250_DEVICE* Device)
++{
++    ULONG pending, pitch;
++    ULONGLONG scanned;
++    NTSTATUS status;
++    status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
++    if (!NT_SUCCESS(status)) return status;
++    if (pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) return STATUS_DEVICE_BUSY;
++    status=DcnReadScanoutPhysical(Device,&scanned);
++    if (!NT_SUCCESS(status)) return status;
++    status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
++    if (!NT_SUCCESS(status)) return status;
++    pitch=((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4;
++    return scanned==Device->DcnFirmwareAddress && pitch==Device->DcnFirmwarePitch ? STATUS_SUCCESS : STATUS_DEVICE_BUSY;
++}
++
++NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
++{
++    NTSTATUS status;
++    ULONG waited=0;
++    // Captured before any address write, so this also covers a bugcheck midway
++    // through a flip before DcnDiverged/current-address publication completed.
++    if (!Device->DcnFirmwareKnown)
++        return Device->DcnDiverged ? STATUS_DEVICE_NOT_READY : STATUS_SUCCESS;
++    if (!Device->Framebuffer || Device->DcnFirmwarePitch!=Device->Post.Pitch)
++        return STATUS_DEVICE_NOT_READY;
++    status=DcnCheckPostSurface(Device);
++    if (!NT_SUCCESS(status))
++    {
++        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,TRUE);
++        if (!NT_SUCCESS(status)) return status;
++        for (;;)
++        {
++            status=DcnCheckPostSurface(Device);
++            if (status!=STATUS_DEVICE_BUSY) break;
++            if (waited>=BC250_DCNFLIP_POLL_MAX_US) return STATUS_IO_TIMEOUT;
++            KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
++            waited+=BC250_DCNFLIP_POLL_STEP_US;
++        }
++        if (!NT_SUCCESS(status)) return status;
++    }
++    Device->DcnCurrentAddress=Device->DcnFirmwareAddress;
++    Device->DcnCurrentPitch=Device->DcnFirmwarePitch;
++    Device->DcnDiverged=FALSE;
++    return STATUS_SUCCESS;
++}
++
++NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
++{
++    NTSTATUS status;
+     DcnUnmapScanout(Device);
+-    if (!Device->DcnDiverged) return;
+-    if (Device->Mmio == NULL || !Device->DcnWriteEnabled)
+-    {
+-        // Diverged is only ever set after a successful write, which needs both - so this should not happen. If
+-        // it does (the registry changed under a running device, say), leaving HUBP0 where it is beats a write
+-        // through a gate the stop path itself just found closed.
+-        GuardLog("dcnflip: stop: cannot restore, gate closed");
+-        return;
+-    }
+-    RtlZeroMemory(&scratch, sizeof(scratch));
+-    DcnFlipCore(Device, 0, TRUE, 0, 0, &scratch);
+-    GuardLog("dcnflip: stop: restore to the firmware address %s (NTSTATUS 0x%08X)",
+-             scratch.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", scratch.NtStatus);
++    status=DcnRestorePostDisplay(Device);
++    GuardLog("dcnflip: stop: verified firmware scanout status 0x%08X",status);
++    return status;
+ }
+ 
+ // ---- ADR 0011 point 3 step 3 (0.7.24): SetVidPnSourceAddress's own path, VUPDATE_NO_LOCK ----------------------
+@@ -615,35 +676,20 @@
+ // hubp1_is_flip_pending checks both the pending bit and EARLIEST_INUSE against
+ // the requested address. DCN addresses are CPU-physical here; dxgkrnl uses our
+ // MC-base-relative card addresses. Keep that conversion paired with the flip.
++
+ NTSTATUS DcnReadScanoutAddress(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* CardAddress)
+ {
+-    ULONG high, low, highAgain, attempt;
+     ULONGLONG physical, offset;
+     NTSTATUS status;
+-
+     *CardAddress = 0;
+-    if (Device->Mmio == NULL || !Device->VramEnabled) return STATUS_DEVICE_NOT_READY;
+-    // A latch between the two halves must not manufacture an address. Bounded
+-    // retries only: the caller can run at DPC and never waits for the next frame.
+-    for (attempt = 0; attempt < 3; ++attempt)
+-    {
+-        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH, &high);
+-        if (!NT_SUCCESS(status)) return status;
+-        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE, &low);
+-        if (!NT_SUCCESS(status)) return status;
+-        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH, &highAgain);
+-        if (!NT_SUCCESS(status)) return status;
+-        high &= HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK;
+-        highAgain &= HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK;
+-        if (high != highAgain) continue;
+-        physical = ((ULONGLONG)high << 32) | low;
+-        if (physical < (ULONGLONG)Device->VramPhysical.QuadPart) return STATUS_DEVICE_NOT_READY;
+-        offset = physical - (ULONGLONG)Device->VramPhysical.QuadPart;
+-        if (offset >= Device->VramLength) return STATUS_DEVICE_NOT_READY;
+-        *CardAddress = Device->VramMcBase + offset;
+-        return STATUS_SUCCESS;
+-    }
+-    return STATUS_DEVICE_NOT_READY;
++    if (!Device->VramEnabled) return STATUS_DEVICE_NOT_READY;
++    status = DcnReadScanoutPhysical(Device, &physical);
++    if (!NT_SUCCESS(status)) return status;
++    if (physical < (ULONGLONG)Device->VramPhysical.QuadPart) return STATUS_DEVICE_NOT_READY;
++    offset = physical - (ULONGLONG)Device->VramPhysical.QuadPart;
++    if (offset >= Device->VramLength) return STATUS_DEVICE_NOT_READY;
++    *CardAddress = Device->VramMcBase + offset;
++    return STATUS_SUCCESS;
+ }
+ 
+ BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress)
+--- frozen137/driver/kmd/bc250kmd.h
++++ working/driver/kmd/bc250kmd.h
+@@ -105,6 +105,9 @@
+     DXGK_DISPLAY_INFORMATION Post;
+     PVOID Framebuffer;                  // mapping of Post.PhysicAddress
+     SIZE_T FramebufferLength;
++    BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
++    BOOLEAN PostDisplayStopAttempted;  // WddmStop restores before freeing scanout objects
++    NTSTATUS PostDisplayStopStatus;    // separate from the ordinary StopDevice completion result
+     ULONG FramebufferCacheProtect;     // actual successful POST mapping cache attribute
+     D3DKMDT_VIDPN_PRESENT_PATH_ROTATION Rotation;
+ 
+@@ -310,7 +313,8 @@
+ // The stop path's undo (pnp.c, ADR 0011 consequences): flips back to the firmware's address when Device->DcnDiverged
+ // says the most recent flip left it somewhere else. A no-op, logged as one, when it does not - so pnp.c can call
+ // it unconditionally rather than reach into dcn.c's state.
+-void DcnStop(_Inout_ BC250_DEVICE* Device);
++NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
++NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
+ 
+ // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
+ // DcnFlipEscape uses (step 2), never PollFlipPending's blocking poll (this may run above DISPATCH_LEVEL, per
+--- frozen137/driver/kmd/wddm.c
++++ working/driver/kmd/wddm.c
+@@ -1586,6 +1586,11 @@
+     KeRemoveQueueDpc(&wddm->ReportDpc);
+     InterlockedExchangePointer(&Device->Wddm, NULL);
+     KeFlushQueuedDpcs();                // join readers admitted before detach, even while IH remains enabled
++    // OS level-three exclusion has stopped flip DDIs and our DPCs are joined.
++    // Restore the reserved POST surface before VidMm/object release can retire
++    // the buffer DCN was scanning. Keep failure distinct from StopDevice success.
++    Device->PostDisplayStopStatus=DcnStop(Device);
++    Device->PostDisplayStopAttempted=TRUE;
+     while (wddm->PagingHead) {
+         BC250_PAGING_JOB* job=wddm->PagingHead;
+         wddm->PagingHead=job->Next;
+@@ -1593,10 +1598,7 @@
+     }
+     wddm->PagingTail=NULL;
+     VidMmStop();
+-    // 2026-09-22 (ADR 0011 consequences): the present path's own destination mapping (dcn.c), torn down here -
+-    // first in the stop order (docs/design/vidpn-flip.md section 8) - so it is gone before DcnStop's own
+-    // restore-to-firmware write runs and before MmioStop unmaps BAR5, whatever happens to either of those.
+-    DcnUnmapScanout(Device);
++    // DcnStop already released the CPU scanout alias before the verified restore.
+ 
+     // The counters are the point of stage A: all of them, once, at the stop. The state is ours alone now, so the
+     // summary cannot race anything.
+--- frozen137/driver/kmd/test/generate_dcn_observation_test.py
++++ working/driver/kmd/test/generate_dcn_observation_test.py
+@@ -11,7 +11,7 @@
+     return s[start:s.index('\n}\n',start)+3]
+ dcn=a.dcn.read_text();wddm=a.wddm.read_text()
+ body='\n'.join(function(dcn,x) for x in (
+-    'NTSTATUS DcnReadScanoutAddress(', 'BOOLEAN DcnFlipPending(', 'NTSTATUS DcnReadScanLine('))
++    'static NTSTATUS DcnReadScanoutPhysical(', 'NTSTATUS DcnReadScanoutAddress(', 'BOOLEAN DcnFlipPending(', 'NTSTATUS DcnReadScanLine('))
+ body+='\n'+function(wddm,'static NTSTATUS Bc250WddmGetScanLine(')
+ fixture=Path(__file__).with_name('dcn_observation_test.c').read_text()
+ assert fixture.count('/* ACTUAL_SOURCE */')==1
+--- frozen137/driver/kmd/test/generate_post_display_test.py
++++ working/driver/kmd/test/generate_post_display_test.py
+@@ -0,0 +1,11 @@
++"""Extract the actual bounded restore and bugcheck display callbacks."""
++from pathlib import Path
++import argparse
++p=argparse.ArgumentParser();p.add_argument('--source',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
++def function(s,sig):
++    start=s.index(sig);return s[start:s.index('\n}\n',start)+3]
++parts=[]
++for file,sigs in [('dcn.c',['static NTSTATUS DcnFlipWriteSequence(', 'static NTSTATUS DcnReadScanoutPhysical(', 'static NTSTATUS DcnCheckPostSurface(', 'NTSTATUS DcnRestorePostDisplay(']),('display.c',['static BOOLEAN IsPostFormatSupported(', 'NTSTATUS Bc250SystemDisplayEnable(', 'void Bc250SystemDisplayWrite('])]:
++    s=(a.source/file).read_text();parts.extend(function(s,sig) for sig in sigs)
++f=Path(__file__).with_name('post_display_test.c').read_text();a.out.write_text(f.replace('/* ACTUAL_SOURCE */','\n'.join(parts)))
++print('Extracted actual DCN restore and bugcheck display callbacks')
+--- frozen137/driver/kmd/test/post_display_test.c
++++ working/driver/kmd/test/post_display_test.c
+@@ -0,0 +1,136 @@
++// Actual-source restore plus CPU writes. Does not trigger a bugcheck or prove
++// hardware idle/reset; models the already-running single DCN pipe only.
++#include <stdio.h>
++#include <stdint.h>
++#include <string.h>
++#include "regs.generated.h"
++#include "dcn_2_0_1_sh_mask.h"
++typedef int32_t NTSTATUS;
++typedef unsigned long ULONG;
++typedef unsigned UINT;
++typedef uint64_t ULONGLONG;
++typedef size_t SIZE_T;
++typedef unsigned char UCHAR;
++typedef int BOOLEAN;
++typedef void* PVOID;
++typedef unsigned D3DDDIFORMAT;
++typedef unsigned D3DDDI_VIDEO_PRESENT_TARGET_ID;
++typedef const void* PDXGKARG_SYSTEM_DISPLAY_ENABLE_FLAGS;
++typedef struct {
++    void *Mmio,*Framebuffer;
++    SIZE_T FramebufferLength;
++    struct { UINT Width,Height,Pitch; D3DDDIFORMAT ColorFormat; } Post;
++    BOOLEAN DcnWriteEnabled,DcnFirmwareKnown,DcnDiverged,SystemDisplayReady;
++    ULONG DcnFirmwarePitch,DcnCurrentPitch;
++    ULONGLONG DcnFirmwareAddress,DcnCurrentAddress;
++    volatile long DcnLockTimeouts;
++} BC250_DEVICE;
++#define TRUE 1
++#define FALSE 0
++#define STATUS_SUCCESS ((NTSTATUS)0)
++#define STATUS_DEVICE_BUSY ((NTSTATUS)0x80000011u)
++#define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
++#define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
++#define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
++#define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
++#define NT_SUCCESS(s) ((s)>=0)
++#define BC250_CHILD_UID 0x250001
++#define D3DDDI_ID_UNINITIALIZED 0xffffffffu
++#define D3DDDIFMT_UNKNOWN 0
++#define D3DDDIFMT_X8R8G8B8 22
++#define D3DDDIFMT_A8R8G8B8 21
++#define BC250_DCNFLIP_POLL_MAX_US 50000
++#define BC250_DCNFLIP_POLL_STEP_US 100
++#define UNREFERENCED_PARAMETER(x) ((void)(x))
++#define min(a,b) ((a)<(b)?(a):(b))
++#define RtlCopyMemory(d,s,n) memcpy(d,s,n)
++static unsigned checks,failures;
++#define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
++static struct {
++    ULONG pitch,flip,surface,high;
++    ULONGLONG requested,scanned;
++    unsigned elapsed,latch_delay,writes;
++    int locked,triggered,never_latch;
++} model;
++static long InterlockedIncrement(volatile long *v){return ++*v;}
++static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
++{
++    if(!d->Mmio)return STATUS_DEVICE_NOT_READY;
++    switch(reg){
++    case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:*out=model.locked?OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK:0;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:*out=model.flip;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL:*out=model.surface;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH:*out=model.pitch;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE:*out=(ULONG)model.scanned;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH:*out=(ULONG)(model.scanned>>32);break;
++    default:CHECK(0);return STATUS_INVALID_PARAMETER;
++    }return STATUS_SUCCESS;
++}
++static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEAN quiet)
++{
++    CHECK(quiet); // No logging/kernel-lock path is reachable from bugcheck.
++    if(!d->Mmio || !d->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
++    model.writes++;
++    switch(reg){
++    case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:model.locked=value!=0;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:model.flip=value;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL:model.surface=value;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH:model.pitch=value;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH:model.high=value;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS:
++        model.requested=((ULONGLONG)model.high<<32)|value;model.flip|=HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;break;
++    case BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG:model.triggered=1;CHECK(!model.locked);break;
++    default:CHECK(0);return STATUS_INVALID_PARAMETER;
++    }return STATUS_SUCCESS;
++}
++static void KeStallExecutionProcessor(ULONG us)
++{
++    CHECK(us==1 || us==100);model.elapsed+=us;
++    if(model.triggered){
++        // The pending bit can clear before the in-use address catches up.
++        if(model.elapsed>=100)model.flip&=~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
++        if(!model.never_latch && model.elapsed>=model.latch_delay)model.scanned=model.requested;
++    }
++}
++/* ACTUAL_SOURCE */
++static void init(BC250_DEVICE*d,ULONG*fb)
++{
++    memset(d,0,sizeof(*d));memset(&model,0,sizeof(model));memset(fb,0,96);
++    d->Mmio=&model;d->Framebuffer=fb;d->FramebufferLength=96;
++    d->Post.Width=4;d->Post.Height=3;d->Post.Pitch=32;d->Post.ColorFormat=D3DDDIFMT_X8R8G8B8;
++    d->DcnWriteEnabled=1;d->DcnFirmwareKnown=1;d->DcnFirmwarePitch=32;
++    d->DcnFirmwareAddress=0x470000000ull;d->DcnCurrentAddress=0x480000000ull;d->DcnDiverged=1;
++    model.scanned=d->DcnCurrentAddress;model.pitch=15;model.latch_delay=300;
++}
++int main(void)
++{
++    BC250_DEVICE d;ULONG fb[24],src[8]={1,2,3,4,5,6,7,8};UINT width,height;D3DDDIFORMAT fmt;unsigned writes;
++    init(&d,fb);
++    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
++    CHECK(d.SystemDisplayReady && width==4 && height==3 && fmt==D3DDDIFMT_X8R8G8B8);
++    CHECK(model.scanned==d.DcnFirmwareAddress && model.elapsed==300 && !d.DcnDiverged);
++    CHECK(d.DcnCurrentAddress==d.DcnFirmwareAddress && d.DcnCurrentPitch==32);
++    Bc250SystemDisplayWrite(&d,src,4,2,16,1,1);
++    CHECK(fb[9]==1 && fb[10]==2 && fb[11]==3 && fb[17]==5 && fb[18]==6 && fb[19]==7);
++    CHECK(fb[8]==0 && fb[12]==0 && fb[20]==0); // preserve pitch padding and clipped right edge
++    writes=model.writes;CHECK(DcnRestorePostDisplay(&d)==STATUS_SUCCESS);CHECK(model.writes==writes);
++    // Mid-publication crash: diverged flag has not been published, cached POST is valid.
++    init(&d,fb);d.DcnDiverged=0;
++    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
++    CHECK(model.scanned==d.DcnFirmwareAddress && model.writes!=0);
++    // Late in-use latch never arrives despite pending clear: do not claim restore.
++    init(&d,fb);model.never_latch=1;
++    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_IO_TIMEOUT);
++    CHECK(!d.SystemDisplayReady && d.DcnDiverged && width==0 && height==0 && fmt==D3DDDIFMT_UNKNOWN);
++    CHECK(model.elapsed==50000 && model.scanned!=d.DcnFirmwareAddress);
++    Bc250SystemDisplayWrite(&d,src,4,2,16,0,0);CHECK(fb[0]==0);
++    init(&d,fb);d.DcnWriteEnabled=0;
++    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_DEVICE_NOT_READY);
++    CHECK(!d.SystemDisplayReady && model.writes==0);
++    // Untouched basic-display path needs no MMIO or programming.
++    init(&d,fb);d.DcnFirmwareKnown=0;d.DcnDiverged=0;d.Mmio=NULL;
++    CHECK(Bc250SystemDisplayEnable(&d,D3DDDI_ID_UNINITIALIZED,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
++    CHECK(d.SystemDisplayReady && model.writes==0);
++    Bc250SystemDisplayWrite(&d,src,4,1,8,0,0);CHECK(fb[0]==1 && fb[1]==2 && fb[2]==0);
++    printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
++}
+--- frozen137/driver/kmd/test/run_post_display.ps1
++++ working/driver/kmd/test/run_post_display.ps1
+@@ -0,0 +1,17 @@
++param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\bd003-011\restore',[string]$Source='')
++$ErrorActionPreference='Stop'
++$repo="$Root\bc250-win"
++if(-not $Source){$Source="$repo\driver\kmd"}
++$vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
++$msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
++$cl="$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
++$sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
++$libs="$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
++New-Item -ItemType Directory -Force $Out | Out-Null
++$env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
++& python "$PSScriptRoot\generate_post_display_test.py" --source $Source --out "$Out\post_display_actual.c"
++if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
++& $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\post_display_test.exe" "$Out\post_display_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
++if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++& "$Out\post_display_test.exe"
++exit $LASTEXITCODE
+--- frozen137/driver/kmd/test/generate_post_display_stop_test.py
++++ working/driver/kmd/test/generate_post_display_stop_test.py
+@@ -0,0 +1,11 @@
++"""Extract real WddmStop, ordinary StopDevice and post-display handover."""
++from pathlib import Path
++import argparse
++p=argparse.ArgumentParser();p.add_argument('--source',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
++def function(s,sig):
++    start=s.index(sig);return s[start:s.index('\n}\n',start)+3]
++parts=[]
++for file,sigs in [('wddm.c',['void WddmStop(']),('pnp.c',['NTSTATUS Bc250StopDevice(', 'NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership('])]:
++    s=(a.source/file).read_text();parts.extend(function(s,sig) for sig in sigs)
++f=Path(__file__).with_name('post_display_stop_test.c').read_text();a.out.write_text(f.replace('/* ACTUAL_SOURCE */','\n'.join(parts)))
++print('Extracted actual WddmStop and both PnP stop callbacks')
+--- frozen137/driver/kmd/test/post_display_stop_test.c
++++ working/driver/kmd/test/post_display_stop_test.c
+@@ -0,0 +1,113 @@
++#include <stdint.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <string.h>
++typedef int32_t NTSTATUS;
++typedef unsigned long ULONG;
++typedef int BOOLEAN;
++typedef void* PVOID;
++typedef int KIRQL;
++typedef struct {int64_t QuadPart;} LARGE_INTEGER;
++typedef unsigned D3DDDI_VIDEO_PRESENT_TARGET_ID;
++typedef struct {unsigned Width,Height,Pitch,TargetId;uint64_t PhysicAddress;} DXGK_DISPLAY_INFORMATION,*PDXGK_DISPLAY_INFORMATION;
++typedef struct LIST_ENTRY {struct LIST_ENTRY *Flink,*Blink;} LIST_ENTRY;
++typedef struct BC250_PAGING_JOB {struct BC250_PAGING_JOB*Next;} BC250_PAGING_JOB;
++typedef struct {LIST_ENTRY Link;} BC250_WDDM_OBJECT;
++typedef struct {
++    int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer;
++    int SubmitDpc,PagingSubmitDpc,VSyncDpc,ReportDpc;
++    long LastCompletedFence,VSyncTicks;
++    BC250_PAGING_JOB *PagingHead,*PagingTail;
++    LIST_ENTRY Objects;
++} BC250_WDDM;
++typedef struct {
++    BC250_WDDM *Wddm;
++    int Smu,Started,ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm,SystemDisplayReady;
++    volatile long DcnVsyncArmed;
++    BOOLEAN PostDisplayStopAttempted;
++    NTSTATUS PostDisplayStopStatus;
++    void *Framebuffer;
++    DXGK_DISPLAY_INFORMATION Post;
++} BC250_DEVICE;
++#define UNREFERENCED_PARAMETER(x) ((void)(x))
++#define TRUE 1
++#define FALSE 0
++#define STATUS_SUCCESS ((NTSTATUS)0)
++#define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
++#define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
++#define NT_SUCCESS(s) ((s)>=0)
++#define BC250_CHILD_UID 0x250001u
++#define D3DDDI_ID_UNINITIALIZED 0xffffffffu
++#define BC250_WDDM_SUBMIT_TIMEOUT_MS 1
++#define BC250_WDDM_TAG 1
++#define KernelMode 0
++#define StageStopEnter 70
++#define StageStopDone 79
++#define GuardLog(...) ((void)0)
++#define RtlZeroMemory(p,n) memset(p,0,n)
++#define CONTAINING_RECORD(p,t,f) ((t*)((char*)(p)-offsetof(t,f)))
++static unsigned checks,failures;
++#define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
++static struct {unsigned joined,smu,restores,vidmm,objects,unmaps;NTSTATUS result;} model;
++static void WddmGpuFence(BC250_DEVICE*d){(void)d;}
++static void WddmGpuFencePaging(BC250_DEVICE*d){(void)d;}
++static void KeDelayExecutionThread(int k,int a,LARGE_INTEGER*t){(void)k;(void)a;(void)t;}
++static void KeAcquireSpinLock(int*l,KIRQL*i){(void)l;*i=0;}
++static void KeReleaseSpinLock(int*l,KIRQL i){(void)l;(void)i;}
++static void KeCancelTimer(int*t){(void)t;}
++static void KeRemoveQueueDpc(int*d){(void)d;}
++static long InterlockedExchange(volatile long*p,long v){long old=*p;*p=v;return old;}
++static void InterlockedExchangePointer(BC250_WDDM**p,void*v){*p=v;}
++static NTSTATUS DcnVsyncEnable(BC250_DEVICE*d,BOOLEAN on){(void)d;CHECK(!on);return STATUS_SUCCESS;}
++static void KeFlushQueuedDpcs(void){model.joined++;}
++static NTSTATUS DcnStop(BC250_DEVICE*d)
++{ CHECK(model.smu && d->Framebuffer);CHECK(model.objects==0 && model.vidmm==0);model.restores++;return model.result; }
++static void VidMmStop(void){CHECK(model.joined && model.restores==1);model.vidmm++;}
++static void WddmSummaryOf(BC250_WDDM*w){(void)w;}
++static int IsListEmpty(LIST_ENTRY*h){return h->Flink==h;}
++static LIST_ENTRY*RemoveHeadList(LIST_ENTRY*h){LIST_ENTRY*e=h->Flink;h->Flink=e->Flink;h->Flink->Blink=h;return e;}
++static void WddmReleaseCaptures(BC250_WDDM_OBJECT*o){(void)o;CHECK(model.restores==1);}
++static void ExFreePoolWithTag(void*p,int tag){(void)p;(void)tag;CHECK(model.restores==1 && model.vidmm==1);model.objects++;}
++static void GuardStage(int s){(void)s;}
++static void GuardLogKeep(void){}
++static void SmuOwnerStop(int*s){(void)s;model.smu++;}
++#define STOP_STUB(n) static void n(BC250_DEVICE*d){(void)d;CHECK(model.smu && model.restores==1);}
++STOP_STUB(IhStop)
++STOP_STUB(GfxPrepareStop)
++STOP_STUB(PspStop)
++STOP_STUB(GartPrepareStop)
++STOP_STUB(GfxStop)
++STOP_STUB(GartStop)
++STOP_STUB(VramStop)
++STOP_STUB(MmioStop)
++static void GfxTraceRlcState(BC250_DEVICE*d,const char*s){(void)d;(void)s;}
++static void DisplayUnmapFramebuffer(BC250_DEVICE*d){CHECK(model.restores==1);d->Framebuffer=NULL;model.unmaps++;}
++/* ACTUAL_SOURCE */
++static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
++{
++    memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));
++    d->Wddm=w;d->Framebuffer=d;d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;
++    d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress=0x470000000ull;
++    w->Objects.Flink=w->Objects.Blink=&o->Link;o->Link.Flink=o->Link.Blink=&w->Objects;
++}
++int main(void)
++{
++    BC250_DEVICE d;BC250_WDDM w;BC250_WDDM_OBJECT o;DXGK_DISPLAY_INFORMATION info;
++    init(&d,&w,&o);
++    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
++    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==2 && model.unmaps==1);
++    CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
++    CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
++    init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));
++    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_IO_TIMEOUT);
++    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0);
++    CHECK(model.restores==1 && model.unmaps==1 && d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);
++    // Ordinary stop remains successful even when display restoration failed.
++    init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;
++    CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS);CHECK(d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);
++    // No WDDM instance: PnP performs the restore itself before MMIO teardown.
++    init(&d,&w,&o);d.Wddm=NULL;
++    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,D3DDDI_ID_UNINITIALIZED,&info)==STATUS_SUCCESS);
++    CHECK(model.joined==0 && model.restores==1 && model.vidmm==0 && info.TargetId==BC250_CHILD_UID);
++    printf("post display stop: %u checks, %u failures\n",checks,failures);return failures?1:0;
++}
+--- frozen137/driver/kmd/test/run_post_display_stop.ps1
++++ working/driver/kmd/test/run_post_display_stop.ps1
+@@ -0,0 +1,17 @@
++param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\bd003-011\stop',[string]$Source='')
++$ErrorActionPreference='Stop'
++$repo="$Root\bc250-win"
++if(-not $Source){$Source="$repo\driver\kmd"}
++$vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
++$msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
++$cl="$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
++$sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
++$libs="$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
++New-Item -ItemType Directory -Force $Out | Out-Null
++$env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
++& python "$PSScriptRoot\generate_post_display_stop_test.py" --source $Source --out "$Out\post_display_stop_actual.c"
++if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
++& $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\post_display_stop_test.exe" "$Out\post_display_stop_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
++if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++& "$Out\post_display_stop_test.exe"
++exit $LASTEXITCODE

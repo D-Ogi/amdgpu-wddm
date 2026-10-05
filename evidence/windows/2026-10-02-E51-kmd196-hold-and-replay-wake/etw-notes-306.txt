@@ -1,0 +1,14 @@
+2026-10-02T16:53:20.4676245Z t=- left=540.2 etw-capture begin tag=N306 perfview=E6B89A6D not_after_qpc=627485155532
+2026-10-02T16:53:27.2859386Z t=0.0 left=533.4 witcher3 seen
+2026-10-02T16:53:27.2890227Z t=0.0 left=533.4 window A skipped (-SkipA)
+2026-10-02T16:55:39.7803196Z t=132.5 left=400.9 window B trigger world: walk 130s: start, 40 s
+2026-10-02T16:55:42.1782028Z t=134.9 left=398.5 window B gpu session BC250-N306-B-gpu start exited exit 0
+2026-10-02T16:55:42.1833229Z t=134.9 left=398.5 window B start session=BC250-N306-B seconds=40 gpu_only=False
+2026-10-02T16:56:26.9271072Z t=179.6 left=353.8 window B collector exit 0
+2026-10-02T16:56:29.3119189Z t=182.0 left=351.4 window B stop BC250-N306-B-gpu exited exit 0
+2026-10-02T16:56:31.6816315Z t=184.4 left=349.0 window B sessions gone (query ok)
+2026-10-02T16:56:31.7220044Z t=184.4 left=349.0 file gpu-B.etl 229638144
+2026-10-02T16:56:31.7260857Z t=184.4 left=349.0 file perf-B.clrRundown.etl 262144
+2026-10-02T16:56:31.7528812Z t=184.5 left=348.9 file perf-B.etl 458752
+2026-10-02T16:56:31.7850766Z t=184.5 left=348.9 file perf-B.kernel.etl 134217728
+2026-10-02T16:56:31.8150105Z t=184.5 left=348.9 etw-capture end cleanup_failed=False

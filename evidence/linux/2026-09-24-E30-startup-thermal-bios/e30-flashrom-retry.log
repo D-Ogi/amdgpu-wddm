@@ -1,0 +1,7 @@
+isa_bridge=0000:00:14.3 0x1022:0x780e
+WARNING: fetching https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz: DNS: transient error (try again later)
+ERROR: unable to select packages:
+  so:libconfuse.so.2 (no such package):
+    required by: libftdi1-1.5-r5[so:libconfuse.so.2]
+  dmidecode (no such package):
+    required by: flashrom-1.6.0-r0[dmidecode]

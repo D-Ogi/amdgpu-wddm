@@ -1,0 +1,5 @@
+gpu-residency-probe.c
+gpu-residency-probe [bytes] [vram|gtt] [--resident-only | --resume-gate READY RELEASE TIMEOUT_MS]
+Resume gate: <=1GiB, timeout 1..1800000ms; READY must be new, RELEASE absent and later contain this PID in ASCII. Two full GPU readbacks in one process, no eviction cycle or recreation. External evidence must establish S4.
+Default: <=1GiB, 3 eviction cycles, 300s watchdog.
+Resident-only: <=12GiB in <=1GiB members retained together, no pressure allocation; full GPU readback and complete-set residency/budget snapshots every64MiB. No continuous-residency claim.

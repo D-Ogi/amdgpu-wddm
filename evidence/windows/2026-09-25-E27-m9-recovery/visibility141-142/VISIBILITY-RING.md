@@ -1,0 +1,13 @@
+# Retained visibility event history after candidate141
+
+Source review ruled out a BOOL/BOOLEAN/bitfield conversion error: actual WDK10.0.26100 shared/d3dkmddi.h6849 declares UINT source followed by BOOLEAN Visible; SDK ntdef.h1676 defines BOOLEAN as UCHAR. The production traced wrapper uses the exact WDK callback pointer type and passes that structure pointer unchanged.
+
+Parent's saved combined141-dwm-recovery.log reports571 visibility calls at73.602s and629 at82.705s, latestFALSE/success both times, one commit with both power flagsfalse, no TDR and only one address flip. This is a repeated source-visibility lifecycle, not evidence for a single idle-off request. The latestFALSE does not tell whether earlierTRUE requests failed.
+
+A plausible, unproved hypothesis is TRUE confirmation timeout followed by FALSE cleanup. Linux dcn10_optc.c optc1_unblank_crtc clears BLANK_DATA_EN/BLANK_DE_MODE without waiting for CURRENT_BLANK_STATE; our common restore/visibility helper waits up to50ms. No functional change to that behavior is made here. Firmware/hardware positive acceptance remains required before changing completion semantics.
+
+BC250_DEVICE now holds16 completed visibility tuples: call, source, requested, returnedstatus, resulting SourceVisible/DcnBlanked, begin/end QPC. It also retains TRUE/FALSE/failure counts and first/lastTRUE status. WddmSummary prints those counters, QPCfrequency and the retained tuples in chronological order. ZeroTRUE calls distinguishes absentTRUE from defaultSUCCESS in its status fields. Timestamps include the normalcallback's work/logging and are not pure hardware latency measurements. LevelTwo callback/summary exclusion protects tuple consistency. No extra MMIO, allocation, lock, public ABI, display behavior or bugcheck-path change.
+
+Validation: visibility-ring142.log810 checks0. Actual-source helper/visibility fixture checks ring wrap, all16 sequence numbers, statuses and timestamps. A modeled TRUE50msTIMEOUT followed by FALSESUCCESS leaves the failedTRUE in history and lastTRUEstatus while the overall lateststatus correctly showsSUCCESS. The clock model confirms500001 ticks at10MHz (50000us waits plus a mock clockstep). build-ring142.log records full WDK success, DEV SYS5A5EE70A8EE34F33A069817F5D921C6ABB59E784BFAF705F926EA8A1D99B4C8A, metadata141, never deployed by this agent.
+
+Changed: bc250kmd.h, display.c retaineddiagnostics, wddm.c summary, existing visibility generator/fixture. Source/hash/diff: visibility-ring-source/. Production edits frozen for root's following candidate. No version/state/evidence/lab changes. Next concrete test is read the retained ring after reproducing the repeated visibility requests, before altering blank/unblank behavior.

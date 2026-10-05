@@ -1,0 +1,190 @@
+--- before/wddm.c
++++ after/wddm.c
+@@ -227,6 +227,7 @@
+     volatile LONG ActiveSubmissions[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG LastReportedFence[BC250_WDDM_NODE_COUNT_MAX];
+     BOOLEAN LastReportedValid[BC250_WDDM_NODE_COUNT_MAX];
++    BOOLEAN RefusalPending[BC250_WDDM_NODE_COUNT_MAX]; // valid DMA never dispatched; cannot retire in software
+     BOOLEAN RejectedPending[BC250_WDDM_NODE_COUNT_MAX];
+     UINT RejectedFence[BC250_WDDM_NODE_COUNT_MAX];
+     BOOLEAN WatchdogFaulted[BC250_WDDM_NODE_COUNT_MAX]; // sticky until adapter state is rebuilt
+@@ -646,6 +647,27 @@
+ 
+ // Has the fence of the submission in flight arrived? Called from the IH DPC (pnp.c), from the submit and from the
+ // watchdog, at <= DISPATCH_LEVEL. GfxFenceArrived is a memory read.
++// A valid command that never reached hardware remains outstanding to VidSch.
++// Do not manufacture DMA_COMPLETED or misuse the OS-reserved DMA_FAULTED event.
++// Closing the node also blocks later software retirement and boundary preemption.
++static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT Node)
++{
++    BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
++    KIRQL irql;
++    BOOLEAN first;
++    if (wddm==NULL || Node>=BC250_WDDM_NODE_COUNT_MAX) return;
++    KeAcquireSpinLock(&wddm->Lock,&irql);
++    first=!wddm->RefusalPending[Node];
++    wddm->RefusalPending[Node]=TRUE;
++    wddm->WatchdogFaulted[Node]=TRUE;
++    if (Node==BC250_WDDM_NODE_COPY) wddm->PagingDeferredValid=FALSE;
++    else wddm->DeferredValid=FALSE;
++    KeReleaseSpinLock(&wddm->Lock,irql);
++    if (Node==BC250_WDDM_NODE_COPY) GfxPagingSubmitFail(Device);
++    else GfxSubmitFail(Device);
++    if (first) GuardLog("wddm: fence %u node %u NOT dispatched; node closed, no completion, recovery required",FenceId,Node);
++}
++
+ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
+ {
+     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+@@ -911,7 +933,7 @@
+         // SubmitCommandVirtual's invalid-parameter contract: the OS retires a
+         // rejected fence after prior work. Update our notion without reporting a
+         // successful DMA completion for work that was never submitted.
+-        if (wddm->RejectedPending[node] &&
++        if (wddm->RejectedPending[node] && !wddm->RefusalPending[node] &&
+             wddm->ActiveSubmissions[node] == 0 && wddm->CompletionPending[node] == 0 &&
+             !(node == BC250_WDDM_NODE_COPY ? wddm->PagingHwPending : wddm->HwPending))
+         {
+@@ -925,7 +947,7 @@
+             }
+             wddm->RejectedPending[node]=FALSE;
+         }
+-        preempt = wddm->PreemptionPending[node] != 0 &&
++        preempt = wddm->PreemptionPending[node] != 0 && !wddm->RefusalPending[node] &&
+                   wddm->ActiveSubmissions[node] == 0 && wddm->CompletionPending[node] == 0 &&
+                   !(node == BC250_WDDM_NODE_COPY ? wddm->PagingHwPending : wddm->HwPending);
+         if (preempt)
+@@ -2426,7 +2448,9 @@
+             pSubmitCommand->DmaBufferSubmissionStartOffset,
+             pSubmitCommand->DmaBufferSubmissionEndOffset-pSubmitCommand->DmaBufferSubmissionStartOffset,
+             FALSE,pSubmitCommand->SubmissionFenceId)) return STATUS_SUCCESS;
+-    WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
++    if (pSubmitCommand->DmaBufferSubmissionStartOffset != pSubmitCommand->DmaBufferSubmissionEndOffset)
++        WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);
++    else WddmCompleteSoftware(device,pSubmitCommand->SubmissionFenceId,node);
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -2603,7 +2627,7 @@
+     if (Wddm != NULL && InterlockedIncrement(&Wddm->UmdSubmitSoft) <= 128)
+         GuardLog("wddm: umd submit fence %u not run: %s (%u ibs, private %u/%u, first 0x%08lX)",
+                  Submit->SubmissionFenceId, why, nIbs, umdLen, bufLen, UmdBlobFirstWord(bytes, umdLen));
+-    WddmCompleteSoftware(Device, Submit->SubmissionFenceId, Node);
++    WddmFailSubmission(Device, Submit->SubmissionFenceId, Node);
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -2700,14 +2724,13 @@
+     // E26 packets are CPU commands, never GFX IBs, even if malformed.
+     if (pSubmitCommand->Flags.Present)
+     {
+-        GuardLog("wddm: present without valid software packet completed without GPU dispatch");
+-        WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
+-        return STATUS_SUCCESS;
++        GuardLog("wddm: malformed virtual present rejected");
++        return STATUS_INVALID_PARAMETER;
+     }
+ 
+     // Stage C. An empty DMA buffer (every Present of stage A's inert DDI) has nothing to run; one with bytes in it
+-    // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root. Everything else
+-    // is completed in software as before. The header says PASSIVE_LEVEL, and gfx.c's lock needs <= APC_LEVEL.
++    // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root.
++    // A refused nonempty command remains outstanding for recovery; only empty work completes in software.
+     // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a fixed VMID, and it stays
+     // node 0's alone - node 1 has its own arm above, its own ring (SDMA0, no VMID) and its own failure counters.
+     if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
+@@ -2715,7 +2738,9 @@
+         WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress,
+                            pSubmitCommand->DmaBufferSize, pSubmitCommand->SubmissionFenceId, node))
+         return STATUS_SUCCESS;
+-    WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
++    if (pSubmitCommand->DmaBufferSize != 0)
++        WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);
++    else WddmCompleteSoftware(device,pSubmitCommand->SubmissionFenceId,node);
+     return STATUS_SUCCESS;
+ }
+ 
+@@ -2769,54 +2794,17 @@
+ static DXGKDDI_RESETFROMTIMEOUT Bc250WddmResetFromTimeout;
+ static NTSTATUS Bc250WddmResetFromTimeout(_In_ const HANDLE hAdapter)
+ {
+-    // A failure return bugchecks, and nobody can reset this GPU (facts M53). What stage C can do, it does: the ring
+-    // path is closed for this device start (GfxSubmitFail, sticky), and the packet in flight, if there is one, is
+-    // forgotten WITHOUT a report - after this DDI the scheduler treats every submitted fence as completed by itself
+-    // (ref graphics-driver-samples, CosKmdAdapter.cpp ResetFromTimeout: "Implicitly sync up"), so the driver only
+-    // brings its own last completed fence up to date. No register is touched: halting the CP the way the undo path
+-    // does (ADR 0008 point 7, facts M44) stays with the escape, where a person decides it.
+-    //
+-    // These two are the only DDIs in the file that log on every call rather than the first few: a TDR means the
+-    // scheduler has decided this adapter is hung, which changes what the whole run means, and a run where it
+-    // happens a hundred times is a different result from one where it happens once.
+-    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+-    BC250_WDDM* wddm = WddmOf(hAdapter);
+-    BOOLEAN pending = FALSE, pagingPending = FALSE;
+-    UINT fence = 0, pagingFence = 0;
+-    KIRQL irql;
+-
+-    (void)WddmFirstCalls(wddm, WddmDdiResetFromTimeout);
+-    if (device != NULL) { GfxSubmitFail(device); GfxPagingSubmitFail(device); }
+-    if (wddm != NULL)
+-    {
+-        KeAcquireSpinLock(&wddm->Lock, &irql);
+-        if (wddm->HwPending)
+-        {
+-            pending = TRUE;
+-            fence = wddm->DeferredValid ? wddm->DeferredFence : wddm->HwFence;
+-            wddm->HwPending = FALSE;
+-            wddm->DeferredValid = FALSE;
+-            KeCancelTimer(&wddm->SubmitTimer);
+-            if ((LONG)fence > wddm->LastCompletedFence) InterlockedExchange(&wddm->LastCompletedFence, (LONG)fence);
+-        }
+-        // ADR 0008 stage D: node 1's own channel, checked and forgotten independently of node 0's above - the
+-        // scheduler's ResetFromTimeout is adapter-wide, not per-node, so both must be quiet before this returns
+-        // (design note section 6).
+-        if (wddm->PagingHwPending)
+-        {
+-            pagingPending = TRUE;
+-            pagingFence = wddm->PagingHwFence;
+-            wddm->PagingHwPending = FALSE;
+-            KeCancelTimer(&wddm->PagingSubmitTimer);
+-            if ((LONG)pagingFence > wddm->LastCompletedFence) InterlockedExchange(&wddm->LastCompletedFence, (LONG)pagingFence);
+-        }
+-        KeReleaseSpinLock(&wddm->Lock, irql);
+-    }
+-    if (pending) GuardLog("wddm: *** ResetFromTimeout with fence %u on the ring: ring path closed, fence dropped unreported ***", fence);
+-    else GuardLog("wddm: *** ResetFromTimeout: the scheduler timed this adapter out (nothing of ours was on the ring) ***");
+-    if (pagingPending)
+-        GuardLog("wddm: *** ResetFromTimeout with fence %u on the SDMA0 ring: node 1 ring path closed, fence dropped unreported ***", pagingFence);
+-    return STATUS_SUCCESS;
++    BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
++    BC250_WDDM* wddm=WddmOf(hAdapter);
++    (void)WddmFirstCalls(wddm,WddmDdiResetFromTimeout);
++    if (device!=NULL) { GfxSubmitFail(device); GfxPagingSubmitFail(device); }
++    // Microsoft requires all GPU memory access stopped before a successful return.
++    // Closing software gates does not prove that. Preserve outstanding fences and
++    // return failure so Windows follows its failed-TDR path instead of freeing
++    // memory under an engine this driver has not actually stopped. Recovery that
++    // can return success still needs a verified hardware halt/reset implementation.
++    GuardLog("wddm: ResetFromTimeout failed: GPU memory access not proven stopped");
++    return STATUS_UNSUCCESSFUL;
+ }
+ 
+ static DXGKDDI_RESTARTFROMTIMEOUT Bc250WddmRestartFromTimeout;
+@@ -2858,10 +2846,14 @@
+         GuardLog("wddm: QueryEngineStatus node %u engine %u", pQueryEngineStatus->NodeOrdinal,
+                  pQueryEngineStatus->EngineOrdinal);
+     if (pQueryEngineStatus->NodeOrdinal >= nodeCount) return STATUS_INVALID_PARAMETER;
+-    // Stage A completes every fence in software, in the DPC that follows the submit (node 1 too, once its own
+-    // hardware channel retires one): the "engine" cannot stall either way.
++    // Report the fault state instead of declaring a failed node responsive.
+     pQueryEngineStatus->EngineStatus.Value = 0;
+-    pQueryEngineStatus->EngineStatus.Responsive = 1;
++    if (wddm != NULL) {
++        KIRQL irql;
++        KeAcquireSpinLock(&wddm->Lock,&irql);
++        pQueryEngineStatus->EngineStatus.Responsive = !wddm->WatchdogFaulted[pQueryEngineStatus->NodeOrdinal];
++        KeReleaseSpinLock(&wddm->Lock,irql);
++    } else pQueryEngineStatus->EngineStatus.Responsive = 1;
+     return STATUS_SUCCESS;
+ }
+ 

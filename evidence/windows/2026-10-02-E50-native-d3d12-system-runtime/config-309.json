@@ -1,0 +1,21 @@
+{
+  "attempt": "native-caps309",
+  "remote": "C:\\BC250\\m15\\native-caps309",
+  "baseline": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+  "interactive": false,
+  "registered": "C:\\BC250\\m15\\registration002\\amdgpu_wddm_d3d12.dll",
+  "desktop_umd": "C:\\BC250\\m15\\gpu-dwm-003\\bc250d3d_router.dll",
+  "artifacts": {
+    "amdgpu_wddm_d3d12.dll": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+    "amdgpu_wddm_vkd3d.dll": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+    "amdgpu_wddm_radv.dll": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC"
+  },
+  "accepted": {
+    "amdgpu_wddm_d3d12.dll": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+    "amdgpu_wddm_vkd3d.dll": "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+    "amdgpu_wddm_radv.dll": "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC"
+  },
+  "swap": [],
+  "accepted_in_place": true,
+  "caps": true
+}

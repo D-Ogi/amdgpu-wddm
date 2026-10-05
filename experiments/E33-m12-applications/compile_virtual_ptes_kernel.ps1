@@ -1,5 +1,6 @@
-param([string]$Out='P:\bc-250\scratch\m12\virtual-pte-kernel',
-      [string]$Kits='P:\bc-250\toolchain\nuget',
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path }),
+      [string]$Out="$Root\scratch\m12\virtual-pte-kernel",
+      [string]$Kits="$Root\toolchain\nuget",
       [string]$KitVersion='10.0.26100.0')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path

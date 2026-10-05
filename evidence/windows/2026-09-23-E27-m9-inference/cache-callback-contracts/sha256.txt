@@ -1,0 +1,4 @@
+011c7062330403a039c381ae6ca58d78d36f1b83984c95450ab00afb671803ff  create-physical-object.md
+f68aee488fce7122ef4fbaf6b487256db513dc9f621278d19e2464ab8a8852fc  map-framebuffer-pointer.md
+0dd2586b4b26b4bedb5261b1696f4ca498f307131229f726e0d4fe6377a99f4c  map-physical-memory-fields.md
+c6bd0678ead0ee7c67a000dd6d2f62b0eb6ac0fca0ab622edb22e1c129ed8ed0  README.md

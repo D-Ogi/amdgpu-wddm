@@ -1,0 +1,77 @@
+
+
+MultipleInstances               : IgnoreNew
+Compatibility                   : Win7
+AllowDemandStart                : True
+AllowHardTerminate              : True
+DeleteExpiredTaskAfter          : 
+DisallowStartIfOnBatteries      : True
+Enabled                         : True
+ExecutionTimeLimit              : PT72H
+Hidden                          : False
+IdleSettings                    : MSFT_TaskIdleSettings
+NetworkSettings                 : MSFT_TaskNetworkSettings
+Priority                        : 7
+RestartCount                    : 0
+RestartInterval                 : 
+RunOnlyIfIdle                   : False
+RunOnlyIfNetworkAvailable       : False
+StartWhenAvailable              : False
+StopIfGoingOnBatteries          : True
+WakeToRun                       : False
+DisallowStartOnRemoteAppSession : False
+UseUnifiedSchedulingEngine      : True
+MaintenanceSettings             : 
+volatile                        : False
+PSComputerName                  : 
+CimClass                        : Root/Microsoft/Windows/TaskScheduler:MSFT_TaskSettings3
+CimInstanceProperties           : {AllowDemandStart, AllowHardTerminate, Compatibility, 
+                                  DeleteExpiredTaskAfter...}
+CimSystemProperties             : Microsoft.Management.Infrastructure.CimSystemProperties
+
+
+
+
+
+Execute   : powershell.exe
+Arguments : -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File 
+            C:\BC250\m9\radv-main-control1\worker.ps1
+
+
+
+& cmd.exe /c C:\BC250\m9\radv-main-control1\run.cmd
+$nativeExit=$LASTEXITCODE
+[IO.File]::WriteAllText('C:\BC250\m9\radv-main-control1\worker.exit',[string]$nativeExit)
+exit $nativeExit
+
+Name       Length LastWriteTime       
+----       ------ -------------       
+before.log 178832 9/24/2026 2:34:04 PM
+m8.err        822 9/24/2026 2:34:07 PM
+m8.out          0 9/24/2026 2:34:07 PM
+run.cmd      1340 9/24/2026 2:34:04 PM
+worker.ps1    189 9/24/2026 2:34:04 PM
+
+
+
+
+TimeCreated  : 9/24/2026 2:34:08 PM
+ProviderName : Application Error
+Id           : 1000
+Message      : Faulting application name: WindowsTerminal.exe, version: 1.24.2607.10001, time 
+               stamp: 0x6a517766
+               Faulting module name: unknown, version: 0.0.0.0, time stamp: 0x00000000
+               Exception code: 0xc0000005
+               Fault offset: 0x0000025ec1fe090f
+               Faulting process id: 0x0x14D8
+               Faulting application start time: 0x0x1DD4C20FD06D8BF
+               Faulting application path: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1
+               .24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe
+               Faulting module path: unknown
+               Report Id: [redacted]
+               Faulting package full name: 
+               Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe
+               Faulting package-relative application ID: App
+
+
+

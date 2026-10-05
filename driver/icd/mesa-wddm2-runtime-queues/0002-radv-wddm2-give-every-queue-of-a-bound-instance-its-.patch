@@ -1,0 +1,332 @@
+From 8d6ea10afacc1f2903a2c0a27616739e849fb8d4 Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:44:13 +0200
+Subject: [PATCH 2/4] radv/wddm2: give every queue of a bound instance its own
+ context
+
+In D3D12 a WDDM context belongs to one runtime command queue
+(pfnCreateContextVirtualCb takes hRTCommandQueue). The device-level
+contexts that vkCreateDevice creates, one per priority and shared by
+every queue of that priority, cannot be expressed there, and sharing
+one context would alias the progress fence, the gather slots and the
+sparse companion fence of distinct queues.
+
+Add ctx_create_bindable to the winsys interface. The hosted BC250
+winsys provides it: the context starts without any kernel object, and
+creating, waiting on or destroying it unbound makes no host call.
+cs_submit and buffer_virtual_bind_begin refuse an unbound bindable
+context with VK_ERROR_VALIDATION_FAILED, before touching any state.
+
+In a bound instance vkCreateDevice creates no device-level context.
+Every queue owns a bindable one instead (owns_hw_ctx, the precedent of
+the dedicated WDDM sparse queue) and is internally synchronized, so
+that binding can take the queue lock. vkQueueSubmit and
+vkQueueBindSparse on an unbound queue fail with
+VK_ERROR_VALIDATION_FAILED without a host call and without losing the
+device. radv_QueueWaitIdle reports an unbound queue idle instead of
+submitting to it, which also keeps vkDeviceWaitIdle usable while some
+queues are unbound.
+
+vkCreateDevice of a bound instance also refuses what would submit
+outside an embedder call or need a context without a runtime queue:
+queue families other than GENERAL and SPARSE (binding creates a
+graphics context only), a submit mode other than immediate, register
+shadowing (it submits at queue creation), and the DMA shader upload
+queue, which is left off.
+
+Queues cannot be bound yet; the next change adds binding.
+---
+ src/amd/vulkan/radv_device.c                | 29 ++++++++++++---
+ src/amd/vulkan/radv_queue.c                 | 41 ++++++++++++++++++++-
+ src/amd/vulkan/radv_queue.h                 | 10 +++++
+ src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c |  3 ++
+ src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c | 41 +++++++++++++++++++++
+ src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h | 13 +++++++
+ 6 files changed, 131 insertions(+), 6 deletions(-)
+
+diff --git a/src/amd/vulkan/radv_device.c b/src/amd/vulkan/radv_device.c
+index 4856f4e7dd4..df59fbaa026 100644
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -1588,23 +1588,40 @@ radv_CreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCr
+    bool video_dec_queue = false;
+    bool video_enc_queue = false;
+ 
+-   if (radv_bound_queues_enabled(pdev)) {
++   const bool bound_queues = radv_bound_queues_enabled(pdev);
++   if (bound_queues) {
+       /* Admission matches consumption: each bound queue takes one context
+        * of the embedder's, so never create more than were reported. */
+       uint32_t general_queues = 0;
+       for (unsigned i = 0; i < pCreateInfo->queueCreateInfoCount; i++) {
+          const VkDeviceQueueCreateInfo *queue_create = &pCreateInfo->pQueueCreateInfos[i];
+-         if (vk_queue_to_radv(pdev, queue_create->queueFamilyIndex) == RADV_QUEUE_GENERAL)
++         const enum radv_queue_family qf = vk_queue_to_radv(pdev, queue_create->queueFamilyIndex);
++
++         /* Binding creates a graphics context only. */
++         if (qf != RADV_QUEUE_GENERAL && qf != RADV_QUEUE_SPARSE) {
++            result = VK_ERROR_FEATURE_NOT_PRESENT;
++            goto fail;
++         }
++         if (qf == RADV_QUEUE_GENERAL)
+             general_queues += queue_create->queueCount;
+       }
+       if (general_queues > radv_general_queue_count(pdev)) {
+          result = VK_ERROR_INITIALIZATION_FAILED;
+          goto fail;
+       }
++
++      /* Every submission must happen inside the embedder's call that made
++       * it: no submit thread, and nothing submitted at queue creation,
++       * which register shadowing would do before any bind. */
++      if (device->vk.submit_mode != VK_QUEUE_SUBMIT_MODE_IMMEDIATE || device->uses_shadow_regs) {
++         result = VK_ERROR_FEATURE_NOT_PRESENT;
++         goto fail;
++      }
+    }
+ 
+-   /* Create one context per queue priority. */
+-   for (unsigned i = 0; i < pCreateInfo->queueCreateInfoCount; i++) {
++   /* Create one context per queue priority. Queues of a bound instance
++    * own theirs instead (radv_queue_init). */
++   for (unsigned i = 0; !bound_queues && i < pCreateInfo->queueCreateInfoCount; i++) {
+       const VkDeviceQueueCreateInfo *queue_create = &pCreateInfo->pQueueCreateInfos[i];
+       const VkDeviceQueueGlobalPriorityCreateInfo *global_priority =
+          vk_find_struct_const(queue_create->pNext, DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO);
+@@ -1662,7 +1679,9 @@ radv_CreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCr
+ 
+    device->shader_use_invisible_vram = (instance->perftest_flags & RADV_PERFTEST_DMA_SHADERS) &&
+                                        /* SDMA buffer copy is only implemented for GFX7+. */
+-                                       pdev->info.gfx_level >= GFX7;
++                                       pdev->info.gfx_level >= GFX7 &&
++                                       /* The upload queue's context would have no runtime queue. */
++                                       !bound_queues;
+    result = radv_init_shader_upload_queue(device);
+    if (result != VK_SUCCESS)
+       goto fail;
+diff --git a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
+index 19708727dcc..199054060be 100644
+--- a/src/amd/vulkan/radv_queue.c
++++ b/src/amd/vulkan/radv_queue.c
+@@ -1880,6 +1880,9 @@ radv_queue_sparse_submit(struct vk_queue *vqueue, struct vk_queue_submit *submis
+    struct radv_device *device = radv_queue_device(queue);
+    VkResult result;
+ 
++   if (radv_queue_is_unbound(queue))
++      return vk_errorf(queue, VK_ERROR_VALIDATION_FAILED, "vkQueueBindSparse() on an unbound queue");
++
+    result = radv_queue_submit_bind_sparse_memory(queue, submission);
+    if (result != VK_SUCCESS)
+       goto fail;
+@@ -1928,6 +1931,11 @@ radv_queue_submit(struct vk_queue *vqueue, struct vk_queue_submit *submission)
+ {
+    struct radv_queue *queue = (struct radv_queue *)vqueue;
+ 
++   /* Refused without a host call and without losing the device: nothing
++    * was queued, and the queue may still be bound later. */
++   if (radv_queue_is_unbound(queue))
++      return vk_errorf(queue, VK_ERROR_VALIDATION_FAILED, "vkQueueSubmit() on an unbound queue");
++
+    VkResult result = radv_queue_submit_bind_sparse_memory(queue, submission);
+    if (result != VK_SUCCESS)
+       goto fail;
+@@ -1975,6 +1983,9 @@ radv_queue_internal_submit(struct radv_queue *queue, struct ac_cmdbuf *cs)
+       .cs_count = 1,
+    };
+ 
++   if (radv_queue_is_unbound(queue))
++      return false;
++
+    VkResult result = device->ws->cs_submit(ctx, &submit, 0, NULL, 0, NULL);
+    if (result != VK_SUCCESS)
+       return false;
+@@ -2002,7 +2013,20 @@ radv_queue_init(struct radv_device *device, struct radv_queue *queue, int idx,
+       return result;
+ 
+    queue->owns_hw_ctx = false;
+-   if (queue->state.qf == RADV_QUEUE_SPARSE && device->ws->buffer_virtual_bind_end) {
++   if (radv_bound_queues_enabled(pdev)) {
++      /* Every queue of a bound instance owns its context, which gets its
++       * kernel objects from the embedder's queue when bound. No two
++       * VkQueues share one, and none exists before the bind. */
++      struct radeon_winsys_ctx *bound_ctx = NULL;
++      result = device->ws->ctx_create_bindable(device->ws, queue->priority, &bound_ctx);
++      if (result != VK_SUCCESS)
++         goto fail;
++      queue->hw_ctx = bound_ctx;
++      queue->owns_hw_ctx = true;
++      queue->bindable = true;
++      /* Binding and submission take the queue lock. */
++      queue->vk.internally_synchronized = true;
++   } else if (queue->state.qf == RADV_QUEUE_SPARSE && device->ws->buffer_virtual_bind_end) {
+       /* WDDM queues mapping waits and signals through its companion context.
+        * A distinct render context keeps waits on this sparse queue from
+        * blocking a signal submitted later to the graphics queue. */
+@@ -2157,6 +2181,21 @@ radv_queue_finish(struct radv_queue *queue)
+       device->ws->ctx_destroy(queue->hw_ctx);
+ }
+ 
++VKAPI_ATTR VkResult VKAPI_CALL
++radv_QueueWaitIdle(VkQueue _queue)
++{
++   VK_FROM_HANDLE(radv_queue, queue, _queue);
++
++   /* An unbound queue has nothing in flight: unbinding retired its last
++    * submission, and it cannot submit again before the next bind. Waiting
++    * the common way would itself be a submission. vkDeviceWaitIdle comes
++    * here for every queue of the device, bound or not. */
++   if (radv_queue_is_unbound(queue))
++      return vk_device_is_lost(&radv_queue_device(queue)->vk) ? VK_ERROR_DEVICE_LOST : VK_SUCCESS;
++
++   return vk_common_QueueWaitIdle(_queue);
++}
++
+ enum amd_ip_type
+ radv_queue_ring(const struct radv_queue *queue)
+ {
+diff --git a/src/amd/vulkan/radv_queue.h b/src/amd/vulkan/radv_queue.h
+index 3a677419e72..3fbeb5faa0b 100644
+--- a/src/amd/vulkan/radv_queue.h
++++ b/src/amd/vulkan/radv_queue.h
+@@ -85,6 +85,10 @@ struct radv_queue {
+    struct vk_queue vk;
+    struct radeon_winsys_ctx *hw_ctx;
+    bool owns_hw_ctx; /* WDDM dedicated sparse queue owns an independent context. */
++   /* Hosted queue binding (draft): hw_ctx is this queue's own and reaches
++    * the host only while the embedder has the queue bound. */
++   bool bindable;
++   bool bound;
+    enum radeon_ctx_priority priority;
+    struct radv_queue_state state;
+    struct radv_queue_state *follower_state;
+@@ -104,6 +108,12 @@ radv_queue_device(const struct radv_queue *queue)
+    return (struct radv_device *)queue->vk.base.device;
+ }
+ 
++static inline bool
++radv_queue_is_unbound(const struct radv_queue *queue)
++{
++   return queue->bindable && !queue->bound;
++}
++
+ #define radv_queue_set_lost(queue, ...)                                                                                \
+    (radv_queue_handle_fault_state((queue)), vk_queue_set_lost(&(queue)->vk, __VA_ARGS__))
+ 
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+index bb66be5dbf6..6f44926a75c 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -1265,6 +1265,9 @@ radv_wddm2_virtual_bind_begin(struct radeon_winsys *_ws, struct radeon_winsys_ct
+    struct radv_wddm2_ctx *ctx = (struct radv_wddm2_ctx *)_ctx;
+    struct radv_wddm2_queue *queue = &ctx->per_ip[ip_type].queue;
+ 
++   if (radv_wddm2_ctx_unbound(ctx))
++      return VK_ERROR_VALIDATION_FAILED;
++
+    /* RADV externally serializes submission to each advertised hardware queue. */
+    if (queue->sparse_batch_active || !queue->context_h || !queue->vm_fence.handle)
+       return VK_ERROR_DEVICE_LOST;
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+index 99668bddc64..d3226748740 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+@@ -412,6 +412,38 @@ fail_contexts:
+    return result;
+ }
+ 
++/* The context of one runtime-bound VkQueue. It starts with no kernel
++ * object, so creating and destroying it unbound never reaches the host.
++ */
++static VkResult
++radv_wddm2_ctx_create_bindable(struct radeon_winsys *_ws, enum radeon_ctx_priority priority,
++                               struct radeon_winsys_ctx **rctx)
++{
++   struct radv_wddm2_winsys *ws = radv_wddm2_winsys(_ws);
++
++   if (!ws->bc250 || !ws->host.dispatch)
++      return VK_ERROR_FEATURE_NOT_PRESENT;
++   if (priority < RADEON_CTX_PRIORITY_LOW || priority > RADEON_CTX_PRIORITY_HIGH)
++      return VK_ERROR_NOT_PERMITTED;
++
++   struct radv_wddm2_ctx *ctx = CALLOC_STRUCT(radv_wddm2_ctx);
++   if (!ctx)
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
++   ctx->ws = ws;
++   ctx->bindable = true;
++
++   for (uint32_t ip = 0; ip < AMD_NUM_IP_TYPES; ip++) {
++      struct radv_wddm2_queue *queue = &ctx->per_ip[ip].queue;
++      queue->hw_ip = ip;
++      queue->bc250_ws = ws;
++      util_dynarray_init(&queue->sparse_ops, NULL);
++   }
++   util_dynarray_init(&ctx->ace_queue.sparse_ops, NULL);
++
++   *rctx = (struct radeon_winsys_ctx *)ctx;
++   return VK_SUCCESS;
++}
++
+ static void
+ radv_wddm2_ctx_destroy(struct radeon_winsys_ctx *rwctx)
+ {
+@@ -487,6 +519,10 @@ radv_wddm2_ctx_wait_idle(struct radeon_winsys_ctx *rwctx, enum amd_ip_type ip_ty
+    struct radv_wddm2_ctx *ctx = radv_wddm2_ctx(rwctx);
+    bool ret = true;
+ 
++   /* Nothing of an unbound context is in flight: unbinding retired it. */
++   if (radv_wddm2_ctx_unbound(ctx))
++      return true;
++
+    if (ctx->per_ip[ip_type].last_submission.handle)
+       ret = vk_wddm2_fence_wait(ctx->ws, &ctx->per_ip[ip_type].last_submission);
+ 
+@@ -984,6 +1020,9 @@ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
+    struct radv_wddm2_queue *ace_queue = &ctx->ace_queue;
+    NTSTATUS status;
+ 
++   if (radv_wddm2_ctx_unbound(ctx))
++      return VK_ERROR_VALIDATION_FAILED;
++
+    assert(queue->context_h != 0 && "Unsupported IP type");
+ 
+    if (submit->is_gang && ace_queue->handle == 0) {
+@@ -1173,6 +1212,8 @@ radv_wddm2_cs_init_functions(struct radv_wddm2_winsys *ws)
+ {
+    ws->base.ctx_create = radv_wddm2_ctx_create;
+    ws->base.ctx_destroy = radv_wddm2_ctx_destroy;
++   if (ws->bc250 && ws->host.dispatch)
++      ws->base.ctx_create_bindable = radv_wddm2_ctx_create_bindable;
+    ws->base.ctx_wait_idle = radv_wddm2_ctx_wait_idle;
+    ws->base.cs_domain = radv_wddm2_cs_domain;
+    ws->base.cs_create = radv_wddm2_cs_create;
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
+index d20ee27d539..91c7569de59 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
+@@ -68,6 +68,12 @@ struct radv_wddm2_queue {
+ struct radv_wddm2_ctx {
+    struct radv_wddm2_winsys *ws;
+ 
++   /* Hosted queue binding (draft). A bindable context belongs to one
++    * VkQueue and holds kernel objects only while bound; unbound, it makes
++    * no host call at all. */
++   bool bindable;
++   bool bound;
++
+    struct radv_wddm2_queue ace_queue;
+ 
+    struct {
+@@ -82,6 +88,13 @@ radv_wddm2_ctx(struct radeon_winsys_ctx *base)
+    return (struct radv_wddm2_ctx *)base;
+ }
+ 
++/* Outside the embedder's bind scope a bindable context reaches no host. */
++static inline bool
++radv_wddm2_ctx_unbound(const struct radv_wddm2_ctx *ctx)
++{
++   return ctx->bindable && !ctx->bound;
++}
++
+ void radv_wddm2_cs_init_functions(struct radv_wddm2_winsys *ws);
+ 
+ #endif /* RADV_WDDM2_CS_H */

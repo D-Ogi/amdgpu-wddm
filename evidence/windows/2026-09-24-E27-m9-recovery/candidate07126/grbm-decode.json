@@ -1,0 +1,35 @@
+{
+  "header_sha256": "8fdfbc3a993fc38fc3a635ab59bc66c237d54acba680fd26e3b009e810654ba7",
+  "samples": {
+    "first": {
+      "source": "candidate07126-first-start.log",
+      "distinct_values": [
+        "0x00003028"
+      ],
+      "all_read_statuses_zero": true
+    },
+    "stop": {
+      "source": "candidate07126-stop-inspect.log",
+      "distinct_values": [
+        "0x00003028"
+      ],
+      "all_read_statuses_zero": true
+    },
+    "warm": {
+      "source": "candidate07126-warm-snapshots.log",
+      "distinct_values": [
+        "0x00003028"
+      ],
+      "all_read_statuses_zero": true
+    }
+  },
+  "decoded_nonzero_fields": {
+    "0x00003028": {
+      "ME0PIPE0_CMDFIFO_AVAIL": 8,
+      "RSMU_RQ_PENDING": 1,
+      "DB_CLEAN": 1,
+      "CB_CLEAN": 1
+    }
+  },
+  "note": "Repeated log printouts are not independent measurements. Decode only successful reads; no reset inferred."
+}

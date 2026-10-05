@@ -1,0 +1,12 @@
+test.c
+UnconfirmedStarts = 0 (flushed to disk)
+UnconfirmedStarts = 0 (flushed to disk)
+FAIL 31: Confirm()==1&&cached==0&&durable==2&&flushes==1&&closes==2
+CLI confirmation: 12 checks, 1 failures
+cannot write UnconfirmedStarts, error 5
+bc250kmd is not installed (no HKLM\fixture-service), nothing to confirm
+cannot open HKLM\fixture-service, error 5 (is this an elevated prompt?)
+cannot open HKLM\fixture-parameters, error 5 (is this an elevated prompt?)
+System.Exception: cached zero is not durable success
+   w ConfirmTest.Check(Boolean condition, String name)
+   w ConfirmTest.Main()

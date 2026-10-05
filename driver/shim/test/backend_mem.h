@@ -124,7 +124,7 @@ unsigned int backend_ib_skipped(void);
  * run 002 found on unit A, because a replayed register file has no MEC and forgets everything the
  * moment a register is overwritten.
  *
- * What was measured, on unit A, 2026-09-21, E12 run 002 (P:\BC-250\scratch\e12\run002\out):
+ * What was measured, on unit A, 2026-09-21, E12 run 002 (<BC250_ROOT>\scratch\e12\run002\out):
  *
  *  1. The MEC keeps, per HQD slot, its own copy of that queue's ring base and read pointer. It is
  *     taken when the queue is activated, and the engine advances the read pointer as it fetches.

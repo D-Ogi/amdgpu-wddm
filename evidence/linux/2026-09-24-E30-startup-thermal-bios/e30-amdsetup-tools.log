@@ -1,0 +1,3 @@
+{"variable": "AmdSetup", "efivar_bytes": 2233, "payload_bytes": 2229, "attributes": 7, "sha256_efivar": "bdb034942e1b37438e00d1e491d4e5b70be4b8eff84189eb03169f85a349aee0", "sha256_payload": "6f266c3c78a544d73eae5cea465756dd73e343fe16e2725d2300d08ba176d055", "utc_epoch": 1790284217.2046306}
+apk_installed_flashrom=spi_driver=mtd_device_count=0
+tools_check_done=2026-09-24T21:10:17Z

@@ -1,0 +1,6 @@
+test.c
+FAIL 82: FillSignalInfo(&d,&s)==STATUS_SUCCESS && s.PixelRate==144000000
+FAIL 83: s.VSyncFreq.Numerator==144000000 && s.VSyncFreq.Denominator==1200000
+FAIL 86: FillSignalInfo(&d,&s)==STATUS_SUCCESS && s.PixelRate==148351648
+FAIL 87: s.VSyncFreq.Numerator==148351648 && s.VSyncFreq.Denominator==2475000
+inherited timing: 197 checks, 4 failures

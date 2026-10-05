@@ -1,0 +1,15 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; retained emitter not yet selected by DDI; no deployment",
+  "sys_sha256": "211893FEB4625F2FE281162F441061CBB014F0576E7D55B6FBBD2B34AC3727D3",
+  "sha256": {
+    "driver/kmd/gfx.c": "a0f3c132a34f98a66db4306b5f64924059f778bbe6619a0c3a46aacfaa2e6b9a",
+    "driver/kmd/bc250kmd.h": "040399a4b82651e1a0807bd6dca825eabefa93c1770d86d764bfd56df921412c",
+    "driver/kmd/paging_capture.h": "fed3743058491a6cc4cb72bb60f2d8c26bf2dc148141fbf4dca8660fa020b934",
+    "experiments/E27-m9-inference/paging-route-test-suffix.c": "57415a9691075cb688b01dba1f19a0af5fda75b35582ab7b82dc465470a68e14",
+    "experiments/E27-m9-inference/generate-paging-route-test.py": "7bc3a6bfe0eafbafdd3a2977219896af8805e98ed3159041783e1d3827224039"
+  },
+  "routing_exit": 0,
+  "focused_exit": 0,
+  "broken_restore_exit": 1
+}

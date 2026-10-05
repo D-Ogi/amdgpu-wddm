@@ -1,0 +1,151 @@
+--- wddm-0761.c
++++ wddm-0762.c
+@@ -226,6 +226,9 @@
+     volatile LONG SubmittedNode[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG ActiveSubmissions[BC250_WDDM_NODE_COUNT_MAX];
+     volatile LONG LastReportedFence[BC250_WDDM_NODE_COUNT_MAX];
++    BOOLEAN LastReportedValid[BC250_WDDM_NODE_COUNT_MAX];
++    BOOLEAN RejectedPending[BC250_WDDM_NODE_COUNT_MAX];
++    UINT RejectedFence[BC250_WDDM_NODE_COUNT_MAX];
+     BOOLEAN WatchdogFaulted[BC250_WDDM_NODE_COUNT_MAX]; // sticky until adapter state is rebuilt
+     volatile LONG CompletionPending[BC250_WDDM_NODE_COUNT_MAX];    // set by the submit, cleared by the DPC
+     volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value";
+@@ -897,6 +900,7 @@
+             WddmReport(device, &data);
+             InterlockedExchange(&wddm->LastCompletedFence, fence);
+             InterlockedExchange(&wddm->LastReportedFence[node], fence);
++            wddm->LastReportedValid[node] = TRUE;
+         }
+ 
+         // DMA-buffer-boundary preemption cannot be acknowledged while that buffer is
+@@ -904,6 +908,23 @@
+         // also covers GfxSubmitIb before it installs HwPending. Completion and submit
+         // exit requeue this DPC, so no spinning or timer is needed while we defer.
+         KeAcquireSpinLock(&wddm->Lock, &irql);
++        // SubmitCommandVirtual's invalid-parameter contract: the OS retires a
++        // rejected fence after prior work. Update our notion without reporting a
++        // successful DMA completion for work that was never submitted.
++        if (wddm->RejectedPending[node] &&
++            wddm->ActiveSubmissions[node] == 0 && wddm->CompletionPending[node] == 0 &&
++            !(node == BC250_WDDM_NODE_COPY ? wddm->PagingHwPending : wddm->HwPending))
++        {
++            UINT rejected=wddm->RejectedFence[node];
++            if (!wddm->LastReportedValid[node] ||
++                (LONG)(rejected-(UINT)wddm->LastReportedFence[node]) > 0)
++            {
++                wddm->LastReportedFence[node]=(LONG)rejected;
++                wddm->LastReportedValid[node]=TRUE;
++                wddm->LastCompletedFence=(LONG)rejected;
++            }
++            wddm->RejectedPending[node]=FALSE;
++        }
+         preempt = wddm->PreemptionPending[node] != 0 &&
+                   wddm->ActiveSubmissions[node] == 0 && wddm->CompletionPending[node] == 0 &&
+                   !(node == BC250_WDDM_NODE_COPY ? wddm->PagingHwPending : wddm->HwPending);
+@@ -2433,14 +2454,10 @@
+     return status;
+ }
+ 
+-// A UMD context's command buffer is the IB named in its BC2S blob. dxgkrnl copies that blob to the front of
+-// pDmaBufferPrivateData and reports its length in DmaBufferUmdPrivateDataSize (the slot itself is the size
+-// CreateContext asked for). One IB takes the gfx ring, still behind EnableGpuSubmit and a root page table.
+-// Two IBs are not half-run. A failure return from this DDI bugchecks, so a blob this reader refuses, or a
+-// ring that will not take it, is completed in software and logged. That retires the scheduler fence so the
+-// queue does not stall. It does not write the monitored fence the IB itself would have written, which is
+-// what the winsys waits on.
+-static void WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
++// SubmitCommandVirtual permits STATUS_INVALID_PARAMETER for malformed private data.
++// The OS faults that calling device. Ordered bookkeeping below retires its rejected
++// fence only after previous work; no DMA_COMPLETED interrupt is invented for it.
++static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
+                           _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* Submit, UINT Node)
+ {
+     struct umd_submit_view ib;
+@@ -2457,6 +2474,13 @@
+     ib.single_ib = 0;
+     if (bytes != NULL && umdLen != 0 && umdLen <= bufLen)
+         st = UmdBlobParseSubmit(bytes, umdLen, &ib);
++    if (st != UMD_BLOB_OK || !ib.single_ib || Node != BC250_WDDM_NODE_3D)
++    {
++        GuardLog("wddm: malformed virtual UMD submission fence %u rejected (blob %d, single %d, node %u)",
++                 Submit->SubmissionFenceId,st,ib.single_ib,Node);
++        return STATUS_INVALID_PARAMETER;
++    }
++
+     // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
+     // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
+     // would signal the monitored fence for an IB the GPU never fetched. This DDI is PASSIVE_LEVEL,
+@@ -2540,7 +2564,7 @@
+                 if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
+                     GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
+                              ib.ib_va, ib.ib_bytes);
+-                return;
++                return STATUS_SUCCESS;
+             }
+             // Not busy: either the ring will not take an IB, or the one it held finished between
+             // the ready check and this one. Try once more in the second case, and do not spin in
+@@ -2556,7 +2580,7 @@
+                     if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
+                         GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
+                                  ib.ib_va, ib.ib_bytes);
+-                    return;
++                    return STATUS_SUCCESS;
+                 }
+                 break;
+             }
+@@ -2578,23 +2602,25 @@
+         GuardLog("wddm: umd submit fence %u not run: %s (%u ibs, private %u/%u, first 0x%08lX)",
+                  Submit->SubmissionFenceId, why, nIbs, umdLen, bufLen, UmdBlobFirstWord(bytes, umdLen));
+     WddmCompleteSoftware(Device, Submit->SubmissionFenceId, Node);
++    return STATUS_SUCCESS;
+ }
+ 
+ static void WddmPresentBlit(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Present);
+ 
+ // Aggregate host-side elapsed time, not GPU execution time. QPC ticks and frequency
+ // are logged separately so analysis needs no rounding or overflow-prone conversion.
+-static void WddmSubmitUmd(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm,
++static NTSTATUS WddmSubmitUmd(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm,
+                           _In_ const BC250_WDDM_OBJECT* Context,
+                           _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* Submit, UINT Node)
+ {
+     LARGE_INTEGER start = KeQueryPerformanceCounter(NULL);
+-    WddmSubmitUmdImpl(Device, Wddm, Context, Submit, Node);
++    NTSTATUS status = WddmSubmitUmdImpl(Device, Wddm, Context, Submit, Node);
+     if (Wddm != NULL)
+     {
+         InterlockedAdd64(&Wddm->UmdSubmitTicks, KeQueryPerformanceCounter(NULL).QuadPart - start.QuadPart);
+         InterlockedIncrement(&Wddm->UmdProfileCalls);
+     }
++    return status;
+ }
+ 
+ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
+@@ -2637,11 +2663,10 @@
+ 
+     // M8. A UMD context's packet is the IB in its BC2S blob, not the DMA buffer a present uses. Handled
+     // here, before stage C, so a UMD submit can never fall through onto DmaBufferVirtualAddress. One IB
+-    // takes the same gated gfx-ring path. Two IBs are not half-run. This DDI still cannot fail.
++    // takes the same gated gfx-ring path. Unsupported multi-IB packets are rejected before dispatch.
+     if (context != NULL && context->UmdContext)
+     {
+-        WddmSubmitUmd(device, wddm, context, pSubmitCommand, node);
+-        return STATUS_SUCCESS;
++        return WddmSubmitUmd(device, wddm, context, pSubmitCommand, node);
+     }
+ 
+     // Only driver-built, non-UMD present packets enter the CPU presentation path.
+@@ -2711,6 +2736,13 @@
+     if (tracked)
+     {
+         KeAcquireSpinLock(&wddm->Lock, &irql);
++        if (status == STATUS_INVALID_PARAMETER)
++        {
++            if (!wddm->RejectedPending[node] ||
++                (LONG)(pSubmitCommand->SubmissionFenceId-wddm->RejectedFence[node]) > 0)
++                wddm->RejectedFence[node]=pSubmitCommand->SubmissionFenceId;
++            wddm->RejectedPending[node]=TRUE;
++        }
+         wddm->ActiveSubmissions[node]--;
+         KeReleaseSpinLock(&wddm->Lock, irql);
+         WddmQueueReport(wddm);

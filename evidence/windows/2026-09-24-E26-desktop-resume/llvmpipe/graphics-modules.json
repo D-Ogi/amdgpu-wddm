@@ -1,0 +1,32 @@
+{
+  "440B2AB98A943E3F77849D5C1672271792C71F5C864D4BB1562E27B3C2DFC43F": {
+    "Renderer": "Mesa softpipe",
+    "Execution": "CPU software rendering",
+    "Compiler": "TGSI interpreter; no LLVM/JIT",
+    "Build": "branch labels / old rotation"
+  },
+  "4A6B097AD176B8E1E1C98914CA2E7E2A1D419A6CE3FA4A18ACDB8E130C2FE7FD": {
+    "Renderer": "Mesa softpipe",
+    "Execution": "CPU software rendering",
+    "Compiler": "TGSI interpreter; no LLVM/JIT",
+    "Build": "resource rotation"
+  },
+  "E1976C4254055F0B96E294E713DBC5798C07E41E61526DD6FC3738A712FC1CAD": {
+    "Renderer": "Mesa softpipe",
+    "Execution": "CPU software rendering",
+    "Compiler": "TGSI interpreter; no LLVM/JIT",
+    "Build": "rotation + frame profile"
+  },
+  "69E620F50A75ED5667230DCE92CD35CB7E7982BE48A9FFBAD8A99D41BE70B00A": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 19.1.7 / native CPU code",
+    "Build": "rotation + render fence + profile"
+  },
+  "853E4FB36A4D71AF0F3380279744C2145BDD4976E86EAB5755850DF4AB12C514": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 19.1.7 / native CPU code",
+    "Build": "rotation + fence + TGSI/NIR"
+  }
+}

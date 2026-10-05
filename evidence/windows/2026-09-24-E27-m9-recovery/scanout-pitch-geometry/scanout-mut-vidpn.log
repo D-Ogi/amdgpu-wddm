@@ -1,0 +1,13 @@
+Extracted publication and vsync functions from P:\bc-250\scratch\m9\scanout-mutations\wddm-ignore-pitch.c
+vidpn_flip_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL line 258: Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT
+FAIL line 259: w.PrimaryPitch==5632 && hardware==4 && programmed_pitch==5632
+FAIL line 262: w.PrimaryPitch==5888 && hardware==5 && programmed_pitch==5888
+FAIL line 268: hardware==6 && !(w.PrimarySequence&1)
+FAIL line 258: Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT
+FAIL line 259: w.PrimaryPitch==5632 && hardware==4 && programmed_pitch==5632
+FAIL line 262: w.PrimaryPitch==5888 && hardware==5 && programmed_pitch==5888
+FAIL line 268: hardware==6 && !(w.PrimarySequence&1)
+vidpn publication: 94 checks, 8 failures

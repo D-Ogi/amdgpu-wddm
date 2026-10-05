@@ -1,0 +1,8 @@
+Source: drivers/gpu/drm/amd/amdgpu/soc15_common.h
+50: #define WREG32_FIELD15(ip, idx, reg, field, val)	\
+51: 	 __WREG32_SOC15_RLC__(adev->reg_offset[ip##_HWIP][idx][mm##reg##_BASE_IDX] + mm##reg,	\
+52: 				(__RREG32_SOC15_RLC__( \
+53: 					adev->reg_offset[ip##_HWIP][idx][mm##reg##_BASE_IDX] + mm##reg, \
+54: 					0, ip##_HWIP, idx) & \
+55: 				~REG_FIELD_MASK(reg, field)) | (val) << REG_FIELD_SHIFT(reg, field), \
+56: 			      0, ip##_HWIP, idx)

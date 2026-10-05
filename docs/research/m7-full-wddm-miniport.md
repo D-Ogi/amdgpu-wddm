@@ -7,7 +7,8 @@ Research only, host side. No lab access, nothing installed, no repo file edited.
 Every claim below carries one of these. Anything without a source is marked ASSUMPTION and says what
 would settle it.
 
-- `WDK:<file>:<line>` - Windows Kits headers under `P:\BC-250\toolchain\nuget\`, version 10.0.26100.0.
+- `WDK:<file>:<line>` - Windows Kits headers under `<BC250_ROOT>\toolchain\nuget\` (`BC250_ROOT` is
+  the workspace root, by default the parent directory of this repository), version 10.0.26100.0.
   Shorthand for the four files used:
   - `DISP` = `microsoft.windows.wdk.x64\c\Include\10.0.26100.0\km\dispmprt.h`
   - `KMDDI` = `microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared\d3dkmddi.h`
@@ -15,8 +16,8 @@ would settle it.
   - `UK` = `microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\shared\d3dukmdt.h`
   - `KD` = `microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\shared\d3dkmdt.h`
 - `LEARN:<url>` - Microsoft Learn.
-- `MESA:<path>:<line>` - `P:\BC-250\ref\mesa` (shallow sparse clone made for this task, 15 MB) and
-  `P:\BC-250\ref\mesa\wddm2-extract\` (the Collabora `wddm2` branch, extracted).
+- `MESA:<path>:<line>` - `<BC250_ROOT>\ref\mesa` (shallow sparse clone made for this task, 15 MB) and
+  `<BC250_ROOT>\ref\mesa\wddm2-extract\` (the Collabora `wddm2` branch, extracted).
 - `OURS:<file>` - our own repo, read only.
 - ASSUMPTION - inference. Each one says what would falsify it.
 
@@ -200,7 +201,7 @@ FACT, each from its own Learn DDI page; the parameter values from
 | `DxgkDdiRestartFromTimeout` | same; "can simply return STATUS_SUCCESS immediately" |
 | `DxgkDdiSubmitCommand` / `SubmitCommandVirtual` | 0x119 param1 = 0x2 |
 | `DxgkDdiPatch` | 0x119 param1 = 0x3 |
-| `DxgkDdiBuildPagingBuffer` | **Only three return codes are legal**: `STATUS_SUCCESS`, `STATUS_GRAPHICS_ALLOCATION_BUSY`, `STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER`. Anything else -> 0x119 param1 = 0x5. **`STATUS_NOT_IMPLEMENTED` here is a bugcheck** |
+| `DxgkDdiBuildPagingBuffer` | Microsoft documents `STATUS_SUCCESS`, `STATUS_GRAPHICS_ALLOCATION_BUSY`, and `STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER`. Do not invent other return codes. Correction M186: the0x119 page labels parameter0x5 as a faulted system/paging command; it does not prove the earlier universal mapping of every other builder return to that exact bugcheck. OS-facing failure handling remains open. |
 | interrupt-reported fences | 0x119 param1 = 0x1. "The driver must always maintain the last completed fence ID value on the GPU" (`LEARN:.../display/tdr-changes-in-windows-8`) |
 
 `STATUS_NOT_IMPLEMENTED` remains safe in: `DxgkDdiEscape`, `DxgkDdiQueryInterface`,
@@ -427,7 +428,7 @@ is tooling only - "WHQL test programs use the list ... to validate that the driv
 unchanged over a test run."
 
 Corroborating local evidence: FACT - Microsoft's own KMDOD sample INF
-(`P:\BC-250\ref\Windows-driver-samples\video\KMDOD\Sample\sampledisplay.inf`) is `Class=Display` and
+(`<BC250_ROOT>\ref\Windows-driver-samples__WARN-MS-PL-no-code-in-our-driver\video\KMDOD\Sample\sampledisplay.inf`) is `Class=Display` and
 declares **no** `UserModeDriverName`, no `InstalledDisplayDrivers`, no `DirectXVersion`. So a
 `Class=Display` driver without those values is at least an arrangement Microsoft itself ships.
 
@@ -1002,7 +1003,7 @@ already give us most of these from the hardware itself.
 
 ## 4.3 The draft WDDM winsys - and a load-bearing caveat about it
 
-`P:\BC-250\ref\mesa\wddm2-extract\src\amd\vulkan\winsys\wddm2\` - 3043 lines, from
+`<BC250_ROOT>\ref\mesa\wddm2-extract\src\amd\vulkan\winsys\wddm2\` - 3043 lines, from
 `gitlab.freedesktop.org/lfrb/mesa` branch `wddm2` (Collabora, MR !29945, still Draft).
 
 **CAVEAT 1, important:** FACT `MESA:wddm2-extract/include/drm-uapi/d3dkmthk.h:1-12` is **Microsoft's
@@ -1291,7 +1292,7 @@ residency) are the two it abandoned.
 ## 5.6 What can be settled host-side, before any lab time
 
 - **A replay/parity test for the caps blob**: build the `UMDRIVERPRIVATE` struct from facts M7, M8, M31,
-  M36 and feed it to the real `ac_fill_*` helpers from `P:\BC-250\ref\mesa\src\amd\common\ac_gpu_info.c`,
+  M36 and feed it to the real `ac_fill_*` helpers from `<BC250_ROOT>\ref\mesa\src\amd\common\ac_gpu_info.c`,
   then assert the resulting `radeon_info` against what amdgpu reports for this ASIC. Pure host-side, same
   shape as the M4 replay test that scored 285 writes with 0 mismatches.
 - **A `DXGK_PTE` -> AMD PTE translation test** against the format already validated in fact M37.
@@ -1320,7 +1321,7 @@ this work.
 
 # 7. Sources
 
-WDK 10.0.26100.0 headers under `P:\BC-250\toolchain\nuget\` (`dispmprt.h`, `d3dkmddi.h`, `d3dkmthk.h`,
+WDK 10.0.26100.0 headers under `<BC250_ROOT>\toolchain\nuget\` (`dispmprt.h`, `d3dkmddi.h`, `d3dkmthk.h`,
 `d3dukmdt.h`, `d3dkmdt.h`), cited by path and line throughout.
 
 Microsoft Learn, the pages that carry weight: WDDM architecture; MCDM KMD implementation guidelines (the
@@ -1334,15 +1335,15 @@ microsoft-basic-display-driver; bug checks 0x116 and 0x119; plus the individual 
 pages named inline. `wddm-in-windows-8.md` was read from the raw docs repo because the Learn page renders
 truncated.
 
-Mesa: `P:\BC-250\ref\mesa` (shallow sparse clone, `origin/main` at `3ae3d2e`) and
-`P:\BC-250\ref\mesa\wddm2-extract\` (branch `wddm2` from `gitlab.freedesktop.org/lfrb/mesa`, extracted
+Mesa: `<BC250_ROOT>\ref\mesa` (shallow sparse clone, `origin/main` at `3ae3d2e`) and
+`<BC250_ROOT>\ref\mesa\wddm2-extract\` (branch `wddm2` from `gitlab.freedesktop.org/lfrb/mesa`, extracted
 with `git archive`). Neither is a source of facts about our hardware; both are read as code.
 
 Prior art repositories read (not cloned): virtio-win/kvm-guest-drivers-windows, arehnman/yttrium-virtio-gpu,
 arehnman/virtio-win-mesa, VirtualBox/virtualbox, vmware/open-vm-tools, reactos/reactos,
 GPUOpen-Drivers/pal, KhronosGroup/Vulkan-Loader, intel/compute-runtime.
 
-Local reference: `P:\BC-250\ref\Windows-driver-samples` (KMDOD sample and its INF).
+Local reference: `<BC250_ROOT>\ref\Windows-driver-samples__WARN-MS-PL-no-code-in-our-driver` (KMDOD sample and its INF).
 
 Our own repo, read only: `docs/adr/0005`, `0006`, `0007`; `driver/kmd/README.md`;
 `docs/00-goal-and-roadmap.md`; `docs/facts.md` (M7, M8, M21, M29, M31, M33, M34, M36, M37, M38, M39).

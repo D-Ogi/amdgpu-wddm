@@ -1,0 +1,170 @@
+{
+  "dynamic-14.bmp": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 28699,
+    "cyan_bbox": [
+      318,
+      163,
+      920,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-14.png": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 32683,
+    "cyan_bbox": [
+      318,
+      169,
+      944,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-2.bmp": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 28971,
+    "cyan_bbox": [
+      318,
+      199,
+      984,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-2.png": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 32955,
+    "cyan_bbox": [
+      318,
+      205,
+      1008,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-20.bmp": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 21499,
+    "cyan_bbox": [
+      318,
+      151,
+      792,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-20.png": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 24971,
+    "cyan_bbox": [
+      318,
+      157,
+      816,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-26.bmp": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 190575,
+    "cyan_bbox": [
+      0,
+      199,
+      1862,
+      1135
+    ],
+    "cyan_outside_control_motion_envelope": 167179
+  },
+  "dynamic-26.png": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 27003,
+    "cyan_bbox": [
+      318,
+      205,
+      928,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-8.bmp": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 7,
+    "cyan_bbox": [
+      318,
+      969,
+      325,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "dynamic-8.png": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 21771,
+    "cyan_bbox": [
+      318,
+      187,
+      856,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "gpu.bmp": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 23403,
+    "cyan_bbox": [
+      318,
+      169,
+      864,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 7
+  },
+  "screen.png": {
+    "size": [
+      1920,
+      1200
+    ],
+    "cyan_pixels": 51070,
+    "cyan_bbox": [
+      70,
+      395,
+      1323,
+      973
+    ],
+    "cyan_outside_control_motion_envelope": 51070
+  }
+}

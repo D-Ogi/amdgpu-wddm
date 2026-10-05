@@ -1,0 +1,26 @@
+[
+  {
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b9564/llama-b9564-bin-win-vulkan-x64.zip",
+    "file": "llama-b9564-bin-win-vulkan-x64.zip",
+    "sha256": "7146eb829f70c61058ec880a48c27640fa8ed485d59993d55f536033242accda",
+    "expected_match": null
+  },
+  {
+    "url": "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf",
+    "file": "models/stories260K.gguf",
+    "sha256": "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d",
+    "expected_match": true
+  },
+  {
+    "url": "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf",
+    "file": "models/stories15M-q4_0.gguf",
+    "sha256": "66967fbece6dbe97886593fdbb73589584927e29119ec31f08090732d1861739",
+    "expected_match": true
+  },
+  {
+    "url": "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_0.gguf",
+    "file": "models/tinyllama-1.1b-chat-v1.0.Q4_0.gguf",
+    "sha256": "da3087fb14aede55fde6eb81a0e55e886810e43509ec82ecdc7aa5d62a03b556",
+    "expected_match": true
+  }
+]

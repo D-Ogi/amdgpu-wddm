@@ -1,0 +1,14 @@
+{
+  "runtime_inputs_compared_normalized": 158,
+  "changed_runtime_inputs": [
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/wddm.c"
+  ],
+  "other_runtime_changes": false,
+  "source_commit": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "source_clean": true,
+  "quality_checks": 8,
+  "sys_sha256": "0C0DA4E13FF110606265274B063D3B6034459A294FE2A552FD5806E0971B05EB",
+  "inf_version": "0.7.153.1",
+  "runtime_validated": false
+}

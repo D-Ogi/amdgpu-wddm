@@ -1,0 +1,5 @@
+ih_retained_actual.c
+FAIL 150: !frees&&!releases&&modelAdev.backend==&d&&modelAdev.irq.ih.ring==ring&&modelAdev.irq.ih.wptr_cpu==wb&&wb[0]==64
+FAIL 155: !wb[0]&&!wb[1]&&!modelAdev.irq.ih.rptr&&!frees&&!releases&&modelAdev.backend==&d&&modelAdev.irq.ih.ring==ring
+FAIL 158: Fini(&d,&i,&modelAdev) && frees==1&&releases==1&&!i.SetUp&&!i.Enabled&&!i.PowerSuspended
+Retained IH: 85 checks, 3 failures

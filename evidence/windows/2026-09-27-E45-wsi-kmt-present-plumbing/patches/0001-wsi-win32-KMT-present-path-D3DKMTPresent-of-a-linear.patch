@@ -1,0 +1,856 @@
+From 1ae7b6af4cb5445014cd8c8161a765cc25323d7a Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 05:41:20 +0200
+Subject: [PATCH 1/2] wsi/win32: KMT present path (D3DKMTPresent of a linear
+ device-local image)
+
+Win32 without a D3D runtime device: swapchain images are linear, dedicated,
+device-local RADV images whose allocation carries the kernel driver's LB7A
+surface description; the winsys presents them through D3DKMTPresent(Blt) on
+a separate non-UMD context, ordered by GPU waits and signals on the common
+blit timeline semaphore. No CPU copy, no DXGI, works inside processes that
+ship their own dxgi.dll. Present log path 'kmt'. BC250_WSI_CPU_PRESENT=1
+keeps the CPU path; the hosted ICD keeps it too (host version 5 has no
+Present). BC250_WSI_KMT_DWMFLUSH=1 adds DwmFlush per present.
+---
+ src/amd/vulkan/radv_device_memory.c           |   6 +
+ src/amd/vulkan/radv_radeon_winsys.h           |   3 +
+ src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c   |  64 +++++-
+ .../vulkan/winsys/wddm2/radv_wddm2_winsys.c   |   1 +
+ .../vulkan/winsys/wddm2/radv_wddm2_winsys.h   |   3 +
+ src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c  | 173 ++++++++++++++-
+ src/util/bc250_host_bootstrap.h               |   3 +
+ src/vulkan/util/vk_internal_exts.h            |   3 +
+ .../util/vk_wddm2_dispatch_table_gen.py       |   1 +
+ src/vulkan/wsi/wsi_common.c                   |  21 +-
+ src/vulkan/wsi/wsi_common.h                   |  20 ++
+ src/vulkan/wsi/wsi_common_private.h           |  13 ++
+ src/vulkan/wsi/wsi_common_win32.cpp           | 202 +++++++++++++++++-
+ 13 files changed, 497 insertions(+), 16 deletions(-)
+
+diff --git a/src/amd/vulkan/radv_device_memory.c b/src/amd/vulkan/radv_device_memory.c
+index 3ae4ffea..7095dea2 100644
+--- a/src/amd/vulkan/radv_device_memory.c
++++ b/src/amd/vulkan/radv_device_memory.c
+@@ -137,6 +137,12 @@ radv_alloc_memory(struct radv_device *device, const VkMemoryAllocateInfo *pAlloc
+        */
+       if (mem->buffer)
+          flags |= RADEON_FLAG_GL2_BYPASS;
++
++      /* Win32 KMT present: the winsys writes the surface description the
++       * kernel driver's present path reads (dedicated image required).
++       */
++      if (wsi_info->present_surface && mem->image)
++         flags |= RADEON_FLAG_WSI_PRESENT_SURFACE;
+    }
+ 
+    float priority_float = 0.5;
+diff --git a/src/amd/vulkan/radv_radeon_winsys.h b/src/amd/vulkan/radv_radeon_winsys.h
+index 12e9575f..6c4304ae 100644
+--- a/src/amd/vulkan/radv_radeon_winsys.h
++++ b/src/amd/vulkan/radv_radeon_winsys.h
+@@ -58,6 +58,9 @@ enum radeon_bo_flag { /* bitfield */
+                       RADEON_FLAG_VM_PAD_1PAGE = (1 << 15),
+                       RADEON_FLAG_ENCRYPTED = (1 << 16),
+                       RADEON_FLAG_EMULATE_SPARSE_RESIDENCY = (1 << 17),
++                      /* WDDM2 WSI: describe the (linear, dedicated) image as a
++                       * presentable surface to the kernel driver. */
++                      RADEON_FLAG_WSI_PRESENT_SURFACE = (1 << 18),
+ };
+ 
+ enum radeon_ctx_priority {
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+index 0e4323e7..87fdc79c 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -34,6 +34,7 @@
+ #include "radv_wddm2_bo.h"
+ #include "radv_wddm2_bc250.h"
+ #include "radv_wddm2_cs.h"
++#include "radv_image.h"
+ #include "util/u_memory.h"
+ 
+ /* Xlib headers conflict with DXGI headers */
+@@ -587,6 +588,7 @@ static VkResult
+ radv_wddm2_bo_create_internal(struct radeon_winsys *_ws, uint64_t size, unsigned alignment,
+                               enum radeon_bo_domain initial_domain, enum radeon_bo_flag flags,
+                               unsigned priority, uint64_t address, void *cpu_ptr,
++                              struct radv_image *surface_image,
+                               struct radeon_winsys_bo **out_bo)
+ {
+    struct radv_wddm2_winsys *ws = radv_wddm2_winsys(_ws);
+@@ -627,7 +629,61 @@ radv_wddm2_bo_create_internal(struct radeon_winsys *_ws, uint64_t size, unsigned
+ 
+    uint8_t alloc_pdata[824] = {0};
+    uint32_t pdata_size;
+-   if (ws->bc250) {
++   if (ws->bc250 && surface_image) {
++      /* WSI present surface: the KMD's 32-byte LB7A surface block (the one
++       * its present path and the D3D user-mode driver share), not BC2A. The
++       * KMD sizes the allocation from Size, places it in VRAM and keeps it
++       * physically contiguous, which its present copy requires. Pitch is the
++       * linear layout RADV chose for the dedicated image; nothing overrides
++       * it afterwards (GFX10 refuses pitch overrides). */
++      const struct radeon_surf *surf = &surface_image->planes[0].surface;
++      struct bc250_linear_surface_blob {
++         uint32_t magic, version, width, height, pitch, format;
++         uint64_t size;
++      } surface;
++      _Static_assert(sizeof(surface) == 32, "LB7A v1 ABI");
++      uint32_t format;
++      switch (surface_image->vk.format) {
++      case VK_FORMAT_B8G8R8A8_UNORM:
++      case VK_FORMAT_B8G8R8A8_SRGB:
++         format = D3DDDIFMT_A8R8G8B8;
++         break;
++      case VK_FORMAT_R8G8B8A8_UNORM:
++      case VK_FORMAT_R8G8B8A8_SRGB:
++         format = D3DDDIFMT_A8B8G8R8;
++         break;
++      default:
++         format = 0;
++         break;
++      }
++      const uint64_t pitch = (uint64_t)surf->u.gfx9.surf_pitch * surf->bpe;
++      if (!surf->is_linear || format == 0 || surface_image->vk.extent.width == 0 ||
++          surface_image->vk.extent.height == 0 || surface_image->vk.extent.width > 8192 ||
++          surface_image->vk.extent.height > 8192 || (pitch & 15) ||
++          pitch < (uint64_t)surface_image->vk.extent.width * 4 ||
++          pitch > UINT32_MAX || phys_size < pitch * surface_image->vk.extent.height ||
++          phys_size > 0x10000000ull || !(initial_domain & RADEON_DOMAIN_VRAM)) {
++         fprintf(stderr, "wddm2: present surface %ux%u format %u pitch %" PRIu64 " linear %u size %" PRIu64
++                 " is not describable to the KMD\n", surface_image->vk.extent.width,
++                 surface_image->vk.extent.height, surface_image->vk.format, pitch, surf->is_linear,
++                 phys_size);
++         FREE(bo);
++         return VK_ERROR_FEATURE_NOT_PRESENT;
++      }
++      memset(&surface, 0, sizeof(surface));
++      surface.magic = 0x4137424c; /* "LB7A" */
++      surface.version = 1;
++      surface.width = surface_image->vk.extent.width;
++      surface.height = surface_image->vk.extent.height;
++      surface.pitch = (uint32_t)pitch;
++      surface.format = format;
++      surface.size = phys_size;
++      memcpy(alloc_pdata, &surface, sizeof(surface));
++      pdata_size = sizeof(surface);
++      bo->md.metadata_type = RADEON_METADATA_TYPE_KMW;
++      bo->md.kmw.pitch_bytes = (uint32_t)pitch;
++      bo->md.kmw.surf_size = surf->surf_size;
++   } else if (ws->bc250) {
+       struct bc250_alloc_blob blob;
+       memset(&blob, 0, sizeof(blob));
+       blob.magic = BC250_ALLOC_MAGIC;
+@@ -812,7 +868,8 @@ radv_wddm2_bo_create(struct radeon_winsys *_ws, uint64_t size, unsigned alignmen
+    if (flags & RADEON_FLAG_VIRTUAL)
+       return radv_wddm2_virtual_bo_create(_ws, size, alignment, initial_domain, flags,
+                                           priority, address, out_bo);
+-   return radv_wddm2_bo_create_internal(_ws, size, alignment, initial_domain, flags, priority, address, NULL, out_bo);
++   return radv_wddm2_bo_create_internal(_ws, size, alignment, initial_domain, flags, priority, address, NULL,
++                                        (flags & RADEON_FLAG_WSI_PRESENT_SURFACE) ? image : NULL, out_bo);
+ }
+ 
+ static VkResult
+@@ -824,7 +881,8 @@ radv_wddm2_bo_from_ptr(struct radeon_winsys *_ws, void *pointer, uint64_t size,
+    enum radeon_bo_flag flags = RADEON_FLAG_NO_INTERPROCESS_SHARING | RADEON_FLAG_CPU_ACCESS;
+    unsigned alignment = ws->gpu_info.gart_page_size;
+ 
+-   return radv_wddm2_bo_create_internal(_ws, size, alignment, initial_domain, flags, priority, 0, pointer, out_bo);
++   return radv_wddm2_bo_create_internal(_ws, size, alignment, initial_domain, flags, priority, 0, pointer, NULL,
++                                        out_bo);
+ }
+ 
+ static bool
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+index 2654f1a0..93c7133b 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -874,6 +874,7 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+    /* Initialize the heaps */
+    simple_mtx_init(&ws->heap_mtx, mtx_plain);
+    simple_mtx_init(&ws->null_prt.lock, mtx_plain);
++   simple_mtx_init(&ws->wsi.present_lock, mtx_plain);
+    util_vma_heap_init(&ws->_32bit_heap, RADV_WDDM2_32BIT_HEAP_START, 1ull << 32);
+    util_vma_heap_init(&ws->heap, RADV_WDDM2_HEAP_START, RADV_WDDM2_REPLAY_HEAP_START - RADV_WDDM2_HEAP_START);
+    util_vma_heap_init(&ws->replay_heap, RADV_WDDM2_REPLAY_HEAP_START, 1ull << 32);
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+index 27fe1fa5..0f3c4650 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+@@ -81,6 +81,9 @@ struct radv_wddm2_winsys {
+    struct {
+       void *d3d12_device; 
+       void *d3d12_queue;
++      /* KMT present path (bc250): non-UMD context carrying window presents. */
++      simple_mtx_t present_lock;
++      uint32_t present_context_h;
+    } wsi;
+ };
+ 
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
+index 2419fded..cb3ece15 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
+@@ -23,15 +23,24 @@
+ 
+ #include "radv_wddm2_wsi.h"
+ #include "radv_wddm2_winsys.h"
++#include "radv_wddm2_bo.h"
+ 
+ #define COBJMACROS
+ #include <unknwn.h>
+ #include <directx/d3d12.h>
+ 
+ #include "radv_device.h"
++#include "radv_device_memory.h"
+ #include "vk_dxgi.h"
++#include "vk_semaphore.h"
++#include "vk_wddm2_monitored_fence.h"
+ #include "wsi_common.h"
+ 
++#include <inttypes.h>
++#include <stdlib.h>
++#include <windows.h>
++#include <d3dkmthk.h>
++
+ static void *
+ radv_wddm2_wsi_get_d3d12_device(VkDevice _device)
+ {
+@@ -53,7 +62,8 @@ radv_wddm2_wsi_get_d3d12_command_queue(VkDevice _device)
+    struct radv_wddm2_winsys *ws = radv_wddm2_winsys(device->ws);
+ 
+    if (!ws->wsi.d3d12_queue) {
+-      ID3D12Device *d3d12_device = (ID3D12Device *)radv_wddm2_wsi_get_d3d12_device(_device);      D3D12_COMMAND_QUEUE_DESC desc = {};
++      ID3D12Device *d3d12_device = (ID3D12Device *)radv_wddm2_wsi_get_d3d12_device(_device);
++      D3D12_COMMAND_QUEUE_DESC desc = {0};
+       ID3D12Device_CreateCommandQueue(d3d12_device, &desc,
+                                       &IID_ID3D12CommandQueue, (void **)&ws->wsi.d3d12_queue);
+    }
+@@ -67,12 +77,155 @@ radv_wddm2_wsi_needs_blits(VkDevice _device)
+    return true;
+ }
+ 
++/* The present context: a non-UMD context of the device (no private driver
++ * data, node 0), the kind bc250kmd's DxgkDdiPresent accepts for a Blt. It
++ * carries only the present, its wait and its signal. Created on the first
++ * present, destroyed with the winsys. */
++static VkResult
++radv_wddm2_wsi_present_context(struct radv_wddm2_winsys *ws, uint32_t *context_h)
++{
++   VkResult result = VK_SUCCESS;
++
++   simple_mtx_lock(&ws->wsi.present_lock);
++   if (!ws->wsi.present_context_h) {
++      D3DKMT_CREATECONTEXTVIRTUAL create = {
++         .hDevice = ws->device_h,
++         .NodeOrdinal = 0,
++         .EngineAffinity = 1,
++         .ClientHint = D3DKMT_CLIENTHINT_VULKAN,
++      };
++      NTSTATUS status = BC250_WDDM_CALL(&ws->host, CreateContextVirtual, &create);
++      if (!NT_SUCCESS(status)) {
++         fprintf(stderr, "wddm2: present context creation failed 0x%X\n", status);
++         result = VK_ERROR_SURFACE_LOST_KHR;
++      } else {
++         ws->wsi.present_context_h = create.hContext;
++      }
++   }
++   *context_h = ws->wsi.present_context_h;
++   simple_mtx_unlock(&ws->wsi.present_lock);
++   return result;
++}
++
++/* wsi_device::win32.kmt_present: the OpenGL-ICD window present. Queue on the
++ * present context a GPU wait for the blit fence at wait_value, the present
++ * of the image's allocation, then a GPU signal at signal_value. dxgkrnl
++ * delivers the copy to the KMD's DxgkDdiPresent(Blt) with the destination it
++ * chose (redirection surface, primary or cross-adapter surface). */
++static VkResult
++radv_wddm2_wsi_kmt_present(VkDevice _device, VkDeviceMemory _memory, void *hwnd,
++                           VkExtent2D extent, uint32_t rect_count, const VkRect2D *rects,
++                           VkSemaphore _semaphore, uint64_t wait_value, uint64_t signal_value)
++{
++   VK_FROM_HANDLE(radv_device, device, _device);
++   VK_FROM_HANDLE(radv_device_memory, memory, _memory);
++   VK_FROM_HANDLE(vk_semaphore, semaphore, _semaphore);
++   struct radv_wddm2_winsys *ws = radv_wddm2_winsys(device->ws);
++   VkResult result = VK_SUCCESS;
++   NTSTATUS status;
++   uint32_t context_h;
++
++   if (!memory || !memory->bo || !semaphore)
++      return VK_ERROR_SURFACE_LOST_KHR;
++   struct vk_wddm2_monitored_fence *fence =
++      vk_sync_as_wddm2_monitored_fence(vk_semaphore_get_active_sync(semaphore));
++   if (!fence)
++      return VK_ERROR_FEATURE_NOT_PRESENT;
++   struct radv_wddm2_bo *bo = radv_wddm2_bo(memory->bo);
++
++   result = radv_wddm2_wsi_present_context(ws, &context_h);
++   if (result != VK_SUCCESS)
++      return result;
++
++   uint32_t fence_h = fence->handle;
++   D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait = {
++      .hContext = context_h,
++      .ObjectCount = 1,
++      .ObjectHandleArray = &fence_h,
++      .MonitoredFenceValueArray = &wait_value,
++   };
++   status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromGpu, &wait);
++   if (!NT_SUCCESS(status)) {
++      fprintf(stderr, "wddm2: present wait failed 0x%X\n", status);
++      /* Without the queued wait the signal below would run early; the
++       * chain is lost rather than the image presented out of order. */
++      return VK_ERROR_SURFACE_LOST_KHR;
++   }
++
++   RECT full = { 0, 0, (LONG)extent.width, (LONG)extent.height };
++   RECT sub_rects[16];
++   uint32_t sub_count = 0;
++   if (rect_count && rect_count <= ARRAY_SIZE(sub_rects)) {
++      for (uint32_t i = 0; i < rect_count; i++) {
++         sub_rects[i].left = rects[i].offset.x;
++         sub_rects[i].top = rects[i].offset.y;
++         sub_rects[i].right = rects[i].offset.x + (LONG)rects[i].extent.width;
++         sub_rects[i].bottom = rects[i].offset.y + (LONG)rects[i].extent.height;
++      }
++      sub_count = rect_count;
++   }
++
++   D3DKMT_PRESENT present = {
++      .hContext = context_h,
++      .hWindow = (HWND)hwnd,
++      .hSource = bo->base.handle,
++      .DstRect = full,
++      .SrcRect = full,
++      .SubRectCnt = sub_count,
++      .pSrcSubRects = sub_count ? sub_rects : NULL,
++      .Flags = {
++         .Blt = 1,
++         .DstRectValid = 1,
++         .SrcRectValid = 1,
++      },
++   };
++   status = BC250_WDDM_CALL(&ws->host, Present, &present);
++   if (!NT_SUCCESS(status)) {
++      static int reported;
++      if (reported < 8) {
++         reported++;
++         fprintf(stderr, "wddm2: D3DKMTPresent failed 0x%X (window %p, source 0x%x, %ux%u)\n",
++                 status, hwnd, bo->base.handle, extent.width, extent.height);
++      }
++      result = VK_ERROR_SURFACE_LOST_KHR;
++   } else if (ws->bc250_trace_submits) {
++      fprintf(stderr, "wddm2: D3DKMTPresent window %p source 0x%x %ux%u composition %u fence 0x%x %" PRIu64
++              " -> %" PRIu64 "\n", hwnd, bo->base.handle, extent.width, extent.height,
++              present.bOptimizeForComposition, fence_h, wait_value, signal_value);
++   }
++
++   /* Always queued: the rendering queue waits for signal_value. */
++   D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU signal = {
++      .hContext = context_h,
++      .ObjectCount = 1,
++      .ObjectHandleArray = &fence_h,
++      .MonitoredFenceValueArray = &signal_value,
++   };
++   status = BC250_WDDM_CALL(&ws->host, SignalSynchronizationObjectFromGpu, &signal);
++   if (!NT_SUCCESS(status)) {
++      fprintf(stderr, "wddm2: present signal failed 0x%X\n", status);
++      return VK_ERROR_DEVICE_LOST;
++   }
++   return result;
++}
++
+ void
+-radv_wddm2_wsi_init(struct radeon_winsys *ws, struct wsi_device *wsi)
++radv_wddm2_wsi_init(struct radeon_winsys *_ws, struct wsi_device *wsi)
+ {
+-   if (radv_wddm2_winsys(ws)->bc250) {
+-      wsi->sw = true;
+-      wsi->blit = NULL;
++   struct radv_wddm2_winsys *ws = radv_wddm2_winsys(_ws);
++
++   if (ws->bc250) {
++      /* BC250_WSI_CPU_PRESENT=1 keeps the CPU present path (diagnostic use).
++       * The hosted ICD keeps it too: host version 5 serves no Present. */
++      const char *cpu = getenv("BC250_WSI_CPU_PRESENT");
++      if ((cpu && cpu[0] == '1') || ws->host.dispatch) {
++         wsi->sw = true;
++         wsi->blit = NULL;
++         return;
++      }
++      wsi->sw = false;
++      wsi->blit = wsi_win32_kmt_blit;
++      wsi->win32.kmt_present = radv_wddm2_wsi_kmt_present;
+       return;
+    }
+    wsi->win32.get_d3d12_device = radv_wddm2_wsi_get_d3d12_device;
+@@ -83,6 +236,14 @@ radv_wddm2_wsi_init(struct radeon_winsys *ws, struct wsi_device *wsi)
+ void
+ radv_wddm2_wsi_finish(struct radv_wddm2_winsys *ws)
+ {
++   if (ws->wsi.present_context_h) {
++      D3DKMT_DESTROYCONTEXT destroy = {
++         .hContext = ws->wsi.present_context_h,
++      };
++      BC250_WDDM_CALL(&ws->host, DestroyContext, &destroy);
++      ws->wsi.present_context_h = 0;
++   }
++   simple_mtx_destroy(&ws->wsi.present_lock);
+    if (ws->wsi.d3d12_queue) {
+       ID3D12CommandQueue_Release((ID3D12CommandQueue *)ws->wsi.d3d12_queue);
+       ws->wsi.d3d12_queue = NULL;
+@@ -91,4 +252,4 @@ radv_wddm2_wsi_finish(struct radv_wddm2_winsys *ws)
+       ID3D12Device_Release((ID3D12Device *)ws->wsi.d3d12_device);
+       ws->wsi.d3d12_device = NULL;
+    }
+-}
+\ No newline at end of file
++}
+diff --git a/src/util/bc250_host_bootstrap.h b/src/util/bc250_host_bootstrap.h
+index c0888fd6..e2ab2649 100644
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -86,6 +86,9 @@ static inline int bc250_host_fence_valid(const struct bc250_host *host, uint64_t
+ #define BC250_HOST_SubmitCommandToHwQueue 42u
+ #define BC250_HOST_SubmitWaitForSyncObjectsToHwQueue 43u
+ #define BC250_HOST_SubmitSignalSyncObjectsToHwQueue 44u
++/* WSI window present (D3DKMTPresent with Flags.Blt). Host version 5 does not serve it;
++ * the hosted ICD keeps the CPU present path. */
++#define BC250_HOST_Present 45u
+ #define BC250_WDDM_CALL(host, name, argument) \
+    ((host)->dispatch ? (host)->dispatch((host)->userdata, BC250_HOST_##name, (void *)(argument)) : WDDM2_DISPATCH(name(argument)))
+ #endif
+diff --git a/src/vulkan/util/vk_internal_exts.h b/src/vulkan/util/vk_internal_exts.h
+index fb164432..45ecfcce 100644
+--- a/src/vulkan/util/vk_internal_exts.h
++++ b/src/vulkan/util/vk_internal_exts.h
+@@ -61,6 +61,9 @@ struct wsi_memory_allocate_info {
+      * GL driver in the X server).
+      */
+     bool dma_buf_sync_file;
++   /* Win32 KMT present path: the allocation is a presentable linear surface
++    * and the winsys describes its geometry to the kernel driver. */
++   bool present_surface;
+ };
+ 
+ /* To be chained into VkSurfaceCapabilities2KHR */
+diff --git a/src/vulkan/util/vk_wddm2_dispatch_table_gen.py b/src/vulkan/util/vk_wddm2_dispatch_table_gen.py
+index 140c3886..71a06ae3 100644
+--- a/src/vulkan/util/vk_wddm2_dispatch_table_gen.py
++++ b/src/vulkan/util/vk_wddm2_dispatch_table_gen.py
+@@ -252,6 +252,7 @@ def main():
+       ('CreateHwQueue', 'D3DKMT_CREATEHWQUEUE *arg'),
+       ('DestroyHwQueue', None),
+       ('SubmitCommand', None),
++      ('Present', 'D3DKMT_PRESENT *arg'),
+       ('SubmitCommandToHwQueue', None),
+       ('CreateAllocation2', 'D3DKMT_CREATEALLOCATION *arg'),
+       ('DestroyAllocation2', None),
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 1531a285..2a4042f1 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -423,6 +423,9 @@ get_blit_type(const struct wsi_device *wsi,
+          container_of(params, const struct wsi_dxgi_image_params, base);
+       return wsi_dxgi_image_needs_blit(wsi, dxgi_params, device);
+    }
++   case WSI_IMAGE_TYPE_KMT:
++      /* The application renders into the linear image that is presented. */
++      return WSI_SWAPCHAIN_NO_BLIT;
+ #endif
+ #if defined(VK_USE_PLATFORM_METAL_EXT)
+    case WSI_IMAGE_TYPE_METAL: {
+@@ -469,6 +472,11 @@ configure_image(const struct wsi_swapchain *chain,
+          container_of(params, const struct wsi_dxgi_image_params, base);
+       return wsi_dxgi_configure_image(chain, pCreateInfo, dxgi_params, info);
+    }
++   case WSI_IMAGE_TYPE_KMT: {
++      const struct wsi_kmt_image_params *kmt_params =
++         container_of(params, const struct wsi_kmt_image_params, base);
++      return wsi_kmt_configure_image(chain, pCreateInfo, kmt_params, info);
++   }
+ #endif
+ #if defined(VK_USE_PLATFORM_METAL_EXT)
+    case WSI_IMAGE_TYPE_METAL: {
+@@ -2708,8 +2716,12 @@ wsi_common_queue_present(const struct wsi_device *wsi,
+          struct wsi_image *image =
+             swapchain->get_wsi_image(swapchain, image_index);
+ 
+-         bool separate_queue_blit = swapchain->blit.type != WSI_SWAPCHAIN_NO_BLIT &&
+-                                    (swapchain->blit.queue != NULL || wsi->blit != NULL);
++         /* A driver-provided blit also covers swapchains without a Vulkan
++          * blit image (WSI_IMAGE_TYPE_KMT presents the linear image itself).
++          */
++         bool separate_queue_blit = wsi->blit != NULL ||
++                                    (swapchain->blit.type != WSI_SWAPCHAIN_NO_BLIT &&
++                                     swapchain->blit.queue != NULL);
+ 
+          /* For TIMING_QUEUE_FULL_EXT, ensure sync objects are signaled,
+           * but don't do any real work. */
+@@ -2804,8 +2816,9 @@ wsi_common_queue_present(const struct wsi_device *wsi,
+       if (results[i] != VK_SUCCESS)
+          continue;
+ 
+-      bool separate_queue_blit = swapchain->blit.type != WSI_SWAPCHAIN_NO_BLIT &&
+-                                 (swapchain->blit.queue != NULL || wsi->blit != NULL);
++      bool separate_queue_blit = wsi->blit != NULL ||
++                                 (swapchain->blit.type != WSI_SWAPCHAIN_NO_BLIT &&
++                                  swapchain->blit.queue != NULL);
+ 
+       if (!separate_queue_blit)
+          continue;
+diff --git a/src/vulkan/wsi/wsi_common.h b/src/vulkan/wsi/wsi_common.h
+index a23ca868..bbc57dce 100644
+--- a/src/vulkan/wsi/wsi_common.h
++++ b/src/vulkan/wsi/wsi_common.h
+@@ -146,6 +146,18 @@ struct wsi_device {
+       VkResult (*create_image_memory)(VkDevice device, void *resource,
+                                       const VkAllocationCallbacks *alloc,
+                                       VkDeviceMemory *out);
++      /* Window present without a D3D runtime device (the OpenGL ICD contract):
++       * the driver queues, on its own present context, a GPU wait for
++       * blit_semaphore at wait_value, D3DKMTPresent(hwnd, Flags.Blt) of the
++       * allocation behind memory (a linear image allocated with
++       * wsi_memory_allocate_info::present_surface), then a GPU signal of
++       * blit_semaphore at signal_value. The signal must be queued even when
++       * the present itself fails, or the presenting queue deadlocks.
++       * rects are in image pixels; rect_count 0 presents the whole image. */
++      VkResult (*kmt_present)(VkDevice device, VkDeviceMemory memory, void *hwnd,
++                              VkExtent2D extent, uint32_t rect_count,
++                              const VkRect2D *rects, VkSemaphore blit_semaphore,
++                              uint64_t wait_value, uint64_t signal_value);
+    } win32;
+ 
+    struct {
+@@ -277,6 +289,14 @@ struct wsi_device_options {
+    bool emulate_24as32;
+ };
+ 
++#ifdef _WIN32
++struct wsi_swapchain;
++/* wsi_device::blit for the Win32 KMT present path (set by the driver together
++ * with win32.kmt_present). */
++VkResult
++wsi_win32_kmt_blit(struct wsi_swapchain *chain, uint32_t image_index);
++#endif
++
+ VkResult
+ wsi_device_init(struct wsi_device *wsi,
+                 VkPhysicalDevice pdevice,
+diff --git a/src/vulkan/wsi/wsi_common_private.h b/src/vulkan/wsi/wsi_common_private.h
+index 44c72c18..8b68dd79 100644
+--- a/src/vulkan/wsi/wsi_common_private.h
++++ b/src/vulkan/wsi/wsi_common_private.h
+@@ -48,6 +48,7 @@ enum wsi_image_type {
+    WSI_IMAGE_TYPE_CPU,
+    WSI_IMAGE_TYPE_DRM,
+    WSI_IMAGE_TYPE_DXGI,
++   WSI_IMAGE_TYPE_KMT,
+    WSI_IMAGE_TYPE_METAL,
+ };
+ 
+@@ -78,6 +79,12 @@ struct wsi_dxgi_image_params {
+    bool storage_image;
+ };
+ 
++/* Win32 without a D3D runtime device: linear device-local images presented
++ * through the driver's D3DKMTPresent hook (wsi_device::win32.kmt_present). */
++struct wsi_kmt_image_params {
++   struct wsi_base_image_params base;
++};
++
+ typedef uint32_t (*wsi_memory_type_select_cb)(const struct wsi_device *wsi,
+                                               uint32_t type_bits);
+ 
+@@ -396,6 +403,12 @@ wsi_drm_configure_image(const struct wsi_swapchain *chain,
+                         const struct wsi_drm_image_params *params,
+                         struct wsi_image_info *info);
+ 
++VkResult
++wsi_kmt_configure_image(const struct wsi_swapchain *chain,
++                        const VkSwapchainCreateInfoKHR *pCreateInfo,
++                        const struct wsi_kmt_image_params *params,
++                        struct wsi_image_info *info);
++
+ VkResult
+ wsi_dxgi_configure_image(const struct wsi_swapchain *chain,
+                          const VkSwapchainCreateInfoKHR *pCreateInfo,
+diff --git a/src/vulkan/wsi/wsi_common_win32.cpp b/src/vulkan/wsi/wsi_common_win32.cpp
+index fd9e4c3d..2dfa28e7 100644
+--- a/src/vulkan/wsi/wsi_common_win32.cpp
++++ b/src/vulkan/wsi/wsi_common_win32.cpp
+@@ -86,6 +86,12 @@ struct wsi_win32_image {
+       int bmp_row_pitch;
+       void *ppvBits;
+    } sw;
++   struct {
++      /* Filled by wsi_win32_kmt_blit, reported by wsi_win32_queue_present. */
++      VkResult present_result;
++      uint64_t t_enter;
++      uint64_t t_blit;
++   } kmt;
+ };
+ 
+ struct wsi_win32_surface {
+@@ -118,6 +124,10 @@ struct wsi_win32_swapchain {
+    HWND wnd;
+    VkFormat format;
+    bool retired;
++   /* KMT present path (WSI_IMAGE_TYPE_KMT): the driver presents the linear
++    * swapchain allocation through D3DKMTPresent; no DIB, no DXGI. */
++   bool kmt;
++   bool kmt_dwmflush;
+    ID3D12Fence              **d3d12_blit_fences;
+    /* BC250_WSI_PRESENT_LOG=<file>: one CSV line per queued present with the
+     * time spent in the CPU copy, BitBlt/Present1 and DwmFlush. Diagnostics
+@@ -795,6 +805,159 @@ wsi_dxgi_configure_image(const struct wsi_swapchain *chain,
+    return VK_SUCCESS;
+ }
+ 
++static void
++wsi_win32_set_image_idle(struct wsi_win32_swapchain *chain,
++                         struct wsi_win32_image *image);
++static VkResult
++wsi_win32_complete_present(struct wsi_win32_swapchain *chain,
++                           uint64_t present_id, VkResult result);
++
++static VkResult
++wsi_kmt_create_image_mem(const struct wsi_swapchain *chain,
++                         const struct wsi_image_info *info,
++                         struct wsi_image *image)
++{
++   const struct wsi_device *wsi = chain->wsi;
++
++   VkMemoryRequirements reqs;
++   wsi->GetImageMemoryRequirements(chain->device, image->image, &reqs);
++
++   VkImageSubresource subres = {};
++   subres.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++   VkSubresourceLayout layout;
++   wsi->GetImageSubresourceLayout(chain->device, image->image, &subres, &layout);
++   assert(layout.offset == 0);
++
++   VkMemoryDedicatedAllocateInfo dedicated = {};
++   dedicated.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
++   dedicated.image = image->image;
++
++   /* The winsys describes this allocation as a presentable linear surface. */
++   struct wsi_memory_allocate_info wsi_alloc = {};
++   wsi_alloc.sType = VK_STRUCTURE_TYPE_WSI_MEMORY_ALLOCATE_INFO_MESA;
++   wsi_alloc.pNext = &dedicated;
++   wsi_alloc.present_surface = true;
++
++   VkMemoryAllocateInfo mem_info = {};
++   mem_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
++   mem_info.pNext = &wsi_alloc;
++   mem_info.allocationSize = reqs.size;
++   mem_info.memoryTypeIndex = wsi_select_device_memory_type(wsi, reqs.memoryTypeBits);
++
++   VkResult result = wsi->AllocateMemory(chain->device, &mem_info,
++                                         &chain->alloc, &image->memory);
++   if (result != VK_SUCCESS)
++      return result;
++
++   image->num_planes = 1;
++   image->sizes[0] = reqs.size;
++   image->row_pitches[0] = layout.rowPitch;
++   image->offsets[0] = 0;
++   return VK_SUCCESS;
++}
++
++VkResult
++wsi_kmt_configure_image(const struct wsi_swapchain *chain,
++                        const VkSwapchainCreateInfoKHR *pCreateInfo,
++                        const struct wsi_kmt_image_params *params,
++                        struct wsi_image_info *info)
++{
++   assert(params->base.image_type == WSI_IMAGE_TYPE_KMT);
++   assert(chain->blit.type == WSI_SWAPCHAIN_NO_BLIT);
++
++   VkResult result = wsi_configure_image(chain, pCreateInfo, 0, info);
++   if (result != VK_SUCCESS)
++      return result;
++
++   info->image_type = WSI_IMAGE_TYPE_KMT;
++   /* The kernel present copies a linear source; the application renders
++    * straight into it (one engine copy per present, none on the CPU). */
++   info->create.tiling = VK_IMAGE_TILING_LINEAR;
++   info->select_image_memory_type = wsi_select_device_memory_type;
++   info->create_mem = wsi_kmt_create_image_mem;
++   return VK_SUCCESS;
++}
++
++/* wsi_device::blit for KMT chains. The common present flow signals the blit
++ * semaphore at N on the rendering queue, calls this, then submits a wait for
++ * the value left in timeline_values before signalling the per-image fences.
++ * The present (GPU wait N, D3DKMTPresent, GPU signal N + 1 on the driver's
++ * present context) is issued here so that the signal is queued before the
++ * submit that waits for it. A failed present is reported by
++ * wsi_win32_queue_present; the driver queues the signal in every case, so
++ * the flow completes and the image returns to the application. */
++VkResult
++wsi_win32_kmt_blit(struct wsi_swapchain *drv_chain, uint32_t image_index)
++{
++   struct wsi_win32_swapchain *chain = (struct wsi_win32_swapchain *)drv_chain;
++   struct wsi_win32_image *image = &chain->images[image_index];
++   struct wsi_device *wsi_device = chain->wsi->wsi;
++
++   if (!chain->kmt)
++      return VK_ERROR_FEATURE_NOT_PRESENT;
++
++   image->kmt.t_enter = chain->present_log ? os_time_get_nano() : 0;
++   const uint64_t wait_value = chain->base.blit.timeline_values[image_index];
++   const uint64_t signal_value = ++chain->base.blit.timeline_values[image_index];
++   image->kmt.present_result =
++      wsi_device->win32.kmt_present(chain->base.device, image->base.memory, chain->wnd,
++                                    chain->extent, 0, NULL,
++                                    chain->base.blit.semaphores[image_index],
++                                    wait_value, signal_value);
++   image->kmt.t_blit = chain->present_log ? os_time_get_nano() : 0;
++   /* Only a lost device (no signal queued) stops the flow. */
++   return image->kmt.present_result == VK_ERROR_DEVICE_LOST ? VK_ERROR_DEVICE_LOST : VK_SUCCESS;
++}
++
++static VkResult
++wsi_win32_create_swapchain_kmt(VkDevice device,
++                               struct wsi_win32 *wsi,
++                               const VkSwapchainCreateInfoKHR *create_info,
++                               struct wsi_win32_swapchain *chain)
++{
++   for (unsigned i = 0; i < create_info->minImageCount; i++) {
++      VkSemaphoreTypeCreateInfo type_info = {};
++      type_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
++      type_info.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
++      VkSemaphoreCreateInfo sem_info = {};
++      sem_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
++      sem_info.pNext = &type_info;
++      VkResult result = wsi->wsi->CreateSemaphore(device, &sem_info, &chain->base.alloc,
++                                                  &chain->base.blit.semaphores[i]);
++      if (result != VK_SUCCESS)
++         return result;
++   }
++   const char *dwmflush = getenv("BC250_WSI_KMT_DWMFLUSH");
++   chain->kmt_dwmflush = dwmflush && dwmflush[0] == '1';
++   return VK_SUCCESS;
++}
++
++static VkResult
++wsi_win32_queue_present_kmt(struct wsi_win32_swapchain *chain,
++                            struct wsi_win32_image *image,
++                            uint64_t present_id)
++{
++   /* The present itself was queued by wsi_win32_kmt_blit. */
++   RECT rect;
++   VkResult result = image->kmt.present_result;
++   if (result == VK_SUCCESS) {
++      if (!GetClientRect(chain->wnd, &rect))
++         result = VK_ERROR_SURFACE_LOST_KHR;
++      else if ((uint32_t)(rect.right - rect.left) != chain->extent.width ||
++               (uint32_t)(rect.bottom - rect.top) != chain->extent.height)
++         result = VK_ERROR_OUT_OF_DATE_KHR;
++   }
++   if (result == VK_SUCCESS && chain->kmt_dwmflush && FAILED(DwmFlush()))
++      result = VK_ERROR_SURFACE_LOST_KHR;
++   if (chain->present_log)
++      wsi_win32_present_log(chain, "kmt", present_id, image->kmt.t_enter,
++                            image->kmt.t_enter, image->kmt.t_blit,
++                            os_time_get_nano(), result);
++
++   wsi_win32_set_image_idle(chain, image);
++   return wsi_win32_complete_present(chain, present_id, result);
++}
++
+ static VkResult
+ wsi_win32_image_init(VkDevice device_h,
+                      struct wsi_win32_swapchain *chain,
+@@ -811,7 +974,7 @@ wsi_win32_image_init(VkDevice device_h,
+    chain->wnd = win32_surface->hwnd;
+    image->chain = chain;
+ 
+-   if (chain->dxgi)
++   if (chain->dxgi || chain->kmt)
+       return VK_SUCCESS;
+ 
+    BITMAPINFO info = { 0 };
+@@ -1006,6 +1169,23 @@ wsi_win32_acquire_next_image(struct wsi_swapchain *drv_chain,
+    struct wsi_win32_swapchain *chain =
+       (struct wsi_win32_swapchain *)drv_chain;
+ 
++   if (chain->kmt) {
++      /* The image is idle for the CPU state machine as soon as its present
++       * was queued; the kernel copy completes on the GPU and signals the
++       * per-image fence through the second submit of the common flow. */
++      VkResult result = wsi_win32_acquire_idle_cpu_image(chain, info, image_index);
++      if (result != VK_SUCCESS)
++         return result;
++      VkFence fence = chain->base.fences[*image_index];
++      if (fence != VK_NULL_HANDLE &&
++          chain->wsi->wsi->WaitForFences(chain->base.device, 1, &fence, false,
++                                         info->timeout) != VK_SUCCESS) {
++         wsi_win32_set_image_idle(chain, &chain->images[*image_index]);
++         return VK_TIMEOUT;
++      }
++      return VK_SUCCESS;
++   }
++
+    /* acquire timeout has to be explicitly handled for sw wsi */
+    if (!chain->dxgi)
+       return wsi_win32_acquire_idle_cpu_image(chain, info, image_index);
+@@ -1153,6 +1333,9 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
+ 
+    const uint64_t t_enter = chain->present_log ? os_time_get_nano() : 0;
+ 
++   if (chain->kmt)
++      return wsi_win32_queue_present_kmt(chain, image, present_id);
++
+    if (chain->dxgi) {
+       VkResult result = wsi_win32_queue_present_dxgi(chain, image, damage);
+       const uint64_t t_blit = chain->present_log ? os_time_get_nano() : 0;
+@@ -1397,11 +1580,19 @@ wsi_win32_surface_create_swapchain(
+       { WSI_IMAGE_TYPE_CPU },
+    };
+ 
++   struct wsi_kmt_image_params kmt_image_params = {
++      { WSI_IMAGE_TYPE_KMT },
++   };
++
+    bool supports_dxgi = wsi->dxgi.factory &&
+                         wsi->dxgi.dcomp &&
+                         wsi->wsi->win32.get_d3d12_command_queue;
++   bool supports_kmt = !supports_dxgi && !wsi_device->sw &&
++                       wsi_device->win32.kmt_present &&
++                       wsi_device->blit == wsi_win32_kmt_blit;
+    struct wsi_base_image_params *image_params = supports_dxgi ?
+-      &dxgi_image_params.base : &cpu_image_params.base;
++      &dxgi_image_params.base : supports_kmt ? &kmt_image_params.base :
++      &cpu_image_params.base;
+ 
+    VkResult result = wsi_swapchain_init(wsi_device, &chain->base, device, create_info,
+                                         num_images, image_params, allocator);
+@@ -1423,7 +1614,7 @@ wsi_win32_surface_create_swapchain(
+                  "chain,path,present_id,enter_us,copy_us,blit_us,dwmflush_us,result\n",
+                  (void *)chain, create_info->imageExtent.width,
+                  create_info->imageExtent.height, (unsigned)create_info->imageFormat,
+-                 num_images, supports_dxgi ? "dxgi" : "gdi");
++                 num_images, supports_dxgi ? "dxgi" : supports_kmt ? "kmt" : "gdi");
+          fflush(chain->present_log);
+       }
+    }
+@@ -1448,6 +1639,11 @@ wsi_win32_surface_create_swapchain(
+       result = wsi_win32_surface_create_swapchain_dxgi(surface, device, wsi, create_info, chain);
+       if (result != VK_SUCCESS)
+          goto fail;
++   } else if (image_params->image_type == WSI_IMAGE_TYPE_KMT) {
++      chain->kmt = true;
++      result = wsi_win32_create_swapchain_kmt(device, wsi, create_info, chain);
++      if (result != VK_SUCCESS)
++         goto fail;
+    }
+ 
+    for (uint32_t image = 0; image < num_images; image++) {
+-- 
+2.27.0.windows.1
+

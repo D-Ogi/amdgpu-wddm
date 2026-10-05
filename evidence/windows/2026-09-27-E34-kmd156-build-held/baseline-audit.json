@@ -1,0 +1,31 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "parent": "19f0dfe",
+  "imports": [
+    "ede9a15",
+    "acf9c4c"
+  ],
+  "compared_existing_driver_and_third_party_files": 303,
+  "changed_existing": [
+    "driver/kmd/bc250kmd.inf",
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/dcn_translate.c",
+    "driver/kmd/dcn_translate.h",
+    "driver/kmd/test/dcn_translate_test.c",
+    "driver/kmd/wddm.c"
+  ],
+  "method": "git blob bytes versus candidate, CRLF normalized only",
+  "working_files": {
+    "driver/kmd/bc250kmd.inf": "7cf3ce93580277bb27b5ee5eb496868801e361e7be29f3ecf4946fe14858a04b",
+    "driver/kmd/bc250kmd_escape.h": "ee4f1a7d84228b7d243c0ebdcd2126baf56a7aab993700d8c59ed86afb4ff867",
+    "driver/kmd/gdi_private.h": "e6c3fbfb56e1f7301c487ac44b88355742eb05ba78e03a870dcbf244bddaaafd",
+    "driver/kmd/test/dcn_translate_test.c": "b4b842096afebffa3308a05d98ec9dbeab3752a5d0dc8c77efb57de35250ed46",
+    "driver/kmd/test/gfx_blt_test.c": "9b82881473d556f9effc25ce8994711ee26457d588c2e6caf19fa403ab6b6a4c",
+    "driver/kmd/wddm.c": "9cd60fe5511c9bec9ce3e8279c5a2d060f75b4f57e9c8ffd587282b8fedb8535",
+    "experiments/E34-native-d3d-zink/hosted-runtime/handle-identity-probe.md": "e35f1440766b84854b2daa373534ad869430ec9048326c79e23a4f545f97232f"
+  },
+  "patches": {
+    "acf9c4c.patch": "25f05a992e3132c4eb98b5d6c5b1a5c7e969668bff72541ddc4f8ff2ec6ed228",
+    "ede9a15.patch": "d3ebd6d8254759f0ab8a3d95be3c0659a89668a8f712ab629d3bf9e3f54e36ad"
+  }
+}

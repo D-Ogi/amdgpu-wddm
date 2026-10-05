@@ -1,0 +1,31 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_test.c
+Generowanie kodu...
+bc250_smu.c
+FAIL line 51: !m->pending && m->response==1
+FAIL line 51: !m->pending && m->response==1
+FAIL line 51: !m->pending && m->response==1
+FAIL line 51: !m->pending && m->response==1
+FAIL line 119: prepare(&m,&report)==-5
+FAIL line 119: !report.ready && !report.messages_completed
+FAIL line 120: m.messages==1 && m.writes==3 && !m.arg_reads
+FAIL line 121: m.last.response==0xff && m.last.status==-5 && !m.held
+FAIL line 51: !m->pending && m->response==1
+FAIL line 126: !report.ready && !report.messages_completed
+FAIL line 127: m.messages==1 && m.writes==3 && !m.arg_reads && !m.held
+FAIL line 128: m.last.response==0 && m.last.prior_response==1
+FAIL line 129: m.last.polls==(mode==2?4u:11u)
+FAIL line 51: !m->pending && m->response==1
+FAIL line 126: !report.ready && !report.messages_completed
+FAIL line 127: m.messages==1 && m.writes==3 && !m.arg_reads && !m.held
+FAIL line 128: m.last.response==0 && m.last.prior_response==1
+FAIL line 129: m.last.polls==(mode==2?4u:11u)
+FAIL line 51: !m->pending && m->response==1
+FAIL line 126: !report.ready && !report.messages_completed
+FAIL line 127: m.messages==1 && m.writes==3 && !m.arg_reads && !m.held
+FAIL line 128: m.last.response==0 && m.last.prior_response==1
+FAIL line 129: m.last.polls==(mode==2?4u:11u)
+SMU integrated clock: 726 checks, 23 failures

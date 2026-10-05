@@ -1,0 +1,5 @@
+Owner explicitly approved the prepared procedure after the automatic rejection, then reiterated full lab control. Fresh STOP check: no stop request. The original prepared script ran once, SSH exit0.
+
+Clock1000MHz, VID116/820mV; Tctl66C. All hardware gates verified closed before guard confirmation. PnP restart exit0, deviceOK/CM_PROB_NONE; Stage50, counter1. info/log exits0, version0x00070065; all gates remain closed. Boot before and after both2026-09-23T19:27:05.
+
+This restores display-only diagnostics, not full WDDM or KIQ acceptance. No deployment, Windows reboot or full GPU start. Original PLAN/source-review describe the state before approval; this separate result supersedes their pending execution state.

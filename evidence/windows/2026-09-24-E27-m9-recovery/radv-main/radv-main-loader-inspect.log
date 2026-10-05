@@ -1,0 +1,32 @@
+
+
+ProcessName     : dwm
+Id              : 4448
+CPU             : 331.578125
+Responding      : True
+StartTime       : 9/24/2026 1:58:18 PM
+MainWindowTitle : 
+
+
+
+{
+  "file_format_version": "1.0.0",
+  "ICD": {
+    "library_path": "C:\\BC250\\m9\\cache-intent-v2\\vulkan_radeon.dll",
+    "api_version": "1.4.0"
+  }
+}
+
+Name                Length
+----                ------
+radeon_icd.json        158
+vulkan_radeon.dll 23252992
+
+
+
+
+LastTaskResult : 3221225786
+LastRunTime    : 9/24/2026 2:34:34 PM
+
+
+

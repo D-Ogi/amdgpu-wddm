@@ -1,0 +1,442 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\build\bc250kmd-0797
+Deferred                                       srv*P:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.031 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 46
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [P:\bc-250\scratch\m9\0797-memory.dmp]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+Primary dump contents written successfully
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\bc-250\scratch\build\bc250kmd-0797
+Deferred                                       srv*P:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: P:\bc-250\scratch\build\bc250kmd-0797;srv*P:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Kernel Version 22621 MP (12 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS
+Edition build lab: 22621.1.amd64fre.ni_release.220506-1250
+Kernel base = 0xfffff800`12400000 PsLoadedModuleList = 0xfffff800`130135a0
+Debug session time: Wed Sep 23 13:00:07.431 2026 (UTC + 2:00)
+System Uptime: 0 days 0:08:22.707
+Loading Kernel Symbols
+...............................................................
+................................................................
+............................................................
+Loading User Symbols
+
+Loading unloaded module list
+.............
+For analysis of this file, run !analyze -v
+11: kd> .reload /f bc250kmd.sys
+11: kd> dd bc250kmd!g_LogNext L3
+fffff800`38b31788  000000ea 00000000 00000000
+11: kd> .writemem P:\bc-250\scratch\m9\0797-kernel-ring.bin bc250kmd!g_Log L0x2a000
+Writing 2a000 bytes....................................................................................
+11: kd> !analyze -v
+Loading Kernel Symbols
+...............................................................
+................................................................
+............................................................
+Loading User Symbols
+
+Loading unloaded module list
+.............
+*******************************************************************************
+*                                                                             *
+*                        Bugcheck Analysis                                    *
+*                                                                             *
+*******************************************************************************
+
+SYSTEM_THREAD_EXCEPTION_NOT_HANDLED (7e)
+This is a very common BugCheck.  Usually the exception address pinpoints
+the driver/function that caused the problem.  Always note this address
+as well as the link date of the driver/image that contains this address.
+Arguments:
+Arg1: ffffffffc0000005, The exception code that was not handled
+Arg2: fffff8001369a992, The address that the exception occurred at
+Arg3: ffffac08c90ca1f8, Exception Record Address
+Arg4: ffffac08c90c9a10, Context Record Address
+
+Debugging Details:
+------------------
+
+*** WARNING: Check Image - Checksum mismatch - Dump: 0x11fa74, File: 0x124b34 - P:\bc-250\scratch\symbols\dxgmms2.sys\43B0ECB8117000\dxgmms2.sys
+
+KEY_VALUES_STRING: 1
+
+    Key  : AV.Dereference
+    Value: NullPtr
+
+    Key  : AV.Type
+    Value: Read
+
+    Key  : Analysis.CPU.mSec
+    Value: 828
+
+    Key  : Analysis.Elapsed.mSec
+    Value: 859
+
+    Key  : Analysis.IO.Other.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Read.Mb
+    Value: 1
+
+    Key  : Analysis.IO.Write.Mb
+    Value: 0
+
+    Key  : Analysis.Init.CPU.mSec
+    Value: 296
+
+    Key  : Analysis.Init.Elapsed.mSec
+    Value: 619
+
+    Key  : Analysis.Memory.CommitPeak.Mb
+    Value: 102
+
+    Key  : Analysis.Version.DbgEng
+    Value: 10.0.29617.1000
+
+    Key  : Analysis.Version.Description
+    Value: 10.2604.29.1 amd64fre
+
+    Key  : Analysis.Version.Ext
+    Value: 1.2604.29.1
+
+    Key  : Bugcheck.Code.KiBugCheckData
+    Value: 0x7e
+
+    Key  : Bugcheck.Code.LegacyAPI
+    Value: 0x7e
+
+    Key  : Bugcheck.Code.TargetModel
+    Value: 0x7e
+
+    Key  : Dump.Attributes.AsUlong
+    Value: 0x1000
+
+    Key  : Dump.Attributes.DiagDataWrittenToHeader
+    Value: 1
+
+    Key  : Dump.Attributes.ErrorCode
+    Value: 0x0
+
+    Key  : Dump.Attributes.LastLine
+    Value: Dump completed successfully.
+
+    Key  : Dump.Attributes.ProgressPercentage
+    Value: 100
+
+    Key  : Failure.Bucket
+    Value: AV_dxgmms2!memcpy
+
+    Key  : Failure.Exception.Code
+    Value: 0xc0000005
+
+    Key  : Failure.Exception.IP.Address
+    Value: 0xfffff8001369a992
+
+    Key  : Failure.Exception.IP.Module
+    Value: dxgmms2
+
+    Key  : Failure.Exception.IP.Offset
+    Value: 0x1a992
+
+    Key  : Failure.Exception.Record
+    Value: 0xffffac08c90ca1f8
+
+    Key  : Failure.Hash
+    Value: {07d5c012-109f-967f-47c2-01fe06ae1434}
+
+    Key  : Faulting.IP.Type
+    Value: Paged
+
+    Key  : Hypervisor.Enlightenments.Value
+    Value: 0
+
+    Key  : Hypervisor.Enlightenments.ValueHex
+    Value: 0x0
+
+    Key  : Hypervisor.Flags.AnyHypervisorPresent
+    Value: 0
+
+    Key  : Hypervisor.Flags.ApicEnlightened
+    Value: 0
+
+    Key  : Hypervisor.Flags.ApicVirtualizationAvailable
+    Value: 1
+
+    Key  : Hypervisor.Flags.AsyncMemoryHint
+    Value: 0
+
+    Key  : Hypervisor.Flags.CoreSchedulerRequested
+    Value: 0
+
+    Key  : Hypervisor.Flags.CpuManager
+    Value: 0
+
+    Key  : Hypervisor.Flags.DeprecateAutoEoi
+    Value: 0
+
+    Key  : Hypervisor.Flags.DynamicCpuDisabled
+    Value: 0
+
+    Key  : Hypervisor.Flags.Epf
+    Value: 0
+
+    Key  : Hypervisor.Flags.ExtendedProcessorMasks
+    Value: 0
+
+    Key  : Hypervisor.Flags.HardwareMbecAvailable
+    Value: 1
+
+    Key  : Hypervisor.Flags.MaxBankNumber
+    Value: 0
+
+    Key  : Hypervisor.Flags.MemoryZeroingControl
+    Value: 0
+
+    Key  : Hypervisor.Flags.NoExtendedRangeFlush
+    Value: 0
+
+    Key  : Hypervisor.Flags.NoNonArchCoreSharing
+    Value: 0
+
+    Key  : Hypervisor.Flags.Phase0InitDone
+    Value: 0
+
+    Key  : Hypervisor.Flags.PowerSchedulerQos
+    Value: 0
+
+    Key  : Hypervisor.Flags.RootScheduler
+    Value: 0
+
+    Key  : Hypervisor.Flags.SynicAvailable
+    Value: 0
+
+    Key  : Hypervisor.Flags.UseQpcBias
+    Value: 0
+
+    Key  : Hypervisor.Flags.Value
+    Value: 16908288
+
+    Key  : Hypervisor.Flags.ValueHex
+    Value: 0x1020000
+
+    Key  : Hypervisor.Flags.VpAssistPage
+    Value: 0
+
+    Key  : Hypervisor.Flags.VsmAvailable
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.AccessStats
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.CrashdumpEnlightened
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.CreateVirtualProcessor
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.DisableHyperthreading
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.HostTimelineSync
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.HypervisorDebuggingEnabled
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.IsHyperV
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.LivedumpEnlightened
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.MapDeviceInterrupt
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.MceEnlightened
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.Nested
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.StartLogicalProcessor
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.Value
+    Value: 0
+
+    Key  : Hypervisor.RootFlags.ValueHex
+    Value: 0x0
+
+    Key  : SecureKernel.HalpHvciEnabled
+    Value: 0
+
+    Key  : WER.OS.Branch
+    Value: ni_release
+
+    Key  : WER.OS.Version
+    Value: 10.0.22621.1
+
+    Key  : WER.System.BIOSRevision
+    Value: 5.13.0.0
+
+
+BUGCHECK_CODE:  7e
+
+BUGCHECK_P1: ffffffffc0000005
+
+BUGCHECK_P2: fffff8001369a992
+
+BUGCHECK_P3: ffffac08c90ca1f8
+
+BUGCHECK_P4: ffffac08c90c9a10
+
+FILE_IN_CAB:  0797-memory.dmp
+
+DUMP_FILE_ATTRIBUTES: 0x1000
+
+FAULTING_THREAD:  ffffad84cac88040
+
+EXCEPTION_RECORD:  ffffac08c90ca1f8 -- (.exr 0xffffac08c90ca1f8)
+ExceptionAddress: fffff8001369a992 (dxgmms2!memcpy+0x0000000000000092)
+   ExceptionCode: c0000005 (Access violation)
+  ExceptionFlags: 00000000
+NumberParameters: 2
+   Parameter[0]: 0000000000000000
+   Parameter[1]: 0000000000000000
+Attempt to read from address 0000000000000000
+
+CONTEXT:  ffffac08c90c9a10 -- (.cxr 0xffffac08c90c9a10)
+rax=ffff990d1422a105 rbx=0000000001032ef7 rcx=ffff990d1422a105
+rdx=000066f2ebdd5efb rsi=0000000000000048 rdi=ffff990d1422a105
+rip=fffff8001369a992 rsp=ffffac08c90ca438 rbp=ffff990d1422a105
+ r8=0000000000001000  r9=0000000000000000 r10=0000000000000000
+r11=0000000000001000 r12=0000000001032ef7 r13=ffffad84d7db8380
+r14=0000000000001000 r15=0000000000000000
+iopl=0         nv up ei pl nz ac po cy
+cs=0010  ss=0000  ds=002b  es=002b  fs=0053  gs=002b             efl=00050213
+dxgmms2!memcpy+0x92:
+fffff800`1369a992 0f100411        movups  xmm0,xmmword ptr [rcx+rdx] ds:002b:00000000`00000000=????????????????????????????????
+Resetting default scope
+
+BLACKBOXBSD: 1 (!blackboxbsd)
+
+
+BLACKBOXNTFS: 1 (!blackboxntfs)
+
+
+BLACKBOXPNP: 1 (!blackboxpnp)
+
+
+BLACKBOXWINLOGON: 1 (!blackboxwinlogon) (!blackboxwinlogonnotify)
+
+
+PROCESS_NAME:  System
+
+READ_ADDRESS:  0000000000000000 
+
+ERROR_CODE: (NTSTATUS) 0xc0000005 - Instrukcja w 0x%p odwo a a si  do pami ci pod adresem 0x%p. Pami   nie mo e by  %s.
+
+EXCEPTION_CODE_STR:  c0000005
+
+EXCEPTION_PARAMETER1:  0000000000000000
+
+EXCEPTION_PARAMETER2:  0000000000000000
+
+EXCEPTION_STR:  0xc0000005
+
+IP_IN_PAGED_CODE: 
+dxgmms2!memcpy+92
+fffff800`1369a992 0f100411        movups  xmm0,xmmword ptr [rcx+rdx]
+
+STACK_TEXT:  
+ffffac08`c90ca438 fffff800`137707cd     : ffff996a`c9bd00df ffffad84`d645adc0 ffffac08`c90ca560 fffff800`1378a0f3 : dxgmms2!memcpy+0x92
+ffffac08`c90ca440 fffff800`13770a29     : ffffad84`d645adc0 ffffad84`d7db8380 ffff990d`1422a0bd 00000000`00000000 : dxgmms2!VIDMM_DMA_POOL::WriteDmaBufferToMinidump+0x38d
+ffffac08`c90ca4d0 fffff800`13764a30     : ffffad84`d645adc0 ffff990d`142053e5 ffff990d`14205b15 00000000`010574e7 : dxgmms2!VIDMM_DMA_POOL::WriteDmaHistoryToMinidump+0x1c5
+ffffac08`c90ca610 fffff800`136ad19d     : 00000000`01057c17 ffffac08`c90ca7c0 ffff990d`142053e5 00000000`00050286 : dxgmms2!VIDMM_GLOBAL::LogInformationToMinidump+0x19c
+ffffac08`c90ca680 fffff800`2a30eb1d     : 00000000`01057c17 00000000`00000003 00000000`00000003 00000000`40000000 : dxgmms2!VidMmLogInformationToMinidump+0x1d
+ffffac08`c90ca6c0 fffff800`2a30f650     : ffffad84`00000000 ffffad84`d661f010 00000000`0000000c 00000000`00000000 : dxgkrnl!TdrCollectDbgInfoStage1+0x84d
+ffffac08`c90ca800 fffff800`136c7ab6     : 00000000`0000000c ffffad84`c794b7b8 ffffad84`c794b7c0 ffffad84`c794b7c8 : dxgkrnl!TdrIsRecoveryRequired+0x140
+ffffac08`c90ca830 fffff800`1375789f     : ffffad84`d43bb000 00000000`00000000 ffffad84`d43bb000 00000000`00000000 : dxgmms2!VidSchiReportHwHang+0x5fe
+ffffac08`c90ca940 fffff800`1372e3b9     : 00000000`00000000 00000000`00000000 00000000`00007ce9 00000000`00989680 : dxgmms2!VidSchiCheckHwProgress+0x294bf
+ffffac08`c90ca9c0 fffff800`1368a6c1     : 00000000`00000000 ffffad84`d43bb000 ffffac08`c90caaf9 00000000`00000000 : dxgmms2!VidSchiWaitForSchedulerEvents+0x389
+ffffac08`c90caa90 fffff800`13737a75     : ffffad84`c8147600 ffffad84`d43bb000 ffffad84`c8147660 ffffad84`d02ca8c0 : dxgmms2!VidSchiScheduleCommandToRun+0x291
+ffffac08`c90cab60 fffff800`137379ea     : 00000000`00000000 fffff800`13737920 ffffad84`d43bb000 ffffad84`c36ff040 : dxgmms2!VidSchiRun_PriorityTable+0x35
+ffffac08`c90cabb0 fffff800`1270bbf7     : ffffad84`cac88040 fffff800`00000001 ffffad84`d43bb000 00000000`00000000 : dxgmms2!VidSchiWorkerThread+0xca
+ffffac08`c90cabf0 fffff800`128233a4     : ffffe680`64b74180 ffffad84`cac88040 fffff800`1270bba0 00000000`00000246 : nt!PspSystemThreadStartup+0x57
+ffffac08`c90cac40 00000000`00000000     : ffffac08`c90cb000 ffffac08`c90c5000 00000000`00000000 00000000`00000000 : nt!KiStartSystemThread+0x34
+
+
+SYMBOL_NAME:  dxgmms2!memcpy+92
+
+MODULE_NAME: dxgmms2
+
+IMAGE_NAME:  dxgmms2.sys
+
+IMAGE_VERSION:  10.0.22621.6199
+
+STACK_COMMAND: .cxr 0xffffac08c90c9a10 ; kb
+
+BUCKET_ID_FUNC_OFFSET:  92
+
+FAILURE_BUCKET_ID:  AV_dxgmms2!memcpy
+
+OS_VERSION:  10.0.22621.1
+
+BUILDLAB_STR:  ni_release
+
+OSPLATFORM_TYPE:  x64
+
+OSNAME:  Windows 10
+
+FAILURE_ID_HASH:  {07d5c012-109f-967f-47c2-01fe06ae1434}
+
+Followup:     MachineOwner
+---------
+
+11: kd> q
+quit:
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Kernel.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\stl.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Usb4Kd.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\windows.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\winrt.natvis'

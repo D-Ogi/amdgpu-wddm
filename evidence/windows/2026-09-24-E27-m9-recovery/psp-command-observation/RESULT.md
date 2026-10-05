@@ -1,0 +1,11 @@
+# M366 - Candidate116 PSP command observations prepared
+
+PROVENANCE: Linux amdgpu v6.18 commit7d0a66e4bb9081d75c82ec4957c50034cb0ea449, AMD MIT. Local ref/linux-src HEAD verified; source hashes attached.
+
+Local amdgpu_psp.c: MP0 11.0.8 sets autoload_supported=false andboot_time_tmr=false, selectingpsp_v11_0_8 forCYAN_SKILLFISH2. psp_resume calls psp_hw_start thenpsp_load_non_psp_fw; the load loop walks ucode entries andusespsp_execute_ip_fw_load. fw_load_skip_check handlesmissingfirmware/P2S/SMC/VF/autoloadMEC-JT cases,not a generic completed-cold-load exemptionforRLC. AUTOLOAD_RLC is gatedbyautoload_supported. psp_suspend terminatesTMR andstopsring. These sourcepaths are notproof of a working warmreset/reload onunitA; E28secondloadfailed and exactruntimekernelrevision wasnotverified.
+
+Current shim waits for its matching fence and checks response.status; these show PSPresponse completion,not firmwareexecution orRLCreadiness. Preserveall11commands andcurrentchecks. Candidate116KMDadds existing safeRLC_CNTL/GRBM_STATUS2 reads before/afterringcreate andaftereachidentifiedcommandlog,onlyFullWddm. NoPSPshimprotocolchange,newregisterwrite,reset,loadskip orchangedorder. Observations addlatency. Command snapshots persist withlaterstartup checkpoints ifPSP returns; a hangwithinPSPbeforepersistencemaystilllose newestin-memoryrecords.
+
+0.7.116.1 SYSBA276AA2AD486FB616A867CE4700AB98533411219DB4954310F2B0289A4C6926. WDKbuild and25packagecheckspass0errors/warnings. ExistingPSPshim test passes firmwarelayout/11commandpositive model and missingfence/refusedcommandcontrols; it doesnotexecute newKMD RLCreads orproveGPUfirmwarehealth. No artificialtest of log-stringplacementadded. Source review verifiesringobservations bracket realLOADonly,commandobservation follows matchingcommandlog before nextsubmission,PLANunchanged. Notdeployed; labremains115display-onlyboot07:07:39 fromM365.
+
+Next hardware: freshfirstcontrol/content andonewarmtrial with116;locatefirstRLCstatechange relative to ringcreate/TMR/SDMA/CP/RLCfirmwarecommands. Keepresetgate0 and115stagedGFXvisibility. Preserveevidence beforefailure-recovery,do not attribute causebeyond measuredinterval. FullM9warm/cache/DMA/alias/lifetime/performance acceptance remainsopen.

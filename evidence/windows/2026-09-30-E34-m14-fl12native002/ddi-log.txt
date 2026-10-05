@@ -1,0 +1,17 @@
+# Cpu: debugger events, trial-directory modules (paths only) and debug strings
+MODULE C:\BC250\m14\fl12native002\d3d11fl12.exe
+EXCEPTION 80000003 first=1
+MODULE C:\BC250\m14\fl12native002\bc250d3d-cpu.dll
+CHILD_EXIT 1 observed=1 tree_closed=1
+# Gpu: debugger events, trial-directory modules (paths only) and debug strings
+MODULE C:\BC250\m14\fl12native002\d3d11fl12.exe
+EXCEPTION 80000003 first=1
+MODULE C:\BC250\m14\fl12native002\amdgpu_wddm_d3d11.dll
+DEBUG M14: instance policy sparse=1 source=0 status=C0000034 result=00000000
+DEBUG M14: GetCaps type 151 not answered
+DEBUG M14: CalcPrivateDeviceSize Interface=000B0020 Version=00090000 Flags=00000040
+DEBUG M14: CreateDevice Interface=000B0020 Version=00090000 Flags=00000040
+MODULE C:\BC250\m14\fl12native002\amdgpu_wddm_dxvk.dll
+MODULE C:\BC250\m14\fl12native002\amdgpu_wddm_radv.dll
+DEBUG M14 engine warning: D3D11DeviceFeatures: Some formats not supported for resource sharing
+CHILD_EXIT 0 observed=1 tree_closed=1

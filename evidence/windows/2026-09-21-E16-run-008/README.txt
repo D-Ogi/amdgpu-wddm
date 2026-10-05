@@ -1,4 +1,4 @@
-E16 run 008, 2026-09-21: bc250kmd 0.7.8 (commit aaf8050), UMD stub package, frozen by tools/packagecheck (PASS)
+E16 run 008, 2026-09-21: bc250kmd 0.7.8 (commit 6968540), UMD stub package, frozen by tools/packagecheck (PASS)
 bc250kmd.sys sha256 prefix af0497b95c8ee6b9. Changes against 0.7.7: RotationSupport.Offset0, one-shot gate.
 
   22:38     install (gates closed), stage 61, confirmed; gate -Full 1.

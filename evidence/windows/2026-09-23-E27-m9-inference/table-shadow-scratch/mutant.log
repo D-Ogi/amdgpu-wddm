@@ -1,0 +1,17 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+FAIL line 202: actual && expected && ((actual->Known[i/64]>>(i%64))&1)==((expected->Known[i/64]>>(i%64))&1) && (!((expected->Known[i/64]>>(i%64))&1) || ((actual->Entries[i/8]>>((i%8)*8))&255)==((expected->Entries[i/8]>>((i%8)*8))&255))
+2434928 checks, 118403 failures: FAIL
+compile-check (kernel flags, same source, no link)
+
+paging_pt_shadow_test.exe exit code 1

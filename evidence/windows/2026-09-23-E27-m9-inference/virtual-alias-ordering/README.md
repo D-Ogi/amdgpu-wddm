@@ -1,0 +1,9 @@
+# Virtual cross-page alias ordering regression
+
+Actual WddmBuildVirtualTransfer constructs three83DWORD mapped-copy transactions in logical slice order. Synthetic known virtual translations describe either six disjoint physical pages or source[A,B,C] to destination[B,C,A]. Packet replay against a snapshot succeeds for disjoint pages and fails for the cycle, while the builder returns SUCCESS and reports all12288bytes processed. The first copy overwrites B before the second reads it. No hardware limitation or live OS occurrence is claimed.
+
+Command: build with `pwsh driver/shim/test/run_paging.ps1 -KmdRouting -Out P:/bc-250/scratch/build/virtual-alias-ordering`, then invoke that directory's `paging_packets.exe --virtual-alias-ordering`. Default15684checks pass. Explicit regression32checks/1failure, native exit1; only cycle byte comparison fails. Translator offset/identity controls, disjoint byte oracle, private packet coverage and lifetime release checks pass. This uses a synthetic translator and actual KMD builder/SDMA emitter; no actual OS root walk or GPU execution is tested.
+
+Production source unchanged this experiment. Next correction must schedule complete physical dependencies before publishing any virtual alias prefix. System-only graphs can reuse existing graph/band scheduling once captures come from the paging root. Local/table destinations need logical table-shadow publication tied to the accepted copy plan; simply forwarding a virtual graph to the physical publisher would lose those semantics. Mixed residency, unequal offsets and cross-callback endpoint lifetime remain part of the original M9 scope. Do not report this failing requirement as fixed.
+
+No lab mutation. Both configured TCP22routes remain unreachable; local sshd status is pending from owner. Installed candidate07101 runtime/checkpoints remain unobserved after owner-reported cold recovery.

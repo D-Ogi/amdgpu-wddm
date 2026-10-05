@@ -1,0 +1,71 @@
+{
+  "checks": [
+    {
+      "status": "PASS",
+      "seconds": 0.632444,
+      "name": "kmd-commands"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.3585575,
+      "name": "kmd-contract"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.2281555,
+      "name": "radv-contract"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.2349127,
+      "name": "umd-contract"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.8283545,
+      "name": "surface-layout"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.8580551,
+      "name": "blit-plan"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.2169948,
+      "name": "allocation-identity"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.864398,
+      "name": "gfx-copy"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.869567,
+      "name": "gfx-blt"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.9763593,
+      "name": "blob-abi"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.209619,
+      "name": "surface-control"
+    },
+    {
+      "status": "PASS",
+      "seconds": 0.5750423,
+      "name": "kmd-analysis"
+    },
+    {
+      "status": "PASS",
+      "seconds": 3.1765338,
+      "name": "umd-analysis"
+    }
+  ],
+  "status": "PASS",
+  "seconds": 10.0477165
+}

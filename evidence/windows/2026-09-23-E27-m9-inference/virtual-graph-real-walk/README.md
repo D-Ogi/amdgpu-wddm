@@ -1,0 +1,9 @@
+# Virtual graph actual page-table walk acceptance (host)
+
+The M291 graph byte oracle now runs18fixtures: disjoint copies, physical cycles and partial cycles, each at1024/384DWORD ring limits, each with synthetic, actual immediate-initialized, and actual queued-PTE-update translation. The latter two modes create the four-level table hierarchy through VidMmStartLayout and VidMmUpdatePageTable. Transfers resolve through the extracted production logical walker, graph builder and SDMA packet encoder. Byte replay checks all destination and untouched bytes, and scratch is overwritten between buffers.
+
+Queued mode starts with six disjoint physical pages. GfxPagingBuildUpdate constructs the remap; before publication the logical walker still resolves the old pages. WddmPublishPagingRecord accepts the commands and commits logical entries. Subsequent graph construction resolves the new PFNs although the retained GPU-visible CPU table image still resolves the original pages. The cycle byte oracle checks the resulting physical-copy schedule. No actual GPU execution, interrupt or OS callback lifetime is modeled here.
+
+Default16348checks PASS; focused --virtual-alias-ordering664checks PASS, exit0. Generated -OmitLogicalCommit control focused630checks/17failures, exit1, including wrong translations and cycle-byte corruption. Different totals reflect different emitted plans after the omitted remap, not an early successful exit. The control modifies extracted test code only. Mapping/shadow allocations are released at the end of real-walker cases.
+
+No production modification this experiment, so no new WDK build/deployment. M291 development image remains the latest built candidate. Both configured TCP22routes still fail; lab runtime and persisted checkpoints remain unobserved. General virtual local/mixed aliases, unequal offsets, allocation/plan costs and actual hardware/OS acceptance remain open.

@@ -1,0 +1,2 @@
+Microsoft-Windows-DxgKrnl 0xffffffffffffffff 5
+Microsoft-Windows-Kernel-Process 0x10 5

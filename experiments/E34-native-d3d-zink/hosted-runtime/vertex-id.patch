@@ -1,0 +1,55 @@
+--- a/src/gallium/drivers/zink/zink_compiler.c
++++ b/src/gallium/drivers/zink/zink_compiler.c
+@@ -5665,6 +5665,17 @@
+    }
+ }
+ 
++static bool
++lower_zero_base_vertex_id(nir_builder *b, nir_intrinsic_instr *intr, void *data)
++{
++   if (intr->intrinsic != nir_intrinsic_load_vertex_id_zero_base)
++      return false;
++   b->cursor = nir_before_instr(&intr->instr);
++   nir_def *value = nir_isub(b, nir_load_vertex_id(b), nir_load_first_vertex(b));
++   nir_def_replace(&intr->def, value);
++   return true;
++}
++
+ void
+ zink_shader_init(struct zink_screen *screen, struct zink_shader *zs)
+ {
+@@ -5697,6 +5708,9 @@
+    if (nir->info.stage < MESA_SHADER_FRAGMENT)
+       nir_gather_xfb_info_from_intrinsics(nir);
+    NIR_PASS(_, nir, fix_vertex_input_locations);
++   if (nir->info.stage == MESA_SHADER_VERTEX && screen->base.caps.draw_parameters)
++      NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_zero_base_vertex_id,
++               nir_metadata_control_flow, NULL);
+    nir_shader_gather_info(nir, nir_shader_get_entrypoint(nir));
+    scan_nir(screen, nir, zs);
+ 
+@@ -5896,24 +5910,11 @@
+    memcpy(&zs->info, &nir->info, sizeof(nir->info));
+ }
+ 
+-static bool
+-lower_zero_base_vertex_id(nir_builder *b, nir_intrinsic_instr *intr, void *data)
+-{
+-   if (intr->intrinsic != nir_intrinsic_load_vertex_id_zero_base)
+-      return false;
+-   b->cursor = nir_before_instr(&intr->instr);
+-   nir_def *value = nir_isub(b, nir_load_vertex_id(b), nir_load_first_vertex(b));
+-   nir_def_replace(&intr->def, value);
+-   return true;
+-}
+ 
+ void
+ zink_shader_finalize(struct pipe_screen *pscreen, struct nir_shader *nir, bool optimize)
+ {
+    struct zink_screen *screen = zink_screen(pscreen);
+-
+-   NIR_PASS(_, nir, nir_shader_intrinsics_pass, lower_zero_base_vertex_id,
+-            nir_metadata_control_flow, NULL);
+ 
+    nir_lower_tex_options tex_opts = {
+       .lower_invalid_implicit_lod = true,

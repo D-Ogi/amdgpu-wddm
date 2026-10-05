@@ -1,0 +1,46 @@
+é?AØè¨$ErrorActionPreference=Stop : The term 'é?AØè¨$ErrorActionPreference=Stop' is not 
+recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\BC250\tmp\shader-eviction07102-run.ps1:1 char:1
++ é?AØè¨$ErrorActionPreference='Stop'
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (é?AØè¨$ErrorActionPreference=Stop:String) [], Comm 
+   andNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+probe_hash=038010EB3E6220A12F66713BEC9B9DCC527646DA1AAE5E7D3880AADA2F467D9A
+boot_before=2026-09-23T19:27:05
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+20:10:41 Tctl 71.0 C (raw 781B0FEF)
+icd_hash=EA70D44045BF77867C9BE50EFB311E7CE7C83D01F4B527FB190E5BC8BD3F8306
+20:10:44 Tctl 71.0 C (raw 781B0FEF)
+20:10:47 Tctl 71.2 C (raw 785B0FEF)
+20:10:49 Tctl 71.2 C (raw 785B0FEF)
+20:10:52 Tctl 71.1 C (raw 783B0FEF)
+20:10:55 Tctl 71.0 C (raw 781B0FEF)
+20:10:57 Tctl 70.6 C (raw 77BB0FEF)
+20:11:00 Tctl 70.6 C (raw 77BB0FEF)
+20:11:03 Tctl 70.6 C (raw 77BB0FEF)
+20:11:05 Tctl 70.8 C (raw 77DB0FEF)
+20:11:08 Tctl 70.9 C (raw 77FB0FEF)
+20:11:10 Tctl 70.8 C (raw 77DB0FEF)
+20:11:13 Tctl 70.5 C (raw 779B0FEF)
+task_state=Ready
+type3-positive exit=0
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    256.7 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    189.6 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type3-evict exit=0
+eviction_witnesses=3 restored=3 expected=3
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    219.0 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    271.9 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0
+type3-stale exit=1
+eviction_witnesses=1 restored=1 expected=1
+EVICT_INPUT round=1 bytes=4194304
+coherency01  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0xd7bd083bb8a604c8 match=NO  t_submit_to_idle_us=    185.0 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+COHERENCY completed=1 mismatches=1
+memory_types_run_complete
+boot_after=2026-09-23T19:27:05

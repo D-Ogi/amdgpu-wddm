@@ -1,0 +1,66 @@
+staged_hashes_verified=13
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  [DEVICE_INTERFACE_REDACTED]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00201B50
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070087 (milestone 7 revision 135)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 60, flips 4670 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+22:14:15 Tctl 66.4 C (raw 737B0FEF)
+
+# Startup task body: apply the lab underclock as soon as bc250rd answers. At boot the scheduled task can run
+# before the driver service is up (seen after a bugcheck restart: the task failed once and the GPU stayed at
+# the firmware default of 1500 MHz), so retry instead of failing.
+#
+#   register (elevated, once):  powershell -File apply-clock.ps1 -Register
+param(
+    [int]$MHz = 1000,
+    [int]$MilliVolt = 820,
+    [int]$TimeoutSec = 180,
+    [switch]$Register
+)
+
+$cli = Join-Path $PSScriptRoot 'bc250rd_cli.exe'
+$log = Join-Path $PSScriptRoot 'apply-clock.log'
+
+if ($Register) {
+    $name = 'BC250 GPU clock 1000MHz 820mV'
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`" -MHz $MHz -MilliVolt $MilliVolt"
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
+    Register-ScheduledTask -TaskName $name -Action $action -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $principal -Force | Out-Null
+    "registered '$name'"
+    return
+}
+
+$deadline = (Get-Date).AddSeconds($TimeoutSec)
+$tries = 0
+do {
+    $tries++
+    $out = & $cli clock $MHz $MilliVolt 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Add-Content $log ((Get-Date).ToString('s') + " applied $MHz MHz $MilliVolt mV after $tries tries")
+        exit 0
+    }
+    Start-Sleep -Seconds 2
+} while ((Get-Date) -lt $deadline)
+Add-Content $log ((Get-Date).ToString('s') + " FAILED after $tries tries: " + (($out | Select-Object -Last 1) -as [string]))
+exit 1
+
+  Id ProcessName StartTime           
+  -- ----------- ---------           
+3756 bc250mon    9/24/2026 9:15:57 PM
+2040 dwm         9/24/2026 9:15:56 PM
+
+
+boot=2026-09-24T21:14:48
+backup_complete=2026-09-24T22:14:16
+no_service_device_or_task_state_changes

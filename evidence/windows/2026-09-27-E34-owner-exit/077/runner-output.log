@@ -1,0 +1,8 @@
+pid=268 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+pid=11648 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+child forced owner exit after GPU completion
+owner_exit=abrupt child_exit=42 survivor_pixels=29376
+PASS iterations=10 generations=1 parent_pixels=20480 child_pixels=20480 distinct_pids=11648,268
+
+
+

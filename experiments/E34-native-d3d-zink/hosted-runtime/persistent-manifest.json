@@ -1,0 +1,42 @@
+[
+  {
+    "path": "src/gallium/drivers/zink/zink_instance.py",
+    "before_sha256": "31dc81e35120b5f58336930ca26299b95d14831797779404c173ea68c6476e53",
+    "after_sha256": "d5ae53623ed1decdbd9985d1ff5dc2074b604b55897f3e7bad7cbeb2f67d1b81"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_program.c",
+    "before_sha256": "80a1285aa948e59666468a51192b1d0772dafeee41b14bcb841fd197be0bb1e1",
+    "after_sha256": "a66832a958d41e79b94bae658df7578f297b0f97217d9a1a34ca4ccc68cbd77e"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_public.h",
+    "before_sha256": "ca41c2efc15a6172b99c5caace1fb4a3e59d3efa475e9bd21e26bebf65d00faf",
+    "after_sha256": "e1034cf9868b4804dbd5e0ec4ae6692732413e212ae7d7db6a18f0e8b0621c65"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_screen.c",
+    "before_sha256": "975240c6600d1e285cfce33b9efae54b86ab9a89de9efa3321185e5dbcf40653",
+    "after_sha256": "001a35dd189d07dc8856b1016eb8fd02cc6f76c9389c854a25f1bb279ea9f2c7"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_types.h",
+    "before_sha256": "9f4295781c7647ddf11a56b88aed7f16a9d4610f3c99f2ba591cac7449709e95",
+    "after_sha256": "48d18578f940f057fd4b4a1890d70e070027f6c9e1ce43223342202cca95dc4f"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_sha256": "46b0ffb43e4fe6a40804cc9d089f16af673a1b3eb005d3aa50f47ac35e84699b",
+    "after_sha256": "22cb5ddc5ab67d043ee4206ded5378d374b9efd70cbc7065dd5548e08451312b"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/State.h",
+    "before_sha256": "7aaed63234cbc620769362a36a7fc4f215255ec1faa03e72b3e65bf56977bcb8",
+    "after_sha256": "5bb8574b049e4835921fd513af541c60c66c72b18154b6906f8ddde558eb4330"
+  },
+  {
+    "path": "src/gallium/targets/d3d10umd/d3d10_gdi.c",
+    "before_sha256": "2d22ce64dc7754a7d7839339036c47c5f8637ccdd548fb0ead48efc3dac86a1a",
+    "after_sha256": "59b5b419388dddaac3f1a7876b99ee40f2b0995e955882735fe367251af0aae5"
+  }
+]

@@ -1,0 +1,27 @@
+trace span 47.82 s, vsync interrupts 2865 (59.9/s)
+
+GPU DMA packets by process (execution Start->Stop):
+  ?                                n= 17076 busy= 44.662 s ( 93.4% of span) median=  0.365 ms p95= 11.088 ms max=  26.811 ms
+  "Unknown" (   4)                 n=  1429 busy=  0.115 s (  0.2% of span) median=  0.074 ms p95=  0.129 ms max=   0.924 ms
+
+Queue latency by process (QueuePacket Start->Stop, submit to completion):
+  "Unknown" (4512)                 n= 15616 median=  11.591 ms p95=  35.359 ms max=   74.204 ms
+  "Unknown" (2288)                 n=  4984 median=   1.621 ms p95=  13.455 ms max=   26.305 ms
+  "Unknown" (   4)                 n=  1429 median=   0.138 ms p95=   0.915 ms max=   14.612 ms
+  "Unknown" (6600)                 n=    50 median=   1.704 ms p95=  14.533 ms max=   19.858 ms
+  "Unknown" (14104)                n=    35 median=   1.007 ms p95=  14.067 ms max=   16.284 ms
+  "Unknown" (1792)                 n=    33 median=   1.160 ms p95=  13.033 ms max=   15.026 ms
+  "Unknown" (4880)                 n=    28 median=   1.619 ms p95=  14.714 ms max=   15.261 ms
+  "Unknown" (6164)                 n=    27 median=   0.923 ms p95=  10.963 ms max=   12.659 ms
+  "Unknown" (12032)                n=    26 median=   1.843 ms p95=  12.415 ms max=   16.001 ms
+  "Unknown" (10948)                n=    26 median=   1.861 ms p95=  11.546 ms max=   14.876 ms
+  "Unknown" (13632)                n=    25 median=   2.113 ms p95=  13.798 ms max=   15.005 ms
+  "Unknown" (1684)                 n=    23 median=   1.489 ms p95=  11.276 ms max=   15.892 ms
+  "Unknown" (4816)                 n=     1 median=   0.122 ms p95=   0.122 ms max=    0.122 ms
+
+GPU busy (union of all DMA packets) 39.497 s = 82.6% of span
+
+Presents by process:
+  "Unknown" (4512)                 n=  2563 rate=  53.6/s interval median=  17.76 ms p95=  25.86 ms p99=  34.85 ms max=   53.43 ms >50ms=1 >100ms=0 >250ms=0
+  "Unknown" (2288)                 n=  2492 rate=  52.1/s interval median=  16.90 ms p95=  32.76 ms p99=  34.32 ms max=   50.78 ms >50ms=1 >100ms=0 >250ms=0
+  "Unknown" (4816)                 n=1

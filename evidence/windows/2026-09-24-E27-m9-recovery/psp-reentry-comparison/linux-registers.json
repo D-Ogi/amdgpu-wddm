@@ -1,0 +1,68 @@
+{
+  "linux-first-load.log": [
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "r",
+      "value": "0x00000001",
+      "raw": "        modprobe-3207    [004] .....   166.103616: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000001"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "w",
+      "value": "0x00000000",
+      "raw": "        modprobe-3207    [004] .....   166.103616: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000000"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "r",
+      "value": "0x00000000",
+      "raw": "        modprobe-3207    [004] .....   166.103624: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000000"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "w",
+      "value": "0x00000001",
+      "raw": "        modprobe-3207    [004] .....   166.103624: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000001"
+    }
+  ],
+  "linux-unload-trace.log": [
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "r",
+      "value": "0x00000001",
+      "raw": "        modprobe-3334    [002] .....   292.500194: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000001"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "w",
+      "value": "0x00000000",
+      "raw": "        modprobe-3334    [002] .....   292.500195: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000000"
+    }
+  ],
+  "linux-second-load.log": [
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "r",
+      "value": "0x00000000",
+      "raw": "        modprobe-3464    [000] .....   459.713812: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000000"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "w",
+      "value": "0x00000000",
+      "raw": "        modprobe-3464    [000] .....   459.713813: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000000"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "r",
+      "value": "0x00000000",
+      "raw": "        modprobe-3464    [000] .....   459.713823: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000000"
+    },
+    {
+      "name": "mmRLC_CNTL",
+      "operation": "w",
+      "value": "0x00000001",
+      "raw": "        modprobe-3464    [000] .....   459.713824: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000001"
+    }
+  ]
+}

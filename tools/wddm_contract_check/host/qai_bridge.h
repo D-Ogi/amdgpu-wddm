@@ -58,6 +58,14 @@ struct bc250h_case {
 
 /* Start and stop the adapter the calls are made against. vram_enabled = 0 models a start with the
  * EnableVram gate closed, where wddm.c has no segment to declare. Returns 0 on success. */
+/* Explicit input only: this host harness cannot discover hardware geometry.
+ * The 8 GiB default retains the old fixture; 12/16 GiB fixtures are synthetic. */
+struct bc250h_geometry {
+    unsigned long long vram_length, vram_physical, vram_mc_base;
+    unsigned fb_width, fb_height, fb_pitch;
+};
+int bc250h_fixture_geometry(unsigned gib, struct bc250h_geometry* geometry);
+int bc250h_start_geometry(int vram_enabled, const struct bc250h_geometry* geometry);
 int  bc250h_start(int vram_enabled);
 void bc250h_stop(void);
 

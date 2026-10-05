@@ -1,0 +1,11 @@
+{
+  "driver/kmd/paging_private.h": "4928f4de28a5503a12ca27d85619a99f0b5775b56b16e2ed2b05c5564bf04ae5",
+  "driver/kmd/paging_private.c": "a0466a0639b82663b425462ad044d1e027980859c6395032502523cd51bae2cc",
+  "driver/kmd/test/paging_private_test.c": "d9149528857bce91da4a4b398133351158f628d02f9ce752cf54330027bf76ac",
+  "driver/kmd/test/run_paging_private.ps1": "08f0722f7335e42c22a23b43243a9d7ee6082ee939f8c89c2c8c7494802a3679",
+  "driver/kmd/gfx.c": "24b035a86d3a77a968d08ec0734298cf594e1eb9fbd99b162b2fe35eab7e8c63",
+  "driver/kmd/wddm.c": "5da62c21a6d7ebf3ff0044458f232b5d25a70379a9107013b68d20a79477844b",
+  "driver/shim/bc250_sdma.c": "fb1a82ab4389866718f35fd4ac654696acddad3b3e40a753d25143f544869520",
+  "driver/shim/include/bc250_sdma.h": "9ea6df2c991552aec22959e5b2674c3562cb5044211232498c2dc31269114a6e",
+  "scratch/build/bc250kmd-native-records-dev/package-umd/bc250kmd.sys": "962203be3d72f49469efd9f590a762cc6d15a10fe76a613fda7d2666f0f63b96"
+}

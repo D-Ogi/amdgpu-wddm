@@ -1,0 +1,21 @@
+retained_power_actual.c
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 160: WddmSuspendRetained(&d)==0 && w.Stopping && w.RetainedPowerPause
+FAIL 164: WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY && w.Stopping
+FAIL 165: WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY && w.Stopping
+FAIL 168: WddmResumeRetained(&d)==-9 && w.Stopping && w.RetainedPowerPause
+FAIL 169: WddmResumeRetained(&d)==0 && !w.Stopping && !w.RetainedPowerPause && d.DcnVsyncArmed
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 185: WddmResumeRetained(&d)==0 && w.VSyncArmed && arms==1 && !mmio
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 48: !lockHeld && observed->Stopping
+FAIL 186: WddmResumeRetained(&d)==0 && !d.DcnVsyncArmed && !arms
+Retained WDDM power: 188 checks, 19 failures

@@ -1,0 +1,21 @@
+The command completed successfully.
+The command completed successfully.
+
+Input
+----------------
+File(s):
+     C:\BC250\m9\candidate07143\d3d11-after.etl
+
+0.00%100.00%
+
+Output
+----------------
+DumpFile:           C:\BC250\m9\candidate07143\d3d11-after.xml
+
+Warning:
+Some events do not match the schema.
+Please rerun the command with -lr to get less restricted XML dump
+The command completed successfully.
+
+
+capture_complete=2026-09-25T00:34:14

@@ -1,0 +1,167 @@
+probe_hash=A8F942D3C9ACC41E4B29A3F4EA3478466F95E2617568BE7FDBFBC4A04F31C530
+driver_version=0.7.133.1
+installed_sha256=37A52F95CD90726D909FBF273D55B9336D766E2997668BA713B8ADC45BCF4A87
+
+
+CommittedBytes : 3372998656
+CommitLimit    : 42655780864
+AvailableBytes : 5109719040
+
+
+
+boot_before=2026-09-24T18:23:50
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+18:45:26 Tctl 66.5 C (raw 739B0FEF)
+launcher_pid=204
+18:45:28 Tctl 67.2 C (raw 745B0FEF)
+18:45:30 Tctl 67.5 C (raw 749B0FEF)
+18:45:32 Tctl 67.4 C (raw 747B0FEF)
+18:45:34 Tctl 67.4 C (raw 747B0FEF)
+18:45:36 Tctl 67.2 C (raw 745B0FEF)
+18:45:38 Tctl 67.1 C (raw 743B0FEF)
+18:45:40 Tctl 67.1 C (raw 743B0FEF)
+18:45:42 Tctl 67.0 C (raw 741B0FEF)
+18:45:45 Tctl 67.0 C (raw 741B0FEF)
+18:45:47 Tctl 67.0 C (raw 741B0FEF)
+18:45:49 Tctl 66.9 C (raw 73FB0FEF)
+18:45:51 Tctl 66.9 C (raw 73FB0FEF)
+18:45:53 Tctl 66.8 C (raw 73DB0FEF)
+18:45:55 Tctl 66.8 C (raw 73DB0FEF)
+18:45:57 Tctl 66.8 C (raw 73DB0FEF)
+18:45:59 Tctl 66.8 C (raw 73DB0FEF)
+18:46:01 Tctl 66.6 C (raw 73BB0FEF)
+18:46:03 Tctl 66.6 C (raw 73BB0FEF)
+18:46:05 Tctl 66.6 C (raw 73BB0FEF)
+18:46:07 Tctl 66.6 C (raw 73BB0FEF)
+18:46:09 Tctl 66.6 C (raw 73BB0FEF)
+18:46:11 Tctl 66.6 C (raw 73BB0FEF)
+18:46:13 Tctl 66.6 C (raw 73BB0FEF)
+18:46:15 Tctl 66.6 C (raw 73BB0FEF)
+18:46:17 Tctl 66.5 C (raw 739B0FEF)
+18:46:19 Tctl 66.5 C (raw 739B0FEF)
+18:46:21 Tctl 66.5 C (raw 739B0FEF)
+18:46:23 Tctl 66.5 C (raw 739B0FEF)
+18:46:25 Tctl 66.5 C (raw 739B0FEF)
+18:46:27 Tctl 66.6 C (raw 73BB0FEF)
+18:46:29 Tctl 66.6 C (raw 73BB0FEF)
+18:46:31 Tctl 66.6 C (raw 73BB0FEF)
+18:46:33 Tctl 66.6 C (raw 73BB0FEF)
+18:46:35 Tctl 66.6 C (raw 73BB0FEF)
+18:46:37 Tctl 66.6 C (raw 73BB0FEF)
+18:46:39 Tctl 66.6 C (raw 73BB0FEF)
+18:46:41 Tctl 66.6 C (raw 73BB0FEF)
+18:46:43 Tctl 66.6 C (raw 73BB0FEF)
+18:46:45 Tctl 66.6 C (raw 73BB0FEF)
+18:46:47 Tctl 66.6 C (raw 73BB0FEF)
+18:46:49 Tctl 66.6 C (raw 73BB0FEF)
+18:46:51 Tctl 66.6 C (raw 73BB0FEF)
+18:46:53 Tctl 66.6 C (raw 73BB0FEF)
+18:46:55 Tctl 66.6 C (raw 73BB0FEF)
+18:46:57 Tctl 66.6 C (raw 73BB0FEF)
+18:46:59 Tctl 66.6 C (raw 73BB0FEF)
+18:47:01 Tctl 66.6 C (raw 73BB0FEF)
+18:47:03 Tctl 66.6 C (raw 73BB0FEF)
+18:47:05 Tctl 66.8 C (raw 73DB0FEF)
+18:47:07 Tctl 66.9 C (raw 73FB0FEF)
+18:47:09 Tctl 66.9 C (raw 73FB0FEF)
+18:47:11 Tctl 66.9 C (raw 73FB0FEF)
+18:47:13 Tctl 66.9 C (raw 73FB0FEF)
+18:47:15 Tctl 66.8 C (raw 73DB0FEF)
+18:47:17 Tctl 66.8 C (raw 73DB0FEF)
+18:47:19 Tctl 66.8 C (raw 73DB0FEF)
+18:47:21 Tctl 66.8 C (raw 73DB0FEF)
+18:47:23 Tctl 66.8 C (raw 73DB0FEF)
+18:47:25 Tctl 66.8 C (raw 73DB0FEF)
+18:47:27 Tctl 66.8 C (raw 73DB0FEF)
+18:47:29 Tctl 66.8 C (raw 73DB0FEF)
+18:47:31 Tctl 66.8 C (raw 73DB0FEF)
+18:47:33 Tctl 66.8 C (raw 73DB0FEF)
+18:47:35 Tctl 66.8 C (raw 73DB0FEF)
+18:47:37 Tctl 66.8 C (raw 73DB0FEF)
+18:47:39 Tctl 66.8 C (raw 73DB0FEF)
+18:47:41 Tctl 66.8 C (raw 73DB0FEF)
+18:47:43 Tctl 66.9 C (raw 73FB0FEF)
+18:47:45 Tctl 66.9 C (raw 73FB0FEF)
+18:47:47 Tctl 66.9 C (raw 73FB0FEF)
+18:47:49 Tctl 66.9 C (raw 73FB0FEF)
+18:47:51 Tctl 66.9 C (raw 73FB0FEF)
+18:47:53 Tctl 66.9 C (raw 73FB0FEF)
+18:47:55 Tctl 66.9 C (raw 73FB0FEF)
+18:47:57 Tctl 66.9 C (raw 73FB0FEF)
+18:47:59 Tctl 66.9 C (raw 73FB0FEF)
+18:48:01 Tctl 66.9 C (raw 73FB0FEF)
+18:48:03 Tctl 66.9 C (raw 73FB0FEF)
+18:48:05 Tctl 66.9 C (raw 73FB0FEF)
+18:48:07 Tctl 66.9 C (raw 73FB0FEF)
+18:48:09 Tctl 66.9 C (raw 73FB0FEF)
+18:48:11 Tctl 66.9 C (raw 73FB0FEF)
+18:48:13 Tctl 66.9 C (raw 73FB0FEF)
+18:48:15 Tctl 66.9 C (raw 73FB0FEF)
+18:48:17 Tctl 66.9 C (raw 73FB0FEF)
+18:48:19 Tctl 66.9 C (raw 73FB0FEF)
+18:48:21 Tctl 66.9 C (raw 73FB0FEF)
+18:48:23 Tctl 66.9 C (raw 73FB0FEF)
+18:48:25 Tctl 66.9 C (raw 73FB0FEF)
+18:48:27 Tctl 66.9 C (raw 73FB0FEF)
+18:48:29 Tctl 66.9 C (raw 73FB0FEF)
+18:48:31 Tctl 66.9 C (raw 73FB0FEF)
+18:48:33 Tctl 66.9 C (raw 73FB0FEF)
+18:48:36 Tctl 66.9 C (raw 73FB0FEF)
+18:48:38 Tctl 66.9 C (raw 73FB0FEF)
+18:48:40 Tctl 66.9 C (raw 73FB0FEF)
+18:48:42 Tctl 66.9 C (raw 73FB0FEF)
+18:48:44 Tctl 66.9 C (raw 73FB0FEF)
+18:48:46 Tctl 66.9 C (raw 73FB0FEF)
+18:48:48 Tctl 66.9 C (raw 73FB0FEF)
+18:48:50 Tctl 66.9 C (raw 73FB0FEF)
+18:48:52 Tctl 67.0 C (raw 741B0FEF)
+18:48:54 Tctl 67.0 C (raw 741B0FEF)
+18:48:56 Tctl 66.9 C (raw 73FB0FEF)
+18:48:58 Tctl 66.9 C (raw 73FB0FEF)
+18:49:00 Tctl 66.9 C (raw 73FB0FEF)
+18:49:02 Tctl 67.0 C (raw 741B0FEF)
+18:49:04 Tctl 67.0 C (raw 741B0FEF)
+18:49:06 Tctl 67.0 C (raw 741B0FEF)
+18:49:08 Tctl 67.0 C (raw 741B0FEF)
+18:49:10 Tctl 67.0 C (raw 741B0FEF)
+18:49:12 Tctl 67.0 C (raw 741B0FEF)
+18:49:14 Tctl 67.0 C (raw 741B0FEF)
+18:49:16 Tctl 67.0 C (raw 741B0FEF)
+18:49:18 Tctl 67.0 C (raw 741B0FEF)
+18:49:20 Tctl 67.0 C (raw 741B0FEF)
+18:49:22 Tctl 67.0 C (raw 741B0FEF)
+18:49:24 Tctl 67.0 C (raw 741B0FEF)
+18:49:26 Tctl 67.0 C (raw 741B0FEF)
+18:49:28 Tctl 67.0 C (raw 741B0FEF)
+18:49:30 Tctl 67.0 C (raw 741B0FEF)
+18:49:32 Tctl 67.0 C (raw 741B0FEF)
+18:49:34 Tctl 67.0 C (raw 741B0FEF)
+18:49:36 Tctl 67.0 C (raw 741B0FEF)
+18:49:38 Tctl 67.0 C (raw 741B0FEF)
+18:49:40 Tctl 67.0 C (raw 741B0FEF)
+18:49:42 Tctl 67.0 C (raw 741B0FEF)
+18:49:44 Tctl 66.9 C (raw 73FB0FEF)
+D3DKMTFreeGpuVirtualAddress [gpu-readback] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-readback] 0x00000000  STATUS_SUCCESS
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [gpu-ib] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-ib]  0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENT_SET_RESULT PASS bytes=6442450944 samples=103 snapshots_only=1
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+gpu_probe_exit=0
+
+
+CommittedBytes : 3372335104
+CommitLimit    : 42655780864
+AvailableBytes : 5104906240
+
+
+
+boot_after=2026-09-24T18:23:50

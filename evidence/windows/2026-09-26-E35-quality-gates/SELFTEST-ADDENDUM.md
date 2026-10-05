@@ -1,0 +1,1 @@
+Additional negative-control assertion: the rejected uninitialized-value case must emit C6001 specifically. Two integration controls pass. Log SHA256 c0e230922429836148e3fca7e0f200cb8a0417db5391222aa2d1d2a892e317db.

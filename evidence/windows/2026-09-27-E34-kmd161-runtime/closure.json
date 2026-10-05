@@ -1,0 +1,40 @@
+{
+  "utc": "2026-09-27T09:32:01.6971503Z",
+  "version": "0.7.161.1",
+  "kmd_sha256": "40F7916FE24957666F392D5913EE70C7DCFEB1A23A121C39E6DB0ACE907B6FF1",
+  "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+  "icd_sha256": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+  "boot": "2026-09-26T18:44:31.5000000+02:00",
+  "dwm": [
+    {
+      "modules": [
+        {
+          "sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+          "name": "bc250d3d.dll"
+        }
+      ],
+      "pid": 7656,
+      "start": "2026-09-27T10:56:41.3869118+02:00"
+    }
+  ],
+  "health": "health abi=1 version=0x000700A1 flags=15 generation=601235525639 epoch=5 completed=444 age_ms=454 ready_ms=337301\r\n",
+  "clock": "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66500 ready=1\r\n",
+  "temperature": "11:32:08 Tctl 66.5 C (raw 739B0FEF)\r\n",
+  "test_processes": [],
+  "running_tasks": [
+    {
+      "TaskName": "BC250 monitor overlay",
+      "State": 4
+    },
+    {
+      "TaskName": "BC250 net watchdog",
+      "State": 4
+    }
+  ],
+  "gates": {
+    "EnableGpuPresentBlit": 0,
+    "EnableCddDwmInterop": 0,
+    "EnableHandleIdentityProbe": 1,
+    "UnconfirmedStarts": 0
+  }
+}

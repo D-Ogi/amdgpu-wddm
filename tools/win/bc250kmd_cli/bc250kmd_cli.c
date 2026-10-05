@@ -8,7 +8,10 @@
 //   bc250kmd_cli list                 every display adapter dxgkrnl knows, with its hardware id and LUID
 //   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
-//   bc250kmd_cli dpm [n [ms]]         the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
+//   bc250kmd_cli health read|confirm  the cached start-health witness, and its checked confirmation
+//   bc250kmd_cli clock read|set       one KMD clock sample, or a complete operating-point transaction
+//   bc250kmd_cli telemetry | vram     what the monitor's GPU line shows (bc250control.dll exports the same reads)
+//   bc250kmd_cli dpm [n [ms]]       the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
 //                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
@@ -272,8 +275,6 @@ static int Info(const WCHAR *wantedId)
 // Offsets are BAR5 byte offsets and come from tools/regcalc (on the target: bc250rd's reglist.txt), never from
 // memory. The driver checks them against its own generated tables, so a wrong one is refused, not executed.
 
-// With softwareOnly the escape carries NoAdapterSynchronization and nothing else: the typed snapshots (DPM) that
-// the driver answers without idling the adapter refuse any other flag combination.
 // Finds the adapter whose hardware id matches and opens it: 0 with *handle set, or 1 after reporting why not.
 static int OpenAdapterById(const WCHAR *wantedId, D3DKMT_HANDLE *handle, NTSTATUS *result)
 {
@@ -314,6 +315,8 @@ static void CloseAdapterHandle(D3DKMT_HANDLE adapter)
     D3DKMTCloseAdapter(&close);
 }
 
+// With softwareOnly the escape carries NoAdapterSynchronization and nothing else: the typed snapshots (DPM) that
+// the driver answers without idling the adapter refuse any other flag combination.
 static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int softwareOnly, NTSTATUS *result)
 {
     D3DKMT_HANDLE adapter = 0;
@@ -416,6 +419,464 @@ static void ReleaseHeldAdapter(void)
 static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
 {
     return SendEscapeFlags(wantedId, data, size, 0, result);
+}
+
+#ifdef BC250_CONTROL_DLL
+#define BC250_CONTROL_API __declspec(dllexport)
+#else
+#define BC250_CONTROL_API
+#endif
+// Shared implementation for CLI and direct monitor P/Invoke, no subprocess or
+// raw bc250rd fallback. A new adapter handle each call survives PnP replacement.
+BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
+    BC250_ESCAPE_CLOCK* data,ULONG bytes)
+{
+    NTSTATUS status=(NTSTATUS)0xC000000E; // STATUS_NO_SUCH_DEVICE before adapter lookup
+    if(!data || bytes!=sizeof(*data) || (op!=BC250_CLOCK_OP_READ && op!=BC250_CLOCK_OP_SET))
+        return (LONG)0xC000000D; // STATUS_INVALID_PARAMETER
+    memset(data,0,sizeof(*data));
+    data->Magic=BC250_ESCAPE_MAGIC;data->Command=BC250_ESCAPE_RUN_CLOCK;
+    data->AbiVersion=BC250_CLOCK_ABI;data->Op=op;
+    data->RequestedMHz=mhz;data->RequestedMv=mv;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),op!=BC250_CLOCK_OP_SET,&status))return status;
+    if(!NT_SUCCESS(status))return status;
+    if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
+    if(data->Status!=BC250_ESCAPE_STATUS_DONE || !data->Ready)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    return 0;
+}
+
+// READ is an adapter-owned software snapshot, never a hardware-idling diagnostic.
+BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULONGLONG epoch,
+    BC250_ESCAPE_START_HEALTH* data,ULONG bytes)
+{
+    NTSTATUS status=(NTSTATUS)0xC000000E;
+    typedef char HealthAbiSizeCheck[(sizeof(BC250_ESCAPE_START_HEALTH)==96)?1:-1];
+    (void)sizeof(HealthAbiSizeCheck);
+    if(!data || bytes!=sizeof(*data) ||
+       (op!=BC250_START_HEALTH_READ && op!=BC250_START_HEALTH_CONFIRM))
+        return (LONG)0xC000000D;
+    memset(data,0,sizeof(*data));
+    data->Magic=BC250_ESCAPE_MAGIC;data->Command=BC250_ESCAPE_RUN_START_HEALTH;
+    data->Status=BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion=BC250_START_HEALTH_ABI;data->Op=op;
+    data->ExpectedGeneration=generation;data->ExpectedEpoch=epoch;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),op!=BC250_START_HEALTH_CONFIRM,&status))return status;
+    if(!NT_SUCCESS(status))return status;
+    if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
+    if(data->Status!=BC250_ESCAPE_STATUS_DONE || data->NtStatus!=0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if(data->Magic!=BC250_ESCAPE_MAGIC || data->Command!=BC250_ESCAPE_RUN_START_HEALTH ||
+       data->AbiVersion!=BC250_START_HEALTH_ABI || data->Op!=op)
+        return (LONG)0xC000000D;
+    if(op==BC250_START_HEALTH_CONFIRM &&
+       (data->Generation!=generation || data->Epoch!=epoch || (data->Flags&(BC250_START_HEALTH_REQUIRED|BC250_START_HEALTH_CONFIRMED))!=(BC250_START_HEALTH_REQUIRED|BC250_START_HEALTH_CONFIRMED)))
+        return (LONG)0xC00000A3;
+    return 0;
+}
+
+static int StartHealth(int argc,wchar_t** argv)
+{
+    BC250_ESCAPE_START_HEALTH data;
+    ULONG op=BC250_START_HEALTH_READ;
+    ULONGLONG generation=0,epoch=0;
+    WCHAR* end;
+    LONG status;
+    if(argc==5 && !_wcsicmp(argv[2],L"confirm")) {
+        op=BC250_START_HEALTH_CONFIRM;
+        generation=_wcstoui64(argv[3],&end,10);if(*end || !generation || argv[3][0]==L'-')return 2;
+        epoch=_wcstoui64(argv[4],&end,10);if(*end || !epoch || argv[4][0]==L'-')return 2;
+    } else if(argc!=3 || _wcsicmp(argv[2],L"read"))return 2;
+    status=Bc250StartHealth(op,generation,epoch,&data,sizeof(data));
+    if(status<0){PrintStatus("KMD start health",status);return 1;}
+    printf("health abi=%lu version=0x%08lX flags=%lu generation=%llu epoch=%llu completed=%llu age_ms=%llu ready_ms=%llu\n",
+        data.AbiVersion,data.Version,data.Flags,data.Generation,data.Epoch,data.Completed,
+        data.LastCompletionAgeMs,data.ReadyAgeMs);
+    return 0;
+}
+
+static int Clock(int argc,wchar_t** argv)
+{
+    BC250_ESCAPE_CLOCK data;
+    ULONG op=BC250_CLOCK_OP_READ,mhz=0,mv=0;
+    WCHAR* end;
+    LONG status;
+    if(argc==5 && !_wcsicmp(argv[2],L"set")) {
+        op=BC250_CLOCK_OP_SET;
+        mhz=wcstoul(argv[3],&end,10);if(*end || argv[3][0]==L'-')return 2;
+        mv=wcstoul(argv[4],&end,10);if(*end || argv[4][0]==L'-')return 2;
+    } else if(argc!=3 || _wcsicmp(argv[2],L"read"))return 2;
+    status=Bc250ClockControl(op,mhz,mv,&data,sizeof(data));
+    if(status<0) { PrintStatus("KMD clock",status);return 1; }
+    printf("clock backend=kmd-smu abi=%lu MHz=%lu VID=%lu temperature_mc=%ld ready=%lu\n",
+        data.AbiVersion,data.ObservedMHz,data.ObservedVid,data.TemperatureMc,data.Ready);
+    if(op==BC250_CLOCK_OP_SET)
+        printf("clock request=%luMHz/%lumV initial=%luMHz/VID%lu expected_vid=%lu voltage_staged=%lu\n",
+            mhz,mv,data.InitialMHz,data.InitialVid,data.ExpectedVid,data.VoltageStaged);
+    return 0;
+}
+
+// ---- telemetry: the monitor's GPU line (tools/win/bc250mon/src/TelemetryProvider.cs) --------------------------
+//
+// Two read-only sources the monitor polls four times a second, so neither may cost a SetupAPI walk or an SMU
+// message per call:
+//   BC250_ESCAPE_RUN_DPM READ  the snapshot the KMD's clock governor publishes every 25 ms tick: temperature, the
+//                              SMU's clock readback and, from 0.7.177, the GRBM_STATUS busy share. Software state,
+//                              NoAdapterSynchronization=1, open to every caller (driver/kmd/dpm.c DpmRequest).
+//   D3DKMTQueryStatistics      dxgkrnl's own residency per segment: standard WDDM, whatever KMD is installed.
+// The adapter's interface path is looked up once and kept; every call still opens and closes its own adapter
+// handle, as the exports above do, so no handle outlives a driver update. A failed open looks the path up again.
+
+#ifndef BC250_ESCAPE_RUN_DPM
+// Only for a driver/kmd/bc250kmd_escape.h that predates the DPM escape (KMD 0.7.175 and later); this tree's header
+// defines it, so here the block drops out. It is the 0.7.177 definition under the header's own names;
+// tools/win/bc250mon/test_telemetry.py compares it with the header of the KMD that ships it.
+#define BC250_ESCAPE_RUN_DPM 23u
+#define BC250_DPM_ABI 1u
+#define BC250_DPM_OP_READ 0u
+#define BC250_DPM_FLAG_TEMPERATURE 128u
+#define BC250_DPM_FLAG_CLOCK 256u
+#define BC250_DPM_FLAG_HW_BUSY 512u
+typedef struct _BC250_ESCAPE_DPM {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Mode, Requested, Reason, Throttle;
+    unsigned long MaxMHz, CapMHz, TargetMHz, WantMHz;
+    unsigned long CurrentMHz, CurrentMv, ObservedMHz, ObservedVid;
+    long TemperatureMc;
+    unsigned long BusyPermille, BusyAvgPermille;
+    unsigned long Raises, Lowers, ThermalEvents, Errors, Resyncs;
+    unsigned long long Ticks;
+    unsigned long long BusyTime100ns;
+    unsigned long long UptimeMs;
+    unsigned long long Generation;
+    unsigned long long ExpectedGeneration;
+    unsigned long SubmitBusyPermille;
+    unsigned long SdmaBusyPermille;
+} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+#endif
+
+// The monitor's digest of dxgkrnl's segment statistics, not a KMD structure. Memory segments are what Task
+// Manager calls dedicated memory; aperture segments (the GART) are summed apart. Segment ids are zero-based.
+// tools/win/bc250mon/src/Driver.cs mirrors it; test_telemetry.py keeps the two equal.
+#define BC250_VIDEO_MEMORY_SEGMENTS 8u
+#define BC250_VIDEO_MEMORY_MAX_SEGMENTS 32u
+typedef struct _BC250_VIDEO_MEMORY {
+    ULONG Size;                             // sizeof(BC250_VIDEO_MEMORY)
+    ULONG Segments;                         // NbSegments; the first BC250_VIDEO_MEMORY_SEGMENTS are itemized
+    ULONG ApertureMask;                     // bit i: segment i is an aperture segment
+    ULONG LuidLow;
+    LONG LuidHigh;
+    ULONG Reserved;
+    ULONGLONG LocalResident, LocalCommitted, LocalLimit;    // memory segments, summed
+    ULONGLONG ApertureResident, ApertureLimit;              // aperture segments, summed
+    ULONGLONG DedicatedVideoMemory;         // KMTQAITYPE_GETSEGMENTSIZE, what DXGI reports; 0 when refused
+    ULONGLONG Resident[BC250_VIDEO_MEMORY_SEGMENTS];
+    ULONGLONG Committed[BC250_VIDEO_MEMORY_SEGMENTS];
+    ULONGLONG Limit[BC250_VIDEO_MEMORY_SEGMENTS];
+} BC250_VIDEO_MEMORY; // 264 bytes
+
+static NTSTATUS TelemetryEscape(void *data, unsigned size);
+static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
+static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
+
+// A limit can be "none": the development PC's RTX 4090 reports an aperture CommitLimit of 2^64-1 (2026-09-30).
+static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
+{
+    return a + b < a ? ~0ull : a + b;
+}
+
+// READ only: the overlay has no business confirming a DPM start. Never idles the scheduler, never reads a BAR.
+BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char DpmAbiSizeCheck[(sizeof(BC250_ESCAPE_DPM) == 160) ? 1 : -1];
+    (void)sizeof(DpmAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_DPM;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_DPM_ABI;
+    data->Op = BC250_DPM_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;         // a KMD before 0.7.175 refuses the command: DEVICE_NOT_READY
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_DPM ||
+        data->AbiVersion != BC250_DPM_ABI || data->Op != BC250_DPM_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// The CU mode snapshot (READ, any caller) and the boot-guard confirmation of a pending 40 CU start (CONFIRM, an
+// administrator with the Generation of a READ of this start). Both are adapter-owned software state answered with
+// NoAdapterSynchronization alone (bc250kmd_escape.h), like the DPM read: no BAR access, no scheduler idle.
+BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration, BC250_ESCAPE_CU_MODE *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char CuModeAbiSizeCheck[(sizeof(BC250_ESCAPE_CU_MODE) == 184) ? 1 : -1];
+    (void)sizeof(CuModeAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || (op != BC250_CU_MODE_OP_READ && op != BC250_CU_MODE_OP_CONFIRM))
+        return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_CU_MODE;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_CU_MODE_ABI;
+    data->Op = op;
+    data->ExpectedGeneration = op == BC250_CU_MODE_OP_CONFIRM ? expectedGeneration : 0;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_CU_MODE ||
+        data->AbiVersion != BC250_CU_MODE_ABI || data->Op != op)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// Any adapter by hardware id prefix (NULL or empty: the BC-250), so the same code has a positive control on a
+// GPU whose numbers Task Manager also shows.
+BC250_CONTROL_API LONG WINAPI Bc250VideoMemory(const WCHAR *hardwareId, BC250_VIDEO_MEMORY *data, ULONG bytes)
+{
+    D3DKMT_QUERYSTATISTICS query;
+    const D3DKMT_QUERYSTATISTICS_SEGMENT_INFORMATION *segment = &query.QueryResult.SegmentInformation;
+    LUID luid;
+    NTSTATUS status;
+    typedef char VideoMemorySizeCheck[(sizeof(BC250_VIDEO_MEMORY) == 264) ? 1 : -1];
+    (void)sizeof(VideoMemorySizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Size = sizeof(*data);
+    status = TelemetryAdapter(hardwareId && hardwareId[0] ? hardwareId : BC250_DEFAULT_HWID, &luid,
+                              &data->DedicatedVideoMemory);
+    if (!NT_SUCCESS(status)) return status;
+    data->LuidLow = luid.LowPart;
+    data->LuidHigh = luid.HighPart;
+    memset(&query, 0, sizeof(query));
+    query.Type = D3DKMT_QUERYSTATISTICS_ADAPTER;
+    query.AdapterLuid = luid;
+    status = TelemetryStatistics(&query);
+    if (!NT_SUCCESS(status)) return status;
+    data->Segments = query.QueryResult.AdapterInformation.NbSegments;
+    if (data->Segments > BC250_VIDEO_MEMORY_MAX_SEGMENTS) return (LONG)0xC000000D;     // not a count to loop over
+    for (ULONG i = 0; i < data->Segments; i++) {
+        memset(&query, 0, sizeof(query));
+        query.Type = D3DKMT_QUERYSTATISTICS_SEGMENT;
+        query.AdapterLuid = luid;
+        query.QuerySegment.SegmentId = i;
+        status = TelemetryStatistics(&query);
+        if (!NT_SUCCESS(status)) return status;
+        if (segment->Aperture) {
+            data->ApertureResident += segment->BytesResident;
+            data->ApertureLimit = SaturatingAdd(data->ApertureLimit, segment->CommitLimit);
+        } else {
+            data->LocalResident += segment->BytesResident;
+            data->LocalCommitted += segment->BytesCommitted;
+            data->LocalLimit = SaturatingAdd(data->LocalLimit, segment->CommitLimit);
+        }
+        if (i < BC250_VIDEO_MEMORY_SEGMENTS) {
+            if (segment->Aperture) data->ApertureMask |= 1u << i;
+            data->Resident[i] = segment->BytesResident;
+            data->Committed[i] = segment->BytesCommitted;
+            data->Limit[i] = segment->CommitLimit;
+        }
+    }
+    return 0;
+}
+
+// ---- telemetry: adapter access --------------------------------------------------------------------------------
+
+static SRWLOCK g_TelemetryLock = SRWLOCK_INIT;
+static BC250_ADAPTER g_TelemetryAdapters[16];      // FindAdapters' list, 40 KB: not on a caller's stack
+static WCHAR g_TelemetryId[128], g_TelemetryPath[512];
+static ULONGLONG g_TelemetryMiss;                   // GetTickCount64 of the last lookup that found nothing to open
+
+// With g_TelemetryLock held. The path is resolved once per hardware id; a failed open of a cached path resolves
+// it again at once (the device was replaced). An adapter that is not there, or does not open (another PC, or
+// ours between a PnP stop and start), is looked for again at most every two seconds: one SetupAPI walk costs
+// ~0.7 ms of CPU, a cached open plus four statistics queries ~6 us (development PC, 2026-09-30).
+static NTSTATUS TelemetryOpenLocked(const WCHAR *wantedId, D3DKMT_OPENADAPTERFROMDEVICENAME *open)
+{
+    NTSTATUS status = (NTSTATUS)0xC000000E;         // STATUS_NO_SUCH_DEVICE
+    for (int attempt = 0; attempt < 2; attempt++) {
+        ULONGLONG now = GetTickCount64();
+        int fresh = 0;
+        if (!g_TelemetryPath[0] || _wcsicmp(g_TelemetryId, wantedId)) {
+            int count, chosen = -1;
+            if (!_wcsicmp(g_TelemetryId, wantedId) && now - g_TelemetryMiss < 2000) return status;
+            count = FindAdapters(g_TelemetryAdapters, 16);
+            for (int i = 0; i < count && chosen < 0; i++)
+                if (MatchesHardwareId(g_TelemetryAdapters[i].HardwareId, wantedId)) chosen = i;
+            wcsncpy_s(g_TelemetryId, 128, wantedId, _TRUNCATE);
+            g_TelemetryPath[0] = 0;
+            if (chosen < 0) { g_TelemetryMiss = now; return status; }
+            wcscpy_s(g_TelemetryPath, 512, g_TelemetryAdapters[chosen].InterfacePath);
+            fresh = 1;
+        }
+        memset(open, 0, sizeof(*open));
+        open->pDeviceName = g_TelemetryPath;
+        status = D3DKMTOpenAdapterFromDeviceName(open);
+        if (NT_SUCCESS(status)) return status;
+        g_TelemetryPath[0] = 0;
+        if (fresh) { g_TelemetryMiss = now; return status; }
+        g_TelemetryMiss = 0;                        // a cached path went stale: look again now
+    }
+    return status;
+}
+
+static NTSTATUS TelemetryEscape(void *data, unsigned size)
+{
+    D3DKMT_OPENADAPTERFROMDEVICENAME open;
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_ESCAPE escape = { 0 };
+    NTSTATUS status;
+
+    AcquireSRWLockExclusive(&g_TelemetryLock);
+    status = TelemetryOpenLocked(BC250_DEFAULT_HWID, &open);
+    if (NT_SUCCESS(status)) {
+        escape.hAdapter = open.hAdapter;
+        escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
+        escape.Flags.NoAdapterSynchronization = 1;  // a software snapshot: the KMD refuses every other flag
+        escape.pPrivateDriverData = data;
+        escape.PrivateDriverDataSize = size;
+        status = D3DKMTEscape(&escape);
+        close.hAdapter = open.hAdapter;
+        D3DKMTCloseAdapter(&close);
+    }
+    ReleaseSRWLockExclusive(&g_TelemetryLock);
+    return status;
+}
+
+static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated)
+{
+    D3DKMT_OPENADAPTERFROMDEVICENAME open;
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_QUERYADAPTERINFO info = { 0 };
+    D3DKMT_SEGMENTSIZEINFO sizes = { 0 };
+    NTSTATUS status;
+
+    AcquireSRWLockExclusive(&g_TelemetryLock);
+    status = TelemetryOpenLocked(wantedId, &open);
+    if (NT_SUCCESS(status)) {
+        *luid = open.AdapterLuid;
+        info.hAdapter = open.hAdapter;
+        info.Type = KMTQAITYPE_GETSEGMENTSIZE;      // answered by dxgkrnl from the segment list, not by the KMD
+        info.pPrivateDriverData = &sizes;
+        info.PrivateDriverDataSize = sizeof(sizes);
+        if (NT_SUCCESS(D3DKMTQueryAdapterInfo(&info))) *dedicated = sizes.DedicatedVideoMemorySize;
+        close.hAdapter = open.hAdapter;
+        D3DKMTCloseAdapter(&close);
+    }
+    ReleaseSRWLockExclusive(&g_TelemetryLock);
+    return status;
+}
+
+static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query)
+{
+    return D3DKMTQueryStatistics(query);
+}
+
+// ---- the control application's reads (tools/win/amdgpu_wddm_control) ------------------------------------------
+
+// The GPU DWM interop decision of this start (driver/kmd/interop.c): software state, open to every caller. The control
+// application (tools/win/amdgpu_wddm_control) shows from it whether the desktop composes through the GPU path.
+BC250_CONTROL_API LONG WINAPI Bc250Interop(BC250_ESCAPE_INTEROP *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char InteropAbiSizeCheck[(sizeof(BC250_ESCAPE_INTEROP) == 104) ? 1 : -1];
+    (void)sizeof(InteropAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_INTEROP;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_INTEROP_ABI;
+    data->Op = BC250_INTEROP_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_INTEROP ||
+        data->AbiVersion != BC250_INTEROP_ABI || data->Op != BC250_INTEROP_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// One page of the driver log ring from sequence `from` on, GET_LOG with NoAdapterSynchronization alone: answered by
+// 0.7.184.1 and later without the adapter lock, so a bug report taken while a game runs does not stall it (BD-054).
+// No HardwareAccess fallback and no LOG_SUMMARY here: both take the adapter lock. An older driver refuses with
+// STATUS_DEVICE_NOT_READY, and the caller says so.
+BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char LogAbiSizeCheck[(sizeof(BC250_ESCAPE_LOG) == 60 + 64 * 168) ? 1 : -1];
+    (void)sizeof(LogAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || from == BC250_LOG_FROM_SUMMARY) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_GET_LOG;
+    data->From = from;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_GET_LOG ||
+        data->Returned > BC250_LOG_MAX_LINES)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// "telemetry [count [interval ms]]": what the monitor's GPU line is made of, one line per sample.
+// "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
+static int Telemetry(int argc, wchar_t **argv)
+{
+    BC250_ESCAPE_DPM d;
+    BC250_VIDEO_MEMORY m;
+    unsigned long count = argc >= 3 ? wcstoul(argv[2], NULL, 10) : 1, interval = argc >= 4 ? wcstoul(argv[3], NULL, 10) : 1000;
+    LONG status;
+    int failed = 0;
+    if (count == 0) count = 1;
+    for (unsigned long i = 0; i < count; i++) {
+        if (i) Sleep(interval);
+        status = Bc250Dpm(&d, sizeof(d));
+        failed |= status < 0;
+        if (status < 0) PrintStatus("dpm", status);
+        else
+            printf("dpm version=0x%08lX flags=0x%lX temperature_c=%.1f%s gfx_mhz=%lu%s busy_pct=%.1f avg_pct=%.1f src=%s "
+                   "submit_pct=%.1f\n", d.Version, d.Flags, d.TemperatureMc / 1000.0,
+                   (d.Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "(stale)", d.ObservedMHz,
+                   (d.Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d.BusyPermille / 10.0, d.BusyAvgPermille / 10.0,
+                   (d.Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d.SubmitBusyPermille / 10.0);
+        status = Bc250VideoMemory(NULL, &m, sizeof(m));
+        failed |= status < 0;
+        if (status < 0) PrintStatus("vram", status);
+        else
+            printf("vram segments=%lu local_resident_mb=%llu local_limit_mb=%llu dedicated_mb=%llu aperture_resident_mb=%llu "
+                   "aperture_limit_mb=%llu\n", m.Segments, m.LocalResident >> 20, m.LocalLimit >> 20,
+                   m.DedicatedVideoMemory >> 20, m.ApertureResident >> 20, m.ApertureLimit >> 20);
+    }
+    return failed ? 1 : 0;
+}
+
+static int VideoMemory(const WCHAR *wantedId)
+{
+    BC250_VIDEO_MEMORY m;
+    LONG status = Bc250VideoMemory(wantedId, &m, sizeof(m));
+    if (status < 0) { PrintStatus("vram", status); return 1; }
+    printf("# adapter luid %08lX-%08lX, %lu segment(s), dedicated %llu bytes (KMTQAITYPE_GETSEGMENTSIZE)\n",
+           (unsigned long)m.LuidHigh, m.LuidLow, m.Segments, m.DedicatedVideoMemory);
+    for (ULONG i = 0; i < m.Segments && i < BC250_VIDEO_MEMORY_SEGMENTS; i++)
+        printf("segment %lu %-8s resident %llu committed %llu limit %llu\n", i,
+               (m.ApertureMask & (1u << i)) ? "aperture" : "memory", m.Resident[i], m.Committed[i], m.Limit[i]);
+    printf("memory   resident %llu committed %llu limit %llu\naperture resident %llu limit %llu\n",
+           m.LocalResident, m.LocalCommitted, m.LocalLimit, m.ApertureResident, m.ApertureLimit);
+    return 0;
 }
 
 static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
@@ -902,7 +1363,11 @@ static int Dcn(void)
     printf("             DCHUBP_CNTL 0x%08lX / 0x000F1002\n", d.Hubp0Cntl);
     printf("otg0         OTG_CONTROL 0x%08lX / 0x80011311, master enable %s / ENABLED\n", d.Otg0Control,
            d.Otg0MasterEnable ? "ENABLED" : "off");
-    printf("             h_total %lu / 2079, v_total %lu / 1234\n", d.Otg0HTotal, d.Otg0VTotal);
+    // Both registers hold the total minus one, as display_timing.h reads them: print the field with the
+    // Linux reference next to it, then the mode it means. The bare name "h_total" on the field value put a
+    // 2079 by 1234 mode into a write-up once (E54).
+    printf("             OTG_H_TOTAL field %lu / 2079, OTG_V_TOTAL field %lu / 1234 (h_total %lu, v_total %lu)\n",
+           d.Otg0HTotal, d.Otg0VTotal, d.Otg0HTotal + 1, d.Otg0VTotal + 1);
     printf("             vblank interrupt enable (GLOBAL_SYNC_STATUS bit 12) %s (no Linux reference for this bit alone)\n",
            d.Otg0VblankIntEnabled ? "on" : "off");
     printf("             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) %s (docs/design/vsync-interrupt-route.md: latches\n"
@@ -979,7 +1444,7 @@ static int DcnFlip(const WCHAR *physText, const WCHAR *fillWord, const WCHAR *fi
 // the CPU, that never touches the WDDM table. Needs the same gates as `fence s0 ... test` (EnableGfx, a bring-up
 // that has reached stage 7) plus EnableVramWrite. bytes defaults to 4096, up to BC250_SDMACOPY_MAX_BYTES (64 KiB).
 
-static int SdmaCopy(const WCHAR *bytesText)
+static int SdmaCopy(const WCHAR *bytesText, int indirect)
 {
     static BC250_ESCAPE_SDMACOPY s;
     NTSTATUS status;
@@ -987,7 +1452,7 @@ static int SdmaCopy(const WCHAR *bytesText)
 
     memset(&s, 0, sizeof(s));
     s.Magic = BC250_ESCAPE_MAGIC;
-    s.Command = BC250_ESCAPE_RUN_SDMACOPY;
+    s.Command = indirect ? BC250_ESCAPE_RUN_SDMAIB : BC250_ESCAPE_RUN_SDMACOPY;
     if (bytesText != NULL) {
         s.Bytes = wcstoul(bytesText, &end, 0);
         if (*end || s.Bytes == 0 || s.Bytes > BC250_SDMACOPY_MAX_BYTES) {
@@ -1001,7 +1466,7 @@ static int SdmaCopy(const WCHAR *bytesText)
     if (s.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
     if (s.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no sdmacopy command\n"); return 3; }
 
-    printf("sdmacopy %lu bytes: %s, NTSTATUS 0x%08lX %s, result %ld\n", s.Bytes != 0 ? s.Bytes : BC250_SDMACOPY_DEFAULT_BYTES,
+    printf("%s %lu bytes: %s, NTSTATUS 0x%08lX %s, result %ld\n", indirect ? "sdmaib VMID0" : "sdmacopy", s.Bytes != 0 ? s.Bytes : BC250_SDMACOPY_DEFAULT_BYTES,
            s.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", s.NtStatus, StatusName((NTSTATUS)s.NtStatus), s.Result);
     printf("gates        mmio %s, vram %s, vram writes %s, gart %s, psp %s, gfx %s\n",
            (s.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
@@ -1168,19 +1633,27 @@ static int Confirm(void)
     RegCloseKey(key);
 
     s = RegCreateKeyExW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS, 0, NULL, REG_OPTION_NON_VOLATILE,
-                        KEY_SET_VALUE, NULL, &key, &disposition);
+                        KEY_SET_VALUE | KEY_QUERY_VALUE, NULL, &key, &disposition);
     if (s != ERROR_SUCCESS) {
         fprintf(stderr, "cannot open HKLM\\%ls, error %lu%s\n", BC250_PARAMETERS, (unsigned long)s,
                 s == ERROR_ACCESS_DENIED ? " (is this an elevated prompt?)" : "");
         return 1;
     }
     s = RegSetValueExW(key, L"UnconfirmedStarts", 0, REG_DWORD, (const BYTE *)&zero, sizeof(zero));
-    RegCloseKey(key);
     if (s != ERROR_SUCCESS) {
+        RegCloseKey(key);
         fprintf(stderr, "cannot write UnconfirmedStarts, error %lu\n", (unsigned long)s);
         return 1;
     }
-    printf("UnconfirmedStarts = 0\n");
+    // RegFlushKey requires KEY_QUERY_VALUE and returns the persistence status.
+    // Closing the handle or rereading zero is not proof it reached the disk.
+    s = RegFlushKey(key);
+    RegCloseKey(key);
+    if (s != ERROR_SUCCESS) {
+        fprintf(stderr, "cannot persist UnconfirmedStarts = 0, flush error %lu\n", (unsigned long)s);
+        return 1;
+    }
+    printf("UnconfirmedStarts = 0 (flushed to disk)\n");
     return 0;
 }
 
@@ -1895,6 +2368,10 @@ int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
+                        "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
+                        "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
+                        "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
+                        "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
                         "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
@@ -1907,6 +2384,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore\n"
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
+                        "       bc250kmd_cli sdmaib [bytes]               (VMID0 indirect SDMA copy/fill control)\n"
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
@@ -1918,6 +2396,10 @@ int wmain(int argc, wchar_t **argv)
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
+    if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
+    if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
+    if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
+    if (!_wcsicmp(argv[1], L"vram") && argc <= 3) return VideoMemory(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"info")) return Info(argc > 2 ? argv[2] : BC250_DEFAULT_HWID);
     if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
     if (!_wcsicmp(argv[1], L"stages")) return Stages();
@@ -1939,7 +2421,8 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
-    if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
+    if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 0);
+    if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();

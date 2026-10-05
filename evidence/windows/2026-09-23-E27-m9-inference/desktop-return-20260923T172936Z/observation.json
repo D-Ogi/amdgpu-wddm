@@ -1,0 +1,10 @@
+{
+  "utc": "20260923T172936Z",
+  "owner_report": "Desktop visible",
+  "tcp22_routes": [
+    false,
+    false
+  ],
+  "hardware_mutation": false,
+  "next_action": "Owner can now run elevated Start-Service sshd; Get-Service sshd. Read persisted07101logs once SSH returns."
+}

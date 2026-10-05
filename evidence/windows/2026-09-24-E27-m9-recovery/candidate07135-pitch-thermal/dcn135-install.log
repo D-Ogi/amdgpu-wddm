@@ -1,0 +1,8 @@
+Desktop DLL mismatch
+At C:\BC250\tmp\dcn135-install.ps1:9 char:101
++ ... 4628A64404B5282FB82227230199DA22F768D'){throw 'Desktop DLL mismatch'}
++                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Desktop DLL mismatch:String) [], RuntimeExceptio 
+   n
+    + FullyQualifiedErrorId : Desktop DLL mismatch
+ 

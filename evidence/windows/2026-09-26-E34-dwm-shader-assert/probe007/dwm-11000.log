@@ -1,0 +1,463 @@
+DWM route pid=11000 luid=00000000000092AF hosted=1
+BC250 private Vulkan instance=00000177DF631120 screen=00000177DF61C1E0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001dc0
+allocation handle=0x40001e40
+allocation handle=0x40001ec0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=11000
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 private Vulkan instance=00000177DF5D7710 screen=00000177DF76D070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40002bc0
+allocation handle=0x40002c40
+allocation handle=0x40002cc0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=11000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 destroy private Vulkan instance=00000177DF631120
+BC250 destroy private Vulkan instance=00000177DF5D7710
+DWM route pid=11000 luid=00000000000092AF hosted=1
+BC250 private Vulkan instance=00000177DF40C020 screen=00000177DF61C1E0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x80001a80
+allocation handle=0x40003840
+allocation handle=0x400038c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=11000
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 private Vulkan instance=00000177DF5F8710 screen=00000177DF634070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x80002980
+allocation handle=0x40004340
+allocation handle=0x400043c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=11000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+DWM DeviceSize interface=000a0009 version=0000177a bytes=9584
+DWM CreateDevice interface=000a0009 version=0000177a
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=00000177DF575970 screen=00000177DF850560
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 callback begin op=1 tid=3040
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=00000177DF6B29E8 queue=80001b00 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 callback begin op=25 tid=3040
+BC250 hosted op=25 count=1 hr=00000000
+BC250 callback begin op=27 tid=3040
+BC250 hosted op=27 count=1 hr=00000000
+BC250 callback begin op=27 tid=3040
+BC250 hosted op=27 count=2 hr=00000000
+BC250 callback begin op=16 tid=3040
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80002e80
+BC250 callback begin op=19 tid=3040
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 callback begin op=21 tid=3040
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 callback begin op=29 tid=3040
+BC250 hosted op=29 count=1 hr=00000000
+BC250 callback begin op=23 tid=3040
+BC250 hosted op=23 count=1 hr=00000000
+BC250 callback begin op=16 tid=3040
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80002e40
+BC250 callback begin op=19 tid=3040
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 callback begin op=21 tid=3040
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 callback begin op=29 tid=3040
+BC250 hosted op=29 count=2 hr=00000000
+BC250 callback begin op=23 tid=3040
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x80002c80
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=00000177DF850560 runtime=00000177DF6B29E8
+BC250 D3D device stage 3
+allocation handle=0xc0001040
+allocation handle=0xc0001080
+allocation handle=0x80001b40
+allocation handle=0x80002a00
+allocation handle=0x800029c0
+allocation handle=0x80002ac0
+allocation handle=0x80002b40
+allocation handle=0x80002b00
+allocation handle=0x80003080
+allocation handle=0x80003040
+allocation handle=0x80002bc0
+allocation handle=0x80002c40
+allocation handle=0x80002cc0
+allocation handle=0x80002d00
+allocation handle=0xc0000dc0
+allocation handle=0x80001bc0
+allocation handle=0x80001cc0
+allocation handle=0x80001d40
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+DWM CreateDevice hr=00000000
+BC250 DDI begin seq=1 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckCounterInfo(struct D3D10DDI_HDEVICE,struct D3D10DDI_COUNTER_INFO *)>::Call(struct D3D10DDI_HDEVICE,struct D3D10DDI_COUNTER_INFO *)
+BC250 DDI end seq=1 tid=3040
+BC250 DDI begin seq=2 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=2 tid=3040
+BC250 DDI begin seq=3 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=3 tid=3040
+BC250 DDI begin seq=4 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=4 tid=3040
+BC250 DDI begin seq=5 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=5 tid=3040
+BC250 DDI begin seq=6 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=6 tid=3040
+BC250 DDI begin seq=7 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=7 tid=3040
+BC250 DDI begin seq=8 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=8 tid=3040
+BC250 DDI begin seq=9 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=9 tid=3040
+BC250 DDI begin seq=10 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckMultisampleQualityLevels(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int,unsigned int *)
+BC250 DDI end seq=10 tid=3040
+BC250 DDI begin seq=11 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=11 tid=3040
+BC250 DDI begin seq=12 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=12 tid=3040
+BC250 DDI begin seq=13 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=13 tid=3040
+BC250 DDI begin seq=14 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=14 tid=3040
+BC250 DDI begin seq=15 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=15 tid=3040
+BC250 DDI begin seq=16 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=16 tid=3040
+BC250 DDI begin seq=17 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CheckFormatSupport(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)>::Call(struct D3D10DDI_HDEVICE,enum DXGI_FORMAT,unsigned int *)
+BC250 DDI end seq=17 tid=3040
+BC250 DDI begin seq=18 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=18 tid=3040
+BC250 DDI begin seq=19 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=19 tid=3040
+BC250 DDI begin seq=20 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateDepthStencilStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *)
+BC250 DDI end seq=20 tid=3040
+BC250 DDI begin seq=21 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateDepthStencilState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)
+BC250 DDI end seq=21 tid=3040
+BC250 DDI begin seq=22 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=22 tid=3040
+BC250 DDI begin seq=23 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=23 tid=3040
+BC250 DDI begin seq=24 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=24 tid=3040
+BC250 DDI begin seq=25 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=25 tid=3040
+BC250 DDI begin seq=26 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetBlendState(struct D3D10DDI_HDEVICE,struct D3D10DDI_HBLENDSTATE,float const * const,unsigned int)>::Call(struct D3D10DDI_HDEVICE,struct D3D10DDI_HBLENDSTATE,const float *,unsigned int)
+BC250 DDI end seq=26 tid=3040
+BC250 DDI begin seq=27 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetDepthStencilState(struct D3D10DDI_HDEVICE,struct D3D10DDI_HDEPTHSTENCILSTATE,unsigned int)>::Call(struct D3D10DDI_HDEVICE,struct D3D10DDI_HDEPTHSTENCILSTATE,unsigned int)
+BC250 DDI end seq=27 tid=3040
+BC250 DDI begin seq=28 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10DDI_HRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,struct D3D10DDI_HRASTERIZERSTATE)
+BC250 DDI end seq=28 tid=3040
+BC250 DDI begin seq=29 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl VsSetSamplers(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,struct D3D10DDI_HSAMPLER const *)>::Call(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,const struct D3D10DDI_HSAMPLER *)
+BC250 DDI end seq=29 tid=3040
+BC250 DDI begin seq=30 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl GsSetSamplers(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,struct D3D10DDI_HSAMPLER const *)>::Call(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,const struct D3D10DDI_HSAMPLER *)
+BC250 DDI end seq=30 tid=3040
+BC250 DDI begin seq=31 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl PsSetSamplers(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,struct D3D10DDI_HSAMPLER const *)>::Call(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,const struct D3D10DDI_HSAMPLER *)
+BC250 DDI end seq=31 tid=3040
+BC250 destroy private Vulkan instance=00000177DF5F8710
+BC250 DDI begin seq=32 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=32 tid=3040
+BC250 DDI begin seq=33 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=33 tid=3040
+BC250 DDI begin seq=34 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=34 tid=3040
+BC250 DDI begin seq=35 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=35 tid=3040
+BC250 DDI begin seq=36 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=36 tid=3040
+BC250 DDI begin seq=37 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=37 tid=3040
+BC250 DDI begin seq=38 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=38 tid=3040
+BC250 DDI begin seq=39 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=39 tid=3040
+BC250 DDI begin seq=40 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=40 tid=3040
+BC250 DDI begin seq=41 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=41 tid=3040
+BC250 DDI begin seq=42 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=42 tid=3040
+BC250 DDI begin seq=43 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=43 tid=3040
+BC250 DDI begin seq=44 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateBlendStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *)
+BC250 DDI end seq=44 tid=3040
+BC250 DDI begin seq=45 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateBlendState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_BLEND_DESC const *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_BLEND_DESC *,struct D3D10DDI_HBLENDSTATE,struct D3D10DDI_HRTBLENDSTATE)
+BC250 DDI end seq=45 tid=3040
+BC250 DDI begin seq=46 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=46 tid=3040
+BC250 DDI begin seq=47 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=47 tid=3040
+BC250 DDI begin seq=48 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=48 tid=3040
+BC250 DDI begin seq=49 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=49 tid=3040
+BC250 DDI begin seq=50 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=50 tid=3040
+BC250 DDI begin seq=51 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=51 tid=3040
+BC250 DDI begin seq=52 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=52 tid=3040
+BC250 DDI begin seq=53 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=53 tid=3040
+BC250 DDI begin seq=54 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=54 tid=3040
+BC250 DDI begin seq=55 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=55 tid=3040
+BC250 DDI begin seq=56 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=56 tid=3040
+BC250 DDI begin seq=57 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=57 tid=3040
+BC250 DDI begin seq=58 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateSamplerSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *)
+BC250 DDI end seq=58 tid=3040
+BC250 DDI begin seq=59 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateSampler(struct D3D10DDI_HDEVICE,struct D3D10_DDI_SAMPLER_DESC const *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_SAMPLER_DESC *,struct D3D10DDI_HSAMPLER,struct D3D10DDI_HRTSAMPLER)
+BC250 DDI end seq=59 tid=3040
+BC250 DDI begin seq=60 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=60 tid=3040
+BC250 DDI begin seq=61 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=61 tid=3040
+BC250 DDI begin seq=62 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=62 tid=3040
+BC250 DDI begin seq=63 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=63 tid=3040
+BC250 DDI begin seq=64 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=64 tid=3040
+BC250 DDI begin seq=65 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=65 tid=3040
+BC250 DDI begin seq=66 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=66 tid=3040
+BC250 DDI begin seq=67 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=67 tid=3040
+BC250 DDI begin seq=68 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=68 tid=3040
+BC250 DDI begin seq=69 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=69 tid=3040
+BC250 DDI begin seq=70 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=70 tid=3040
+BC250 DDI begin seq=71 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=71 tid=3040
+BC250 DDI begin seq=72 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateRasterizerStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *)
+BC250 DDI end seq=72 tid=3040
+BC250 DDI begin seq=73 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_RASTERIZER_DESC const *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_RASTERIZER_DESC *,struct D3D10DDI_HRASTERIZERSTATE,struct D3D10DDI_HRTRASTERIZERSTATE)
+BC250 DDI end seq=73 tid=3040
+BC250 DDI begin seq=74 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateDepthStencilStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *)
+BC250 DDI end seq=74 tid=3040
+BC250 DDI begin seq=75 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateDepthStencilState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)
+BC250 DDI end seq=75 tid=3040
+BC250 DDI begin seq=76 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateDepthStencilStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *)
+BC250 DDI end seq=76 tid=3040
+BC250 DDI begin seq=77 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateDepthStencilState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)
+BC250 DDI end seq=77 tid=3040
+BC250 DDI begin seq=78 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateDepthStencilStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *)
+BC250 DDI end seq=78 tid=3040
+BC250 DDI begin seq=79 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateDepthStencilState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)
+BC250 DDI end seq=79 tid=3040
+BC250 DDI begin seq=80 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateDepthStencilStateSize(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *)
+BC250 DDI end seq=80 tid=3040
+BC250 DDI begin seq=81 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateDepthStencilState(struct D3D10DDI_HDEVICE,struct D3D10_DDI_DEPTH_STENCIL_DESC const *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10_DDI_DEPTH_STENCIL_DESC *,struct D3D10DDI_HDEPTHSTENCILSTATE,struct D3D10DDI_HRTDEPTHSTENCILSTATE)
+BC250 DDI end seq=81 tid=3040
+BC250 DDI begin seq=82 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateResourceSize(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *)
+BC250 DDI end seq=82 tid=3040
+BC250 DDI begin seq=83 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateResource(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)
+allocation handle=0x80001dc0
+BC250 DDI end seq=83 tid=3040
+BC250 DDI begin seq=84 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateResourceSize(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *)
+BC250 DDI end seq=84 tid=3040
+BC250 DDI begin seq=85 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateResource(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)
+allocation handle=0x80001e40
+BC250 DDI end seq=85 tid=3040
+BC250 DDI begin seq=86 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateResourceSize(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *)
+BC250 DDI end seq=86 tid=3040
+BC250 DDI begin seq=87 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateResource(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)
+BC250 DDI end seq=87 tid=3040
+BC250 DDI begin seq=88 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateResourceSize(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *)
+BC250 DDI end seq=88 tid=3040
+BC250 DDI begin seq=89 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateResource(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)
+BC250 DDI end seq=89 tid=3040
+BC250 DDI begin seq=90 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateResourceSize(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *)
+BC250 DDI end seq=90 tid=3040
+BC250 DDI begin seq=91 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateResource(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)
+allocation handle=0x80001ec0
+BC250 DDI end seq=91 tid=3040
+BC250 DDI begin seq=92 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SoSetTargets(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,struct D3D10DDI_HRESOURCE const *,unsigned int const *)>::Call(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,const struct D3D10DDI_HRESOURCE *,const unsigned int *)
+BC250 DDI end seq=92 tid=3040
+BC250 DDI begin seq=93 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetRenderTargets(struct D3D10DDI_HDEVICE,struct D3D10DDI_HRENDERTARGETVIEW const *,unsigned int,unsigned int,struct D3D10DDI_HDEPTHSTENCILVIEW)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDI_HRENDERTARGETVIEW *,unsigned int,unsigned int,struct D3D10DDI_HDEPTHSTENCILVIEW)
+BC250 DDI end seq=93 tid=3040
+BC250 DDI begin seq=94 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetViewports(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,struct D3D10_DDI_VIEWPORT const *)>::Call(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,const struct D3D10_DDI_VIEWPORT *)
+BC250 DDI end seq=94 tid=3040
+BC250 DDI begin seq=95 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetScissorRects(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,struct tagRECT const *)>::Call(struct D3D10DDI_HDEVICE,unsigned int,unsigned int,const struct tagRECT *)
+BC250 DDI end seq=95 tid=3040
+BC250 DDI begin seq=96 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetPredication(struct D3D10DDI_HDEVICE,struct D3D10DDI_HQUERY,int)>::Call(struct D3D10DDI_HDEVICE,struct D3D10DDI_HQUERY,int)
+BC250 DDI end seq=96 tid=3040
+BC250 DDI begin seq=97 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl IaSetTopology(struct D3D10DDI_HDEVICE,enum D3D10_DDI_PRIMITIVE_TOPOLOGY)>::Call(struct D3D10DDI_HDEVICE,enum D3D10_DDI_PRIMITIVE_TOPOLOGY)
+BC250 DDI end seq=97 tid=3040
+BC250 DDI begin seq=98 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl SetRasterizerState(struct D3D10DDI_HDEVICE,struct D3D10DDI_HRASTERIZERSTATE)>::Call(struct D3D10DDI_HDEVICE,struct D3D10DDI_HRASTERIZERSTATE)
+BC250 DDI end seq=98 tid=3040
+BC250 DDI begin seq=99 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateResourceSize(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *)
+BC250 DDI end seq=99 tid=3040
+BC250 DDI begin seq=100 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateResource(struct D3D10DDI_HDEVICE,struct D3D10DDIARG_CREATERESOURCE const *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)>::Call(struct D3D10DDI_HDEVICE,const struct D3D10DDIARG_CREATERESOURCE *,struct D3D10DDI_HRESOURCE,struct D3D10DDI_HRTRESOURCE)
+allocation handle=0x80001f00
+BC250 DDI end seq=100 tid=3040
+BC250 DDI begin seq=101 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=101 tid=3040
+BC250 DDI begin seq=102 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreatePixelShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=102 tid=3040
+BC250 DDI begin seq=103 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=103 tid=3040
+BC250 DDI begin seq=104 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=104 tid=3040
+BC250 DDI begin seq=105 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=105 tid=3040
+BC250 DDI begin seq=106 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=106 tid=3040
+BC250 DDI begin seq=107 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=107 tid=3040
+BC250 DDI begin seq=108 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+allocation handle=0x80002d40
+BC250 DDI end seq=108 tid=3040
+BC250 DDI begin seq=109 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=109 tid=3040
+BC250 DDI begin seq=110 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=110 tid=3040
+BC250 DDI begin seq=111 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=111 tid=3040
+BC250 DDI begin seq=112 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=112 tid=3040
+BC250 DDI begin seq=113 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=113 tid=3040
+BC250 DDI begin seq=114 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=114 tid=3040
+BC250 DDI begin seq=115 tid=3040 name=unsigned __int64 __cdecl Bc250Entry<&unsigned __int64 __cdecl CalcPrivateShaderSize(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=115 tid=3040
+BC250 DDI begin seq=116 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=116 tid=3040
+BC250 DDI begin seq=117 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreateVertexShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=117 tid=3040
+BC250 DDI begin seq=118 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreatePixelShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)
+BC250 DDI end seq=118 tid=3040
+BC250 DDI begin seq=119 tid=3040 name=void __cdecl Bc250Entry<&void __cdecl CreatePixelShader(struct D3D10DDI_HDEVICE,unsigned int const *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,struct D3D10DDIARG_STAGE_IO_SIGNATURES const *)>::Call(struct D3D10DDI_HDEVICE,const unsigned int *,struct D3D10DDI_HSHADER,struct D3D10DDI_HRTSHADER,const struct D3D10DDIARG_STAGE_IO_SIGNATURES *)

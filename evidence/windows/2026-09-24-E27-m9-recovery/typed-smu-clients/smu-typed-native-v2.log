@@ -1,0 +1,14 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+P:\bc-250\scratch\m9\smu-typed-native-v2\smu-native.inc(169): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\smu-typed-native-v2\smu-native.inc(169): warning C4013: niezdefiniowany "NT_SUCCESS"; przy założeniu, że extern zwraca int
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(99): warning C4127: wyrażenie warunkowe jest stałą
+Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_smu_native.ps1:21
+Line |
+  21 |  if($LASTEXITCODE -ne 0){throw 'Host build failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Host build failed

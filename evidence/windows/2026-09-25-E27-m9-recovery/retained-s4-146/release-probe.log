@@ -1,0 +1,27 @@
+health abi=1 version=0x00070092 flags=7 generation=34815300295 epoch=13 completed=35 age_ms=864 ready_ms=172762
+
+released_original_pid=6000
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 128 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 00000258C74E0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=67108864 all_words_match=1 fence=128 word_base=0
+RESUME_ID phase=verified pid=6000 adapter=40000080 device=400000C0 context=40000240 paging_queue=40000140 paging_fence=40000100 fence=40000280 data=40000180 data_va=0000000000010000 command=400001C0 command_va=0000000004010000 readback=40000200 readback_va=0000000004020000 sequence=128
+GPU_RETAINED_RESUME_RESULT PASS pid=6000 bytes=67108864 final_sequence=128; external S4 evidence required
+D3DKMTFreeGpuVirtualAddress [gpu-readback] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-readback] 0x00000000  STATUS_SUCCESS
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [gpu-ib] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-ib]  0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+probe_exit=0
+probe_completed

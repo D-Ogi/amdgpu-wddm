@@ -1,0 +1,6 @@
+kmd-commands PASS 0.83s
+Exception: P:\BC-250\bc250-win\tools\quality\quick.ps1:34
+Line |
+  34 |   Write-Error $_
+     |   ~~~~~~~~~~~~~~
+     | kmd-contract failed; see P:\bc-250\scratch\g0-hosted\gdi-texture-quality001\kmd-contract.log

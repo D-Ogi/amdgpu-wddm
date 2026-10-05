@@ -1,0 +1,11 @@
+{
+    "health":  {
+                   "flags":  15,
+                   "epoch":  5,
+                   "completed":  76,
+                   "ready_ms":  60442,
+                   "generation":  43455941387,
+                   "age_ms":  1241
+               },
+    "scope":  "candidate-confirmed"
+}

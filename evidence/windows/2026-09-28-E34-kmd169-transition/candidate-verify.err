@@ -1,0 +1,7 @@
+CPU DWM readiness deadline expired after 38 samples
+At C:\BC250\m13\kmd169-stage004\kmd169-transition\verify-cpu.ps1:50 char:2
++  throw "CPU DWM readiness deadline expired after $attempts samples"
++  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (CPU DWM readine...fter 38 samples:String) [], RuntimeException
+    + FullyQualifiedErrorId : CPU DWM readiness deadline expired after 38 samples
+ 

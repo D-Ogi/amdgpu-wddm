@@ -1,0 +1,124 @@
+/*
+ * Copyright (c) 2026 D-Ogi
+ * SPDX-License-Identifier: MIT
+ *
+ * Private BC250 bootstrap contract, not a registered Vulkan extension.
+ * Both endpoints are built together against the same WDK and x64 ABI.
+ * Version 2 carries device-scoped runtime operations. Version 3 adds the
+ * private import of runtime-owned allocations. Version 4 adds queue progress
+ * fences that order hosted rendering against native Present. Version 5 adds
+ * the sticky device status and its loss report.
+ */
+#ifndef BC250_HOST_BOOTSTRAP_H
+#define BC250_HOST_BOOTSTRAP_H
+#include <stdint.h>
+#define BC250_HOST_STYPE 0x42434831u
+#define BC250_HOST_VERSION 5u
+#define BC250_HOST_IMPORT_STYPE 0x42434832u
+/* bc250_host_import with its flags field valid. Under BC250_HOST_IMPORT_STYPE the bytes of that field
+ * were padding and are never read: such an import has no flags. */
+#define BC250_HOST_IMPORT_FLAGS_STYPE 0x42434835u
+struct bc250_host_import {
+   uint32_t sType;
+   const void *pNext;
+   void *identity;
+   uint32_t allocation;
+   /* BC250_HOST_IMPORT_* bits, read only when sType is BC250_HOST_IMPORT_FLAGS_STYPE. The field takes
+    * the padding that followed allocation on x64, the one supported layout, so the size and every other
+    * offset are unchanged. */
+   uint32_t flags;
+   uint64_t va, size;
+};
+#if defined(_M_X64) || defined(__x86_64__)
+#ifdef __cplusplus
+static_assert(sizeof(bc250_host_import) == 48, "bc250_host_import layout");
+#else
+_Static_assert(sizeof(struct bc250_host_import) == 48, "bc250_host_import layout");
+#endif
+#else
+#error "bc250_host_import is defined for x64 only"
+#endif
+/* The host answers Lock2 and Unlock2 for this allocation: vkMapMemory may map it. Without the bit a
+ * borrowed allocation is never mapped by the ICD. */
+#define BC250_HOST_IMPORT_CPU_MAP 1u
+#define BC250_HOST_IMPORT_KNOWN_FLAGS BC250_HOST_IMPORT_CPU_MAP
+/* Policy of the host for this instance (hosted ICD patch 0006), chained next to struct bc250_host. With
+ * the structure present the host alone decides on sparse binding: BC250_HOST_POLICY_SPARSE turns it on,
+ * its absence turns it off. An ICD without the patch ignores it and follows its environment. */
+#define BC250_HOST_POLICY_STYPE 0x42434836u
+#define BC250_HOST_POLICY_VERSION 1u
+#define BC250_HOST_POLICY_SPARSE 1u
+#define BC250_HOST_POLICY_KNOWN_FLAGS BC250_HOST_POLICY_SPARSE
+struct bc250_host_policy {
+   uint32_t sType;
+   const void *pNext;
+   uint32_t version, size;
+   uint32_t flags, reserved;
+};
+#define BC250_HOST_CREATE_PAGING 1u
+#define BC250_HOST_DESTROY_PAGING 2u
+#define BC250_HOST_PUBLISH_PROGRESS 3u
+#define BC250_HOST_CHECK_STATUS 4u
+#define BC250_HOST_REPORT_LOST 5u
+struct bc250_host_progress {
+   uint32_t context, sync;
+   uint64_t value;
+   const uint64_t *cpu_address;
+};
+struct bc250_host_paging {
+   uint32_t queue, sync;
+   void *cpu_address;
+};
+struct bc250_host {
+   uint32_t sType;
+   const void *pNext;
+   uint32_t version, size;
+   uint64_t adapter_luid;
+   void *identity;
+   void *userdata;
+   int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
+};
+static inline int32_t bc250_host_check_status(const struct bc250_host *host)
+{
+   return host->dispatch ? host->dispatch(host->userdata, BC250_HOST_CHECK_STATUS, 0) : 0;
+}
+static inline int bc250_host_fence_valid(const struct bc250_host *host, uint64_t value)
+{
+   if (host->dispatch && value == UINT64_MAX) {
+      host->dispatch(host->userdata, BC250_HOST_REPORT_LOST, 0);
+      return 0;
+   }
+   return bc250_host_check_status(host) >= 0;
+}
+#define BC250_HOST_CreateAllocation2 16u
+#define BC250_HOST_DestroyAllocation2 17u
+#define BC250_HOST_ReserveGpuVirtualAddress 18u
+#define BC250_HOST_MapGpuVirtualAddress 19u
+#define BC250_HOST_FreeGpuVirtualAddress 20u
+#define BC250_HOST_MakeResident 21u
+#define BC250_HOST_Evict 22u
+#define BC250_HOST_Lock2 23u
+#define BC250_HOST_Unlock2 24u
+#define BC250_HOST_CreateContextVirtual 25u
+#define BC250_HOST_DestroyContext 26u
+#define BC250_HOST_CreateSynchronizationObject2 27u
+#define BC250_HOST_DestroySynchronizationObject 28u
+#define BC250_HOST_WaitForSynchronizationObjectFromCpu 29u
+#define BC250_HOST_SignalSynchronizationObjectFromCpu 30u
+#define BC250_HOST_WaitForSynchronizationObjectFromGpu 31u
+#define BC250_HOST_SignalSynchronizationObjectFromGpu 32u
+#define BC250_HOST_SignalSynchronizationObjectFromGpu2 33u
+#define BC250_HOST_SubmitCommand 34u
+#define BC250_HOST_UpdateGpuVirtualAddress 35u
+#define BC250_HOST_GetDeviceState 36u
+#define BC250_HOST_QueryResourceInfoFromNtHandle 37u
+#define BC250_HOST_OpenResourceFromNtHandle 38u
+#define BC250_HOST_OpenSyncObjectFromNtHandle2 39u
+#define BC250_HOST_CreateHwQueue 40u
+#define BC250_HOST_DestroyHwQueue 41u
+#define BC250_HOST_SubmitCommandToHwQueue 42u
+#define BC250_HOST_SubmitWaitForSyncObjectsToHwQueue 43u
+#define BC250_HOST_SubmitSignalSyncObjectsToHwQueue 44u
+#define BC250_WDDM_CALL(host, name, argument) \
+   ((host)->dispatch ? (host)->dispatch((host)->userdata, BC250_HOST_##name, (void *)(argument)) : WDDM2_DISPATCH(name(argument)))
+#endif

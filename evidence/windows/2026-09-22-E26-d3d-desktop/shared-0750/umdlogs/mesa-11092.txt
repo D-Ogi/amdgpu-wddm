@@ -1,0 +1,38 @@
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CalcPrivateResourceSize
+CreateResource
+BC250 CreatePagingQueue 00000000
+BC250 Allocate 00000000 primary 0 handle 40000180 va 0
+BC250 MapGpuVa 8000000a va 10000
+RelocateDeviceFuncs
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+SetRenderTargets
+DestroyRasterizerState
+DestroyDepthStencilState
+DestroyBlendState
+DestroySampler
+DestroyDevice
+CloseAdapter

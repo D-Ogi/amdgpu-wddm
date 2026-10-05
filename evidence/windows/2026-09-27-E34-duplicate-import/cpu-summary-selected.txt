@@ -1,0 +1,45 @@
+ 10772    554.398 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 10773    554.398 wddm summary: paging operation  11    1676  first at 259
+ 10774    554.398 wddm summary: paging operation  12     134  first at 316
+ 10775    554.398 wddm summary: paging operation   9      13  first at 336
+ 10776    554.398 wddm summary: paging operation   2       2  first at 523
+ 10777    554.398 wddm summary: paging operation   8       2  first at 544
+ 10778    554.398 wddm summary: objects created/destroyed: dev 12/5 ctx 10/5 proc 7/3 alloc 29/24, 33 alive
+ 10779    554.398 wddm summary: allocations opened/closed: 38/31 calls
+ 10780    554.398 wddm summary: submissions 0 physical + 477 virtual, 0 preemptions, last completed fence 443
+ 10781    554.398 wddm summary: node 0 hardware: 34 submitted, 34 completed, 0 timeouts, 0 refused
+ 10782    554.398 wddm summary: umd: 16 allocs (0 refused), 1 contexts, 34 submits on the ring, 0 not run
+ 10785    554.398 wddm summary: node 1 (paging, open): 443 hardware submitted, 443 completed, 0 timeouts, 0 refused
+ 10787    554.398 wddm summary: SubmitCommandVirtual by node: 0: 34, 1: 443, 0 private-buffer refusals
+ 10788    554.398 wddm summary: paging DMA VA nonzero 798 zero 1029, mapping observations 8
+ 10789    554.398 wddm summary: native DMA transfers 2 fills 13 bytes 101793792
+ 10791    554.398 wddm summary: native DMA exact disjoint checks 2
+ 10792    554.398 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x23EB6F000 CPU_PA0x23EB6F000
+ 10793    554.398 wddm summary: BuildPagingBuffer: 2 transfers, 13 fills, 101793792 bytes, 249 insufficient-buffer
+ 10794    554.398 wddm summary: aperture map batches 0, unmap batches 0
+ 10795    554.398 wddm summary: paging TLB invalidations 134, PTE update batches 637
+ 10796    554.398 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 10797    554.398 wddm summary: presents 764, flips 765 of 767 address calls (764 arrived above DISPATCH_LEVEL)
+ 10798    554.398 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 10799    554.398 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 10800    554.398 wddm summary: widest blit 0 rows
+ 10801    554.398 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 10802    554.398 wddm summary: vsync enabled, 0 ticks, 33183 reported to dxgkrnl
+ 10803    554.398 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+ 10804    554.398 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 10811    554.398 wddm summary: dcn lock acknowledgement timeouts 0
+ 10812    554.398 wddm summary: vidpn flip open: 765 hardware flips, 0 refused, 1 hardware vsyncs armed 33202 acked 0 refused 3 completion-deferred 1 old-buffer-reports
+ 10813    554.398 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 10814    554.398 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 10815    554.398 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 10816    554.398 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 10817    554.398 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 10818    554.398 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 10819    554.398 vidmm summary: PTE encoding level 0 segment 0 coherent 7734 noncoherent 18444 snoop mismatches 0
+ 10820    554.398 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 94908 snoop mismatches 0
+ 10821    554.398 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+ 10822    554.398 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 648 snoop mismatches 0
+ 10823    554.398 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 22 snoop mismatches 0
+ 10824    554.398 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 21 snoop mismatches 0
+ 10825    554.398 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 10826    554.398 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots

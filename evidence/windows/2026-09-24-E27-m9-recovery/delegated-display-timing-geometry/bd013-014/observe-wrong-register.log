@@ -1,0 +1,5 @@
+Extracted actual observer, timing reader, diagnostic whitelist and escape prefix
+dcn_observe_actual.c
+FAIL 189: o.EarliestInUseLow==((0x0EB94ul)^0x5A000001u)
+FAIL 217: o.Status==BC250_ESCAPE_STATUS_REFUSED && o.ValidMask==(BC250_DCN_OBSERVE_VALID_ALL & ~(1u<<2)) && o.EarliestInUseLow==0
+DCN observer: 104 checks, 2 failures

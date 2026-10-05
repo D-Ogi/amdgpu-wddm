@@ -1,0 +1,92 @@
+diff --git a/src/amd/vulkan/radv_pipeline_rt.c b/src/amd/vulkan/radv_pipeline_rt.c
+index b075263a..442ec82c 100644
+--- a/src/amd/vulkan/radv_pipeline_rt.c
++++ b/src/amd/vulkan/radv_pipeline_rt.c
+@@ -1129,9 +1129,31 @@ compile_rt_prolog(struct radv_device *device, struct radv_ray_tracing_pipeline *
+    pipeline->prolog->info.push_constant_size = push_constant_size;
+ }
+ 
++static void
++radv_ray_tracing_pipeline_hash_imports(const struct radv_device *device,
++                                       const VkRayTracingPipelineCreateInfoKHR *pCreateInfo,
++                                       const struct radv_ray_tracing_state_key *rt_state, bool library_cache_key,
++                                       unsigned char *hash);
++
+ void
+ radv_ray_tracing_pipeline_hash(const struct radv_device *device, const VkRayTracingPipelineCreateInfoKHR *pCreateInfo,
+                                const struct radv_ray_tracing_state_key *rt_state, unsigned char *hash)
++{
++   radv_ray_tracing_pipeline_hash_imports(device, pCreateInfo, rt_state, false, hash);
++}
++
++/* With library_cache_key, the key under which a pipeline library is cached: it names what the library's compile
++ * produces, and that depends on the imported libraries only through whether they hold a callable shader (which
++ * decides whether the library keeps its NIR). A library that imports others, as vkd3d-proton creates one for every
++ * AddToStateObject() on top of the previous state object, then keeps its key when the chain below it was built in a
++ * different order or from different additions, as a game's streaming does from one run to the next. The pipeline's
++ * own hash, which pipelines importing it use, still covers the whole chain.
++ */
++static void
++radv_ray_tracing_pipeline_hash_imports(const struct radv_device *device,
++                                       const VkRayTracingPipelineCreateInfoKHR *pCreateInfo,
++                                       const struct radv_ray_tracing_state_key *rt_state, bool library_cache_key,
++                                       unsigned char *hash)
+ {
+    VK_FROM_HANDLE(radv_pipeline_layout, layout, pCreateInfo->layout);
+    blake3_hasher ctx;
+@@ -1154,7 +1176,12 @@ radv_ray_tracing_pipeline_hash(const struct radv_device *device, const VkRayTrac
+       _mesa_blake3_update(&ctx, &rt_state->groups[i].handle, sizeof(struct radv_pipeline_group_handle));
+    }
+ 
+-   if (pCreateInfo->pLibraryInfo) {
++   if (pCreateInfo->pLibraryInfo && library_cache_key) {
++      bool imported_callable = false;
++      for (uint32_t i = pCreateInfo->stageCount; i < rt_state->stage_count; i++)
++         imported_callable |= rt_state->stages[i].stage == MESA_SHADER_CALLABLE;
++      _mesa_blake3_update(&ctx, &imported_callable, sizeof(imported_callable));
++   } else if (pCreateInfo->pLibraryInfo) {
+       for (uint32_t i = 0; i < pCreateInfo->pLibraryInfo->libraryCount; ++i) {
+          VK_FROM_HANDLE(radv_pipeline, lib_pipeline, pCreateInfo->pLibraryInfo->pLibraries[i]);
+          struct radv_ray_tracing_pipeline *lib = radv_pipeline_to_ray_tracing(lib_pipeline);
+@@ -1202,9 +1229,26 @@ radv_rt_pipeline_compile(struct radv_device *device, const VkRayTracingPipelineC
+       skip_shaders_cache = true;
+    }
+ 
++   /* A library that imports others is looked up in and added to the application's cache under its library key
++    * (radv_ray_tracing_pipeline_hash_imports). The device's own cache keeps the full hash, which pipeline binaries
++    * look up.
++    */
++   unsigned char full_blake3[BLAKE3_KEY_LEN];
++   unsigned char cache_blake3[BLAKE3_KEY_LEN];
++   const bool library_key = cache && pCreateInfo->pLibraryInfo && pCreateInfo->pLibraryInfo->libraryCount &&
++                            (pipeline->base.base.create_flags & VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR);
++   memcpy(full_blake3, pipeline->base.base.blake3, sizeof(full_blake3));
++   if (library_key)
++      radv_ray_tracing_pipeline_hash_imports(device, pCreateInfo, rt_state, true, cache_blake3);
++   else
++      memcpy(cache_blake3, full_blake3, sizeof(cache_blake3));
++
+    bool found_in_application_cache = true;
+-   if (!skip_shaders_cache &&
+-       radv_ray_tracing_pipeline_cache_search(device, cache, pipeline, &found_in_application_cache)) {
++   memcpy(pipeline->base.base.blake3, cache_blake3, sizeof(cache_blake3));
++   bool found = !skip_shaders_cache &&
++                radv_ray_tracing_pipeline_cache_search(device, cache, pipeline, &found_in_application_cache);
++   memcpy(pipeline->base.base.blake3, full_blake3, sizeof(full_blake3));
++   if (found) {
+       if (found_in_application_cache)
+          pipeline_feedback.flags |= VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT;
+       result = VK_SUCCESS;
+@@ -1217,8 +1261,11 @@ radv_rt_pipeline_compile(struct radv_device *device, const VkRayTracingPipelineC
+    if (result != VK_SUCCESS)
+       return result;
+ 
+-   if (!skip_shaders_cache)
++   if (!skip_shaders_cache) {
++      memcpy(pipeline->base.base.blake3, cache_blake3, sizeof(cache_blake3));
+       radv_ray_tracing_pipeline_cache_insert(device, cache, pipeline, pCreateInfo->stageCount, pCreateInfo->groupCount);
++      memcpy(pipeline->base.base.blake3, full_blake3, sizeof(full_blake3));
++   }
+ 
+ done:
+    pipeline_feedback.duration = os_time_get_nano() - pipeline_start;

@@ -1,0 +1,103 @@
+   }
+
+   //radv_wddm2_bo_va_free(ws, bo->flags, bo->base.va, bo->base.size);
+
+   FREE(bo);
+}
+static VkResult
+radv_wddm2_virtual_bo_map(struct radv_wddm2_winsys *ws, struct radv_wddm2_ctx *ctx,
+                            enum amd_ip_type ip_type, struct radv_wddm2_bo *parent,
+                            uint64_t offset, uint64_t size, struct radv_wddm2_bo *bo,
+                            uint64_t bo_offset)
+{
+   D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION op = {
+      .OperationType = D3DDDI_UPDATEGPUVIRTUALADDRESS_MAP_PROTECT,
+      .MapProtect = {
+         .BaseAddress = parent->base.va + offset,
+         .SizeInBytes = size,
+         .hAllocation = bo->base.handle,
+         .AllocationOffsetInBytes = bo_offset,
+         .AllocationSizeInBytes = size,
+         .Protection = {
+            .Write = 1,
+         },
+         .DriverProtection = 1,
+      },
+   };
+
+   const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
+      .hDevice = ws->device_h,
+      .hContext = ctx->per_ip[ip_type].queue.context_h,
+      .hFenceObject = ctx->per_ip[ip_type].queue.vm_fence.handle,
+      .FenceValue = ctx->per_ip[ip_type].queue.vm_fence.wait_value,
+      .Operations = &op,
+      .NumOperations = 1,
+   };
+
+   NTSTATUS status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
+   if (!NT_SUCCESS(status)) {
+      fprintf(stdout, "mapping 0x%" PRIx64 " failed: 0x%X\n", parent->base.va + offset, status);
+      return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+   }
+   return VK_SUCCESS;
+}
+
+static VkResult
+radv_wddm2_virtual_bo_unmap(struct radv_wddm2_winsys *ws, struct radv_wddm2_ctx *ctx,
+                            enum amd_ip_type ip_type, struct radv_wddm2_bo *parent,
+                            uint64_t offset, uint64_t size)
+{
+   D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION op = {
+      .OperationType = D3DDDI_UPDATEGPUVIRTUALADDRESS_UNMAP,
+      .Unmap = {
+         .BaseAddress = parent->base.va + offset,
+         .SizeInBytes = size,
+         .Protection = {
+            .Zero = 1,
+         }
+      },
+   };
+
+   const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
+      .hDevice = ws->device_h,
+      .hContext = ctx->per_ip[ip_type].queue.context_h,
+      .hFenceObject = ctx->per_ip[ip_type].queue.vm_fence.handle,
+      .FenceValue = ctx->per_ip[ip_type].queue.vm_fence.wait_value,
+      .Operations = &op,
+      .NumOperations = 1,
+   };
+
+   NTSTATUS status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
+   if (!NT_SUCCESS(status)) {
+      fprintf(stderr, "mapping 0x%" PRIx64 " failed: 0x%X\n", parent->base.va + offset, status);
+      return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+   }
+   return VK_SUCCESS;
+}
+
+static VkResult
+radv_wddm2_bo_virtual_bind(struct radeon_winsys *_ws, struct radeon_winsys_ctx *_ctx, enum amd_ip_type ip_type,
+                           struct radeon_winsys_bo *_parent, uint64_t offset, uint64_t size,
+                           struct radeon_winsys_bo *_bo, uint64_t bo_offset)
+{
+   struct radv_wddm2_winsys *ws = radv_wddm2_winsys(_ws);
+   struct radv_wddm2_ctx *ctx = (struct radv_wddm2_ctx *)_ctx;
+   struct radv_wddm2_bo *parent = (struct radv_wddm2_bo *)_parent;
+   struct radv_wddm2_bo *bo = (struct radv_wddm2_bo *)_bo;
+   VkResult ret;
+
+   assert(parent->base.is_virtual);
+   assert(!bo || !bo->base.is_virtual);
+
+   if (bo) {
+      ret = radv_wddm2_virtual_bo_map(ws, ctx, ip_type, parent, offset, size, bo, bo_offset);
+   } else {
+      ret = radv_wddm2_virtual_bo_unmap(ws, ctx, ip_type, parent, offset, size);
+   }
+
+   return ret;
+}
+
+static void
+radv_wddm2_dump_bo_log(struct radeon_winsys *_ws, FILE *file)
+{

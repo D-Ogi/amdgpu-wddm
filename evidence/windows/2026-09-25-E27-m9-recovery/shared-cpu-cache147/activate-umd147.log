@@ -1,0 +1,14 @@
+old_modules=bc250umd.dll,C:\BC250\m13\mesa-main-umd\bc250d3d.dll,C:\BC250\m13\mesa-main-umd\bc250d3d.dll
+old_dwm=6076
+boot_before=2026-09-25T03:57:55.5000000+02:00
+new_dwm=1660
+loaded_umd=C:\BC250\m13\mesa-main-umd\bc250d3d.dll
+loaded_hash=D438EA42314A3ADD6817665A6133628A64404B5282FB82227230199DA22F768D
+New UMD not loaded; inspect before another change
+At C:\BC250\tmp\activate-umd147.ps1:24 char:60
++ ... e -ne $dll){throw 'New UMD not loaded; inspect before another change' ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (New UMD not loa... another change:String) [], Ru 
+   ntimeException
+    + FullyQualifiedErrorId : New UMD not loaded; inspect before another change
+ 

@@ -1,0 +1,17 @@
+﻿{
+    "Time":  "2026-09-24T18:23:07",
+    "Automatic":  true,
+    "Settings":  [
+
+                 ],
+    "Usage":  [
+                  {
+                      "Name":  "C:\\pagefile.sys",
+                      "AllocatedBaseSize":  7936,
+                      "CurrentUsage":  70,
+                      "PeakUsage":  90
+                  }
+              ],
+    "FreeDisk":  481572450304,
+    "Boot":  "2026-09-24T11:44:14"
+}

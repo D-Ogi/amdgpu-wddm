@@ -1,0 +1,1028 @@
+bc250kmd 0x00070038 log kept at the stop: 25192 lines, 24168 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.000 stage 10
+     1      0.001 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.001 stage 20
+     3      0.072 stage 30
+     4      0.074 stage 31
+     5      0.074 stage 32
+     6      0.074 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.074 stage 33
+     8      0.074 stage 34
+     9      0.074 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.076 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.076 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.076 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.076 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.076 gart: ready, dummy page at 0x26FFFA000
+    15      0.076 psp: ready
+    16      0.076 gpumem: ready, doorbells at 0xD0000000
+    17      0.076 gfx: ready, GPU submission allowed, paging node off
+    18      0.076 ih: ready
+    19      0.076 wddm: full table started, VRAM identified
+    20      0.076 vidmm: segment 1 at physical 0x2708CA000 + 0x1FD736000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+    22      0.076 stage 35
+    23      0.076 stage 39
+    24      0.076 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+    25      0.076 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    26      0.076 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+    27      0.076 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+    28      0.076 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+    29      0.076 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+    30      0.076 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    31      0.076 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    32      0.076 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    33      0.076 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    34      0.076 wddm: GetNodeMetadata node 0 adapter 0
+    35      0.078 wddm: QUERYSEGMENT4 pass 1: 2 segment(s)
+    36      0.078 wddm: QUERYSEGMENT4 pass 2: 2 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+    37      0.078 wddm: segment 1 flags 0x00080404 gpu 0xF4008CA000 cpu 0x2708CA000 size 0x1FD736000
+    38      0.078 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+    39      0.078 wddm: CreateProcess flags 0x00000001 pasids 1
+    40      0.078 wddm: CreateDevice flags 0x00000001 pasid 0
+    41      0.078 wddm: CreateDevice flags 0x00000001 pasid 0
+    42      0.078 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    43      0.078 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    44      0.078 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    45      0.078 vidmm: level 0 cpu table 0xFFFF9D8015502000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    46      0.078 vidmm:   -> first entry 0x0 (written)
+    47      0.078 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    48      0.078 vidmm: level 0 cpu table 0xFFFF9D8015503000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    49      0.078 vidmm:   -> first entry 0x0 (written)
+    50      0.078 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    51      0.078 vidmm: level 0 cpu table 0xFFFF9D8015504000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    52      0.078 vidmm:   -> first entry 0x0 (written)
+    53      0.078 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    54      0.078 vidmm: level 0 cpu table 0xFFFF9D8015505000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    55      0.078 vidmm:   -> first entry 0x0 (written)
+    56      0.078 vidmm: level 0 cpu table 0xFFFF9D8015506000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    57      0.078 vidmm:   -> first entry 0x0 (written)
+    58      0.078 vidmm: level 0 cpu table 0xFFFF9D8015507000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    59      0.078 vidmm:   -> first entry 0x0 (written)
+    60      0.078 vidmm: level 0 cpu table 0xFFFF9D8015508000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    61      0.078 vidmm:   -> first entry 0x0 (written)
+    62      0.078 vidmm: level 0 cpu table 0xFFFF9D8015509000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    63      0.078 vidmm:   -> first entry 0x0 (written)
+    64      0.109 vidmm: first valid entry of segment 1: level 1 raw 0x21 / 0x3 -> 0x2708CD001 rc 0
+    65      0.111 wddm: SetRootPageTable segment 1 offset 0x0, 512 entries
+    66      0.111 vidmm: root page table 1:0x0 = physical 0x2708CA000, 512 entries (the VMID is pointed at it by the first packet)
+    67      0.111 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+    68      0.111 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+    69      0.111 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+    70      0.115 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+    71      0.115 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+    72      0.115 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+    73      0.115 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+    74      0.115 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+    75      0.115 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+    76      0.115 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+    77      0.115 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+    78      0.115 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+    79      0.115 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+    80      0.115 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+    81      0.116 wddm: CreateProcess flags 0x00000002 pasids 1
+    82      0.116 wddm: CreateDevice flags 0x00000002 pasid 0
+    83      0.116 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    84      0.116 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    85      0.116 vidmm: level 0 table 1: 0x1FD732000 start 0 count 16 flags 0x3 first raw 0x0 / 0x0
+    86      0.116 vidmm:   -> first entry 0x0 (written)
+    87      0.116 vidmm: level 0 table 1: 0x1FD732000 start 17 count 495 flags 0x3 first raw 0x0 / 0x0
+    88      0.116 vidmm:   -> first entry 0x0 (written)
+    89      0.116 vidmm: level 0 table 1: 0x1FD732000 start 16 count 1 flags 0x2 first raw 0x1 / 0x19B1BA
+    90      0.116 vidmm: first valid entry of segment 0: level 0 raw 0x1 / 0x19B1BA -> 0x19B1BA073 rc 0
+    91      0.116 vidmm:   -> first entry 0x19B1BA073 (written)
+    92      0.116 vidmm: level 1 table 1: 0x1FD733000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD732
+    93      0.116 vidmm:   -> first entry 0x46DFFC001 (written)
+    94      0.116 vidmm: level 2 table 1: 0x1FD734000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD733
+    95      0.116 vidmm:   -> first entry 0x46DFFD001 (written)
+    96      0.116 vidmm: level 3 table 1: 0x1FD735000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD734
+    97      0.116 vidmm:   -> first entry 0x46DFFE001 (written)
+    98      0.116 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+    99      0.116 vidmm: level 0 table 1: 0x1FD732000 start 17 count 1 flags 0x0 first raw 0x1 / 0x1BBF01
+   100      0.116 vidmm:   -> first entry 0x1BBF01073 (written)
+   101      0.116 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   102      0.116 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   103      0.116 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   104      0.116 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   105      0.116 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   106      0.116 wddm: OpenAllocation [0] handle 0x40000F40 private 32 bytes -> FFFFD60F14976DD0 (GetHandleData said 0000000000000000)
+   107      0.116 wddm: OpenAllocation 1 allocations flags 0x00000001
+   108      0.116 vidmm: level 0 table 1: 0x4000 start 0 count 512 flags 0x0 first raw 0x21 / 0x204
+   109      0.116 vidmm:   -> first entry 0x270ACE071 (written)
+   110      0.117 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   111      0.117 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   112      0.117 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   113      0.118 wddm: DescribeAllocation 1920x1200 format 21
+   114      0.118 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   115      0.118 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   116      0.118 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   117      0.118 wddm: OpenAllocation [0] handle 0x40000FC0 private 32 bytes -> FFFFD60F14977E20 (GetHandleData said 0000000000000000)
+   118      0.118 wddm: OpenAllocation 1 allocations flags 0x00000001
+   119      0.118 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   120      0.120 stage 50
+   121      0.120 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   122      0.120 wddm: DescribeAllocation 1920x1200 format 21
+   123      0.120 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   124      0.120 wddm: software vsync on, 16 ms period, target 2424833
+   125      0.120 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   126      0.120 wddm: DescribeAllocation 1920x1200 format 21
+   127      0.346 wddm: ControlInterrupt type 3 on -> 0x00000000
+   128      0.362 wddm: ControlInterrupt type 3 off -> 0x00000000
+   129      0.362 wddm: ControlInterrupt type 3 on -> 0x00000000
+   130      0.377 wddm: ControlInterrupt type 3 off -> 0x00000000
+   131      0.377 wddm: ControlInterrupt type 3 on -> 0x00000000
+   132      0.394 wddm: ControlInterrupt type 3 off -> 0x00000000
+   133      0.394 wddm: ControlInterrupt type 3 on -> 0x00000000
+   134      0.410 wddm: ControlInterrupt type 3 off -> 0x00000000
+   135      3.154 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   136      3.154 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F0C9BB010/2184, driver data 0
+   137      3.154 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   138      3.154 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   139      3.154 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   140      3.154 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   141      3.154 wddm: SetRootPageTable segment 1 offset 0x1FD735000, 512 entries
+   142      3.154 vidmm: root page table 1:0x1FD735000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   143      3.154 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   144      3.154 wddm: present without valid software packet completed without GPU dispatch
+   145      3.174 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   146      3.174 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F13BDC010/2184, driver data 0
+   147      3.174 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   148      3.174 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   149      3.174 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   150      3.174 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   151      3.174 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 0
+   152      3.174 wddm: present without valid software packet completed without GPU dispatch
+   153      3.190 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   154      3.190 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F0C9BB010/2184, driver data 0
+   155      3.190 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   156      3.190 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   157      3.190 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   158      3.190 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   159      3.190 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 0
+   160      3.190 wddm: present without valid software packet completed without GPU dispatch
+   161      3.206 wddm: Present flags 0x00000001 source 0 dest 0, 4 sub-rectangles, 4096 DMA bytes free
+   162      3.206 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F13BDC010/2184, driver data 0
+   163      3.206 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   164      3.206 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   165      3.206 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   166      3.206 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   167      3.206 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 0
+   168      3.206 wddm: present without valid software packet completed without GPU dispatch
+   169      5.772 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   170      5.772 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F0C9BB010/2184, driver data 0
+   171      5.772 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   172      5.772 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   173      5.772 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   174      5.772 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   175      5.772 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 0
+   176      5.772 wddm: present without valid software packet completed without GPU dispatch
+   177      5.806 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   178      5.806 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F13BDC010/2184, driver data 0
+   179      5.806 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   180      5.806 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   181      5.806 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   182      5.806 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   183      5.806 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 0
+   184      5.806 wddm: present without valid software packet completed without GPU dispatch
+   185      8.495 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   186      8.495 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F0C9BB010/2184, driver data 0
+   187      8.495 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   188      8.495 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   189      8.495 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   190      8.495 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   191      8.495 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 0
+   192      8.495 wddm: present without valid software packet completed without GPU dispatch
+   193      8.523 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   194      8.523 wddm: Present list FFFFAE027676ABB0 (context list 256), private FFFFD60F13BDC010/2184, driver data 0
+   195      8.523 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   196      8.523 wddm: Present list q4-7  FFFFD60F14977E20 00000000008DC000 0000000000000000 0000000000000000
+   197      8.523 wddm: Present list q8-11 FFFFD60F14976DD0 0000000000012000 0000000000000000 0000000000000000
+   198      8.523 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   199      8.523 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 0
+   200      8.523 wddm: present without valid software packet completed without GPU dispatch
+   201      8.541 wddm: present without valid software packet completed without GPU dispatch
+   202     11.043 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+   203     11.199 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+   204     11.199 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 248 us, in TMR at 0x0
+   205     11.201 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1890 us, in TMR at 0x0
+   206     11.203 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1887 us, in TMR at 0x0
+   207     11.207 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF842000
+   208     11.213 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF883000
+   209     11.219 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF8C4000
+   210     11.225 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   211     11.225 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   212     11.231 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   213     11.231 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   214     11.233 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1702 us, in TMR at 0x0
+   215     11.233 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   216     11.261 ih: init: rc 0, 21 writes
+   217     11.261 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   218     11.277 wddm: present without valid software packet completed without GPU dispatch
+   219     11.291 gfx: stage 1 (doorbell aperture): rc 0, 70 writes so far, 1 us
+   220     11.291 gfx: op 1 to stage 1 -> 0x00000000, result 0, 70 writes, 0 doorbells
+   221     11.307 wddm: present without valid software packet completed without GPU dispatch
+   222     11.319 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+   223     11.319 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+   224     11.323 wddm: present without valid software packet completed without GPU dispatch
+   225     11.347 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 4 us
+   226     11.347 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   227     11.383 gfx: stage 4 (constants): rc 0, 157 writes so far, 60 us
+   228     11.383 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   229     11.425 gfx: stage 5 (RLC): rc 0, 8 writes so far, 134 us
+   230     11.425 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+   231     11.513 gfx: stage 6 (CP): rc 0, 62 writes so far, 456 us
+   232     11.513 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+   233     11.549 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 101 us
+   234     11.549 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   235     11.577 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   236     11.577 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   237     11.605 gfx: IB 0x564000 x3 dwords at VMID 0: fetched 1, fence 0x1/0x1, result 0
+   238     11.605 gfx: fence ring 0 x1 int 4 -> 0x00000000, result 0, 1 completed, last 0x1/0x1, 39 us
+   239     14.686 wddm: present without valid software packet completed without GPU dispatch
+   240     14.706 wddm: present without valid software packet completed without GPU dispatch
+   241     14.724 wddm: present without valid software packet completed without GPU dispatch
+   242     15.461 wddm: CreateProcess flags 0x00000000 pasids 1
+   243     15.461 wddm: CreateDevice flags 0x00000000 pasid 0
+   244     15.757 wddm: umd context node 0 ip 0, private slot 576
+   245     15.757 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 80
+   246     15.757 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+   247     15.757 wddm: umd alloc 4096 bytes heap 0x4 align 4096 va 0x0
+   248     15.757 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   249     15.757 wddm: OpenAllocation [0] handle 0x40000D80 private 192 bytes -> FFFFD60F149777F0 (GetHandleData said 0000000000000000)
+   250     15.757 wddm: OpenAllocation 1 allocations flags 0x00000001
+   251     15.757 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   252     15.817 wddm: umd alloc 3932160 bytes heap 0x4 align 262144 va 0x0
+   253     15.817 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   254     15.817 wddm: OpenAllocation [0] handle 0x40001540 private 192 bytes -> FFFFD60F14977AC0 (GetHandleData said 0000000000000000)
+   255     15.817 wddm: OpenAllocation 1 allocations flags 0x00000001
+ 24424     22.383 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00019000
+ 24425     22.383 wddm: umd ib +192 00000001 0000000C 00000000 00000000 C0053C00 00000013 00019000 00000001
+ 24426     22.383 wddm: umd ib +200 0000000C FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24427     22.383 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00823000 00000002 004A1800
+ 24428     22.383 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24429     22.383 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24430     22.383 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24431     22.383 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24432     22.383 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24433     22.383 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24434     22.383 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24435     22.383 wddm: umd ib +176 C0043700 40100500 0001D000 00000001 00000000 00000000 C0004600 0000002E
+ 24436     22.383 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0001D000
+ 24437     22.383 wddm: umd ib +192 00000001 0000000B 00000000 00000000 C0053C00 00000013 0001D000 00000001
+ 24438     22.383 wddm: umd ib +200 0000000B FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24439     22.383 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00824000 00000002 004A2800
+ 24440     22.383 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24441     22.383 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24442     22.383 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24443     22.383 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24444     22.383 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24445     22.383 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24446     22.383 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24447     22.383 wddm: umd ib +176 C0043700 40100500 00021000 00000001 00000000 00000000 C0004600 0000002E
+ 24448     22.383 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00021000
+ 24449     22.383 wddm: umd ib +192 00000001 0000000C 00000000 00000000 C0053C00 00000013 00021000 00000001
+ 24450     22.383 wddm: umd ib +200 0000000C FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24451     22.383 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A24000 00000002 006A2800
+ 24452     22.383 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24453     22.383 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24454     22.383 wddm: umd ib 0x20016C000 2432 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24455     22.383 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24456     22.383 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24457     22.383 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24458     22.383 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24459     22.383 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+ 24460     22.383 wddm: umd ib +184 00000000 00000000 00A70000 00000002 00000400 C0004200 00000000 C0027600
+ 24461     22.383 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0000 00020396 C0017600
+ 24462     22.383 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+ 24463     22.383 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0067600 00000243 00000040
+ 24464     22.383 wddm: umd ib +216 00000040 00000040 00000040 00000000 3727C5AC C0004600 0000002E C0004600
+ 24465     22.383 wddm: umd ib +224 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000 00000001
+ 24466     22.383 wddm: umd ib +232 00000053 00000000 00000000 C0053C00 00000013 00029000 00000001 00000053
+ 24467     22.383 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x271D8A200 vram leaf 0x271D8A071 dram 00000000 00000000 00000000 00000000
+ 24468     22.383 wddm: umd ib 0x20016C000 3584 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24469     22.383 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24470     22.383 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24471     22.383 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24472     22.383 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24473     22.383 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+ 24474     22.383 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 24475     22.383 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 24476     22.383 wddm: umd ib +200 00000001 C0017600 00000242 0002D480 C0087600 00000244 00000004 00000008
+ 24477     22.383 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 24478     22.383 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24479     22.383 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000000AD 00000000 00000000 C0053C00
+ 24480     22.383 wddm: umd ib +232 00000013 0003A000 00000001 000000AD FFFFFFFF 00000004 C0065800 00000000
+ 24481     22.383 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 24482     22.383 wddm: umd ib 0x20016C000 2784 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24483     22.383 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24484     22.383 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24485     22.383 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24486     22.383 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24487     22.383 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+ 24488     22.383 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24489     22.383 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24490     22.383 wddm: umd ib +200 00000001 C0017600 00000242 0002DC00 C00B7600 00000243 00000040 000000AC
+ 24491     22.383 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 24492     22.383 wddm: umd ib +216 00000001 C0027600 0000024E 00080008 00000001 C0031502 000000AC 00000001
+ 24493     22.383 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24494     22.383 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 24495     22.383 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24496     22.383 wddm: umd ib 0x20016C000 8576 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24497     22.383 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24498     22.383 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24499     22.383 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24500     22.383 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24501     22.383 wddm: umd ib +176 C0043700 40100500 00084000 00000001 00000000 00000000 C0027600 0000020C
+ 24502     22.383 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 24503     22.383 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 24504     22.383 wddm: umd ib +200 00000001 C0017600 00000242 0002E140 C0087600 00000244 00000008 00000008
+ 24505     22.383 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 24506     22.383 wddm: umd ib +216 00084008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24507     22.383 wddm: umd ib +224 0070F514 23000000 00084000 00000001 00000120 00000000 00000000 C0053C00
+ 24508     22.383 wddm: umd ib +232 00000013 00084000 00000001 00000120 FFFFFFFF 00000004 C0065800 00000000
+ 24509     22.383 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 24510     22.385 wddm: umd ib 0x20016C000 7488 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24511     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24512     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24513     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24514     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24515     22.385 wddm: umd ib +176 C0043700 40100500 00088000 00000001 00000000 00000000 C0027600 0000020C
+ 24516     22.385 wddm: umd ib +184 010004B5 00000000 C0027600 00000212 602C0003 00000398 C0017600 00000228
+ 24517     22.385 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000100 00000001
+ 24518     22.385 wddm: umd ib +200 00000001 C0017600 00000242 0002F700 C0087600 00000244 00000040 00000040
+ 24519     22.385 wddm: umd ib +208 00000001 00000001 00000001 00000040 00000040 00000040 C0017600 00000243
+ 24520     22.385 wddm: umd ib +216 00088008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24521     22.385 wddm: umd ib +224 0070F514 23000000 00088000 00000001 000000FC 00000000 00000000 C0053C00
+ 24522     22.385 wddm: umd ib +232 00000013 00088000 00000001 000000FC FFFFFFFF 00000004 C0065800 00000000
+ 24523     22.385 wddm: shader 0x10004B500 lo 010004B5 hi 00000000 -> phys 0x271D95500 vram leaf 0x271D95071 dram 00000000 00000000 00000000 00000000
+ 24524     22.385 wddm: umd ib 0x20016C000 3424 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24525     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24526     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24527     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24528     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24529     22.385 wddm: umd ib +176 C0043700 40100500 0008C000 00000001 00000000 00000000 C0027600 0000020C
+ 24530     22.385 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24531     22.385 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24532     22.385 wddm: umd ib +200 00000001 C0017600 00000242 00030900 C00B7600 00000243 00000040 000000AC
+ 24533     22.385 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 24534     22.385 wddm: umd ib +216 00000001 C0027600 0000024E 0008C008 00000001 C0031502 000000AC 00000001
+ 24535     22.385 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24536     22.385 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 24537     22.385 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24538     22.385 wddm: umd ib 0x20016C000 6272 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24539     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24540     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24541     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24542     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24543     22.385 wddm: umd ib +176 C0043700 40100500 00090000 00000001 00000000 00000000 C0027600 0000020C
+ 24544     22.385 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24545     22.385 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24546     22.385 wddm: umd ib +200 00000001 C0017600 00000242 00030FC0 C00B7600 00000243 00000040 00000020
+ 24547     22.385 wddm: umd ib +208 00000800 00000040 00000020 00000000 00000000 00000001 00000001 00000001
+ 24548     22.385 wddm: umd ib +216 00000001 C0027600 0000024E 00090008 00000001 C0031502 00000020 00000001
+ 24549     22.385 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24550     22.385 wddm: umd ib +232 80001600 C0027600 0000020C 0100048A 00000000 C0027600 00000212 602C0000
+ 24551     22.385 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24552     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24553     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24554     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24555     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24556     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24557     22.385 wddm: umd ib +176 C0043700 40100500 00094000 00000001 00000000 00000000 C0004600 0000002E
+ 24558     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00094000
+ 24559     22.385 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00094000 00000001
+ 24560     22.385 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24561     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 004A0000 00000002 00330000
+ 24562     22.385 wddm: umd ib +216 00000002 40000800 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24563     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000000 00000000 00000000 00000000
+ 24564     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24565     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24566     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24567     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24568     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24569     22.385 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0004600 0000002E
+ 24570     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000
+ 24571     22.385 wddm: umd ib +192 00000001 00000058 00000000 00000000 C0053C00 00000013 00029000 00000001
+ 24572     22.385 wddm: umd ib +200 00000058 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24573     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A25000 00000002 00480000
+ 24574     22.385 wddm: umd ib +216 00000002 40000100 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24575     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 0070F514 23000000 00029000 00000001
+ 24576     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24577     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24578     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24579     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24580     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24581     22.385 wddm: umd ib +176 C0043700 40100500 00025000 00000001 00000000 00000000 C0004600 0000002E
+ 24582     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00025000
+ 24583     22.385 wddm: umd ib +192 00000001 0000000C 00000000 00000000 C0053C00 00000013 00025000 00000001
+ 24584     22.385 wddm: umd ib +200 0000000C FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24585     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00821000 00000002 004A0000
+ 24586     22.385 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24587     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24588     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24589     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24590     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24591     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24592     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24593     22.385 wddm: umd ib +176 C0043700 40100500 00001000 00000001 00000000 00000000 C0004600 0000002E
+ 24594     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00001000
+ 24595     22.385 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00001000 00000001
+ 24596     22.385 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24597     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00822000 00000002 004A0800
+ 24598     22.385 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24599     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24600     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24601     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24602     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24603     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24604     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24605     22.385 wddm: umd ib +176 C0043700 40100500 00005000 00000001 00000000 00000000 C0004600 0000002E
+ 24606     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00005000
+ 24607     22.385 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00005000 00000001
+ 24608     22.385 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24609     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00823000 00000002 004A1800
+ 24610     22.385 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24611     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24612     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24613     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24614     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24615     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24616     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24617     22.385 wddm: umd ib +176 C0043700 40100500 00009000 00000001 00000000 00000000 C0004600 0000002E
+ 24618     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00009000
+ 24619     22.385 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00009000 00000001
+ 24620     22.385 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24621     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00824000 00000002 004A2800
+ 24622     22.385 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24623     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24624     22.385 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24625     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24626     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24627     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24628     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24629     22.385 wddm: umd ib +176 C0043700 40100500 0000D000 00000001 00000000 00000000 C0004600 0000002E
+ 24630     22.385 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0000D000
+ 24631     22.385 wddm: umd ib +192 00000001 0000000C 00000000 00000000 C0053C00 00000013 0000D000 00000001
+ 24632     22.385 wddm: umd ib +200 0000000C FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24633     22.385 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A24000 00000002 006A2800
+ 24634     22.385 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24635     22.385 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24636     22.385 wddm: umd ib 0x20016C000 2432 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24637     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24638     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24639     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24640     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24641     22.385 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+ 24642     22.385 wddm: umd ib +184 00000000 00000000 00A70000 00000002 00000400 C0004200 00000000 C0027600
+ 24643     22.385 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0000 00020396 C0017600
+ 24644     22.385 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+ 24645     22.385 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0067600 00000243 00000040
+ 24646     22.385 wddm: umd ib +216 00000040 00000040 00000040 00000000 3727C5AC C0004600 0000002E C0004600
+ 24647     22.385 wddm: umd ib +224 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000 00000001
+ 24648     22.385 wddm: umd ib +232 00000059 00000000 00000000 C0053C00 00000013 00029000 00000001 00000059
+ 24649     22.385 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x271D8A200 vram leaf 0x271D8A071 dram 00000000 00000000 00000000 00000000
+ 24650     22.385 wddm: umd ib 0x20016C000 3584 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24651     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24652     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24653     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24654     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24655     22.385 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+ 24656     22.385 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 24657     22.385 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 24658     22.385 wddm: umd ib +200 00000001 C0017600 00000242 0002D480 C0087600 00000244 00000004 00000008
+ 24659     22.385 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 24660     22.385 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24661     22.385 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000000B6 00000000 00000000 C0053C00
+ 24662     22.385 wddm: umd ib +232 00000013 0003A000 00000001 000000B6 FFFFFFFF 00000004 C0065800 00000000
+ 24663     22.385 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 24664     22.385 wddm: umd ib 0x20016C000 2784 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24665     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24666     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24667     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24668     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24669     22.385 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+ 24670     22.385 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24671     22.385 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24672     22.385 wddm: umd ib +200 00000001 C0017600 00000242 0002DC00 C00B7600 00000243 00000040 000000AC
+ 24673     22.385 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 24674     22.385 wddm: umd ib +216 00000001 C0027600 0000024E 00080008 00000001 C0031502 000000AC 00000001
+ 24675     22.385 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24676     22.385 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 24677     22.385 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24678     22.385 wddm: umd ib 0x20016C000 8576 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24679     22.385 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24680     22.385 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24681     22.385 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24682     22.385 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24683     22.385 wddm: umd ib +176 C0043700 40100500 00084000 00000001 00000000 00000000 C0027600 0000020C
+ 24684     22.385 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 24685     22.385 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 24686     22.385 wddm: umd ib +200 00000001 C0017600 00000242 0002E140 C0087600 00000244 00000008 00000008
+ 24687     22.385 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 24688     22.385 wddm: umd ib +216 00084008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24689     22.385 wddm: umd ib +224 0070F514 23000000 00084000 00000001 00000138 00000000 00000000 C0053C00
+ 24690     22.385 wddm: umd ib +232 00000013 00084000 00000001 00000138 FFFFFFFF 00000004 C0065800 00000000
+ 24691     22.385 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 24692     22.387 wddm: umd ib 0x20016C000 7488 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24693     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24694     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24695     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24696     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24697     22.387 wddm: umd ib +176 C0043700 40100500 00088000 00000001 00000000 00000000 C0027600 0000020C
+ 24698     22.387 wddm: umd ib +184 010004B5 00000000 C0027600 00000212 602C0003 00000398 C0017600 00000228
+ 24699     22.387 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000100 00000001
+ 24700     22.387 wddm: umd ib +200 00000001 C0017600 00000242 0002F700 C0087600 00000244 00000040 00000040
+ 24701     22.387 wddm: umd ib +208 00000001 00000001 00000001 00000040 00000040 00000040 C0017600 00000243
+ 24702     22.387 wddm: umd ib +216 00088008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24703     22.387 wddm: umd ib +224 0070F514 23000000 00088000 00000001 00000111 00000000 00000000 C0053C00
+ 24704     22.387 wddm: umd ib +232 00000013 00088000 00000001 00000111 FFFFFFFF 00000004 C0065800 00000000
+ 24705     22.387 wddm: shader 0x10004B500 lo 010004B5 hi 00000000 -> phys 0x271D95500 vram leaf 0x271D95071 dram 00000000 00000000 00000000 00000000
+ 24706     22.387 wddm: umd ib 0x20016C000 3424 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24707     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24708     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24709     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24710     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24711     22.387 wddm: umd ib +176 C0043700 40100500 0008C000 00000001 00000000 00000000 C0027600 0000020C
+ 24712     22.387 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24713     22.387 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24714     22.387 wddm: umd ib +200 00000001 C0017600 00000242 00030900 C00B7600 00000243 00000040 000000AC
+ 24715     22.387 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 24716     22.387 wddm: umd ib +216 00000001 C0027600 0000024E 0008C008 00000001 C0031502 000000AC 00000001
+ 24717     22.387 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24718     22.387 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 24719     22.387 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24720     22.387 wddm: umd ib 0x20016C000 6272 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24721     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24722     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24723     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24724     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24725     22.387 wddm: umd ib +176 C0043700 40100500 00090000 00000001 00000000 00000000 C0027600 0000020C
+ 24726     22.387 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24727     22.387 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24728     22.387 wddm: umd ib +200 00000001 C0017600 00000242 00030FC0 C00B7600 00000243 00000040 00000020
+ 24729     22.387 wddm: umd ib +208 00000800 00000040 00000020 00000000 00000000 00000001 00000001 00000001
+ 24730     22.387 wddm: umd ib +216 00000001 C0027600 0000024E 00090008 00000001 C0031502 00000020 00000001
+ 24731     22.387 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24732     22.387 wddm: umd ib +232 80001600 C0027600 0000020C 0100048A 00000000 C0027600 00000212 602C0000
+ 24733     22.387 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24734     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24735     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24736     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24737     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24738     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24739     22.387 wddm: umd ib +176 C0043700 40100500 00094000 00000001 00000000 00000000 C0004600 0000002E
+ 24740     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00094000
+ 24741     22.387 wddm: umd ib +192 00000001 0000000E 00000000 00000000 C0053C00 00000013 00094000 00000001
+ 24742     22.387 wddm: umd ib +200 0000000E FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24743     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 004A0000 00000002 00330000
+ 24744     22.387 wddm: umd ib +216 00000002 40000800 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24745     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000000 00000000 00000000 00000000
+ 24746     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24747     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24748     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24749     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24750     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24751     22.387 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0004600 0000002E
+ 24752     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000
+ 24753     22.387 wddm: umd ib +192 00000001 0000005E 00000000 00000000 C0053C00 00000013 00029000 00000001
+ 24754     22.387 wddm: umd ib +200 0000005E FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24755     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A25000 00000002 00480000
+ 24756     22.387 wddm: umd ib +216 00000002 40000100 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24757     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 0070F514 23000000 00029000 00000001
+ 24758     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24759     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24760     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24761     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24762     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24763     22.387 wddm: umd ib +176 C0043700 40100500 00011000 00000001 00000000 00000000 C0004600 0000002E
+ 24764     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00011000
+ 24765     22.387 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00011000 00000001
+ 24766     22.387 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24767     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00821000 00000002 004A0000
+ 24768     22.387 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24769     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24770     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24771     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24772     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24773     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24774     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24775     22.387 wddm: umd ib +176 C0043700 40100500 00015000 00000001 00000000 00000000 C0004600 0000002E
+ 24776     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00015000
+ 24777     22.387 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00015000 00000001
+ 24778     22.387 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24779     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00822000 00000002 004A0800
+ 24780     22.387 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24781     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24782     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24783     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24784     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24785     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24786     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24787     22.387 wddm: umd ib +176 C0043700 40100500 00019000 00000001 00000000 00000000 C0004600 0000002E
+ 24788     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00019000
+ 24789     22.387 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00019000 00000001
+ 24790     22.387 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24791     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00823000 00000002 004A1800
+ 24792     22.387 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24793     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24794     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24795     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24796     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24797     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24798     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24799     22.387 wddm: umd ib +176 C0043700 40100500 0001D000 00000001 00000000 00000000 C0004600 0000002E
+ 24800     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0001D000
+ 24801     22.387 wddm: umd ib +192 00000001 0000000C 00000000 00000000 C0053C00 00000013 0001D000 00000001
+ 24802     22.387 wddm: umd ib +200 0000000C FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24803     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00824000 00000002 004A2800
+ 24804     22.387 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24805     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24806     22.387 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24807     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24808     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24809     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24810     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24811     22.387 wddm: umd ib +176 C0043700 40100500 00021000 00000001 00000000 00000000 C0004600 0000002E
+ 24812     22.387 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00021000
+ 24813     22.387 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00021000 00000001
+ 24814     22.387 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24815     22.387 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A24000 00000002 006A2800
+ 24816     22.387 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24817     22.387 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24818     22.387 wddm: umd ib 0x20016C000 2432 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24819     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24820     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24821     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24822     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24823     22.387 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+ 24824     22.387 wddm: umd ib +184 00000000 00000000 00A70000 00000002 00000400 C0004200 00000000 C0027600
+ 24825     22.387 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0000 00020396 C0017600
+ 24826     22.387 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+ 24827     22.387 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0067600 00000243 00000040
+ 24828     22.387 wddm: umd ib +216 00000040 00000040 00000040 00000000 3727C5AC C0004600 0000002E C0004600
+ 24829     22.387 wddm: umd ib +224 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000 00000001
+ 24830     22.387 wddm: umd ib +232 0000005F 00000000 00000000 C0053C00 00000013 00029000 00000001 0000005F
+ 24831     22.387 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x271D8A200 vram leaf 0x271D8A071 dram 00000000 00000000 00000000 00000000
+ 24832     22.387 wddm: umd ib 0x20016C000 3584 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24833     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24834     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24835     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24836     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24837     22.387 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+ 24838     22.387 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 24839     22.387 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 24840     22.387 wddm: umd ib +200 00000001 C0017600 00000242 0002D480 C0087600 00000244 00000004 00000008
+ 24841     22.387 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 24842     22.387 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24843     22.387 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000000BF 00000000 00000000 C0053C00
+ 24844     22.387 wddm: umd ib +232 00000013 0003A000 00000001 000000BF FFFFFFFF 00000004 C0065800 00000000
+ 24845     22.387 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 24846     22.387 wddm: umd ib 0x20016C000 2784 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24847     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24848     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24849     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24850     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24851     22.387 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+ 24852     22.387 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24853     22.387 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24854     22.387 wddm: umd ib +200 00000001 C0017600 00000242 0002DC00 C00B7600 00000243 00000040 000000AC
+ 24855     22.387 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 24856     22.387 wddm: umd ib +216 00000001 C0027600 0000024E 00080008 00000001 C0031502 000000AC 00000001
+ 24857     22.387 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24858     22.387 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 24859     22.387 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24860     22.387 wddm: umd ib 0x20016C000 8576 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24861     22.387 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24862     22.387 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24863     22.387 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24864     22.387 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24865     22.387 wddm: umd ib +176 C0043700 40100500 00084000 00000001 00000000 00000000 C0027600 0000020C
+ 24866     22.387 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 24867     22.387 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 24868     22.387 wddm: umd ib +200 00000001 C0017600 00000242 0002E140 C0087600 00000244 00000008 00000008
+ 24869     22.387 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 24870     22.387 wddm: umd ib +216 00084008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24871     22.387 wddm: umd ib +224 0070F514 23000000 00084000 00000001 00000150 00000000 00000000 C0053C00
+ 24872     22.387 wddm: umd ib +232 00000013 00084000 00000001 00000150 FFFFFFFF 00000004 C0065800 00000000
+ 24873     22.387 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 24874     22.389 wddm: umd ib 0x20016C000 7488 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24875     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24876     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24877     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24878     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24879     22.389 wddm: umd ib +176 C0043700 40100500 00088000 00000001 00000000 00000000 C0027600 0000020C
+ 24880     22.389 wddm: umd ib +184 010004B5 00000000 C0027600 00000212 602C0003 00000398 C0017600 00000228
+ 24881     22.389 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000100 00000001
+ 24882     22.389 wddm: umd ib +200 00000001 C0017600 00000242 0002F700 C0087600 00000244 00000040 00000040
+ 24883     22.389 wddm: umd ib +208 00000001 00000001 00000001 00000040 00000040 00000040 C0017600 00000243
+ 24884     22.389 wddm: umd ib +216 00088008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 24885     22.389 wddm: umd ib +224 0070F514 23000000 00088000 00000001 00000126 00000000 00000000 C0053C00
+ 24886     22.389 wddm: umd ib +232 00000013 00088000 00000001 00000126 FFFFFFFF 00000004 C0065800 00000000
+ 24887     22.389 wddm: shader 0x10004B500 lo 010004B5 hi 00000000 -> phys 0x271D95500 vram leaf 0x271D95071 dram 00000000 00000000 00000000 00000000
+ 24888     22.389 wddm: umd ib 0x20016C000 3424 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24889     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24890     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24891     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24892     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24893     22.389 wddm: umd ib +176 C0043700 40100500 0008C000 00000001 00000000 00000000 C0027600 0000020C
+ 24894     22.389 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24895     22.389 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24896     22.389 wddm: umd ib +200 00000001 C0017600 00000242 00030900 C00B7600 00000243 00000040 000000AC
+ 24897     22.389 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 24898     22.389 wddm: umd ib +216 00000001 C0027600 0000024E 0008C008 00000001 C0031502 000000AC 00000001
+ 24899     22.389 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24900     22.389 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 24901     22.389 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24902     22.389 wddm: umd ib 0x20016C000 6272 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24903     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24904     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24905     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24906     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24907     22.389 wddm: umd ib +176 C0043700 40100500 00090000 00000001 00000000 00000000 C0027600 0000020C
+ 24908     22.389 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 24909     22.389 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 24910     22.389 wddm: umd ib +200 00000001 C0017600 00000242 00030FC0 C00B7600 00000243 00000040 00000020
+ 24911     22.389 wddm: umd ib +208 00000800 00000040 00000020 00000000 00000000 00000001 00000001 00000001
+ 24912     22.389 wddm: umd ib +216 00000001 C0027600 0000024E 00090008 00000001 C0031502 00000020 00000001
+ 24913     22.389 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 24914     22.389 wddm: umd ib +232 80001600 C0027600 0000020C 0100048A 00000000 C0027600 00000212 602C0000
+ 24915     22.389 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 24916     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24917     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24918     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24919     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24920     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24921     22.389 wddm: umd ib +176 C0043700 40100500 00094000 00000001 00000000 00000000 C0004600 0000002E
+ 24922     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00094000
+ 24923     22.389 wddm: umd ib +192 00000001 0000000F 00000000 00000000 C0053C00 00000013 00094000 00000001
+ 24924     22.389 wddm: umd ib +200 0000000F FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24925     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 004A0000 00000002 00330000
+ 24926     22.389 wddm: umd ib +216 00000002 40000800 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24927     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000000 00000000 00000000 00000000
+ 24928     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24929     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24930     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24931     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24932     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24933     22.389 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0004600 0000002E
+ 24934     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000
+ 24935     22.389 wddm: umd ib +192 00000001 00000064 00000000 00000000 C0053C00 00000013 00029000 00000001
+ 24936     22.389 wddm: umd ib +200 00000064 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24937     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A25000 00000002 00480000
+ 24938     22.389 wddm: umd ib +216 00000002 40000100 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24939     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 0070F514 23000000 00029000 00000001
+ 24940     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24941     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24942     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24943     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24944     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24945     22.389 wddm: umd ib +176 C0043700 40100500 00025000 00000001 00000000 00000000 C0004600 0000002E
+ 24946     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00025000
+ 24947     22.389 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 00025000 00000001
+ 24948     22.389 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24949     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00821000 00000002 004A0000
+ 24950     22.389 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24951     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24952     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24953     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24954     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24955     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24956     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24957     22.389 wddm: umd ib +176 C0043700 40100500 00001000 00000001 00000000 00000000 C0004600 0000002E
+ 24958     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00001000
+ 24959     22.389 wddm: umd ib +192 00000001 0000000E 00000000 00000000 C0053C00 00000013 00001000 00000001
+ 24960     22.389 wddm: umd ib +200 0000000E FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24961     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00822000 00000002 004A0800
+ 24962     22.389 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24963     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24964     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24965     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24966     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24967     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24968     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24969     22.389 wddm: umd ib +176 C0043700 40100500 00005000 00000001 00000000 00000000 C0004600 0000002E
+ 24970     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00005000
+ 24971     22.389 wddm: umd ib +192 00000001 0000000E 00000000 00000000 C0053C00 00000013 00005000 00000001
+ 24972     22.389 wddm: umd ib +200 0000000E FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24973     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00823000 00000002 004A1800
+ 24974     22.389 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24975     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24976     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24977     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24978     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24979     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24980     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24981     22.389 wddm: umd ib +176 C0043700 40100500 00009000 00000001 00000000 00000000 C0004600 0000002E
+ 24982     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00009000
+ 24983     22.389 wddm: umd ib +192 00000001 0000000E 00000000 00000000 C0053C00 00000013 00009000 00000001
+ 24984     22.389 wddm: umd ib +200 0000000E FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24985     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00824000 00000002 004A2800
+ 24986     22.389 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24987     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 24988     22.389 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 24989     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 24990     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 24991     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 24992     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 24993     22.389 wddm: umd ib +176 C0043700 40100500 0000D000 00000001 00000000 00000000 C0004600 0000002E
+ 24994     22.389 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0000D000
+ 24995     22.389 wddm: umd ib +192 00000001 0000000D 00000000 00000000 C0053C00 00000013 0000D000 00000001
+ 24996     22.389 wddm: umd ib +200 0000000D FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 24997     22.389 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 00A24000 00000002 006A2800
+ 24998     22.389 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+ 24999     22.389 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+ 25000     22.389 wddm: umd ib 0x20016C000 2432 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25001     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25002     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25003     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25004     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25005     22.389 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+ 25006     22.389 wddm: umd ib +184 00000000 00000000 00A70000 00000002 00000400 C0004200 00000000 C0027600
+ 25007     22.389 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0000 00020396 C0017600
+ 25008     22.389 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+ 25009     22.389 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0067600 00000243 00000040
+ 25010     22.389 wddm: umd ib +216 00000040 00000040 00000040 00000000 3727C5AC C0004600 0000002E C0004600
+ 25011     22.389 wddm: umd ib +224 0000002C C0004600 00000407 C0064900 0070F514 23000000 00029000 00000001
+ 25012     22.389 wddm: umd ib +232 00000065 00000000 00000000 C0053C00 00000013 00029000 00000001 00000065
+ 25013     22.389 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x271D8A200 vram leaf 0x271D8A071 dram 00000000 00000000 00000000 00000000
+ 25014     22.389 wddm: umd ib 0x20016C000 3584 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25015     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25016     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25017     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25018     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25019     22.389 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+ 25020     22.389 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 25021     22.389 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 25022     22.389 wddm: umd ib +200 00000001 C0017600 00000242 0002D480 C0087600 00000244 00000004 00000008
+ 25023     22.389 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 25024     22.389 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 25025     22.389 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000000C8 00000000 00000000 C0053C00
+ 25026     22.389 wddm: umd ib +232 00000013 0003A000 00000001 000000C8 FFFFFFFF 00000004 C0065800 00000000
+ 25027     22.389 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 25028     22.389 wddm: umd ib 0x20016C000 2784 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25029     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25030     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25031     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25032     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25033     22.389 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+ 25034     22.389 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 25035     22.389 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 25036     22.389 wddm: umd ib +200 00000001 C0017600 00000242 0002DC00 C00B7600 00000243 00000040 000000AC
+ 25037     22.389 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 25038     22.389 wddm: umd ib +216 00000001 C0027600 0000024E 00080008 00000001 C0031502 000000AC 00000001
+ 25039     22.389 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 25040     22.389 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 25041     22.389 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 25042     22.389 wddm: umd ib 0x20016C000 8576 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25043     22.389 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25044     22.389 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25045     22.389 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25046     22.389 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25047     22.389 wddm: umd ib +176 C0043700 40100500 00084000 00000001 00000000 00000000 C0027600 0000020C
+ 25048     22.389 wddm: umd ib +184 0100048A 00000000 C0027600 00000212 602C0000 00000B98 C0017600 00000228
+ 25049     22.389 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000001 00000100
+ 25050     22.389 wddm: umd ib +200 00000001 C0017600 00000242 0002E140 C0087600 00000244 00000008 00000008
+ 25051     22.389 wddm: umd ib +208 3F800000 00000000 3F800000 3F800000 40400000 3DCCCCCD C0017600 00000243
+ 25052     22.389 wddm: umd ib +216 00084008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 25053     22.389 wddm: umd ib +224 0070F514 23000000 00084000 00000001 00000168 00000000 00000000 C0053C00
+ 25054     22.389 wddm: umd ib +232 00000013 00084000 00000001 00000168 FFFFFFFF 00000004 C0065800 00000000
+ 25055     22.389 wddm: shader 0x100048A00 lo 0100048A hi 00000000 -> phys 0x271D92A00 vram leaf 0x271D92071 dram 00000000 00000000 00000000 00000000
+ 25056     22.391 wddm: umd ib 0x20016C000 7488 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25057     22.391 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25058     22.391 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25059     22.391 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25060     22.391 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25061     22.391 wddm: umd ib +176 C0043700 40100500 00088000 00000001 00000000 00000000 C0027600 0000020C
+ 25062     22.391 wddm: umd ib +184 010004B5 00000000 C0027600 00000212 602C0003 00000398 C0017600 00000228
+ 25063     22.391 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000100 00000001
+ 25064     22.391 wddm: umd ib +200 00000001 C0017600 00000242 0002F700 C0087600 00000244 00000040 00000040
+ 25065     22.391 wddm: umd ib +208 00000001 00000001 00000001 00000040 00000040 00000040 C0017600 00000243
+ 25066     22.391 wddm: umd ib +216 00088008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+ 25067     22.391 wddm: umd ib +224 0070F514 23000000 00088000 00000001 0000013B 00000000 00000000 C0053C00
+ 25068     22.391 wddm: umd ib +232 00000013 00088000 00000001 0000013B FFFFFFFF 00000004 C0065800 00000000
+ 25069     22.391 wddm: shader 0x10004B500 lo 010004B5 hi 00000000 -> phys 0x271D95500 vram leaf 0x271D95071 dram 00000000 00000000 00000000 00000000
+ 25070     22.391 wddm: umd ib 0x20016C000 3424 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25071     22.391 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25072     22.391 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25073     22.391 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25074     22.391 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25075     22.391 wddm: umd ib +176 C0043700 40100500 0008C000 00000001 00000000 00000000 C0027600 0000020C
+ 25076     22.391 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 25077     22.391 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 25078     22.391 wddm: umd ib +200 00000001 C0017600 00000242 00030900 C00B7600 00000243 00000040 000000AC
+ 25079     22.391 wddm: umd ib +208 00002B00 00000040 000000AC 00000000 00000000 00000001 00000001 00000001
+ 25080     22.391 wddm: umd ib +216 00000001 C0027600 0000024E 0008C008 00000001 C0031502 000000AC 00000001
+ 25081     22.391 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 25082     22.391 wddm: umd ib +232 80001600 C0027600 0000020C 010004BC 00000000 C0027600 00000212 602C0004
+ 25083     22.391 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 25084     22.391 wddm: umd ib 0x20016C000 6272 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25085     22.391 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25086     22.391 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25087     22.391 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25088     22.391 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25089     22.391 wddm: umd ib +176 C0043700 40100500 00090000 00000001 00000000 00000000 C0027600 0000020C
+ 25090     22.391 wddm: umd ib +184 010004CB 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+ 25091     22.391 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+ 25092     22.391 wddm: umd ib +200 00000001 C0017600 00000242 00030FC0 C00B7600 00000243 00000040 00000020
+ 25093     22.391 wddm: umd ib +208 00000800 00000040 00000020 00000000 00000000 00000001 00000001 00000001
+ 25094     22.391 wddm: umd ib +216 00000001 C0027600 0000024E 00090008 00000001 C0031502 00000020 00000001
+ 25095     22.391 wddm: umd ib +224 00000001 00002045 C0055000 60200000 0004CB00 00000001 0004CB00 00000001
+ 25096     22.391 wddm: umd ib +232 80001600 C0027600 0000020C 0100048A 00000000 C0027600 00000212 602C0000
+ 25097     22.391 wddm: shader 0x10004CB00 lo 010004CB hi 00000000 -> phys 0x271D96B00 vram leaf 0x271D96071 dram 00000000 00000000 00000000 00000000
+ 25098     22.391 wddm: umd ib 0x20016C000 928 bytes -> phys 0x1B4B50000 system leaf 0x1B4B50073 dram C0012800 80000000 80000000 C0001200
+ 25099     22.391 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+ 25100     22.391 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+ 25101     22.391 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+ 25102     22.391 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+ 25103     22.391 wddm: umd ib +176 C0043700 40100500 00094000 00000001 00000000 00000000 C0004600 0000002E
+ 25104     22.391 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00094000
+ 25105     22.391 wddm: umd ib +192 00000001 00000010 00000000 00000000 C0053C00 00000013 00094000 00000001
+ 25106     22.391 wddm: umd ib +200 00000010 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+ 25107     22.391 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 004A0000 00000002 00330000
+ 25108     22.391 wddm: umd ib +216 00000002 40000800 C0055000 80000000 00000000 00000000 00000000 00000000
+ 25109     22.391 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000000 00000000 00000000 00000000
+ 25110     22.397 wddm: DestroyContext
+ 25111     22.397 wddm: DestroyDevice
+ 25112     22.397 wddm: DestroyProcess
+ 25113     24.172 wddm: present without valid software packet completed without GPU dispatch
+ 25114     24.206 wddm: present without valid software packet completed without GPU dispatch
+ 25115     24.222 wddm: present without valid software packet completed without GPU dispatch
+ 25116     26.418 ih: op 3 -> 0x00000000, result 0, 0 writes; 931 interrupt routine calls, 931 ours, 2861 DPCs, 931 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+ 25117     27.341 wddm: present without valid software packet completed without GPU dispatch
+ 25118     27.373 wddm: software vsync off after 1703 ticks
+ 25119     27.373 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+ 25120     27.373 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+ 25121     27.383 wddm: DestroyContext
+ 25122     27.383 wddm: DestroyDevice
+ 25123     27.383 wddm: DestroyProcess
+ 25124     27.397 wddm: DestroyContext
+ 25125     27.397 wddm: DestroyDevice
+ 25126     27.397 wddm: DestroyDevice
+ 25127     27.397 wddm: DestroyProcess
+ 25128     27.398 stage 70
+ 25129     27.398 wddm summary: ---- DDI calls: name, count, first log line ----
+ 25130     27.398 wddm summary: QueryAdapterInfo                   17  first at 26
+ 25131     27.398 wddm summary: GetNodeMetadata                     1  first at 34
+ 25132     27.398 wddm summary: CreateDevice                        8  first at 40
+ 25133     27.398 wddm summary: DestroyDevice                       8  first at 272
+ 25134     27.398 wddm summary: CreateContext                       7  first at 42
+ 25135     27.398 wddm summary: DestroyContext                      7  first at 271
+ 25136     27.398 wddm summary: CreateProcess                       7  first at 39
+ 25137     27.398 wddm summary: DestroyProcess                      7  first at 273
+ 25138     27.398 wddm summary: SetRootPageTable                    6  first at 65
+ 25139     27.398 wddm summary: CreateAllocation                  224  first at 105
+ 25140     27.398 wddm summary: DestroyAllocation                 337  first at 263
+ 25141     27.398 wddm summary: DescribeAllocation                  3  first at 113
+ 25142     27.398 wddm summary: GetStandardAllocationDriverData      4  first at 103
+ 25143     27.398 wddm summary: OpenAllocation                    224  first at 107
+ 25144     27.398 wddm summary: CloseAllocation                   224  first at 262
+ 25145     27.398 wddm summary: BuildPagingBuffer                3402  first at 44
+ 25146     27.398 wddm summary: SubmitCommandVirtual             1738  first at 143
+ 25147     27.398 wddm summary: Present                            25  first at 135
+ 25148     27.398 wddm summary: SetVidPnSourceAddress               1  first at 123
+ 25149     27.398 wddm summary: ControlInterrupt                  538  first at 127
+ 25150     27.398 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 25151     27.398 wddm summary: adapter info type   1       1  first at 26
+ 25152     27.398 wddm summary: adapter info type  15       1  first at 27
+ 25153     27.398 wddm summary: adapter info type  47       1  first at 28
+ 25154     27.398 wddm summary: adapter info type  13       1  first at 29
+ 25155     27.398 wddm summary: adapter info type  14       4  first at 30
+ 25156     27.398 wddm summary: adapter info type  11       2  first at 36
+ 25157     27.398 wddm summary: adapter info type  10       1  first at 38
+ 25158     27.398 wddm summary: adapter info type  16       1  first at 38
+ 25159     27.398 wddm summary: adapter info type   0       5  first at 242
+ 25160     27.398 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 25161     27.398 wddm summary: paging operation  11    2279  first at 44
+ 25162     27.398 wddm summary: paging operation  12    1010  first at 98
+ 25163     27.398 wddm summary: paging operation   9      59  first at 111
+ 25164     27.398 wddm summary: paging operation   8      48  first at 261
+ 25165     27.398 wddm summary: paging operation   2       6  first at 268
+ 25166     27.398 wddm summary: objects created/destroyed: dev 8/8 ctx 7/7 proc 7/7 alloc 224/337, 0 alive
+ 25167     27.398 wddm summary: allocations opened/closed: 224/224 calls
+ 25168     27.398 wddm summary: submissions 0 physical + 1738 virtual, 0 preemptions, last completed fence 1738
+ 25169     27.398 wddm summary: node 0 hardware: 931 submitted, 930 completed, 1 timeouts, 0 refused
+ 25170     27.398 wddm summary: umd: 222 allocs (0 refused), 5 contexts, 931 submits on the ring, 782 not run
+ 25171     27.398 wddm summary: node 1 (paging, closed): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+ 25172     27.398 wddm summary: SubmitCommandVirtual by node: 0: 1738, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+ 25173     27.398 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+ 25174     27.398 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+ 25175     27.398 wddm summary: presents 25, flips 1 of 1 address calls (0 arrived above DISPATCH_LEVEL)
+ 25176     27.398 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+ 25177     27.398 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 25178     27.398 wddm summary: widest blit 0 rows
+ 25179     27.398 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 25180     27.398 wddm summary: vsync not enabled by ControlInterrupt, 1703 ticks, 269 reported to dxgkrnl
+ 25181     27.398 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+ 25182     27.398 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 25183     27.398 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 25184     27.398 wddm: stop, last completed fence 1738, 1703 vsync ticks, 0 objects freed at the stop
+ 25185     27.402 ih: IH_RB_CNTL 0x403101A0
+ 25186     27.570 amdgpu[2]: failed to halt cp gfx
+
+ 25187     27.570 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+ 25188     27.570 amdgpu[0]: free PSP TMR buffer
+
+ 25189     27.594 psp: unload: destroy TMR 0, ring stop 0
+ 25190     27.594 gart: firmware state restored at stop (282 writes)
+ 25191     27.594 stage 79

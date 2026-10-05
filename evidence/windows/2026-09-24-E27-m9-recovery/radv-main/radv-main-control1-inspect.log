@@ -1,0 +1,21 @@
+
+Name       Length LastWriteTime       
+----       ------ -------------       
+before.log 178832 9/24/2026 2:34:04 PM
+m8.err        822 9/24/2026 2:34:07 PM
+m8.out          0 9/24/2026 2:34:07 PM
+run.cmd      1340 9/24/2026 2:34:04 PM
+worker.ps1    189 9/24/2026 2:34:04 PM
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanExplicitLayers"
+[Vulkan Loader] DRIVER:         Searching for driver manifest files
+[Vulkan Loader] DRIVER:            In following locations:
+[Vulkan Loader] DRIVER:               C:\BC250\m9\radv-main-icd1\radeon_icd.json
+[Vulkan Loader] DRIVER:            Found the following files:
+[Vulkan Loader] DRIVER:               C:\BC250\m9\radv-main-icd1\radeon_icd.json
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m9\radv-main-icd1\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+                                      
+now=2026-09-24T14:34:52
+
+

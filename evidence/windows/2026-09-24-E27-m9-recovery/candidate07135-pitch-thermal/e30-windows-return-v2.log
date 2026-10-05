@@ -1,0 +1,87 @@
+log          56 lines since this driver load, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table display-only
+     0      0.015 stage 10
+     1      0.015 gate: EnableFullWddm 0
+     2      0.015 stage 20
+     3     31.053 stage 30
+     4     31.053 stage 31
+     5     31.053 stage 32
+     6     31.053 post display 1920x1200 pitch 7680 format 22 target 4294967295
+     7     31.053 stage 33
+     8     31.069 stage 34
+     9     31.069 interrupt resource 1: message, vector 0x51, flags 0x3
+    10     31.069 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    11     31.069 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12     31.069 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13     31.069 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14     31.069 gart: ready, dummy page at 0x26FFFA000
+    15     31.069 psp: ready
+    16     31.069 gpumem: ready, doorbells at 0xD0000000
+    17     31.069 gfx: ready, GPU submission allowed, paging node allowed
+    18     31.069 ih: ready
+    19     31.069 stage 35
+    20     31.069 stage 39
+    21     31.100 stage 50
+    22     31.100 stage 60
+    23     31.100 stage 61
+    24     50.809 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    25     55.872 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    26     60.936 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    27     65.983 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    28     71.030 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    29     76.077 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    30     81.125 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    31     86.172 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    32     91.219 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    33     96.266 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    34    101.314 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    35    106.366 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    36    111.404 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    37    116.452 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    38    121.499 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    39    126.546 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    40    131.594 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    41    136.641 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    42    141.689 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    43    146.736 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    44    151.783 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    45    156.846 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    46    161.894 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    47    166.941 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    48    171.988 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    49    177.035 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    50    182.082 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    51    187.130 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    52    192.178 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    53    197.226 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    54    202.274 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    55    206.383 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+             56 lines printed
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   [PCI identity redacted]
+# interface  [PCI interface redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00008DB7
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070086 (milestone 7 revision 134)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     481
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+boot=2026-09-24T21:14:48
+dwm_pid=2040 start=2026-09-24T21:15:56 responding=True
+21:18:41 Tctl 66.8 C (raw 73DB0FEF)
+
+
+EnableFullWddm      : 0
+UnconfirmedStarts   : 0
+EnableSdmaIbControl : 0
+EnableSdmaVaControl : 0
+EnablePresentBlit   : 1
+EnableDcnWrite      : 1
+EnableVidPnFlip     : 1
+
+
+
+final_time=2026-09-24T21:18:41
+final_check_complete

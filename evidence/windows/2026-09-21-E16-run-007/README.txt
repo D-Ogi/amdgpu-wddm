@@ -1,13 +1,13 @@
 E16 runs 006 and 007, 2026-09-21
 ================================
 
-Run 006: bc250kmd 0.7.6 (commit 81428ed) = 0.7.5 plus tracing wrappers on the child and VidPN DDIs.
+Run 006: bc250kmd 0.7.6 (commit 9e042e2) = 0.7.5 plus tracing wrappers on the child and VidPN DDIs.
   22:10:23  install (gates closed), stage 61, confirmed.   22:11:36  gate -Full 1: status OK, stage 39, screen black.
   22:12:17  ring-open6: QueryChildRelations ok, QueryDeviceDescriptor 0xC01D0001 (no EDID, as designed),
             RecommendMonitorModes ok, IsSupportedVidPn ok, and EVERY EnumVidPnCofuncModality -> 0xC01E030A
             (STATUS_GRAPHICS_INVALID_FREQUENCY). The display side is refused, not skipped.
 
-Run 007: bc250kmd 0.7.7 (commit d19081d): the full table's modes carry 60 Hz instead of FREQUENCY_NOTSPECIFIED.
+Run 007: bc250kmd 0.7.7 (commit f5ab660): the full table's modes carry 60 Hz instead of FREQUENCY_NOTSPECIFIED.
   22:16:29  install (gates closed), stage 61, confirmed.   22:17:43  gate -Full 1 (gate-x-221743 is cut short).
   ~22:18    BUGCHECK 0x113 VIDEO_DXGKRNL_FATAL_ERROR, seen by the owner on the screen. Restart with the gate still
             open in the registry: second bugcheck (dump written 22:22:26). Third boot: the start budget refuses the

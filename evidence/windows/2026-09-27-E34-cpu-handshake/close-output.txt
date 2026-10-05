@@ -1,0 +1,10 @@
+{
+    "task_removed":  true,
+    "probes_alive":  false,
+    "utc":  "2026-09-27T15:15:35.1768729Z",
+    "result":  {
+                   "utc":  "2026-09-27T15:14:08.0734315Z",
+                   "failure":  "",
+                   "exit_code":  0
+               }
+}

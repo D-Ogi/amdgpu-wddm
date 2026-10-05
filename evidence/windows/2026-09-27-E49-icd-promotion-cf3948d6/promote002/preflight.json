@@ -1,0 +1,62 @@
+{
+ "utc": "2026-09-27T12:05:24.2682461Z",
+ "boot": "2026-09-27T12:58:57.5000000+02:00",
+ "stop": false,
+ "registered": {
+  "vulkan_radeon.dll": {
+   "sha256": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+   "written": "2026-09-27T11:57:27.7513173Z",
+   "bytes": 24253952
+  },
+  "vulkan_radeon.93B1D1FD.dll": {
+   "sha256": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+   "written": "2026-09-26T23:53:45.7588778Z",
+   "bytes": 24253952
+  },
+  "vulkan_radeon.9C40083C.dll": {
+   "sha256": "9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798",
+   "written": "2026-09-25T05:53:10.3405135Z",
+   "bytes": 24263168
+  }
+ },
+ "held_count": 29,
+ "icd_manifest": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+ "khronos_drivers": {
+  "C:\\BC250\\m10\\wsi-final\\radeon_icd.json": 0
+ },
+ "candidates": {
+  "vulkan_radeon.0CD4A98D.dll": "0CD4A98DD80AE1248CFA1E6D4C1EB650DCF217FA9A840C002EDC4BB7EB0ADB47",
+  "vulkan_radeon.11BA2143.dll": "11BA214350632A0DA665521D7132318DA62043C5D7EAFE7BFF7EF1BDB48FEFF2",
+  "vulkan_radeon.6661C2D2.dll": "6661C2D2FE1DBAAAAA007D1686A0C42F33E7A9F5204DC0681EF98AA404F952AD",
+  "vulkan_radeon.50E99A84.dll": "50E99A84C1FEA6295E6D54AB3E516498462E84FB3651A24A52FE5F2E942C151F",
+  "vulkan_radeon.CF3948D6.dll": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+  "vulkan_radeon.63AF86CB.dll": "63AF86CB862570709956E0376FDBDCB434DB3573E6A99412ED60311CFFAE48DA",
+  "vulkan_radeon.B9F4C95B.dll": "B9F4C95B22AB80F671FC94A678A70F3A960DB05F12D6615C0A8422FB8ED693F9",
+  "vulkan_radeon.09191AAA.dll": "09191AAADD4416CCF6C90343DE58152A9DE933B84817999A2868ABC9BB114614"
+ },
+ "tasks": [
+  {
+   "state": "Running",
+   "name": "BC250 monitor overlay"
+  },
+  {
+   "state": "Running",
+   "name": "BC250 net watchdog"
+  },
+  {
+   "name": "(165 other BC250 tasks, none running)",
+   "state": "Ready/Disabled"
+  }
+ ],
+ "processes": [],
+ "dwm": [
+  3152
+ ],
+ "tctl": 66.6,
+ "health": "health abi=1 version=0x000700A4 flags=15 generation=35176574868 epoch=7 completed=653 age_ms=1443 ready_ms=479423",
+ "gates": {
+  "gpu_present": 0,
+  "interop": 0,
+  "unconfirmed": 0
+ }
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/radv_device_memory.c",
+    "before_sha256": "4000796fcb5eb5f817db2e7b89c5ee6f06fb8f232876eafd9baa0433cbc5b5cd",
+    "after_sha256": "b5fc2034724a2779151072060285f7891d7f02d65dd6509b4f744d4dbf0a8a8f"
+  },
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/radv_radeon_winsys.h",
+    "before_sha256": "8c159b0729e5680dad516b3837c594276a3e4537b4d3d9029ae7129bd38145ce",
+    "after_sha256": "5cae07edac91defa0d571fd86582b09dd648347775888001974f25fc97588dd3"
+  },
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c",
+    "before_sha256": "b6a053a2ef901e4fc8eea8f456ecef7d3f8117a280d40f24b8e674d0e950fb2d",
+    "after_sha256": "248cc07b980cc55733a7e756b9d04de7f2db8caab0c4fe358ed7b903dac41cb4"
+  },
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h",
+    "before_sha256": "cc4043974a8a31972c7e0014d82f77c82c6801482d856f852c70c854cb5a7c5c",
+    "after_sha256": "de7d49d767e0bc3bfafa0a1daba0542a0c71a9211c938c425945a4ef34d9e1e6"
+  },
+  {
+    "component": "icd",
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "af56849ecf050568f04756240ff48178a194e4242fe886d447719836fef60be4",
+    "after_sha256": "34766554fec6159cefea14a88e273a33140b064512627de46730c9ed9e7891c9"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_resource.c",
+    "before_sha256": "b821992bdbca5eab1edc286b8fdd4ba340048ce3d68b230ccd41e20f24f8ed2c",
+    "after_sha256": "506b1dd336e122f547b9c5f83a1e14d9d3c8b02e539d842786e89508814f094b"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/DxgiFns.cpp",
+    "before_sha256": "f134bb939fe86d6eab380a1bf4c3feec3de67995e4519dfb5fb78752b5904d64",
+    "after_sha256": "dea0a67b62fba249548eadd4a7b5a4230293e5bd93df0ef54694feb417279408"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/Resource.cpp",
+    "before_sha256": "7537729feaa18d208311033ba65c34ed13902fda12ec9536cf7051ffea7d6e74",
+    "after_sha256": "d2e00c8b299c74efa041495cd7b12896fa8abb803dce4aeff42fc765f9c10f96"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/include/frontend/winsys_handle.h",
+    "before_sha256": "4996d8b722678d2de1abcfcf4cb0de2f515a8069cc7e615f0ba7b99bef60edfd",
+    "after_sha256": "c094a15faf506f3ea54dfd5e10aaac5b8db26936c8071ef57d1051ce0040699f"
+  },
+  {
+    "component": "umd",
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "af56849ecf050568f04756240ff48178a194e4242fe886d447719836fef60be4",
+    "after_sha256": "34766554fec6159cefea14a88e273a33140b064512627de46730c9ed9e7891c9"
+  }
+]

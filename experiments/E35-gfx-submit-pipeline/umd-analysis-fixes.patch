@@ -1,0 +1,121 @@
+--- a/src/gallium/auxiliary/util/u_inlines.h
++++ b/src/gallium/auxiliary/util/u_inlines.h
+@@ -182,7 +182,7 @@
+ 
+       res->screen->resource_destroy(res->screen, res);
+       res = next;
+-   } while (pipe_reference_described(res ? &res->reference : NULL,
++   } while (res && pipe_reference_described(&res->reference,
+                                      NULL,
+                                      (debug_reference_descriptor)
+                                      debug_describe_resource));
+@@ -244,7 +244,7 @@
+    if (pipe_reference_described_nonatomic(old_dst ? &old_dst->reference : NULL,
+                                           src ? &src->reference : NULL,
+                                           (debug_reference_descriptor)
+-                                          debug_describe_sampler_view))
++                                          debug_describe_sampler_view) && old_dst)
+       old_dst->context->sampler_view_destroy(old_dst->context, old_dst);
+    *dst = src;
+ }
+@@ -289,7 +289,7 @@
+ 
+    if (pipe_reference_described(old_dst ? &old_dst->reference : NULL,
+                      src ? &src->reference : NULL,
+-                     (debug_reference_descriptor)debug_describe_so_target))
++                     (debug_reference_descriptor)debug_describe_so_target) && old_dst)
+       old_dst->context->stream_output_target_destroy(old_dst->context, old_dst);
+    *dst = src;
+ }
+@@ -301,7 +301,7 @@
+    struct pipe_vertex_state *old_dst = *dst;
+ 
+    if (pipe_reference(old_dst ? &old_dst->reference : NULL,
+-                      src ? &src->reference : NULL))
++                      src ? &src->reference : NULL) && old_dst)
+       old_dst->screen->vertex_state_destroy(old_dst->screen, old_dst);
+    *dst = src;
+ }
+@@ -413,7 +413,9 @@
+ static inline bool
+ pipe_surface_equal(const struct pipe_surface *s1, const struct pipe_surface *s2)
+ {
+-   return !!s1 == !!s2 && s1->texture == s2->texture &&
++   if (!s1 || !s2)
++      return s1 == s2;
++   return s1->texture == s2->texture &&
+           s1->format == s2->format &&
+           s1->nr_samples == s2->nr_samples &&
+           (!s1->texture ||
+--- a/src/gallium/frontends/d3d10umd/DriverIncludes.h
++++ b/src/gallium/frontends/d3d10umd/DriverIncludes.h
+@@ -46,6 +46,8 @@
+  */
+ #include <d3d10_1.h>
+ 
++/* WDK DDI SAL expressions also reference the D3D11 limit constants. */
++#include <d3d11.h>
+ #include <d3d10umddi.h>
+ 
+ #endif   /* DRIVER_INCLUDES_H */
+--- a/src/gallium/frontends/d3d10umd/OutputMerger.h
++++ b/src/gallium/frontends/d3d10umd/OutputMerger.h
+@@ -92,7 +92,7 @@
+ 
+ void APIENTRY SetRenderTargets(
+    D3D10DDI_HDEVICE hDevice,
+-   __in_ecount (NumViews) const D3D10DDI_HRENDERTARGETVIEW *phRenderTargetView,
++   __in_ecount (RTargets) const D3D10DDI_HRENDERTARGETVIEW *phRenderTargetView,
+    UINT RTargets, UINT ClearTargets, D3D10DDI_HDEPTHSTENCILVIEW hDepthStencilView);
+ 
+ SIZE_T APIENTRY CalcPrivateDepthStencilStateSize(
+--- a/src/gallium/frontends/d3d10umd/Rasterizer.h
++++ b/src/gallium/frontends/d3d10umd/Rasterizer.h
+@@ -41,7 +41,7 @@
+ 
+ void APIENTRY SetScissorRects(
+    D3D10DDI_HDEVICE hDevice, UINT NumScissorRects, UINT ClearScissorRects,
+-   __in_ecount (NumRects) const D3D10_DDI_RECT *pRects);
++   __in_ecount (NumScissorRects) const D3D10_DDI_RECT *pRects);
+ 
+ SIZE_T APIENTRY CalcPrivateRasterizerStateSize(
+    D3D10DDI_HDEVICE hDevice,
+--- a/src/gallium/frontends/d3d10umd/Shader.h
++++ b/src/gallium/frontends/d3d10umd/Shader.h
+@@ -68,7 +68,7 @@
+ void APIENTRY DestroySampler(D3D10DDI_HDEVICE hDevice, D3D10DDI_HSAMPLER hSampler);
+ 
+ void APIENTRY CreateVertexShader(D3D10DDI_HDEVICE hDevice,
+-                        __in_ecount (pShaderCode[1]) const UINT *pCode,
++                        __in_ecount (pCode[1]) const UINT *pCode,
+                         D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRTShader,
+                         __in const D3D10DDIARG_STAGE_IO_SIGNATURES *pSignatures);
+ 
+@@ -84,7 +84,7 @@
+                    __in_ecount (NumSamplers) const D3D10DDI_HSAMPLER *phSamplers);
+ 
+ void APIENTRY CreateGeometryShader(D3D10DDI_HDEVICE hDevice,
+-                          __in_ecount (pShaderCode[1]) const UINT *pCode,
++                          __in_ecount (pCode[1]) const UINT *pCode,
+                           D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRTShader,
+                           __in const D3D10DDIARG_STAGE_IO_SIGNATURES *pSignatures);
+ 
+@@ -116,7 +116,7 @@
+                   __in_ecount (SOTargets) const UINT *pOffsets);
+ 
+ void APIENTRY CreatePixelShader(D3D10DDI_HDEVICE hDevice,
+-                       __in_ecount (pShaderCode[1]) const UINT *pCode,
++                       __in_ecount (pCode[1]) const UINT *pCode,
+                        D3D10DDI_HSHADER hShader, D3D10DDI_HRTSHADER hRTShader,
+                        __in const D3D10DDIARG_STAGE_IO_SIGNATURES *pSignatures);
+ void APIENTRY PsSetShader(D3D10DDI_HDEVICE hDevice, D3D10DDI_HSHADER hShader);
+--- a/meson.build
++++ b/meson.build
+@@ -1403,6 +1403,7 @@
+     '/wd4309',  # 'initializing': truncation of constant value
+     '/wd4838',  # conversion from 'int' to 'const char' requires a narrowing conversion
+     '/wd5105',  # macro expansion producing 'defined' has undefined behavior (winbase.h, need Windows SDK upgrade)
++    '/we4013',  # Reject undeclared functions before any lab deployment
+     '/we4020',  # Error when passing the wrong number of parameters
+     '/we4024',  # Error when passing different type of parameter
+     '/we4189',  # 'identifier' : local variable is initialized but not referenced

@@ -1,0 +1,159 @@
+#include "paging_pt_shadow.h"
+
+static int ValidTable(PAGING_PT_U64 Physical)
+{
+    return (Physical & 4095u)==0 && Physical<=0xfffffffff000ull;
+}
+
+// No deletions: paging-process tables stay pinned until the instance is reset.
+static PAGING_PT_SHADOW_SLOT* Find(const PAGING_PT_SHADOW* State, PAGING_PT_U64 Physical)
+{
+    unsigned start, i;
+    if (!State || !State->Slots || !State->Capacity) return 0;
+    start=(unsigned)((Physical>>12)%State->Capacity);
+    for (i=0;i<State->Capacity;i++) {
+        unsigned index=(unsigned)(((PAGING_PT_U64)start+i)%State->Capacity);
+        PAGING_PT_SHADOW_SLOT* slot=&State->Slots[index];
+        if (!slot->Occupied || slot->Physical==Physical) return slot;
+    }
+    return 0;
+}
+
+int PagingPtShadowInit(PAGING_PT_SHADOW* State, PAGING_PT_SHADOW_SLOT* Slots, unsigned Capacity)
+{
+    unsigned i,j;
+    if (!State || !Slots || !Capacity) return PAGING_PT_INVALID;
+    State->Slots=Slots;State->Capacity=Capacity;State->Used=0;
+    for (i=0;i<Capacity;i++) {
+        Slots[i].Occupied=0;Slots[i].Physical=0;
+        for (j=0;j<16;j++) Slots[i].Known[j]=0;
+        // Entries stay uninitialized until at least one DWORD is written.
+    }
+    return PAGING_PT_OK;
+}
+
+int PagingPtShadowApply(PAGING_PT_SHADOW* State, PAGING_PT_U64 Physical,
+                       unsigned First, unsigned Count, const PAGING_PT_U64* Entries, int Register)
+{
+    PAGING_PT_SHADOW_SLOT* slot;
+    unsigned i;
+    if (!State || !State->Slots || !State->Capacity || !ValidTable(Physical) || !Entries ||
+        First>=PAGING_PT_ENTRIES || !Count || Count>PAGING_PT_ENTRIES-First)
+        return PAGING_PT_INVALID;
+    slot=Find(State,Physical);
+    if (!slot) return Register ? PAGING_PT_FULL : PAGING_PT_MISSING;
+    if (!slot->Occupied) {
+        if (!Register) return PAGING_PT_MISSING;
+        slot->Physical=Physical;slot->Occupied=1;State->Used++;
+    }
+    for (i=0;i<Count;i++) {
+        unsigned index=First+i;
+        slot->Entries[index]=Entries[i];
+        slot->Known[index/32]|=3ull<<((index%32)*2);
+    }
+    return PAGING_PT_OK;
+}
+
+int PagingPtShadowRead(const PAGING_PT_SHADOW* State, PAGING_PT_U64 Physical,
+                      unsigned Index, PAGING_PT_U64* Entry)
+{
+    PAGING_PT_SHADOW_SLOT* slot;
+    if (!Entry) return PAGING_PT_INVALID;
+    *Entry=0;
+    if (!State || !State->Slots || !State->Capacity || !ValidTable(Physical) || Index>=PAGING_PT_ENTRIES)
+        return PAGING_PT_INVALID;
+    slot=Find(State,Physical);
+    if (!slot || !slot->Occupied || ((slot->Known[Index/32]>>((Index%32)*2))&3)!=3) return PAGING_PT_MISSING;
+    *Entry=slot->Entries[Index];
+    return PAGING_PT_OK;
+}
+
+unsigned PagingPtShadowTableCount(PAGING_PT_U64 VirtualBytes, unsigned Levels)
+{
+    PAGING_PT_U64 pages,total=0;
+    unsigned i;
+    if (!VirtualBytes || VirtualBytes>(1ull<<48) || !Levels || Levels>4) return 0;
+    pages=(VirtualBytes+4095)/4096;
+    for(i=0;i<Levels;i++) { pages=(pages+511)/512;total+=pages; }
+    if(pages!=1 || total>0xffffffffu)return 0;
+    return (unsigned)total;
+}
+
+int PagingPtShadowCanApply(const PAGING_PT_SHADOW* State, PAGING_PT_U64 Physical,
+                          unsigned First, unsigned Count, int Register)
+{
+    PAGING_PT_SHADOW_SLOT* slot;
+    if(!State || !State->Slots || !State->Capacity || !ValidTable(Physical) ||
+       First>=PAGING_PT_ENTRIES || !Count || Count>PAGING_PT_ENTRIES-First)return PAGING_PT_INVALID;
+    slot=Find(State,Physical);
+    if(!slot)return Register?PAGING_PT_FULL:PAGING_PT_MISSING;
+    if(!slot->Occupied && !Register)return PAGING_PT_MISSING;
+    return PAGING_PT_OK;
+}
+
+int PagingPtShadowCopy(PAGING_PT_SHADOW* State, PAGING_PT_U64 Source, unsigned SourceFirst,
+                      PAGING_PT_U64 Destination, unsigned DestinationFirst, unsigned Count)
+{
+    PAGING_PT_SHADOW_SLOT *source,*destination;
+    unsigned i;
+    int reverse;
+    if(!State || !State->Slots || !State->Capacity || !ValidTable(Source) || !ValidTable(Destination) ||
+       SourceFirst>=PAGING_PT_ENTRIES || DestinationFirst>=PAGING_PT_ENTRIES || !Count ||
+       Count>PAGING_PT_ENTRIES-SourceFirst || Count>PAGING_PT_ENTRIES-DestinationFirst)
+        return PAGING_PT_INVALID;
+    destination=Find(State,Destination);
+    if(!destination || !destination->Occupied)return PAGING_PT_MISSING;
+    source=Find(State,Source);
+    if(source && !source->Occupied)source=0;
+    reverse=source==destination && DestinationFirst>SourceFirst && DestinationFirst-SourceFirst<Count;
+    for(i=0;i<Count;i++) {
+        unsigned at=reverse?Count-1-i:i;
+        unsigned src=SourceFirst+at,dst=DestinationFirst+at;
+        unsigned shift=(dst%32)*2;
+        PAGING_PT_U64 mask=3ull<<shift;
+        PAGING_PT_U64 known=source ? (source->Known[src/32]>>((src%32)*2))&3 : 0;
+        // A first partial fill initialized the whole storage word, but only
+        // the marked halves represent known data. No read when both are unknown.
+        if(known) destination->Entries[dst]=source->Entries[src];
+        destination->Known[dst/32]=(destination->Known[dst/32]&~mask)|(known<<shift);
+    }
+    return PAGING_PT_OK;
+}
+
+int PagingPtShadowFill(PAGING_PT_SHADOW* State, PAGING_PT_U64 Physical,
+                       PAGING_PT_U64 Bytes, unsigned Pattern)
+{
+    unsigned slotIndex;
+    PAGING_PT_U64 end,pattern=((PAGING_PT_U64)Pattern<<32)|Pattern;
+    if (!State || !State->Slots || !State->Capacity || !Bytes ||
+        ((Physical|Bytes)&3)!=0 || Physical>0xffffffffffffull ||
+        Bytes>0x1000000000000ull-Physical) return PAGING_PT_INVALID;
+    end=Physical+Bytes;
+    // Scan only registered-table storage, not every page in a large fill range.
+    for(slotIndex=0;slotIndex<State->Capacity;slotIndex++) {
+        PAGING_PT_SHADOW_SLOT* slot=&State->Slots[slotIndex];
+        PAGING_PT_U64 begin,limit;
+        unsigned first,last,index;
+        if (!slot->Occupied || slot->Physical>=end || slot->Physical+4096<=Physical) continue;
+        begin=Physical>slot->Physical ? Physical-slot->Physical : 0;
+        limit=end-slot->Physical;if(limit>4096)limit=4096;
+        first=(unsigned)(begin/8);last=(unsigned)((limit-1)/8);
+        for(index=first;index<=last;index++) {
+            unsigned shift=(index%32)*2;
+            PAGING_PT_U64 known=(slot->Known[index/32]>>shift)&3;
+            unsigned low=begin<=(PAGING_PT_U64)index*8;
+            unsigned high=limit>=(PAGING_PT_U64)index*8+8;
+            if(low && high) {
+                slot->Entries[index]=pattern;known=3;
+            } else {
+                // Zero initializes storage only. The unwritten half stays unknown.
+                PAGING_PT_U64 old=known ? slot->Entries[index] : 0;
+                slot->Entries[index]=low ? (old&0xffffffff00000000ull)|Pattern :
+                    (old&0xffffffffull)|((PAGING_PT_U64)Pattern<<32);
+                known|=low?1u:2u;
+            }
+            slot->Known[index/32]|=known<<shift;
+        }
+    }
+    return PAGING_PT_OK;
+}

@@ -1,5 +1,7 @@
 from pathlib import Path
-import argparse,hashlib,json
+import argparse,hashlib,json,os
+# BC250_ROOT is the workspace root, by default the parent directory of this repository.
+ROOT=os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent))
 ap=argparse.ArgumentParser(description='Build the native lab probe with actual Mesa sparse batch helpers.')
 ap.add_argument('--source',type=Path,required=True)
 ap.add_argument('--out',type=Path,required=True)
@@ -17,11 +19,11 @@ inputs=[bo,e/'native_sparse_control.c',e/'../../tools/win/kmtprobe/kmtprobe.c',e
 cmd=r"""@echo off
 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 if errorlevel 1 exit /b 1
-set TEMP=P:\bc-250\scratch\tmp
+set TEMP=ROOTDIR\scratch\tmp
 set TMP=%TEMP%
-cl /nologo /W3 /WX /O2 /MT /D_CRT_SECURE_NO_WARNINGS /I "OUT" /I P:\bc-250\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um /I P:\bc-250\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared /Fo"OUT\native-sparse-control.obj" /Fe"OUT\native-sparse-control.exe" "SOURCE" /link gdi32.lib
+cl /nologo /W3 /WX /O2 /MT /D_CRT_SECURE_NO_WARNINGS /I "OUT" /I ROOTDIR\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um /I ROOTDIR\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared /Fo"OUT\native-sparse-control.obj" /Fe"OUT\native-sparse-control.exe" "SOURCE" /link gdi32.lib
 exit /b %errorlevel%
 """
-cmd=cmd.replace('OUT',str(w)).replace('SOURCE',str(e/'native_sparse_control.c'))
+cmd=cmd.replace('ROOTDIR',ROOT).replace('OUT',str(w)).replace('SOURCE',str(e/'native_sparse_control.c'))
 (w/'build.cmd').write_text(cmd,newline='\n')
 print('Prepared source-extracted native probe; run only on lab, default bound mode')

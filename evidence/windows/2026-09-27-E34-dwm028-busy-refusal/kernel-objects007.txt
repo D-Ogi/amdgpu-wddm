@@ -1,0 +1,54 @@
+11: kd> .sympath+ P:\bc-250\scratch\g0-hosted\kmd163-final001
+Expanded Symbol search path is: p:\bc-250\scratch\build\bc250kmd;p:\bc-250\scratch\build\bc250rd;srv*p:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols;p:\bc-250\scratch\g0-hosted\kmd163-final001
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\build\bc250kmd
+OK                                             P:\BC-250\scratch\build\bc250rd
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\bc-250\scratch\g0-hosted\kmd163-final001
+11: kd> .reload /f bc250kmd.sys
+11: kd> dt bc250kmd!amdgpu_device
+   +0x000 no_hw_access     : Int4B
+   +0x004 pm               : <unnamed-tag>
+11: kd> dt bc250kmd!amdgpu_gfx
+   +0x000 xcc_mask         : Uint4B
+   +0x008 rlc              : amdgpu_rlc
+   +0x050 me               : amdgpu_me
+   +0x058 mec              : amdgpu_mec
+   +0x060 config           : amdgpu_gfx_config
+   +0x090 kiq              : [1] amdgpu_kiq
+   +0x180 gfx_ring         : [1] amdgpu_ring
+   +0x270 compute_ring     : [8] amdgpu_ring
+   +0x9f0 num_gfx_rings    : Uint4B
+   +0x9f4 num_compute_rings : Uint4B
+   +0x9f8 async_gfx_ring   : UChar
+   +0x9f9 pp_gfxoff        : UChar
+   +0xa00 wb_mem           : bc250_mem
+   +0xa18 fence_mem        : bc250_mem
+   +0xa30 dispatch_shader  : bc250_mem
+   +0xa48 dispatch_dst     : bc250_mem
+   +0xa60 ib_mem           : bc250_mem
+   +0xa78 mec_queue_bitmap : Uint8B
+11: kd> uf bc250kmd!bc250_gfx_fence_read
+bc250kmd!bc250_gfx_fence_read:
+fffff804`2f9848a0 4885c9          test    rcx,rcx
+fffff804`2f9848a3 7418            je      bc250kmd!bc250_gfx_fence_read+0x1d (fffff804`2f9848bd)  Branch
+
+bc250kmd!bc250_gfx_fence_read+0x5:
+fffff804`2f9848a5 488b8950520000  mov     rcx,qword ptr [rcx+5250h]
+fffff804`2f9848ac 4885c9          test    rcx,rcx
+fffff804`2f9848af 740c            je      bc250kmd!bc250_gfx_fence_read+0x1d (fffff804`2f9848bd)  Branch
+
+bc250kmd!bc250_gfx_fence_read+0x11:
+fffff804`2f9848b1 83fa10          cmp     edx,10h
+fffff804`2f9848b4 7307            jae     bc250kmd!bc250_gfx_fence_read+0x1d (fffff804`2f9848bd)  Branch
+
+bc250kmd!bc250_gfx_fence_read+0x16:
+fffff804`2f9848b6 8bc2            mov     eax,edx
+fffff804`2f9848b8 488b04c1        mov     rax,qword ptr [rcx+rax*8]
+fffff804`2f9848bc c3              ret
+
+bc250kmd!bc250_gfx_fence_read+0x1d:
+fffff804`2f9848bd 33c0            xor     eax,eax
+fffff804`2f9848bf c3              ret

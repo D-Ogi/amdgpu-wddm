@@ -1,0 +1,247 @@
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -9,6 +9,9 @@
+ #define BC250_HOST_STYPE 0x42434831u
+ #define BC250_HOST_VERSION 5u
+ #define BC250_HOST_IMPORT_STYPE 0x42434832u
++/* bc250_host_import with its flags field valid. Under BC250_HOST_IMPORT_STYPE the bytes of that field
++ * were padding and are never read: such an import has no flags. */
++#define BC250_HOST_IMPORT_FLAGS_STYPE 0x42434835u
+ /* Adapter GetCaps precedes the runtime device callbacks. This instance can
+  * enumerate the real adapter and its queue policy, but cannot create a device.
+  * Use a distinct identity from every device instance; no paging queue is made.
+@@ -25,8 +28,25 @@
+    const void *pNext;
+    void *identity;
+    uint32_t allocation;
++   /* BC250_HOST_IMPORT_* bits, read only when sType is BC250_HOST_IMPORT_FLAGS_STYPE. The field takes
++    * the padding that followed allocation on x64, the one supported layout, so the size and every other
++    * offset are unchanged. */
++   uint32_t flags;
+    uint64_t va, size;
+ };
++#if defined(_M_X64) || defined(__x86_64__)
++#ifdef __cplusplus
++static_assert(sizeof(bc250_host_import) == 48, "bc250_host_import layout");
++#else
++_Static_assert(sizeof(struct bc250_host_import) == 48, "bc250_host_import layout");
++#endif
++#else
++#error "bc250_host_import is defined for x64 only"
++#endif
++/* The host answers Lock2 and Unlock2 for this allocation: vkMapMemory may map it. Without the bit a
++ * borrowed allocation is never mapped by the ICD. */
++#define BC250_HOST_IMPORT_CPU_MAP 1u
++#define BC250_HOST_IMPORT_KNOWN_FLAGS BC250_HOST_IMPORT_CPU_MAP
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
+ #define BC250_HOST_PUBLISH_PROGRESS 3u
+--- a/src/amd/vulkan/radv_radeon_winsys.h
++++ b/src/amd/vulkan/radv_radeon_winsys.h
+@@ -405,7 +405,8 @@
+ 
+    /* When non-NULL and true, do not build the indirect gfx-init IB. The state is
+     * emitted inline, the same stream as RADV_DEBUG=noibchaining. NULL means no. */
+-   VkResult (*buffer_from_hosted)(struct radeon_winsys *, void *, uint32_t, uint64_t, uint64_t, struct radeon_winsys_bo **);
++   VkResult (*buffer_from_hosted)(struct radeon_winsys *, void *, uint32_t, uint32_t flags, uint64_t, uint64_t,
++                                  struct radeon_winsys_bo **);
+    bool (*inline_gfx_preamble)(struct radeon_winsys *ws);
+ };
+ 
+--- a/src/amd/vulkan/radv_device_memory.c
++++ b/src/amd/vulkan/radv_device_memory.c
+@@ -161,13 +161,19 @@
+ #endif
+ 
+    const struct bc250_host_import *host_import=NULL;
+-   for (const VkBaseInStructure *ext=pAllocateInfo->pNext;ext;ext=ext->pNext)
+-      if ((uint32_t)ext->sType==BC250_HOST_IMPORT_STYPE) host_import=(const void *)ext;
++   uint32_t host_import_flags=0;
++   for (const VkBaseInStructure *ext=pAllocateInfo->pNext;ext;ext=ext->pNext) {
++      if ((uint32_t)ext->sType==BC250_HOST_IMPORT_STYPE) {
++         host_import=(const void *)ext; host_import_flags=0; /* no flags field under this type */
++      } else if ((uint32_t)ext->sType==BC250_HOST_IMPORT_FLAGS_STYPE) {
++         host_import=(const void *)ext; host_import_flags=host_import->flags;
++      }
++   }
+    if (host_import) {
+       if (!device->vk.bc250_host.dispatch || !device->ws->buffer_from_hosted ||
+           host_import->size<pAllocateInfo->allocationSize) { result=VK_ERROR_INVALID_EXTERNAL_HANDLE; goto fail; }
+       result=device->ws->buffer_from_hosted(device->ws,host_import->identity,host_import->allocation,
+-                                           host_import->va,host_import->size,&mem->bo);
++                                           host_import_flags,host_import->va,host_import->size,&mem->bo);
+       if (result!=VK_SUCCESS) goto fail;
+    } else if (ahb_import_info) {
+       result = radv_import_ahb_memory(device, mem, priority, ahb_import_info);
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
+@@ -52,6 +52,8 @@
+    uint64_t sparse_high_va;
+    bool emulate_sparse_residency;
+    bool borrowed;
++   /* A borrowed allocation whose host answers Lock2 and Unlock2 (BC250_HOST_IMPORT_CPU_MAP). */
++   bool host_mappable;
+ 
+    void *map;
+    uint32_t handle;
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -1088,7 +1088,8 @@
+    struct radv_wddm2_bo *bo = radv_wddm2_bo(_bo);
+    ASSERTED NTSTATUS status;
+ 
+-   if (bo->borrowed) return NULL;
++   /* A borrowed allocation is mapped only when its import asked for it. */
++   if (bo->borrowed && !bo->host_mappable) return NULL;
+ 
+    if (bo->map && !fixed_addr)
+       return bo->map;
+@@ -1534,16 +1535,17 @@
+ }
+ 
+ static VkResult
+-radv_wddm2_bo_from_hosted(struct radeon_winsys *rws, void *identity, uint32_t allocation,
++radv_wddm2_bo_from_hosted(struct radeon_winsys *rws, void *identity, uint32_t allocation, uint32_t flags,
+                          uint64_t va, uint64_t size, struct radeon_winsys_bo **out)
+ {
+    struct radv_wddm2_winsys *ws=radv_wddm2_winsys(rws);
+    if (!ws->host.dispatch || identity!=ws->host.identity || !allocation || !va || !size ||
++       (flags & ~BC250_HOST_IMPORT_KNOWN_FLAGS) ||
+        (va & 4095) || (size & 4095) || va>=RADV_WDDM2_PRT_CONTROL_MASK || size>RADV_WDDM2_PRT_CONTROL_MASK-va)
+       return VK_ERROR_INVALID_EXTERNAL_HANDLE;
+    struct radv_wddm2_bo *bo=CALLOC_STRUCT(radv_wddm2_bo);
+    if (!bo) return VK_ERROR_OUT_OF_HOST_MEMORY;
+-   bo->ws=ws; bo->borrowed=true;
++   bo->ws=ws; bo->borrowed=true; bo->host_mappable=!!(flags & BC250_HOST_IMPORT_CPU_MAP);
+    bo->base.va=va; bo->base.size=size; bo->base.handle=allocation; bo->base.obj_id=allocation;
+    bo->base.initial_domain=RADEON_DOMAIN_VRAM;
+    radv_wddm2_bo_account(ws, bo, true);
+--- a/src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c
++++ b/src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c
+@@ -12,7 +12,8 @@
+  * context or fence, no device-level context.
+  *
+  * Scope: the tests call the winsys hooks (ctx_create_bindable, ctx_bind,
+- * ctx_unbind, cs_submit, the sparse hooks, ctx_destroy) directly. They do
++ * ctx_unbind, cs_submit, the sparse hooks, ctx_destroy, and for host
++ * imports buffer_from_hosted, buffer_map, buffer_destroy) directly. They do
+  * not cover the instance chain parser (radv_instance.c), the public bind
+  * and unbind entries with their queue lock (radv_queue.c) or the queue
+  * count admission of vkCreateDevice (radv_device.c).
+@@ -80,7 +81,8 @@
+ struct obj {
+    uint32_t handle;
+    bool live;
+-   bool app;          /* syncs: an application fence of the test */
++   bool app;          /* syncs: an application fence of the test;
++                       * allocations: the host's own, imported by the test */
+    void *cookie;      /* contexts: the cookie they were created with */
+    uint64_t value;    /* syncs: what the fence's CPU mapping shows */
+    void *mem;         /* allocations: Lock2 memory */
+@@ -393,9 +395,16 @@
+       record(op, 0, 0, o->handle, NULL);
+       return 0;
+    }
++   case BC250_HOST_Unlock2: {
++      const D3DKMT_UNLOCK2 *u = arg;
++      struct obj *o = find(h.allocs, h.n_allocs, u->hAllocation);
++      if (!o || !o->live)
++         h.unexpected++;
++      record(op, 0, 0, u->hAllocation, NULL);
++      return 0;
++   }
+    case BC250_HOST_FreeGpuVirtualAddress:
+    case BC250_HOST_Evict:
+-   case BC250_HOST_Unlock2:
+    case BC250_HOST_GetDeviceState:
+       record(op, 0, 0, 0, NULL);
+       return 0;
+@@ -483,6 +492,15 @@
+    fence->value_map = &o->value;
+ }
+ 
++/* An allocation the host owns and hands over through bc250_host_import. */
++static struct obj *
++host_alloc(void)
++{
++   struct obj *o = new_obj(h.allocs, &h.n_allocs, 0x3000);
++   o->app = true;
++   return o;
++}
++
+ struct fake_cs {
+    struct radv_winsys_cs cs;
+    struct radv_winsys_ib ib;
+@@ -1140,6 +1158,64 @@
+    contract();
+ }
+ 
++/* Allocations imported from the host: mapped only with
++ * BC250_HOST_IMPORT_CPU_MAP, through the host's Lock2 and Unlock2, and
++ * never released by the ICD. */
++static void
++test_hosted_map(void)
++{
++   struct radv_wddm2_winsys *ws = make_ws();
++   void *const identity = ws->host.identity;
++   const uint64_t va = 0x800000000ull, size = 65536;
++   const uint64_t vram_vis = ws->allocated_vram_vis;
++
++   /* Without the flag the ICD never maps it. */
++   struct obj *plain = host_alloc();
++   struct radeon_winsys_bo *bo = NULL;
++   unsigned mark = h.n_ev;
++   check(ws->base.buffer_from_hosted(&ws->base, identity, plain->handle, 0, va, size, &bo) == VK_SUCCESS && bo &&
++            h.n_ev == mark,
++         "an import without flags succeeds, no host call");
++   check(ws->base.buffer_map(&ws->base, bo, false, NULL) == NULL && h.n_ev == mark,
++         "and is not mapped, with no host call");
++   ws->base.buffer_destroy(&ws->base, bo);
++   check(h.n_ev == mark && plain->live, "destroying it makes no host call; the allocation stays the host's");
++
++   /* With it, the first map locks the host's allocation, once. */
++   struct obj *mappable = host_alloc();
++   bo = NULL;
++   mark = h.n_ev;
++   check(ws->base.buffer_from_hosted(&ws->base, identity, mappable->handle, BC250_HOST_IMPORT_CPU_MAP, va, size,
++                                     &bo) == VK_SUCCESS && bo && h.n_ev == mark,
++         "an import with BC250_HOST_IMPORT_CPU_MAP succeeds, no host call");
++   void *ptr = ws->base.buffer_map(&ws->base, bo, false, NULL);
++   check(ptr && ptr == mappable->mem, "the map returns the host's pData");
++   check(h.n_ev == mark + 1 && event_is((int)mark, BC250_HOST_Lock2, 0, 0, mappable->handle),
++         "through exactly one Lock2 of the imported allocation (calls: %u)", h.n_ev - mark);
++   mark = h.n_ev;
++   check(ws->base.buffer_map(&ws->base, bo, false, NULL) == ptr && h.n_ev == mark,
++         "a second map returns the same pointer, no host call");
++
++   /* Destroy unlocks it and gives nothing else back: the host owns it. */
++   mark = h.n_ev;
++   ws->base.buffer_destroy(&ws->base, bo);
++   check(h.n_ev == mark + 1 && event_is((int)mark, BC250_HOST_Unlock2, 0, 0, mappable->handle),
++         "destroying it makes exactly one Unlock2 of the allocation (calls: %u)", h.n_ev - mark);
++   check(!count_op(mark, BC250_HOST_Evict) && !count_op(mark, BC250_HOST_FreeGpuVirtualAddress) &&
++            !count_op(mark, BC250_HOST_DestroyAllocation2) && mappable->live,
++         "no evict, VA free or allocation destroy; the allocation stays the host's");
++
++   /* An unknown flag bit is refused before anything is made. */
++   bo = NULL;
++   mark = h.n_ev;
++   check(ws->base.buffer_from_hosted(&ws->base, identity, plain->handle, 0x80000000u, va, size, &bo) ==
++               VK_ERROR_INVALID_EXTERNAL_HANDLE &&
++            !bo && h.n_ev == mark,
++         "an unknown flag bit is refused, no BO, no host call");
++   check(ws->allocated_vram_vis == vram_vis, "the imports leave no byte charge behind");
++   contract();
++}
++
+ static const struct {
+    const char *name;
+    void (*run)(void);
+@@ -1156,6 +1232,7 @@
+    {"rebind", test_rebind},
+    {"review_wait_failure", test_review_wait_failure},
+    {"review_destroy_failure", test_review_destroy_failure},
++   {"hosted_map", test_hosted_map},
+ };
+ 
+ int

@@ -1,0 +1,34 @@
+#version 450
+/* Per-element integer mixing: the "lowbias32" xorshift-multiply. Pure uint32 arithmetic, so the
+ * result is defined to the bit by the language; any difference between two implementations is a
+ * real difference in the hardware or the compiler, never rounding. */
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer In {
+	uint v[];
+} a;
+
+layout(std430, binding = 1) writeonly buffer Out {
+	uint v[];
+} o;
+
+layout(push_constant) uniform Push {
+	uint n;
+} p;
+
+uint mix32(uint x)
+{
+	x ^= x >> 16;
+	x *= 0x7feb352du;
+	x ^= x >> 15;
+	x *= 0x846ca68bu;
+	x ^= x >> 16;
+	return x;
+}
+
+void main()
+{
+	uint i = gl_GlobalInvocationID.x;
+	if (i < p.n)
+		o.v[i] = mix32(a.v[i]);
+}

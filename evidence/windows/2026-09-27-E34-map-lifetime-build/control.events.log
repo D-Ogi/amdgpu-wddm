@@ -1,0 +1,10 @@
+BC250 audit lifetime event=begin map=4294967296 time_ns=1 ctx=0000006D78CFFA40 resource=0000006D78CFFA88 resource_id=4294967294 object_id=4294967295 target=2 width=1920 height=1200 depth=1 format=105 bind=8 level=0 usage=2 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=1920 box_height=1200 box_depth=1
+BC250 audit lifetime event=result map=4294967296 time_ns=2 success=1 resource=0000006D78CFFA88 resource_id=4294967294 object_id=4294967297 usage=2 staging=0 stride=0 layer_stride=4294967297
+BC250 audit lifetime event=end map=4294967296 time_ns=3
+BC250 audit lifetime event=begin map=4294967298 time_ns=4 ctx=0000006D78CFFA40 resource=0000006D78CFFA88 resource_id=4294967294 object_id=4294967297 target=2 width=1920 height=1200 depth=1 format=105 bind=8 level=0 usage=40 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=1920 box_height=1200 box_depth=1
+BC250 audit lifetime event=result map=4294967298 time_ns=5 success=1 resource=0000006D78CFFAB8 resource_id=4294967299 object_id=4294967297 usage=40 staging=1 stride=0 layer_stride=0
+BC250 audit lifetime event=end map=4294967298 time_ns=6
+BC250 audit lifetime event=begin map=4294967300 time_ns=7 ctx=0000006D78CFFA40 resource=0000006D78CFFA88 resource_id=4294967294 object_id=4294967297 target=2 width=1920 height=1200 depth=1 format=105 bind=8 level=0 usage=4 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=1920 box_height=1200 box_depth=1
+BC250 audit lifetime event=result map=4294967300 time_ns=8 success=0 resource=0000000000000000 resource_id=0 object_id=0 usage=4 staging=0 stride=0 layer_stride=0
+BC250 audit lifetime event=begin map=4294967301 time_ns=9 ctx=0000006D78CFFA40 resource=0000006D78CFFA88 resource_id=4294967294 object_id=4294967297 target=2 width=1920 height=1200 depth=1 format=105 bind=8 level=0 usage=2 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=1920 box_height=1200 box_depth=1
+BC250 audit lifetime event=result map=4294967301 time_ns=10 success=0 resource=0000000000000000 resource_id=0 object_id=0 usage=2 staging=0 stride=0 layer_stride=0

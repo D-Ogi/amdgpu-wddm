@@ -41,8 +41,8 @@ documented DDI, with this experiment's observations as its acceptance test).
 
 ```powershell
 # build on the PC
-pwsh experiments\E05-display-only-owns-device\build.ps1 -Sample P:\BC-250\ref\Windows-driver-samples\video\KMDOD `
-     -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\e05-kmdod
+pwsh experiments\E05-display-only-owns-device\build.ps1 -Sample $env:BC250_ROOT\ref\Windows-driver-samples__WARN-MS-PL-no-code-in-our-driver\video\KMDOD `
+     -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\e05-kmdod
 # on the target, elevated (package copied to C:\BC250\e05)
 pnputil /add-driver C:\BC250\e05\bc250kmdod.inf /install          # install
 pnputil /enum-drivers | findstr /i /c:"bc250kmdod" /c:"oem"        # find oemNN.inf

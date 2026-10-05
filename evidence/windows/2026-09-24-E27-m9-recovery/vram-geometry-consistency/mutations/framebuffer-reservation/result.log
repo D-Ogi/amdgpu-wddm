@@ -1,0 +1,9 @@
+Extracted VramStart, framebuffer resolver, segment layout and actual GART setup caller
+vram_geometry_actual.c
+FAIL line203: !WddmMemoryLayout(&d,&off,&len,&table,&tablelen)
+FAIL line204: !off && !len && !table && !tablelen
+FAIL line203: !WddmMemoryLayout(&d,&off,&len,&table,&tablelen)
+FAIL line204: !off && !len && !table && !tablelen
+FAIL line203: !WddmMemoryLayout(&d,&off,&len,&table,&tablelen)
+FAIL line204: !off && !len && !table && !tablelen
+VRAM geometry: 72 checks, 6 failures

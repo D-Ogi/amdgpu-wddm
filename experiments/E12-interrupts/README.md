@@ -111,7 +111,7 @@ the value, no vector) -> `fence -Op gfx` -> `ih state` -> `fence -Op c0`, `c5`, 
 Not answered by part A: whether `DxgkCbQueueDpc` works for a display-only miniport (no interrupt arrived, so none
 was queued). Part C answers it.
 
-### Parts B and C, run 002 (2026-09-21, bc250kmd 0.6.1.0 = commit 3c1373d, `evidence/windows/2026-09-21-E12-run-002/`)
+### Parts B and C, run 002 (2026-09-21, bc250kmd 0.6.1.0 = commit 9a716a5, `evidence/windows/2026-09-21-E12-run-002/`)
 
 Reviewed a third time before the install (no blocker; the DPC drain at stop, a single-consumer gate in the DPC and a
 total time budget for the fence escape went in on the reviewer's advice). Linux reference taken the same day: E13.

@@ -12,7 +12,8 @@ firmware file into `C:\BC250\firmware\`: is this the same microcode that amdgpu 
 unit A?
 
 The blobs themselves are not in this repository (`.gitignore`: `*.bin`). They live under
-`P:\BC-250\ref\linux-firmware\amdgpu\`. Versions are facts about public files and are
+`<BC250_ROOT>\ref\linux-firmware\amdgpu\` (`BC250_ROOT` is the workspace root, by default the
+parent directory of this repository). Versions are facts about public files and are
 printed here; payload bytes never are.
 
 ## Usage
@@ -111,10 +112,10 @@ file. If one ever turns up here, read its `dump` output with that in mind.
 
 ## Findings on the BC-250 files
 
-`ref/linux-firmware/amdgpu/`, eight files, 2026-09-21.
+`ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/`, eight files, 2026-09-21.
 
 ```
-$ python tools/fwinfo/fwinfo.py versions P:\BC-250\ref\linux-firmware\amdgpu
+$ python tools/fwinfo/fwinfo.py versions $env:BC250_ROOT\ref\linux-firmware\amdgpu
 file                       struct                     hdr  ucode_version  feature  ucode/file
 cyan_skillfish2_ce.bin     gfx_firmware_header_v1_0   1.0  0x00000025     32       263040/263296
 cyan_skillfish2_me.bin     gfx_firmware_header_v1_0   1.0  0x00000063     32       263168/263424
@@ -127,7 +128,7 @@ cyan_skillfish2_sdma1.bin  sdma_firmware_header_v1_0  1.0  0x00000034     50    
 ```
 
 ```
-$ python tools/fwinfo/fwinfo.py check P:\BC-250\ref\linux-firmware\amdgpu\cyan_skillfish2_*.bin
+$ python tools/fwinfo/fwinfo.py check $env:BC250_ROOT\ref\linux-firmware\amdgpu\cyan_skillfish2_*.bin
 cyan_skillfish2_ce.bin: OK (gfx_firmware_header_v1_0)
 cyan_skillfish2_me.bin: OK (gfx_firmware_header_v1_0)
 cyan_skillfish2_mec.bin: OK (gfx_firmware_header_v1_0)
@@ -140,7 +141,7 @@ cyan_skillfish2_sdma1.bin: OK (sdma_firmware_header_v1_0)
 ```
 
 ```
-$ python tools/fwinfo/fwinfo.py compare P:\BC-250\ref\linux-firmware\amdgpu \
+$ python tools/fwinfo/fwinfo.py compare $env:BC250_ROOT\ref\linux-firmware\amdgpu \
       evidence/linux/2026-09-21-E01-diagusb-run-001/amdgpu_firmware_info.txt
 file                       label  ucode_version  feature  vs the dump
 cyan_skillfish2_ce.bin     CE     0x00000025     32       match

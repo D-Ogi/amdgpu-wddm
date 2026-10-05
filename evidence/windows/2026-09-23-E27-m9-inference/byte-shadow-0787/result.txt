@@ -1,0 +1,19 @@
+M220 byte-granular logical copy, 2026-09-23.
+Dirty worktree over base-commit.txt; relevant changed source snapshots included.
+E27 procedure written before implementation/testing.
+Known bitmap16->64 uint64 words (+384 bytes/table slot vs0786), one bit per byte.
+Apply marks8 bytes/PTE; Read requires all8; PTE Copy preserves partial-byte metadata;
+DWORD Fill marks4 bytes and retains other known bytes. PagingPtShadowCopyBytes copies
+one source/destination page slice with snapshot/memmove semantics and no registration.
+Unknown/untracked source clears corresponding destination knowledge. Invalid arguments
+are rejected before mutation. Storage initialized only when needed; no unknown reads.
+Final shadow784240/0, kernel compile passes. Routing9172/0. Full WDK0787 build/sign pass.
+SYS SHA256FCA0387F5775E3227A81D809B85DBF838CE36F41370F9449AAC3C4C43665C6C7.
+Package scratch/build/bc250kmd-0787/package-umd NOT DEPLOYED.
+Independent128-byte snapshot oracle covers16 source offsets*16 destination offsets*
+16 lengths, both overlap directions, self-copy and mixed knowledge. Missing bytes
+are completed from known source to expose retained partial values. Additional PTE
+copy of a single known byte, page-end and rollback controls pass.
+Byte-copy helper not yet wired to Transfer DDI. Metadata memmove does not prove SDMA
+overlap semantics; corresponding hardware staging/order still required.
+No lab access/deployment/reboot/USB changes/private-data redaction. No GPU acceptance.

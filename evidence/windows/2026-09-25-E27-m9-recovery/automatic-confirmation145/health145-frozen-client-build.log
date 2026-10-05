@@ -1,0 +1,8 @@
+  ..
+  ----------------------------------------------------------------------
+  Ran 2 tests in 0.001s
+  System.Management.Automation.RemoteException
+  OK
+bc250kmd_cli.c
+   Trwa tworzenie biblioteki P:\bc-250\scratch\build\health145-frozen-client\bc250control.lib i obiektu P:\bc-250\scratch\build\health145-frozen-client\bc250control.exp
+   190464  bc250kmd_cli.exe

@@ -1,0 +1,128 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+P:\bc-250\bc250-win\driver\kmd\bc250kmd_escape.h(84): error C2059: błąd składniowy: „stała”
+P:\bc-250\bc250-win\driver\kmd\smu.h(27): error C2059: błąd składniowy: „stała”
+P:\bc-250\bc250-win\driver\kmd\smu.h(27): error C2143: błąd składniowy: brakuje „)” przed „*”
+P:\bc-250\bc250-win\driver\kmd\smu.h(27): error C2143: błąd składniowy: brakuje „{” przed „*”
+P:\bc-250\bc250-win\driver\kmd\smu.h(27): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2371: "BOOLEAN": zmiana definicji; różne typy podstawowe
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\um\winnt.h(1217): note: zobacz deklarację „BOOLEAN”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „Administrator”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2371: "BOOLEAN": zmiana definicji; różne typy podstawowe
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\um\winnt.h(1217): note: zobacz deklarację „BOOLEAN”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „HardwareAccess”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2371: "BOOLEAN": zmiana definicji; różne typy podstawowe
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\um\winnt.h(1217): note: zobacz deklarację „BOOLEAN”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „NoAdapterSynchronization”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): error C2059: błąd składniowy: „)”
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\bc250-win\driver\kmd\smu.h(28): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(152): error C2059: błąd składniowy: „stała”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(152): error C2143: błąd składniowy: brakuje „)” przed „*”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(152): error C2143: błąd składniowy: brakuje „{” przed „*”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(152): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2371: "BOOLEAN": zmiana definicji; różne typy podstawowe
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\um\winnt.h(1217): note: zobacz deklarację „BOOLEAN”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „administrator”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2371: "BOOLEAN": zmiana definicji; różne typy podstawowe
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\um\winnt.h(1217): note: zobacz deklarację „BOOLEAN”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „hardwareAccess”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2371: "BOOLEAN": zmiana definicji; różne typy podstawowe
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\um\winnt.h(1217): note: zobacz deklarację „BOOLEAN”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „noAdapterSynchronization”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2059: błąd składniowy: „)”
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+P:\bc-250\scratch\m9\smu-typed-native\smu-native.inc(153): error C2054: oczekiwano "(" postępuj zgodnie z "noAdapterSynchronization"
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(48): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „r”
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(48): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(48): error C2059: błąd składniowy: „{”
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(49): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(49): error C2224: po lewej ".Magic" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(49): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(49): error C2224: po lewej ".Command" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(49): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(49): error C2224: po lewej ".AbiVersion" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2224: po lewej ".Op" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2224: po lewej ".RequestedMHz" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2224: po lewej ".RequestedMv" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(51): warning C4013: niezdefiniowany "SmuClockRequest"; przy założeniu, że extern zwraca int
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(51): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(52): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(52): error C2224: po lewej ".Status" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(52): error C2224: po lewej ".Ready" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(52): error C2224: po lewej ".NtStatus" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(53): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(53): error C2224: po lewej ".Op" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(53): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(53): error C2224: po lewej ".RequestedMHz" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(53): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(53): error C2224: po lewej ".RequestedMv" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(54): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(55): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(55): error C2224: po lewej ".Status" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(55): error C2224: po lewej ".Ready" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(56): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(56): error C2224: po lewej ".ObservedMHz" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(56): error C2224: po lewej ".ObservedVid" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(56): error C2224: po lewej ".TemperatureMc" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(98): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „r”
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(98): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(98): error C2059: błąd składniowy: „{”
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(99): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(99): warning C4127: wyrażenie warunkowe jest stałą
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(100): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(100): error C2224: po lewej ".Magic" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(100): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(100): error C2224: po lewej ".Command" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(100): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(100): error C2224: po lewej ".AbiVersion" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(101): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(102): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(102): error C2224: po lewej ".Status" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(102): error C2224: po lewej ".NtStatus" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(102): error C2224: po lewej ".Ready" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(104): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(104): error C2224: po lewej ".Op" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(104): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(104): error C2224: po lewej ".RequestedMHz" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(104): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(104): error C2224: po lewej ".RequestedMv" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(105): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(106): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(106): error C2224: po lewej ".Status" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(106): error C2224: po lewej ".Ready" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(106): error C2224: po lewej ".VoltageStaged" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(107): error C2065: "r": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(107): error C2224: po lewej ".InitialMHz" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(107): error C2224: po lewej ".InitialVid" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(107): error C2224: po lewej ".ObservedMHz" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(107): error C2224: po lewej ".ObservedVid" musi być typ struct/union
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(107): fatal error C1003: Licznik błędów przekracza 100; zatrzymywanie kompilacji
+Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_smu_native.ps1:21
+Line |
+  21 |  if($LASTEXITCODE -ne 0){throw 'Host build failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Host build failed

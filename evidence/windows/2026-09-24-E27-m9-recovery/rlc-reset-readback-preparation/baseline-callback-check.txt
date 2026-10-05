@@ -1,0 +1,1 @@
+PASS: gate1 callback body still matches original AMD callback, normalized whitespace and shim delay spelling only.

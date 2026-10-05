@@ -1,0 +1,11 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -1140,7 +1140,7 @@
+    struct radv_wddm2_bo *bo = radv_wddm2_bo(_bo);
+    ASSERTED NTSTATUS status;
+ 
+-   if (all_resident && !bo->base.is_virtual) {
++   if (all_resident && !bo->base.is_virtual && !bo->borrowed) {
+       D3DKMT_EVICT evict = {
+          .hDevice = ws->device_h,
+          .NumAllocations = 1,

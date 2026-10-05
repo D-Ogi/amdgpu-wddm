@@ -1,0 +1,45 @@
+{
+  "m8": "8 operations, zero mismatches",
+  "stories15M": {
+    "linux_reference_match": true,
+    "layers": 7,
+    "text_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  "tinyllama": {
+    "linux_reference_match": true,
+    "layers": 23,
+    "text_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  "before": [
+    [
+      "0",
+      "204",
+      "204",
+      "0",
+      "0"
+    ],
+    [
+      "1",
+      "24397",
+      "24397",
+      "0",
+      "0"
+    ]
+  ],
+  "after": [
+    [
+      "0",
+      "2558",
+      "2558",
+      "0",
+      "0"
+    ],
+    [
+      "1",
+      "47606",
+      "47606",
+      "0",
+      "0"
+    ]
+  ]
+}

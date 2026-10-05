@@ -1,0 +1,24 @@
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+[private device instance redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+[private device instance redacted]
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x0007008F (milestone 7 revision 143)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 0, flips 190 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+probe_sha256=217383432D9B75C58914CF882A57D664CB7E0A214070AB7099F37CD96F01C178
+raster_exit=0
+OPEN status=0x00000000 source=0 target=2424833
+QDC_REFRESH numerator=154000000 denominator=2568800
+QDC_SIGNAL pixel=154000000 active=1920x1200 total=2080x1235 h=154000000/2080 v=154000000/2568800
+INFO nt=0x00000000 result=0 version=0x0007008F width=1920 height=1200 pitch=7680 flags=0x1FD
+RASTER sample=1023 us=16001126.400 nt=0x00000000 blank=0 line=1112
+RASTER_RESULT samples=1024 failures=0 active=992 blank=32 active_changes=991 min_line=3 max_line=1197
+OBS_RESULT samples=16 failures=0 scheduling_idled=1
+CLOSE status=0x00000000
+boot=2026-09-24T21:14:48
+combined_observation_complete=2026-09-25T00:35:16

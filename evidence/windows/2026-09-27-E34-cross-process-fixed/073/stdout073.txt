@@ -1,0 +1,6 @@
+pid=10712 UMD=C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+pid=7844 UMD=C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+parent progress=100 generations=1 checked_pixels=204800
+pid=7844 CreateTexture2D shared=8007000e
+parent FAIL CreateTexture2D shared
+

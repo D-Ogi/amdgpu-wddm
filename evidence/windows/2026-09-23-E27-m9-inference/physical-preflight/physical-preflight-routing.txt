@@ -1,0 +1,10 @@
+compile (user mode, paging-node packets)
+  Generowanie kodu...
+  P:\bc-250\scratch\m9\physical-preflight-routing\paging-route.c(969): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+  P:\bc-250\scratch\m9\physical-preflight-routing\paging-route.c(969): warning C4127: wyrażenie warunkowe jest stałą
+  Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_paging.ps1:44
+Line |
+  44 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl.exe failed (2)

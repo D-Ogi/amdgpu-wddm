@@ -1,0 +1,30 @@
+{
+    "phase":  "Cpu",
+    "child_exit":  1,
+    "observed":  true,
+    "feature_level":  null,
+    "options":  [
+
+                ],
+    "tiling":  null,
+    "checks_failed":  [
+                          "FAIL D3D11CreateDevice: 0x887A0004"
+                      ],
+    "final":  "FAILED: 1 failure(s)",
+    "native_shell_loaded":  0,
+    "cpu_umd_loaded":  1,
+    "engine_loaded":  0,
+    "icd_loaded":  0,
+    "policy":  [
+
+               ],
+    "caps_not_answered":  [
+
+                          ],
+    "ddi_errors":  [
+
+                   ],
+    "second_chance":  [
+
+                      ]
+}

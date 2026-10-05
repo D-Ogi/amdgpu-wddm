@@ -48,6 +48,12 @@ fi
 NETLOG=/tmp/bc250-net.log
 /etc/bc250/net "$M" >"$NETLOG" 2>&1 &
 
+# Reference capture starts before the first GPU access or amdgpu load.
+if [ "$mode" = "network" ]; then
+    echo "bc250.mode=network: network started; GPU diagnostics skipped."
+    exec /bin/sh -l
+fi
+
 # A kernel that hangs on modprobe cannot be helped from here, but nothing in user space should be
 # allowed to cost us the QR codes: diag.py writes them once after phase A already.
 TMO=""

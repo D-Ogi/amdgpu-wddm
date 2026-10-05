@@ -1,0 +1,35 @@
+{
+  "positive_rounds": 32,
+  "stale_control": "detected round1, previous GPU hash retained",
+  "counters": {
+    "before": {
+      "0": [
+        30507,
+        30507,
+        0,
+        0
+      ],
+      "1": [
+        670556,
+        670556,
+        0,
+        0
+      ]
+    },
+    "after": {
+      "0": [
+        30541,
+        30541,
+        0,
+        0
+      ],
+      "1": [
+        673837,
+        673837,
+        0,
+        0
+      ]
+    }
+  },
+  "scope": "host-coherent reused Vulkan allocations; no eviction or CPU cache-alias type proof"
+}

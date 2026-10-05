@@ -1,0 +1,24 @@
+# The facts gate: the generated pages under docs/facts must be what tools/facts/gen_facts.py
+# writes from docs/facts/data/*.yaml. Same check as the 'facts' step of tools/quality/quick.ps1.
+name: facts
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  facts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generated pages match the data (fails on any diff; fix with gen_facts.py --write)
+        run: python tools/facts/gen_facts.py --check
+      - name: Generator tests
+        run: python -m unittest discover -s tools/facts

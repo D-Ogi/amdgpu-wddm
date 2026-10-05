@@ -1,0 +1,11 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -1044,6 +1044,8 @@
+    struct radv_wddm2_bo *bo = radv_wddm2_bo(_bo);
+    ASSERTED NTSTATUS status;
+ 
++   if (bo->borrowed) return NULL;
++
+    if (bo->map && !fixed_addr)
+       return bo->map;
+ 

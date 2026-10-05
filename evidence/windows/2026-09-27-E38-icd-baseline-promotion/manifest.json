@@ -1,0 +1,99 @@
+{
+ "artifacts": {
+  "registered ICD before": "9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798 (24263168 bytes, Mesa f333dd6d, 2026-09-25 07:53)",
+  "registered ICD after": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (24253952 bytes, fork c34ab7cd on 940ab0eb / 05e6c962)",
+  "rollback file": "C:/BC250/m10/wsi-final/vulkan_radeon.9C40083C.dll",
+  "keep file": "C:/BC250/m10/wsi-final/vulkan_radeon.93B1D1FD.dll",
+  "manifest radeon_icd.json": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE (unchanged)",
+  "compared hosted candidate ICD": "3508416F7FB6367BC7345970C22603E03DA963A01F4B5C0A1DF1AAAC2D90CF71 (scratch/m12/mesa-current-build, 2026-09-26 22:18)",
+  "E36 consolidated ICD": "FAD08ECB16C9CFFDCB8D09D408C8ABC428B348D948D945D78DE30892D88A65AF (fork 940ab0eb)",
+  "flip control": "runtime-flip-control.exe E58D29517DB7C5E29B30F73E19F9EAB4C6C376AC411E2E28E6871E74224642BA, router B2748CF0",
+  "application-slot UMD during flip control": "848BCBF5FD3B864B183F2194308FA70D254C615B5B30BDBC602C34C9EDC00287 (fork 71f2e28c), restored to 346A5140",
+  "CPU UMD": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA (untouched)",
+  "smoke runner": "C:/BC250/m13/fork-consolidated001/run-smoke.ps1 (tools/quality/run-smoke.ps1), vkcompute C:/BC250/m8",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD unchanged, DWM 84 unchanged, no registry change",
+  "screen captures": "screen-kmtflip001-{0,1,2}.png kept outside Git (desktop content); hashes in kmtflip001/capture-hashes.json"
+ },
+ "files": {
+  "kmtflip001/capture-hashes.json": {
+   "sha256": "8c7e9c04280bd74084788487ea9c4158358129dc703b33f646cb6ecb3ad4fd14",
+   "bytes": 299
+  },
+  "kmtflip001/done-kmtflip001.json": {
+   "sha256": "e4714cf93cf253e08e61754ee4676abbb1b2cdf7c78458d1fa50ae5bbafbb8c4",
+   "bytes": 67
+  },
+  "kmtflip001/run-kmtflip001.log": {
+   "sha256": "922af501a774a274042ff8e3c2a8bf4fc36afb6ad21451fe7969a132fac68141",
+   "bytes": 9833
+  },
+  "kmtflip001/screen-kmtflip001-analysis.json": {
+   "sha256": "f2d2b7b4167a146831572f308158440c2cccedd205c3ec70c5f186cae88c4062",
+   "bytes": 881
+  },
+  "kmtflip001/stderr-kmtflip001.txt": {
+   "sha256": "d85b4c804eed549e850d3e32519c69efc9c74a9f0be18eaace24c0a31fef1345",
+   "bytes": 8366
+  },
+  "kmtflip001/stdout-kmtflip001.txt": {
+   "sha256": "2ba5193cf93793a0cf89baecc72774a4e2e9bddbc94ceb0589d99bb0849407e1",
+   "bytes": 242
+  },
+  "promote001/promote001.log": {
+   "sha256": "2b62463ca3a5dafa596bd4426bd2c42837dc69a4cde4a11a761deed8dedab8dc",
+   "bytes": 3158
+  },
+  "promote001/smoke/receipt.json": {
+   "sha256": "21cf6b446bdef09ccbaff1bcc96b2e926fe06b2a69a24ac199d2502b74c6fcb1",
+   "bytes": 388
+  },
+  "promote001/smoke/stderr.txt": {
+   "sha256": "d97a6020f5034b4d031cbd818c07a512231587deba0c56069ba94df1b77efe2a",
+   "bytes": 2332
+  },
+  "promote001/smoke/stdout.txt": {
+   "sha256": "084e75c1185d0499b9927fa041ceb93a13206b3fd2a0935e4199bd2a39826490",
+   "bytes": 2789
+  },
+  "promote001/smoke-config.json": {
+   "sha256": "0bf2904a4379adff890ef6750845cd6d5b2e0a5ceec47ddc92b02f2c8c84535c",
+   "bytes": 527
+  },
+  "RESULT.md": {
+   "sha256": "14f9e819a58c0fb54cb7aa6d0c318961aaa7f94a9cacc7d60913b6b2fdb198c6",
+   "bytes": 4764
+  },
+  "scripts/analyze-kmtflip001.py": {
+   "sha256": "53dfbe6c608c45b76476e39d64395fbc1c01de5df89819ea8a7f455445d6ae5d",
+   "bytes": 1280
+  },
+  "scripts/compare-current-vs-fork.py": {
+   "sha256": "cb8e8f06db4c8a18ba63f9c60f2d1f61573074ff9e7a94e005808a12030e0755",
+   "bytes": 2600
+  },
+  "scripts/launch-kmtflip001.ps1": {
+   "sha256": "e2313f12290604cb9e7ca112cc473986f6a12e73391a5bfec4d7221ee15a6383",
+   "bytes": 1351
+  },
+  "scripts/poll-kmtflip001.ps1": {
+   "sha256": "7d16a50f46adf7b200c2987944a57836e6ee326a6b0996990f343acea0776927",
+   "bytes": 1671
+  },
+  "scripts/promote-icd001.ps1": {
+   "sha256": "60a61bcbd1b2567a88c1317f38ce2f6492d4ad7dc7801648d776fe2893a784d7",
+   "bytes": 4947
+  },
+  "scripts/run-kmtflip001.ps1": {
+   "sha256": "055ee4e73d2678a9caa91af62a1958a9686fe40aa1de78af08e4a0df5cb67869",
+   "bytes": 6122
+  },
+  "scripts/stage-kmtflip001.ps1": {
+   "sha256": "0f1e2b4f65f51e8db1006d09c2b12f4ebb3449789a97c1ececf517c527210171",
+   "bytes": 1877
+  },
+  "scripts/worker-kmtflip001.ps1": {
+   "sha256": "3d1720c8b0a87dbf995c205b09175fc144dffdbdf940da5827625c59891a6b89",
+   "bytes": 360
+  }
+ }
+}

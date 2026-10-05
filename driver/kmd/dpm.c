@@ -9,7 +9,9 @@
 //
 // Since 0.7.205 the thermal cap alone may go under that floor, to 900 or 800 MHz at the floor's own 820 mV
 // (owner decision 2026-10-05, after RotTR scene 2 held 88 C with the governor already at 1000 MHz and the GPU
-// 97 % busy). The firmware has never been seen below 1000 MHz (facts M47), so DpmApply treats a refused
+// 97 % busy). The firmware accepts both points (facts M785: session 402 held 800 and 900 MHz at VID 116
+// with no refusal), and 1000 MHz is only the lowest level the power tables publish (facts M47). A part that
+// does refuse costs nothing: DpmApply treats a refused
 // sub-floor transition as "this part has no sub-floor": one log line, the lab floor applied instead, the SMU
 // give-up counter untouched, and the governor's cap stops at the lab floor for the rest of the start.
 //
@@ -400,8 +402,9 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
         return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
     }
     if (Level < BC250_DPM_FLOOR_LEVEL) {
-        // A thermal-only point under the lab floor (0.7.205). The firmware has never been seen below 1000 MHz
-        // (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there), so a refusal here is a
+        // A thermal-only point under the lab floor (0.7.205). The tables publish no level below 1000 MHz
+        // (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there) although unit A's firmware
+        // accepts 800 and 900 MHz (facts M785), so a refusal here is a
         // property of this part, not an SMU fault: the governor loses the sub-floor for the rest of the start,
         // the lab floor goes in instead, and the SMU give-up counter (BC250_DPM_ERROR_LIMIT) is untouched, so
         // one unsupported point never costs the whole DPM start.

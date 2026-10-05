@@ -1,0 +1,213 @@
+diff --git a/driver/kmd/gdi_private.h b/driver/kmd/gdi_private.h
+index 6d0cf73..92a88c0 100644
+--- a/driver/kmd/gdi_private.h
++++ b/driver/kmd/gdi_private.h
+@@ -1,5 +1,6 @@
+ #ifndef BC250_GDI_PRIVATE_H
+ #define BC250_GDI_PRIVATE_H
++#include "dcn_translate.h"
+ 
+ // Windows ABI: 32-bit unsigned long, 64-bit unsigned long long.
+ #define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
+@@ -35,4 +36,32 @@ static __inline int WddmGdiPrivate(const void* Data, unsigned int Bytes, unsigne
+     return 1;
+ }
+ 
++/* Type values are the WDK GDISURFACETYPE ABI (checked by the kernel caller).
++ * A tag describes requested policy, never OS provenance or backing identity. */
++static __inline int WddmGdiLayout(unsigned long Width,unsigned long Height,
++    unsigned long Type,unsigned long Bpp,unsigned long* Pitch,unsigned long long* Size)
++{
++    if (Bpp!=1 && Bpp!=4) return 0;
++    if (Type==2 || Type==3) return DcnStagingLayout(Width,Height,Bpp,Pitch,Size);
++    if (Bpp!=4) return 0;
++    if (Type==1) return DcnSharedTextureLayout(Width,Height,Pitch,Size);
++    return DcnStagingLayout(Width,Height,4,Pitch,Size);
++}
++
++static __inline int WddmSurfaceGeometry(const BC250_WDDM_ALLOCATION_PRIVATE* Surface,
++    unsigned long Type,unsigned long Bpp)
++{
++    unsigned long pitch;
++    unsigned long long size;
++    if (!Surface || Surface->Magic!=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC ||
++        Surface->Version!=1 || Type>8 || Surface->Size>~0ull-4095ull) return 0;
++    if (!Type) {
++        /* Legacy UMD producers may add pitch/row padding. Bound the footprint,
++         * but do not require the standard-GDI producer's exact layout. */
++        return Bpp==4 && DcnSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,&size) &&
++            Surface->Size>=size;
++    }
++    return WddmGdiLayout(Surface->Width,Surface->Height,Type,Bpp,&pitch,&size) &&
++        Surface->Pitch==pitch && Surface->Size==size;
++}
+ #endif
+diff --git a/driver/kmd/test/dcn_translate_test.c b/driver/kmd/test/dcn_translate_test.c
+index 61ceddd..9dd2fb5 100644
+--- a/driver/kmd/test/dcn_translate_test.c
++++ b/driver/kmd/test/dcn_translate_test.c
+@@ -83,6 +83,39 @@ int main(void)
+     gdi.Flags=0;gdi.Reserved=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+     gdi.Reserved=0;gdi.Magic^=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+     gdi.Magic^=1;gdi.Surface.Version=2;CHECK(!WddmGdiPrivate(&gdi,48,&type));
++    /* Validate the received blob independently of producer allocation calls. */
++    gdi.Surface.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
++    gdi.Surface.Version=1;
++    for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
++        unsigned long kind;
++        gdi.Surface.Width=w;gdi.Surface.Height=h;
++        for(kind=1;kind<=3;kind++) {
++            unsigned long bpp=kind==1?4:1;
++            CHECK(WddmGdiLayout(w,h,kind,bpp,&gdi.Surface.Pitch,&gdi.Surface.Size));
++            CHECK(WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
++            gdi.Surface.Size--;
++            CHECK(!WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
++            gdi.Surface.Size+=2;
++            CHECK(!WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
++            gdi.Surface.Size--;
++            gdi.Surface.Pitch+=4;
++            CHECK(!WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
++        }
++    }
++    gdi.Surface.Width=3;gdi.Surface.Height=3;
++    gdi.Surface.Pitch=256;gdi.Surface.Size=1024;
++    CHECK(WddmSurfaceGeometry(&gdi.Surface,0,4)); /* legacy padded UMD */
++    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,1));
++    gdi.Surface.Size=767;CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
++    gdi.Surface.Size=~0ull;CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
++    gdi.Surface.Size=1024;gdi.Surface.Version=2;
++    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
++    gdi.Surface.Version=1;gdi.Surface.Magic^=1;
++    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
++    gdi.Surface.Magic^=1;gdi.Surface.Pitch=8;
++    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
++    CHECK(!WddmGdiLayout(3,3,1,1,&pitch,&bytes));
++    CHECK(!WddmGdiLayout(3,3,2,0,&pitch,&bytes));
+     for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
+         CHECK(DcnSharedTextureLayout(w,h,&pitch,&bytes));
+         // Independent consumer contract: Resource.cpp OpenResource on a0ad8af5.
+diff --git a/driver/kmd/wddm.c b/driver/kmd/wddm.c
+index f5994c1..4b8a6d3 100644
+--- a/driver/kmd/wddm.c
++++ b/driver/kmd/wddm.c
+@@ -2569,6 +2569,19 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
+ 
+ // ---- allocations ------------------------------------------------------------------------------------------------
+ 
++C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE==1);
++C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
++C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
++static ULONG WddmSurfacePixelBytes(ULONG Format)
++{
++    switch (Format) {
++    case D3DDDIFMT_A8: return 1;
++    case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
++    case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: return 4;
++    default: return 0;
++    }
++}
++
+ static DXGKDDI_GETSTANDARDALLOCATIONDRIVERDATA Bc250WddmGetStandardAllocationDriverData;
+ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdapter,
+                                                          _Inout_ DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA* pData)
+@@ -2582,6 +2595,23 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
+     private.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
+     private.Version = 1;
+ 
++    // Retain the CDD/DWM allocation contract independently of the shared first-DDI
++    // log budget: primary/shadow requests can exhaust it before a GDI request.
++    // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
++    // Separate the size query from the private-data fill, at most20 lines per start.
++    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE && pData->pCreateGdiSurfaceData != NULL)
++    {
++        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
++        ULONG slot = type <= 8 ? type : 9;
++        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
++        LONG bit = (LONG)(1u << (slot * 2 + fill));
++        if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
++            GuardLog("wddm: GDI request type %u flags 0x%08X phase %s %ux%u format %u",
++                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
++                     pData->pCreateGdiSurfaceData->Width, pData->pCreateGdiSurfaceData->Height,
++                     (ULONG)pData->pCreateGdiSurfaceData->Format);
++    }
++
+     switch (pData->StandardAllocationType)
+     {
+     case D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE:
+@@ -2620,23 +2650,9 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
+     // the UMD-created shared textures. Logical Width/Height remain unchanged.
+     // Staging uses its format size and the advertised four-byte row alignment.
+     {
+-        BOOLEAN texture=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE &&
+-            pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_TEXTURE;
+-        BOOLEAN staging=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE &&
+-            (pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE ||
+-             pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_STAGING);
+-        if (staging) {
+-            ULONG bpp;
+-            switch (private.Format) {
+-            case D3DDDIFMT_A8: bpp=1;break;
+-            case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
+-            case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: bpp=4;break;
+-            default: return STATUS_INVALID_PARAMETER;
+-            }
+-            if (!DcnStagingLayout(private.Width,private.Height,bpp,&private.Pitch,&private.Size))
+-                return STATUS_INVALID_PARAMETER;
+-        } else if (texture) {
+-            if (!DcnSharedTextureLayout(private.Width,private.Height,&private.Pitch,&private.Size))
++        if (pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE) {
++            if (!WddmGdiLayout(private.Width,private.Height,(ULONG)pData->pCreateGdiSurfaceData->Type,
++                    WddmSurfacePixelBytes(private.Format),&private.Pitch,&private.Size))
+                 return STATUS_INVALID_PARAMETER;
+         } else {
+             if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
+@@ -2654,22 +2670,6 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
+     else if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
+         pData->pCreateGdiSurfaceData->Pitch = private.Pitch;
+ 
+-    // Retain the CDD/DWM allocation contract independently of the shared first-DDI
+-    // log budget: primary/shadow requests can exhaust it before a GDI request.
+-    // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
+-    // Separate the size query from the private-data fill, at most20 lines per start.
+-    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
+-    {
+-        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
+-        ULONG slot = type <= 8 ? type : 9;
+-        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
+-        LONG bit = (LONG)(1u << (slot * 2 + fill));
+-        if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
+-            GuardLog("wddm: GDI surface type %u flags 0x%08X phase %s %ux%u format %u pitch %u bytes %llu",
+-                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
+-                     private.Width, private.Height, private.Format, private.Pitch, private.Size);
+-    }
+-
+     // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
+     if (pData->pAllocationPrivateDriverData != NULL)
+     {
+@@ -2824,6 +2824,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
+         if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
+             private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
+             !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
++            !WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) ||
+             (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
+         {
+             if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
+@@ -2861,7 +2862,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
+         info->PreferredSegment.SegmentId0 = allocationSharedCpu ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
+         info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
+         info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
+-        info->EvictionSegmentSet = 0;                   // surfaces live in the local segment only; no eviction target
++        info->EvictionSegmentSet = 0;                   // no explicit eviction segment; VidMm owns backing-store eviction
+         info->PhysicalAdapterIndex = 0;
+         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
+         // Linear VRAM blits use physical mappings. System-memory pages are not assumed contiguous.
+@@ -2981,7 +2982,8 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
+             }
+         }
+         else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
+-            private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType))
++            private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
++            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)))
+         {
+             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
+             if (opened != NULL) {

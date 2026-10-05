@@ -195,6 +195,26 @@ static void SurfaceFormats(void)
     CHECK(!WddmSurfaceFormatBpp(31,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(31,BC250_SURFACE_SCANOUT));
     CHECK(WddmSurfaceFormatBpp(113,BC250_SURFACE_COMPOSED)==8);
     CHECK(!WddmSurfaceFormatBpp(113,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(113,BC250_SURFACE_SCANOUT));
+    /* A8 (D3DDDIFMT_A8, DXGI A8_UNORM) has a COMPOSED row at 1 byte a pixel since the shared table gained it,
+     * where the KMD answered 0 before. Since 0.7.207 a composed surface also reaches the hardware at that size:
+     * DcnLinearSurfaceBytes takes 1, 4 and 8 bytes a pixel, so a type-0 A8 blob is admitted when its pitch holds
+     * a byte a pixel and the allocation covers the rows (M14.1, DirectComposition's shared atlases). The VidPN
+     * source mode list is the one place that still refuses A8, and on its size alone (display_modes.h). */
+    CHECK(WddmSurfaceFormatBpp(28,BC250_SURFACE_COMPOSED)==1);
+    CHECK(WddmSurfaceFormatBpp(28,BC250_SURFACE_GDI)==1 && !WddmSurfaceFormatBpp(28,BC250_SURFACE_SCANOUT));
+    CHECK(DcnLinearSurfaceBytes(1920,1080,1920,1,&bytes) && bytes==1920ull*1080u);
+    {
+        BC250_WDDM_ALLOCATION_PRIVATE a8={0};
+        a8.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;a8.Version=1;
+        a8.Width=1920;a8.Height=1080;a8.Pitch=1920;a8.Size=1920ull*1080u;a8.Format=28;
+        CHECK(WddmSurfaceAdmitted(&a8,0));
+        a8.Pitch=7680;a8.Size=7680ull*1080u;
+        CHECK(WddmSurfaceAdmitted(&a8,0));
+        a8.Pitch=1920;a8.Size=1920ull*1080u-1u;
+        CHECK(!WddmSurfaceAdmitted(&a8,0));      /* the rows must still fit the allocation */
+        a8.Pitch=1919;a8.Size=1920ull*1080u;
+        CHECK(!WddmSurfaceAdmitted(&a8,0));      /* and the row must fit the pitch */
+    }
     /* The 8-byte geometry itself: a whole number of pixels per row, the row inside the pitch. */
     CHECK(DcnLinearSurfaceBytes(256,64,2048,8,&bytes) && bytes==131072ull);
     CHECK(!DcnLinearSurfaceBytes(256,64,2044,8,&bytes) && !bytes);

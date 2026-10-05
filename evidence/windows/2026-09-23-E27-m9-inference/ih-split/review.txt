@@ -1,0 +1,26 @@
+2026-09-23 M238. Host/source evidence, no lab access.
+Split bc250_ih_hw_init into shared validation, hw_prepare (all but last RMW),
+hw_enable (last RMW), and compatibility wrapper calling both.
+No upstream register sequence change. Caller must serialize, successfully prepare
+and publish interrupt context before enable. DIRQL requires a suitable backend.
+No new allocation, wait, or address literal in final enable.
+
+Replay from the same E03 recorded initial state:
+prepare14 writes, all IH_RB_CNTL writes have RB_ENABLE/ENABLE_INTR clear.
+enable1 write; concatenation matches15 Linux writes, 4 allocation address
+exceptions independently checked, zero mismatches/address failures.
+NULL enable refuses without output. Existing repeat-init shape, decode,
+pointer, fence, compute controls pass; MSI/self-clear negative controls fail.
+Initial split test used already initialized state and differed in retained
+RB_GPU_TS_ENABLE on first disable. Corrected test to reset through existing
+prepare fixture before comparison; existing repeat-init test retained.
+Full WDK build/sign passes, dev-only version0793:
+scratch/build/ih-split-dev/package-umd
+SYS98AB939CC93FEA8A352F59F3F55B4EF3F25A6010EE9148857F27E4B896B8AEE7
+Official0793 unchanged. Not deployed.
+
+KMD still calls compatibility hw_init: the M237 publication hazard is NOT fixed.
+Next: publish DpcAdev with interrupts disabled, use short synchronized final
+enable with DIRQL-safe backend; keep allocations/waits/teardown outside callback.
+Sequence.RecordFault logs when !Dpc: do not use ordinary sequence at DIRQL.
+Also review synchronized stop/admission and failure cleanup before PnP wiring.

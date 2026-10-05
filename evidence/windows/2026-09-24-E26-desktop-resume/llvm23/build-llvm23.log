@@ -1,0 +1,228 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+CMake Warning at CMakeLists.txt:4 (message):
+  Your CMake version is 3.25.2.  Starting with LLVM 24, the minimum version
+  of CMake required to build LLVM will become 3.31.0, and using an older
+  CMake will become an error.  Please upgrade your CMake to at least 3.31.0
+  now to avoid issues in the future.
+
+
+-- The C compiler identification is MSVC 19.44.35221.0
+-- The CXX compiler identification is MSVC 19.44.35221.0
+-- The ASM compiler identification is MSVC
+-- Found assembler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Doxygen disabled.
+-- Found Python3: C:/Users/desktop/AppData/Local/Programs/Python/Python312/python.exe (found suitable version "3.12.10", minimum required is "3.0") found components: Interpreter 
+-- Looking for __GLIBC__
+-- Looking for __GLIBC__ - not found
+-- Looking for valgrind/valgrind.h
+-- Looking for valgrind/valgrind.h - not found
+-- Looking for FE_ALL_EXCEPT
+-- Looking for FE_ALL_EXCEPT - found
+-- Looking for FE_INEXACT
+-- Looking for FE_INEXACT - found
+-- Performing Test HAVE_BUILTIN_THREAD_POINTER
+-- Performing Test HAVE_BUILTIN_THREAD_POINTER - Failed
+-- Looking for CrashReporterClient.h
+-- Looking for CrashReporterClient.h - not found
+-- Looking for pfm_initialize in pfm
+-- Looking for pfm_initialize in pfm - not found
+-- Looking for arc4random
+-- Looking for arc4random - not found
+-- Looking for backtrace
+-- Looking for backtrace - not found
+-- Could NOT find Backtrace (missing: Backtrace_LIBRARY Backtrace_INCLUDE_DIR) 
+-- Performing Test C_SUPPORTS_WERROR_UNGUARDED_AVAILABILITY_NEW
+-- Performing Test C_SUPPORTS_WERROR_UNGUARDED_AVAILABILITY_NEW - Failed
+-- Looking for __register_frame
+-- Looking for __register_frame - not found
+-- Looking for __deregister_frame
+-- Looking for __deregister_frame - not found
+-- Looking for __unw_add_dynamic_fde
+-- Looking for __unw_add_dynamic_fde - not found
+-- Looking for _Unwind_Backtrace
+-- Looking for _Unwind_Backtrace - not found
+-- Looking for getpagesize
+-- Looking for getpagesize - not found
+-- Looking for sysconf
+-- Looking for sysconf - not found
+-- Looking for getrusage
+-- Looking for getrusage - not found
+-- Looking for isatty
+-- Looking for isatty - not found
+-- Looking for futimens
+-- Looking for futimens - not found
+-- Looking for futimes
+-- Looking for futimes - not found
+-- Looking for getauxval
+-- Looking for getauxval - not found
+-- Looking for sigaltstack
+-- Looking for sigaltstack - not found
+-- Looking for mallctl
+-- Looking for mallctl - not found
+-- Looking for mallinfo
+-- Looking for mallinfo - not found
+-- Looking for mallinfo2
+-- Looking for mallinfo2 - not found
+-- Looking for malloc_zone_statistics
+-- Looking for malloc_zone_statistics - not found
+-- Looking for posix_spawn
+-- Looking for posix_spawn - not found
+-- Looking for pread
+-- Looking for pread - not found
+-- Looking for sbrk
+-- Looking for sbrk - not found
+-- Looking for strerror_r
+-- Looking for strerror_r - not found
+-- Looking for strerror_s
+-- Looking for strerror_s - found
+-- Looking for setenv
+-- Looking for setenv - not found
+-- Looking for _chsize_s
+-- Looking for _chsize_s - found
+-- Looking for _alloca
+-- Looking for _alloca - not found
+-- Looking for __alloca
+-- Looking for __alloca - not found
+-- Looking for __chkstk
+-- Looking for __chkstk - found
+-- Looking for __chkstk_ms
+-- Looking for __chkstk_ms - not found
+-- Looking for ___chkstk
+-- Looking for ___chkstk - not found
+-- Looking for ___chkstk_ms
+-- Looking for ___chkstk_ms - not found
+-- Looking for __ashldi3
+-- Looking for __ashldi3 - not found
+-- Looking for __ashrdi3
+-- Looking for __ashrdi3 - not found
+-- Looking for __divdi3
+-- Looking for __divdi3 - not found
+-- Looking for __fixdfdi
+-- Looking for __fixdfdi - not found
+-- Looking for __fixsfdi
+-- Looking for __fixsfdi - not found
+-- Looking for __floatdidf
+-- Looking for __floatdidf - not found
+-- Looking for __lshrdi3
+-- Looking for __lshrdi3 - not found
+-- Looking for __moddi3
+-- Looking for __moddi3 - not found
+-- Looking for __udivdi3
+-- Looking for __udivdi3 - not found
+-- Looking for __umoddi3
+-- Looking for __umoddi3 - not found
+-- Looking for __main
+-- Looking for __main - not found
+-- Looking for __cmpdi2
+-- Looking for __cmpdi2 - not found
+-- Performing Test HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC
+-- Performing Test HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC - Failed
+-- Performing Test HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
+-- Performing Test HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC - Failed
+-- Looking for proc_pid_rusage
+-- Looking for proc_pid_rusage - not found
+-- Performing Test LLVM_HAS_ATOMICS
+-- Performing Test LLVM_HAS_ATOMICS - Success
+-- LLVM host triple: x86_64-pc-windows-msvc
+-- Native target architecture is X86
+-- Found DIASDK: C:/Program Files/Microsoft Visual Studio/2022/Community/DIA SDK/include  
+-- Threads enabled.
+-- Ninja version: 1.11.1
+-- Could NOT find OCaml (missing: OCAMLFIND OCAML_VERSION OCAML_STDLIB_PATH) 
+-- OCaml bindings disabled.
+-- Found Python module pygments
+-- Found Python module pygments.lexers.c_cpp
+-- Found Python module yaml
+-- LLVM default target triple: x86_64-pc-windows-msvc
+-- Performing Test LLVM_USES_LIBSTDCXX
+-- Performing Test LLVM_USES_LIBSTDCXX - Failed
+-- Performing Test LLVM_DEFAULT_TO_GLIBCXX_USE_CXX11_ABI
+-- Performing Test LLVM_DEFAULT_TO_GLIBCXX_USE_CXX11_ABI - Failed
+-- Precompiled headers enabled.
+-- Looking for os_signpost_interval_begin
+-- Looking for os_signpost_interval_begin - not found
+-- Looking for flock
+-- Looking for flock - not found
+-- Performing Test LLVM_LINKER_SUPPORTS_B_SYMBOLIC_FUNCTIONS
+-- Performing Test LLVM_LINKER_SUPPORTS_B_SYMBOLIC_FUNCTIONS - Success
+-- Performing Test HAS_WERROR_GLOBAL_CTORS
+-- Performing Test HAS_WERROR_GLOBAL_CTORS - Failed
+-- Looking for _M_X64
+-- Looking for _M_X64 - found
+-- Looking for _M_ARM64EC
+-- Looking for _M_ARM64EC - not found
+-- The ASM_MASM compiler identification is MSVC
+-- Found assembler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/ml64.exe
+-- Found Git: C:/Program Files/Git/cmd/git.exe (found version "2.27.0.windows.1") 
+-- Looking for logf128
+-- Looking for logf128 - not found
+-- Targeting X86
+-- Not building llvm-mt.exe because libxml2 is not available
+-- Configuring done
+-- Generating done
+-- Build files have been written to: P:/BC-250/scratch/llvm2312-build
+ninja: Entering directory `P:/bc-250/scratch/llvm2312-build'
+[1/2351] Building C object lib\Support\CMakeFiles\LLVMSupport.dir\regerror.c.obj
+[2/2351] Building C object lib\Support\CMakeFiles\LLVMSupport.dir\regfree.c.obj
+[3/2351] Building C object lib\Support\CMakeFiles\LLVMSupport.dir\regstrlcpy.c.obj
+[4/2351] Building C object lib\Support\CMakeFiles\LLVMSupport.dir\regexec.c.obj
+[5/2351] Building C object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_neon.c.obj
+[6/2351] Building ASM_MASM object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_sse2_x86-64_windows_msvc.asm.obj
+ Assembling: P:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support\BLAKE3\blake3_sse2_x86-64_windows_msvc.asm
+
+[7/2351] Building ASM_MASM object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_sse41_x86-64_windows_msvc.asm.obj
+ Assembling: P:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support\BLAKE3\blake3_sse41_x86-64_windows_msvc.asm
+
+[8/2351] Building ASM_MASM object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_avx2_x86-64_windows_msvc.asm.obj
+ Assembling: P:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support\BLAKE3\blake3_avx2_x86-64_windows_msvc.asm
+
+[9/2351] Building ASM_MASM object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_avx512_x86-64_windows_msvc.asm.obj
+ Assembling: P:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support\BLAKE3\blake3_avx512_x86-64_windows_msvc.asm
+
+[10/2351] Building CXX object lib\Demangle\CMakeFiles\LLVMDemangle.dir\Demangle.cpp.obj
+[11/2351] Building RC object utils\TableGen\CMakeFiles\llvm-min-tblgen.dir\__\__\resources\windows_version_resource.rc.res
+[12/2351] Building C object lib\Support\CMakeFiles\LLVMSupport.dir\regcomp.c.obj
+[13/2351] Building CXX object lib\Demangle\CMakeFiles\LLVMDemangle.dir\DLangDemangle.cpp.obj
+[14/2351] Building C object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3.c.obj
+[15/2351] Building CXX object lib\Demangle\CMakeFiles\LLVMDemangle.dir\MicrosoftDemangleNodes.cpp.obj
+[16/2351] Creating export file for LTO
+[17/2351] Creating export file for Remarks
+[18/2351] Building C object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_dispatch.c.obj
+[19/2351] Building CXX object lib\Demangle\CMakeFiles\LLVMDemangle.dir\MicrosoftDemangle.cpp.obj
+[20/2351] Building CXX object lib\Demangle\CMakeFiles\LLVMDemangle.dir\RustDemangle.cpp.obj
+[21/2351] Generating VCSRevision.h
+[22/2351] Building CXX object lib\Demangle\CMakeFiles\LLVMDemangle.dir\ItaniumDemangle.cpp.obj
+[23/2351] Linking CXX static library lib\LLVMDemangle.lib
+[24/2351] Building C object lib\Support\BLAKE3\CMakeFiles\LLVMSupportBlake3.dir\blake3_portable.c.obj
+[25/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\cmake_pch.cxx.obj
+[26/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\ABIBreak.cpp.obj
+[27/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\APFloat.cpp.obj
+FAILED: lib/Support/CMakeFiles/LLVMSupport.dir/APFloat.cpp.obj 
+"C:\PROGRA~1\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\cl.exe"  /nologo /TP -DUNICODE -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS -D_UNICODE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -IP:\BC-250\scratch\llvm2312-build\lib\Support -IP:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support -IP:\BC-250\scratch\llvm2312-build\include -IP:\BC-250\ref\llvm-project-23.1.2\llvm\include -IP:\BC-250\ref\llvm-project-23.1.2\llvm\..\third-party\siphash\include -IP:\BC-250\ref\llvm-project-23.1.2\llvm\..\libc /utf-8 /Zc:inline /Zc:preprocessor /Zc:__cplusplus /Oi /bigobj /permissive- /W4 -wd4146 -wd4244 -wd4267 -wd4456 -wd4457 -wd4458 -wd4459 -wd4624 -wd4100 -wd4127 -wd4505 -wd4702 -wd4245 -wd4310 -wd4701 -wd4703 -wd4389 -wd4805 -wd4577 -wd4319 -wd4324 -wd4251 -wd4275 -w14062 -we4238 /Gw /O2 /Ob2 /DNDEBUG -MT /EHs-c- /GR- -std:c++17 /YuP:/BC-250/scratch/llvm2312-build/lib/Support/CMakeFiles/LLVMSupport.dir/cmake_pch.hxx /FpP:/BC-250/scratch/llvm2312-build/lib/Support/CMakeFiles/LLVMSupport.dir/./cmake_pch.cxx.pch /FIP:/BC-250/scratch/llvm2312-build/lib/Support/CMakeFiles/LLVMSupport.dir/cmake_pch.hxx /showIncludes /Folib\Support\CMakeFiles\LLVMSupport.dir\APFloat.cpp.obj /Fdlib\Support\LLVMSupport.dir\LLVMSupport.pdb /FS -c P:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support\APFloat.cpp
+P:\BC-250\ref\llvm-project-23.1.2\llvm\lib\Support\APFloat.cpp(43): fatal error C1083: Nie można otworzyć pliku dołącz: 'shared/math.h': No such file or directory
+[28/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\ARMBuildAttributes.cpp.obj
+[29/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\APSInt.cpp.obj
+[30/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\AArch64BuildAttributes.cpp.obj
+[31/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\ARMWinEH.cpp.obj
+[32/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\AArch64AttributeParser.cpp.obj
+[33/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\AllocToken.cpp.obj
+[34/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\APFixedPoint.cpp.obj
+[35/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\AMDGPUMetadata.cpp.obj
+[36/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\APInt.cpp.obj
+[37/2351] Building CXX object lib\Support\CMakeFiles\LLVMSupport.dir\ARMAttributeParser.cpp.obj
+[38/2351] Building CXX object lib\FileCheck\CMakeFiles\LLVMFileCheck.dir\FileCheck.cpp.obj
+ninja: build stopped: subcommand failed.

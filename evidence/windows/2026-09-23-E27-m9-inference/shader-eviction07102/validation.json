@@ -1,0 +1,41 @@
+{
+  "type3-positive": {
+    "exit": 0,
+    "evicted": 0,
+    "restored": 0,
+    "checks": {
+      "native_exit": true,
+      "summary": true,
+      "word_oracle": true,
+      "loader": true,
+      "actual_submit": true,
+      "eviction_cycles": true
+    }
+  },
+  "type3-evict": {
+    "exit": 0,
+    "evicted": 3,
+    "restored": 3,
+    "checks": {
+      "native_exit": true,
+      "summary": true,
+      "word_oracle": true,
+      "loader": true,
+      "actual_submit": true,
+      "eviction_cycles": true
+    }
+  },
+  "type3-stale": {
+    "exit": 1,
+    "evicted": 1,
+    "restored": 1,
+    "checks": {
+      "native_exit": true,
+      "summary": true,
+      "word_oracle": true,
+      "loader": true,
+      "actual_submit": true,
+      "eviction_cycles": true
+    }
+  }
+}

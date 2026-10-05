@@ -1,0 +1,359 @@
+﻿log          357 lines since this driver load, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.004 stage 10
+     1      0.004 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.006 stage 20
+     3      0.112 stage 30
+     4      0.116 stage 31
+     5      0.116 stage 32
+     6      0.116 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.118 stage 33
+     8      0.120 stage 34
+     9      0.120 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.120 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.120 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.120 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.120 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.120 wddm: full table started, VRAM identified
+    15      0.120 vidmm: segment 1 at physical 0x2708CA000 + 0x1FD736000, host memory below 0x270000000, updates are WRITTEN
+    16      0.120 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+    17      0.120 stage 35
+    18      0.122 stage 39
+    19      0.122 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+    20      0.122 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    21      0.122 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+    22      0.122 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+    23      0.122 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+    24      0.122 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+    25      0.122 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    26      0.122 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    27      0.122 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    28      0.122 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    29      0.122 wddm: GetNodeMetadata node 0 adapter 0
+    30      0.124 wddm: QUERYSEGMENT4 pass 1: 2 segment(s)
+    31      0.124 wddm: QUERYSEGMENT4 pass 2: 2 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+    32      0.124 wddm: segment 1 flags 0x00080404 gpu 0xF4008CA000 cpu 0x2708CA000 size 0x1FD736000
+    33      0.124 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+    34      0.124 wddm: CreateProcess flags 0x00000001 pasids 1
+    35      0.124 wddm: CreateDevice flags 0x00000001 pasid 0
+    36      0.124 wddm: CreateDevice flags 0x00000001 pasid 0
+    37      0.124 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    38      0.124 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    39      0.126 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    40      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF2000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    41      0.126 vidmm:   -> first entry 0x0 (written)
+    42      0.126 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    43      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF3000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    44      0.126 vidmm:   -> first entry 0x0 (written)
+    45      0.126 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    46      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF4000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    47      0.126 vidmm:   -> first entry 0x0 (written)
+    48      0.126 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    49      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF5000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    50      0.126 vidmm:   -> first entry 0x0 (written)
+    51      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF6000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    52      0.126 vidmm:   -> first entry 0x0 (written)
+    53      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF7000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    54      0.126 vidmm:   -> first entry 0x0 (written)
+    55      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF8000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    56      0.126 vidmm:   -> first entry 0x0 (written)
+    57      0.126 vidmm: level 0 cpu table 0xFFFFD581EDAF9000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    58      0.126 vidmm:   -> first entry 0x0 (written)
+    59      0.166 vidmm: first valid entry of segment 1: level 1 raw 0x21 / 0x3 -> 0x2708CD001 rc 0
+    60      0.172 wddm: SetRootPageTable segment 1 offset 0x0, 512 entries
+    61      0.172 vidmm: root page table 1:0x0 = physical 0x2708CA000, 512 entries (the VMID is pointed at it by the first packet)
+    62      0.172 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+    63      0.172 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+    64      0.172 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+    65      0.178 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+    66      0.178 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+    67      0.178 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+    68      0.178 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+    69      0.178 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+    70      0.178 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+    71      0.178 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+    72      0.178 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+    73      0.178 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+    74      0.178 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+    75      0.178 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+    76      0.180 wddm: CreateProcess flags 0x00000002 pasids 1
+    77      0.180 wddm: CreateDevice flags 0x00000002 pasid 0
+    78      0.180 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    79      0.180 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    80      0.180 vidmm: level 0 table 1: 0x1FD732000 start 0 count 16 flags 0x3 first raw 0x0 / 0x0
+    81      0.180 vidmm:   -> first entry 0x0 (written)
+    82      0.180 vidmm: level 0 table 1: 0x1FD732000 start 17 count 495 flags 0x3 first raw 0x0 / 0x0
+    83      0.180 vidmm:   -> first entry 0x0 (written)
+    84      0.180 vidmm: level 0 table 1: 0x1FD732000 start 16 count 1 flags 0x2 first raw 0x1 / 0x1F61BC
+    85      0.180 vidmm: first valid entry of segment 0: level 0 raw 0x1 / 0x1F61BC -> 0x1F61BC073 rc 0
+    86      0.180 vidmm:   -> first entry 0x1F61BC073 (written)
+    87      0.180 vidmm: level 1 table 1: 0x1FD733000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD732
+    88      0.180 vidmm:   -> first entry 0x46DFFC001 (written)
+    89      0.180 vidmm: level 2 table 1: 0x1FD734000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD733
+    90      0.180 vidmm:   -> first entry 0x46DFFD001 (written)
+    91      0.180 vidmm: level 3 table 1: 0x1FD735000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD734
+    92      0.182 vidmm:   -> first entry 0x46DFFE001 (written)
+    93      0.182 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+    94      0.182 vidmm: level 0 table 1: 0x1FD732000 start 17 count 1 flags 0x0 first raw 0x1 / 0x1FD9C3
+    95      0.182 vidmm:   -> first entry 0x1FD9C3073 (written)
+    96      0.182 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+    97      0.182 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+    98      0.182 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+    99      0.182 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   100      0.182 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   101      0.182 wddm: OpenAllocation [0] handle 0x80001440 private 32 bytes -> FFFF980D7738DCC0 (GetHandleData said 0000000000000000)
+   102      0.182 wddm: OpenAllocation 1 allocations flags 0x00000001
+   103      0.182 vidmm: level 0 table 1: 0x4000 start 0 count 512 flags 0x0 first raw 0x21 / 0x204
+   104      0.182 vidmm:   -> first entry 0x270ACE071 (written)
+   105      0.182 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   106      0.182 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   107      0.182 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   108      0.184 wddm: DescribeAllocation 1920x1200 format 21
+   109      0.184 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   110      0.184 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   111      0.184 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   112      0.184 wddm: OpenAllocation [0] handle 0x80000E80 private 32 bytes -> FFFF980D7738D720 (GetHandleData said 0000000000000000)
+   113      0.184 wddm: OpenAllocation 1 allocations flags 0x00000001
+   114      0.184 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   115      0.188 stage 50
+   116      0.188 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   117      0.188 wddm: DescribeAllocation 1920x1200 format 21
+   118      0.188 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   119      0.188 wddm: software vsync on, 16 ms period, target 2424833
+   120      0.188 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   121      0.188 wddm: DescribeAllocation 1920x1200 format 21
+   122      0.428 wddm: ControlInterrupt type 3 on -> 0x00000000
+   123      0.444 wddm: ControlInterrupt type 3 off -> 0x00000000
+   124      0.444 wddm: ControlInterrupt type 3 on -> 0x00000000
+   125      0.460 wddm: ControlInterrupt type 3 off -> 0x00000000
+   126      0.460 wddm: ControlInterrupt type 3 on -> 0x00000000
+   127      0.476 wddm: ControlInterrupt type 3 off -> 0x00000000
+   128      0.476 wddm: ControlInterrupt type 3 on -> 0x00000000
+   129      0.492 wddm: ControlInterrupt type 3 off -> 0x00000000
+   130      2.966 wddm: CreateProcess flags 0x00000000 pasids 1
+   131      2.966 wddm: CreateDevice flags 0x00000000 pasid 0
+   132      2.976 wddm: CreateProcess flags 0x00000000 pasids 1
+   133      2.976 wddm: CreateDevice flags 0x00000000 pasid 0
+   134      3.094 wddm: CreateDevice flags 0x00000000 pasid 0
+   135      3.098 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   136      3.098 wddm: OpenAllocation [0] handle 0x80002240 private 32 bytes -> FFFF980D7738E650 (GetHandleData said 0000000000000000)
+   137      3.098 wddm: OpenAllocation 1 allocations flags 0x00000001
+   138      3.100 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   139      3.108 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   140      3.108 wddm: OpenAllocation [0] handle 0x400087C0 private 32 bytes -> FFFF980D7738FA00 (GetHandleData said 0000000000000000)
+   141      3.108 wddm: OpenAllocation 1 allocations flags 0x00000001
+   142      3.110 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   143      3.118 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   144      3.118 wddm: OpenAllocation [0] handle 0x80002340 private 32 bytes -> FFFF980D7738F730 (GetHandleData said 0000000000000000)
+   145      3.118 wddm: OpenAllocation 1 allocations flags 0x00000001
+   146      3.144 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   147      3.144 wddm: OpenAllocation [0] handle 0x800026C0 private 32 bytes -> FFFF980D77390390 (GetHandleData said 0000000000000000)
+   148      3.144 wddm: OpenAllocation 1 allocations flags 0x00000001
+   149      3.154 wddm: software vsync off after 185 ticks
+   150      3.154 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   151      3.254 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   152      3.254 wddm: BuildPagingBuffer operation 2 segment 0, 65536 bytes free, pass offset 0
+   153      3.254 wddm: CloseAllocation 1 allocations
+   154      3.254 wddm: DestroyAllocation 1 allocations
+   155      3.254 wddm: BuildPagingBuffer operation 2 segment 0, 65536 bytes free, pass offset 0
+   156      3.254 wddm: CloseAllocation 1 allocations
+   157      3.254 wddm: DestroyAllocation 1 allocations
+   158      3.254 wddm: DestroyDevice
+   159      3.258 wddm: BuildPagingBuffer operation 8 segment 0, 65536 bytes free, pass offset 0
+   160      3.266 wddm: BuildPagingBuffer operation 8 segment 0, 65536 bytes free, pass offset 0
+   161      3.270 wddm: DescribeAllocation 1920x1200 format 21
+   162      3.374 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   163      3.376 wddm: CloseAllocation 1 allocations
+   164      3.376 wddm: DestroyAllocation 1 allocations
+   165      3.378 wddm: CloseAllocation 1 allocations
+   166      3.378 wddm: DestroyAllocation 1 allocations
+   167      3.378 wddm: CloseAllocation 1 allocations
+   168      3.378 wddm: DestroyAllocation 1 allocations
+   169      3.380 wddm: CloseAllocation 1 allocations
+   170      3.380 wddm: DestroyAllocation 1 allocations
+   171      3.390 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   172      3.392 wddm: OpenAllocation [0] handle 0x400088C0 private 32 bytes -> FFFF980D7738DCC0 (GetHandleData said 0000000000000000)
+   173      3.392 wddm: OpenAllocation 1 allocations flags 0x00000001
+   174      3.398 wddm: DestroyProcess
+   175      3.400 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   176      3.400 wddm: OpenAllocation [0] handle 0x80002B00 private 32 bytes -> FFFF980D7738DD50 (GetHandleData said 0000000000000000)
+   177      3.400 wddm: OpenAllocation 1 allocations flags 0x00000001
+   178      3.408 wddm: CreateProcess flags 0x00000000 pasids 1
+   179      3.408 wddm: CreateDevice flags 0x00000000 pasid 0
+   180      3.436 wddm: BuildPagingBuffer operation 8 segment 0, 65536 bytes free, pass offset 0
+   181      3.446 wddm: BuildPagingBuffer operation 8 segment 0, 65536 bytes free, pass offset 0
+   182      3.450 wddm: DescribeAllocation 1920x1200 format 21
+   183      3.553 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   184      3.555 wddm: CloseAllocation 1 allocations
+   185      3.555 wddm: DestroyAllocation 1 allocations
+   186      3.557 wddm: CloseAllocation 1 allocations
+   187      3.557 wddm: DestroyAllocation 1 allocations
+   188      3.633 wddm: DescribeAllocation 1920x1200 format 21
+   189      3.735 wddm: display SetVidPnSourceVisibility call 6 detail 0x0 -> 0x00000000
+   190      3.817 wddm: DescribeAllocation 1920x1200 format 21
+   191      3.917 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   192      3.917 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   193      3.935 wddm: CreateDevice flags 0x00000000 pasid 0
+   194      4.005 wddm: DescribeAllocation 1920x1200 format 21
+   195      5.346 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   196      5.346 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   197     12.869 wddm: CreateProcess flags 0x00000000 pasids 1
+   198     13.433 wddm: DestroyDevice
+   199     13.435 wddm: DestroyProcess
+   200     13.531 wddm: DestroyDevice
+   201     13.651 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   202     13.651 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   203     13.653 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   204     13.653 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   205     13.655 wddm: SetVidPnSourceAddress segment 1 address 0xF402DF6000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   206     13.655 wddm: software vsync on, 16 ms period, target 2424833
+   207     13.661 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   208     13.661 wddm: Present list FFFFD00EC5428BB0 (context list 256), private FFFF980D787E36A0/2184, driver data 0
+   209     13.661 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   210     13.661 wddm: Present list q4-7  FFFF980D77388080 00000000008DC000 0000000000000000 0000000000000000
+   211     13.661 wddm: Present list q8-11 FFFF980D77388590 0000000000012000 0000000000000000 0000000000000000
+   212     13.661 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   213     13.661 wddm: SetRootPageTable segment 1 offset 0x1FD735000, 512 entries
+   214     13.661 vidmm: root page table 1:0x1FD735000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   215     13.661 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 4096
+   216     13.661 wddm: blit source (reading 3) FFFF980D77388080 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC000 -> 0x2736C0000 .. 0x273F89FFF
+   217     13.661 wddm: blit destination 1920x1200 pitch 7680 va 0x12000 physical 0x272DF6000 primary
+   218     13.661 wddm: blit rect 0 (0,0)-(1920,1200)
+   219     13.693 wddm: DestroyDevice
+   220     13.697 wddm: DestroyProcess
+   221     13.943 wddm: blit 1 rectangles, 1200 rows copied, destination primary allocation
+   222     13.943 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   223     13.943 wddm: Present list FFFFD00EC5428BB0 (context list 256), private FFFF980D7879E010/2184, driver data 0
+   224     13.943 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   225     13.943 wddm: Present list q4-7  FFFF980D77388080 00000000008DC000 0000000000000000 0000000000000000
+   226     13.943 wddm: Present list q8-11 FFFF980D77388590 0000000000012000 0000000000000000 0000000000000000
+   227     13.943 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   228     13.943 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 4096
+   229     13.945 wddm: blit source (reading 3) FFFF980D77388080 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC000 -> 0x2736C0000 .. 0x273F89FFF
+   230     13.945 wddm: blit destination 1920x1200 pitch 7680 va 0x12000 physical 0x272DF6000 primary
+   231     13.945 wddm: blit rect 0 (1673,1152)-(1920,1200)
+   232     13.947 wddm: blit 1 rectangles, 48 rows copied, destination primary allocation
+   233     13.947 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   234     13.947 wddm: Present list FFFFD00EC5428BB0 (context list 256), private FFFF980D787E36A0/2184, driver data 0
+   235     13.947 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   236     13.947 wddm: Present list q4-7  FFFF980D77388080 00000000008DC000 0000000000000000 0000000000000000
+   237     13.947 wddm: Present list q8-11 FFFF980D77388590 0000000000012000 0000000000000000 0000000000000000
+   238     13.947 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   239     13.947 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 4096
+   240     13.947 wddm: blit source (reading 3) FFFF980D77388080 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC000 -> 0x2736C0000 .. 0x273F89FFF
+   241     13.947 wddm: blit destination 1920x1200 pitch 7680 va 0x12000 physical 0x272DF6000 primary
+   242     13.947 wddm: blit rect 0 (715,1152)-(751,1200)
+   243     13.947 wddm: blit rect 1 (985,1152)-(1072,1200)
+   244     13.949 wddm: blit rect 2 (1673,1152)-(1920,1200)
+   245     13.949 wddm: blit 3 rectangles, 144 rows copied, destination primary allocation
+   246     13.986 wddm: CreateProcess flags 0x00000000 pasids 1
+   247     14.732 wddm: software vsync off after 252 ticks
+   248     14.832 wddm: BuildPagingBuffer operation 2 segment 0, 65536 bytes free, pass offset 0
+   249     15.665 wddm: CreateProcess flags 0x00000000 pasids 1
+   250     16.073 wddm: DestroyDevice
+   251     16.073 wddm: DestroyProcess
+   252     17.072 wddm: DestroyDevice
+   253     17.072 wddm: DestroyProcess
+   254     17.619 wddm: DestroyDevice
+   255     17.621 wddm: DestroyProcess
+   256     19.183 wddm: E26 shared control allocation reached KMD flags 1 allocation flags 0 bytes 8192 format 32
+   257     19.272 wddm: DestroyDevice
+   258     19.380 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   259     19.380 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   260     19.382 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   261     19.382 wddm: Present list FFFFD00EC5CE5BF0 (context list 256), private FFFF980D7886A6E0/2184, driver data 0
+   262     19.382 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   263     19.382 wddm: Present list q4-7  FFFF980D77393A20 0000000000010000 0000000000000000 0000000000000000
+   264     19.382 wddm: Present list q8-11 FFFF980D773955B0 0000000000140000 0000000000000000 0000000000000000
+   265     19.382 wddm: Present dst (0,0)-(640,480) src (0,0)-(640,480) va 0x13F000
+   266     19.382 wddm: SetRootPageTable segment 1 offset 0x1FD723000, 512 entries
+   267     19.382 vidmm: root page table 1:0x1FD723000 = physical 0x46DFED000, 512 entries (the VMID is pointed at it by the first packet)
+   268     19.382 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x13F000 size 4096
+   269     19.382 wddm: blit source (reading 3) FFFF980D77393A20 640x480 pitch 2560 format 32 size 0x12C000 va 0x10000 -> 0x270ACE000 .. 0x270BF9FFF
+   270     19.382 wddm: blit destination 640x480 pitch 2560 va 0x140000 physical 0x270BFA000 offscreen
+   271     19.382 wddm: blit rect 0 (0,0)-(640,480)
+   272     19.695 wddm: blit 1 rectangles, 480 rows copied, destination offscreen allocation
+   273     19.786 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   274     19.786 wddm: Present list FFFFD00EC5CE5BF0 (context list 256), private FFFF980D65668380/2184, driver data 0
+   275     19.786 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   276     19.786 wddm: Present list q4-7  FFFF980D77393A20 0000000000010000 0000000000000000 0000000000000000
+   277     19.786 wddm: Present list q8-11 FFFF980D773955B0 0000000000140000 0000000000000000 0000000000000000
+   278     19.786 wddm: Present dst (0,0)-(640,480) src (0,0)-(640,480) va 0x13E000
+   279     19.786 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x13E000 size 4096
+   280     19.786 wddm: blit source (reading 3) FFFF980D77393A20 640x480 pitch 2560 format 32 size 0x12C000 va 0x10000 -> 0x270ACE000 .. 0x270BF9FFF
+   281     19.786 wddm: blit destination 640x480 pitch 2560 va 0x140000 physical 0x270BFA000 offscreen
+   282     19.786 wddm: blit rect 0 (0,0)-(640,480)
+   283     20.098 wddm: blit 1 rectangles, 480 rows copied, destination offscreen allocation
+   284     20.180 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   285     20.180 wddm: Present list FFFFD00EC5CE5BF0 (context list 256), private FFFF980D7886A6E0/2184, driver data 0
+   286     20.180 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   287     20.180 wddm: Present list q4-7  FFFF980D77393A20 0000000000010000 0000000000000000 0000000000000000
+   288     20.180 wddm: Present list q8-11 FFFF980D773955B0 0000000000140000 0000000000000000 0000000000000000
+   289     20.180 wddm: Present dst (0,0)-(640,480) src (0,0)-(640,480) va 0x13F000
+   290     20.180 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x13F000 size 4096
+   291     20.182 wddm: blit source (reading 3) FFFF980D77393A20 640x480 pitch 2560 format 32 size 0x12C000 va 0x10000 -> 0x270ACE000 .. 0x270BF9FFF
+   292     20.182 wddm: blit destination 640x480 pitch 2560 va 0x140000 physical 0x270BFA000 offscreen
+   293     20.182 wddm: blit rect 0 (0,0)-(640,480)
+   294     20.492 wddm: blit 1 rectangles, 480 rows copied, destination offscreen allocation
+   295     20.593 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   296     20.593 wddm: Present list FFFFD00EC5CE5BF0 (context list 256), private FFFF980D65668380/2184, driver data 0
+   297     20.593 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   298     20.593 wddm: Present list q4-7  FFFF980D77393A20 0000000000010000 0000000000000000 0000000000000000
+   299     20.595 wddm: Present list q8-11 FFFF980D773955B0 0000000000140000 0000000000000000 0000000000000000
+   300     20.595 wddm: Present dst (0,0)-(640,480) src (0,0)-(640,480) va 0x13E000
+   301     20.595 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x13E000 size 4096
+   302     20.595 wddm: blit source (reading 3) FFFF980D77393A20 640x480 pitch 2560 format 32 size 0x12C000 va 0x10000 -> 0x270ACE000 .. 0x270BF9FFF
+   303     20.595 wddm: blit destination 640x480 pitch 2560 va 0x140000 physical 0x270BFA000 offscreen
+   304     20.595 wddm: blit rect 0 (0,0)-(640,480)
+   305     20.909 wddm: blit 1 rectangles, 480 rows copied, destination offscreen allocation
+   306     20.993 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   307     20.993 wddm: Present list FFFFD00EC5CE5BF0 (context list 256), private FFFF980D7886A6E0/2184, driver data 0
+   308     20.993 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   309     20.993 wddm: Present list q4-7  FFFF980D77393A20 0000000000010000 0000000000000000 0000000000000000
+   310     20.993 wddm: Present list q8-11 FFFF980D773955B0 0000000000140000 0000000000000000 0000000000000000
+   311     20.993 wddm: Present dst (0,0)-(640,480) src (0,0)-(640,480) va 0x13F000
+   312     20.993 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x13F000 size 4096
+   313     20.993 wddm: blit source (reading 3) FFFF980D77393A20 640x480 pitch 2560 format 32 size 0x12C000 va 0x10000 -> 0x270ACE000 .. 0x270BF9FFF
+   314     20.993 wddm: blit destination 640x480 pitch 2560 va 0x140000 physical 0x270BFA000 offscreen
+   315     20.993 wddm: blit rect 0 (0,0)-(640,480)
+   316     21.308 wddm: blit 1 rectangles, 480 rows copied, destination offscreen allocation
+   317     24.005 fbdump: hubp 0 rows 0..63 of 1200, pitch 7680, address 0x270000000
+   318     24.025 fbdump: hubp 0 rows 64..127 of 1200, pitch 7680, address 0x270078000
+   319     24.045 fbdump: hubp 0 rows 128..191 of 1200, pitch 7680, address 0x2700F0000
+   320     24.065 fbdump: hubp 0 rows 192..255 of 1200, pitch 7680, address 0x270168000
+   321     24.086 fbdump: hubp 0 rows 256..319 of 1200, pitch 7680, address 0x2701E0000
+   322     24.109 fbdump: hubp 0 rows 320..383 of 1200, pitch 7680, address 0x270258000
+   323     24.130 fbdump: hubp 0 rows 384..447 of 1200, pitch 7680, address 0x2702D0000
+   324     24.440 fbdump: hubp 0 rows 448..511 of 1200, pitch 7680, address 0x270348000
+   325     24.460 fbdump: hubp 0 rows 512..575 of 1200, pitch 7680, address 0x2703C0000
+   326     24.480 fbdump: hubp 0 rows 576..639 of 1200, pitch 7680, address 0x270438000
+   327     24.501 fbdump: hubp 0 rows 640..703 of 1200, pitch 7680, address 0x2704B0000
+   328     24.522 fbdump: hubp 0 rows 704..767 of 1200, pitch 7680, address 0x270528000
+   329     24.541 fbdump: hubp 0 rows 768..831 of 1200, pitch 7680, address 0x2705A0000
+   330     24.563 fbdump: hubp 0 rows 832..895 of 1200, pitch 7680, address 0x270618000
+   331     24.873 fbdump: hubp 0 rows 896..959 of 1200, pitch 7680, address 0x270690000
+   332     24.897 fbdump: hubp 0 rows 960..1023 of 1200, pitch 7680, address 0x270708000
+   333     24.917 fbdump: hubp 0 rows 1024..1087 of 1200, pitch 7680, address 0x270780000
+   334     24.939 fbdump: hubp 0 rows 1088..1151 of 1200, pitch 7680, address 0x2707F8000
+   335     24.955 fbdump: hubp 0 rows 1152..1199 of 1200, pitch 7680, address 0x270870000
+   336     42.030 wddm: DestroyContext
+   337     42.154 wddm: DestroyProcess
+   338     46.522 fbdump: hubp 0 rows 0..63 of 1200, pitch 7680, address 0x270000000
+   339     46.544 fbdump: hubp 0 rows 64..127 of 1200, pitch 7680, address 0x270078000
+   340     46.566 fbdump: hubp 0 rows 128..191 of 1200, pitch 7680, address 0x2700F0000
+   341     46.586 fbdump: hubp 0 rows 192..255 of 1200, pitch 7680, address 0x270168000
+   342     46.606 fbdump: hubp 0 rows 256..319 of 1200, pitch 7680, address 0x2701E0000
+   343     46.626 fbdump: hubp 0 rows 320..383 of 1200, pitch 7680, address 0x270258000
+   344     46.646 fbdump: hubp 0 rows 384..447 of 1200, pitch 7680, address 0x2702D0000
+   345     46.668 fbdump: hubp 0 rows 448..511 of 1200, pitch 7680, address 0x270348000
+   346     46.688 fbdump: hubp 0 rows 512..575 of 1200, pitch 7680, address 0x2703C0000
+   347     46.708 fbdump: hubp 0 rows 576..639 of 1200, pitch 7680, address 0x270438000
+   348     46.728 fbdump: hubp 0 rows 640..703 of 1200, pitch 7680, address 0x2704B0000
+   349     46.750 fbdump: hubp 0 rows 704..767 of 1200, pitch 7680, address 0x270528000
+   350     46.772 fbdump: hubp 0 rows 768..831 of 1200, pitch 7680, address 0x2705A0000
+   351     46.792 fbdump: hubp 0 rows 832..895 of 1200, pitch 7680, address 0x270618000
+   352     46.812 fbdump: hubp 0 rows 896..959 of 1200, pitch 7680, address 0x270690000
+   353     46.834 fbdump: hubp 0 rows 960..1023 of 1200, pitch 7680, address 0x270708000
+   354     46.856 fbdump: hubp 0 rows 1024..1087 of 1200, pitch 7680, address 0x270780000
+   355     46.876 fbdump: hubp 0 rows 1088..1151 of 1200, pitch 7680, address 0x2707F8000
+   356     46.892 fbdump: hubp 0 rows 1152..1199 of 1200, pitch 7680, address 0x270870000
+             357 lines printed

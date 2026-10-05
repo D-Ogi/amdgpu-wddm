@@ -85,9 +85,10 @@ int bc250_clock_message_allowed(unsigned int message)
     }
 }
 
-// The imported commit refuses a clock below CYAN_SKILLFISH_SCLK_MIN (1000 MHz, the firmware's own lowest
-// SCLK level: facts M47, and amdgpu's own overdrive bound). The points under the lab floor (900 and 800 MHz
-// for the thermal cap, 0.7.205; 500 MHz for the idle state, 0.7.207) therefore go out from here, as the two messages the imported
+// The imported commit refuses a clock below CYAN_SKILLFISH_SCLK_MIN (1000 MHz, the lowest SCLK level the
+// power tables publish and amdgpu's own overdrive bound: facts M47; the firmware itself accepts 800 and
+// 900 MHz at VID 116, facts M785). The points under the lab floor (900 and 800 MHz for the thermal cap,
+// 0.7.205; 500 MHz for the idle state, 0.7.207) therefore go out from here, as the two messages the imported
 // PP_OD_COMMIT_DPM_TABLE sends for a forced voltage, in its order and with its VID encoding, and nothing
 // else. The import stays as extracted; this is the one deviation, and it covers only mhz < SCLK_MIN.
 static int subfloor_commit(struct smu_context *smu,unsigned int mhz,unsigned int mv)

@@ -101,9 +101,11 @@
                                             // lower (one level per hot step from 87 C, 800 MHz at once
                                             // at 90 C). A missing sensor, SetStablePowerState, the
                                             // fixed mode, stop, power down and giving up stay at
-                                            // 1000 MHz. The firmware has never run below 1000 MHz
-                                            // (facts M47), so a refused sub-floor transition is logged
-                                            // ("sub-floor refused"), does not count towards the SMU
+                                            // 1000 MHz. The power tables publish no level below
+                                            // 1000 MHz (facts M47) although unit A's firmware accepts
+                                            // 800 and 900 MHz (facts M785), so a refused sub-floor
+                                            // transition is logged ("sub-floor refused"),
+                                            // does not count towards the SMU
                                             // give-up limit, and stops the cap at 1000 MHz for the
                                             // rest of that start. Every escape carries MHz, not a
                                             // level index: no struct and no ABI changed (RUN_DPM

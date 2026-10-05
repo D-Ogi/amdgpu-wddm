@@ -1,0 +1,17 @@
+[
+  {
+    "utc": "2026-09-24T03:19:14.825469+00:00",
+    "event": "warm_start_ssh_lost_independent_probe_timeout",
+    "relay_on": true
+  },
+  {
+    "utc": "2026-09-24T03:19:15.979959+00:00",
+    "event": "off_verified",
+    "relay_on": false
+  },
+  {
+    "utc": "2026-09-24T03:19:25.131071+00:00",
+    "event": "on_verified",
+    "relay_on": true
+  }
+]

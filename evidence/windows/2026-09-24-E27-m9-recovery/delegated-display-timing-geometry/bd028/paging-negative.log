@@ -1,0 +1,19 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+paging_mc_test: 3 synthetic geometries, 63 checks, 12 failed
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:20: DcnTranslateCardAddress(mc, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:21: PagingPhysicalToMc(physical, bytes, vramBase, mcBase, vramLength, &back)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:22: back == mc
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:20: DcnTranslateCardAddress(mc, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:21: PagingPhysicalToMc(physical, bytes, vramBase, mcBase, vramLength, &back)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:22: back == mc
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:20: DcnTranslateCardAddress(mc, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:21: PagingPhysicalToMc(physical, bytes, vramBase, mcBase, vramLength, &back)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:22: back == mc
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:20: DcnTranslateCardAddress(mc, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:21: PagingPhysicalToMc(physical, bytes, vramBase, mcBase, vramLength, &back)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\paging_mc_test.c:22: back == mc
+compile-check (kernel flags, same source, no link)
+
+paging_mc_test.exe exit code 1

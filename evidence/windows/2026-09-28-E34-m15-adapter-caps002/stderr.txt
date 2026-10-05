@@ -1,0 +1,19 @@
+2fc0:info:vkd3d_config_flags_init_once: Embedder config defaults 'pipeline_library_app_cache'.
+2fc0:info:vkd3d_config_flags_init_once: VKD3D_CONFIG=''.
+2fc0:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+2fc0:info:vkd3d_instance_init: vkd3d-proton - build: 7bfcd7f09f078f5.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x67c3227
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+2fc0:info:vkd3d_disable_swapchain_extensions: VK_KHR_swapchain is not enabled, not enabling 5 extensions that depend on it.
+2fc0:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+2fc0:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+2fc0:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+2fc0:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+2fc0:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+2fc0:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+2fc0:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+2fc0:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.

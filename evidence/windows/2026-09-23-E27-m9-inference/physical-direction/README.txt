@@ -1,0 +1,8 @@
+M309 - Direction proof includes shared physical page positions
+Base revision bed764da5192be7132d646be0e6331c1edeb30fd plus working tree changes; snapshots included.
+
+PagingPageAliasDirection no longer requires shared identities at the same logical page index. For each shared page it computes signed delta=(sourceIndex-destinationIndex)*4096+destinationOffset-sourceOffset. Positive dependencies require backward traversal, negative forward; incompatible signs remain unsupported by this classifier. Injective source/destination lists still required. This O(identity/list size) proof admits page-position shifts and allows page order to override byte-offset direction. Same-slice overlaps remain staged.
+
+1778accepted whole-memory snapshot fixtures drawn from all216three-destination identity combinations x16offsetpairs plus original controls pass; rejected layouts are not claimed implemented. Explicit conflicting-cycle refusal retained. Actual owned-transfer fixtures add destination[B,C,D] and[D,A,B] for source[A,B,C], both offset directions and system/mixed/local/table domains. Independent7/34/83/100DWORD packet replay checks bytes, domains, multipass/private ownership and table effects. Decoder was corrected to allow disjoint byte intervals inside one physical page; previously it incorrectly equated page identity with byte overlap.
+
+Routing233887checks PASS. WDK26100build PASS, development SYSDDF431822B3827DE56A049AF858655FE299BAA36312AB2F23DFB48A50DD33AFF, not installed. General mixed-direction cycles, repeated-source dependencies, OS status/lifetime/cache/initialization and actual GPU performance remain open. No lab access/mutation this turn.

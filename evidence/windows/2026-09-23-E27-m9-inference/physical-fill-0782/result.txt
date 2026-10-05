@@ -1,0 +1,15 @@
+M213 physical Fill DDI local integration, 2026-09-23.
+Dirty working tree over base-commit.txt; relevant source snapshots included.
+Procedure recorded in E27 README before testing.
+9075 routing checks pass (64 new). Actual adapter/publication/physical builder
+host tested with WDK field models; outer DDI branch/counters compile/source only.
+Tests cover unaligned multipass, resumed >4GiB, packet address/pattern/size,
+private parser coverage, segment bounds and refusal without progress.
+Initial generator duplicated extraction; corrected ordering. Next test expected
+4 wide-resume slices instead of3; small unaligned case needs4. Logs preserved.
+Full WDK build/sign0782 passed. SYS SHA256
+51096D5DA7978B3617585179FA3803CC435F2C5D2407D14DC229147B0CF3A26C
+Package scratch/build/bc250kmd-0782/package-umd NOT DEPLOYED.
+Open: table-shadow synchronization after Fill, physical Transfer, aperture Fill,
+restricted DDI error policy, cache/OS lifetime/recovery/hardware/performance.
+No lab access, reboot, USB change or private-data redaction.

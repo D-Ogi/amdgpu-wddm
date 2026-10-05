@@ -2,8 +2,8 @@
 # repository, with our INF that matches only PCI\VEN_1002&DEV_13FE, and test-signs the package.
 # The sample is MS-PL licensed and is an instrument of this experiment, not part of our driver.
 #
-#   pwsh experiments\E05-display-only-owns-device\build.ps1 -Sample P:\BC-250\ref\Windows-driver-samples\video\KMDOD `
-#        -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\e05-kmdod
+#   pwsh experiments\E05-display-only-owns-device\build.ps1 -Sample $env:BC250_ROOT\ref\Windows-driver-samples__WARN-MS-PL-no-code-in-our-driver\video\KMDOD `
+#        -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\e05-kmdod
 
 param(
     [Parameter(Mandatory)][string]$Sample,

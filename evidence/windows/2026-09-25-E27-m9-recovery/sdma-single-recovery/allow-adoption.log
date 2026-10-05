@@ -1,0 +1,5 @@
+test.c
+allow-adoption.c
+FAIL line 142 mode3 inst0: adev->sdma.instance[selected].ring.wptr==0
+FAIL line 142 mode3 inst1: adev->sdma.instance[selected].ring.wptr==0
+SDMA single retained recovery: 57994 checks, 2 failures; host model only

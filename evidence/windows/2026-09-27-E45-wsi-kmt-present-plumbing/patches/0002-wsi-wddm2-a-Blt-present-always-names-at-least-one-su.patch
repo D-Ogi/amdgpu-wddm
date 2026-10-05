@@ -1,0 +1,35 @@
+From aa8296c0f834f7329fef05feae94b6e8f130f73a Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 05:57:50 +0200
+Subject: [PATCH 2/2] wsi/wddm2: a Blt present always names at least one
+ sub-rectangle
+
+SubRectCnt 0 with Flags.Blt is STATUS_INVALID_PARAMETER by the d3dkmthk
+documentation; wsi-kmt-002 measured 0xC000000D for every present. Without
+damage rectangles the whole image is the one sub-rectangle.
+---
+ src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
+index cb3ece15..9f0902d8 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c
+@@ -152,9 +152,12 @@ radv_wddm2_wsi_kmt_present(VkDevice _device, VkDeviceMemory _memory, void *hwnd,
+       return VK_ERROR_SURFACE_LOST_KHR;
+    }
+ 
++   /* A Blt present needs at least one sub-rectangle (d3dkmthk: SubRectCnt 0 or
++    * pSrcSubRects NULL with Flags.Blt is STATUS_INVALID_PARAMETER; wsi-kmt-002
++    * measured exactly that). Without damage the whole image is the one rect. */
+    RECT full = { 0, 0, (LONG)extent.width, (LONG)extent.height };
+-   RECT sub_rects[16];
+-   uint32_t sub_count = 0;
++   RECT sub_rects[16] = { full };
++   uint32_t sub_count = 1;
+    if (rect_count && rect_count <= ARRAY_SIZE(sub_rects)) {
+       for (uint32_t i = 0; i < rect_count; i++) {
+          sub_rects[i].left = rects[i].offset.x;
+-- 
+2.27.0.windows.1
+

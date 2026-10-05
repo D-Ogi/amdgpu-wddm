@@ -1,0 +1,10 @@
+[
+    {
+        "Name":  "receipts.zip",
+        "Length":  12034830
+    },
+    {
+        "Name":  "gpu.etl",
+        "Length":  130023424
+    }
+]

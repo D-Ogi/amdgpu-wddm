@@ -1,0 +1,35 @@
+previous_version=0.7.136.1 problem=43
+00:01:15 Tctl 66.4 C (raw 737B0FEF)
+
+boot=2026-09-24T21:14:48
+Microsoft PnP Utility
+
+[private instance identifier redacted]
+Device disabled successfully.
+
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem111.inf
+[private instance identifier redacted]
+
+Total driver packages:  1
+Added driver packages:  1
+Microsoft PnP Utility
+
+[private instance identifier redacted]
+Device enabled successfully.
+
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE among the 2 present:
+  ROOT\BasicRender  (Microsoft Basic Render Driver)
+  ROOT\BasicDisplay  (Microsoft Basic Display Driver)
+
+140 full not ready
+At C:\BC250\tmp\combined140-install.ps1:41 char:96
++ ... C' -or $info -notmatch 'FULL WDDM TABLE'){throw '140 full not ready'}
++                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (140 full not ready:String) [], RuntimeException
+    + FullyQualifiedErrorId : 140 full not ready
+ 

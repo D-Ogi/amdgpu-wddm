@@ -1,0 +1,13 @@
+# M283: actual shader read after explicit eviction/restoration
+
+Date2026-09-23, unitA, installed KMD0.7.100.1/oem74 unchanged, boot15:39:09 unchanged. No OS restart or PnP transition. Latest local M278-M282 alias code is NOT deployed and is not covered by this runtime result.
+
+Isolated diagnostic ICD EA70D44045BF77867C9BE50EFB311E7CE7C83D01F4B527FB190E5BC8BD3F8306 at C:/BC250/m9/shader-eviction-icd is cache-intent-v2 plus shader-eviction-icd.patch. It consumes a one-shot process environment flag after Unlock2 of a4MiB BO, requires initial GPU residency1, evicts, waits for2/3, makes resident, waits the paging fence and requires residency1. This is test instrumentation, not production allocation behavior. The Mesa source was restored from its prepatch copy after building; isolated binary retained. Global quiet ICD unchanged.
+
+Probe SHA256038010EB3E6220A12F66713BEC9B9DCC527646DA1AAE5E7D3880AADA2F467D9A. Vulkan memory type3 (heap1, flags7) allocates three4MiB buffers. Two integer hash dispatches operate on1048576words per round; full byte comparison against CPU oracle. Before rounds1/5/9, after idle and fresh host writes, the input is unmapped with the diagnostic armed. Shader executes BEFORE input CPU remapping. Ordinary ICD cannot silently pass: the probe requires flag consumption, and validator requires detailed witnesses.
+
+Limited interactive task BC250-M9-ShaderEviction07100 ran baseline16rounds, eviction-positive16rounds and stale-input negative control. Exact loader path and actual submit witnesses checked. Positive native exits0; three measured transitions1->2->1, fence waits complete, all16rounds match. Stale control exits1 at round1 after its own1->2->1 cycle; output differs from expected fresh input. Four total eviction/restoration witnesses. Independent collected-file validation.json confirms exits, all match flags, loader/submit and transitions. Residency2 is shared-memory residency: not proof of changed physical PFNs or disk page-out. Legacy aperture callbacks and pressure-scale eviction are not established by this test.
+
+Temperature samples max72.1C; final17:02:11 deviceOK, bootunchanged,1000MHz/VID116,temp71.2C. Final GFX12957/12957, paging216936/216936, zero timeouts/refusals and no TDR. Scheduled task removed; host session64632 terminal0. Global driver/ICD registrations unchanged. Raw logs decoded to UTF8; device instance/profile strings redacted from copied evidence. No other data altered.
+
+Full M9 still requires general alias completion/hardware acceptance, OS pending/cancel lifecycle, CPU table cache-alias proof, warm reentry recovery and performance work. This closes only the observed small-buffer shader-after-explicit-eviction test gap.

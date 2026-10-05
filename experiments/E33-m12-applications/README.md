@@ -102,8 +102,10 @@ not yet the system default and does not enable sparse.
 
 Host control against the actual patched source:
 
-    python experiments/E33-m12-applications/test_sparse_reservation.py --source P:/bc-250/scratch/m12/mesa-current-src --out P:/bc-250/scratch/m12/reservation-control
-    cmd /c P:/bc-250/scratch/m12/reservation-control/run.cmd
+    python experiments/E33-m12-applications/test_sparse_reservation.py --source %BC250_ROOT%/scratch/m12/mesa-current-src --out %BC250_ROOT%/scratch/m12/reservation-control
+    cmd /c %BC250_ROOT%/scratch/m12/reservation-control/run.cmd
+
+`BC250_ROOT` is the workspace root, by default the parent directory of this repository.
 
 The generated C uses actual WDK declarations and a mock OS dispatch; it is
 not a substitute for hardware bind/unbind and residency tests.
@@ -114,8 +116,8 @@ completion fences. The source-extracted scheduler model and ordinary lab
 controls pass; sparse hardware acceptance is still open.
 [Evidence and scope](../../evidence/windows/2026-09-25-E33-sparse-order/RESULT.md).
 
-    python experiments/E33-m12-applications/test_sparse_order.py --source P:/bc-250/scratch/m12/mesa-current-src --out P:/bc-250/scratch/m12/order-control
-    cmd /c P:/bc-250/scratch/m12/order-control/run.cmd
+    python experiments/E33-m12-applications/test_sparse_order.py --source %BC250_ROOT%/scratch/m12/mesa-current-src --out %BC250_ROOT%/scratch/m12/order-control
+    cmd /c %BC250_ROOT%/scratch/m12/order-control/run.cmd
 
 The historical M481 patch remains in its commit; mesa05-source.json now pins
 the complete patch including M482.

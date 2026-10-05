@@ -1,0 +1,9 @@
+Get-Content : Cannot find path 'C:\BC250\m13\duplicate-control002\done123.json' because it does 
+not exist.
+At C:\BC250\tmp\launch127.ps1:11 char:11
++ $baseline=Get-Content 'C:\BC250\m13\duplicate-control002\done123.json ...
++           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\BC250\m13\du...02\done123.json:String) [Get-Con 
+   tent], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+ 

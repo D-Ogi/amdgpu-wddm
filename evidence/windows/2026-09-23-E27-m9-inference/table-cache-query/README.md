@@ -1,0 +1,13 @@
+# M287: physical table cache-attribute diagnostic
+
+Date2026-09-23. Base commit bed764da5192be7132d646be0e6331c1edeb30fd; captured working-tree sources. Host-only, no lab access/deployment.
+
+Review confirmed VidMmStartLayout retains an NC table mapping, while CPU_VIRTUAL updates borrow an OS pointer. Logical paging walks use shadow entries, but bootstrap writes, CPU Present translation and IB diagnostics still use the retained map; removing it would require preserving those paths. CachedPageTables is a WDDM3.1 capability, not proof of the borrowed pointer's current cache attributes. The current driver advertises WDDM2.0. M190 remains open.
+
+WDK26100 ntddk.h declares MmGetCacheAttribute(PHYSICAL_ADDRESS,MEMORY_CACHING_TYPE*) returning NTSTATUS, NTDDI_WINBLUE minimum and DISPATCH_LEVEL maximum. The declaration establishes a physical-address query, not a per-virtual-address PAT inspection. The adjacent Ex variant is not used. Exact header excerpt/hash retained. A bounded Microsoft Learn search did not return a dedicated MmGetCacheAttribute contract; no stronger behavior is inferred. https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-mmgetphysicaladdress confirms MmGetPhysicalAddress returns identity for a valid nonpaged virtual address; our existing use is identity accounting, not a new DMA address path.
+
+VidMmUpdatePageTableLocked now logs cache-query status/type for validated CPU_VIRTUAL tables during the existing capped initial-call logging window, under the CPU table lifetime lock, before writes. It does not change mapping, gate writes or infer the borrowed VA's PAT type from the result. Non-success remains an observation. The retained NC request is explicitly distinguished from the unproven borrowed-VA attributes in the log.
+
+Actual extracted KMD tests:15684checksPASS. Mock API asserts table lock ownership and verifies the argument equals the validated table physical identity, not CPU VA or GPU MC. Real WDK build/sign successfully links the kernel import. SYS SHA256BA249BB8FA58FCC86ABB3ADE35AA0F68ED03BE2C8142BE311F8AE018A4BE6280 at scratch/build/table-cache-query-dev. Revision100 remains development-only, no live cache result. Commands: run_paging.ps1 -KmdRouting -Out P:/bc-250/scratch/m9/table-cache-query-host; build.ps1 -Kits P:/bc-250/toolchain/nuget -Out P:/bc-250/scratch/build/table-cache-query-dev. A patch assertion initially left the new test assertion unapplied; fixed and final suite rerun successfully.
+
+Next: versioned candidate acceptance can capture this limited physical query alongside startup evidence. A success/type is not by itself proof of every VA alias; status failure must not become a fabricated cache type. M190/full M9 remain incomplete.

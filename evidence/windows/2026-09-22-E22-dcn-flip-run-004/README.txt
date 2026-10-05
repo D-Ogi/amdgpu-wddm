@@ -1,4 +1,4 @@
-E22 run 004 (step 3, the interrupt question), 2026-09-22 09:58-10:03: bc250kmd 0.7.24 (85fbf5c) on unit A, owner
+E22 run 004 (step 3, the interrupt question), 2026-09-22 09:58-10:03: bc250kmd 0.7.24 (f14c11c) on unit A, owner
 at the monitor. Written to test the inference of M98, that the IH ring is what the VUPDATE interrupt was missing.
 
 run-004-script.sh: e19_target.ps1 -Phase gate -Full 1 -GpuVa 1 -Engines 1 -Blit 1 -VidPnFlip 1 (the paging node

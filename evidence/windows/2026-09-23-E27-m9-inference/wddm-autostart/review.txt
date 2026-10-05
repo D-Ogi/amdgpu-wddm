@@ -1,0 +1,34 @@
+M241 2026-09-23. Full WDDM startup integration, not deployed.
+WddmStart allocates WDDM state plus nonpaged aggregate startup report before
+hardware. Full WDDM now requires GPU VA gate and valid memory layout; captures
+aperture, prepares VidMm, calls GpuStartupInitialize, releases temporary report,
+then publishes Device.Wddm with InterlockedExchangePointer.
+No diagnostic-only full-WDDM fallback accepting work before GPU initialization.
+Display-only gate remains unchanged. Failure cleans unpublished VidMm (including
+partially failed initialization), aperture and both CPU allocations. Coordinator
+unwinds attempted hardware; PnP stop handles remaining prepared subsystems with
+the existing quarantine rules. Updated PnP failure comment.
+
+Bc250Escape FullWddm admission allows known observational commands and only
+GFX/IH STATE. Blocks GART/PSP, engine initialization/finalization, PLAN, fence/
+SDMA tests, raw register and VRAM writes and diagnostic flips. Returns
+STATUS_DEVICE_BUSY and common StatusREFUSED; does not write a wrongly cast
+NtStatus field (its offset differs across escape structures).
+Guard uses FullWddm lifetime, not merely nonNULL Device.Wddm.
+PnP exclusion of diagnostic callbacks during initial StartDevice still requires
+runtime/contract validation; this patch does not add a separate escape rundown.
+
+Actual WddmStart and policy helper extracted:89 checks pass. CPU allocations,
+VidMm and GPU APIs modeled. No-startup mutation87checks/8failures; omitted VidMm
+cleanup89checks/4failures. Existing coordinator319 pass.
+Full WDK build/sign:
+scratch/build/wddm-autostart-dev/package-umd
+SYS31DFC33B82291F86A61F05515F0D4D5942741A18E354E462B37E591073CF87C8
+Retains0793 DEVONLY, official0793 unchanged. No deployment/lab/reboot/USB.
+
+Before lab: replace manual fullWDDM->GART->PSP->IH->RUN scripts, verify all gates
+and firmware are present at device start, and provide a supported clock-control
+path: old bc250rd raw register writes are now denied in full WDDM, so its startup
+task cannot be assumed to enforce1000MHz/820mV there. Do not deploy blindly.
+Need live start/failure/stop/reentry, earliest OS callbacks, real paging/fences,
+reset/remove containment, remaining M9 alias/cache/error/lifetime/performance.

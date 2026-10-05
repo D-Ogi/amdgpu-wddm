@@ -1,0 +1,141 @@
+{
+ "artifacts": {
+  "fl-probe.exe": "30F69C0577D35921 (first 16 hex; MSVC 19.44, /MT, built from fl-probe.c with build.cmd)",
+  "vkd3d-proton d3d12.dll": "7B77ED5C",
+  "vkd3d-proton d3d12core.dll": "90B1DAD6",
+  "DXVK dxgi.dll": "2E674A56",
+  "vkd3d-proton source": "472989aabdcf3e343e16d13c402feae3815008aa (scratch/m12/vkd3d-package001 manifest)",
+  "DXVK source": "3.1.1 dc7f97df8a52656d24e286fe3ccde3049445a5bb",
+  "ICD baseline (runs 001, 003, 004)": "9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798 (pre-M496, LoadLibraryA DXGI.DLL)",
+  "ICD sparse candidate (runs 001, 003 only)": "4D027149571DC000DA1E5006E6E393FCA6178DB32F1D9CB25D684E60849A5805 (M491, pre-M496)",
+  "ICD consolidated (run 006)": "FAD08ECB16C9CFFDCB8D09D408C8ABC428B348D948D945D78DE30892D88A65AF (fork 940ab0eb, E36)",
+  "ICD D3DKMT enumeration candidate (run 005)": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (fork 940ab0eb plus patches/)",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD unchanged, UMD 8279AC7F untouched, registered ICD 9C40083C restored after each run"
+ },
+ "files": {
+  "build.cmd": {
+   "sha256": "3a883c0dc82ddb1fd09a8150ba4728525057dba1d5cfd266daf57d6da9af158e",
+   "bytes": 330
+  },
+  "devpc-control-nvidia.json": {
+   "sha256": "f7d6e437e88a8289cd3798229089691828ac1d9002ab6134428eb6cb1bad5df5",
+   "bytes": 1511
+  },
+  "fl-probe.c": {
+   "sha256": "e041909b2ed0cfb9f4a75bbec391980d2e70634dc6ce955cdf5fb8810efa0fb6",
+   "bytes": 7270
+  },
+  "out004/cdb-modules-threads.txt": {
+   "sha256": "c203bf5e768337a6e67bafd080ea516acea5ee1361ca3c829d68e3163de37648",
+   "bytes": 27337
+  },
+  "out004/cdb-stack.txt": {
+   "sha256": "a11cfec1d003f915e2d8a9fa9806eaae44444faf9e0f4a2c36e4e2eeadc2c65a",
+   "bytes": 6004
+  },
+  "out004/fl-probe_dxgi.log": {
+   "sha256": "600d19b453ca9481aeaae7274bb4cda14c45a3b60912680a8a7eb78e5018b051",
+   "bytes": 603
+  },
+  "out005/A-candidate-default.json": {
+   "sha256": "a063c58444d4b64f0370d36654f099a680b16ce6d54a5d19d2b3df59ea3fe2f3",
+   "bytes": 1436
+  },
+  "out005/A-candidate-default.stderr.txt": {
+   "sha256": "71aa841f4cdadd26c39749a96863625ef8b4ae28a2cba06dac17090175e4fbad",
+   "bytes": 3529
+  },
+  "out005/fl-probe_dxgi.log": {
+   "sha256": "9d4391830e01a5d19589eb622e233d6e299ce8ef5d3214ff7a3677387eef6af1",
+   "bytes": 729
+  },
+  "out005/smoke-config.json": {
+   "sha256": "0bf2904a4379adff890ef6750845cd6d5b2e0a5ceec47ddc92b02f2c8c84535c",
+   "bytes": 527
+  },
+  "out005/smoke-receipt.json": {
+   "sha256": "21cf6b446bdef09ccbaff1bcc96b2e926fe06b2a69a24ac199d2502b74c6fcb1",
+   "bytes": 388
+  },
+  "out005/smoke-stdout.txt": {
+   "sha256": "f0d4ab9db7c9c76a8131747a8a9f1e8d31133361e74e7aadcab757393f2c4414",
+   "bytes": 2789
+  },
+  "out006/A-consolidated-default.json": {
+   "sha256": "a063c58444d4b64f0370d36654f099a680b16ce6d54a5d19d2b3df59ea3fe2f3",
+   "bytes": 1436
+  },
+  "out006/A-consolidated-default.stderr.txt": {
+   "sha256": "b31907b8e7b3efe6a5b3169941908d9af7446531f441034df28cff1f7e34ee6b",
+   "bytes": 3529
+  },
+  "out006/fl-probe_dxgi.log": {
+   "sha256": "9d4391830e01a5d19589eb622e233d6e299ce8ef5d3214ff7a3677387eef6af1",
+   "bytes": 729
+  },
+  "patches/0001-vk_wddm2-guard-the-fallback-STATUS_-and-NT_SUCCESS-m.patch": {
+   "sha256": "0aa4f659eecc5f1e493ac88925650b45e9c6677c01036826c364cfe7cabba0f9",
+   "bytes": 3662
+  },
+  "patches/0002-vk_dxgi-enumerate-WDDM-adapters-through-D3DKMTEnumAd.patch": {
+   "sha256": "81cb43e8a9cbab84d2f2718df2fa81ed30295c82a93cc85c6193df9a72df2c42",
+   "bytes": 7881
+  },
+  "RESULT.md": {
+   "sha256": "5634ea685cbe8a282a4e3713f42fa5f52547934b4b0df3577bf3b8bafd10cba9",
+   "bytes": 4834
+  },
+  "run-fl001-session0.log": {
+   "sha256": "e502806ccc26b79ca0ab3200791106776dd650e7a8851c3187bfa25cb2fb5864",
+   "bytes": 2213
+  },
+  "run-fl003-interactive.log": {
+   "sha256": "bc1201c61b152f67ab34bb78e4507aafdf55b17bedc499c625b676f1ff59804f",
+   "bytes": 2356
+  },
+  "run-fl004.log": {
+   "sha256": "c6794e5d4377af4ac1615968c38b0e65c144310016c18a98904d96000aab14dd",
+   "bytes": 1622
+  },
+  "run-fl005.log": {
+   "sha256": "a0612fab7a4316b34f5a4fa8876dac9599a998139d778ba73019ded003ba6609",
+   "bytes": 2790
+  },
+  "run-fl006.log": {
+   "sha256": "490e2769b3578b4aab612ea65032e567a78681331dad1f803eccb2bbfbc8d457",
+   "bytes": 1632
+  },
+  "scripts/launch-fl005.ps1": {
+   "sha256": "43f30c6d8ae0288cfa1bfed892d047333a65604c6396f64151cf4e3439e087f7",
+   "bytes": 1380
+  },
+  "scripts/poll-fl005.ps1": {
+   "sha256": "f739891002891275b88f5d80115245022ce949504b17f04d0b9e90f3af28ad03",
+   "bytes": 943
+  },
+  "scripts/run-fl001.ps1": {
+   "sha256": "bc076fcf0de845849ceee5df5a5ce92f8fe974adfe2b10fdfabef256fe9f4bdb",
+   "bytes": 4734
+  },
+  "scripts/run-fl004.ps1": {
+   "sha256": "640c13abe22a6c88b57b248a37ca975e1de3d81148c37ca1dba9b47d95b24f9a",
+   "bytes": 3788
+  },
+  "scripts/run-fl005.ps1": {
+   "sha256": "1892201b1624c8e20025b2147b1eb503cf90686cb260cd522ddc7ad8a4224d8c",
+   "bytes": 5847
+  },
+  "scripts/run-fl006.ps1": {
+   "sha256": "dfe6a8e206e2ae7f04e2885aa0b9e409fa048679c5f420f351d5c1b26c27b17b",
+   "bytes": 4685
+  },
+  "scripts/state-fl001.ps1": {
+   "sha256": "e6efa2e9635510226783f1628371d06cda2aaea7ba1150e4c415847a0fc0d24d",
+   "bytes": 1388
+  },
+  "scripts/worker-fl005.ps1": {
+   "sha256": "e8ae241d64bb5cb6ac996c4343ae35598c4690417e67b459a18fde7141b0adcf",
+   "bytes": 359
+  }
+ }
+}

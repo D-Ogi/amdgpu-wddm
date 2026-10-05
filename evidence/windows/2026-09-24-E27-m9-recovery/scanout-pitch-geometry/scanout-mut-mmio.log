@@ -1,0 +1,6 @@
+Extracted DcnFlipWriteSequence from P:\bc-250\scratch\m9\scanout-mutations\dcn-fixed-pitch.c
+dcn_flip_actual.c
+FAIL line 213: model.pitch==((0xA5A5FFFFul&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)|(pitches[i]/4-1))
+FAIL line 213: model.pitch==((0xA5A5FFFFul&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)|(pitches[i]/4-1))
+FAIL line 213: model.pitch==((0xA5A5FFFFul&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)|(pitches[i]/4-1))
+dcn flip: 35374 checks, 3 failures

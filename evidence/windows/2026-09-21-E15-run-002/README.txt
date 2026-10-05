@@ -1,4 +1,4 @@
-E15 run 002, 2026-09-21, unit A, Windows 11 Pro, bc250kmd 0.7.0.0 (source state: commit 949d383, built from a clean
+E15 run 002, 2026-09-21, unit A, Windows 11 Pro, bc250kmd 0.7.0.0 (source state: commit 32df400, built from a clean
 worktree of that commit; the EnableFullWddm gate closed), witness bc250rd. No kernel debugger session. Driven over SSH
 with experiments/E15-compute-dispatch/e15_target.ps1 -Package C:\BC250\e15b, one script for the whole run
 (P:\BC-250\scratch\tmp\e15b_run.sh: it stops at the first step that does not end with exit code 0; none did). File

@@ -1,0 +1,5 @@
+# every line of game-kernel.log of trial 314 that mentions a held submission.
+# The log is the kernel driver's own guard stream; nothing else is filtered or changed.
+# 0 of 166229 lines.
+
+(none: this kernel driver has no hold counters)

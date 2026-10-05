@@ -1,0 +1,26 @@
+trace span 47.45 s, vsync interrupts 2842 (59.9/s)
+
+GPU DMA packets by process (execution Start->Stop):
+  ?                                n= 11733 busy= 52.157 s (109.9% of span) median=  0.372 ms p95= 26.166 ms max=  38.125 ms
+  "Unknown" (   4)                 n=   495 busy=  0.038 s (  0.1% of span) median=  0.071 ms p95=  0.130 ms max=   0.213 ms
+
+Queue latency by process (QueuePacket Start->Stop, submit to completion):
+  "Unknown" (10996)                n= 10217 median=  46.727 ms p95=  76.490 ms max=  112.516 ms
+  "Unknown" (2288)                 n=  2972 median=   4.842 ms p95=  13.536 ms max=   44.167 ms
+  "Unknown" (   4)                 n=   495 median=   0.128 ms p95=   0.239 ms max=    6.861 ms
+  "Unknown" (11204)                n=    42 median=   1.758 ms p95=  22.016 ms max=   27.945 ms
+  "Unknown" (10484)                n=    41 median=   2.030 ms p95=  19.575 ms max=   30.377 ms
+  "Unknown" (6388)                 n=    40 median=   1.238 ms p95=  21.673 ms max=   21.852 ms
+  "Unknown" (5244)                 n=    35 median=   0.908 ms p95=  24.894 ms max=   26.452 ms
+  "Unknown" (5500)                 n=    34 median=   0.460 ms p95=  21.488 ms max=   24.149 ms
+  "Unknown" (8092)                 n=    33 median=   1.641 ms p95=  21.480 ms max=   31.995 ms
+  "Unknown" (5296)                 n=    32 median=   2.096 ms p95=  21.482 ms max=   22.416 ms
+  "Unknown" (7320)                 n=    29 median=   1.023 ms p95=  23.048 ms max=   27.175 ms
+  "Unknown" (4816)                 n=     1 median=  25.612 ms p95=  25.612 ms max=   25.612 ms
+
+GPU busy (union of all DMA packets) 46.086 s = 97.1% of span
+
+Presents by process:
+  "Unknown" (10996)                n=  1487 rate=  31.3/s interval median=  31.19 ms p95=  41.20 ms p99=  57.19 ms max=   95.47 ms >50ms=25 >100ms=0 >250ms=0
+  "Unknown" (2288)                 n=  1486 rate=  31.3/s interval median=  31.04 ms p95=  42.12 ms p99=  49.63 ms max=   66.26 ms >50ms=14 >100ms=0 >250ms=0
+  "Unknown" (4816)                 n=1

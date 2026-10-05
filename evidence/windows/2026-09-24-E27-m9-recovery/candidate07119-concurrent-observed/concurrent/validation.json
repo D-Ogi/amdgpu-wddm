@@ -1,0 +1,96 @@
+[
+  {
+    "name": "client-a",
+    "bytes": 67108864,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "67108864",
+        "64"
+      ],
+      [
+        "67108864",
+        "128"
+      ],
+      [
+        "67108864",
+        "192"
+      ],
+      [
+        "67108864",
+        "256"
+      ]
+    ],
+    "departure_status": [
+      "3",
+      "3",
+      "3"
+    ],
+    "cumulative_gfx": [
+      "512",
+      "512",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "21725",
+      "21725",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "407",
+      "406",
+      "391"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  },
+  {
+    "name": "client-b",
+    "bytes": 67108864,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "67108864",
+        "64"
+      ],
+      [
+        "67108864",
+        "128"
+      ],
+      [
+        "67108864",
+        "192"
+      ],
+      [
+        "67108864",
+        "256"
+      ]
+    ],
+    "departure_status": [
+      "3",
+      "3",
+      "3"
+    ],
+    "cumulative_gfx": [
+      "512",
+      "512",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "21725",
+      "21725",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "406",
+      "406",
+      "390"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  }
+]

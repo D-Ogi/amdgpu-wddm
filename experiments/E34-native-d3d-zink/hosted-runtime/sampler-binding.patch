@@ -1,0 +1,40 @@
+--- a/src/gallium/drivers/zink/zink_context.c
++++ b/src/gallium/drivers/zink/zink_context.c
+@@ -585,6 +585,7 @@
+       return NULL;
+ 
+    VkResult result = VKSCR(CreateSampler)(screen->dev, &sci, NULL, &sampler->sampler);
++   if (getenv("BC250_HOST_TRACE_SAMPLER")) fprintf(stderr,"BC250 sampler create handle=%p u=%u border=%u\n",(void*)sampler->sampler,sci.addressModeU,sci.borderColor);
+    if (result != VK_SUCCESS) {
+       mesa_loge("ZINK: vkCreateSampler failed (%s)", vk_Result_to_str(result));
+       FREE(sampler);
+--- a/src/gallium/drivers/zink/zink_descriptors.c
++++ b/src/gallium/drivers/zink/zink_descriptors.c
+@@ -1147,6 +1147,8 @@
+             for (unsigned k = 0; k < zs->precompile.bindings[i].descriptorCount; k++) {
+                /* VkDescriptorDataEXT is a union of pointers; the member doesn't matter */
+                info.data.pSampler = (void*)(((uint8_t*)ctx) + zs->precompile.db_template[i].offset + k * zs->precompile.db_template[i].stride);
++               if (getenv("BC250_HOST_TRACE_SAMPLER") && info.type == VK_DESCRIPTOR_TYPE_SAMPLER)
++                  fprintf(stderr,"BC250 sampler descriptor binding=%u handle=%p\n",zs->precompile.bindings[i].binding,(void*)*info.data.pSampler);
+                VKSCR(GetDescriptorEXT)(screen->dev, &info, zs->precompile.db_template[i].db_size, bs->dd.db_map + desc_offset + k * zs->precompile.db_template[i].db_size);
+             }
+          } else {
+--- a/src/gallium/drivers/zink/nir_to_spirv/nir_to_spirv.c
++++ b/src/gallium/drivers/zink/nir_to_spirv/nir_to_spirv.c
+@@ -1390,7 +1390,7 @@
+    snprintf(buf, sizeof(buf), "sampler_%u", var->data.driver_location);
+    spirv_builder_emit_name(&ctx->builder, var_id, buf);
+    spirv_builder_emit_descriptor_set(&ctx->builder, var_id, var->data.descriptor_set);
+-   spirv_builder_emit_binding(&ctx->builder, var_id, var->data.driver_location);
++   spirv_builder_emit_binding(&ctx->builder, var_id, var->data.binding);
+    _mesa_hash_table_insert(ctx->vars, var, (void *)(intptr_t)var_id);
+    if (ctx->spirv_1_4_interfaces) {
+       assert(ctx->num_entry_ifaces < ARRAY_SIZE(ctx->entry_ifaces));
+@@ -4330,6 +4330,7 @@
+       if (nir_tex_instr_need_sampler(tex) && sampler_src >= 0) {
+          nir_variable *sampler_var = nir_deref_instr_get_variable(nir_src_as_deref(tex->src[sampler_src].src));
+          if (sampler_var && glsl_type_is_bare_sampler(glsl_without_array(sampler_var->type))) {
++            if (getenv("BC250_HOST_TRACE_SAMPLER")) fprintf(stderr,"BC250 SPIRV separate sampler binding=%u texture=%u\n",sampler_var->data.binding,var->data.binding);
+             SpvId image = spirv_builder_emit_image(&ctx->builder, image_type, combined);
+             SpvId sampler = spirv_builder_emit_load(&ctx->builder,
+                spirv_builder_type_sampler(&ctx->builder), cl_sampler, false);

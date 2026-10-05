@@ -1,4 +1,4 @@
-E18 run 001, 2026-09-21: bc250kmd 0.7.10 (commit a5befa3), UMD stub package 0.7.10.1, EnableGpuVa = 0 (plan)
+E18 run 001, 2026-09-21: bc250kmd 0.7.10 (commit 194d7ab), UMD stub package 0.7.10.1, EnableGpuVa = 0 (plan)
 ===========================================================================================================
 
 Package frozen by tools/packagecheck (package-manifest.txt, PASS). bc250kmd.sys sha256 prefix 7460df514c983f51.

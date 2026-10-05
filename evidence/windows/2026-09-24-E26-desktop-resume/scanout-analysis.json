@@ -1,0 +1,338 @@
+{
+  "baseline07127.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "blit07127-scanout12.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "blit07127-scanout32.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "menu-control-closed.bmp": {
+    "sha256": "cf232aa931c9f7bc5142c82bd41e29c2a661d4d9a629976452f7a03a42933384",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "menu-control-menu.bmp": {
+    "sha256": "f0be25688348ddd033e9425175436d5889b76193f2cecc46ea4098696d13801c",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "mesa-flip07127-scanout12.bmp": {
+    "sha256": "2c85efbd963e3f2eb693d36837d579793b41146d077bc271bcad1475dcabc94c",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "mesa-flip07127-scanout32.bmp": {
+    "sha256": "efbd3f9f7c66cb36cf8be750ab8159f669c275f85471e1169edb209e42870cc6",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "mesa-rotation07127-scanout12.bmp": {
+    "sha256": "a3076a6f7daf5eddd2ee4a7635a892c060e4da1bfb3a609a69b7dbe5c7fa44f7",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "mesa-rotation07127-scanout32.bmp": {
+    "sha256": "b0f6499982b806fb8bff160ebad9d1193711fd2a82dccf6484e8b451b373f4ca",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "mesa-start07127-scanout12.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "mesa-start07127-scanout32.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "mesa07127-scanout15.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "mesa07127-scanout30.bmp": {
+    "sha256": "01dc574c885730fb76e9876c815d832a176130c312894b3bdadd8f50d4e71151",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "rotation-control-scanout-0.bmp": {
+    "sha256": "8b82c3c0b5c61f97bebb8edf1078aca9ac3e504cbd65c770a4a13fab6319aabe",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "rotation-control-scanout-1.bmp": {
+    "sha256": "acbf248e56b51750ef71e3ee04369a046f21c3d11298de47425fc6f69027ad2b",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  },
+  "rotation-control-scanout-2.bmp": {
+    "sha256": "6b0a820a44ec44c2de5dc1db855a1773fe73cf3d179dc78b45338df6e7684341",
+    "size": [
+      1920,
+      1200
+    ],
+    "rgb_extrema": [
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ],
+      [
+        0,
+        255
+      ]
+    ]
+  }
+}

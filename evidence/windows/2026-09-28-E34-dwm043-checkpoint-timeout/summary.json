@@ -1,0 +1,45 @@
+{
+  "success": false,
+  "trial_seconds": 28.857495999999998,
+  "measured_seconds": 0,
+  "markers": 1,
+  "restoration_succeeded": true,
+  "failure": "Checkpoint acknowledgement deadline exceeded",
+  "logged_marker1": {
+    "events": 1408,
+    "requests": 256,
+    "successful": 256,
+    "ended": 251,
+    "pending_store_ids": [],
+    "completed_store_span_bytes": 10196,
+    "last_checkpoint": {
+      "event": "checkpoint",
+      "seq": 1408,
+      "time_ns": 7255799266600,
+      "marker": 1,
+      "requests": 256,
+      "successful": 256,
+      "failed": 0,
+      "ended": 251,
+      "pending": 0,
+      "live": 5,
+      "stores_begun": 318,
+      "stores_ended": 318
+    }
+  },
+  "replay": {
+    "old": {
+      "fixture_bytes": 334782,
+      "pass": true,
+      "elapsed_ms": 1826.7257000000002,
+      "error": null
+    },
+    "new": {
+      "fixture_bytes": 334782,
+      "pass": true,
+      "elapsed_ms": 421.4316,
+      "error": null
+    }
+  },
+  "replay_scope": "File-only PS5 controls on CPU baseline after the trial. Earlier unsynchronized controls are invalid due to publication race and excluded. Improvement does not prove the trial timeout cause."
+}

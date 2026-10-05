@@ -1,0 +1,60 @@
+{
+  "043": {
+    "exit": 0,
+    "pixels": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=0/4096"
+    ]
+  },
+  "044": {
+    "exit": 7,
+    "pixels": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=4096/4096"
+    ]
+  },
+  "045": {
+    "exit": -1073741819,
+    "pixels": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=4096/4096"
+    ]
+  },
+  "046": {
+    "exit": 0,
+    "pixels": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=0/4096"
+    ]
+  },
+  "047": {
+    "exit": 6,
+    "pixels": [
+      "channel=0 mismatches=4096/4096"
+    ]
+  },
+  "048": {
+    "exit": 6,
+    "pixels": [
+      "channel=0 mismatches=4096/4096"
+    ]
+  },
+  "049": {
+    "exit": 0,
+    "pixels": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=0/4096"
+    ]
+  },
+  "050": {
+    "exit": 6,
+    "pixels": [
+      "channel=0 mismatches=4096/4096"
+    ]
+  }
+}

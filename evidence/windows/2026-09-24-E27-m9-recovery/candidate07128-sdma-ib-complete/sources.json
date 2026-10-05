@@ -1,0 +1,13 @@
+{
+  "driver/kmd/gfx.c": "5517c184498accd68563b5e07f840d064cfa0cb12a2449b628bfdbd3cf4d9025",
+  "driver/kmd/bc250kmd_escape.h": "129aa2d8558bfa4eb0957aad71614a2e5f70fb80b5c7ccad57da06a90c82c7f0",
+  "driver/kmd/display.c": "7cfbc4ae3395adafdf606e27da29839277f104789fc7333f9ae246c78b9c5648",
+  "driver/kmd/bc250kmd.inf": "01da0e52fa5a8bc2f98a8046a22d0178b5e88dacd6c281bfc828faadeb74902b",
+  "driver/kmd/test/generate_cp_startup_test.py": "fe33191ef99f33a0b1dcfb12bfa3b1bb417c8c5a255d1d895f5960e4a3162c0f",
+  "tools/win/bc250kmd_cli/bc250kmd_cli.c": "fc4bbd795ccedb3bb3cec67193184f5a4121ad76b41c82eeab84d226082d2caa",
+  "driver/shim/bc250_sdma.c": "c2180ed8b5ee1311304216912edc4df0ad3161301f6f16e9087a144fb0604e9d",
+  "driver/shim/include/bc250_sdma.h": "4ecf01a3242e5f727a083c7227ea4e6a23eac7eb571d5a5cdab56f14827d523b",
+  "scratch/build/bc250kmd-07128/package-umd/bc250kmd.sys": "98931c11faf37de35a230022839c5b68c69a6a1999cd39438987f2bd20da4897",
+  "scratch/build/bc250cli-07128/bc250kmd_cli.exe": "01839399a83f7202a8f01345e121b3925801617b0860e4456933197d450cf9c3",
+  "scratch/m9/sdma-ib128-scanout.bmp": "2a413bf383df58ea4b73a62b4fea7b281925945dfbdce5552dbecedb28512f00"
+}

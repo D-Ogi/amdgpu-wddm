@@ -1,0 +1,187 @@
+exit=-1073740791
+
+BC250 private Vulkan instance=000002E1116D5DD0 screen=000002E1116B4EF0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x40001080
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 private Vulkan instance=000002E111752A70 screen=000002E111746CA0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=000002E113F591E0 screen=000002E113F06F10
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=000002E113ED2AE8 queue=40002100 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80000240
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80000200
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x40002280
+BC250 hosted op=19 count=3 hr=8000000a
+BC250 hosted op=21 count=3 hr=8000000a
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=000002E113F06F10 runtime=000002E113ED2AE8
+BC250 D3D device stage 3
+allocation handle=0x80000340
+BC250 hosted op=19 count=4 hr=8000000a
+BC250 hosted op=21 count=4 hr=8000000a
+allocation handle=0x80000300
+BC250 hosted op=19 count=5 hr=8000000a
+BC250 hosted op=21 count=5 hr=8000000a
+allocation handle=0x40002300
+BC250 hosted op=19 count=6 hr=8000000a
+BC250 hosted op=21 count=6 hr=8000000a
+allocation handle=0x40002340
+BC250 hosted op=19 count=7 hr=8000000a
+BC250 hosted op=21 count=7 hr=8000000a
+allocation handle=0x40002380
+BC250 hosted op=19 count=8 hr=8000000a
+BC250 hosted op=21 count=8 hr=8000000a
+allocation handle=0x400023c0
+BC250 hosted op=19 count=9 hr=8000000a
+BC250 hosted op=21 count=9 hr=8000000a
+allocation handle=0x40002400
+BC250 hosted op=19 count=10 hr=8000000a
+BC250 hosted op=21 count=10 hr=8000000a
+allocation handle=0x40002440
+BC250 hosted op=19 count=11 hr=8000000a
+BC250 hosted op=21 count=11 hr=8000000a
+allocation handle=0x80000540
+BC250 hosted op=19 count=12 hr=8000000a
+BC250 hosted op=21 count=12 hr=8000000a
+allocation handle=0x80000500
+BC250 hosted op=19 count=13 hr=8000000a
+BC250 hosted op=21 count=13 hr=8000000a
+allocation handle=0x40002480
+BC250 hosted op=19 count=14 hr=8000000a
+BC250 hosted op=21 count=14 hr=8000000a
+allocation handle=0x400024c0
+BC250 hosted op=19 count=15 hr=8000000a
+BC250 hosted op=21 count=15 hr=8000000a
+allocation handle=0x40002500
+BC250 hosted op=19 count=16 hr=8000000a
+BC250 hosted op=21 count=16 hr=8000000a
+allocation handle=0x40002540
+BC250 hosted op=19 count=17 hr=8000000a
+BC250 hosted op=21 count=17 hr=8000000a
+allocation handle=0x40002580
+BC250 hosted op=19 count=18 hr=8000000a
+BC250 hosted op=21 count=18 hr=8000000a
+allocation handle=0x400025c0
+BC250 hosted op=19 count=19 hr=8000000a
+BC250 hosted op=21 count=19 hr=8000000a
+allocation handle=0x40002600
+BC250 hosted op=19 count=20 hr=8000000a
+BC250 hosted op=21 count=20 hr=8000000a
+allocation handle=0x40002640
+BC250 hosted op=19 count=21 hr=8000000a
+BC250 hosted op=21 count=21 hr=8000000a
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\runtime-control.exe",
+        "Hash":  "D624FAE36995D3F77AD21379261FCE9512838AEEF8BC695A4571B712B9796704"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\bc250d3d_zink.dll",
+        "Hash":  "0B6DE237ADC4FC61A026E331A526A8397CE032A7A48163654F88B5D32D943504"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+CPU UMD file restored
+[
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime005\\vulkan_radeon.dll",
+        "Hash":  "9ED551B8F90F909D7D1F76A3828A464CFEF2EAA39B2E869F5EC3560A991E29D9"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime005\\bc250d3d_zink.dll",
+        "Hash":  "0B6DE237ADC4FC61A026E331A526A8397CE032A7A48163654F88B5D32D943504"
+    }
+]
+DWM before=1052 after=1052
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798

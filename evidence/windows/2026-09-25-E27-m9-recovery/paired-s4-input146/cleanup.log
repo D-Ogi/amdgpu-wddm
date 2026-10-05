@@ -1,0 +1,10 @@
+health abi=1 version=0x00070092 flags=7 generation=588676524 epoch=13 completed=222 age_ms=550 ready_ms=291892
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66625 ready=1
+
+Microsoft Windows Performance Recorder Version 10.0.22621 (CoreSystem)
+Copyright (c) 2022 Microsoft Corporation. All rights reserved.
+
+WPR is not recording
+boot=2026-09-25T03:57:55.5000000+02:00
+now=2026-09-25T04:38:18.0755984+02:00
+cleanup_complete

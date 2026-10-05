@@ -1,0 +1,7 @@
+compile and link (compare baked bytes to the filler)
+  Generowanie kodu...
+run
+umd_caps_test: all cases passed
+compile-check (kernel flags, baked bytes only, no filler, no link)
+
+umd_caps_test.exe exit code 0

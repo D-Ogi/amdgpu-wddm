@@ -1,0 +1,36 @@
+Local d3dkmddi.md SHA256 ea381f446626d68f66e064f67f75a9fe50288987b5bdd5d4430fb4fe3fb681fb
+
+19041: 
+19042: #### Field AllocationOffsetInBytes
+19043: 
+19044: The offset in bytes from the start of the allocation being transferred. The offset should not be added to <b>SourceVirtualAddress</b> or <b>DesinationVirtualAddress</b>.
+19045: 
+19046: #### Field TransferSizeInBytes
+19047: 
+19048: The number of bytes to transfer.
+19049: 
+19050: #### Field SourceVirtualAddress
+19051: 
+19052: The virtual address of the source in the context of the paging process.
+19053: 
+19054: #### Field DestinationVirtualAddress
+19055: 
+19056: The virtual address of the destination in the context of the paging process.
+19057: 
+30493: #### Field Transfer.TransferOffset
+30494: 
+30495: [in] The offset, in bytes, of the first page within the allocation that is transferred. This offset is applied only to a location that a segment location describes. This offset does not apply to an [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) description of a memory range. If the driver requires more than one paging buffer to complete the transfer (that is, the driver returns STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER from its [**DxgkDdiBuildPagingBuffer**](#nc-d3dkmddi-dxgkddi_buildpagingbuffer) function), **TransferOffset** is the same for each call to **DxgkDdiBuildPagingBuffer** for this transfer.
+30496: 
+30497: #### Field Transfer.TransferSize
+30498: 
+30499: [in] The size, in bytes, of the memory information to transfer.
+30500: 
+30537: #### Field Transfer.MdlOffset
+30538: 
+30539: [in] The offset, in system memory pages, within the [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) structure that the **pMdl** member points to, to the first system memory page for the current operation. The driver can obtain the physical address of the first system memory page by calling the [**MmGetMdlPfnArray**](/windows-hardware/drivers/kernel/mm-bad-pointer#mmgetmdlpfnarray) function as follows.
+30540: 
+30541: ```cpp
+30542: MmGetMdlPfnArray(pMdl)[MdlOffset];
+30543: ```
+30544: 
+30545: #### Field Fill

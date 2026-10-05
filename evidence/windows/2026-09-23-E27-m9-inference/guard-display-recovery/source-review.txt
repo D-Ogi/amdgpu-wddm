@@ -1,0 +1,9 @@
+Source review, 2026-09-23
+
+Current registry LastStage90 is StageRefusedByGuard (bc250kmd.h). pnp.c writes it only after GuardCheckAndCountStart fails; guard.c refuses UnconfirmedStarts >=2. The read-only CLI log command returned1, so no current in-memory ring was acquired.
+
+GfxExecute and GfxInitializeHardware compared with the saved07101 gfx.c; equality results are in source-hashes.json. CP1entry is persisted before GfxExecute acquires GfxPagingLock/GartLock. The persisted boundary does not isolate the KIQ function. GuardLogKeep skips non-PASSIVE IRQL; adding it under GartLock (fast mutex) would not provide durable checkpoints.
+
+KIQ cold path follows AMD ordering: scheduler selection, MQD clear, GRBM queue selection, MQD build, KIQ register setup, default selection. Register setup first disables polling, reads ACTIVE, conditionally dequeues, then programs queue pointers and activates. Local active-queue branch additionally unhalts halted MEC and restores it, zeros RPTR, checks timeout; declared existing deviation. No evidence yet establishes whether this branch ran in07101. No speculative register change or reset was made.
+
+Next hardware step prepared: one closed-gate display-only recovery to restore diagnostic escapes. Execution was rejected by automatic approval review before the command started, citing driver registry/guard/PnP mutation and display/SSH disruption risk. Explicit approval requested; no restart or gate mutation executed. Overlay notification only was sent.

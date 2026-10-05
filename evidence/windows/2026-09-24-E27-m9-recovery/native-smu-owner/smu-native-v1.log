@@ -1,0 +1,48 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(22): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(22): warning C4127: wyrażenie warunkowe jest stałą
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(77): error C2065: "MAXULONG": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(77): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(95): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(96): error C2065: "STATUS_DEVICE_NOT_READY": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(97): error C2065: "STATUS_INVALID_PARAMETER": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(98): error C2065: "STATUS_IO_TIMEOUT": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(99): error C2065: "STATUS_DEVICE_POWER_FAILURE": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(100): error C2065: "STATUS_DEVICE_DATA_ERROR": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(101): error C2065: "STATUS_IO_DEVICE_ERROR": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(113): error C2065: "STATUS_INVALID_PARAMETER": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(115): error C2065: "STATUS_INVALID_DEVICE_STATE": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v1\smu-native.inc(125): warning C4127: wyrażenie warunkowe jest stałą
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(41): error C2065: "STATUS_WAIT_0": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(41): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(50): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(51): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(58): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(68): error C2065: "STATUS_DEVICE_NOT_READY": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(69): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(70): error C2065: "STATUS_INVALID_DEVICE_STATE": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(72): error C2065: "STATUS_WAIT_0": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(72): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(78): error C2065: "STATUS_WAIT_0": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(78): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(80): error C2065: "STATUS_WAIT_0": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(80): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(83): error C2065: "STATUS_WAIT_0": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(83): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(84): error C2065: "STATUS_WAIT_0": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(84): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(86): error C2065: "STATUS_DEVICE_NOT_READY": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(88): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+P:\BC-250\bc250-win\driver\shim\test\smu_native_test.c(89): error C2065: "STATUS_SUCCESS": niezadeklarowany identyfikator
+Generowanie kodu...
+Host build failed
+At P:\BC-250\bc250-win\driver\shim\test\run_smu_native.ps1:21 char:25
++ if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Host build failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Host build failed
+ 

@@ -33,4 +33,4 @@ not the IH ring (the fence is polled). The seven SDMA shim defects of the fault-
 
 | Run | Build | What | Result |
 |---|---|---|---|
-| 001 | 0.7.22 (b197b2b) | fresh restart, gate on, gart, psp, gfx run 7, ring-test fence, `sdmacopy 4096`, `sdmacopy 65536`, full undo | both MATCHED, 11-12 us seed to read-back, 69 C. M95. `evidence/windows/2026-09-22-E23-sdma-copy-run-001/` |
+| 001 | 0.7.22 (4c233e3) | fresh restart, gate on, gart, psp, gfx run 7, ring-test fence, `sdmacopy 4096`, `sdmacopy 65536`, full undo | both MATCHED, 11-12 us seed to read-back, 69 C. M95. `evidence/windows/2026-09-22-E23-sdma-copy-run-001/` |

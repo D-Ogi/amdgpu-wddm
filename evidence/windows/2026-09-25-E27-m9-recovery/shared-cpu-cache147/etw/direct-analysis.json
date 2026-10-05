@@ -1,0 +1,400 @@
+{
+  "metadata": {
+    "version": "1",
+    "mode": "active",
+    "pid": "7552",
+    "session": "1",
+    "window_station": "WinSta0",
+    "input_desktop": "Winlogon",
+    "attached_desktop": "Winlogon",
+    "utc": "2026-09-25T03:09:34.3225322Z",
+    "qpc_frequency": "10000000",
+    "qpc_start": "43085690541",
+    "duration_ms": "3000",
+    "original": "960:600",
+    "input_size": "40",
+    "transport": "SetCursorPos-direct"
+  },
+  "sample_count": 187,
+  "distinct_observed": 61,
+  "coordinate_changes": 186,
+  "matches": 187,
+  "sample_gap_us": {
+    "n": 186,
+    "min": 13278.5,
+    "p50": 16012.8,
+    "p95": 19725.0,
+    "max": 23272.9
+  },
+  "logical_delay_us": {
+    "n": 187,
+    "min": 6665,
+    "p50": 7012,
+    "p95": 10314,
+    "max": 10891
+  },
+  "input": {
+    "anchor": {
+      "raw_qpc": 43069493824,
+      "converted_filetime": 134347793727036467,
+      "trace_start_filetime": 134347793726780260,
+      "frequency": 10000000,
+      "clock_type": 1,
+      "lost_events": 0,
+      "anchor_provider_data1": 2353097849,
+      "anchor_id": 169,
+      "anchor_pid": 5688,
+      "anchor_tid": 11384,
+      "anchor_payload_hash": 5427729843859209304
+    },
+    "active_interval_us": [
+      1645292.4,
+      4645292.4
+    ],
+    "counts": {
+      "Microsoft-Windows-Win32k/WakeInputIdle/win:Info": 225,
+      "Microsoft-Windows-Win32k/WakeMIT/win:Info": 97,
+      "Microsoft-Windows-Win32k/ProcessQueuedMouseEvents/win:Start": 97,
+      "Microsoft-Windows-Win32k/WakePump/win:Info": 101,
+      "Microsoft-Windows-Win32k/ProcessQueuedMouseEvents/win:Stop": 97,
+      "Microsoft-Windows-Win32k/AppMessagePump/win:Stop": 232,
+      "Microsoft-Windows-Win32k/QueueInputMessage/win:Info": 97,
+      "Microsoft-Windows-Win32k/RetrieveInputMessage/win:Info": 97,
+      "Microsoft-Windows-Win32k/AppMessagePump/win:Start": 232,
+      "Microsoft-Windows-Win32k/QueuePostMessage/win:Info": 22,
+      "Microsoft-Windows-Win32k/RetrievePostMessage/win:Info": 28,
+      "Microsoft-Windows-Win32k/RetrievePseudoMessage/win:Info": 8,
+      "Microsoft-Windows-Win32k/DispatchMessage/win:Start": 4,
+      "Microsoft-Windows-Win32k/DispatchMessage/win:Stop": 4,
+      "Microsoft-Windows-Win32k/QueueNullPostMessage/win:Info": 14
+    },
+    "pairs_us": {},
+    "event_gaps_us": {}
+  },
+  "graphics": {
+    "anchor": {
+      "raw_qpc": 43073708107,
+      "converted_filetime": 134347793731250750,
+      "trace_start_filetime": 134347793728835444,
+      "frequency": 10000000,
+      "clock_type": 1,
+      "lost_events": 0,
+      "anchor_provider_data1": 2150548570,
+      "anchor_id": 105,
+      "anchor_pid": 2004,
+      "anchor_tid": 4336,
+      "anchor_payload_hash": 18052759129240701220
+    },
+    "active_interval_us": [
+      1439774.0,
+      4439774.0
+    ],
+    "counts": {
+      "Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info": 177,
+      "Microsoft-Windows-Win32k/WindowUpdate/win:Info": 190,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_WFW/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_WFVB/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_WFVB/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_UPDATE_TIMES/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_GETPRESENTSTATS/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_VSYNC_QPC_SMOOTHING_RESET/win:Info": 4,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_VSYNC_QPC_SMOOTHING_UPDATE/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_VSYNC_QPC_SMOOTHING/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_GETPRESENTSTATS1/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT_STATS_DELTAS/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_NEW_EFFECTIVE_REFRESH_PERIOD_DELTAS/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_GETPRESENTSTATS/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_FRAMEINFO/win:Info": 288,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_UPDATE_TIMES/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDERTIME/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PROCESS_FRAME/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_FRAME_VSYNCDEADLINES/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Start": 145,
+      "Microsoft-Windows-Win32k/DCompBeginFrame/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/CurrentFrameId/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT/win:Info": 740,
+      "Microsoft-Windows-Dwm-Core/COMMAND_PROCESSED_ONBEHALF/win:Info": 1110,
+      "Microsoft-Windows-Dwm-Core/COMMANDS_COUNT/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/CHANNELBATCHES_PROCESSED/win:Info": 194,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY_GetPresentHistory/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSSURFACEUPDATES/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSSURFACEUPDATES/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_CHECKDEVICESTATE/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_CHECKDEVICESTATE/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_CLEAR_D2D_CACHES/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_CLEAR_D2D_CACHES/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULED_COMPOSITION_REASON/win:Info": 322,
+      "Microsoft-Windows-Dwm-Core/UCE_PROCESSANIMATERESOURCES/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/DCOMPEVENT_ANIMATION_UPDATE_VALUE/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/UCE_PROCESSANIMATERESOURCES/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/PROCESS_EXPRESSIONS/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/PROCESS_EXPRESSIONS/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRECOMPUTEEVENT/win:Start": 98,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DIRTY_ADDRECT/win:Info": 259,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRECOMPUTEEVENT/win:Stop": 98,
+      "Microsoft-Windows-Dwm-Core/OVERLAY_CANDIDATECOLLECTION/win:Start": 145,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_OCCLUSIONEVENT/win:Start": 144,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_OCCLUSIONEVENT/win:Info": 290,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_OCCLUSIONEVENT/win:Stop": 144,
+      "Microsoft-Windows-Dwm-Core/OVERLAY_CANDIDATECOLLECTION/win:Stop": 145,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWING_CONTEXT_FRAME/win:Start": 84,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_RENDEREVENT/win:Start": 84,
+      "Microsoft-Windows-Dwm-Core/RENDER_CVIPASS/win:Start": 84,
+      "Microsoft-Windows-Dwm-Core/RENDER_CVIPASS/win:Stop": 84,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DIRTYREGIONEVENT/win:Info": 84,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_RENDEROPT_DISCARDVIEWEVENT/win:Info": 84,
+      "Microsoft-Windows-Dwm-Core/Dx_Flip_Consumed/win:Info": 1,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWEVENT/win:Start": 168,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWEVENT/win:Stop": 167,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWING_CONTEXT_STATE/win:Info": 252,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_VISUAL_RENDERCONTENT/win:Info": 252,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_RENDEREVENT/win:Stop": 84,
+      "Microsoft-Windows-Win32k/WakePump/win:Info": 101,
+      "Microsoft-Windows-Win32k/QueueInputMessage/win:Info": 97,
+      "Microsoft-Windows-Win32k/RetrieveInputMessage/win:Info": 97,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWING_CONTEXT_FRAME/win:Stop": 84,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Stop": 144,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_TIME/win:Info": 145,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start": 84,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRESENTEVENT/win:Start": 84,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_COPYFRONTTOBACKBUFFEREVENT/win:Start": 83,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_COPYFRONTTOBACKBUFFEREVENT/win:Stop": 83,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_PRESENT/win:Info": 83,
+      "Microsoft-Windows-Dwm-Core/LEGACYSWAPCHAIN_BUFFERFLIP/win:Info": 83,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_DXGI_PRESENT_SUCCEEDED/win:Info": 83,
+      "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRESENTEVENT/win:Stop": 83,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop": 83,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PROCESS_FRAME/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PROCESS_FRAME/win:Stop": 144,
+      "Microsoft-Windows-Dwm-Core/PROCESS_ATTRIBUTION/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_UPDATE_FRAME_INDEXES/win:Info": 83,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_VBLANK_LOOP/win:Stop": 144,
+      "Microsoft-Windows-Dwm-Core/ENDFRAME_DRAWLIST_BATCH_STATS/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/ENDFRAME_PRIMITIVE_GROUP_STATS/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/ENDFRAME_TESSELLATED_PRIMITIVES_STATS/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/ENDFRAME_HW_DRAWLIST_CACHE_STATS/win:Info": 144,
+      "Microsoft-Windows-Dwm-Core/ENDFRAME_WARP_DRAWLIST_CACHE_STATS/win:Info": 143,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_VBLANK_LOOP/win:Start": 144,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_WFW/win:Start": 144,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_RETIREFRAME/win:Info": 82,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_GLITCH/win:Info": 83,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_NEW_EFFECTIVE_REFRESH_PERIOD/win:Info": 141,
+      "Microsoft-Windows-Win32k/QueuePostMessage/win:Info": 22,
+      "Microsoft-Windows-Win32k/RetrievePostMessage/win:Info": 28,
+      "Microsoft-Windows-Win32k/RetrievePseudoMessage/win:Info": 8,
+      "Microsoft-Windows-Win32k/DispatchMessage/win:Start": 4,
+      "Microsoft-Windows-Win32k/PhysicalSurfCreate/win:Info": 4,
+      "Microsoft-Windows-Win32k/ThreadExit/win:Info": 12,
+      "Microsoft-Windows-Win32k/GUIThread/win:Stop": 12,
+      "Microsoft-Windows-Win32k/DirtyRectUpdate/win:Info": 4,
+      "Microsoft-Windows-Win32k/ModifyRgn/win:Info": 8,
+      "Microsoft-Windows-Win32k/GdiSysMemToken/win:Info": 4,
+      "Microsoft-Windows-Win32k/DispatchMessage/win:Stop": 4,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENTHISTORYTOKEN_GDISYSMEM/win:Info": 4,
+      "Microsoft-Windows-Win32k/DwmGetRgn/win:Info": 4,
+      "Microsoft-Windows-Dwm-Core/ETWGUID_DWMUPDATEWINDOW/win:Info": 4,
+      "Microsoft-Windows-Dwm-Core/RENDERTARGET_RENDERSKIPPED/win:Info": 61,
+      "Microsoft-Windows-Dwm-Core/UNPRESENTED_FRAME/win:Info": 61,
+      "Microsoft-Windows-Win32k/GUIThread/win:Start": 1,
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_TIMEADJUSTED_BETWEENFRAMES/win:Info": 28,
+      "Microsoft-Windows-Win32k/QueueNullPostMessage/win:Info": 14
+    },
+    "pairs_us": {
+      "SCHEDULE_WFVB": {
+        "n": 145,
+        "min": 84,
+        "p50": 89,
+        "p95": 2730,
+        "max": 10662
+      },
+      "SCHEDULE_GETPRESENTSTATS": {
+        "n": 145,
+        "min": 29,
+        "p50": 36,
+        "p95": 79,
+        "max": 114
+      },
+      "SCHEDULE_UPDATE_TIMES": {
+        "n": 145,
+        "min": 36,
+        "p50": 44,
+        "p95": 106,
+        "max": 147
+      },
+      "MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT": {
+        "n": 145,
+        "min": 7,
+        "p50": 62,
+        "p95": 125,
+        "max": 178
+      },
+      "MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY": {
+        "n": 145,
+        "min": 6,
+        "p50": 6,
+        "p95": 13,
+        "max": 145
+      },
+      "MILEVENT_MEDIA_UCE_PROCESSSURFACEUPDATES": {
+        "n": 145,
+        "min": 4,
+        "p50": 4,
+        "p95": 8,
+        "max": 34
+      },
+      "MILEVENT_MEDIA_UCE_CHECKDEVICESTATE": {
+        "n": 145,
+        "min": 2,
+        "p50": 3,
+        "p95": 5,
+        "max": 5
+      },
+      "SCHEDULE_CLEAR_D2D_CACHES": {
+        "n": 145,
+        "min": 3,
+        "p50": 4,
+        "p95": 6,
+        "max": 9
+      },
+      "UCE_PROCESSANIMATERESOURCES": {
+        "n": 145,
+        "min": 6,
+        "p50": 8,
+        "p95": 11,
+        "max": 37
+      },
+      "PROCESS_EXPRESSIONS": {
+        "n": 145,
+        "min": 313,
+        "p50": 339,
+        "p95": 558,
+        "max": 820
+      },
+      "MILEVENT_MEDIA_UCE_PRECOMPUTEEVENT": {
+        "n": 98,
+        "min": 90,
+        "p50": 93,
+        "p95": 148,
+        "max": 183
+      },
+      "ETWGUID_OCCLUSIONEVENT": {
+        "n": 143,
+        "min": 98,
+        "p50": 133,
+        "p95": 220,
+        "max": 255
+      },
+      "OVERLAY_CANDIDATECOLLECTION": {
+        "n": 145,
+        "min": 104,
+        "p50": 139,
+        "p95": 225,
+        "max": 264
+      },
+      "RENDER_CVIPASS": {
+        "n": 84,
+        "min": 1,
+        "p50": 2,
+        "p95": 3,
+        "max": 3
+      },
+      "ETWGUID_DRAWEVENT": {
+        "n": 167,
+        "min": 8,
+        "p50": 15,
+        "p95": 27479,
+        "max": 46581
+      },
+      "MILEVENT_MEDIA_UCE_RENDEREVENT": {
+        "n": 84,
+        "min": 156,
+        "p50": 165,
+        "p95": 258,
+        "max": 311
+      },
+      "ETWGUID_DRAWING_CONTEXT_FRAME": {
+        "n": 84,
+        "min": 22095,
+        "p50": 23669,
+        "p95": 33700,
+        "max": 46859
+      },
+      "SCHEDULE_RENDER": {
+        "n": 144,
+        "min": 1793,
+        "p50": 23849,
+        "p95": 29235,
+        "max": 48520
+      },
+      "ETWGUID_COPYFRONTTOBACKBUFFEREVENT": {
+        "n": 83,
+        "min": 467,
+        "p50": 692,
+        "p95": 1308,
+        "max": 53618
+      },
+      "MILEVENT_MEDIA_UCE_PRESENTEVENT": {
+        "n": 83,
+        "min": 5102,
+        "p50": 5522,
+        "p95": 9668,
+        "max": 59703
+      },
+      "SCHEDULE_PRESENT": {
+        "n": 83,
+        "min": 5109,
+        "p50": 5531,
+        "p95": 9676,
+        "max": 59709
+      },
+      "SCHEDULE_PROCESS_FRAME": {
+        "n": 144,
+        "min": 1810,
+        "p50": 29231,
+        "p95": 37835,
+        "max": 84419
+      },
+      "SCHEDULE_WFW": {
+        "n": 144,
+        "min": 13,
+        "p50": 14,
+        "p95": 21,
+        "max": 241
+      },
+      "SCHEDULE_VBLANK_LOOP": {
+        "n": 143,
+        "min": 1974,
+        "p50": 29788,
+        "p95": 39414,
+        "max": 58463
+      }
+    },
+    "event_gaps_us": {
+      "Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info": {
+        "n": 176,
+        "min": 16470,
+        "p50": 16680,
+        "p95": 16816,
+        "max": 33319
+      },
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Start": {
+        "n": 144,
+        "min": 2017,
+        "p50": 29433,
+        "p95": 38008,
+        "max": 84759
+      },
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start": {
+        "n": 83,
+        "min": 29086,
+        "p50": 33590,
+        "p95": 48618,
+        "max": 84456
+      }
+    }
+  }
+}

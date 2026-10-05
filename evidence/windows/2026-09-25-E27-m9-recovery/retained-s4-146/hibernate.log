@@ -1,0 +1,4 @@
+health abi=1 version=0x00070092 flags=15 generation=34815300295 epoch=5 completed=400 age_ms=168 ready_ms=300737
+
+hibernate_task_requested_utc=2026-09-25T01:01:36.1472835Z
+hibernate_task_started

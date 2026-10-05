@@ -1,0 +1,114 @@
+Source: drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
+5467: static void gfx_v10_0_rlc_stop(struct amdgpu_device *adev)
+5468: {
+5469: 	u32 tmp = RREG32_SOC15(GC, 0, mmRLC_CNTL);
+5470: 
+5471: 	tmp = REG_SET_FIELD(tmp, RLC_CNTL, RLC_ENABLE_F32, 0);
+5472: 	WREG32_SOC15(GC, 0, mmRLC_CNTL, tmp);
+5473: }
+5474: 
+5475: static void gfx_v10_0_rlc_reset(struct amdgpu_device *adev)
+5476: {
+5477: 	WREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 1);
+5478: 	udelay(50);
+5479: 	WREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 0);
+5480: 	udelay(50);
+5481: }
+7608: static int gfx_v10_0_soft_reset(struct amdgpu_ip_block *ip_block)
+7609: {
+7610: 	u32 grbm_soft_reset = 0;
+7611: 	u32 tmp;
+7612: 	struct amdgpu_device *adev = ip_block->adev;
+7613: 
+7614: 	/* GRBM_STATUS */
+7615: 	tmp = RREG32_SOC15(GC, 0, mmGRBM_STATUS);
+7616: 	if (tmp & (GRBM_STATUS__PA_BUSY_MASK | GRBM_STATUS__SC_BUSY_MASK |
+7617: 		   GRBM_STATUS__BCI_BUSY_MASK | GRBM_STATUS__SX_BUSY_MASK |
+7618: 		   GRBM_STATUS__TA_BUSY_MASK | GRBM_STATUS__DB_BUSY_MASK |
+7619: 		   GRBM_STATUS__CB_BUSY_MASK | GRBM_STATUS__GDS_BUSY_MASK |
+7620: 		   GRBM_STATUS__SPI_BUSY_MASK | GRBM_STATUS__GE_BUSY_NO_DMA_MASK)) {
+7621: 		grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7622: 						GRBM_SOFT_RESET, SOFT_RESET_CP,
+7623: 						1);
+7624: 		grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7625: 						GRBM_SOFT_RESET, SOFT_RESET_GFX,
+7626: 						1);
+7627: 	}
+7628: 
+7629: 	if (tmp & (GRBM_STATUS__CP_BUSY_MASK | GRBM_STATUS__CP_COHERENCY_BUSY_MASK)) {
+7630: 		grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7631: 						GRBM_SOFT_RESET, SOFT_RESET_CP,
+7632: 						1);
+7633: 	}
+7634: 
+7635: 	/* GRBM_STATUS2 */
+7636: 	tmp = RREG32_SOC15(GC, 0, mmGRBM_STATUS2);
+7637: 	switch (amdgpu_ip_version(adev, GC_HWIP, 0)) {
+7638: 	case IP_VERSION(10, 3, 0):
+7639: 	case IP_VERSION(10, 3, 2):
+7640: 	case IP_VERSION(10, 3, 1):
+7641: 	case IP_VERSION(10, 3, 4):
+7642: 	case IP_VERSION(10, 3, 5):
+7643: 	case IP_VERSION(10, 3, 6):
+7644: 	case IP_VERSION(10, 3, 3):
+7645: 		if (REG_GET_FIELD(tmp, GRBM_STATUS2, RLC_BUSY_Sienna_Cichlid))
+7646: 			grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7647: 							GRBM_SOFT_RESET,
+7648: 							SOFT_RESET_RLC,
+7649: 							1);
+7650: 		break;
+7651: 	default:
+7652: 		if (REG_GET_FIELD(tmp, GRBM_STATUS2, RLC_BUSY))
+7653: 			grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7654: 							GRBM_SOFT_RESET,
+7655: 							SOFT_RESET_RLC,
+7656: 							1);
+7657: 		break;
+7658: 	}
+7659: 
+7660: 	if (grbm_soft_reset) {
+7661: 		/* stop the rlc */
+7662: 		gfx_v10_0_rlc_stop(adev);
+7663: 
+7664: 		/* Disable GFX parsing/prefetching */
+7665: 		gfx_v10_0_cp_gfx_enable(adev, false);
+7666: 
+7667: 		/* Disable MEC parsing/prefetching */
+7668: 		gfx_v10_0_cp_compute_enable(adev, false);
+7669: 
+7670: 		tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+7671: 		tmp |= grbm_soft_reset;
+7672: 		dev_info(adev->dev, "GRBM_SOFT_RESET=0x%08X\n", tmp);
+7673: 		WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+7674: 		tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+7675: 
+7676: 		udelay(50);
+7677: 
+7678: 		tmp &= ~grbm_soft_reset;
+7679: 		WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+7680: 		tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+7681: 
+7682: 		/* Wait a little for things to settle down */
+7683: 		udelay(50);
+7684: 	}
+7685: 	return 0;
+7686: }
+9809: static const struct amd_ip_funcs gfx_v10_0_ip_funcs = {
+9810: 	.name = "gfx_v10_0",
+9811: 	.early_init = gfx_v10_0_early_init,
+9812: 	.late_init = gfx_v10_0_late_init,
+9813: 	.sw_init = gfx_v10_0_sw_init,
+9814: 	.sw_fini = gfx_v10_0_sw_fini,
+9815: 	.hw_init = gfx_v10_0_hw_init,
+9816: 	.hw_fini = gfx_v10_0_hw_fini,
+9817: 	.suspend = gfx_v10_0_suspend,
+9818: 	.resume = gfx_v10_0_resume,
+9819: 	.is_idle = gfx_v10_0_is_idle,
+9820: 	.wait_for_idle = gfx_v10_0_wait_for_idle,
+9821: 	.soft_reset = gfx_v10_0_soft_reset,
+9822: 	.set_clockgating_state = gfx_v10_0_set_clockgating_state,
+9823: 	.set_powergating_state = gfx_v10_0_set_powergating_state,
+9824: 	.get_clockgating_state = gfx_v10_0_get_clockgating_state,
+9825: 	.dump_ip_state = gfx_v10_ip_dump,
+9826: 	.print_ip_state = gfx_v10_ip_print,
+9827: };

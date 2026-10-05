@@ -1,0 +1,69 @@
+{"sequence":0,"elapsed_ms":15,"phase":"after","api":"Process RADV_EXPERIMENTAL=sparse","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15,"phase":"before","api":"create-device","hr":"00000000"}
+{"sequence":1,"elapsed_ms":15,"phase":"before","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":47,"phase":"after","api":"CreateDXGIFactory1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":47,"phase":"before","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":47,"phase":"after","api":"EnumAdapters1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":47,"phase":"before","api":"GetDesc1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":47,"phase":"after","api":"GetDesc1","hr":"00000000"}
+runtime=system32/d3d12.dll adapter=BC-250
+{"sequence":1,"elapsed_ms":47,"phase":"before","api":"D3D12CreateDevice FL12_1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":14969,"phase":"after","api":"D3D12CreateDevice FL12_1","hr":"00000000"}
+{"sequence":1,"elapsed_ms":14969,"phase":"after","api":"Reported TiledResourcesTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":14969,"phase":"after","api":"Reported ResourceBindingTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":14969,"phase":"after","api":"Reported ConservativeRasterizationTier 3","hr":"00000000"}
+{"sequence":1,"elapsed_ms":14969,"phase":"after","api":"Reported MaxSupportedFeatureLevel c100","hr":"00000000"}
+{"sequence":1,"elapsed_ms":14969,"phase":"after","api":"create-device","hr":"00000000"}
+{"sequence":2,"elapsed_ms":19719,"phase":"before","api":"create-queue","hr":"00000000"}
+{"sequence":2,"elapsed_ms":19719,"phase":"before","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":19765,"phase":"after","api":"CreateCommandQueue DIRECT","hr":"00000000"}
+{"sequence":2,"elapsed_ms":19765,"phase":"after","api":"create-queue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25234,"phase":"before","api":"copy","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25234,"phase":"before","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25250,"phase":"after","api":"CreateCommittedResource UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25250,"phase":"before","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25250,"phase":"after","api":"CreateCommittedResource READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25250,"phase":"after","api":"Pattern seed af8abdac","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"Map READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"Unmap READBACK prefill","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"Map UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"Unmap UPLOAD","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"Map READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"Map READBACK before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"Destination holds complement before submit","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"after","api":"CreateCommandAllocator","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25265,"phase":"before","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25281,"phase":"after","api":"CreateCommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25281,"phase":"before","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25281,"phase":"after","api":"CreateFence","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25281,"phase":"before","api":"CopyBufferRegion 4096","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25312,"phase":"after","api":"CopyBufferRegion 4096","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25312,"phase":"before","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25312,"phase":"after","api":"Close CommandList","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25312,"phase":"before","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"ExecuteCommandLists","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"before","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"Queue Signal 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"before","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"SetEventOnCompletion 1","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"before","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"WaitForFence bounded","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"before","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"GetCompletedValue","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"before","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"Map READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"before","api":"Unmap READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"Unmap READBACK","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"Compare 4096 exact bytes","hr":"00000000"}
+{"sequence":3,"elapsed_ms":25328,"phase":"after","api":"copy","hr":"00000000"}
+{"sequence":4,"elapsed_ms":30797,"phase":"before","api":"status","hr":"00000000"}
+{"sequence":4,"elapsed_ms":30797,"phase":"before","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":30797,"phase":"after","api":"GetDeviceRemovedReason","hr":"00000000"}
+{"sequence":4,"elapsed_ms":30797,"phase":"after","api":"status","hr":"00000000"}
+{"sequence":5,"elapsed_ms":36437,"phase":"before","api":"exit","hr":"00000000"}
+{"sequence":5,"elapsed_ms":36437,"phase":"after","api":"exit","hr":"00000000"}

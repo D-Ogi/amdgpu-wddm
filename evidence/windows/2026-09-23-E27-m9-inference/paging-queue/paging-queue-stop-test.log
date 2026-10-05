@@ -1,0 +1,4 @@
+before.c
+FAIL line 50: lateReader==NULL
+after.c
+PASS: actual stop order detaches before DPC flush boundary, joins earlier reader, blocks late pointer capture, cancels timers/reports with vsync on/off

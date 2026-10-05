@@ -1,0 +1,57 @@
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CalcPrivateResourceSize
+CreateResource
+CreateRenderTargetView
+ClearRenderTargetView
+CalcPrivateResourceSize
+CreateResource
+ResourceCopy
+ResourceMap
+ResourceUnmap
+DestroyResource
+ClearRenderTargetView
+_Present
+BC250 CreateContextVirtual 00000000
+BC250 Allocate 00000000 primary 0 handle 40000140 va 0
+BC250 Lock2 00000000
+BC250 Present flags 1 src 40000140 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Lock2 00000000
+BC250 Present flags 1 src 40000140 dst 0
+BC250 PresentCb 00000000
+DestroyRenderTargetView
+DestroyResource
+BC250 Deallocate 80070057
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+SetRenderTargets
+DestroyRasterizerState
+DestroyDepthStencilState
+DestroyBlendState
+DestroySampler
+DestroyDevice
+CloseAdapter

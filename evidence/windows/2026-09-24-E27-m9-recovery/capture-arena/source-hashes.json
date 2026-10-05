@@ -1,0 +1,9 @@
+{
+  "driver/kmd/paging_capture.c": "a0bc1afd7db76f7e47d36d79dea85878f6ccbb8dfd60ac3991819573ea7118bd",
+  "driver/kmd/paging_capture.h": "34a1a87369bf22c6793de247d79bd31e2b0b42f69f994e7b00bc7b99f0de629a",
+  "driver/kmd/wddm.c": "1bcd4bd5077ffd3b582703e6c923ecaddead20b6dc2cecbffee98a76f4ff4b05",
+  "driver/shim/test/paging_packets.c": "c84cbcd22d37a5057d962638bff5a2b8d09883720f4bbf22c0529c36a01da264",
+  "driver/shim/test/run_paging.ps1": "a8bed98bc0bdb0e619014e1c3b27311e430a7e358e58f536c8d62b49b91541de",
+  "experiments/E27-m9-inference/generate-paging-route-test.py": "4a9b8561fb937b06c11ed9e7f9c83b3db301dec244689877fdab0f0f7f7d245b",
+  "experiments/E27-m9-inference/paging-route-test-suffix.c": "b2094f57c3aee27a5339dbbd127d96a682b0601498da3d13dede7fa961fe7dc1"
+}

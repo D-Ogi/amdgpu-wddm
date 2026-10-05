@@ -1,0 +1,21 @@
+Extracted publication and vsync functions from P:\bc-250\scratch\m9\vidpn-ignore-error-mutated.c
+vidpn_flip_actual.c
+FAIL line 199: Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT
+FAIL line 200: w.PrimaryAddress.QuadPart==10 && w.PrimarySegment==1 && w.Flips==0
+FAIL line 201: programmed==10 && hardware==1 && arms==0 && !(w.PrimarySequence&1)
+FAIL line 203: reports==1 && reported==10
+FAIL line 207: programmed==20 && w.PrimaryAddress.QuadPart==20 && w.PrimarySegment==2
+FAIL line 208: w.Flips==1 && hardware==2 && !(w.PrimarySequence&1)
+FAIL line 210: hardware==2 && w.Flips==1
+FAIL line 218: w.PrimarySegment==3 && hardware==3
+FAIL line 219: level ? arms==0 : arms==3
+FAIL line 221: hardware==3
+FAIL line 199: Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT
+FAIL line 200: w.PrimaryAddress.QuadPart==10 && w.PrimarySegment==1 && w.Flips==0
+FAIL line 203: reports==1 && reported==10
+FAIL line 207: programmed==20 && w.PrimaryAddress.QuadPart==20 && w.PrimarySegment==2
+FAIL line 208: w.Flips==1 && hardware==2 && !(w.PrimarySequence&1)
+FAIL line 210: hardware==2 && w.Flips==1
+FAIL line 218: w.PrimarySegment==3 && hardware==3
+FAIL line 221: hardware==3
+vidpn publication: 56 checks, 18 failures

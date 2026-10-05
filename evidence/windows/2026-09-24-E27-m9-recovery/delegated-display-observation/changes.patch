@@ -1,0 +1,541 @@
+--- frozen136/driver/kmd/wddm.c
++++ working/driver/kmd/wddm.c
+@@ -1121,7 +1121,7 @@
+     LONGLONG address;
+     if (generation & 1) return FALSE;
+     address = InterlockedCompareExchange64(&Wddm->PrimaryAddress.QuadPart, 0, 0);
+-    if (Device->VidPnFlipEnabled && DcnFlipPending(Device)) return FALSE;
++    if (Device->VidPnFlipEnabled && DcnFlipPending(Device, (ULONGLONG)address)) return FALSE;
+     if (InterlockedCompareExchange(&Wddm->PrimarySequence, 0, 0) != generation) return FALSE;
+     Address->QuadPart = address;
+     return TRUE;
+@@ -1242,11 +1242,23 @@
+     RtlZeroMemory(&data, sizeof(data));
+     data.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;
+     data.CrtcVsync.VidPnTargetId = wddm->VSyncTargetId;
+-    // Refuse both an in-flight flip and a sample crossing a programming change.
++    // A stable completed request may be retired. Otherwise preserve this vblank
++    // by reporting the buffer hardware is still reading, never the queued one.
+     if (!WddmReadCompletedPrimary(Device, wddm, &data.CrtcVsync.PhysicalAddress))
+     {
+-        InterlockedIncrement(&Device->DcnVsyncDeferred);
+-        return;
++        ULONGLONG scanned;
++        LONG generation;
++        InterlockedIncrement(&Device->DcnVsyncDeferred); // completion deferred, not necessarily the vblank
++        generation = InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
++        if (generation & 1) return;
++        if (!NT_SUCCESS(DcnReadScanoutAddress(Device, &scanned))) return;
++        // If the pending bit outlives the address latch, reporting the requested
++        // address would still retire the flip early. Only the distinct previous
++        // buffer is safe here; a matching address needs the completed path above.
++        if (scanned == (ULONGLONG)InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0)) return;
++        if (InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0) != generation) return;
++        data.CrtcVsync.PhysicalAddress.QuadPart = (LONGLONG)scanned;
++        InterlockedIncrement(&Device->DcnVsyncOldBufferReports);
+     }
+     data.CrtcVsync.PhysicalAdapterMask = 0;
+     InterlockedIncrement(&wddm->VSyncReports);
+@@ -1368,9 +1380,10 @@
+     GuardLog("wddm summary: dcn lock acknowledgement timeouts %ld",
+              InterlockedCompareExchange(&Wddm->Device->DcnLockTimeouts, 0, 0));
+     GuardLog("wddm summary: vidpn flip %s: %ld hardware flips, %ld refused, %ld hardware vsyncs armed %ld "
+-             "acked %ld refused %ld deferred (flip still pending)",
++             "acked %ld refused %ld completion-deferred %ld old-buffer-reports",
+              Wddm->Device->VidPnFlipEnabled ? "open" : "closed", Wddm->Device->DcnFlipsHardware, Wddm->Device->DcnFlipRefused,
+-             Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred);
++             Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred,
++             Wddm->Device->DcnVsyncOldBufferReports);
+     if (Wddm->ReportFailures != 0)
+         GuardLog("wddm summary: *** %ld reports refused by DxgkCbSynchronizeExecution ***", Wddm->ReportFailures);
+ 
+@@ -4574,7 +4587,14 @@
+     if (wddm == NULL || height == 0) return STATUS_NOT_SUPPORTED;
+     if (pGetScanLine->VidPnTargetId != wddm->VSyncTargetId) return STATUS_INVALID_PARAMETER;
+ 
+-    // Answered from the timer's phase and nothing else: how far into the period we are gives the scan line, and
++    if (device->VidPnFlipEnabled)
++    {
++        NTSTATUS status = DcnReadScanLine(device, &pGetScanLine->InVerticalBlank, &pGetScanLine->ScanLine);
++        if (!NT_SUCCESS(status)) return status;
++        goto Report;
++    }
++
++    // Software-only path: how far into the period we are gives the scan line, and
+     // the last few per cent of it are called the blank. There is no CRTC to ask (ADR 0006 point 2), so this is a
+     // plausible answer rather than a measured one - it is here because a driver claiming FlipOnVSyncMmIo that
+     // leaves GetScanLine NULL leaves dxgkrnl no way to ask where the beam is.
+@@ -4593,6 +4613,7 @@
+         pGetScanLine->ScanLine = (UINT)((since * height) / period);
+         if (pGetScanLine->ScanLine >= height) pGetScanLine->ScanLine = height - 1;
+     }
++Report:
+     if (WddmFirstCalls(wddm, WddmDdiGetScanLine))
+         GuardLog("wddm: GetScanLine target %u -> line %u, blank %u", (ULONG)pGetScanLine->VidPnTargetId,
+                  pGetScanLine->ScanLine, pGetScanLine->InVerticalBlank ? 1u : 0u);
+--- frozen136/driver/kmd/dcn.c
++++ working/driver/kmd/dcn.c
+@@ -563,7 +563,7 @@
+ // SetVidPnSourceAddress's own flip: the same M87 write sequence DcnFlipCore uses (DcnFlipWriteSequence), never
+ // PollFlipPending's 50 ms busy-wait - d3dkmddi.h allows this DDI up to PROFILE_LEVEL - 1, where a busy-wait of
+ // that length would stall the DPC that is supposed to report the flip's completion (WddmDcnVsync, wddm.c;
+-// DcnFlipPending below is that DPC's own single, non-blocking read). CardAddress is what dxgkrnl's
++// DcnFlipPending below is that DPC's bounded, non-blocking observation). CardAddress is what dxgkrnl's
+ // DXGKARG_SETVIDPNSOURCEADDRESS.PrimaryAddress carries for this adapter's one segment - BaseAddress-relative
+ // (Device->VramMcBase + an offset, wddm.c's WddmQuerySegment4), not the physical address DCN wants - and
+ // DcnTranslateCardAddress (dcn_translate.c) is the inverse of that same arithmetic (facts M85), run from what
+@@ -611,17 +611,78 @@
+     return status;
+ }
+ 
+-// The vsync DPC's own poll (WddmDcnVsync, wddm.c): a single, non-blocking read of
+-// HUBPREQ0_DCSURF_FLIP_CONTROL's SURFACE_FLIP_PENDING bit (facts M94: clears within one frame), never
+-// PollFlipPending's busy-wait. <= DISPATCH_LEVEL; FALSE (not pending) whenever the register cannot be read, so a
+-// transient refusal never holds a vsync report back forever.
+-BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device)
+-{
+-    ULONG value = 0;
+-
+-    if (Device->Mmio == NULL) return FALSE;
+-    if (!NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value))) return FALSE;
+-    return (value & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) != 0;
++// PROVENANCE: Linux AMD display dc/hubp/dcn10/dcn10_hubp.c (MIT),
++// hubp1_is_flip_pending checks both the pending bit and EARLIEST_INUSE against
++// the requested address. DCN addresses are CPU-physical here; dxgkrnl uses our
++// MC-base-relative card addresses. Keep that conversion paired with the flip.
++NTSTATUS DcnReadScanoutAddress(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* CardAddress)
++{
++    ULONG high, low, highAgain, attempt;
++    ULONGLONG physical, offset;
++    NTSTATUS status;
++
++    *CardAddress = 0;
++    if (Device->Mmio == NULL || !Device->VramEnabled) return STATUS_DEVICE_NOT_READY;
++    // A latch between the two halves must not manufacture an address. Bounded
++    // retries only: the caller can run at DPC and never waits for the next frame.
++    for (attempt = 0; attempt < 3; ++attempt)
++    {
++        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH, &high);
++        if (!NT_SUCCESS(status)) return status;
++        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE, &low);
++        if (!NT_SUCCESS(status)) return status;
++        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH, &highAgain);
++        if (!NT_SUCCESS(status)) return status;
++        high &= HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK;
++        highAgain &= HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK;
++        if (high != highAgain) continue;
++        physical = ((ULONGLONG)high << 32) | low;
++        if (physical < (ULONGLONG)Device->VramPhysical.QuadPart) return STATUS_DEVICE_NOT_READY;
++        offset = physical - (ULONGLONG)Device->VramPhysical.QuadPart;
++        if (offset >= Device->VramLength) return STATUS_DEVICE_NOT_READY;
++        *CardAddress = Device->VramMcBase + offset;
++        return STATUS_SUCCESS;
++    }
++    return STATUS_DEVICE_NOT_READY;
++}
++
++BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress)
++{
++    ULONG value;
++    ULONGLONG scanned;
++
++    if (Device->Mmio == NULL) return TRUE;
++    if (!NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value))) return TRUE;
++    if (value & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) return TRUE;
++    if (!NT_SUCCESS(DcnReadScanoutAddress(Device, &scanned))) return TRUE;
++    return scanned != RequestedAddress;
++}
++
++// PROVENANCE: Linux AMD display dc/optc/dcn10/dcn10_optc.c (MIT),
++// optc1_get_position / optc1_get_crtc_scanoutpos. Sample the vertical counter,
++// with the static mode's blank bounds, rather than a software timer's phase.
++// Deriving blank from that same counter avoids a status/position boundary race.
++NTSTATUS DcnReadScanLine(_In_ const BC250_DEVICE* Device, _Out_ BOOLEAN* InBlank, _Out_ UINT* ScanLine)
++{
++    ULONG bounds, total, position, start, end, line;
++    NTSTATUS status;
++
++    if (Device->Mmio == NULL) return STATUS_DEVICE_NOT_READY;
++    status = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_V_BLANK_START_END, &bounds);
++    if (!NT_SUCCESS(status)) return status;
++    status = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_V_TOTAL, &total);
++    if (!NT_SUCCESS(status)) return status;
++    status = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_STATUS_POSITION, &position);
++    if (!NT_SUCCESS(status)) return status;
++    start = (bounds & OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_START_MASK) >> OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_START__SHIFT;
++    end = (bounds & OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_END_MASK) >> OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_END__SHIFT;
++    total = ((total & OTG0_OTG_V_TOTAL__OTG_V_TOTAL_MASK) >> OTG0_OTG_V_TOTAL__OTG_V_TOTAL__SHIFT) + 1;
++    line = (position & OTG0_OTG_STATUS_POSITION__OTG_VERT_COUNT_MASK) >> OTG0_OTG_STATUS_POSITION__OTG_VERT_COUNT__SHIFT;
++    if (start >= total || end >= total || line >= total || start == end) return STATUS_DEVICE_NOT_READY;
++    *InBlank = start < end ? (line >= start && line < end) : (line >= start || line < end);
++    // D3D raster status starts line zero at the first active line (blank end).
++    *ScanLine = *InBlank ? 0 : (line + total - end) % total;
++    return STATUS_SUCCESS;
+ }
+ 
+ // The hardware vsync source's own enable/ack: a read-modify-write of OTG0_OTG_GLOBAL_SYNC_STATUS (facts M88)
+--- frozen136/driver/kmd/bc250kmd.h
++++ working/driver/kmd/bc250kmd.h
+@@ -144,7 +144,8 @@
+     volatile LONG DcnVsyncTicks;         // every VUPDATE_NO_LOCK event the ISR acknowledged, armed or not
+     volatile LONG DcnVsyncRefused;       // MmioDcnRead/MmioDcnWrite failed inside the ISR (should not happen:
+                                          // BAR5 stays mapped for the whole device start; counted, not assumed impossible)
+-    volatile LONG DcnVsyncDeferred;      // a hardware tick postponed one DPC because the flip was still pending
++    volatile LONG DcnVsyncDeferred;      // completion observation deferred (may report the old buffer)
++    volatile LONG DcnVsyncOldBufferReports; // vblanks preserved with a distinct observed scanout
+     volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
+     volatile LONG DcnLockTimeouts;      // bounded OTG update-lock acknowledgement expired
+     volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress translation/range or programming refused
+@@ -320,9 +321,11 @@
+ // STATUS_ACCESS_DENIED when the address does not translate inside the carve-out or fails the escape's own 4
+ // KiB/range rule.
+ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+-// The vsync DPC's own poll (wddm.c's WddmDcnVsync): a single, non-blocking read of
+-// HUBPREQ0_DCSURF_FLIP_CONTROL's SURFACE_FLIP_PENDING bit, never PollFlipPending's busy-wait. <= DISPATCH_LEVEL.
+-BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device);
++// Non-blocking hardware observations: pending includes EARLIEST_INUSE mismatch.
++// Scanout returns the actual card address, independently of request publication.
++BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress);
++NTSTATUS DcnReadScanoutAddress(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* CardAddress);
++NTSTATUS DcnReadScanLine(_In_ const BC250_DEVICE* Device, _Out_ BOOLEAN* InBlank, _Out_ UINT* ScanLine);
+ // The hardware vsync interrupt's own enable/ack (0.7.24, ADR 0011 point 3 step 3). DcnVsyncEnable is
+ // wddm.c's WddmVSyncArm's hardware branch: a read-modify-write of OTG0_OTG_GLOBAL_SYNC_STATUS that sets or
+ // clears VUPDATE_NO_LOCK_INT_EN and always acks whatever VUPDATE_NO_LOCK_EVENT_CLEAR finds pending, so neither
+@@ -641,8 +644,9 @@
+ void WddmStop(_Inout_ BC250_DEVICE* Device);
+ void WddmDpc(_Inout_ BC250_DEVICE* Device);
+ // ADR 0011 point 3 step 3 (0.7.24): the hardware vsync's own DPC-side report - CRTC_VSYNC once per DPC run that
+-// found at least one VUPDATE_NO_LOCK event acknowledged (Device->DcnVsyncAcked), deferred one tick if the flip
+-// is still pending (dcn.c's DcnFlipPending). A no-op with Device->VidPnFlipEnabled closed. See pnp.c's
++// found at least one VUPDATE_NO_LOCK event acknowledged (Device->DcnVsyncAcked).
++// A pending flip reports the distinct scanned buffer when the generation is stable;
++// ambiguous observations remain deferred rather than retiring an unlatched flip. A no-op with Device->VidPnFlipEnabled closed. See pnp.c's
+ // Bc250DpcRoutine and docs/design/vidpn-flip.md.
+ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device);
+ void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet in flight finished? <= DISPATCH_LEVEL
+--- frozen136/driver/kmd/gen_regs.py
++++ working/driver/kmd/gen_regs.py
+@@ -167,6 +167,12 @@
+                  [f"mmOTG{m}_{r}" for m in range(2) for r in _DCN_OTG] +
+                  ["mmDCHUBBUB_CTRL_STATUS"])
+ 
++# Internal observation only: keep the existing 75-register escape payload stable.
++# AMD hubp1_is_flip_pending / optc1_get_crtc_scanoutpos (MIT).
++DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
++    "mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH", "mmOTG0_OTG_V_BLANK_START_END"]
++NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION"]]
++
+ BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
+ 
+ # IPs gen_probes.SPEC does not carry a header for, because they are deliberately not part of the diagusb read
+@@ -253,10 +259,11 @@
+     dcn_allow = sorted({off for off, _ in dcn_named})
+     if len(dcn_allow) != len(dcn_named):
+         sys.exit("DCN_REGISTERS has two names for the same offset: gen_regs.py assumed they are all distinct")
++    dcn_allow = sorted(set(dcn_allow) | {offset(maps, "DMU", name) for name in DCN_PRIVATE_READ_REGISTERS})
+     if dcn_allow[-1] >= BAR5_LENGTH:
+         sys.exit(f"dcn: 0x{dcn_allow[-1]:X} is beyond BAR5")
+     out += ["// ADR 0011 point 3: the DCN dump's own registers (gen_regs.py's DCN_REGISTERS, tools/regcalc, ip DMU).",
+-            "// Sorted, unique, for MmioDcnRead's table check.",
++            "// Plus internal observation registers; sorted, unique, for MmioDcnRead's table check.",
+             f"#define BC250_MMIO_DCN_ALLOW_COUNT {len(dcn_allow)}",
+             "static const unsigned long g_MmioDcnAllow[BC250_MMIO_DCN_ALLOW_COUNT] = {"]
+     out += ["    " + ", ".join(f"0x{o:05X}" for o in dcn_allow[i:i + 10]) + "," for i in range(0, len(dcn_allow), 10)]
+--- frozen136/driver/kmd/regs.generated.h
++++ working/driver/kmd/regs.generated.h
+@@ -37,6 +37,10 @@
+ #define BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK 0x1412Cul
+ #define BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG 0x13FE8ul
+ #define BC250_REG_DMU_OTG0_OTG_VUPDATE_KEEPOUT 0x1413Cul
++#define BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE 0x0EB94ul
++#define BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH 0x0EB98ul
++#define BC250_REG_DMU_OTG0_OTG_V_BLANK_START_END 0x13FD8ul
++#define BC250_REG_DMU_OTG0_OTG_STATUS_POSITION 0x14028ul
+ #define BC250_REG_THM_THM_TCON_CUR_TMP 0x59800ul
+ #define BC250_DCN_REG_INFO_COUNT 75
+ 
+@@ -1213,17 +1217,17 @@
+ };
+ 
+ // ADR 0011 point 3: the DCN dump's own registers (gen_regs.py's DCN_REGISTERS, tools/regcalc, ip DMU).
+-// Sorted, unique, for MmioDcnRead's table check.
+-#define BC250_MMIO_DCN_ALLOW_COUNT 75
++// Plus internal observation registers; sorted, unique, for MmioDcnRead's table check.
++#define BC250_MMIO_DCN_ALLOW_COUNT 78
+ static const unsigned long g_MmioDcnAllow[BC250_MMIO_DCN_ALLOW_COUNT] = {
+     0x0E7D0, 0x0EA94, 0x0EA98, 0x0EA9C, 0x0EACC, 0x0EB1C, 0x0EB28, 0x0EB2C, 0x0EB68, 0x0EB6C,
+-    0x0EB70, 0x0EB80, 0x0EB84, 0x0EE04, 0x0EE08, 0x0EE0C, 0x0EE3C, 0x0EE8C, 0x0EE98, 0x0EE9C,
+-    0x0EED8, 0x0EEDC, 0x0EEE0, 0x0EEF0, 0x0EEF4, 0x0F174, 0x0F178, 0x0F17C, 0x0F1AC, 0x0F1FC,
+-    0x0F208, 0x0F20C, 0x0F248, 0x0F24C, 0x0F250, 0x0F260, 0x0F264, 0x0F4E4, 0x0F4E8, 0x0F4EC,
+-    0x0F51C, 0x0F56C, 0x0F578, 0x0F57C, 0x0F5B8, 0x0F5BC, 0x0F5C0, 0x0F5D0, 0x0F5D4, 0x13FA8,
+-    0x13FBC, 0x13FE8, 0x14004, 0x14024, 0x14028, 0x14030, 0x1408C, 0x14120, 0x14128, 0x1412C,
+-    0x1413C, 0x14140, 0x141A8, 0x141BC, 0x141E8, 0x14204, 0x14224, 0x14228, 0x14230, 0x1428C,
+-    0x14320, 0x14328, 0x1432C, 0x1433C, 0x14340,
++    0x0EB70, 0x0EB80, 0x0EB84, 0x0EB94, 0x0EB98, 0x0EE04, 0x0EE08, 0x0EE0C, 0x0EE3C, 0x0EE8C,
++    0x0EE98, 0x0EE9C, 0x0EED8, 0x0EEDC, 0x0EEE0, 0x0EEF0, 0x0EEF4, 0x0F174, 0x0F178, 0x0F17C,
++    0x0F1AC, 0x0F1FC, 0x0F208, 0x0F20C, 0x0F248, 0x0F24C, 0x0F250, 0x0F260, 0x0F264, 0x0F4E4,
++    0x0F4E8, 0x0F4EC, 0x0F51C, 0x0F56C, 0x0F578, 0x0F57C, 0x0F5B8, 0x0F5BC, 0x0F5C0, 0x0F5D0,
++    0x0F5D4, 0x13FA8, 0x13FBC, 0x13FD8, 0x13FE8, 0x14004, 0x14024, 0x14028, 0x14030, 0x1408C,
++    0x14120, 0x14128, 0x1412C, 0x1413C, 0x14140, 0x141A8, 0x141BC, 0x141E8, 0x14204, 0x14224,
++    0x14228, 0x14230, 0x1428C, 0x14320, 0x14328, 0x1432C, 0x1433C, 0x14340,
+ };
+ 
+ // The same registers, in DCN_REGISTERS's order, with their names: what MmioDcnTable() hands dcn.c.
+--- frozen136/driver/kmd/test/vidpn_flip_test.c
++++ working/driver/kmd/test/vidpn_flip_test.c
+@@ -47,7 +47,7 @@
+     struct {ULONG Width,Height,Pitch;} Post;
+     BC250_WDDM *Wddm;
+     int VidPnFlipEnabled;
+-    volatile LONG DcnVsyncAcked, DcnVsyncDeferred;
++    volatile LONG DcnVsyncAcked, DcnVsyncDeferred, DcnVsyncOldBufferReports;
+ } BC250_DEVICE;
+ #define BC250_WDDM_MAGIC_ALLOCATION 123
+ #define D3DDDIFMT_A8R8G8B8 21
+@@ -56,9 +56,9 @@
+ static BC250_WDDM_OBJECT* WddmObject(HANDLE h,ULONG magic){BC250_WDDM_OBJECT *a=h;return a && a->Magic==magic?a:NULL;}
+ static ULONG programmed_pitch;
+ static unsigned checks,failures,hardware,arms,reports;
+-static int irq,pending,inject_update,nested_writer;
++static int irq,pending,inject_update,nested_writer,inject_fallback_update;
+ static NTSTATUS hardware_result;
+-static LONGLONG programmed,reported;
++static LONGLONG programmed,displayed,reported;
+ #define CHECK(x) do { ++checks; if(!(x)){++failures;printf("FAIL line %d: %s\n",__LINE__,#x);} } while(0)
+ static LONG InterlockedCompareExchange(volatile LONG *p,LONG value,LONG compare){LONG old=*p;if(old==compare)*p=value;return old;}
+ static LONG InterlockedExchange(volatile LONG *p,LONG value){LONG old=*p;*p=value;return old;}
+@@ -95,7 +95,7 @@
+     if(NT_SUCCESS(hardware_result)){programmed=(LONGLONG)address;programmed_pitch=pitch;}
+     return hardware_result;
+ }
+-static BOOLEAN DcnFlipPending(BC250_DEVICE *d)
++static BOOLEAN DcnFlipPending(BC250_DEVICE *d, ULONGLONG expected)
+ {
+     if(inject_update){
+         DXGKARG_SETVIDPNSOURCEADDRESS next={0};
+@@ -103,7 +103,13 @@
+         next.PrimaryAddress.QuadPart=30;next.PrimarySegment=3;
+         CHECK(Bc250WddmSetVidPnSourceAddress(d,&next)==STATUS_SUCCESS);
+     }
+-    return pending;
++    return pending || displayed != (LONGLONG)expected;
++}
++static NTSTATUS DcnReadScanoutAddress(BC250_DEVICE *d, ULONGLONG *out)
++{
++    *out=(ULONGLONG)displayed;
++    if(inject_fallback_update){inject_fallback_update=0;d->Wddm->PrimarySequence+=2;}
++    return STATUS_SUCCESS;
+ }
+ /* ACTUAL_SOURCE */
+ int main(void)
+@@ -113,30 +119,45 @@
+         BC250_WDDM w={0};BC250_DEVICE d={0};
+         DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+         PHYSICAL_ADDRESS sample={-1};
++        unsigned before;
+         d.Post.Width=1366;d.Post.Height=768;d.Post.Pitch=5632;w.PrimaryPitch=5632;
+         d.Wddm=&w;d.VidPnFlipEnabled=1;w.VSyncEnabled=1;
+         w.PrimaryAddress.QuadPart=10;w.PrimarySegment=1;
+         request.PrimaryAddress.QuadPart=20;request.PrimarySegment=2;
+         irq=level?3:0;hardware=arms=reports=0;pending=inject_update=nested_writer=0;
+-        hardware_result=STATUS_IO_TIMEOUT;programmed=10;
++        hardware_result=STATUS_IO_TIMEOUT;programmed=displayed=10;
+         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_IO_TIMEOUT);
+         CHECK(w.PrimaryAddress.QuadPart==10 && w.PrimarySegment==1 && w.Flips==0);
+         CHECK(programmed==10 && hardware==1 && arms==0 && !(w.PrimarySequence&1));
+-        d.DcnVsyncAcked=1;WddmDcnVsync(&d);
+-        CHECK(reports==1 && reported==10);
+-        // Same address must reach hardware on retry, then be deduplicated only on success.
++        before=reports;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
++        CHECK(reports==before+1 && reported==10);
+         hardware_result=STATUS_SUCCESS;nested_writer=1;
+         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+         CHECK(programmed==20 && w.PrimaryAddress.QuadPart==20 && w.PrimarySegment==2);
+         CHECK(w.Flips==1 && hardware==2 && !(w.PrimarySequence&1));
+         CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+         CHECK(hardware==2 && w.Flips==1);
+-        pending=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);CHECK(reports==1);
+-        pending=0;d.DcnVsyncAcked=1;WddmDcnVsync(&d);CHECK(reports==2 && reported==20);
+-        // An entire second transaction during the pending read must invalidate this snapshot.
++        // Every vblank reports; neither pending nor cleared-before-inuse retires 20.
++        before=reports;pending=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
++        CHECK(reports==before+1 && reported==10);
++        before=reports;pending=0;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
++        CHECK(reports==before+1 && reported==10);
++        CHECK(d.DcnVsyncOldBufferReports==2);
++        // Fallback is also generation-protected, even for an ABA writer.
++        before=reports;pending=1;inject_fallback_update=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
++        CHECK(reports==before);
++        // Matching address alone cannot override an asserted pending bit.
++        before=reports;displayed=20;pending=1;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
++        CHECK(reports==before);
++        pending=0;d.DcnVsyncAcked=1;WddmDcnVsync(&d);
++        CHECK(reports==before+1 && reported==20);
++        // A whole new transaction during the observation invalidates completion.
+         inject_update=1;
+         CHECK(!WddmReadCompletedPrimary(&d,&w,&sample));
+         CHECK(sample.QuadPart==-1);
++        CHECK(!WddmReadCompletedPrimary(&d,&w,&sample));
++        CHECK(sample.QuadPart==-1 && w.PrimaryAddress.QuadPart==30);
++        displayed=30;
+         CHECK(WddmReadCompletedPrimary(&d,&w,&sample) && sample.QuadPart==30);
+         CHECK(w.PrimarySegment==3 && hardware==3);
+         CHECK(level ? arms==0 : arms==3);
+--- frozen136/driver/kmd/test/dcn_observation_test.c
++++ working/driver/kmd/test/dcn_observation_test.c
+@@ -0,0 +1,112 @@
++// Actual-source host controls. This MMIO model proves decoding/publication,
++// not physical DCN latching or scan timing.
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "regs.generated.h"
++#include "dcn_2_0_1_sh_mask.h"
++typedef int32_t NTSTATUS;
++typedef unsigned long ULONG;
++typedef unsigned UINT;
++typedef uint64_t ULONGLONG;
++typedef int64_t LONGLONG;
++typedef unsigned char BOOLEAN;
++typedef void* HANDLE;
++typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
++typedef LARGE_INTEGER PHYSICAL_ADDRESS;
++typedef struct { UINT VSyncTargetId; LARGE_INTEGER VSyncLast; } BC250_WDDM;
++typedef struct {
++    void *Mmio;
++    BOOLEAN VramEnabled, VidPnFlipEnabled;
++    PHYSICAL_ADDRESS VramPhysical;
++    ULONGLONG VramMcBase, VramLength;
++    struct { UINT Height; } Post;
++    BC250_WDDM *Wddm;
++} BC250_DEVICE;
++typedef struct { UINT VidPnTargetId; BOOLEAN InVerticalBlank; UINT ScanLine; } DXGKARG_GETSCANLINE;
++#define TRUE 1
++#define FALSE 0
++#define STATUS_SUCCESS ((NTSTATUS)0)
++#define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
++#define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
++#define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
++#define NT_SUCCESS(s) ((s)>=0)
++#define BC250_WDDM_VSYNC_MS 16
++#define WddmDdiGetScanLine 0
++#define GuardLog(...) ((void)0)
++static unsigned checks, failures, clock_queries;
++#define CHECK(x) do { ++checks; if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);} } while(0)
++static struct {
++    ULONGLONG inuse, next;
++    ULONG pending, bounds, total, position;
++    unsigned reads, change_on;
++    NTSTATUS status;
++} model;
++static NTSTATUS MmioDcnRead(const BC250_DEVICE *d,ULONG reg,ULONG *value)
++{
++    (void)d;
++    if (++model.reads==model.change_on) model.inuse=model.next;
++    if (!NT_SUCCESS(model.status)) return model.status;
++    switch(reg){
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH: *value=(ULONG)(model.inuse>>32);break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE: *value=(ULONG)model.inuse;break;
++    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL: *value=model.pending;break;
++    case BC250_REG_DMU_OTG0_OTG_V_BLANK_START_END: *value=model.bounds;break;
++    case BC250_REG_DMU_OTG0_OTG_V_TOTAL: *value=model.total;break;
++    case BC250_REG_DMU_OTG0_OTG_STATUS_POSITION: *value=model.position;break;
++    default:CHECK(0);return STATUS_INVALID_PARAMETER;
++    }
++    return STATUS_SUCCESS;
++}
++static BC250_WDDM* WddmOf(HANDLE h){return ((BC250_DEVICE*)h)->Wddm;}
++static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER *frequency)
++{ LARGE_INTEGER now={1000000000};clock_queries++;frequency->QuadPart=1000000;return now; }
++static int WddmFirstCalls(BC250_WDDM *w,int call){(void)w;(void)call;return 0;}
++/* ACTUAL_SOURCE */
++int main(void)
++{
++    BC250_WDDM w={0};BC250_DEVICE d={0};DXGKARG_GETSCANLINE line={0};
++    ULONGLONG observed,old,next;unsigned phase,i;
++    w.VSyncTargetId=0;d.Wddm=&w;d.Post.Height=1200;d.VidPnFlipEnabled=1;d.VramEnabled=1;d.Mmio=&model;
++    // Exercise 8 and 12 GiB geometry and a high-dword address transition.
++    d.VramPhysical.QuadPart=0x400000000ull;d.VramMcBase=0x800000000ull;
++    for(i=0;i<2;i++){
++        d.VramLength=(8ull+4ull*i)<<30;
++        model.inuse=(ULONGLONG)d.VramPhysical.QuadPart+d.VramLength-0x100000;
++        observed=0;CHECK(DcnReadScanoutAddress(&d,&observed)==STATUS_SUCCESS);
++        CHECK(observed==d.VramMcBase+d.VramLength-0x100000);
++        model.pending=0;CHECK(!DcnFlipPending(&d,observed));
++        CHECK(DcnFlipPending(&d,observed-0x100000)); // cleared bit, old surface still in use
++        model.pending=HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
++        CHECK(DcnFlipPending(&d,observed));model.pending=0;
++    }
++    old=0x4fff00000ull;next=0x500100000ull;
++    for(phase=1;phase<=3;phase++){
++        model.inuse=old;model.next=next;model.reads=0;model.change_on=phase;
++        CHECK(DcnReadScanoutAddress(&d,&observed)==STATUS_SUCCESS);
++        CHECK(observed==d.VramMcBase+next-(ULONGLONG)d.VramPhysical.QuadPart);
++        CHECK(model.reads<=6);
++    }
++    model.change_on=0;model.inuse=old;model.status=STATUS_DEVICE_NOT_READY;
++    CHECK(DcnFlipPending(&d,d.VramMcBase+old-(ULONGLONG)d.VramPhysical.QuadPart));
++    model.status=STATUS_SUCCESS;
++    // Real geometry: 1235 total, 1200 active, blank wraps through counter zero.
++    model.total=1234;model.bounds=(32u<<OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_END__SHIFT)|1232u;
++    for(i=0;i<1235;i++){
++        model.position=i;
++        CHECK(Bc250WddmGetScanLine(&d,&line)==STATUS_SUCCESS);
++        CHECK(line.InVerticalBlank==(i<32 || i>=1232));
++        CHECK(line.ScanLine==((i<32 || i>=1232)?0:i-32));
++    }
++    // A non-wrapping blank interval and active image crossing counter zero.
++    model.total=999;model.bounds=(200u<<OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_END__SHIFT)|100u;
++    for(i=0;i<1000;i++){
++        model.position=i;
++        CHECK(Bc250WddmGetScanLine(&d,&line)==STATUS_SUCCESS);
++        CHECK(line.InVerticalBlank==(i>=100 && i<200));
++        CHECK(line.ScanLine==((i>=100 && i<200)?0:(i+800)%1000));
++    }
++    CHECK(clock_queries==0); // Hardware path never derives phase from stale VSyncLast.
++    printf("DCN observation: %u checks, %u failures\n",checks,failures);
++    return failures?1:0;
++}
+--- frozen136/driver/kmd/test/generate_dcn_observation_test.py
++++ working/driver/kmd/test/generate_dcn_observation_test.py
+@@ -0,0 +1,19 @@
++"""Extract the actual DCN observation helpers and hardware GetScanLine DDI."""
++from pathlib import Path
++import argparse
++p=argparse.ArgumentParser()
++p.add_argument('--dcn',type=Path,default=Path(__file__).resolve().parents[1]/'dcn.c')
++p.add_argument('--wddm',type=Path,default=Path(__file__).resolve().parents[1]/'wddm.c')
++p.add_argument('--out',type=Path,required=True)
++a=p.parse_args()
++def function(s, signature):
++    start=s.index(signature)
++    return s[start:s.index('\n}\n',start)+3]
++dcn=a.dcn.read_text();wddm=a.wddm.read_text()
++body='\n'.join(function(dcn,x) for x in (
++    'NTSTATUS DcnReadScanoutAddress(', 'BOOLEAN DcnFlipPending(', 'NTSTATUS DcnReadScanLine('))
++body+='\n'+function(wddm,'static NTSTATUS Bc250WddmGetScanLine(')
++fixture=Path(__file__).with_name('dcn_observation_test.c').read_text()
++assert fixture.count('/* ACTUAL_SOURCE */')==1
++a.out.write_text(fixture.replace('/* ACTUAL_SOURCE */',body))
++print('Extracted DCN observation helpers and hardware GetScanLine DDI')
+--- frozen136/driver/kmd/test/run_dcn_observation.ps1
++++ working/driver/kmd/test/run_dcn_observation.ps1
+@@ -0,0 +1,18 @@
++param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\bd007-009\observation',[string]$Dcn='',[string]$Wddm='')
++$ErrorActionPreference='Stop'
++$repo="$Root\bc250-win"
++if(-not $Dcn){$Dcn="$repo\driver\kmd\dcn.c"}
++if(-not $Wddm){$Wddm="$repo\driver\kmd\wddm.c"}
++$vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
++$msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
++$cl="$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
++$sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
++$libs="$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
++New-Item -ItemType Directory -Force $Out | Out-Null
++$env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
++& python "$PSScriptRoot\generate_dcn_observation_test.py" --dcn $Dcn --wddm $Wddm --out "$Out\dcn_observation_actual.c"
++if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
++& $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\dcn_observation_test.exe" "$Out\dcn_observation_actual.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
++if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++& "$Out\dcn_observation_test.exe"
++exit $LASTEXITCODE

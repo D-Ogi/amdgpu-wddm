@@ -1,0 +1,66 @@
+#Requires -Version 7.0
+# Host gate of the application router (driver/umd/router), without a device and without touching machine state.
+# Builds a scratch layout from the output of build-umd-router.ps1 (router, UMD doubles, harness) and three real
+# binaries named by parameter: the hosted UMD bc250d3d_zink.dll, the CPU UMD bc250d3d.dll and a package holding the
+# DXVK shell amdgpu_wddm_d3d11.dll with its amdgpu_wddm_d3d11.config. Then runs test-router.exe, each scenario in its
+# own process on a private application hive (RegLoadAppKey, RegOverridePredefKey). Every scenario of the desktop-only
+# router 5BBEB783's gate runs unchanged next to the AppRouter ones. The gate of 674AD261 (2026-10-01) used the
+# hosted UMD E6B944CF, the CPU UMD 4176D1DF and the shell E748418C with its config A9B498ED: 68 scenarios, 0 failed.
+#
+#   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
+#        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
+param(
+    [Parameter(Mandatory)][string]$HostedUmd,
+    [Parameter(Mandatory)][string]$CpuUmd,
+    [Parameter(Mandatory)][string]$AppPackage,
+    [string]$Build,
+    [string]$OutputDir
+)
+$ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\common.ps1"
+$repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$root = Get-Bc250Root $repo
+if (-not $Build) { $Build = Join-Path $root 'scratch\build\umd-router' }
+if (-not $OutputDir) { $OutputDir = Join-Path $root 'scratch\build\umd-router-host-gates' }
+$stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+$gate = Join-Path ([IO.Path]::GetFullPath($OutputDir)) $stamp
+$layout = Join-Path $gate 'layout'
+$out = Join-Path $gate 'results'
+foreach ($d in @('router','cpu','cpu-real','fail','umd','umd-noicd','umd-diag','umd-diag\logs','umd-router','icd-alt','dwm','hives',
+                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','applogs')) {
+    [void](New-Item -ItemType Directory -Force -Path (Join-Path $layout $d))
+}
+[void](New-Item -ItemType Directory -Force -Path $out)
+function Put([string]$From, [string]$To) { Copy-Item -LiteralPath $From -Destination (Join-Path $layout $To) }
+# Placeholder ICD: OpenAdapter only checks that the file exists; the ICD is loaded at CreateDevice.
+function Placeholder([string]$To) { Set-Content -LiteralPath (Join-Path $layout $To) -Value 'placeholder, never loaded by OpenAdapter' -NoNewline }
+$shell = Join-Path $AppPackage 'amdgpu_wddm_d3d11.dll'
+$shellConfig = Join-Path $AppPackage 'amdgpu_wddm_d3d11.config'
+Put "$Build\bc250d3d_router.dll" 'router\bc250d3d_router.dll'
+Put "$Build\fake-hosted.dll" 'router\bc250d3d_zink.dll'
+Put "$Build\fake-cpu.dll" 'cpu\bc250d3d.dll'
+Put "$Build\fake-fail.dll" 'fail\fake-fail.dll'
+Put "$Build\fake-app.dll" 'app\amdgpu_wddm_d3d11.dll'
+Put "$Build\fake-nooa102.dll" 'app-noexport\amdgpu_wddm_d3d11.dll'
+Put $CpuUmd 'cpu-real\bc250d3d.dll'
+foreach ($d in @('umd','umd-noicd','umd-diag','umd-router')) { Put $HostedUmd "$d\bc250d3d_zink.dll" }
+foreach ($d in @('umd','umd-diag','umd-router')) { Placeholder "$d\amdgpu_wddm_radv.dll" }
+Placeholder 'icd-alt\alt-icd.dll'
+Put "$Build\bc250d3d_router.dll" 'umd-router\bc250d3d_router.dll'
+Put "$Build\test-router.exe" 'dwm\dwm.exe'
+Put "$Build\test-router.exe" 'logonui\logonui.exe'
+# The DXVK shell reads its config beside itself at OpenAdapter; engine and ICD are loaded (and hash-checked) only
+# at CreateDevice, so the host layout holds the shell and the config alone.
+Put $shell 'app-real\amdgpu_wddm_d3d11.dll'
+Put $shellConfig 'app-real\amdgpu_wddm_d3d11.config'
+Put $shell 'app-real-noconfig\amdgpu_wddm_d3d11.dll'
+
+$inputs = foreach ($f in @("$Build\bc250d3d_router.dll", "$Build\test-router.exe", $HostedUmd, $CpuUmd, $shell, $shellConfig)) {
+    '{0}  {1}' -f (Get-FileHash -LiteralPath $f).Hash, $f
+}
+$inputs | Set-Content -LiteralPath (Join-Path $gate 'inputs.sha256')
+& "$Build\test-router.exe" run $layout $out | Tee-Object -FilePath (Join-Path $gate 'run.txt')
+$code = $LASTEXITCODE
+"exit=$code" | Add-Content -LiteralPath (Join-Path $gate 'run.txt')
+Write-Output "host gate directory: $gate"
+exit $code

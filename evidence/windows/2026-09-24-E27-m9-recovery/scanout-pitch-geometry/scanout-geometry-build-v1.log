@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 514 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x019A70  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x018630  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x02FBB0  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x03C510  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\scanout-geometry-dev-v1\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\scanout-geometry-dev-v1\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\scanout-geometry-dev-v1\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7684  bc250kmd.inf
+   364432  bc250kmd.sys
+  32C35BB9E1EC1C6169F41FB30862700A665E64626637125FA64317DE4E7C47D8  package\bc250kmd.sys

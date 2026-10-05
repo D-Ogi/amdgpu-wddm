@@ -1,0 +1,8 @@
+{
+  "SleepTime": "2026-09-25T02:31:15.5098944Z",
+  "WakeTime": "2026-09-25T02:33:25.9208355Z",
+  "EffectiveState": "5",
+  "HiberReadDuration": "1927",
+  "HiberWriteDuration": "3165",
+  "HiberPagesWritten": "288491"
+}

@@ -1,0 +1,7 @@
+Extracted actual WddmStop and both PnP stop callbacks
+post_display_stop_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 256: Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_IO_TIMEOUT
+FAIL 257: info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0
+post display stop: 70 checks, 2 failures

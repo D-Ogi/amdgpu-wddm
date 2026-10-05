@@ -1,0 +1,7 @@
+window A no gpu etl
+== window B
+  "Unknown" (5308)                 n=  1756 rate=  35.5/s interval median=  26.70 ms p95=  40.87 ms p99=  62.42 ms max=   76.08 ms >50ms=44 >100ms=0 >250ms=0
+  "Unknown" (11364)                n=  1755 rate=  35.5/s interval median=  28.02 ms p95=  41.02 ms p99=  53.46 ms max=   82.13 ms >50ms=30 >100ms=0 >250ms=0
+  "Unknown" (2096)                 n=    50 rate=   1.0/s interval median=1005.29 ms p95=1079.88 ms p99=1135.36 ms max= 1135.36 ms >50ms=49 >100ms=49 >250ms=48
+2026-10-01T01:25:40.9692866Z t=0.0 left=353.9 window A skipped (-SkipA)
+2026-10-01T01:29:20.8637895Z t=219.9 left=134.1 window B trigger world: walk 220s: start, 40 s

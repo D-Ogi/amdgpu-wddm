@@ -1,0 +1,371 @@
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CalcPrivateResourceSize
+CreateResource
+BC250 CreatePagingQueue 00000000
+BC250 Allocate input runtime 0000028C828029C0 size 1228800 primary 0
+BC250 Allocate 00000000 format 32 primary 0 handle 40000180 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CalcPrivateResourceSize
+CreateResource
+CreateResource(64x32x1 hResource=0000028C90C9FD30)
+  ResourceDimension = 3
+  Usage = 0
+  BindFlags = 0x28
+  MapFlags = 0x0
+  MiscFlags = 0x2
+  Format = DXGI_FORMAT_R8G8B8A8_UNORM
+  SampleDesc.Count = 1
+  SampleDesc.Quality = 0
+  MipLevels = 1
+  ArraySize = 1
+  pPrimaryDesc = 0000000000000000
+BC250 Allocate input runtime 0000028C82F52AE0 size 8192 primary 0
+BC250 Allocate 00000000 format 32 primary 0 handle 400002c0 resource 0
+BC250 MapGpuVa 8000000a va 13c000
+BC250 MakeResident 8000000a
+OpenResource
+CreateResource
+BC250 CreatePagingQueue 00000000
+BC250 MapGpuVa 8000000a va 13e000
+BC250 MakeResident 8000000a
+BC250 OpenResource 00000000 handle 40000340
+CreateRenderTargetView
+CreateRenderTargetView
+ClearRenderTargetView
+Flush
+CalcPrivateResourceSize
+CreateResource
+ResourceCopy
+ResourceMap
+ResourceUnmap
+DestroyResource
+ClearRenderTargetView
+Flush
+CalcPrivateResourceSize
+CreateResource
+ResourceCopy
+ResourceMap
+ResourceUnmap
+DestroyResource
+DestroyRenderTargetView
+DestroyRenderTargetView
+DestroyResource
+BC250 Deallocate 80070057
+DestroyResource
+BC250 Deallocate 80070057
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+SetRenderTargets
+DestroyRasterizerState
+DestroyDepthStencilState
+DestroyBlendState
+DestroySampler
+DestroyDevice
+CloseAdapter
+CreateRenderTargetView
+ClearRenderTargetView
+CalcPrivateResourceSize
+CreateResource
+ResourceCopy
+ResourceMap
+ResourceUnmap
+DestroyResource
+ClearRenderTargetView
+_Present
+BC250 CreateContextVirtual 00000000
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+ClearRenderTargetView
+_Present
+BC250 Present flags 1 src 40000180 dst 0
+BC250 PresentCb 00000000
+DestroyRenderTargetView
+DestroyResource
+BC250 Deallocate 00000000
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+SetRenderTargets
+DestroyRasterizerState
+DestroyDepthStencilState
+DestroyBlendState
+DestroySampler
+DestroyDevice
+CloseAdapter

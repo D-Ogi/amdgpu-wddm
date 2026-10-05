@@ -1,0 +1,1206 @@
+boot=2026-09-23T13:00:34
+
+
+EnableFullWddm    : 0
+LastStage         : 90
+StageHistory      : 10 20 30 90 
+UnconfirmedStarts : 2
+KeepStatus        : 0
+
+
+
+
+Status                   Problem FriendlyName                                  
+------                   ------- ------------                                  
+Error  CM_PROB_FAILED_POST_START BC-250 GPU (bc250kmd, display-only, lab build)
+
+
+snapshot=ring-20260923-105956-007.log bytes=769 sha256=6A5A67485928CD9D5885F46A809A1962B2DC0195385B583843CB63AAAAE990F0
+bc250kmd 0x00070061 log snapshot: 18 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.004 stage 10
+     1      0.004 gate: EnableFullWddm 0
+     2      0.004 stage 20
+     3      0.074 stage 30
+     4      0.076 stage 31
+     5      0.078 stage 32
+     6      0.078 post display 1920x1200 pitch 7680 format 22 target 4294967295
+     7      0.078 stage 33
+     8      0.080 stage 34
+     9      0.080 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.080 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    11      0.080 stage 35
+    12      0.080 stage 39
+    13      0.088 stage 50
+    14      0.159 stage 60
+    15      0.161 stage 61
+    16     28.915 stage 70
+    17     28.917 stage 79
+snapshot=ring-20260923-110000-118.log bytes=1427 sha256=1E96E2A2C3EA49645F0FA4B789910335559342A09E00CADFA271414EEB66EDB7
+bc250kmd 0x00070061 log snapshot: 22 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+snapshot=ring-20260923-110000-120.log bytes=1485 sha256=A4CE56F81B10302491467F5507846A5632E4E62D0B93F352DEE64354B371C124
+bc250kmd 0x00070061 log snapshot: 23 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+snapshot=ring-20260923-110000-125.log bytes=1542 sha256=8E347DBA5CFDC28DA204FC48E76A21A71F314BD90DCB7DC82D35C1E778A4BE6C
+bc250kmd 0x00070061 log snapshot: 24 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+snapshot=ring-20260923-110000-136.log bytes=1690 sha256=628FB59F399A818CC20D4BC9C1791CF4B113228DA5571EEB937D0BFC8FB2526C
+bc250kmd 0x00070061 log snapshot: 26 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+snapshot=ring-20260923-110000-240.log bytes=3098 sha256=15369FC0D81B3C75C450C0B3E20933A55D1D3EC38D13A4C71C74173837A7D127
+bc250kmd 0x00070061 log snapshot: 40 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+snapshot=ring-20260923-110000-244.log bytes=3365 sha256=7D842CBE6F7A460417BDB07A10261D07859B04303236FA10746F35B1343FC187
+bc250kmd 0x00070061 log snapshot: 43 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+snapshot=ring-20260923-110000-246.log bytes=3414 sha256=955BAB109405411F0D1CF37F582F9C9A00D094E5284730CCCF81C2FD40D1C757
+bc250kmd 0x00070061 log snapshot: 44 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+snapshot=ring-20260923-110000-252.log bytes=3633 sha256=0ABDFEB63736857D68B2B70D8542510F235B3D8CCB50F298C0B8FC0BBE2FF70E
+bc250kmd 0x00070061 log snapshot: 47 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+snapshot=ring-20260923-110000-254.log bytes=3852 sha256=D5A55FDD369F911C10608D50478A40ABB40937B42B79779A26AFDE5EF4E42E33
+bc250kmd 0x00070061 log snapshot: 50 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+snapshot=ring-20260923-110000-258.log bytes=4231 sha256=94C38F04CBCC450A7802B42ECED24AABF8969E7F8453FA9FDD4734A87D25E2F6
+bc250kmd 0x00070061 log snapshot: 55 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+    53      0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54      0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+snapshot=ring-20260923-110000-256.log bytes=4066 sha256=9C6996E0879BC7BBD4669C2F77BCEEB5DD54F40D59061A389D8631616EAC0F23
+bc250kmd 0x00070061 log snapshot: 53 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+snapshot=ring-20260923-110000-260.log bytes=4436 sha256=0D8D37AA1CBBD7363E3BBDA8E1F486BD320261BFCA32777F8FFFC27D8C6008E2
+bc250kmd 0x00070061 log snapshot: 58 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+    53      0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54      0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.216 startup: entering GFX stage 5
+    56      0.218 gfx: stage 5 (RLC): rc 0, 8 writes so far, 132 us
+    57      0.218 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+snapshot=ring-20260923-110000-262.log bytes=7710 sha256=7177D72D3DD77C7A9BF5F007C8F69C1F9563D5B8C1E7EC97654180550229FA2D
+bc250kmd 0x00070061 log snapshot: 107 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+    53      0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54      0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.216 startup: entering GFX stage 5
+    56      0.218 gfx: stage 5 (RLC): rc 0, 8 writes so far, 132 us
+    57      0.218 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.220 startup: entering GFX stage 6
+    59      0.220 amdgpu[0]: CP resume kiq-init begin
+
+    60      0.220 amdgpu[0]: CP resume kiq-init end result=0
+
+    61      0.220 amdgpu[0]: CP resume compute-unhalt begin
+
+    62      0.220 amdgpu[0]: CP resume compute-unhalt end
+
+    63      0.220 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    64      0.220 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    65      0.220 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    66      0.220 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    67      0.220 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    68      0.220 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    69      0.220 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    70      0.220 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    71      0.220 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    72      0.220 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    73      0.220 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    74      0.220 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    75      0.220 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    76      0.220 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    77      0.220 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    78      0.220 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    79      0.220 amdgpu[0]: CP resume kcq-enable begin
+
+    80      0.220 amdgpu[0]: CP resume kcq-enable end result=0
+
+    81      0.220 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    82      0.220 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    83      0.220 amdgpu[0]: CP resume kgq-enable begin
+
+    84      0.220 amdgpu[0]: CP resume kgq-enable end result=0
+
+    85      0.220 amdgpu[0]: CP resume gfx-start begin
+
+    86      0.220 amdgpu[0]: CP resume gfx-start end result=0
+
+    87      0.220 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+    88      0.220 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+    89      0.220 amdgpu[0]: CP resume compute-test ring=0 begin
+
+    90      0.220 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+    91      0.220 amdgpu[0]: CP resume compute-test ring=1 begin
+
+    92      0.220 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+    93      0.220 amdgpu[0]: CP resume compute-test ring=2 begin
+
+    94      0.220 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+    95      0.220 amdgpu[0]: CP resume compute-test ring=3 begin
+
+    96      0.220 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+    97      0.220 amdgpu[0]: CP resume compute-test ring=4 begin
+
+    98      0.220 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+    99      0.220 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   100      0.220 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   101      0.220 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   102      0.220 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   103      0.220 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   104      0.220 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   105      0.220 gfx: stage 6 (CP): rc 0, 62 writes so far, 436 us
+   106      0.220 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+snapshot=ring-20260923-110000-264.log bytes=7759 sha256=B290AD6A0EADAC07C91C76726632A991ABD78470E0DB6ADE9BCD0F8FF930E4B3
+bc250kmd 0x00070061 log snapshot: 108 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+    53      0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54      0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.216 startup: entering GFX stage 5
+    56      0.218 gfx: stage 5 (RLC): rc 0, 8 writes so far, 132 us
+    57      0.218 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.220 startup: entering GFX stage 6
+    59      0.220 amdgpu[0]: CP resume kiq-init begin
+
+    60      0.220 amdgpu[0]: CP resume kiq-init end result=0
+
+    61      0.220 amdgpu[0]: CP resume compute-unhalt begin
+
+    62      0.220 amdgpu[0]: CP resume compute-unhalt end
+
+    63      0.220 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    64      0.220 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    65      0.220 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    66      0.220 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    67      0.220 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    68      0.220 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    69      0.220 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    70      0.220 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    71      0.220 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    72      0.220 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    73      0.220 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    74      0.220 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    75      0.220 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    76      0.220 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    77      0.220 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    78      0.220 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    79      0.220 amdgpu[0]: CP resume kcq-enable begin
+
+    80      0.220 amdgpu[0]: CP resume kcq-enable end result=0
+
+    81      0.220 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    82      0.220 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    83      0.220 amdgpu[0]: CP resume kgq-enable begin
+
+    84      0.220 amdgpu[0]: CP resume kgq-enable end result=0
+
+    85      0.220 amdgpu[0]: CP resume gfx-start begin
+
+    86      0.220 amdgpu[0]: CP resume gfx-start end result=0
+
+    87      0.220 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+    88      0.220 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+    89      0.220 amdgpu[0]: CP resume compute-test ring=0 begin
+
+    90      0.220 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+    91      0.220 amdgpu[0]: CP resume compute-test ring=1 begin
+
+    92      0.220 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+    93      0.220 amdgpu[0]: CP resume compute-test ring=2 begin
+
+    94      0.220 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+    95      0.220 amdgpu[0]: CP resume compute-test ring=3 begin
+
+    96      0.220 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+    97      0.220 amdgpu[0]: CP resume compute-test ring=4 begin
+
+    98      0.220 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+    99      0.220 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   100      0.220 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   101      0.220 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   102      0.220 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   103      0.220 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   104      0.220 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   105      0.220 gfx: stage 6 (CP): rc 0, 62 writes so far, 436 us
+   106      0.220 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+   107      0.222 startup: entering GFX stage 7
+snapshot=ring-20260923-110000-268.log bytes=8277 sha256=FC61C112156F6F5D4A8BCF5A331AEE654A30655F21A657145BF9B921AFD6B981
+bc250kmd 0x00070061 log snapshot: 115 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+    53      0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54      0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.216 startup: entering GFX stage 5
+    56      0.218 gfx: stage 5 (RLC): rc 0, 8 writes so far, 132 us
+    57      0.218 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.220 startup: entering GFX stage 6
+    59      0.220 amdgpu[0]: CP resume kiq-init begin
+
+    60      0.220 amdgpu[0]: CP resume kiq-init end result=0
+
+    61      0.220 amdgpu[0]: CP resume compute-unhalt begin
+
+    62      0.220 amdgpu[0]: CP resume compute-unhalt end
+
+    63      0.220 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    64      0.220 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    65      0.220 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    66      0.220 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    67      0.220 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    68      0.220 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    69      0.220 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    70      0.220 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    71      0.220 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    72      0.220 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    73      0.220 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    74      0.220 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    75      0.220 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    76      0.220 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    77      0.220 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    78      0.220 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    79      0.220 amdgpu[0]: CP resume kcq-enable begin
+
+    80      0.220 amdgpu[0]: CP resume kcq-enable end result=0
+
+    81      0.220 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    82      0.220 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    83      0.220 amdgpu[0]: CP resume kgq-enable begin
+
+    84      0.220 amdgpu[0]: CP resume kgq-enable end result=0
+
+    85      0.220 amdgpu[0]: CP resume gfx-start begin
+
+    86      0.220 amdgpu[0]: CP resume gfx-start end result=0
+
+    87      0.220 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+    88      0.220 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+    89      0.220 amdgpu[0]: CP resume compute-test ring=0 begin
+
+    90      0.220 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+    91      0.220 amdgpu[0]: CP resume compute-test ring=1 begin
+
+    92      0.220 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+    93      0.220 amdgpu[0]: CP resume compute-test ring=2 begin
+
+    94      0.220 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+    95      0.220 amdgpu[0]: CP resume compute-test ring=3 begin
+
+    96      0.220 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+    97      0.220 amdgpu[0]: CP resume compute-test ring=4 begin
+
+    98      0.220 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+    99      0.220 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   100      0.220 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   101      0.220 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   102      0.220 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   103      0.220 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   104      0.220 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   105      0.220 gfx: stage 6 (CP): rc 0, 62 writes so far, 436 us
+   106      0.220 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+   107      0.222 startup: entering GFX stage 7
+   108      0.224 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 96 us
+   109      0.224 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   110      0.224 startup: entering GFX stage 8
+   111      0.224 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 22 us
+   112      0.224 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   113      0.224 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   114      0.226 startup: both engines ready
+snapshot=ring-20260923-110000-266.log bytes=8230 sha256=A353A26EF489CBAA3DBB934C01653F3F4C7901483646659D77B71056769BECEB
+bc250kmd 0x00070061 log snapshot: 114 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.002 stage 20
+     3      0.070 stage 30
+     4      0.072 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.074 gart: ready, dummy page at 0x26FFFA000
+    15      0.074 psp: ready
+    16      0.074 gpumem: ready, doorbells at 0xD0000000
+    17      0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.074 ih: ready
+    19      0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.076 startup: entering interrupt connection
+    22      0.078 startup: entering firmware preparation
+    23      0.082 startup: entering GART initialization
+    24      0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.094 startup: entering PSP initialization
+    26      0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28      0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29      0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30      0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31      0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32      0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33      0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36      0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38      0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.198 startup: entering IH initialization
+    40      0.202 ih: init: rc 0, 20 writes
+    41      0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.202 startup: entering GFX initialization
+    43      0.204 startup: entering GFX stage 1
+    44      0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.210 startup: entering GFX stage 2
+    47      0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48      0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.212 startup: entering GFX stage 3
+    50      0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51      0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.214 startup: entering GFX stage 4
+    53      0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54      0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.216 startup: entering GFX stage 5
+    56      0.218 gfx: stage 5 (RLC): rc 0, 8 writes so far, 132 us
+    57      0.218 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.220 startup: entering GFX stage 6
+    59      0.220 amdgpu[0]: CP resume kiq-init begin
+
+    60      0.220 amdgpu[0]: CP resume kiq-init end result=0
+
+    61      0.220 amdgpu[0]: CP resume compute-unhalt begin
+
+    62      0.220 amdgpu[0]: CP resume compute-unhalt end
+
+    63      0.220 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    64      0.220 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    65      0.220 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    66      0.220 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    67      0.220 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    68      0.220 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    69      0.220 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    70      0.220 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    71      0.220 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    72      0.220 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    73      0.220 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    74      0.220 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    75      0.220 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    76      0.220 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    77      0.220 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    78      0.220 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    79      0.220 amdgpu[0]: CP resume kcq-enable begin
+
+    80      0.220 amdgpu[0]: CP resume kcq-enable end result=0
+
+    81      0.220 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    82      0.220 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    83      0.220 amdgpu[0]: CP resume kgq-enable begin
+
+    84      0.220 amdgpu[0]: CP resume kgq-enable end result=0
+
+    85      0.220 amdgpu[0]: CP resume gfx-start begin
+
+    86      0.220 amdgpu[0]: CP resume gfx-start end result=0
+
+    87      0.220 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+    88      0.220 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+    89      0.220 amdgpu[0]: CP resume compute-test ring=0 begin
+
+    90      0.220 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+    91      0.220 amdgpu[0]: CP resume compute-test ring=1 begin
+
+    92      0.220 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+    93      0.220 amdgpu[0]: CP resume compute-test ring=2 begin
+
+    94      0.220 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+    95      0.220 amdgpu[0]: CP resume compute-test ring=3 begin
+
+    96      0.220 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+    97      0.220 amdgpu[0]: CP resume compute-test ring=4 begin
+
+    98      0.220 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+    99      0.220 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   100      0.220 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   101      0.220 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   102      0.220 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   103      0.220 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   104      0.220 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   105      0.220 gfx: stage 6 (CP): rc 0, 62 writes so far, 436 us
+   106      0.220 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+   107      0.222 startup: entering GFX stage 7
+   108      0.224 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 96 us
+   109      0.224 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   110      0.224 startup: entering GFX stage 8
+   111      0.224 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 22 us
+   112      0.224 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   113      0.224 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+
+Name                   Length LastWriteTime        
+----                   ------ -------------        
+092126-43343-01.dmp    989340 9/21/2026 6:39:44 AM 
+092126-62671-01.dmp    967452 9/21/2026 10:36:37 PM
+092126-63828-01.dmp   1802684 9/21/2026 10:46:08 PM
+092226-58796-01.dmp   1632348 9/22/2026 11:14:10 AM
+092326-63406-01.dmp   2340236 9/23/2026 1:01:42 PM 
+MEMORY.DMP          855510666 9/23/2026 1:01:27 PM 
+
+
+recovery_read_complete

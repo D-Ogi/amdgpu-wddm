@@ -1,0 +1,5 @@
+{
+  "linux_commit": "7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+  "sdma_v5_0_sha256": "d38d98e12e323ce658e41d47ea1e4b617fab07d5037548f945054845fac68cec",
+  "upstream_callback": "static int sdma_v5_0_soft_reset_engine(struct amdgpu_device *adev, u32 instance_id)\n{\n\tu32 grbm_soft_reset;\n\tu32 tmp;\n\n\tgrbm_soft_reset = REG_SET_FIELD(0,\n\t\t\t\t\tGRBM_SOFT_RESET, SOFT_RESET_SDMA0,\n\t\t\t\t\t1);\n\tgrbm_soft_reset <<= instance_id;\n\n\ttmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);\n\ttmp |= grbm_soft_reset;\n\tDRM_DEBUG(\"GRBM_SOFT_RESET=0x%08X\\n\", tmp);\n\tWREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);\n\ttmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);\n\n\tudelay(50);\n\n\ttmp &= ~grbm_soft_reset;\n\tWREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);\n\ttmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);\n\treturn 0;\n}"
+}

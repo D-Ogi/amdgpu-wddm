@@ -1,0 +1,21 @@
+{
+  "parent": "6e7830b390230bc74cb12f3564b0ca716145cf3e",
+  "files": [
+    {
+      "path": "driver/kmd/wddm.c",
+      "sha256": "c289c5af1d8e98a1557d2fa22ea4c7f31306e17def996b5b3feaef1163dc897f"
+    },
+    {
+      "path": "driver/kmd/gfx_blt.c",
+      "sha256": "28ad4029c9de8eab67d64118fc1c8ec22692af2b80e7b6f225276bb62b8f2c8a"
+    },
+    {
+      "path": "driver/kmd/gfx_blt.h",
+      "sha256": "ba8aee762c6be5ad2daaf3861b96250574adcb476c21b18ec7355c652516cb41"
+    },
+    {
+      "path": "driver/kmd/test/gfx_blt_test.c",
+      "sha256": "563505601d93d87098d12a6de91d4c838d523326c7461eeec341e45073fa4ab1"
+    }
+  ]
+}

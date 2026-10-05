@@ -1,0 +1,124 @@
+{
+  "kmd-start.log": {
+    "gpu_present": [
+      "8",
+      "0",
+      "0"
+    ],
+    "hardware": [
+      "147",
+      "147",
+      "0",
+      "0"
+    ],
+    "cpu_blit": [
+      "open",
+      "0",
+      "0",
+      "0"
+    ]
+  },
+  "kmd-end.log": {
+    "gpu_present": [
+      "8",
+      "0",
+      "0"
+    ],
+    "hardware": [
+      "3014",
+      "3014",
+      "0",
+      "0"
+    ],
+    "cpu_blit": [
+      "open",
+      "0",
+      "0",
+      "0"
+    ]
+  },
+  "full_frame_buckets": [
+    {
+      "ctx": "0000023C7BD02070",
+      "sample": 9408,
+      "id": 50,
+      "target": 2,
+      "size": "1920x1200x1",
+      "format": 105,
+      "bind": 8,
+      "usage": 10,
+      "box": "1920x1200x1",
+      "runtime": 0,
+      "user_ptr": 0,
+      "calls": 1,
+      "bytes": 9216000
+    },
+    {
+      "ctx": "0000023C7BD02070",
+      "sample": 9408,
+      "id": 98,
+      "target": 2,
+      "size": "1920x1200x1",
+      "format": 105,
+      "bind": 0,
+      "usage": 1,
+      "box": "1920x1200x1",
+      "runtime": 0,
+      "user_ptr": 0,
+      "calls": 4,
+      "bytes": 36864000
+    }
+  ],
+  "persistent_buckets": [
+    {
+      "ctx": "0000023C7BD02070",
+      "sample": 9408,
+      "id": 0,
+      "target": 0,
+      "size": "24000x1x1",
+      "format": 81,
+      "bind": 134250496,
+      "usage": 1795,
+      "box": "24000x1x1",
+      "runtime": 0,
+      "user_ptr": 0,
+      "calls": 7,
+      "bytes": 168000
+    },
+    {
+      "ctx": "0000023C7BD02070",
+      "sample": 9408,
+      "id": 2,
+      "target": 0,
+      "size": "1048576x1x1",
+      "format": 81,
+      "bind": 32880,
+      "usage": 802,
+      "box": "1048576x1x1",
+      "runtime": 0,
+      "user_ptr": 0,
+      "calls": 1,
+      "bytes": 1048576
+    }
+  ],
+  "device_times": [
+    {
+      "phase": "begin",
+      "pid": "8548",
+      "tid": "6788",
+      "filetime": "134349872720880017",
+      "qpc": "69396122988",
+      "frequency": "10000000",
+      "utc": "2026-09-27T12:54:32.088001+00:00"
+    },
+    {
+      "phase": "end",
+      "pid": "8548",
+      "tid": "6788",
+      "filetime": "134349872728685896",
+      "qpc": "69403928865",
+      "frequency": "10000000",
+      "utc": "2026-09-27T12:54:32.868590+00:00"
+    }
+  ]
+}

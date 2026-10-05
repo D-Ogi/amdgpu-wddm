@@ -1,0 +1,1015 @@
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  [DEVICE_INTERFACE]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00008926
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070092 (milestone 7 revision 146)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 50, flips 3245 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+boot_before=2026-09-25T03:57:55
+dwm_before=6076 start=2026-09-25T04:42:44
+05:05:29 Tctl 66.5 C (raw 739B0FEF)
+
+UnconfirmedStarts = 0 (flushed to disk)
+disable_begin=2026-09-25T05:05:29
+Microsoft PnP Utility
+
+Disabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\[INSTANCE]
+Device disabled successfully.
+
+disabled_problem=22
+install_begin=2026-09-25T05:05:33
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem118.inf
+Driver package installed on device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\[INSTANCE]
+
+Total driver packages:  1
+Added driver packages:  1
+enable_begin=2026-09-25T05:05:36
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\[INSTANCE]
+Device enabled successfully.
+
+health abi=1 version=0x00070093 flags=7 generation=40723385082 epoch=5 completed=8 age_ms=4830 ready_ms=7320
+log          886 lines since this driver load, 0 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.004 stage 10
+     1      0.004 gate: EnableFullWddm 2
+     2      0.006 stage 20
+     3      0.158 stage 30
+     4      0.158 guard: count 0 -> 1 flushed, durable required 1
+     5      0.160 stage 31
+     6      0.160 stage 32
+     7      0.160 post display 1920x1200 pitch 7680 format 22 target 2424833
+     8      0.162 stage 33
+     9      0.162 stage 34
+    10      0.162 interrupt resource 1: message, vector 0x70, flags 0x3
+    11      0.162 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    12      0.162 smu: native owner start status 0x00000000
+    13      0.162 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    14      0.162 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    15      0.164 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    16      0.164 gart: ready, dummy page at 0x26FFFA000
+    17      0.164 psp: ready
+    18      0.164 gpumem: ready, doorbells at 0xD0000000
+    19      0.164 gfx: ready, GPU submission allowed, paging node allowed
+    20      0.164 ih: ready
+    21      0.166 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    22      0.172 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    23      0.172 startup: entering interrupt connection
+    24      0.174 startup: entering firmware preparation
+    25      0.196 startup: entering native clock preparation
+    26      0.200 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 67250mc staged 0
+    27      0.202 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    28      0.202 gfx: unpublished translation bootstrap entered with engines halted
+    29      0.202 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.202 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    31      0.202 startup: entering GART initialization
+    32      0.218 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    33      0.218 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    34      0.218 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    35      0.218 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    36      0.218 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    37      0.218 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    38      0.218 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    39      0.218 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    40      0.218 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    41      0.218 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    42      0.218 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    43      0.218 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    44      0.218 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    45      0.218 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    46      0.218 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    47      0.218 startup: entering PSP initialization
+    48      0.268 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    49      0.268 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    50      0.290 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.290 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    52      0.290 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    53      0.290 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 238 us, in TMR at 0x0
+    54      0.290 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    55      0.290 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    56      0.292 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1890 us, in TMR at 0x0
+    57      0.292 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    58      0.292 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    59      0.294 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1941 us, in TMR at 0x0
+    60      0.294 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    61      0.294 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    62      0.300 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5913 us, in TMR at 0xF5FF842000
+    63      0.300 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    64      0.300 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    65      0.306 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5912 us, in TMR at 0xF5FF883000
+    66      0.306 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    67      0.306 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    68      0.310 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5912 us, in TMR at 0xF5FF8C4000
+    69      0.310 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    70      0.310 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    71      0.316 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6014 us, in TMR at 0xF5FF800000
+    72      0.316 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    73      0.316 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    74      0.318 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    75      0.318 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    76      0.318 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    77      0.324 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6041 us, in TMR at 0xF5FF800000
+    78      0.324 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    79      0.324 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    80      0.324 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    81      0.324 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    82      0.324 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    83      0.326 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    84      0.326 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    85      0.326 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    86      0.326 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    87      0.326 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    88      0.326 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    89      0.326 startup: entering IH initialization
+    90      0.328 ih: init: rc 0, 18 writes
+    91      0.328 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    92      0.328 startup: entering GFX initialization
+    93      0.332 startup: entering GFX stage 1
+    94      0.334 gfx: RLC startup policy pp_gfxoff 0
+    95      0.338 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    96      0.338 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    97      0.340 startup: entering GFX stage 2
+    98      0.344 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+    99      0.344 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+   100      0.346 startup: entering GFX stage 3
+   101      0.348 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 5 us
+   102      0.348 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   103      0.350 startup: entering GFX stage 4
+   104      0.352 gfx: stage 4 (constants): rc 0, 157 writes so far, 66 us
+   105      0.352 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   106      0.356 startup: entering GFX stage 5
+   107      0.358 startup: RLC boundary acquire-paging-lock
+   108      0.360 startup: RLC boundary acquire-gart-lock
+   109      0.362 startup: RLC boundary locks-acquired
+   110      0.366 startup: RLC boundary before-rlc-resume
+   111      0.368 startup: RLC boundary after-rlc-resume
+   112      0.370 startup: RLC boundary before-gfx-visibility
+   113      0.372 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   114      0.376 startup: visibility observer returned after-invalidate-request
+   115      0.378 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   116      0.380 startup: visibility observer returned after-invalidate-request-read
+   117      0.382 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   118      0.384 startup: visibility observer returned after-invalidate-ack
+   119      0.388 startup: visibility GFX returned 0, entering MMHUB
+   120      0.390 startup: visibility MMHUB returned 0
+   121      0.392 gpumem: startup GFX translations committed after RLC, before CP
+   122      0.394 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   123      0.394 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   124      0.394 startup: visibility publication observer returned
+   125      0.398 startup: RLC boundary after-gfx-visibility
+   126      0.400 gfx: stage 5 (RLC): rc 0, 11 writes so far, 34817 us
+   127      0.400 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   128      0.402 startup: entering GFX stage 6
+   129      0.406 startup: entering CP step 1
+   130      0.408 startup: CP1 checkpoint acquire-paging-lock
+   131      0.410 startup: CP1 checkpoint acquire-gart-lock
+   132      0.412 startup: CP1 checkpoint locks-acquired
+   133      0.414 amdgpu[0]: CP resume kiq-init begin
+
+   134      0.414 startup: CP1 checkpoint scheduler
+   135      0.416 startup: CP1 checkpoint scheduler-read
+   136      0.420 startup: CP1 checkpoint scheduler-write
+   137      0.422 startup: CP1 checkpoint scheduler-done
+   138      0.424 startup: CP1 checkpoint clear-mqd
+   139      0.426 startup: CP1 checkpoint select-queue
+   140      0.430 startup: CP1 checkpoint build-mqd
+   141      0.432 startup: CP1 checkpoint disable-wptr-poll
+   142      0.434 startup: CP1 checkpoint read-active
+   143      0.436 startup: CP1 checkpoint program-hqd
+   144      0.438 startup: CP1 checkpoint activate-hqd
+   145      0.442 startup: CP1 checkpoint restore-selection
+   146      0.444 startup: CP1 checkpoint complete
+   147      0.446 amdgpu[0]: CP resume kiq-init end result=0
+
+   148      0.446 gfx: CP step 1: rc 0, 27 writes, 31951 us
+   149      0.446 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   150      0.446 startup: CP step 1 returned 0x00000000 result 0
+   151      0.450 startup: entering CP step 2
+   152      0.452 amdgpu[0]: CP resume compute-unhalt begin
+
+   153      0.452 amdgpu[0]: CP resume compute-unhalt end
+
+   154      0.452 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   155      0.452 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   156      0.452 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   157      0.452 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   158      0.452 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   159      0.452 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   160      0.452 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   161      0.452 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   162      0.452 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   163      0.452 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   164      0.452 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   165      0.452 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   166      0.452 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   167      0.452 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   168      0.452 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   169      0.452 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   170      0.452 gfx: CP step 2: rc 0, 17 writes, 285 us
+   171      0.452 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   172      0.452 startup: CP step 2 returned 0x00000000 result 0
+   173      0.456 startup: entering CP step 3
+   174      0.458 amdgpu[0]: CP resume kcq-enable begin
+
+   175      0.458 amdgpu[0]: CP resume kcq-enable end result=0
+
+   176      0.458 gfx: CP step 3: rc 0, 1 writes, 52 us
+   177      0.458 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   178      0.458 startup: CP step 3 returned 0x00000000 result 0
+   179      0.462 startup: entering CP step 4
+   180      0.464 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   181      0.464 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   182      0.464 gfx: CP step 4: rc 0, 4 writes, 30 us
+   183      0.464 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   184      0.464 startup: CP step 4 returned 0x00000000 result 0
+   185      0.466 startup: entering CP step 5
+   186      0.470 amdgpu[0]: CP resume kgq-enable begin
+
+   187      0.470 amdgpu[0]: CP resume kgq-enable end result=0
+
+   188      0.470 gfx: CP step 5: rc 0, 1 writes, 24 us
+   189      0.470 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   190      0.470 startup: CP step 5 returned 0x00000000 result 0
+   191      0.472 startup: entering CP step 6
+   192      0.474 amdgpu[0]: CP resume gfx-start begin
+
+   193      0.474 amdgpu[0]: CP resume gfx-start end result=0
+
+   194      0.474 gfx: CP step 6: rc 0, 3 writes, 23 us
+   195      0.474 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   196      0.474 startup: CP step 6 returned 0x00000000 result 0
+   197      0.476 startup: entering CP step 7
+   198      0.480 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   199      0.480 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   200      0.480 gfx: CP step 7: rc 0, 1 writes, 17 us
+   201      0.480 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   202      0.480 startup: CP step 7 returned 0x00000000 result 0
+   203      0.482 startup: entering CP step 8
+   204      0.484 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   205      0.484 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   206      0.484 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   207      0.484 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   208      0.484 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   209      0.484 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   210      0.484 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   211      0.484 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   212      0.484 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   213      0.484 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   214      0.484 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   215      0.484 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   216      0.484 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   217      0.484 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   218      0.484 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   219      0.484 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   220      0.484 gfx: CP step 8: rc 0, 8 writes, 115 us
+   221      0.484 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   222      0.486 startup: CP step 8 returned 0x00000000 result 0
+   223      0.492 startup: entering GFX stage 7
+   224      0.494 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 100 us
+   225      0.494 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   226      0.498 startup: entering GFX stage 8
+   227      0.500 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   228      0.500 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   229      0.500 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   230      0.504 startup: SDMA control 0 command 16 bytes 4096 begin
+   231      0.508 gfx: sdmacopy 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   232      0.508 startup: SDMA control 0 status 0 NT 0x00000000 result 0 fence 1/1 compare 4096 matched 1
+   233      0.512 startup: SDMA control 1 command 18 bytes 4096 begin
+   234      0.514 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   235      0.516 gfx: sdmaib 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   236      0.516 startup: SDMA control 1 status 0 NT 0x00000000 result 0 fence 2/2 compare 4096 matched 1
+   237      0.518 startup: SDMA control 2 command 18 bytes 65536 begin
+   238      0.522 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   239      0.544 gfx: sdmaib 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   240      0.544 startup: SDMA control 2 status 0 NT 0x00000000 result 0 fence 3/3 compare 65536 matched 1
+   241      0.546 startup: SDMA control 3 command 16 bytes 65536 begin
+   242      0.570 gfx: sdmacopy 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   243      0.570 startup: SDMA control 3 status 0 NT 0x00000000 result 0 fence 4/4 compare 65536 matched 1
+   244      0.574 startup: SDMA VMID2 translated control begin
+   245      0.576 gfx: sdmava root PA0x46E02C000 IB PA0x26FFBA000 system PA0x26FF35000 source PA0x46E00C000 VA0x40000000 CSA0x40003000 VMID2
+   246      0.576 gfx: sdmava trial0 sourceVRAM fence5/5 compared4096 status0x00000000
+   247      0.576 gfx: sdmava trial1 sourcesystem-remap fence6/6 compared4096 status0x00000000
+   248      0.576 gfx: sdmava end status0x00000000 result0 fault0x0
+   249      0.580 startup: both engines ready
+   250      0.584 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   251      0.584 wddm: GPU initialized before adapter admission
+   252      0.584 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   253      0.586 stage 35
+   254      0.586 stage 39
+   255      0.586 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   256      0.586 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   257      0.586 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   258      0.586 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   259      0.586 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   260      0.586 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   261      0.586 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   262      0.586 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   263      0.588 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   264      0.588 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   265      0.588 wddm: GetNodeMetadata node 0 adapter 0
+   266      0.588 wddm: GetNodeMetadata node 1 adapter 0
+   267      0.588 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   268      0.588 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   269      0.588 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   270      0.588 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   271      0.588 wddm: CreateProcess flags 0x00000001 pasids 1
+   272      0.590 wddm: CreateDevice flags 0x00000001 pasid 0
+   273      0.590 wddm: CreateDevice flags 0x00000001 pasid 0
+   274      0.590 wddm: capture reservation ready 22020400 bytes
+   275      0.590 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   276      0.590 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   277      0.592 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   278      0.592 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   279      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   280      0.592 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   281      0.592 vidmm: table physical cache query pa 0x45E154000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   282      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   283      0.592 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   284      0.592 vidmm: table physical cache query pa 0x45E155000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   285      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   286      0.592 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   287      0.592 vidmm: table physical cache query pa 0x45E156000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   288      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   289      0.592 vidmm: table physical cache query pa 0x45E157000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   290      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   291      0.592 vidmm: table physical cache query pa 0x45E158000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   292      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   293      0.592 vidmm: table physical cache query pa 0x45E159000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   294      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   295      0.592 vidmm: table physical cache query pa 0x45E15A000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   296      0.592 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   297      0.640 wddm: paging DMA mapping op11 VA0x410000 root0x0 translated0 system0 PA0x0 CPU_PA0x8E6D000 match0 offset0
+   298      0.640 wddm: SetRootPageTable segment 3 offset 0x0, 512 entries
+   299      0.640 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+   300      0.640 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+   301      0.640 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+   302      0.640 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+   303      0.646 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+   304      0.646 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+   305      0.646 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+   306      0.646 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+   307      0.646 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+   308      0.646 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+   309      0.646 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+   310      0.646 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+   311      0.646 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+   312      0.646 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+   313      0.646 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+   314      0.648 wddm: CreateProcess flags 0x00000002 pasids 1
+   315      0.648 wddm: CreateDevice flags 0x00000002 pasid 0
+   316      0.648 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   317      0.648 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   318      0.648 wddm: paging DMA mapping op11 VA0x410000 root0x45E150000 translated1 system1 PA0x8E6D000 CPU_PA0x8E6D000 match1 offset0
+   319      0.648 wddm: paging DMA mapping op11 VA0x4100B8 root0x45E150000 translated1 system1 PA0x8E6D0B8 CPU_PA0x8E6D0B8 match1 offset184
+   320      0.648 wddm: paging DMA mapping op11 VA0x400000 root0x45E150000 translated1 system1 PA0x18495D000 CPU_PA0x18495D000 match1 offset0
+   321      0.648 wddm: SubmitCommandVirtual fence 1 node 1 flags 0x00000001 va 0x410000 size 4024
+   322      0.648 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7
+   323      0.648 wddm: paging DMA mapping op11 VA0x4000E8 root0x45E150000 translated1 system1 PA0x18495D0E8 CPU_PA0x18495D0E8 match1 offset232
+   324      0.648 wddm: paging DMA mapping op11 VA0x400128 root0x45E150000 translated1 system1 PA0x18495D128 CPU_PA0x18495D128 match1 offset296
+   325      0.648 wddm: paging DMA mapping op11 VA0x410000 root0x45E150000 translated1 system1 PA0x8E6D000 CPU_PA0x8E6D000 match1 offset0
+   326      0.648 wddm: SubmitCommandVirtual fence 2 node 1 flags 0x00000001 va 0x400000 size 4072
+   327      0.648 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 8
+   328      0.648 wddm: paging DMA mapping op11 VA0x4101B0 root0x45E150000 translated1 system1 PA0x8E6D1B0 CPU_PA0x8E6D1B0 match1 offset432
+   329      0.648 wddm: SubmitCommandVirtual fence 3 node 1 flags 0x00000001 va 0x410000 size 4016
+   330      0.648 wddm: paging DMA mapping op11 VA0x400000 root0x45E150000 translated1 system1 PA0x18495D000 CPU_PA0x18495D000 match1 offset0
+   331      0.648 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 9
+   332      0.648 wddm: SubmitCommandVirtual fence 4 node 1 flags 0x00000001 va 0x400000 size 4016
+   333      0.648 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 10
+   334      0.648 wddm: BuildPagingBuffer operation 12 segment 0, 64720 bytes free, pass offset 0
+   335      0.648 wddm: SubmitCommandVirtual fence 5 node 1 flags 0x00000001 va 0x410000 size 876
+   336      0.648 gfx: paging submit, 219 ring dwords reserved for buffer at 0x410000, seq 11
+   337      0.648 wddm: BuildPagingBuffer operation 12 segment 0, 64596 bytes free, pass offset 0
+   338      0.648 wddm: SubmitCommandVirtual fence 6 node 1 flags 0x00000001 va 0x41036C size 124
+   339      0.648 gfx: paging submit, 31 ring dwords reserved for buffer at 0x41036C, seq 12
+   340      0.648 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   341      0.648 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   342      0.648 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   343      0.648 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   344      0.648 wddm: OpenAllocation [0] handle 0x40000AC0 private 32 bytes -> FFFFE38750C533C0 (GetHandleData said 0000000000000000)
+   345      0.648 wddm: OpenAllocation 1 allocations flags 0x00000001
+   346      0.648 wddm: SubmitCommandVirtual fence 7 node 1 flags 0x00000001 va 0x4103E8 size 3072
+   347      0.648 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4103E8, seq 13
+   348      0.650 wddm: SubmitCommandVirtual fence 8 node 1 flags 0x00000001 va 0x400000 size 4016
+   349      0.650 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 14
+   350      0.650 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 15
+   351      0.650 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 16
+   352      0.650 wddm: BuildPagingBuffer operation 12 segment 0, 62152 bytes free, pass offset 0
+   353      0.650 wddm: BuildPagingBuffer operation 9 segment 0, 62092 bytes free, pass offset 0
+   354      0.652 gfx: paging submit, 895 ring dwords reserved for buffer at 0x410000, seq 17
+   355      0.652 gfx: paging submit, 96 ring dwords reserved for buffer at 0x410E40, seq 18
+   356      0.652 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 19
+   357      0.652 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 20
+   358      0.652 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 21
+   359      0.652 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 22
+   360      0.652 wddm: BuildPagingBuffer operation 12 segment 0, 62984 bytes free, pass offset 0
+   361      0.652 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 23
+   362      0.652 gfx: paging submit, 920 ring dwords reserved for buffer at 0x410000, seq 24
+   363      0.652 gfx: paging submit, 96 ring dwords reserved for buffer at 0x410E60, seq 25
+   364      0.654 gfx: paging submit, 956 ring dwords reserved for buffer at 0x400000, seq 26
+   365      0.654 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400EF0, seq 27
+   366      0.654 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 28
+   367      0.654 gfx: paging submit, 44 ring dwords reserved for buffer at 0x400000, seq 29
+   368      0.654 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4000B0, seq 30
+   369      0.654 gfx: paging submit, 92 ring dwords reserved for buffer at 0x410000, seq 31
+   370      0.654 gfx: paging submit, 918 ring dwords reserved for buffer at 0x410170, seq 32
+   371      0.654 gfx: paging submit, 185 ring dwords reserved for buffer at 0x400000, seq 33
+   372      0.654 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   373      0.654 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   374      0.654 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   375      0.654 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   376      0.654 wddm: OpenAllocation [0] handle 0x40000B40 private 32 bytes -> FFFFE38750C53220 (GetHandleData said 0000000000000000)
+   377      0.654 wddm: OpenAllocation 1 allocations flags 0x00000001
+   378      0.654 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002E4, seq 34
+   379      0.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 35
+   380      0.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 36
+   381      0.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 37
+   382      0.656 wddm: BuildPagingBuffer operation 9 segment 0, 62348 bytes free, pass offset 0
+   383      0.658 gfx: paging submit, 831 ring dwords reserved for buffer at 0x400000, seq 38
+   384      0.658 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D40, seq 39
+   385      0.658 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 40
+   386      0.658 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 41
+   387      0.658 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 42
+   388      0.660 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 43
+   389      0.660 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 44
+   390      0.660 gfx: paging submit, 452 ring dwords reserved for buffer at 0x400000, seq 45
+   391      0.660 gfx: paging submit, 560 ring dwords reserved for buffer at 0x400710, seq 46
+   392      0.660 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 47
+   393      0.660 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4107B0, seq 48
+   394      0.660 gfx: paging submit, 540 ring dwords reserved for buffer at 0x400000, seq 49
+   395      0.660 gfx: paging submit, 464 ring dwords reserved for buffer at 0x400870, seq 50
+   396      0.660 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 51
+   397      0.660 gfx: paging submit, 418 ring dwords reserved for buffer at 0x410930, seq 52
+   398      0.660 gfx: paging submit, 685 ring dwords reserved for buffer at 0x400000, seq 53
+   399      0.662 stage 50
+   400      0.662 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   401      0.662 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   402      0.662 dcnflip: SetVidPnSourceAddress flip: card 0xF4008D0000 -> physical 0x2708D0000
+   403      0.662 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   404      0.662 wddm: hardware vsync on (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)
+   405      0.662 display visibility: call 1 source 0x00000000 visible 1 previous 0 hardware 1 blanked 0
+   406      0.662 display visibility: call 1 status 0x00000000 current 1 blanked 0
+   407      0.662 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   408      0.664 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   409      0.936 wddm: CreateProcess flags 0x00000000 pasids 1
+   410      0.936 wddm: CreateDevice flags 0x00000000 pasid 0
+   411      0.936 wddm: ControlInterrupt type 3 on -> 0x00000000
+   412      0.936 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   413      0.936 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   414      1.060 wddm: CreateProcess flags 0x00000000 pasids 1
+   415      1.060 wddm: CreateDevice flags 0x00000000 pasid 0
+   416      1.060 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   417      1.060 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   418      1.134 wddm: DestroyContext
+   419      1.138 wddm: DestroyDevice
+   420      1.154 wddm: CreateDevice flags 0x00000000 pasid 0
+   421      1.154 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   422      1.154 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   423      1.325 wddm: CreateDevice flags 0x00000000 pasid 0
+   424      1.331 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   425      1.331 wddm: OpenAllocation [0] handle 0xC00016C0 private 32 bytes -> FFFFE3875E023E30 (GetHandleData said 0000000000000000)
+   426      1.331 wddm: OpenAllocation 1 allocations flags 0x00000001
+   427      1.331 gfx: paging submit, 320 ring dwords reserved for buffer at 0x400AB4, seq 54
+   428      1.331 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 55
+   429      1.333 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 56
+   430      1.333 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 57
+   431      1.333 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 58
+   432      1.333 wddm: BuildPagingBuffer operation 9 segment 0, 64260 bytes free, pass offset 0
+   433      1.335 gfx: paging submit, 353 ring dwords reserved for buffer at 0x410000, seq 59
+   434      1.335 gfx: paging submit, 638 ring dwords reserved for buffer at 0x4105C0, seq 60
+   435      1.335 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 61
+   436      1.335 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 62
+   437      1.335 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 63
+   438      1.335 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 64
+   439      1.335 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 65
+   440      1.335 gfx: paging submit, 63 ring dwords reserved for buffer at 0x410000, seq 66
+   441      1.335 gfx: paging submit, 944 ring dwords reserved for buffer at 0x4100FC, seq 67
+   442      1.337 gfx: paging submit, 108 ring dwords reserved for buffer at 0x400000, seq 68
+   443      1.337 gfx: paging submit, 896 ring dwords reserved for buffer at 0x4001B0, seq 69
+   444      1.337 gfx: paging submit, 156 ring dwords reserved for buffer at 0x410000, seq 70
+   445      1.337 gfx: paging submit, 848 ring dwords reserved for buffer at 0x410270, seq 71
+   446      1.337 gfx: paging submit, 204 ring dwords reserved for buffer at 0x400000, seq 72
+   447      1.337 gfx: paging submit, 810 ring dwords reserved for buffer at 0x400330, seq 73
+   448      1.337 gfx: paging submit, 1008 ring dwords reserved for buffer at 0x410000, seq 74
+   449      1.337 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 75
+   450      1.337 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 76
+   451      1.337 gfx: paging submit, 411 ring dwords reserved for buffer at 0x400000, seq 77
+   452      1.343 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   453      1.343 wddm: OpenAllocation [0] handle 0xC0002140 private 32 bytes -> FFFFE3875E0273D0 (GetHandleData said 0000000000000000)
+   454      1.343 wddm: OpenAllocation 1 allocations flags 0x00000001
+   455      1.343 gfx: paging submit, 592 ring dwords reserved for buffer at 0x40066C, seq 78
+   456      1.343 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410000, seq 79
+   457      1.345 gfx: paging submit, 974 ring dwords reserved for buffer at 0x41009C, seq 80
+   458      1.345 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 81
+   459      1.345 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 82
+   460      1.345 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 83
+   461      1.345 wddm: BuildPagingBuffer operation 9 segment 0, 62860 bytes free, pass offset 0
+   462      1.347 gfx: paging submit, 703 ring dwords reserved for buffer at 0x410000, seq 84
+   463      1.347 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B40, seq 85
+   464      1.347 gfx: paging submit, 328 ring dwords reserved for buffer at 0x400000, seq 86
+   465      1.347 gfx: paging submit, 688 ring dwords reserved for buffer at 0x400520, seq 87
+   466      1.347 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 88
+   467      1.347 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 89
+   468      1.347 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 90
+   469      1.349 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 91
+   470      1.349 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 92
+   471      1.349 gfx: paging submit, 364 ring dwords reserved for buffer at 0x400000, seq 93
+   472      1.349 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4005B0, seq 94
+   473      1.349 gfx: paging submit, 412 ring dwords reserved for buffer at 0x410000, seq 95
+   474      1.349 gfx: paging submit, 592 ring dwords reserved for buffer at 0x410670, seq 96
+   475      1.349 gfx: paging submit, 460 ring dwords reserved for buffer at 0x400000, seq 97
+   476      1.349 gfx: paging submit, 550 ring dwords reserved for buffer at 0x400730, seq 98
+   477      1.349 gfx: paging submit, 553 ring dwords reserved for buffer at 0x410000, seq 99
+   478      1.371 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   479      1.371 wddm: OpenAllocation [0] handle 0xC0000B40 private 32 bytes -> FFFFE3875E02F6A0 (GetHandleData said 0000000000000000)
+   480      1.371 wddm: OpenAllocation 1 allocations flags 0x00000001
+   481      1.371 gfx: paging submit, 213 ring dwords reserved for buffer at 0x4108A4, seq 100
+   482      1.373 gfx: paging submit, 240 ring dwords reserved for buffer at 0x410BF8, seq 101
+   483      1.373 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 102
+   484      1.373 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 103
+   485      1.373 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 104
+   486      1.373 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 105
+   487      1.375 gfx: paging submit, 433 ring dwords reserved for buffer at 0x400000, seq 106
+   488      1.375 gfx: paging submit, 198 ring dwords reserved for buffer at 0x400700, seq 107
+   489      1.375 gfx: paging submit, 368 ring dwords reserved for buffer at 0x400A18, seq 108
+   490      1.375 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 109
+   491      1.375 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 110
+   492      1.377 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 111
+   493      1.377 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 112
+   494      1.377 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 113
+   495      1.377 gfx: paging submit, 319 ring dwords reserved for buffer at 0x400000, seq 114
+   496      1.377 gfx: paging submit, 688 ring dwords reserved for buffer at 0x4004FC, seq 115
+   497      1.377 gfx: paging submit, 364 ring dwords reserved for buffer at 0x410000, seq 116
+   498      1.377 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4105B0, seq 117
+   499      1.377 gfx: paging submit, 412 ring dwords reserved for buffer at 0x400000, seq 118
+   500      1.377 gfx: paging submit, 592 ring dwords reserved for buffer at 0x400670, seq 119
+   501      1.377 gfx: paging submit, 460 ring dwords reserved for buffer at 0x410000, seq 120
+   502      1.377 gfx: paging submit, 544 ring dwords reserved for buffer at 0x410730, seq 121
+   503      1.377 gfx: paging submit, 561 ring dwords reserved for buffer at 0x400000, seq 122
+   504      1.383 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   505      1.383 wddm: OpenAllocation [0] handle 0xC0001C80 private 32 bytes -> FFFFE3875DCAC7A0 (GetHandleData said 0000000000000000)
+   506      1.383 wddm: OpenAllocation 1 allocations flags 0x00000001
+   507      1.383 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4008C4, seq 123
+   508      1.383 gfx: paging submit, 399 ring dwords reserved for buffer at 0x410000, seq 124
+   509      1.383 gfx: paging submit, 608 ring dwords reserved for buffer at 0x41063C, seq 125
+   510      1.385 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 126
+   511      1.385 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 127
+   512      1.385 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 128
+   513      1.385 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 129
+   514      1.387 gfx: paging submit, 65 ring dwords reserved for buffer at 0x400000, seq 130
+   515      1.387 gfx: paging submit, 818 ring dwords reserved for buffer at 0x400140, seq 131
+   516      1.387 gfx: paging submit, 112 ring dwords reserved for buffer at 0x400E08, seq 132
+   517      1.387 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 133
+   518      1.387 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 134
+   519      1.389 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 135
+   520      1.389 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 136
+   521      1.389 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 137
+   522      1.389 gfx: paging submit, 605 ring dwords reserved for buffer at 0x400000, seq 138
+   523      1.389 gfx: paging submit, 400 ring dwords reserved for buffer at 0x400974, seq 139
+   524      1.389 gfx: paging submit, 652 ring dwords reserved for buffer at 0x410000, seq 140
+   525      1.389 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A30, seq 141
+   526      1.389 gfx: paging submit, 700 ring dwords reserved for buffer at 0x400000, seq 142
+   527      1.389 gfx: paging submit, 304 ring dwords reserved for buffer at 0x400AF0, seq 143
+   528      1.389 gfx: paging submit, 799 ring dwords reserved for buffer at 0x410000, seq 144
+   529      1.393 display visibility: call 2 source 0x00000000 visible 0 previous 1 hardware 1 blanked 0
+   530      1.393 display visibility: call 2 status 0x00000000 current 0 blanked 1
+   531      1.393 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   532      1.395 display visibility: call 3 source 0x00000000 visible 0 previous 0 hardware 1 blanked 1
+   533      1.395 display visibility: call 3 status 0x00000000 current 0 blanked 1
+   534      1.395 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   535      1.395 wddm: BuildPagingBuffer operation 2 segment 0, 62340 bytes free, pass offset 0
+   536      1.397 gfx: paging submit, 208 ring dwords reserved for buffer at 0x410C7C, seq 145
+   537      1.397 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 146
+   538      1.397 gfx: paging submit, 295 ring dwords reserved for buffer at 0x410000, seq 147
+   539      1.397 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41049C, seq 148
+   540      1.397 wddm: CloseAllocation 1 allocations
+   541      1.397 wddm: DestroyAllocation 1 allocations
+   542      1.397 wddm: BuildPagingBuffer operation 2 segment 0, 64296 bytes free, pass offset 0
+   543      1.397 gfx: paging submit, 39 ring dwords reserved for buffer at 0x4104D8, seq 149
+   544      1.397 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410574, seq 150
+   545      1.397 wddm: CloseAllocation 1 allocations
+   546      1.397 wddm: DestroyAllocation 1 allocations
+   547      1.399 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4105B0, seq 151
+   548      1.399 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 152
+   549      1.399 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 153
+   550      1.399 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 154
+   551      1.401 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 155
+   552      1.401 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 156
+   553      1.401 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 157
+   554      1.401 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 158
+   555      1.401 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 159
+   556      1.401 wddm: BuildPagingBuffer operation 8 segment 0, 63156 bytes free, pass offset 0
+   557      1.405 gfx: paging submit, 629 ring dwords reserved for buffer at 0x400000, seq 160
+   558      1.409 gfx: paging submit, 368 ring dwords reserved for buffer at 0x400A20, seq 161
+   559      1.409 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 162
+   560      1.409 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 163
+   561      1.409 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 164
+   562      1.409 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 165
+   563      1.409 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 166
+   564      1.409 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 167
+   565      1.409 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 168
+   566      1.409 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 169
+   567      1.409 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 170
+   568      1.409 gfx: paging submit, 275 ring dwords reserved for buffer at 0x400000, seq 171
+   569      1.409 gfx: paging submit, 501 ring dwords reserved for buffer at 0x410000, seq 172
+   570      1.409 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4107D4, seq 173
+   571      1.415 gfx: paging submit, 496 ring dwords reserved for buffer at 0x410810, seq 174
+   572      1.415 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 175
+   573      1.415 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 176
+   574      1.415 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 177
+   575      1.415 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 178
+   576      1.415 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 179
+   577      1.417 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 180
+   578      1.417 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 181
+   579      1.417 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 182
+   580      1.417 wddm: BuildPagingBuffer operation 8 segment 0, 62580 bytes free, pass offset 0
+   581      1.421 gfx: paging submit, 773 ring dwords reserved for buffer at 0x400000, seq 183
+   582      1.423 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C60, seq 184
+   583      1.423 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 185
+   584      1.423 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 186
+   585      1.423 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 187
+   586      1.423 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 188
+   587      1.423 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x410000, seq 189
+   588      1.423 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 190
+   589      1.423 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 191
+   590      1.425 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 192
+   591      1.425 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 193
+   592      1.425 gfx: paging submit, 67 ring dwords reserved for buffer at 0x400000, seq 194
+   593      1.425 gfx: paging submit, 818 ring dwords reserved for buffer at 0x40010C, seq 195
+   594      1.425 gfx: paging submit, 128 ring dwords reserved for buffer at 0x400DD4, seq 196
+   595      1.425 gfx: paging submit, 924 ring dwords reserved for buffer at 0x410000, seq 197
+   596      1.425 gfx: paging submit, 80 ring dwords reserved for buffer at 0x410E70, seq 198
+   597      1.425 gfx: paging submit, 972 ring dwords reserved for buffer at 0x400000, seq 199
+   598      1.425 gfx: paging submit, 32 ring dwords reserved for buffer at 0x400F30, seq 200
+   599      1.425 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 201
+   600      1.425 gfx: paging submit, 60 ring dwords reserved for buffer at 0x400000, seq 202
+   601      1.425 gfx: paging submit, 958 ring dwords reserved for buffer at 0x4000F0, seq 203
+   602      1.425 gfx: paging submit, 145 ring dwords reserved for buffer at 0x410000, seq 204
+   603      1.425 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   604      1.425 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   605      1.425 display visibility: call 4 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   606      1.425 display visibility: call 4 status 0x00000000 current 1 blanked 0
+   607      1.425 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   608      1.429 gfx: paging submit, 487 ring dwords reserved for buffer at 0x410244, seq 205
+   609      1.429 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4109E0, seq 206
+   610      1.429 wddm: CloseAllocation 1 allocations
+   611      1.429 wddm: DestroyAllocation 1 allocations
+   612      1.431 gfx: paging submit, 368 ring dwords reserved for buffer at 0x410A1C, seq 207
+   613      1.431 gfx: paging submit, 537 ring dwords reserved for buffer at 0x400000, seq 208
+   614      1.431 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400864, seq 209
+   615      1.431 wddm: CloseAllocation 1 allocations
+   616      1.431 wddm: DestroyAllocation 1 allocations
+   617      1.433 gfx: paging submit, 273 ring dwords reserved for buffer at 0x4008A0, seq 210
+   618      1.433 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400CE4, seq 211
+   619      1.433 wddm: CloseAllocation 1 allocations
+   620      1.433 wddm: DestroyAllocation 1 allocations
+   621      1.435 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   622      1.435 wddm: OpenAllocation [0] handle 0x80003640 private 32 bytes -> FFFFE3875DCC2290 (GetHandleData said 0000000000000000)
+   623      1.435 wddm: OpenAllocation 1 allocations flags 0x00000001
+   624      1.435 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400D20, seq 212
+   625      1.435 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 213
+   626      1.435 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 214
+   627      1.435 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 215
+   628      1.437 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 216
+   629      1.437 gfx: paging submit, 497 ring dwords reserved for buffer at 0x410000, seq 217
+   630      1.439 gfx: paging submit, 494 ring dwords reserved for buffer at 0x410800, seq 218
+   631      1.439 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 219
+   632      1.439 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 220
+   633      1.439 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 221
+   634      1.439 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 222
+   635      1.439 gfx: paging submit, 589 ring dwords reserved for buffer at 0x400000, seq 223
+   636      1.441 gfx: paging submit, 416 ring dwords reserved for buffer at 0x400934, seq 224
+   637      1.441 gfx: paging submit, 636 ring dwords reserved for buffer at 0x410000, seq 225
+   638      1.441 gfx: paging submit, 368 ring dwords reserved for buffer at 0x4109F0, seq 226
+   639      1.441 gfx: paging submit, 684 ring dwords reserved for buffer at 0x400000, seq 227
+   640      1.441 gfx: paging submit, 320 ring dwords reserved for buffer at 0x400AB0, seq 228
+   641      1.441 gfx: paging submit, 732 ring dwords reserved for buffer at 0x410000, seq 229
+   642      1.441 gfx: paging submit, 272 ring dwords reserved for buffer at 0x410B70, seq 230
+   643      1.441 gfx: paging submit, 780 ring dwords reserved for buffer at 0x400000, seq 231
+   644      1.441 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C30, seq 232
+   645      1.441 gfx: paging submit, 881 ring dwords reserved for buffer at 0x410000, seq 233
+   646      1.447 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   647      1.447 wddm: OpenAllocation [0] handle 0x80003BC0 private 32 bytes -> FFFFE3875DCCB670 (GetHandleData said 0000000000000000)
+   648      1.447 wddm: OpenAllocation 1 allocations flags 0x00000001
+   649      1.447 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DC4, seq 234
+   650      1.447 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 235
+   651      1.447 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 236
+   652      1.449 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 237
+   653      1.449 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 238
+   654      1.451 gfx: paging submit, 575 ring dwords reserved for buffer at 0x400000, seq 239
+   655      1.451 gfx: paging submit, 416 ring dwords reserved for buffer at 0x400940, seq 240
+   656      1.451 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 241
+   657      1.451 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 242
+   658      1.453 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 243
+   659      1.453 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 244
+   660      1.453 gfx: paging submit, 223 ring dwords reserved for buffer at 0x410000, seq 245
+   661      1.453 gfx: paging submit, 782 ring dwords reserved for buffer at 0x41037C, seq 246
+   662      1.453 gfx: paging submit, 284 ring dwords reserved for buffer at 0x400000, seq 247
+   663      1.453 gfx: paging submit, 720 ring dwords reserved for buffer at 0x400470, seq 248
+   664      1.453 gfx: paging submit, 332 ring dwords reserved for buffer at 0x410000, seq 249
+   665      1.453 gfx: paging submit, 672 ring dwords reserved for buffer at 0x410530, seq 250
+   666      1.453 gfx: paging submit, 380 ring dwords reserved for buffer at 0x400000, seq 251
+   667      1.453 gfx: paging submit, 624 ring dwords reserved for buffer at 0x4005F0, seq 252
+   668      1.453 gfx: paging submit, 428 ring dwords reserved for buffer at 0x410000, seq 253
+   669      1.453 gfx: paging submit, 576 ring dwords reserved for buffer at 0x4106B0, seq 254
+   670      1.453 gfx: paging submit, 529 ring dwords reserved for buffer at 0x400000, seq 255
+   671      1.457 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   672      1.457 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   673      1.457 display visibility: call 5 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+   674      1.457 display visibility: call 5 status 0x00000000 current 1 blanked 0
+   675      1.457 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   676      1.729 gfx: paging submit, 478 ring dwords reserved for buffer at 0x400844, seq 256
+   677      1.729 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 257
+   678      1.729 gfx: paging submit, 430 ring dwords reserved for buffer at 0x410930, seq 258
+   679      1.729 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 259
+   680      1.729 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 260
+   681      1.729 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 261
+   682      1.729 gfx: paging submit, 795 ring dwords reserved for buffer at 0x410000, seq 262
+   683      1.759 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   684      1.759 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   685      1.759 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   686      1.759 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   687      1.759 wddm: Present list q4-7  FFFFE3875DCC2290 0000000002338000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   688      1.759 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   689      1.759 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   690      1.785 wddm: CreateDevice flags 0x00000000 pasid 0
+   691      1.787 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   692      1.787 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   693      1.789 wddm: CreateProcess flags 0x00000000 pasids 1
+   694      1.789 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   695      1.789 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   696      1.867 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   697      1.867 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   698      1.867 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   699      1.867 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   700      1.867 wddm: Present list q4-7  FFFFE3875DCCB670 0000000000010000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   701      1.867 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   702      1.867 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   703      1.987 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+   704      1.987 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   705      1.987 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   706      1.987 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   707      1.987 wddm: Present list q4-7  FFFFE3875DCAC7A0 0000000001A6E000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   708      1.987 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   709      1.987 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   710      2.013 gfx: paging submit, 208 ring dwords reserved for buffer at 0x410C6C, seq 263
+   711      2.013 gfx: paging submit, 855 ring dwords reserved for buffer at 0x400000, seq 264
+   712      2.013 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D5C, seq 265
+   713      2.015 gfx: paging submit, 888 ring dwords reserved for buffer at 0x410000, seq 266
+   714      2.015 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DE0, seq 267
+   715      2.015 gfx: paging submit, 969 ring dwords reserved for buffer at 0x400000, seq 268
+   716      2.031 wddm: DestroyContext
+   717      2.039 wddm: DestroyDevice
+   718      2.043 wddm: DestroyProcess
+   719      2.055 wddm: CreateProcess flags 0x00000000 pasids 1
+   720      2.057 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   721      2.057 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   722      2.079 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400F24, seq 269
+   723      2.079 gfx: paging submit, 91 ring dwords reserved for buffer at 0x410000, seq 270
+   724      2.081 gfx: paging submit, 110 ring dwords reserved for buffer at 0x41016C, seq 271
+   725      2.081 gfx: paging submit, 816 ring dwords reserved for buffer at 0x410324, seq 272
+   726      2.081 gfx: paging submit, 236 ring dwords reserved for buffer at 0x400000, seq 273
+   727      2.081 gfx: paging submit, 782 ring dwords reserved for buffer at 0x4003B0, seq 274
+   728      2.081 gfx: paging submit, 317 ring dwords reserved for buffer at 0x410000, seq 275
+   729      2.175 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   730      2.175 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   731      2.175 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   732      2.175 wddm: Present list q4-7  FFFFE3875DCC2290 0000000002338000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   733      2.175 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   734      2.175 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   735      2.656 gfx: paging submit, 686 ring dwords reserved for buffer at 0x4104F4, seq 276
+   736      2.656 gfx: paging submit, 380 ring dwords reserved for buffer at 0x400000, seq 277
+   737      2.656 gfx: paging submit, 638 ring dwords reserved for buffer at 0x4005F0, seq 278
+   738      2.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 279
+   739      2.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 280
+   740      2.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 281
+   741      2.656 gfx: paging submit, 587 ring dwords reserved for buffer at 0x400000, seq 282
+   742      2.722 gfx: paging submit, 125 ring dwords reserved for buffer at 0x40092C, seq 283
+   743      2.726 gfx: paging submit, 110 ring dwords reserved for buffer at 0x400B20, seq 284
+   744      2.726 gfx: paging submit, 192 ring dwords reserved for buffer at 0x400CD8, seq 285
+   745      2.726 gfx: paging submit, 860 ring dwords reserved for buffer at 0x410000, seq 286
+   746      2.726 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D70, seq 287
+   747      2.726 gfx: paging submit, 908 ring dwords reserved for buffer at 0x400000, seq 288
+   748      2.726 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E30, seq 289
+   749      2.726 gfx: paging submit, 956 ring dwords reserved for buffer at 0x410000, seq 290
+   750      2.726 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410EF0, seq 291
+   751      2.728 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 292
+   752      2.728 gfx: paging submit, 44 ring dwords reserved for buffer at 0x410000, seq 293
+   753      2.728 gfx: paging submit, 962 ring dwords reserved for buffer at 0x4100B0, seq 294
+   754      2.728 gfx: paging submit, 143 ring dwords reserved for buffer at 0x400000, seq 295
+   755      2.758 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   756      2.758 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   757      2.758 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   758      2.758 wddm: Present list q4-7  FFFFE3875DCCB670 0000000000010000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   759      2.758 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   760      2.758 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   761      2.766 gfx: paging submit, 617 ring dwords reserved for buffer at 0x40023C, seq 296
+   762      2.766 gfx: paging submit, 256 ring dwords reserved for buffer at 0x400BE0, seq 297
+   763      2.766 gfx: paging submit, 360 ring dwords reserved for buffer at 0x410000, seq 298
+   764      2.766 gfx: paging submit, 656 ring dwords reserved for buffer at 0x4105A0, seq 299
+   765      2.768 gfx: paging submit, 396 ring dwords reserved for buffer at 0x400000, seq 300
+   766      2.768 gfx: paging submit, 608 ring dwords reserved for buffer at 0x400630, seq 301
+   767      2.768 gfx: paging submit, 491 ring dwords reserved for buffer at 0x410000, seq 302
+   768      2.840 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   769      2.840 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   770      2.840 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   771      2.840 wddm: Present list q4-7  FFFFE3875DCAC7A0 0000000001A6E000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   772      2.840 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   773      2.840 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   774      2.850 gfx: paging submit, 153 ring dwords reserved for buffer at 0x4107AC, seq 303
+   775      2.850 gfx: paging submit, 138 ring dwords reserved for buffer at 0x410A10, seq 304
+   776      2.852 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C38, seq 305
+   777      2.852 gfx: paging submit, 828 ring dwords reserved for buffer at 0x400000, seq 306
+   778      2.852 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF0, seq 307
+   779      2.852 gfx: paging submit, 876 ring dwords reserved for buffer at 0x410000, seq 308
+   780      2.852 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB0, seq 309
+   781      2.852 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 310
+   782      2.852 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E70, seq 311
+   783      2.852 gfx: paging submit, 972 ring dwords reserved for buffer at 0x410000, seq 312
+   784      2.852 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F30, seq 313
+   785      2.852 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 314
+   786      2.852 gfx: paging submit, 83 ring dwords reserved for buffer at 0x410000, seq 315
+   787      2.860 gfx: paging submit, 745 ring dwords reserved for buffer at 0x41014C, seq 316
+   788      2.860 gfx: paging submit, 176 ring dwords reserved for buffer at 0x410CF0, seq 317
+   789      2.860 gfx: paging submit, 568 ring dwords reserved for buffer at 0x400000, seq 318
+   790      2.860 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4008E0, seq 319
+   791      2.860 gfx: paging submit, 604 ring dwords reserved for buffer at 0x410000, seq 320
+   792      2.860 gfx: paging submit, 400 ring dwords reserved for buffer at 0x410970, seq 321
+   793      2.860 gfx: paging submit, 699 ring dwords reserved for buffer at 0x400000, seq 322
+   794      3.913 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   795      3.913 wddm: Present list FFFF92868F17FE40 (context list 256), private 0000000000000000/0, driver data 0
+   796      3.913 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   797      3.915 wddm: Present list q4-7  FFFFE3875DCC2290 0000000002338000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   798      3.915 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   799      3.915 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   800      4.920 wddm summary: ---- DDI calls: name, count, first log line ----
+   801      4.920 wddm summary: QueryAdapterInfo                   12  first at 257
+   802      4.920 wddm summary: GetNodeMetadata                     2  first at 265
+   803      4.920 wddm summary: CreateDevice                       10  first at 272
+   804      4.920 wddm summary: DestroyDevice                       2  first at 419
+   805      4.920 wddm summary: CreateContext                       8  first at 275
+   806      4.920 wddm summary: DestroyContext                      2  first at 418
+   807      4.920 wddm summary: CreateProcess                       6  first at 271
+   808      4.920 wddm summary: DestroyProcess                      1  first at 718
+   809      4.920 wddm summary: SetRootPageTable                    1  first at 298
+   810      4.920 wddm summary: CreateAllocation                   12  first at 343
+   811      4.920 wddm summary: DestroyAllocation                   5  first at 541
+   812      4.920 wddm summary: DescribeAllocation                 12  first at 372
+   813      4.920 wddm summary: GetStandardAllocationDriverData      4  first at 341
+   814      4.920 wddm summary: OpenAllocation                     16  first at 345
+   815      4.920 wddm summary: CloseAllocation                     5  first at 540
+   816      4.920 wddm summary: BuildPagingBuffer                1577  first at 277
+   817      4.920 wddm summary: SubmitCommandVirtual              316  first at 320
+   818      4.920 wddm summary: Present                             7  first at 684
+   819      4.920 wddm summary: SetVidPnSourceAddress              10  first at 403
+   820      4.920 wddm summary: ControlInterrupt                    1  first at 411
+   821      4.920 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   822      4.920 wddm summary: adapter info type   1       1  first at 257
+   823      4.920 wddm summary: adapter info type  15       1  first at 258
+   824      4.920 wddm summary: adapter info type  47       1  first at 259
+   825      4.920 wddm summary: adapter info type  13       1  first at 260
+   826      4.920 wddm summary: adapter info type  14       4  first at 261
+   827      4.920 wddm summary: adapter info type  11       2  first at 268
+   828      4.920 wddm summary: adapter info type  10       1  first at 270
+   829      4.920 wddm summary: adapter info type  16       1  first at 270
+   830      4.920 wddm summary: capture plans reserved 0 heap 0
+   831      4.920 wddm summary: capture context peaks plans 0 reserved-bytes 0
+   832      4.920 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   833      4.920 wddm summary: paging operation  11    1503  first at 277
+   834      4.920 wddm summary: paging operation  12      62  first at 334
+   835      4.920 wddm summary: paging operation   9       8  first at 353
+   836      4.920 wddm summary: paging operation   2       2  first at 535
+   837      4.920 wddm summary: paging operation   8       2  first at 556
+   838      4.920 wddm summary: objects created/destroyed: dev 10/2 ctx 8/2 proc 6/1 alloc 12/5, 47 alive
+   839      4.920 wddm summary: allocations opened/closed: 16/5 calls
+   840      4.920 wddm summary: submissions 0 physical + 316 virtual, 0 preemptions, last completed fence 316
+   841      4.920 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   842      4.920 wddm summary: umd: 0 allocs (0 refused), 0 contexts, 0 submits on the ring, 0 not run
+   843      4.920 wddm profile: umd calls 0, elapsed ticks 0, QPC frequency 10000000
+   844      4.920 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+   845      4.920 wddm summary: node 1 (paging, open): 316 hardware submitted, 316 completed, 0 timeouts, 0 refused
+   846      4.920 wddm: paging OS-private queue admissions=316 (no submit allocation)
+   847      4.920 wddm summary: SubmitCommandVirtual by node: 0: 0, 1: 316, 0 private-buffer refusals
+   848      4.920 wddm summary: paging DMA VA nonzero 548 zero 1029, mapping observations 8
+   849      4.920 wddm summary: native DMA transfers 2 fills 8 bytes 92160000
+   850      4.920 wddm summary: native DMA exact disjoint checks 2
+   851      4.920 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x18495D000 CPU_PA0x18495D000
+   852      4.920 wddm summary: BuildPagingBuffer: 2 transfers, 8 fills, 92160000 bytes, 207 insufficient-buffer
+   853      4.920 wddm summary: aperture map batches 0, unmap batches 0
+   854      4.920 wddm summary: paging TLB invalidations 62, PTE update batches 468
+   855      4.920 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+   856      4.920 wddm summary: presents 7, flips 8 of 10 address calls (7 arrived above DISPATCH_LEVEL)
+   857      4.920 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+   858      4.920 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+   859      4.920 wddm summary: widest blit 0 rows
+   860      4.920 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+   861      4.920 wddm summary: vsync enabled, 0 ticks, 239 reported to dxgkrnl
+   862      4.920 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+   863      4.920 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+   864      4.920 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+   865      4.920 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 40728427262..40728427363
+   866      4.920 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 40735729956..40735730078
+   867      4.920 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 40735751588..40735751788
+   868      4.920 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 40736053900..40736053986
+   869      4.920 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 40736370011..40736370097
+   870      4.920 wddm summary: dcn lock acknowledgement timeouts 0
+   871      4.920 wddm summary: vidpn flip open: 8 hardware flips, 0 refused, 1 hardware vsyncs armed 255 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+   872      4.920 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   873      4.920 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   874      4.920 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+   875      4.920 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+   876      4.920 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+   877      4.920 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+   878      4.920 vidmm summary: PTE encoding level 0 segment 0 coherent 0 noncoherent 29828 snoop mismatches 0
+   879      4.920 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 85500 snoop mismatches 0
+   880      4.920 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+   881      4.920 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 636 snoop mismatches 0
+   882      4.920 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 10 snoop mismatches 0
+   883      4.920 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 9 snoop mismatches 0
+   884      4.920 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+   885      4.920 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 1 roots
+             886 lines printed
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  [DEVICE_INTERFACE]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-008D36AE
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070093 (milestone 7 revision 147)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 0, flips 8 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+driver_version=0.7.147.1
+installed_sha256=5FCB554AE77B04506AA80B4590EE33D7CAA4F8D5A6E720CA89666F736760EC31
+boot_after=2026-09-25T03:57:55
+
+  Id StartTime            Responding
+  -- ---------            ----------
+6076 9/25/2026 4:42:44 AM       True
+
+
+
+
+EnableFullWddm      : 2
+EnableSdmaIbControl : 0
+EnableSdmaVaControl : 0
+UnconfirmedStarts   : 1
+EnablePresentBlit   : 1
+EnableDcnWrite      : 1
+EnableVidPnFlip     : 1
+
+
+
+dwm_retained=True
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66875 ready=1
+clock verified: 1000 MHz, VID 116 (request 820 mV), backend=kmd-smu
+candidate147_transition_complete_pending_automatic_confirmation

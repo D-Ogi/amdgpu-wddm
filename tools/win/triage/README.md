@@ -44,4 +44,5 @@ our modules loaded: none
 `0x1E_C000001D_nwifi!NwfReadMsg`, which is the same address: the script's answer is the symbol-free half of it.
 
 Dumps and module files are evidence from a machine and never go into this repository; keep them under
-`P:\BC-250\scratch\dumps\`.
+`<BC250_ROOT>\scratch\dumps\` (`BC250_ROOT` is the workspace root, by default the parent directory of
+this repository).

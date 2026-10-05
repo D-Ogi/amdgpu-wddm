@@ -1,0 +1,19 @@
+probe-cpu-power 1.0
+utc 2026-10-05T02:17:26Z
+host BC250-A
+os 10.0.22631
+cpu AMD BC-250
+cores 6 logical 12
+max-clock-mhz 3194
+current-clock-mhz 3194
+--- active scheme
+Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+(the SUB_PROCESSOR query output is in powercfg-sub-processor.txt)
+
+--- idle counter samples
+samples 20 at 1 s
+% of maximum frequency: n 20 mean 46.00 min 42.00 max 100.00
+% processor performance: n 20 mean 62.66 min 42.98 max 106.15
+% processor time: n 20 mean 3.33 min 0.00 max 25.60
+processor frequency: n 20 mean 3,194.00 min 3,194.00 max 3,194.00
+probe-cpu-power end

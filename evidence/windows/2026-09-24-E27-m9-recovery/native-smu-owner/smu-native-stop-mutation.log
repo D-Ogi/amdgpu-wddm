@@ -1,0 +1,11 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+Generowanie kodu...
+FAIL line 81: WaitForSingleObject(stop_done,100)==WAIT_TIMEOUT
+FAIL line 58: SmuPrepareClock(&owner,&r)==STATUS_SUCCESS && r.ready
+FAIL line 85: !owner.Online && !owner.Registers && !owner.Caller && calls==1204
+FAIL line 87: !f && !v && !t && calls==1204
+SMU native owner: 23078 checks, 4 failures

@@ -1,0 +1,88 @@
+{
+  "dwm_pid": 7680,
+  "trace_loss": {
+    "events": 0,
+    "buffers": 0
+  },
+  "matched": 3971,
+  "pending": 0,
+  "unmatched": 0,
+  "duplicate_starts": 0,
+  "contexts": [
+    {
+      "TimeStamp": "356403",
+      "hContext": "0xffffdd81fbea9b70",
+      "ContextHandle": "0x00000000400002c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1287122",
+      "hContext": "0xffffdd81f8e4edd0",
+      "ContextHandle": "0x0000000040001dc0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1316548",
+      "hContext": "0xffffdd81fe1e66a0",
+      "ContextHandle": "0x0000000040002bc0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1356391",
+      "hContext": "0xffffdd81fe1e66a0",
+      "ContextHandle": "0x0000000080001b00",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1383846",
+      "hContext": "0xffffdd81f8e4edd0",
+      "ContextHandle": "0x0000000080002a00",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1401749",
+      "hContext": "0xffffdd81fe04eb30",
+      "ContextHandle": "0x0000000040004580",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1572873",
+      "hContext": "0xffffdd81fefb0a70",
+      "ContextHandle": "0x0000000080001f80",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "2049732",
+      "hContext": "0xffffdd81f8e4edd0",
+      "ContextHandle": "0x00000000400049c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "2134225",
+      "hContext": "0xffffdd81f9f98b30",
+      "ContextHandle": "0x00000000400056c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "2139134",
+      "hContext": "0xffffdd81fb0ebdd0",
+      "ContextHandle": "0x0000000040005bc0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    }
+  ],
+  "duration_seconds": 185.8558529,
+  "restored_cpu_pid": 8116,
+  "map_bucket_overflow_max": 8,
+  "kmd_blits_start": 706,
+  "kmd_blits_end": 706
+}

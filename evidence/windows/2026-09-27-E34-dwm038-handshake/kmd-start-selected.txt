@@ -1,0 +1,12 @@
+  3899     11.719 wddm summary: node 0 hardware: 96 submitted, 96 completed, 0 timeouts, 0 refused
+  3986     11.719 wddm: GPU Present submits8 rejected0 failed0
+  3988     11.720 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  4121     12.874 wddm summary: node 0 hardware: 115 submitted, 115 completed, 0 timeouts, 0 refused
+  4208     12.875 wddm: GPU Present submits8 rejected0 failed0
+  4210     12.875 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  4337     13.999 wddm summary: node 0 hardware: 133 submitted, 133 completed, 0 timeouts, 0 refused
+  4424     14.001 wddm: GPU Present submits8 rejected0 failed0
+  4426     14.001 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  4538     14.742 wddm summary: node 0 hardware: 147 submitted, 147 completed, 0 timeouts, 0 refused
+  4625     14.742 wddm: GPU Present submits8 rejected0 failed0
+  4627     14.742 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous

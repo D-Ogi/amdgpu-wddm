@@ -1,0 +1,12 @@
+compile (user mode, paging-node packets)
+  Generowanie kodu...
+  P:\bc-250\scratch\build\capture-witness-routing\paging-route.c(3087): error C2065: "MAXULONG": niezadeklarowany identyfikator
+  P:\bc-250\scratch\build\capture-witness-routing\paging-route.c(3087): warning C4389: "!=": niezgodność typu ze znakiem/bez znaku
+  P:\bc-250\scratch\build\capture-witness-routing\paging-route.c(3092): error C2065: "MAXULONG": niezadeklarowany identyfikator
+  P:\bc-250\scratch\build\capture-witness-routing\paging-route.c(3092): warning C4389: "!=": niezgodność typu ze znakiem/bez znaku
+  Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_paging.ps1:49
+Line |
+  49 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl.exe failed (2)

@@ -1,0 +1,35 @@
+[
+  {
+    "line": 2838,
+    "context": [
+      "    if(Build->MultipassOffset==PAGING_CAPTURE_COMPLETE)return STATUS_SUCCESS;",
+      "    if(!Build->MultipassOffset) {",
+      "        status=GfxPagingCaptureVirtualGraph(Device,Root,src,dst,bytes,&capture);",
+      "        if(!NT_SUCCESS(status))return status;",
+      "        capture->Owner.Allocation=Build->TransferVirtual.hAllocation;",
+      "        capture->Owner.AllocationOffset=Build->TransferVirtual.AllocationOffsetInBytes;"
+    ]
+  },
+  {
+    "line": 3100,
+    "context": [
+      "        BC250_WDDM_OBJECT* context=WddmObject(pBuildPagingBuffer->hSystemContext,BC250_WDDM_MAGIC_CONTEXT);",
+      "        ULONGLONG moved=0;",
+      "        NTSTATUS status=WddmBuildCapturedVirtualTransfer((BC250_DEVICE*)hAdapter,context?context->RootPhysical:0,",
+      "            context?&context->Captures:NULL,pBuildPagingBuffer,&moved);",
+      "        if (moved) {",
+      "            InterlockedIncrement(&wddm->PagingTransfersBuilt);"
+    ]
+  },
+  {
+    "line": 3194,
+    "context": [
+      "    if (!wddm) return WddmBuildPagingBufferImpl(hAdapter,Build);",
+      "    KeEnterCriticalRegion();ExAcquirePushLockExclusive(&wddm->PagingBuildLock);",
+      "    status=WddmBuildPagingBufferImpl(hAdapter,Build);",
+      "    ExReleasePushLockExclusive(&wddm->PagingBuildLock);KeLeaveCriticalRegion();",
+      "    return status;",
+      "}"
+    ]
+  }
+]

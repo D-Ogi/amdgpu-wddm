@@ -1,0 +1,40 @@
+{
+    "status":  "functional-restored",
+    "tree_closed":  true,
+    "baseline_restored":  true,
+    "runtime_functional":  true,
+    "runtime_entered":  true,
+    "caps_succeeded":  true,
+    "artifacts":  {
+                      "amdgpu_wddm_d3d12.dll":  "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+                      "amdgpu_wddm_vkd3d.dll":  "D79FEC49525A75E679EEAE8B1602C5AD4FFF518D2BE615A39B4214DC18AE5046",
+                      "amdgpu_wddm_radv.dll":  "F9DCB33B6349642EA1FC849245C1651A849E5CB0E832BC087865327DCA7766EC"
+                  },
+    "phases":  [
+                   "Capture",
+                   "Install",
+                   "runtime",
+                   "Restore",
+                   "Verify"
+               ],
+    "errors":  [
+
+               ],
+    "caps_witness":  {
+                         "document":  true,
+                         "created_at":  "12_1",
+                         "create_12_1":  "0x00000000 S_OK",
+                         "max_feature_level":  "12_1",
+                         "tiled_tier":  3,
+                         "removed_reason":  "0x00000000 S_OK",
+                         "modules":  [
+                                         "amdgpu_wddm_d3d12.dll",
+                                         "amdgpu_wddm_vkd3d.dll",
+                                         "amdgpu_wddm_radv.dll"
+                                     ],
+                         "sparse_policy":  "1 default",
+                         "promotable":  true
+                     },
+    "candidate_retained":  false,
+    "elapsed":  26.5765553
+}

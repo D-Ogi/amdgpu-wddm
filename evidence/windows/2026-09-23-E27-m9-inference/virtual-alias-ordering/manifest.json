@@ -1,0 +1,12 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "working_tree": "dirty; no production modification or deployment",
+  "default_exit": 0,
+  "regression_exit": 1,
+  "sha256": {
+    "driver/kmd/wddm.c": "fbaa8d49ba219ff2b1aa778dc174f50a8392664908f5a7308825312bbf3b3024",
+    "experiments/E27-m9-inference/paging-route-test-prefix.c": "57578a152c5d8944d83c7c8aaa11bb81d2480c065dadc285b0ca2d151e2ed712",
+    "experiments/E27-m9-inference/paging-route-test-suffix.c": "7fd3a0646e1d7edf0b8bb5f3e1d9ea2222378bd01d4479d4a154fc080516d535",
+    "experiments/E27-m9-inference/generate-paging-route-test.py": "ec86a35ae2fe5d750699598b2bedb2e070a6bb0bc7c1006d91783ab6bd37d8f9"
+  }
+}

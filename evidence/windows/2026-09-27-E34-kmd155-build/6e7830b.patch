@@ -1,0 +1,259 @@
+diff --git a/driver/kmd/gfx-copy-provenance.md b/driver/kmd/gfx-copy-provenance.md
+index 4825135..63b600e 100644
+--- a/driver/kmd/gfx-copy-provenance.md
++++ b/driver/kmd/gfx-copy-provenance.md
+@@ -16,3 +16,11 @@ radv_cp_dma_prepare. The GFX9+ count field is aligned down to32 bytes for each
+ maximum-size chunk; the final packet carries CP_SYNC. The first packet uses
+ RAW_WAIT to order earlier CP DMA. L2 source/destination selection matches RADV's
+ CP_DMA_USE_L2 path. Cache flushes and shader ordering remain caller obligations.
++
++PROVENANCE: Linux amdgpu (https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git), MIT for the imported AMD files.
++
++The acquire sequence follows the existing imported gfx_v10_0_emit_mem_sync in
++shim/bc250_dispatch.c:224-244 and nvd.h. It has eight DWORDs including its header,
++full coherency range, and GL2 writeback/invalidate plus lower cache operations.
++This does not provide residency or inter-queue waits. Exact existing reference
++file hashes for this addition are retained with the validation evidence.
+diff --git a/driver/kmd/gfx_blt.c b/driver/kmd/gfx_blt.c
+index 3a240be..68bc542 100644
+--- a/driver/kmd/gfx_blt.c
++++ b/driver/kmd/gfx_blt.c
+@@ -140,3 +140,27 @@ int Bc250GfxPresentMatches(const void* record, unsigned int capacity,
+         PresentWord(p+8)==BC250_GFX_PRESENT_RECORD_BYTES && PresentWord(p+12)==bytes &&
+         (((unsigned long long)PresentWord(p+20)<<32)|PresentWord(p+16))==address;
+ }
++
++BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
++    const BC250_BLIT_SURFACE* source, const BC250_BLIT_SURFACE* destination,
++    const BC250_BLIT_RECT* sourceRect, const BC250_BLIT_RECT* destinationRect,
++    const BC250_BLIT_RECT* dirty, unsigned int count,
++    unsigned long long sourceBase, unsigned long long destinationBase,
++    unsigned int offset, unsigned int* next, unsigned int* buffer,
++    unsigned int capacity, unsigned int* written)
++{
++    BC250_GFX_BLIT_RESULT result;
++    unsigned int copied,i;
++    if (!next || !written) return Bc250GfxBltInvalid;
++    *next=offset;*written=0;
++    if (capacity<16u || (capacity&7u)) return Bc250GfxBltNoSpace;
++    if (!buffer) return Bc250GfxBltInvalid;
++    result=Bc250EmitGfxBltList(source,destination,sourceRect,destinationRect,
++        dirty,count,sourceBase,destinationBase,offset,next,
++        buffer+BC250_GFX_ACQUIRE_DWORDS,capacity-BC250_GFX_ACQUIRE_DWORDS,&copied);
++    if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return result;
++    (void)Bc250EmitGfxAcquire(buffer,capacity);
++    for(i=BC250_GFX_ACQUIRE_DWORDS+copied;i<capacity;i++)buffer[i]=Bc250GfxCopyNop();
++    *written=capacity;
++    return result;
++}
+diff --git a/driver/kmd/gfx_blt.h b/driver/kmd/gfx_blt.h
+index 17460f5..2d264c3 100644
+--- a/driver/kmd/gfx_blt.h
++++ b/driver/kmd/gfx_blt.h
+@@ -45,3 +45,15 @@ int Bc250GfxPresentRecord(void* Record, unsigned int Capacity,
+     unsigned long long Address, unsigned int Bytes);
+ int Bc250GfxPresentMatches(const void* Record, unsigned int Capacity,
+     unsigned long long Address, unsigned int Bytes);
++
++/* Complete Present IB: acquire before every pass, copies, full NOP padding.
++ * Capacity must be a multiple of eight DWORDs and at least16. Offset counts
++ * copy packets only. Invalid/no-space never writes Buffer. Residency and
++ * cross-queue producer completion remain caller obligations. */
++BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
++    const BC250_BLIT_SURFACE* Source, const BC250_BLIT_SURFACE* Destination,
++    const BC250_BLIT_RECT* SourceRect, const BC250_BLIT_RECT* DestinationRect,
++    const BC250_BLIT_RECT* Dirty, unsigned int Count,
++    unsigned long long SourceBase, unsigned long long DestinationBase,
++    unsigned int Offset, unsigned int* Next, unsigned int* Buffer,
++    unsigned int CapacityDwords, unsigned int* Written);
+diff --git a/driver/kmd/gfx_copy.c b/driver/kmd/gfx_copy.c
+index ac7982f..ce4277b 100644
+--- a/driver/kmd/gfx_copy.c
++++ b/driver/kmd/gfx_copy.c
+@@ -56,3 +56,24 @@ unsigned int Bc250GfxCopyNop(void)
+ {
+     return (unsigned int)PACKET3(PACKET3_NOP, 0x3fff);
+ }
++
++unsigned int Bc250EmitGfxAcquire(unsigned int* buffer, unsigned int capacity)
++{
++    if (!buffer || capacity<BC250_GFX_ACQUIRE_DWORDS) return 0;
++    /* Same imported gfx_v10_0 sequence as shim/bc250_dispatch.c emit_mem_sync. */
++    buffer[0]=(unsigned int)PACKET3(PACKET3_ACQUIRE_MEM,6);
++    buffer[1]=0;
++    buffer[2]=0xffffffffu;
++    buffer[3]=0xffffffu;
++    buffer[4]=buffer[5]=0;
++    buffer[6]=0xau;
++    buffer[7]=PACKET3_ACQUIRE_MEM_GCR_CNTL_GL2_INV(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GL2_WB(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLM_INV(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLM_WB(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GL1_INV(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLV_INV(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLK_INV(1) |
++        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLI_INV(1);
++    return BC250_GFX_ACQUIRE_DWORDS;
++}
+diff --git a/driver/kmd/gfx_copy.h b/driver/kmd/gfx_copy.h
+index 7105cef..defb8d1 100644
+--- a/driver/kmd/gfx_copy.h
++++ b/driver/kmd/gfx_copy.h
+@@ -21,3 +21,9 @@ unsigned int Bc250EmitGfxCopySpan(unsigned int* Buffer, unsigned int CapacityDwo
+ 
+ /* Single-word CP padding used for the GFX IB alignment tail. */
+ unsigned int Bc250GfxCopyNop(void);
++
++/* Linux gfx_v10_0_emit_mem_sync sequence, eight DWORDs including header.
++ * Makes prior producer writes visible to the L2 DMA read; it does not wait for
++ * another queue or make an allocation resident. Caller supplies that ordering. */
++#define BC250_GFX_ACQUIRE_DWORDS 8u
++unsigned int Bc250EmitGfxAcquire(unsigned int* Buffer, unsigned int CapacityDwords);
+diff --git a/driver/kmd/test/gfx_blt_test.c b/driver/kmd/test/gfx_blt_test.c
+index 3943332..4c3c658 100644
+--- a/driver/kmd/test/gfx_blt_test.c
++++ b/driver/kmd/test/gfx_blt_test.c
+@@ -102,6 +102,44 @@ int main(void)
+             } while(result==Bc250GfxBltMore);
+             CHECK(offset==8 && !memcmp(actual,expected,sizeof(actual)));
+         }
++        /* Exact production Present wrapper: every pass starts with acquire,
++         * copy packet ordinals exclude acquire/NOPs, same independent pixels. */
++        for(capacity=16;capacity<=64;capacity+=8) {
++            offset=attempts=0;memset(actual,0xcc,sizeof(actual));
++            do {
++                unsigned int prior=offset,packets;
++                memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
++                result=Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,
++                    sourceBase,destinationBase,offset,&offset,buffer,capacity,&written);
++                CHECK(result==Bc250GfxBltDone || result==Bc250GfxBltMore);
++                CHECK(written==capacity && offset>prior);
++                CHECK((buffer[0]>>30)==3 && ((buffer[0]>>16)&0x3fff)==6 && ((buffer[0]>>8)&255)==0x58);
++                CHECK(buffer[7]& (1u<<14)); /* GL2 invalidate precedes first DMA */
++                packets=offset-prior;
++                CHECK(8+7*packets<=written);
++                for(j=8;j<8+7*packets;j+=7) {
++                    unsigned long long from=(((unsigned long long)buffer[j+3]<<32)|buffer[j+2])-sourceBase;
++                    unsigned long long to=(((unsigned long long)buffer[j+5]<<32)|buffer[j+4])-destinationBase;
++                    unsigned int bytes=buffer[j+6]&S_506_BYTE_COUNT(~0u);
++                    CHECK(((buffer[j]>>8)&255)==0x50);
++                    CHECK(from+bytes<=sizeof(source) && to+bytes<=sizeof(actual));
++                    memcpy(actual+to,source+from,bytes);
++                }
++                CHECK(buffer[14]&S_506_RAW_WAIT(1));
++                CHECK(buffer[8+7*packets-6]&S_501_CP_SYNC(1));
++                for(;j<written;j++)CHECK(buffer[j]==0xffff1000u);
++                CHECK(!memcmp(buffer+written,saved+written,sizeof(buffer)-written*sizeof(buffer[0])));
++                CHECK(++attempts<=8);
++            } while(result==Bc250GfxBltMore);
++            CHECK(offset==8 && !memcmp(actual,expected,sizeof(actual)));
++        }
++        memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
++        CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
++            0,&offset,buffer,8,&written)==Bc250GfxBltNoSpace && !offset && !written);
++        CHECK(!memcmp(buffer,saved,sizeof(buffer)));
++        CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
++            8,&offset,buffer,16,&written)==Bc250GfxBltDone && offset==8 && written==16);
++        for(j=8;j<16;j++)CHECK(buffer[j]==0xffff1000u);
+         /* A bad late rectangle must not leave a valid prefix in the DMA buffer,
+          * including when a previous pass already consumed that prefix. */
+         rects[3].Right=12;
+@@ -111,6 +149,10 @@ int main(void)
+             CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+                 offset,&nextOffset,buffer,64,&written)==Bc250GfxBltInvalid);
+             CHECK(!written && nextOffset==offset && !memcmp(saved,buffer,sizeof(buffer)));
++            CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
++                offset,&nextOffset,buffer,64,&written)==Bc250GfxBltInvalid);
++            CHECK(!written && nextOffset==offset && !memcmp(saved,buffer,sizeof(buffer)));
++
+         }
+         CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,0,0,sourceBase,destinationBase,
+             0,&offset,buffer,6,&written)==Bc250GfxBltNoSpace && !written && !offset);
+@@ -166,6 +208,7 @@ int main(void)
+             memcpy(record,original,sizeof(record));
+         }
+     }
++    puts("PASS acquired and padded Present IBs, resumed copies, rejection and independent pixels");
+     puts("PASS Present private-record binding, truncation, mutation and range checks");
+     puts("PASS full dirty-list prevalidation and packet-ordinal multipass at30 capacities");
+     puts("PASS decoded row copies at30 capacities, padding, intra-row resume, batch-only sync, whole-footprint rejection");
+diff --git a/driver/kmd/test/gfx_copy_test.c b/driver/kmd/test/gfx_copy_test.c
+index 6aff4ed..636a8bf 100644
+--- a/driver/kmd/test/gfx_copy_test.c
++++ b/driver/kmd/test/gfx_copy_test.c
+@@ -45,6 +45,20 @@ int main(void)
+     CHECK(!Bc250EmitGfxCopy(NULL,32,0,4096,4));
+     CHECK(!memcmp(buffer,saved,sizeof(buffer)));
+     CHECK(Bc250EmitGfxCopy(buffer,7,0,16,16)==7); /* adjacent is not overlapping */
++    memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
++    CHECK(!Bc250EmitGfxAcquire(NULL,8));
++    for(i=0;i<8;i++) {
++        CHECK(!Bc250EmitGfxAcquire(buffer,i));
++        CHECK(!memcmp(buffer,saved,sizeof(buffer)));
++    }
++    CHECK(Bc250EmitGfxAcquire(buffer,8)==8);
++    /* Independently decoded GFX10 type3 header, global range and cache bits. */
++    CHECK((buffer[0]>>30)==3 && ((buffer[0]>>16)&0x3fff)==6 && ((buffer[0]>>8)&255)==0x58);
++    CHECK(buffer[1]==0 && buffer[2]==0xffffffffu && buffer[3]==0xffffffu);
++    CHECK(buffer[4]==0 && buffer[5]==0 && buffer[6]==10);
++    CHECK(buffer[7]==((1u<<0)|(1u<<4)|(1u<<5)|(1u<<7)|(1u<<8)|(1u<<9)|(1u<<14)|(1u<<15)));
++    CHECK(!memcmp(buffer+8,saved+8,sizeof(buffer)-8*sizeof(buffer[0])));
++    puts("PASS GFX10 acquire packet, global range, cache operations, short-buffer atomicity");
+     puts("PASS GFX copy chunks,64-bit addresses,final sync,first RAW wait,capacity/overlap/overflow rejection");
+     return 0;
+ }
+diff --git a/driver/kmd/wddm.c b/driver/kmd/wddm.c
+index f324a79..15f216e 100644
+--- a/driver/kmd/wddm.c
++++ b/driver/kmd/wddm.c
+@@ -4908,7 +4908,7 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
+         !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
+         (Present->SubRectCnt && !Present->pDstSubRects)) return status;
+     if (!Present->pDmaBuffer || ((ULONG_PTR)Present->pDmaBuffer&3u) ||
+-        Present->DmaSize<32 || (Present->DmaSize&31u) ||
++        Present->DmaSize<64 || (Present->DmaSize&31u) ||
+         !Present->pDmaBufferPrivateData || Present->DmaBufferPrivateDataSize<sizeof(record))
+         return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+     if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize)) return status;
+@@ -4948,13 +4948,13 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
+             dirty[i].Right=Present->pDstSubRects[i].right;dirty[i].Bottom=Present->pDstSubRects[i].bottom;
+         }
+     }
+-    result=Bc250EmitGfxBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
++    result=Bc250EmitGfxPresentBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
+         va[0],va[1],Present->MultipassOffset,&next,Present->pDmaBuffer,Present->DmaSize/4u,&written);
+     if (dirty) ExFreePoolWithTag(dirty,BC250_WDDM_TAG);
+     if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return status;
+     // Consume the entire aligned DMA buffer, one record/IB. This prevents two
+     // Present records being appended while the consumer expects one exact span.
+-    for(i=written;i<Present->DmaSize/4u;i++)((ULONG*)Present->pDmaBuffer)[i]=Bc250GfxCopyNop();
++    if (written!=Present->DmaSize/4u) return status;
+     KeMemoryBarrier();
+     RtlCopyMemory(Present->pDmaBufferPrivateData,record,sizeof(record));
+     Present->pDmaBuffer=(UCHAR*)Present->pDmaBuffer+Present->DmaSize;
+diff --git a/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md b/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md
+index 8ec39af..2325ddb 100644
+--- a/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md
++++ b/experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md
+@@ -21,7 +21,7 @@ are filled with the imported CP NOP encoding, preventing another Present record
+ from being appended to the same IB. The private record is published only after
+ command construction and a memory barrier. MultipassOffset is a packet ordinal;
+ More becomes STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER. An empty list intersection
+-produces a NOP-only IB with ordinary hardware completion. Small or unaligned DMA
++produces an acquire plus NOP IB with ordinary hardware completion. Small or unaligned DMA
+ capacity is returned as insufficient without publishing a record.
+ 
+ With the gate enabled, UMD contexts request a Present allocation list as well as
+@@ -37,3 +37,12 @@ complete. Do not enable the gate as a substitute for the CDD/DWM interop contrac
+ The main development tree contains runtime changes beyond deployed KMD153.
+ Any lab candidate must be reconciled against that exact baseline in an isolated
+ source tree and assigned its own artifact identity before deployment.
++
++Each IB now starts with the eight-DWORD GFX10 ACQUIRE_MEM sequence from the
++imported gfx_v10_0_emit_mem_sync. The minimum capacity is64 bytes (16 DWORDs),
++leaving room for acquire, at least one copy packet, and alignment padding.
++MultipassOffset still counts copy packets only. The production wrapper is
++host-tested with independent pixel decoding at seven aligned capacities.
++Cache invalidation does not establish producer completion or residency: WDDM2
++Present allocation lists do not make allocations resident. Exact source and
++destination residency on the submitting device remain an admission obligation.

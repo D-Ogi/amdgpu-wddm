@@ -1,0 +1,41 @@
+{
+  "source": "refresh-etw.etl, Microsoft-Windows-Direct3D11, tracerpt XML",
+  "set_display_mode_errors": 0,
+  "journal": [
+    {
+      "code": "0xC00002B6",
+      "message": "CreateAllocation",
+      "count": 2
+    },
+    {
+      "code": "0x887A0005",
+      "message": "Removing device.",
+      "count": 2
+    },
+    {
+      "code": "0x8007000E",
+      "message": "UMD reported error while device is removed.",
+      "count": 2
+    },
+    {
+      "code": "0x80070005",
+      "message": "LoadUMD",
+      "count": 2
+    },
+    {
+      "code": "0x887A0004",
+      "message": "Failed to find DDI to drive requested feature levels",
+      "count": 3
+    },
+    {
+      "code": "0xC01E000E",
+      "message": "Present",
+      "count": 2
+    },
+    {
+      "code": "0xC000000D",
+      "message": "DestroyAllocation2",
+      "count": 2
+    }
+  ]
+}

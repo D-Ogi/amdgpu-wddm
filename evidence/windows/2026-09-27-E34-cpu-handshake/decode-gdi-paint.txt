@@ -1,0 +1,11 @@
+etl P:\bc-250\scratch\g0-hosted\redirblt-cpu001\gpu.etl (14680064 bytes)
+dxgkrnl rows of interest: 185  171=39 172=39 184=107
+ProcessStart rows for pid 11060: 15:14:04.3034175 redirblt-probe.exe
+present rows by process: 12796=91, 4744=16
+probe present rows: 0
+blit rows: 0 total, 0 of the probe
+present-history rows by model: 0/UNINITIALIZED=39 7/REDIRECTED_COMPOSITION=39
+model 3 (REDIRECTED_BLT) tokens in the trace: 0
+CddStandardAllocation rows: 0
+CddStandardAllocation rows in the probe's process: 0
+csv: P:\bc-250\scratch\g0-hosted\redirblt-cpu001\decode-gdi-paint\gpu-redirblt.csv

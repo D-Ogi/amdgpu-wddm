@@ -1,0 +1,17 @@
+{
+  "amd_shared.h": "b62f54e77923a14427f82c9c3db2fb56f4816c7a2c8331bedbbac521b0122491",
+  "build07121.log": "b651b1d2bcb74674baf4c27c75b796069e947364dae86b42d200e5e2540d0b51",
+  "package07121-sha256.txt": "ad36ef23477ed4eac088c14eb6459d436d24bf39e800fa443a61bde577d3f67f",
+  "package07121.json": "645e281bc0f37263de7f457005350af67992669f38ad177eaa93e05824a19c42",
+  "package07121.md": "98387c25f769137035ce0135e63cf48313cc22e84ba9b3daa8941b285e25decd",
+  "PLAN.md": "989b2aff73c35ff5ce10e1d79ade8c09ed9c81ea0cb4edd363f9c186c568645a",
+  "RESULT.md": "9fb87ba1823e799a9779e0d05bbede49c27b592aa3962e0d6901daff5f57f118",
+  "rlc-cg-policy-test.log": "c953a563b336a01f56846f114c3369686366dc80f18f830ac2d7917e3447c246",
+  "source.json": "1b330334d8a4729faa3ffa206dbe1c7104a585d919789170e44347160f564035",
+  "source\\driver\\kmd\\bc250kmd.inf": "3d2ae4119638922c8d2183c13d00669f56310ca9f79078080509c274341d5f46",
+  "source\\driver\\kmd\\bc250kmd_escape.h": "f6641a02702e038fffd6a9dc16de67ab175847c017e5b3d41d028f1398ff6b1f",
+  "source\\driver\\shim\\bc250_gfx.c": "e3d78854738d0a97ecd060b11f49cbab6fb3bbffc269fca91f24fa984cfe2341",
+  "source\\driver\\shim\\generated\\rlc_cg_flags.h": "2cbb0b7fb28d2bb3ccd6ea466de8a2ac8ea62d575f939d801927daeffa2260a4",
+  "source\\driver\\shim\\include\\bc250_gfx.h": "81fd5fe2715484b55016ffa613d63fd6b7952728f38a168bf7d3934fc1a39c1b",
+  "source\\driver\\shim\\test\\replay_gfx.c": "d7be2d0e996d65acab32e46c4b82235c1f33a027ac9f7a0719b7459b3a6025dc"
+}

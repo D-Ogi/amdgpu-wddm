@@ -1,0 +1,8 @@
+{
+  "driver/kmd/gfx_copy.c": "c71e77270276d38884c9c63e25533a3387407c1cc7dbbb7fd347212bbd57a5bd",
+  "driver/kmd/gfx_copy.h": "fbd6c367e70782780a773295bd10a32d00dacb8f82aa65e24e5a188d5e6caab8",
+  "driver/kmd/gfx_copy_fields.h": "fc95af0806826084ffafd6922f14b9a834958f4da0ce43fa3e70bf9ce362eb10",
+  "driver/kmd/test/gfx_copy_test.c": "4cb47b8c589cdb8f48df51875c1cabc1ad78c2e6c32b6180b201fd3b76ac5858",
+  "driver/kmd/test/run_gfx_copy.ps1": "46507e4cce3848a1f56757e5f245a7f3cdba2039a07bb02d1bde0e7387c38006",
+  "tools/quality/quick.ps1": "aa96c129f949728260f83d0f3f234d93edec4bd56fff6f65afe191ea9a446502"
+}

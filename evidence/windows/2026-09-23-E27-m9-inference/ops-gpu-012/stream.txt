@@ -1,0 +1,44 @@
+GATE_BEGIN 2026-09-23T03:44:22
+GATE_END 2026-09-23T03:44:38
+STEP_BEGIN gart 2026-09-23T03:44:38
+STEP_END gart 2026-09-23T03:44:38
+STEP_BEGIN psp 2026-09-23T03:44:38
+STEP_END psp 2026-09-23T03:44:38
+STEP_BEGIN ih 2026-09-23T03:44:38
+STEP_END ih 2026-09-23T03:44:38
+STEP_BEGIN gfx-1 2026-09-23T03:44:38
+STEP_END gfx-1 2026-09-23T03:44:38
+STEP_BEGIN gfx-2 2026-09-23T03:44:38
+STEP_END gfx-2 2026-09-23T03:44:39
+STEP_BEGIN gfx-3 2026-09-23T03:44:39
+STEP_END gfx-3 2026-09-23T03:44:39
+STEP_BEGIN gfx-4 2026-09-23T03:44:39
+STEP_END gfx-4 2026-09-23T03:44:39
+STEP_BEGIN gfx-5 2026-09-23T03:44:39
+STEP_END gfx-5 2026-09-23T03:44:39
+STEP_BEGIN gfx-6 2026-09-23T03:44:39
+STEP_END gfx-6 2026-09-23T03:44:39
+STEP_BEGIN gfx-7 2026-09-23T03:44:39
+STEP_END gfx-7 2026-09-23T03:44:39
+STEP_BEGIN gfx-8 2026-09-23T03:44:39
+STEP_END gfx-8 2026-09-23T03:44:39
+STEP_BEGIN fence-control 2026-09-23T03:44:39
+STEP_END fence-control 2026-09-23T03:44:39
+OPERATORS_BEGIN 2026-09-23T03:44:39
+RESTORE_BEGIN 2026-09-23T03:45:27
+time 2026-09-23T03:45:46  phase confirm m9-restored
+UnconfirmedStarts = 0
+Hardware watch failed: 133160     58.004 wddm summary: node 0 hardware: 7683 submitted, 7683 
+completed, 0 timeouts, 0 refused 133161     58.004 wddm summary: umd: 466 allocs (0 refused), 9 
+contexts, 7683 submits on the ring, 1109 not run
+At C:\BC250\tmp\ops-gpu-012.ps1:90 char:89
++ ... ch ', 0 not run') { throw "Hardware watch failed: $liveHw $liveUmd" }
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Hardware watch ..., 1109 not run:String) [], Ru  
+  ntimeException
+    + FullyQualifiedErrorId : Hardware watch failed: 133160     58.004 wddm summary: node 0 hardw 
+   are: 7683 submitted, 7683 completed, 0 timeouts, 0 refused 133161     58.004 wddm summary: u   
+ md: 466 allocs (0 refused), 9 contexts, 7683 submits on the ring, 1109 not run
+ 
+
+ssh_exit=1

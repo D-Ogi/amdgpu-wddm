@@ -1,0 +1,8 @@
+
+Unexpected baseline
+At C:\BC250\tmp\run070.ps1:7 char:47
++ ... et-FileHash $active).Hash -ne $original){throw 'Unexpected baseline'}
++                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Unexpected baseline:String) [], RuntimeException
+    + FullyQualifiedErrorId : Unexpected baseline
+ 

@@ -1,0 +1,9 @@
+test.c
+FAIL clock ready before each hardware phase
+FAIL clock ready before each hardware phase
+FAIL clock ready before each hardware phase
+FAIL clock ready before each hardware phase
+FAIL clock refusal preserves status
+FAIL clock failure cannot admit engines
+FAIL clock failure releases firmware without GPU writes
+422 checks, 7 failures

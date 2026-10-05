@@ -1,0 +1,132 @@
+diff --git a/src/gallium/frontends/d3d10umd/ShaderTGSI.c b/src/gallium/frontends/d3d10umd/ShaderTGSI.c
+index 653cb96..a1039c9 100644
+--- a/src/gallium/frontends/d3d10umd/ShaderTGSI.c
++++ b/src/gallium/frontends/d3d10umd/ShaderTGSI.c
+@@ -38,6 +38,7 @@
+ #include "tgsi/tgsi_dump.h"
+ #include "util/macros.h"
+ #include "util/u_memory.h"
++#include "util/u_dynarray.h"
+ 
+ #include "ShaderDump.h"
+ 
+@@ -242,8 +243,40 @@ struct Shader_xlate {
+    struct Shader_label *labels;
+    uint num_labels;
+    uint max_labels;
++   struct util_dynarray conditional_labels;
+ };
+ 
++/* Softpipe jumps to these labels when all lanes skip a branch. Leaving
++ * their default value of zero restarts the shader with live control stacks.
++ * Generated conditionals (BREAKC etc.) must use the same stack as IF/ELSE.
++ */
++static void
++Shader_conditional_begin(struct Shader_xlate *sx, struct ureg_src condition)
++{
++   unsigned label;
++   ureg_UIF(sx->ureg, condition, &label);
++   util_dynarray_append(&sx->conditional_labels, label);
++}
++
++static void
++Shader_conditional_else(struct Shader_xlate *sx)
++{
++   assert(sx->conditional_labels.size);
++   unsigned label = util_dynarray_pop(&sx->conditional_labels, unsigned);
++   ureg_fixup_label(sx->ureg, label, ureg_get_instruction_number(sx->ureg));
++   ureg_ELSE(sx->ureg, &label);
++   util_dynarray_append(&sx->conditional_labels, label);
++}
++
++static void
++Shader_conditional_end(struct Shader_xlate *sx)
++{
++   assert(sx->conditional_labels.size);
++   unsigned label = util_dynarray_pop(&sx->conditional_labels, unsigned);
++   ureg_fixup_label(sx->ureg, label, ureg_get_instruction_number(sx->ureg));
++   ureg_ENDIF(sx->ureg);
++}
++
+ static uint
+ translate_interpolation(D3D10_SB_INTERPOLATION_MODE interpolation)
+ {
+@@ -1254,6 +1287,7 @@ Shader_tgsi_translate(const unsigned *code,
+    uint i, j;
+ 
+    memset(&sx, 0, sizeof sx);
++   util_dynarray_init(&sx.conditional_labels, NULL);
+ 
+    Shader_parse_init(&parser, code);
+ 
+@@ -2134,37 +2168,41 @@ Shader_tgsi_translate(const unsigned *code,
+          }
+          break;
+       case D3D10_SB_OPCODE_IF: {
+-         unsigned label = 0;
+          if (opcode.specific.test_boolean == D3D10_SB_INSTRUCTION_TEST_ZERO) {
+             struct ureg_src src =
+                translate_src_operand(&sx, &opcode.src[0], OF_INT);
+             struct ureg_dst src_nz = ureg_DECL_temporary(ureg);
+             ureg_USEQ(ureg, src_nz, src, ureg_imm1u(ureg, 0));
+-            ureg_UIF(ureg, ureg_src(src_nz), &label);
++            Shader_conditional_begin(&sx, ureg_src(src_nz));
+             ureg_release_temporary(ureg, src_nz);;
+          } else {
+-            ureg_UIF(ureg, translate_src_operand(&sx, &opcode.src[0], OF_INT), &label);
++            Shader_conditional_begin(&sx, translate_src_operand(&sx, &opcode.src[0], OF_INT));
+          }
+       }
+          break;
++      case D3D10_SB_OPCODE_ELSE:
++         Shader_conditional_else(&sx);
++         break;
++      case D3D10_SB_OPCODE_ENDIF:
++         Shader_conditional_end(&sx);
++         break;
+       case D3D10_SB_OPCODE_RETC:
+       case D3D10_SB_OPCODE_CONTINUEC:
+       case D3D10_SB_OPCODE_CALLC:
+       case D3D10_SB_OPCODE_DISCARD:
+       case D3D10_SB_OPCODE_BREAKC:
+       {
+-         unsigned label = 0;
+          assert(operand_is_scalar(&opcode.src[0]));
+          if (opcode.specific.test_boolean == D3D10_SB_INSTRUCTION_TEST_ZERO) {
+             struct ureg_src src =
+                translate_src_operand(&sx, &opcode.src[0], OF_INT);
+             struct ureg_dst src_nz = ureg_DECL_temporary(ureg);
+             ureg_USEQ(ureg, src_nz, src, ureg_imm1u(ureg, 0));
+-            ureg_UIF(ureg, ureg_src(src_nz), &label);
++            Shader_conditional_begin(&sx, ureg_src(src_nz));
+             ureg_release_temporary(ureg, src_nz);
+          }
+          else {
+-            ureg_UIF(ureg, translate_src_operand(&sx, &opcode.src[0], OF_INT), &label);
++            Shader_conditional_begin(&sx, translate_src_operand(&sx, &opcode.src[0], OF_INT));
+          }
+          switch (opcode.type) {
+          case D3D10_SB_OPCODE_RETC:
+@@ -2190,7 +2228,7 @@ Shader_tgsi_translate(const unsigned *code,
+             assert(0);
+             break;
+          }
+-         ureg_ENDIF(ureg);
++         Shader_conditional_end(&sx);
+       }
+          break;
+       case D3D10_SB_OPCODE_LABEL: {
+@@ -2293,6 +2331,8 @@ Shader_tgsi_translate(const unsigned *code,
+    }
+    FREE(sx.labels);
+    FREE(sx.calls);
++   assert(!sx.conditional_labels.size);
++   util_dynarray_fini(&sx.conditional_labels);
+ 
+    tokens = ureg_get_tokens(ureg, &nr_tokens);
+    assert(tokens);
+@@ -2304,3 +2344,4 @@ Shader_tgsi_translate(const unsigned *code,
+ 
+    return tokens;
+ }
++

@@ -1,0 +1,9 @@
+# M318: shader after eviction on07102
+
+Same installed07102 and boot as M317. Unchanged isolated ICD EA70D44045BF77867C9BE50EFB311E7CE7C83D01F4B527FB190E5BC8BD3F8306 and probe038010EB3E6220A12F66713BEC9B9DCC527646DA1AAE5E7D3880AADA2F467D9A. Global ICD untouched. M283 method: three4MiB buffers, memory type3, two integer-hash dispatches per round over1048576words, CPU oracle and actual loader/submit witnesses.
+
+Baseline16rounds and eviction16rounds match all words, native exits0. Three positive residency cycles1->2->1 with paging fences before shader access. Stale-input control has one valid baseline round, then one mismatching round after its own eviction/restoration, nativeexit1 as expected. Independent validation.json checks native exits, complete match/mismatch counts, loader/submit and transition witnesses. The initial host validator incorrectly expected zero matching stale-control rounds; inspection of the baseline round corrected this expectation. It was not a GPU failure.
+
+Before: paging10109/10109; after15223/15223, zero timeouts/refusals and noTDR. Node0hardware34/34. Summary operation8(VIRTUAL_TRANSFER per local WDK26100 d3dkmddi declaration)1492calls. Per-call alias/fragmentation/capture shape was not recorded, so this does not establish all retained-capture branches. Residency2 is shared-memory residency, not proof of PFN movement or disk pageout. No GPU reinitialization/reboot; final PnPOK,1000MHz/VID116,70.8C, task removed.
+
+Script first-line decoding error prevented ErrorActionPreference assignment (same cloning issue as M317). Native result files, complete independent validation and final state support the bounded result; raw stream retained, not relied on alone. A clean ASCII future script was prepared without rerunning this workload. Result logs originally UTF16 were decoded toUTF8; profile/device identifiers redacted where present. No other result content changed.

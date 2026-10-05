@@ -1,0 +1,58 @@
+bc250-win/driver/kmd/gpumem.c
+265: static int FlushTlb(struct amdgpu_device* adev, const BC250_SEQUENCE* sequence)
+266: {
+267:     int gfx, mm;
+268: 
+269:     if (!NT_SUCCESS(sequence->Fault))
+270:     {
+271:         GuardLog("gpumem: the sequence has stopped, no TLB flush after the table change");
+272:         return -5;
+273:     }
+274:     gfx = bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_GFXHUB(0), 0);
+275:     if (sequence->TraceRlcRetirement) GfxTraceRlcState(sequence->Device,"after-retire-gfxhub-flush");
+276:     mm = bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_MMHUB0(0), 0);
+277:     if (sequence->TraceRlcRetirement) GfxTraceRlcState(sequence->Device,"after-retire-mmhub-flush");
+278:     // A sequence that stopped inside the flush answers every read with all ones, which both of the flush's polls take
+279:     // for "done": the return codes say nothing then. (The semaphore still goes back: gfx.c's PassesFault.)
+280:     if (!NT_SUCCESS(sequence->Fault)) { gfx = -5; mm = -5; }
+281:     if (gfx != 0 || mm != 0) GuardLog("gpumem: TLB flush failed, GFX hub %d, MM hub %d", gfx, mm);
+282:     return gfx != 0 ? gfx : mm;
+283: }
+389: void bc250_shim_mem_free(struct amdgpu_device* adev, struct bc250_mem* m)
+390: {
+391:     BC250_SEQUENCE* sequence;
+392:     BC250_GPUMEM* mem = MemOf(adev, &sequence);
+393:     ULONG i;
+394: 
+395:     // A zeroed struct (nothing was ever allocated into it) is a safe no-op, as before. An allocation
+396:     // whose cpu is NULL - bc250_shim.h: the owner could not map it - still exists here and is looked
+397:     // up by its MC address instead, because there is no cpu pointer to look it up by (D-02; neither
+398:     // MmMapIoSpaceEx nor MmAllocateContiguousMemorySpecifyCache above ever returns success with a
+399:     // NULL pointer, so this arm is not reached on this backend today - see sdma_faults_report.md).
+400:     if (mem == NULL || m == NULL || (m->cpu == NULL && m->mc == 0 && m->size == 0)) return;
+401:     for (i = 0; i < BC250_GPUMEM_MAX; i++)
+402:     {
+403:         BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
+404:         if (!entry->Used || entry->Retired) continue;
+405:         if (m->cpu != NULL ? entry->Cpu != m->cpu : entry->Mc != m->mc) continue;
+406:         if (entry->Gtt)
+407:         {
+408:             // The GPU loses the page now; Windows gets it back in GpuMemRelease, once the GPU is known to be quiet.
+409:             if (entry->Bound)
+410:             {
+411:                 if (sequence->TraceRlcRetirement) {
+412:                     GuardLog("gpumem: retire GTT entry %lu bytes %llu",i,entry->Size);
+413:                     GfxTraceRlcState(sequence->Device,"before-retire-unbind");
+414:                 }
+415:                 bc250_gart_unbind(adev, entry->GartOffset, entry->Size / PAGE_SIZE, mem->Table);
+416:                 if (sequence->TraceRlcRetirement) GfxTraceRlcState(sequence->Device,"after-retire-unbind");
+417:                 // Failed: logged, and the page then waits for more than a quiet GPU (TlbDirty, GpuMemRelease).
+418:                 mem->TlbDirty = FlushTlb(adev, sequence) != 0;
+419:             }
+420:             entry->Retired = TRUE;
+421:         }
+422:         else ReleaseEntry(mem, entry);
+423:         break;
+424:     }
+425:     RtlZeroMemory(m, sizeof(*m));
+426: }

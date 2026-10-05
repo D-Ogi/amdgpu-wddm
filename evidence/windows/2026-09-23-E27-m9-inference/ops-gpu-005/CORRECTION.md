@@ -1,0 +1,1 @@
+Recovered stop-summary.log supersedes any inference that later flag contrasts or node samples isolate a mathematical operator. The session has a hardware timeout followed by software-only completion of UMD jobs. Those later outputs are invalid as operator evidence. The first timeout must be captured on a fresh boot. Original raw evidence and README remain unchanged.

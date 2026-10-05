@@ -32,8 +32,10 @@ namespace Bc250Mon
             var p = new Panel { Name = Name, Title = "SoC / GPU", Order = 10 };
             try
             {
-                double t = _driver.ReadTemperature();
-                uint mhz = _driver.Smu(Driver.MsgGetGfxFrequency, 0), vid = _driver.Smu(Driver.MsgGetGfxVid, 0);
+                ClockSnapshot sample = _driver.ReadClock();
+                double t = sample.TemperatureMc / 1000.0;
+                uint mhz = sample.ObservedMHz, vid = sample.ObservedVid;
+                p.Rows.Add(new Row("Control", "KMD / serialized SMU"));
                 Level lvl = t >= ErrorC ? Level.Error : t >= WarnC ? Level.Warn : Level.Good;
                 p.Rows.Add(new Row("Tctl", t.ToString("0.0") + " C", lvl));
                 p.Rows.Add(new Row("GFX clock", mhz + " MHz"));

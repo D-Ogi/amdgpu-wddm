@@ -1,0 +1,81 @@
+{
+  "name": "vram64k",
+  "bytes": 65536,
+  "cycles": 3,
+  "gpu_readbacks": [
+    [
+      "65536",
+      "1"
+    ],
+    [
+      "65536",
+      "2"
+    ],
+    [
+      "65536",
+      "3"
+    ],
+    [
+      "65536",
+      "4"
+    ]
+  ],
+  "departure_status": [
+    "2",
+    "2",
+    "2"
+  ],
+  "cumulative_gfx": [
+    "4",
+    "4",
+    "0",
+    "0"
+  ],
+  "cumulative_sdma": [
+    "875",
+    "875",
+    "0",
+    "0"
+  ],
+  "bulk_resident_ms": [
+    "15",
+    "0",
+    "0"
+  ],
+  "physical_endpoints_verified": false,
+  "shader_cache_policy_verified": false,
+  "rlc_phases": {
+    "before-psp": {
+      "control": "0x00000000",
+      "status2": "0x00000008"
+    },
+    "after-psp": {
+      "control": "0x00000001",
+      "status2": "0x00000008"
+    },
+    "after-stop": {
+      "control": "0x00000000",
+      "status2": "0x00000008"
+    },
+    "after-gfx-memory-release": {
+      "control": "0x00000000",
+      "status2": "0x01000008"
+    },
+    "before-psp-unload": {
+      "control": "0x00000000",
+      "status2": "0x01000008"
+    },
+    "after-tmr-destroy": {
+      "control": "0x00000000",
+      "status2": "0x01000008"
+    },
+    "after-psp-ring-stop": {
+      "control": "0x00000000",
+      "status2": "0x01000008"
+    },
+    "after-gart-stop": {
+      "control": "0x00000000",
+      "status2": "0x01000008"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "current_ac_standby_seconds": 0,
+  "current_ac_video_seconds": 0,
+  "queried_system_window_local": [
+    "2026-09-24T08:20:00",
+    "2026-09-24T08:29:00"
+  ],
+  "events": [
+    {
+      "utc": "2026-09-24T06:22:36.075000+00:00",
+      "id": 10016,
+      "provider": "Microsoft-Windows-DistributedCOM"
+    },
+    {
+      "utc": "2026-09-24T06:22:13.789000+00:00",
+      "id": 10016,
+      "provider": "Microsoft-Windows-DistributedCOM"
+    }
+  ],
+  "event_messages_omitted_for_privacy": true,
+  "historical_power_setting_not_independently_proven": true
+}

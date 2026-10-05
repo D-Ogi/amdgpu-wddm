@@ -1,0 +1,10 @@
+after 40 s: steam 1 (session 1) webhelpers 6 ws_mb 889 private_mb 893 available_mb 4017
+no stop reques== trial 246
+Binary file scratch/m15/native-caps001/trial-246.log matches
+window A no gpu etl
+== window B
+  "Unknown" (1200)                 n=  2344 rate=  45.3/s interval median=  20.38 ms p95=  33.89 ms p99=  41.89 ms max=   73.39 ms >50ms=12 >100ms=0 >250ms=0
+  "Unknown" (10228)                n=  2343 rate=  45.3/s interval median=  21.55 ms p95=  28.73 ms p99=  35.08 ms max=   53.58 ms >50ms=1 >100ms=0 >250ms=0
+2026-10-01T12:00:47.8364291Z t=0.0 left=351.2 window A skipped (-SkipA)
+2026-10-01T12:04:03.2666160Z t=195.4 left=155.8 window B trigger world: walk 190s: start, 40 s
+no samples

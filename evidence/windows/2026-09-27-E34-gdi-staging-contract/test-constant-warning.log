@@ -1,0 +1,9 @@
+compile and link (host, no WDK header)
+  P:\bc-250\bc250-win\driver\kmd\test\dcn_translate_test.c(68): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+  P:\bc-250\bc250-win\driver\kmd\test\dcn_translate_test.c(68): warning C4127: wyrażenie warunkowe jest stałą
+  Generowanie kodu...
+Exception: P:\bc-250\bc250-win\driver\kmd\test\run_dcn_translate.ps1:35
+Line |
+  35 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl.exe failed (2)

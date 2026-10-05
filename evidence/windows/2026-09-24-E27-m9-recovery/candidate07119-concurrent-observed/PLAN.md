@@ -1,0 +1,7 @@
+# M377 - Concurrent64MiB and post-completion observation
+
+M376 passed1GiB content but lost connectivity after completion without a warm restart. Do not repeat1GiB. Read-only follow-up finds current AC standby/video timers0(disabled), and only DCOM10016 events in the queried08:20-08:29System window, not a sleep transition. This is limited evidence, not proof of the cause or historical settings.
+
+Hypothesis: two concurrently launched64MiB clients on119 can complete correct three-cycle/four-read content tests and remain responsive during60seconds of post-completion observation. Current recovered boot08:30:00 has no full GPU initialization. Verify gates0, STOP absent, exact119SYS4374CB20857D0CA5D09D8EFCF61F5D35718633D568571EF41FE717900E15236E,1000MHz/820mV,temp<85C. One first full startup, two prepared clients with exclusive outputs, stream temperature plus CLI summary counters each observation while running and for30x2s after native completion. Check guard/SSH independently at end. This does not establish arbitrary idle stability or same-system-context arena overlap. No driver change/reinstall/warm retry/routine reboot.
+
+On failure retain original observer until terminal or verified recovery; independently check pinned connectivity before authorized AC. Preserve raw outputs/events before recovery PnP. Success leaves initialized session available for subsequent work; no final device stop. Full M9 remains open.

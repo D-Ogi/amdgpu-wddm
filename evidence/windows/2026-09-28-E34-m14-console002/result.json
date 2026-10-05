@@ -1,0 +1,8 @@
+{
+    "nested_passed":  false,
+    "elapsed":  14.346295399999999,
+    "error":  null,
+    "outer_exit":  126,
+    "status":  "diagnostic-failure",
+    "outer_closed":  true
+}

@@ -1,0 +1,11 @@
+{
+  "driver/kmd/gfx.c": "a98405cae76e9ec11ef40caed4f864ffee2e41862ace90907271aafa2ef18995",
+  "driver/kmd/gpumem.c": "9de2a3ecc30ca1aeda693615c993975f91e29db2eff7f8043daa4fba37ccbe1d",
+  "driver/shim/bc250_gfx.c": "2edd581bbe5dee70ce53fdd62cce99f860fae77197674e533cc1b877fcca6ec5",
+  "driver/kmd/bc250kmd.h": "86daeb0851b4d2cd81cb0e46b75bf0feffc3b850a85ce69e2fbb7ee195737682",
+  "driver/kmd/bc250kmd.inf": "3d742e63e0c3010890670f30c19da056c9a68240510bbdf17389d28450f3ac6d",
+  "driver/kmd/bc250kmd_escape.h": "24d9713c09d006ea290812318a40c8b250d8968f982f7b344dfa4f50befd754e",
+  "experiments/E27-m9-inference/generate-stop-chain-test.py": "b53ffe14eb3ba1db5c142fba84a62554747923d9ec9e1553313beca58d764809",
+  "experiments/E27-m9-inference/stop-chain-test-prefix.c": "3d7af243ef5a078594515b31ffdb889f61f3ab3e3f78f98941ec8c09fe499cf3",
+  "experiments/E27-m9-inference/stop-chain-test-suffix.c": "5357e001514da8c47179805617e658619180d1468239559f08516c885e5072a8"
+}

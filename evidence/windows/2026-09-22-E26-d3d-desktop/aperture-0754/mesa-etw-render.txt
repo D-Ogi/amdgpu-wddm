@@ -1,0 +1,6 @@
+create 00000000 level a000
+shared second device 00000000
+shared create 887a0005
+shared control FAIL
+buffer 00000000
+rtv 887a0005

@@ -1,0 +1,1287 @@
+diff --git a/src/gallium/auxiliary/nir/tgsi_to_nir.c b/src/gallium/auxiliary/nir/tgsi_to_nir.c
+index edc771ee..080ff387 100644
+--- a/src/gallium/auxiliary/nir/tgsi_to_nir.c
++++ b/src/gallium/auxiliary/nir/tgsi_to_nir.c
+@@ -802,6 +802,7 @@ ttn_get_src(struct ttn_compile *c, struct tgsi_full_src_register *tgsi_fsrc,
+    if (tgsi_src->File == TGSI_FILE_NULL) {
+       return nir_imm_float(b, 0.0);
+    } else if (tgsi_src->File == TGSI_FILE_SAMPLER ||
++              tgsi_src->File == TGSI_FILE_SAMPLER_VIEW ||
+               tgsi_src->File == TGSI_FILE_IMAGE ||
+               tgsi_src->File == TGSI_FILE_BUFFER) {
+       /* Only the index of the resource gets used in texturing, and it will
+@@ -1170,8 +1171,28 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+    nir_tex_instr *instr;
+    nir_texop op;
+    unsigned num_srcs, samp = 1, sview, i;
++   unsigned opcode = tgsi_inst->Instruction.Opcode;
++   bool separate = tgsi_inst->Src[1].Register.File == TGSI_FILE_SAMPLER_VIEW;
++   unsigned texture = separate ?
++      c->scan->sampler_targets[tgsi_inst->Src[1].Register.Index] :
++      tgsi_inst->Texture.Texture;
++   bool compare = opcode == TGSI_OPCODE_SAMPLE_C || opcode == TGSI_OPCODE_SAMPLE_C_LZ;
+ 
+    switch (tgsi_inst->Instruction.Opcode) {
++   case TGSI_OPCODE_SAMPLE:
++   case TGSI_OPCODE_SAMPLE_C:
++      op = nir_texop_tex; num_srcs = 1; samp = 2; break;
++   case TGSI_OPCODE_SAMPLE_B:
++      op = nir_texop_txb; num_srcs = 2; samp = 2; break;
++   case TGSI_OPCODE_SAMPLE_L:
++   case TGSI_OPCODE_SAMPLE_C_LZ:
++      op = nir_texop_txl; num_srcs = 2; samp = 2; break;
++   case TGSI_OPCODE_SAMPLE_D:
++      op = nir_texop_txd; num_srcs = 3; samp = 2; break;
++   case TGSI_OPCODE_SAMPLE_I:
++      op = (texture == TGSI_TEXTURE_2D_MSAA || texture == TGSI_TEXTURE_2D_ARRAY_MSAA)
++         ? nir_texop_txf_ms : nir_texop_txf;
++      num_srcs = 2; samp = 1; break;
+    case TGSI_OPCODE_TEX:
+       op = nir_texop_tex;
+       num_srcs = 1;
+@@ -1236,7 +1257,7 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+       abort();
+    }
+ 
+-   if (tgsi_inst->Texture.Texture == TGSI_TEXTURE_SHADOW1D ||
++   if (compare || texture == TGSI_TEXTURE_SHADOW1D ||
+        tgsi_inst->Texture.Texture == TGSI_TEXTURE_SHADOW1D_ARRAY ||
+        tgsi_inst->Texture.Texture == TGSI_TEXTURE_SHADOW2D ||
+        tgsi_inst->Texture.Texture == TGSI_TEXTURE_SHADOW2D_ARRAY ||
+@@ -1255,22 +1276,21 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+    instr->op = op;
+    instr->can_speculate = true; /* No shaders come from SPIR-V or GLSL. */
+ 
+-   get_texture_info(tgsi_inst->Texture.Texture,
++   get_texture_info(texture,
+                     &instr->sampler_dim, &instr->is_shadow, &instr->is_array);
+ 
++   instr->is_shadow |= compare;
++
+    instr->coord_components =
+       glsl_get_sampler_dim_coordinate_components(instr->sampler_dim);
+ 
+    if (instr->is_array)
+       instr->coord_components++;
+ 
+-   assert(tgsi_inst->Src[samp].Register.File == TGSI_FILE_SAMPLER);
++   assert(tgsi_inst->Src[samp].Register.File == TGSI_FILE_SAMPLER ||
++          (opcode == TGSI_OPCODE_SAMPLE_I && separate));
+ 
+-   /* TODO if we supported any opc's which take an explicit SVIEW
+-    * src, we would use that here instead.  But for the "legacy"
+-    * texture opc's the SVIEW index is same as SAMP index:
+-    */
+-   sview = tgsi_inst->Src[samp].Register.Index;
++   sview = tgsi_inst->Src[separate ? 1 : samp].Register.Index;
+ 
+    nir_alu_type sampler_type =
+       sview < c->num_samp_types ? c->samp_types[sview] : nir_type_float32;
+@@ -1290,13 +1310,25 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+ 
+    nir_deref_instr *deref = nir_build_deref_var(b, var);
+ 
++   // Direct3D texture and sampler bindings are independent. Keep the
++   // texture dereference above, and a separate sampler binding for SAMPLE.
++   nir_deref_instr *sampler_deref = deref;
++   if (separate && opcode != TGSI_OPCODE_SAMPLE_I) {
++      unsigned binding = tgsi_inst->Src[samp].Register.Index;
++      nir_variable *sampler = nir_variable_create(b->shader, nir_var_uniform,
++         glsl_bare_sampler_type(), "d3d_sampler");
++      sampler->data.binding = binding;
++      sampler->data.explicit_binding = true;
++      sampler_deref = nir_build_deref_var(b, sampler);
++      BITSET_SET(b->shader->info.samplers_used, binding);
++   }
+    unsigned src_number = 0;
+ 
+    instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_texture_deref,
+                                                 &deref->def);
+    src_number++;
+    instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_sampler_deref,
+-                                                &deref->def);
++                                                &sampler_deref->def);
+    src_number++;
+ 
+    instr->src[src_number] =
+@@ -1304,6 +1336,20 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+                           nir_trim_vector(b, src[0], instr->coord_components));
+    src_number++;
+ 
++   if (opcode == TGSI_OPCODE_SAMPLE_B || opcode == TGSI_OPCODE_SAMPLE_L ||
++       opcode == TGSI_OPCODE_SAMPLE_C_LZ) {
++      instr->src[src_number++] = nir_tex_src_for_ssa(
++         opcode == TGSI_OPCODE_SAMPLE_B ? nir_tex_src_bias : nir_tex_src_lod,
++         opcode == TGSI_OPCODE_SAMPLE_C_LZ ? nir_imm_float(b, 0.0f) : ttn_channel(b, src[3], X));
++   }
++   if (opcode == TGSI_OPCODE_SAMPLE_D) {
++      instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_ddx,
++         nir_trim_vector(b, src[3], instr->coord_components - instr->is_array));
++      src_number++;
++      instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_ddy,
++         nir_trim_vector(b, src[4], instr->coord_components - instr->is_array));
++      src_number++;
++   }
+    if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXP) {
+       instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_projector,
+                                                    ttn_channel(b, src[0], W));
+@@ -1338,7 +1384,8 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+       src_number++;
+    }
+ 
+-   if (tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF ||
++   if (opcode == TGSI_OPCODE_SAMPLE_I ||
++       tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF ||
+        tgsi_inst->Instruction.Opcode == TGSI_OPCODE_TXF_LZ) {
+       if (op == nir_texop_txf_ms) {
+          instr->src[src_number] = nir_tex_src_for_ssa(nir_tex_src_ms_index,
+@@ -1372,7 +1419,9 @@ ttn_tex(struct ttn_compile *c, nir_def **src)
+    }
+ 
+    if (instr->is_shadow) {
+-      if (instr->coord_components == 4)
++      if (compare)
++         instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[3], X));
++      else if (instr->coord_components == 4)
+          instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[1], X));
+       else if (instr->coord_components == 3)
+          instr->src[src_number].src = nir_src_for_ssa(ttn_channel(b, src[0], W));
+@@ -1432,22 +1481,25 @@ ttn_txq(struct ttn_compile *c, nir_def **src)
+    nir_builder *b = &c->build;
+    struct tgsi_full_instruction *tgsi_inst = &c->token->FullInstruction;
+    nir_tex_instr *txs, *qlv;
++   unsigned texture = tgsi_inst->Instruction.Opcode == TGSI_OPCODE_SVIEWINFO ?
++      c->scan->sampler_targets[tgsi_inst->Src[1].Register.Index] : tgsi_inst->Texture.Texture;
+ 
+    txs = nir_tex_instr_create(b->shader, 2);
+    txs->op = nir_texop_txs;
+    txs->dest_type = nir_type_uint32;
+    txs->can_speculate = true;
+-   get_texture_info(tgsi_inst->Texture.Texture,
++   get_texture_info(texture,
+                     &txs->sampler_dim, &txs->is_shadow, &txs->is_array);
+ 
+    qlv = nir_tex_instr_create(b->shader, 1);
+    qlv->op = nir_texop_query_levels;
+    qlv->dest_type = nir_type_uint32;
+    qlv->can_speculate = true;
+-   get_texture_info(tgsi_inst->Texture.Texture,
++   get_texture_info(texture,
+                     &qlv->sampler_dim, &qlv->is_shadow, &qlv->is_array);
+ 
+-   assert(tgsi_inst->Src[1].Register.File == TGSI_FILE_SAMPLER);
++   assert(tgsi_inst->Src[1].Register.File == TGSI_FILE_SAMPLER ||
++          tgsi_inst->Src[1].Register.File == TGSI_FILE_SAMPLER_VIEW);
+    int sview = tgsi_inst->Src[1].Register.Index;
+ 
+    nir_alu_type sampler_type =
+@@ -1950,6 +2002,13 @@ ttn_emit_instruction(struct ttn_compile *c)
+       ttn_kill_if(b, src);
+       break;
+ 
++   case TGSI_OPCODE_SAMPLE:
++   case TGSI_OPCODE_SAMPLE_B:
++   case TGSI_OPCODE_SAMPLE_L:
++   case TGSI_OPCODE_SAMPLE_D:
++   case TGSI_OPCODE_SAMPLE_C:
++   case TGSI_OPCODE_SAMPLE_C_LZ:
++   case TGSI_OPCODE_SAMPLE_I:
+    case TGSI_OPCODE_TEX:
+    case TGSI_OPCODE_TEX_LZ:
+    case TGSI_OPCODE_TXP:
+@@ -1966,6 +2025,7 @@ ttn_emit_instruction(struct ttn_compile *c)
+       dst = ttn_tex(c, src);
+       break;
+ 
++   case TGSI_OPCODE_SVIEWINFO:
+    case TGSI_OPCODE_TXQ:
+       dst = ttn_txq(c, src);
+       break;
+diff --git a/src/gallium/auxiliary/tgsi/tgsi_exec.c b/src/gallium/auxiliary/tgsi/tgsi_exec.c
+index eaaa1e1e..1b03674c 100644
+--- a/src/gallium/auxiliary/tgsi/tgsi_exec.c
++++ b/src/gallium/auxiliary/tgsi/tgsi_exec.c
+@@ -1515,8 +1515,14 @@ get_index_registers(const struct tgsi_exec_machine *mach,
+    if (reg->Register.Indirect) {
+       const unsigned execmask = mach->ExecMask;
+ 
+-      assert(reg->Indirect.File == TGSI_FILE_ADDRESS);
+-      const union tgsi_exec_channel *addr = &mach->Addrs[reg->Indirect.Index].xyzw[reg->Indirect.Swizzle];
++      /* D3D10 relative operands may use TEMP as well as ADDR.
++       * Fetch through the same register-file path as destination indirection. */
++      union tgsi_exec_channel indirect_index, indirect_value;
++      for (int lane = 0; lane < TGSI_QUAD_SIZE; lane++)
++         indirect_index.i[lane] = reg->Indirect.Index;
++      fetch_src_file_channel(mach, reg->Indirect.File, reg->Indirect.Swizzle,
++                             &indirect_index, &ZeroVec, &indirect_value);
++      const union tgsi_exec_channel *addr = &indirect_value;
+       for (int i = 0; i < TGSI_QUAD_SIZE; i++)
+          index->i[i] += addr->u[i];
+ 
+@@ -1557,8 +1563,14 @@ get_index_registers(const struct tgsi_exec_machine *mach,
+       if (reg->Dimension.Indirect) {
+          const unsigned execmask = mach->ExecMask;
+ 
+-         assert(reg->DimIndirect.File == TGSI_FILE_ADDRESS);
+-         const union tgsi_exec_channel *addr = &mach->Addrs[reg->DimIndirect.Index].xyzw[reg->DimIndirect.Swizzle];
++         /* D3D10 relative operands may use TEMP as well as ADDR.
++          * Fetch through the same register-file path as destination indirection. */
++         union tgsi_exec_channel indirect_index, indirect_value;
++         for (int lane = 0; lane < TGSI_QUAD_SIZE; lane++)
++            indirect_index.i[lane] = reg->DimIndirect.Index;
++         fetch_src_file_channel(mach, reg->DimIndirect.File, reg->DimIndirect.Swizzle,
++                                &indirect_index, &ZeroVec, &indirect_value);
++         const union tgsi_exec_channel *addr = &indirect_value;
+          for (int i = 0; i < TGSI_QUAD_SIZE; i++)
+             index2D->i[i] += addr->u[i];
+ 
+diff --git a/src/gallium/frontends/d3d10umd/Debug.cpp b/src/gallium/frontends/d3d10umd/Debug.cpp
+index 17f7292e..554d5a17 100644
+--- a/src/gallium/frontends/d3d10umd/Debug.cpp
++++ b/src/gallium/frontends/d3d10umd/Debug.cpp
+@@ -34,6 +34,18 @@ DebugPrintf(const char *format, ...)
+     va_end(ap);
+ 
+     OutputDebugStringA(buf);
++    static volatile LONG lines = 0;
++    if (InterlockedIncrement(&lines) <= 10000 || strstr(buf, "BC250 SetError") || strstr(buf, "BC250 Perf")) {
++       char path[MAX_PATH];
++       snprintf(path, sizeof(path), "C:\\BC250\\e26\\umdlogs\\mesa-%lu.txt", GetCurrentProcessId());
++       HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
++                              NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
++       if (f != INVALID_HANDLE_VALUE) {
++          DWORD written;
++          WriteFile(f, buf, (DWORD)strlen(buf), &written, NULL);
++          CloseHandle(f);
++       }
++    }
+ }
+ 
+ 
+diff --git a/src/gallium/frontends/d3d10umd/Debug.h b/src/gallium/frontends/d3d10umd/Debug.h
+index efdf3187..02f1c5bc 100644
+--- a/src/gallium/frontends/d3d10umd/Debug.h
++++ b/src/gallium/frontends/d3d10umd/Debug.h
+@@ -60,7 +60,7 @@ AssertFail(const char *expr, const char *file, unsigned line, const char *functi
+ #endif
+ 
+ 
+-#if 0 && !defined(NDEBUG)
++#if 1
+ #define LOG_ENTRYPOINT() DebugPrintf("%s\n", __func__)
+ #else
+ #define LOG_ENTRYPOINT() (void)0
+diff --git a/src/gallium/frontends/d3d10umd/Device.cpp b/src/gallium/frontends/d3d10umd/Device.cpp
+index 101a1210..5406e651 100644
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -130,7 +130,20 @@ CreateDevice(D3D10DDI_HADAPTER hAdapter,                 // IN
+    Device *pDevice = CastDevice(pCreateData->hDrvDevice);
+    memset(pDevice, 0, sizeof *pDevice);
+ 
++   // E26: DWM requests runtime synchronization while creating its primary,
++   // before the first Present. Register a virtual context at device creation
++   // so the runtime has a context for its broadcast synchronization callbacks.
++   if (!pCreateData->pKTCallbacks->pfnCreateContextVirtualCb) return E_NOTIMPL;
++   D3DDDICB_CREATECONTEXTVIRTUAL context = {};
++   context.EngineAffinity = 1;
++   HRESULT contextResult = pCreateData->pKTCallbacks->pfnCreateContextVirtualCb(
++       (HANDLE)pCreateData->hRTDevice.handle, &context);
++   DebugPrintf("BC250 initial CreateContextVirtual %08lx\n", contextResult);
++   if (FAILED(contextResult)) return contextResult;
++   pDevice->hContext = context.hContext;
++
+    struct pipe_screen *screen = pAdapter->screen;
++   DebugPrintf("BC250 Renderer: %s\n", screen->get_name(screen));
+    struct pipe_context *pipe = screen->context_create(screen, NULL, 0);
+    pDevice->pipe = pipe;
+    pDevice->cso = cso_create_context(pipe, CSO_NO_VBUF);
+@@ -294,14 +307,8 @@ CreateDevice(D3D10DDI_HADAPTER hAdapter,                 // IN
+    pCreateData->DXGIBaseDDI.pDXGIDDIBaseFunctions->pfnBlt =
+       _Blt;
+ 
+-   if (0) {
+-      return S_OK;
+-   } else {
+-      // Tell DXGI to not use the shared resource presentation path when
+-      // communicating with DWM:
+-      // http://msdn.microsoft.com/en-us/library/windows/hardware/ff569887(v=vs.85).aspx
+-      return DXGI_STATUS_NO_REDIRECTION;
+-   }
++   // E26: the linear shared-resource path is implemented for the tested formats.
++   return S_OK;
+ }
+ 
+ 
+@@ -360,6 +367,16 @@ DestroyDevice(D3D10DDI_HDEVICE hDevice)   // IN
+    pipe->set_sampler_views(pipe, MESA_SHADER_GEOMETRY, 0,
+                            PIPE_MAX_SHADER_SAMPLER_VIEWS, 0, sampler_views);
+ 
++   if (pDevice->hContext) {
++      D3DDDICB_DESTROYCONTEXT destroy = {};
++      destroy.hContext = pDevice->hContext;
++      pDevice->KTCallbacks.pfnDestroyContextCb(pDevice->hDevice, &destroy);
++   }
++   if (pDevice->pagingQueue) {
++      D3DDDI_DESTROYPAGINGQUEUE destroy = {};
++      destroy.hPagingQueue = pDevice->pagingQueue;
++      pDevice->KTCallbacks.pfnDestroyPagingQueueCb(pDevice->hDevice, &destroy);
++   }
+    pipe->destroy(pipe);
+ }
+ 
+diff --git a/src/gallium/frontends/d3d10umd/Draw.cpp b/src/gallium/frontends/d3d10umd/Draw.cpp
+index 3bf231ea..59d4415d 100644
+--- a/src/gallium/frontends/d3d10umd/Draw.cpp
++++ b/src/gallium/frontends/d3d10umd/Draw.cpp
+@@ -40,6 +40,16 @@
+ #include "util/u_draw.h"
+ #include "util/u_memory.h"
+ 
++// Diagnostic wall-clock accounting around native draw entry points.
++struct Bc250DrawTimer {
++   Device *device; LARGE_INTEGER start;
++   Bc250DrawTimer(Device *d):device(d){QueryPerformanceCounter(&start);}
++   ~Bc250DrawTimer(){LARGE_INTEGER end;QueryPerformanceCounter(&end);
++      UINT64 ticks=end.QuadPart-start.QuadPart;
++      device->profileDrawTicks+=ticks;device->profileDrawCalls++;
++      if(ticks>device->profileDrawMax)device->profileDrawMax=ticks;}
++};
++
+ static unsigned
+ ClampedUAdd(unsigned a,
+             unsigned b)
+@@ -153,6 +163,7 @@ Draw(D3D10DDI_HDEVICE hDevice,   // IN
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+ 
+    ResolveState(pDevice);
+ 
+@@ -183,6 +194,7 @@ DrawIndexed(D3D10DDI_HDEVICE hDevice,  // IN
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+    struct pipe_draw_info info;
+    struct pipe_draw_start_count_bias draw;
+    struct pipe_resource *null_ib = NULL;
+@@ -241,6 +253,7 @@ DrawInstanced(D3D10DDI_HDEVICE hDevice,      // IN
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+ 
+    if (!InstanceCount) {
+       return;
+@@ -280,6 +293,7 @@ DrawIndexedInstanced(D3D10DDI_HDEVICE hDevice,   // IN
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+    struct pipe_draw_info info;
+    struct pipe_draw_start_count_bias draw;
+    struct pipe_resource *null_ib = NULL;
+@@ -344,6 +358,7 @@ DrawAuto(D3D10DDI_HDEVICE hDevice)  // IN
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+    struct pipe_draw_info info;
+    struct pipe_draw_indirect_info indirect;
+ 
+diff --git a/src/gallium/frontends/d3d10umd/DxgiFns.cpp b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+index ea615236..3797643d 100644
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <stdio.h>
++#include <vector>
+ 
+ #include "DxgiFns.h"
+ #include "Format.h"
+@@ -39,6 +40,9 @@
+ #include "Debug.h"
+ 
+ #include "util/format/u_format.h"
++#include "util/u_inlines.h"
++#include "util/os_time.h"
++#include "frontend/winsys_handle.h"
+ 
+ 
+ /*
+@@ -52,6 +56,91 @@
+  * ----------------------------------------------------------------------
+  */
+ 
++HRESULT Bc250EnsureSurface(Device *device, Resource *resource)
++{
++   if (!resource || !resource->resource) return E_INVALIDARG;
++   if (resource->presentReady) return S_OK;
++   UINT width = resource->resource->width0, height = resource->resource->height0;
++   if (!width || !height || width > 8192 || height > 8192) return E_INVALIDARG;
++   if (!device->pagingQueue) {
++      if (!device->KTCallbacks.pfnCreatePagingQueueCb) return E_NOTIMPL;
++      D3DDDICB_CREATEPAGINGQUEUE queue = {};
++      queue.Priority = D3DDDI_PAGINGQUEUE_PRIORITY_NORMAL;
++      HRESULT hr = device->KTCallbacks.pfnCreatePagingQueueCb(device->hDevice, &queue);
++      DebugPrintf("BC250 CreatePagingQueue %08lx\n", hr);
++      if (FAILED(hr)) return hr;
++      device->pagingQueue = queue.hPagingQueue;
++      device->pagingFence = (volatile UINT64 *)queue.FenceValueCPUVirtualAddress;
++   }
++   UINT format;
++   switch (resource->Format) {
++   case DXGI_FORMAT_B8G8R8A8_UNORM: format = D3DDDIFMT_A8R8G8B8; break;
++   case DXGI_FORMAT_B8G8R8X8_UNORM: format = D3DDDIFMT_X8R8G8B8; break;
++   case DXGI_FORMAT_R8G8B8A8_UNORM: format = D3DDDIFMT_A8B8G8R8; break;
++   default: return E_NOTIMPL;
++   }
++   struct SurfacePrivate { UINT magic, version, width, height, pitch, format; UINT64 size; };
++   static_assert(sizeof(SurfacePrivate) == 32, "LB7A ABI");
++   SurfacePrivate data = {0x4137424c, 1, width, height, width*4, format, UINT64(width)*height*4};
++   HRESULT hr;
++   if (!resource->allocation) {
++      D3DDDI_ALLOCATIONINFO2 info = {};
++      info.pPrivateDriverData = &data; info.PrivateDriverDataSize = sizeof(data);
++      info.Flags.Primary = resource->primary; info.VidPnSourceId = resource->vidpn;
++      D3DDDICB_ALLOCATE allocate = {};
++      allocate.hResource = resource->hRTResource;
++      struct ResourcePrivate { UINT magic, version, shared; };
++      ResourcePrivate group = {0x52363245, 1, resource->shared ? 1u : 0u}; // "E26R"
++      allocate.pPrivateDriverData = &group; allocate.PrivateDriverDataSize = sizeof(group);
++      DebugPrintf("BC250 Allocate input runtime %p size %llu primary %u\n", resource->hRTResource, data.size, resource->primary);
++      allocate.NumAllocations = 1; allocate.pAllocationInfo2 = &info;
++      hr = device->KTCallbacks.pfnAllocateCb(device->hDevice, &allocate);
++      DebugPrintf("BC250 Allocate %08lx format %u primary %u handle %x resource %x\n", hr, format, resource->primary, info.hAllocation, allocate.hKMResource);
++      if (FAILED(hr)) return hr;
++      resource->allocation = info.hAllocation;
++   }
++   resource->gpuBytes = (data.size + 4095) & ~UINT64(4095);
++   D3DDDI_MAPGPUVIRTUALADDRESS map = {};
++   map.hPagingQueue = device->pagingQueue;
++   map.hAllocation = resource->allocation;
++   map.SizeInPages = resource->gpuBytes / 4096;
++   map.Protection.Write = 1;
++   hr = device->KTCallbacks.pfnMapGpuVirtualAddressCb(device->hDevice, &map);
++   DebugPrintf("BC250 MapGpuVa %08lx va %llx\n", hr, map.VirtualAddress);
++   // WDDM callbacks report successful asynchronous paging as E_PENDING.
++   if (FAILED(hr) && hr != E_PENDING) return hr;
++   resource->gpuVa = map.VirtualAddress;
++   UINT64 fence = map.PagingFenceValue;
++   D3DDDI_MAKERESIDENT resident = {};
++   resident.hPagingQueue = device->pagingQueue;
++   resident.NumAllocations = 1; resident.AllocationList = &resource->allocation;
++   hr = device->KTCallbacks.pfnMakeResidentCb(device->hDevice, &resident);
++   DebugPrintf("BC250 MakeResident %08lx\n", hr);
++   if (FAILED(hr) && hr != E_PENDING) return hr;
++   if (resident.PagingFenceValue > fence) fence = resident.PagingFenceValue;
++   ULONGLONG deadline = GetTickCount64() + 5000;
++   while (device->pagingFence && *device->pagingFence < fence && GetTickCount64() < deadline) Sleep(1);
++   if (!device->pagingFence || *device->pagingFence < fence) return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
++   D3DDDICB_LOCK2 lock = {};
++   lock.hAllocation = resource->allocation;
++   hr = device->KTCallbacks.pfnLock2Cb(device->hDevice, &lock);
++   if (FAILED(hr)) return hr;
++   resource->cpuMapping = lock.pData;
++   struct winsys_handle handle = {};
++   handle.type = WINSYS_HANDLE_TYPE_USER_MEMORY;
++   handle.user_memory = lock.pData; handle.stride = width * 4;
++   handle.size = data.size;
++   struct pipe_resource desc = *resource->resource;
++   desc.bind |= PIPE_BIND_DISPLAY_TARGET | PIPE_BIND_SHARED;
++   struct pipe_resource *imported = device->pipe->screen->resource_from_handle(
++       device->pipe->screen, &desc, &handle, 0);
++   if (!imported) return E_OUTOFMEMORY;
++   pipe_resource_reference(&resource->resource, NULL);
++   resource->resource = imported;
++   resource->presentReady = TRUE;
++   return S_OK;
++}
++
+ HRESULT APIENTRY
+ _Present(DXGI_DDI_ARG_PRESENT *pPresentData)
+ {
+@@ -61,11 +150,71 @@ _Present(DXGI_DDI_ARG_PRESENT *pPresentData)
+    struct Device *device = CastDevice(pPresentData->hDevice);
+    Resource *pSrcResource = CastResource(pPresentData->hSurfaceToPresent);
+ 
+-   device->pipe->flush(device->pipe, NULL, 0);
+-   device->pipe->screen->flush_frontbuffer(device->pipe->screen, device->pipe, 
+-      pSrcResource->resource, 0, 0, pPresentData->pDXGIContext, 0, NULL);
+-
+-   return S_OK;
++   /* E26 software baseline: use the runtime's WDDM callbacks, not GetDC.
++    * LB7A is the existing linear-surface contract in bc250kmd/wddm.c.
++    * This path remains diagnostic until sharing, residency and flips pass. */
++   if (!device->KTCallbacks.pfnCreateContextVirtualCb ||
++       !device->KTCallbacks.pfnLock2Cb || !device->KTCallbacks.pfnUnlock2Cb)
++      return E_NOTIMPL;
++   if (!device->hContext) {
++      D3DDDICB_CREATECONTEXTVIRTUAL create = {};
++      create.EngineAffinity = 1;
++      HRESULT hr = device->KTCallbacks.pfnCreateContextVirtualCb(device->hDevice, &create);
++      DebugPrintf("BC250 CreateContextVirtual %08lx\n", hr);
++      if (FAILED(hr)) return hr;
++      device->hContext = create.hContext;
++   }
++   struct pipe_resource *resource = pSrcResource->resource;
++   UINT width = resource->width0, height = resource->height0;
++   if (!width || !height || width > 8192 || height > 8192) return E_INVALIDARG;
++   if (resource->format != PIPE_FORMAT_B8G8R8A8_UNORM &&
++       resource->format != PIPE_FORMAT_B8G8R8X8_UNORM &&
++       resource->format != PIPE_FORMAT_R8G8B8A8_UNORM &&
++       resource->format != PIPE_FORMAT_R8G8B8X8_UNORM) return E_NOTIMPL;
++   HRESULT allocated = Bc250EnsureSurface(device, pSrcResource);
++   if (FAILED(allocated)) return allocated;
++   // llvmpipe flush queues CPU raster work. Publish the scanout allocation
++   // only after its render fence completes; a CPU barrier alone cannot wait.
++   LARGE_INTEGER renderStart, renderEnd;
++   QueryPerformanceCounter(&renderStart);
++   pipe_fence_handle *renderFence = NULL;
++   device->pipe->flush(device->pipe, &renderFence, 0);
++   bool rendered = !renderFence || device->pipe->screen->fence_finish(
++      device->pipe->screen, device->pipe, renderFence, OS_TIMEOUT_INFINITE);
++   device->pipe->screen->fence_reference(device->pipe->screen, &renderFence, NULL);
++   QueryPerformanceCounter(&renderEnd);
++   if (!rendered) return E_FAIL;
++   MemoryBarrier();
++   HRESULT hr;
++   DXGIDDICB_PRESENT present = {};
++   present.hSrcAllocation = pSrcResource->allocation;
++   present.hContext = device->hContext;
++   Resource *dstResource = CastResource(pPresentData->hDstResource);
++   if (dstResource) {
++      hr = Bc250EnsureSurface(device, dstResource);
++      if (FAILED(hr)) return hr;
++      present.hDstAllocation = dstResource->allocation;
++   }
++   DebugPrintf("BC250 Present flags %x src %x dst %x\n", pPresentData->Flags.Value,
++               present.hSrcAllocation, present.hDstAllocation);
++   present.pDXGIContext = pPresentData->pDXGIContext;
++   LARGE_INTEGER presentStart, presentEnd, frequency;
++   QueryPerformanceCounter(&presentStart);
++   hr = device->pDXGIBaseCallbacks->pfnPresentCb(device->hDevice, &present);
++   QueryPerformanceCounter(&presentEnd);QueryPerformanceFrequency(&frequency);
++   if(++device->profilePresents<=120 || device->profilePresents%60==0)
++      DebugPrintf("BC250 Perf frame %u gap_ms %.3f draws %llu draw_ms %.3f max_draw_ms %.3f present_ms %.3f render_wait_ms %.3f\n",
++       device->profilePresents,
++       device->profileLastPresent?1000.0*(presentEnd.QuadPart-device->profileLastPresent)/frequency.QuadPart:0.0,
++       device->profileDrawCalls,1000.0*device->profileDrawTicks/frequency.QuadPart,
++       1000.0*device->profileDrawMax/frequency.QuadPart,
++       1000.0*(presentEnd.QuadPart-presentStart.QuadPart)/frequency.QuadPart,
++       1000.0*(renderEnd.QuadPart-renderStart.QuadPart)/frequency.QuadPart);
++   device->profileLastPresent=presentEnd.QuadPart;
++   device->profileDrawTicks=device->profileDrawMax=device->profileDrawCalls=0;
++
++   DebugPrintf("BC250 PresentCb %08lx\n", hr);
++   return hr;
+ }
+ 
+ 
+@@ -114,9 +263,15 @@ _GetGammaCaps( DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS *GetCaps )
+ HRESULT APIENTRY
+ _SetDisplayMode( DXGI_DDI_ARG_SETDISPLAYMODE *SetDisplayMode )
+ {
+-   LOG_UNSUPPORTED_ENTRYPOINT();
+-
+-   return S_OK;
++   Device *device = CastDevice(SetDisplayMode->hDevice);
++   Resource *resource = CastResource(SetDisplayMode->hResource);
++   HRESULT hr = Bc250EnsureSurface(device, resource);
++   if (FAILED(hr)) return hr;
++   D3DDDICB_SETDISPLAYMODE mode = {};
++   mode.hPrimaryAllocation = resource->allocation;
++   hr = device->KTCallbacks.pfnSetDisplayModeCb(device->hDevice, &mode);
++   DebugPrintf("BC250 SetDisplayMode %08lx\n", hr);
++   return hr;
+ }
+ 
+ 
+@@ -172,72 +327,75 @@ _QueryResourceResidency( DXGI_DDI_ARG_QUERYRESOURCERESIDENCY *QueryResourceResid
+  */
+ 
+ HRESULT APIENTRY
+-_RotateResourceIdentities( DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *RotateResourceIdentities )
++_RotateResourceIdentities(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args)
+ {
+    LOG_ENTRYPOINT();
+-
+-   if (RotateResourceIdentities->Resources <= 1) {
+-      return S_OK;
++   if (args->Resources <= 1) return S_OK;
++   Device *device = CastDevice(args->hDevice);
++   pipe_context *pipe = device->pipe;
++   // Microsoft DXGI_BASE_FUNCTIONS: rotate kernel identities, preserve RT
++   // handles. Copying pixels writes into a buffer still scanned by DCN.
++   std::vector<Resource> before(args->Resources);
++   for (UINT i = 0; i < args->Resources; ++i) {
++      Resource *r = CastResource(args->pResources[i]);
++      if (!r || !r->presentReady || !r->resource ||
++          r->resource->target != PIPE_TEXTURE_2D || r->resource->last_level ||
++          (r->resource->bind & PIPE_BIND_DEPTH_STENCIL)) return E_NOTIMPL;
++      before[i] = *r;
+    }
+-
+-   struct pipe_context *pipe = CastPipeDevice(RotateResourceIdentities->hDevice);
+-   struct pipe_screen *screen = pipe->screen;
+-
+-   struct pipe_resource *resource0 = CastPipeResource(RotateResourceIdentities->pResources[0]);
+-
+-   assert(resource0);
+-   LOG_UNSUPPORTED(resource0->last_level);
+-
+-   /*
+-    * XXX: Copying is not very efficient, but it is much simpler than the
+-    * alternative of recreating all views.
+-    */
+-
+-   struct pipe_resource *temp_resource;
+-   temp_resource = screen->resource_create(screen, resource0);
+-   assert(temp_resource);
+-   if (!temp_resource) {
+-      return E_OUTOFMEMORY;
+-   }
+-
+-   struct pipe_box src_box;
+-   src_box.x = 0;
+-   src_box.y = 0;
+-   src_box.z = 0;
+-   src_box.width  = resource0->width0;
+-   src_box.height = resource0->height0;
+-   src_box.depth  = resource0->depth0;
+-
+-   for (UINT i = 0; i < RotateResourceIdentities->Resources + 1; ++i) {
+-      struct pipe_resource *src_resource;
+-      struct pipe_resource *dst_resource;
+-
+-      if (i < RotateResourceIdentities->Resources) {
+-         src_resource = CastPipeResource(RotateResourceIdentities->pResources[i]);
+-      } else {
+-         src_resource = temp_resource;
+-      }
+-
+-      if (i > 0) {
+-         dst_resource = CastPipeResource(RotateResourceIdentities->pResources[i - 1]);
+-      } else {
+-         dst_resource = temp_resource;
++   auto rotated = [&](pipe_resource *resource) -> pipe_resource * {
++      for (UINT i = 0; i < args->Resources; ++i)
++         if (resource == before[i].resource)
++            return before[(i + 1) % args->Resources].resource;
++      return resource;
++   };
++   pipe->flush(pipe, NULL, 0);
++   // Prepare sampler views before publishing any changed resource identity.
++   struct ViewChange { ShaderResourceView *view; pipe_sampler_view *next; };
++   std::vector<ViewChange> changes;
++   for (ShaderResourceView *v = device->shaderResourceViews; v; v = v->next) {
++      if (!v->handle || rotated(v->handle->texture) == v->handle->texture) continue;
++      pipe_sampler_view *next = pipe->create_sampler_view(pipe,
++         rotated(v->handle->texture), v->handle);
++      if (!next) {
++         for (auto &c : changes) pipe->sampler_view_release(pipe, c.next);
++         return E_OUTOFMEMORY;
+       }
+-
+-      assert(dst_resource);
+-      assert(src_resource);
+-
+-      pipe->resource_copy_region(pipe,
+-                                 dst_resource,
+-                                 0, // dst_level
+-                                 0, 0, 0, // dst_x,y,z
+-                                 src_resource,
+-                                 0, // src_level
+-                                 &src_box);
++      changes.push_back({v, next});
+    }
+-
+-   pipe_resource_reference(&temp_resource, NULL);
+-
++   for (UINT i = 0; i < args->Resources; ++i) {
++      Resource *r = CastResource(args->pResources[i]);
++      const Resource &next = before[(i + 1) % args->Resources];
++      r->resource = next.resource;
++      r->allocation = next.allocation;
++      r->gpuVa = next.gpuVa;
++      r->gpuBytes = next.gpuBytes;
++      r->cpuMapping = next.cpuMapping;
++      r->presentReady = next.presentReady;
++      // hRTResource and the logical resource/view descriptors stay in place.
++      DebugPrintf("BC250 Rotate slot %u kernel %x -> %x va %llx\n",
++                  i, before[i].allocation, r->allocation, r->gpuVa);
++   }
++   for (RenderTargetView *v = device->renderTargetViews; v; v = v->next)
++      pipe_resource_reference(&v->surface.texture, rotated(v->surface.texture));
++   for (UINT i = 0; i < device->fb.nr_cbufs; ++i)
++      pipe_resource_reference(&device->fb.cbufs[i].texture,
++                              rotated(device->fb.cbufs[i].texture));
++   // A cached bound framebuffer and bound samplers also retain old storage.
++   pipe->set_framebuffer_state(pipe, &device->fb);
++   for (auto &c : changes) {
++      pipe_sampler_view *old = c.view->handle;
++      for (UINT sh = 0; sh < MESA_SHADER_STAGES; ++sh)
++         for (UINT i = 0; i < PIPE_MAX_SHADER_SAMPLER_VIEWS; ++i)
++            if (device->sampler_views[sh][i] == old)
++               device->sampler_views[sh][i] = c.next;
++      c.view->handle = c.next;
++      pipe->sampler_view_release(pipe, old);
++   }
++   if (!changes.empty())
++      for (auto sh : {MESA_SHADER_VERTEX, MESA_SHADER_FRAGMENT, MESA_SHADER_GEOMETRY})
++         pipe->set_sampler_views(pipe, sh, 0, PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                 0, device->sampler_views[sh]);
+    return S_OK;
+ }
+ 
+@@ -256,7 +414,31 @@ _RotateResourceIdentities( DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *RotateResour
+ HRESULT APIENTRY
+ _Blt(DXGI_DDI_ARG_BLT *Blt)
+ {
+-   LOG_UNSUPPORTED_ENTRYPOINT();
+-
++   LOG_ENTRYPOINT();
++   struct pipe_context *pipe = CastPipeDevice(Blt->hDevice);
++   struct pipe_resource *src = CastPipeResource(Blt->hSrcResource);
++   struct pipe_resource *dst = CastPipeResource(Blt->hDstResource);
++   if (!src || !dst || Blt->SrcSubresource || Blt->DstSubresource ||
++       src->target != PIPE_TEXTURE_2D || dst->target != PIPE_TEXTURE_2D ||
++       src->array_size != 1 || dst->array_size != 1 ||
++       Blt->Rotate > DXGI_DDI_MODE_ROTATION_IDENTITY) return E_NOTIMPL;
++   if (Blt->DstRight <= Blt->DstLeft || Blt->DstBottom <= Blt->DstTop ||
++       Blt->DstRight > dst->width0 || Blt->DstBottom > dst->height0)
++      return E_INVALIDARG;
++   if (!pipe->screen->is_format_supported(pipe->screen, src->format, src->target,
++        src->nr_samples, src->nr_storage_samples, PIPE_BIND_SAMPLER_VIEW) ||
++       !pipe->screen->is_format_supported(pipe->screen, dst->format, dst->target,
++        dst->nr_samples, dst->nr_storage_samples, PIPE_BIND_RENDER_TARGET)) return E_NOTIMPL;
++   struct pipe_blit_info info = {};
++   info.src.resource = src; info.src.format = src->format;
++   info.src.box.width = src->width0; info.src.box.height = src->height0; info.src.box.depth = 1;
++   info.dst.resource = dst; info.dst.format = dst->format;
++   info.dst.box.x = Blt->DstLeft; info.dst.box.y = Blt->DstTop;
++   info.dst.box.width = Blt->DstRight - Blt->DstLeft;
++   info.dst.box.height = Blt->DstBottom - Blt->DstTop; info.dst.box.depth = 1;
++   info.mask = PIPE_MASK_RGBA; info.filter = PIPE_TEX_FILTER_NEAREST;
++   pipe->blit(pipe, &info);
++   pipe->flush(pipe, NULL, 0);
++   MemoryBarrier();
+    return S_OK;
+ }
+diff --git a/src/gallium/frontends/d3d10umd/OutputMerger.cpp b/src/gallium/frontends/d3d10umd/OutputMerger.cpp
+index 2a38864f..3a3edabf 100644
+--- a/src/gallium/frontends/d3d10umd/OutputMerger.cpp
++++ b/src/gallium/frontends/d3d10umd/OutputMerger.cpp
+@@ -130,6 +130,9 @@ CreateRenderTargetView(
+    }
+ 
+    pRTView->surface = desc;
++   Device *device = CastDevice(hDevice);
++   pRTView->next = device->renderTargetViews;
++   device->renderTargetViews = pRTView;
+ }
+ 
+ 
+@@ -153,6 +156,9 @@ DestroyRenderTargetView(D3D10DDI_HDEVICE hDevice,                       // IN
+ 
+    RenderTargetView *pRTView = CastRenderTargetView(hRenderTargetView);
+ 
++   RenderTargetView **link = &CastDevice(hDevice)->renderTargetViews;
++   while (*link && *link != pRTView) link = &(*link)->next;
++   if (*link) *link = pRTView->next;
+    pipe_resource_reference(&pRTView->surface.texture, NULL);
+ }
+ 
+diff --git a/src/gallium/frontends/d3d10umd/Resource.cpp b/src/gallium/frontends/d3d10umd/Resource.cpp
+index 65729f15..2ee4ceb6 100644
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -252,6 +252,10 @@ CreateResource(D3D10DDI_HDEVICE hDevice,                                // IN
+    Resource *pResource = CastResource(hResource);
+ 
+    memset(pResource, 0, sizeof *pResource);
++   pResource->hRTResource = (HANDLE)hRTResource.handle;
++   pResource->primary = pCreateResource->pPrimaryDesc != NULL;
++   pResource->shared = (pCreateResource->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED) != 0;
++   pResource->vidpn = pCreateResource->pPrimaryDesc ? pCreateResource->pPrimaryDesc->VidPnSourceId : 0;
+ 
+ #if 0
+    if (pCreateResource->pPrimaryDesc) {
+@@ -308,7 +312,7 @@ CreateResource(D3D10DDI_HDEVICE hDevice,                                // IN
+    }
+ 
+    pResource->resource = screen->resource_create(screen, &templat);
+-   if (!pResource) {
++   if (!pResource->resource) {
+       DebugPrintf("%s: failed to create resource\n", __func__);
+       SetError(hDevice, E_OUTOFMEMORY);
+       return;
+@@ -318,6 +322,12 @@ CreateResource(D3D10DDI_HDEVICE hDevice,                                // IN
+    pResource->transfers = (struct pipe_transfer **)calloc(pResource->NumSubResources,
+                                                           sizeof *pResource->transfers);
+ 
++   if (pResource->primary || (pCreateResource->BindFlags & D3D10_DDI_BIND_PRESENT) ||
++       (pCreateResource->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED)) {
++      HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), pResource);
++      if (FAILED(hr)) { SetError(hDevice, hr); return; }
++   }
++
+    if (pCreateResource->pInitialDataUP) {
+       if (pResource->buffer) {
+          assert(pResource->NumSubResources == 1);
+@@ -418,8 +428,44 @@ OpenResource(D3D10DDI_HDEVICE hDevice,                            // IN
+              D3D10DDI_HRESOURCE hResource,                        // IN
+              D3D10DDI_HRTRESOURCE hRTResource)                    // IN
+ {
+-   LOG_UNSUPPORTED_ENTRYPOINT();
+-   SetError(hDevice, E_OUTOFMEMORY);
++   LOG_ENTRYPOINT();
++   struct SurfacePrivate { UINT magic, version, width, height, pitch, format; UINT64 size; };
++   if (pOpenResource->NumAllocations != 1 || !pOpenResource->pOpenAllocationInfo2) {
++      SetError(hDevice, E_NOTIMPL); return;
++   }
++   const D3DDDI_OPENALLOCATIONINFO2 *info = pOpenResource->pOpenAllocationInfo2;
++   if (!info->pPrivateDriverData || info->PrivateDriverDataSize < sizeof(SurfacePrivate)) {
++      SetError(hDevice, E_INVALIDARG); return;
++   }
++   SurfacePrivate data;
++   memcpy(&data, info->pPrivateDriverData, sizeof(data));
++   if (data.magic != 0x4137424c || data.version != 1 || !data.width || !data.height ||
++       data.width > 8192 || data.height > 8192 || data.pitch != data.width * 4 ||
++       data.size < UINT64(data.pitch) * data.height) { SetError(hDevice, E_INVALIDARG); return; }
++   DXGI_FORMAT format;
++   switch (data.format) {
++   case D3DDDIFMT_A8R8G8B8: format = DXGI_FORMAT_B8G8R8A8_UNORM; break;
++   case D3DDDIFMT_X8R8G8B8: format = DXGI_FORMAT_B8G8R8X8_UNORM; break;
++   case D3DDDIFMT_A8B8G8R8: format = DXGI_FORMAT_R8G8B8A8_UNORM; break;
++   default: SetError(hDevice, E_NOTIMPL); return;
++   }
++   D3D10DDI_MIPINFO mip = {};
++   mip.TexelWidth = mip.PhysicalWidth = data.width;
++   mip.TexelHeight = mip.PhysicalHeight = data.height;
++   mip.TexelDepth = mip.PhysicalDepth = 1;
++   D3D10DDIARG_CREATERESOURCE create = {};
++   create.pMipInfoList = &mip; create.ResourceDimension = D3D10DDIRESOURCE_TEXTURE2D;
++   create.Usage = D3D10_DDI_USAGE_DEFAULT;
++   create.BindFlags = D3D10_DDI_BIND_SHADER_RESOURCE | D3D10_DDI_BIND_RENDER_TARGET;
++   create.Format = format; create.SampleDesc.Count = 1;
++   create.MipLevels = 1; create.ArraySize = 1;
++   CreateResource(hDevice, &create, hResource, hRTResource);
++   Resource *resource = CastResource(hResource);
++   if (!resource->resource) return;
++   resource->allocation = info->hAllocation;
++   HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), resource);
++   DebugPrintf("BC250 OpenResource %08lx handle %x\n", hr, resource->allocation);
++   SetError(hDevice, hr);
+ }
+ 
+ 
+@@ -460,6 +506,19 @@ DestroyResource(D3D10DDI_HDEVICE hDevice,       // IN
+          pResource->transfers[SubResource] = NULL;
+       }
+    }
++   if (pResource->allocation) {
++      Device *device = CastDevice(hDevice);
++      if (pResource->cpuMapping) {
++         D3DDDICB_UNLOCK2 unlock = {};
++         unlock.hAllocation = pResource->allocation;
++         device->KTCallbacks.pfnUnlock2Cb(device->hDevice, &unlock);
++      }
++      D3DDDICB_DEALLOCATE2 free = {};
++      // Close by allocation; VidMm releases the associated GPU VA atomically.
++      free.NumAllocations = 1; free.HandleList = &pResource->allocation;
++      HRESULT hr = device->KTCallbacks.pfnDeallocate2Cb(device->hDevice, &free);
++      DebugPrintf("BC250 Deallocate %08lx\n", hr);
++   }
+    free(pResource->transfers);
+ 
+    pipe_resource_reference(&pResource->resource, NULL);
+diff --git a/src/gallium/frontends/d3d10umd/Shader.cpp b/src/gallium/frontends/d3d10umd/Shader.cpp
+index df6ffa19..ad752e82 100644
+--- a/src/gallium/frontends/d3d10umd/Shader.cpp
++++ b/src/gallium/frontends/d3d10umd/Shader.cpp
+@@ -1251,6 +1251,9 @@ CreateShaderResourceView(
+    }
+ 
+    pSRView->handle = pipe->create_sampler_view(pipe, resource, &desc);
++   Device *device = CastDevice(hDevice);
++   pSRView->next = device->shaderResourceViews;
++   device->shaderResourceViews = pSRView;
+ }
+ 
+ 
+@@ -1333,6 +1336,9 @@ CreateShaderResourceView1(
+    }
+ 
+    pSRView->handle = pipe->create_sampler_view(pipe, resource, &desc);
++   Device *device = CastDevice(hDevice);
++   pSRView->next = device->shaderResourceViews;
++   device->shaderResourceViews = pSRView;
+ }
+ 
+ 
+@@ -1360,6 +1366,9 @@ DestroyShaderResourceView(D3D10DDI_HDEVICE hDevice,                           //
+    Device *pDevice = CastDevice(hDevice);
+    struct pipe_context *pipe = pDevice->pipe;
+ 
++   ShaderResourceView **link = &pDevice->shaderResourceViews;
++   while (*link && *link != pSRView) link = &(*link)->next;
++   if (*link) *link = pSRView->next;
+    pipe->sampler_view_release(pipe, pSRView->handle);
+    pSRView->handle = NULL;
+ }
+diff --git a/src/gallium/frontends/d3d10umd/ShaderTGSI.c b/src/gallium/frontends/d3d10umd/ShaderTGSI.c
+index 653cb965..a1039c9f 100644
+--- a/src/gallium/frontends/d3d10umd/ShaderTGSI.c
++++ b/src/gallium/frontends/d3d10umd/ShaderTGSI.c
+@@ -38,6 +38,7 @@
+ #include "tgsi/tgsi_dump.h"
+ #include "util/macros.h"
+ #include "util/u_memory.h"
++#include "util/u_dynarray.h"
+ 
+ #include "ShaderDump.h"
+ 
+@@ -242,8 +243,40 @@ struct Shader_xlate {
+    struct Shader_label *labels;
+    uint num_labels;
+    uint max_labels;
++   struct util_dynarray conditional_labels;
+ };
+ 
++/* Softpipe jumps to these labels when all lanes skip a branch. Leaving
++ * their default value of zero restarts the shader with live control stacks.
++ * Generated conditionals (BREAKC etc.) must use the same stack as IF/ELSE.
++ */
++static void
++Shader_conditional_begin(struct Shader_xlate *sx, struct ureg_src condition)
++{
++   unsigned label;
++   ureg_UIF(sx->ureg, condition, &label);
++   util_dynarray_append(&sx->conditional_labels, label);
++}
++
++static void
++Shader_conditional_else(struct Shader_xlate *sx)
++{
++   assert(sx->conditional_labels.size);
++   unsigned label = util_dynarray_pop(&sx->conditional_labels, unsigned);
++   ureg_fixup_label(sx->ureg, label, ureg_get_instruction_number(sx->ureg));
++   ureg_ELSE(sx->ureg, &label);
++   util_dynarray_append(&sx->conditional_labels, label);
++}
++
++static void
++Shader_conditional_end(struct Shader_xlate *sx)
++{
++   assert(sx->conditional_labels.size);
++   unsigned label = util_dynarray_pop(&sx->conditional_labels, unsigned);
++   ureg_fixup_label(sx->ureg, label, ureg_get_instruction_number(sx->ureg));
++   ureg_ENDIF(sx->ureg);
++}
++
+ static uint
+ translate_interpolation(D3D10_SB_INTERPOLATION_MODE interpolation)
+ {
+@@ -1254,6 +1287,7 @@ Shader_tgsi_translate(const unsigned *code,
+    uint i, j;
+ 
+    memset(&sx, 0, sizeof sx);
++   util_dynarray_init(&sx.conditional_labels, NULL);
+ 
+    Shader_parse_init(&parser, code);
+ 
+@@ -2134,37 +2168,41 @@ Shader_tgsi_translate(const unsigned *code,
+          }
+          break;
+       case D3D10_SB_OPCODE_IF: {
+-         unsigned label = 0;
+          if (opcode.specific.test_boolean == D3D10_SB_INSTRUCTION_TEST_ZERO) {
+             struct ureg_src src =
+                translate_src_operand(&sx, &opcode.src[0], OF_INT);
+             struct ureg_dst src_nz = ureg_DECL_temporary(ureg);
+             ureg_USEQ(ureg, src_nz, src, ureg_imm1u(ureg, 0));
+-            ureg_UIF(ureg, ureg_src(src_nz), &label);
++            Shader_conditional_begin(&sx, ureg_src(src_nz));
+             ureg_release_temporary(ureg, src_nz);;
+          } else {
+-            ureg_UIF(ureg, translate_src_operand(&sx, &opcode.src[0], OF_INT), &label);
++            Shader_conditional_begin(&sx, translate_src_operand(&sx, &opcode.src[0], OF_INT));
+          }
+       }
+          break;
++      case D3D10_SB_OPCODE_ELSE:
++         Shader_conditional_else(&sx);
++         break;
++      case D3D10_SB_OPCODE_ENDIF:
++         Shader_conditional_end(&sx);
++         break;
+       case D3D10_SB_OPCODE_RETC:
+       case D3D10_SB_OPCODE_CONTINUEC:
+       case D3D10_SB_OPCODE_CALLC:
+       case D3D10_SB_OPCODE_DISCARD:
+       case D3D10_SB_OPCODE_BREAKC:
+       {
+-         unsigned label = 0;
+          assert(operand_is_scalar(&opcode.src[0]));
+          if (opcode.specific.test_boolean == D3D10_SB_INSTRUCTION_TEST_ZERO) {
+             struct ureg_src src =
+                translate_src_operand(&sx, &opcode.src[0], OF_INT);
+             struct ureg_dst src_nz = ureg_DECL_temporary(ureg);
+             ureg_USEQ(ureg, src_nz, src, ureg_imm1u(ureg, 0));
+-            ureg_UIF(ureg, ureg_src(src_nz), &label);
++            Shader_conditional_begin(&sx, ureg_src(src_nz));
+             ureg_release_temporary(ureg, src_nz);
+          }
+          else {
+-            ureg_UIF(ureg, translate_src_operand(&sx, &opcode.src[0], OF_INT), &label);
++            Shader_conditional_begin(&sx, translate_src_operand(&sx, &opcode.src[0], OF_INT));
+          }
+          switch (opcode.type) {
+          case D3D10_SB_OPCODE_RETC:
+@@ -2190,7 +2228,7 @@ Shader_tgsi_translate(const unsigned *code,
+             assert(0);
+             break;
+          }
+-         ureg_ENDIF(ureg);
++         Shader_conditional_end(&sx);
+       }
+          break;
+       case D3D10_SB_OPCODE_LABEL: {
+@@ -2293,6 +2331,8 @@ Shader_tgsi_translate(const unsigned *code,
+    }
+    FREE(sx.labels);
+    FREE(sx.calls);
++   assert(!sx.conditional_labels.size);
++   util_dynarray_fini(&sx.conditional_labels);
+ 
+    tokens = ureg_get_tokens(ureg, &nr_tokens);
+    assert(tokens);
+@@ -2304,3 +2344,4 @@ Shader_tgsi_translate(const unsigned *code,
+ 
+    return tokens;
+ }
++
+diff --git a/src/gallium/frontends/d3d10umd/State.h b/src/gallium/frontends/d3d10umd/State.h
+index 7c7f2c29..c41c319f 100644
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -64,8 +64,15 @@ struct Shader
+ struct Query;
+ struct ElementLayout;
+ 
++struct RenderTargetView;
++struct ShaderResourceView;
++
+ struct Device
+ {
++   UINT64 profileDrawTicks, profileDrawMax, profileDrawCalls, profileLastPresent;
++   UINT profilePresents;
++   RenderTargetView *renderTargetViews;
++   ShaderResourceView *shaderResourceViews;
+    struct pipe_context *pipe;
+ 
+    struct cso_context *cso;
+@@ -95,6 +102,8 @@ struct Device
+ 
+    HANDLE hDevice;
+    HANDLE hContext;
++   D3DKMT_HANDLE pagingQueue;
++   volatile UINT64 *pagingFence;
+ 
+    D3DDDI_DEVICECALLBACKS KTCallbacks;
+    D3D10DDI_CORELAYER_DEVICECALLBACKS UMCallbacks;
+@@ -146,6 +155,7 @@ static inline void
+ SetError(D3D10DDI_HDEVICE hDevice, HRESULT hr)
+ {
+    if (FAILED(hr)) {
++      DebugPrintf("BC250 SetError %08lx\n", hr);
+       Device *pDevice = CastDevice(hDevice);
+       pDevice->UMCallbacks.pfnSetErrorCb(pDevice->hRTCoreLayer, hr);
+    }
+@@ -154,6 +164,13 @@ SetError(D3D10DDI_HDEVICE hDevice, HRESULT hr)
+ 
+ struct Resource
+ {
++   HANDLE hRTResource;
++   D3DKMT_HANDLE allocation;
++   UINT64 gpuVa, gpuBytes;
++   BOOL presentReady;
++   void *cpuMapping;
++   BOOL primary, shared;
++   UINT vidpn;
+    DXGI_FORMAT Format;
+    UINT MipLevels;
+    UINT NumSubResources;
+@@ -164,6 +181,8 @@ struct Resource
+ };
+ 
+ 
++HRESULT Bc250EnsureSurface(Device *device, Resource *resource);
++
+ static inline Resource *
+ CastResource(D3D10DDI_HRESOURCE hResource)
+ {
+@@ -207,6 +226,7 @@ CastPipeBuffer(D3D10DDI_HRESOURCE hResource)
+ 
+ struct RenderTargetView
+ {
++   RenderTargetView *next;
+    struct pipe_surface surface;
+    D3D10DDI_HRTRENDERTARGETVIEW hRTRenderTargetView;
+ };
+@@ -362,6 +382,7 @@ CastPipeSamplerState(D3D10DDI_HSAMPLER hSampler)
+ 
+ struct ShaderResourceView
+ {
++   ShaderResourceView *next;
+    struct pipe_sampler_view *handle;
+ };
+ 
+diff --git a/src/gallium/include/frontend/winsys_handle.h b/src/gallium/include/frontend/winsys_handle.h
+index 289cb9d0..6c57df08 100644
+--- a/src/gallium/include/frontend/winsys_handle.h
++++ b/src/gallium/include/frontend/winsys_handle.h
+@@ -10,6 +10,7 @@ typedef void *HANDLE;
+ extern "C" {
+ #endif
+ 
++#define WINSYS_HANDLE_TYPE_USER_MEMORY 6 /* caller-owned mapped CPU memory */
+ #define WINSYS_HANDLE_TYPE_SHARED 0
+ #define WINSYS_HANDLE_TYPE_KMS    1
+ #define WINSYS_HANDLE_TYPE_FD     2
+@@ -94,6 +95,7 @@ struct winsys_handle
+        * Output for resource_get_handle.
+        */
+       void *com_obj;
++      void *user_memory;
+ 
+       /**
+        * String name for an object.
+diff --git a/src/gallium/targets/d3d10umd/d3d10_gdi.c b/src/gallium/targets/d3d10umd/d3d10_gdi.c
+index cafc790c..11150aa8 100644
+--- a/src/gallium/targets/d3d10umd/d3d10_gdi.c
++++ b/src/gallium/targets/d3d10umd/d3d10_gdi.c
+@@ -83,9 +83,13 @@ d3d10_create_screen(void)
+    (void)driver;
+ #endif
+ 
++#ifndef GALLIUM_LLVMPIPE
+    if (screen == NULL) {
+       screen = softpipe_create_screen( winsys );
+    }
++#endif
++   // This diagnostic llvmpipe build must not silently fall back to softpipe:
++   // the comparison and the module manifest identify a single renderer.
+ 
+    if (screen == NULL)
+       goto no_screen;
+diff --git a/src/gallium/targets/d3d10umd/meson.build b/src/gallium/targets/d3d10umd/meson.build
+index ab1cf053..cb2032f6 100644
+--- a/src/gallium/targets/d3d10umd/meson.build
++++ b/src/gallium/targets/d3d10umd/meson.build
+@@ -41,3 +41,15 @@ if with_tests
+     suite : ['d3d10'],
+   )
+ endif
++
++executable('bc250_ttn_control', 'bc250_ttn_control.c',
++ include_directories: [inc_include, inc_src, inc_gallium, inc_gallium_aux],
++ link_with: [libgallium],
++ dependencies: [dep_ws2_32, idep_nir, driver_swrast, idep_mesautil])
++
++executable('bc250_lp_test_arit',
++ ['../../drivers/llvmpipe/lp_test_arit.c', 'bc250_lp_test_main.c', sha1_h],
++ c_args: [c_msvc_compat_args],
++ dependencies: [dep_llvm, dep_dl, dep_clock, idep_mesautil],
++ include_directories: [inc_gallium, inc_gallium_aux, inc_include, inc_src],
++ link_with: [libllvmpipe, libgallium])
+diff --git a/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c b/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
+index 3c433935..9b88cdf2 100644
+--- a/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
++++ b/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
+@@ -43,6 +43,7 @@
+ #include "util/u_math.h"
+ #include "util/u_memory.h"
+ #include "frontend/sw_winsys.h"
++#include "frontend/winsys_handle.h"
+ #include "gdi_sw_winsys.h"
+ #include "wgl/stw_gdishim.h"
+ 
+@@ -57,6 +58,7 @@ struct gdi_sw_displaytarget
+    unsigned size;
+ 
+    void *data;
++   bool external_memory;
+ 
+    BITMAPV5HEADER bmi;
+ };
+@@ -134,7 +136,7 @@ gdi_sw_displaytarget_destroy(struct sw_winsys *winsys,
+ {
+    struct gdi_sw_displaytarget *gdt = gdi_sw_displaytarget(dt);
+ 
+-   align_free(gdt->data);
++   if (!gdt->external_memory) align_free(gdt->data);
+    FREE(gdt);
+ }
+ 
+@@ -220,8 +222,25 @@ gdi_sw_displaytarget_from_handle(struct sw_winsys *winsys,
+                                  struct winsys_handle *whandle,
+                                  unsigned *stride)
+ {
+-   assert(0);
+-   return NULL;
++   if (whandle->type != WINSYS_HANDLE_TYPE_USER_MEMORY || !whandle->user_memory ||
++       templet->last_level || templet->array_size != 1 || templet->depth0 != 1)
++      return NULL;
++   unsigned cpp = util_format_get_blocksize(templet->format);
++   if (!cpp || whandle->stride < (uint64_t)templet->width0 * cpp ||
++       whandle->size < (uint64_t)whandle->stride * templet->height0)
++      return NULL;
++   struct sw_displaytarget *dt = gdi_sw_displaytarget_create(winsys, templet->bind,
++       templet->format, templet->width0, templet->height0, 64, NULL, stride);
++   if (!dt) return NULL;
++   struct gdi_sw_displaytarget *gdt = gdi_sw_displaytarget(dt);
++   align_free(gdt->data);
++   gdt->data = whandle->user_memory;
++   gdt->external_memory = true;
++   gdt->stride = whandle->stride;
++   gdt->size = whandle->stride * templet->height0;
++   gdt->bmi.bV5Width = whandle->stride / cpp;
++   *stride = whandle->stride;
++   return dt;
+ }
+ 
+ 
+@@ -242,6 +261,27 @@ gdi_sw_display( struct sw_winsys *winsys,
+ {
+     struct gdi_sw_displaytarget *gdt = gdi_sw_displaytarget(dt);
+ 
++    /* E26 diagnostic: preserve frames before the GDI presentation boundary. */
++    static volatile LONG frame_count;
++    LONG frame = InterlockedIncrement(&frame_count);
++    if (frame == 1 || frame == 30) {
++       char path[MAX_PATH];
++       wsprintfA(path, "C:\\BC250\\e26\\umdlogs\\frame-%lu-%ld.bmp", GetCurrentProcessId(), frame);
++       HANDLE file = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
++                                 CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
++       if (file != INVALID_HANDLE_VALUE) {
++          BITMAPFILEHEADER header = {0};
++          DWORD written;
++          header.bfType = 0x4d42;
++          header.bfOffBits = sizeof(header) + sizeof(gdt->bmi);
++          header.bfSize = header.bfOffBits + gdt->size;
++          WriteFile(file, &header, sizeof(header), &written, NULL);
++          WriteFile(file, &gdt->bmi, sizeof(gdt->bmi), &written, NULL);
++          WriteFile(file, gdt->data, gdt->size, &written, NULL);
++          CloseHandle(file);
++       }
++    }
++
+     StretchDIBits(hDC,
+                   0, 0, gdt->width, gdt->height,
+                   0, 0, gdt->width, gdt->height,

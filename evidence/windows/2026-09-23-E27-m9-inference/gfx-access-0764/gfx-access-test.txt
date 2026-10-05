@@ -1,0 +1,4 @@
+undrained.c
+FAIL line 132: WaitForSingleObject(closeDone,300)==WAIT_TIMEOUT && !freed
+after.c
+PASS: actual GFX/SDMA fence callbacks, close blocks new admission and waits active readers, release/event ordering, repeated close, reopen and NULL object

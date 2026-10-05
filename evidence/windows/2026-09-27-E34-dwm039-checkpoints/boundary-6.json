@@ -1,0 +1,10 @@
+{
+    "marker":  6,
+    "pid":  7768,
+    "process_start_utc":  "2026-09-27T18:15:49.0500128Z",
+    "utc":  "2026-09-27T18:17:28.6548183Z",
+    "trial_seconds":  105.2459794,
+    "log_start_offset":  5551760,
+    "line":  "BC250 audit lifetime event=checkpoint seq=25944 time_ns=457167370900 marker=6 requests=8633 successful=8633 failed=0 ended=8625 pending=0 live=8\r",
+    "label":  "render-end"
+}

@@ -1,0 +1,9 @@
+PROVENANCE: Linux amdgpu (AMD MIT); local Linux6.18.0 reference, not the exact E28 Alpine6.18.52 binary.
+
+1439: #define WREG8(reg, v) amdgpu_mm_wreg8(adev, (reg), (v))
+1440: 
+1441: #define RREG32(reg) amdgpu_device_rreg(adev, (reg), 0)
+1442: #define DREG32(reg) printk(KERN_INFO "REGISTER: " #reg " : 0x%08X\n", amdgpu_device_rreg(adev, (reg), 0))
+1443: #define WREG32(reg, v) amdgpu_device_wreg(adev, (reg), (v), 0)
+1444: #define REG_SET(FIELD, v) (((v) << FIELD##_SHIFT) & FIELD##_MASK)
+1445: #define REG_GET(FIELD, v) (((v) << FIELD##_SHIFT) & FIELD##_MASK)

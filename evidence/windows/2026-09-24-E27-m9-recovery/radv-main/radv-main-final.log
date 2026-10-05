@@ -1,0 +1,12 @@
+UnconfirmedStarts = 0
+icd_sha256=DB886B8D53E6BEE89665287AF5EE19A1868E5874868C795F6B11472FBB4A3986
+
+  Id StartTime            Responding
+  -- ---------            ----------
+4448 9/24/2026 1:58:18 PM       True
+
+
+14:49:35 Tctl 66.6 C (raw 73BB0FEF)
+launcher_exit=-1073741515
+boot=2026-09-24T11:44:14
+final_time=2026-09-24T14:49:35

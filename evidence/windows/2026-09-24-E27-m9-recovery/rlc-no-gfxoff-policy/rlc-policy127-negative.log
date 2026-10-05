@@ -1,0 +1,6 @@
+rlc-policy127.c
+FAIL policy=0 seed=0 accesses original=5 shim=3
+FAIL policy=0 seed=1 accesses original=5 shim=3
+FAIL policy=1 seed=0 accesses original=3 shim=5
+FAIL policy=1 seed=1 accesses original=3 shim=5
+4 AMD/shim policy scenarios, 4 failures

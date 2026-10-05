@@ -1,0 +1,453 @@
+{
+  "schema": 2,
+  "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
+  "kmd_version": "0.7.205.1",
+  "kmd_abi": "0x000700CD",
+  "control_app_exe": "amdgpu_wddm_control.exe",
+  "sources": {
+    "kmd": "bc250-win 2e61d1fe (kmd205-thermal-subfloor)",
+    "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
+    "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/compile-limiter 220099f5",
+    "d3d12_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
+    "d3d11_shell": "bc250-win m14/dxgi-private-hints 7abf21de",
+    "d3d11_engine": "dxvk fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49",
+    "d3d11_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
+    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm 7ae6462f + x86 patch, engine dxvk ebeadc49, ICD mesa 091ad563 + x86 patch 9C645734; no x86 D3D12",
+    "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
+  },
+  "public_commits": {
+    "note": "Two commit messages were reworded before publication (2026-10-05); trees are identical. Built commit -> commit on D-Ogi/amdgpu-wddm main.",
+    "2e61d1fe": "6c8c31c9",
+    "36745de5": "7b8347ba",
+    "7294c09d": "af01d499",
+    "dd30a44d": "9a6f26d2"
+  },
+  "files": [
+    {
+      "component": "kmd",
+      "path": "payload/kmd/bc250kmd.inf",
+      "source": "scratch/subfloor/build-kmd/package/bc250kmd.inf",
+      "sha256": "E175FEC41288DC63BD934A002D5BC4256A902D7D38033CD58DB404126037E0FA",
+      "size": 8013,
+      "role": "KMD 0.7.205.1 INF (commit 2e61d1fe, kmd205-thermal-subfloor on kmd204-warm87 36745de5); the release re-stamps DriverVer and adds the Reboot directive"
+    },
+    {
+      "component": "kmd",
+      "path": "payload/kmd/bc250kmd.sys",
+      "source": "scratch/subfloor/build-kmd/package/bc250kmd.sys",
+      "sha256": "E38F0B5FDCB034B4852A225FCAFDF0A4B1C2A7D7FABE6F66742B3C08F4D94480",
+      "size": 483216,
+      "role": "KMD 0.7.205.1 (commit 2e61d1fe, kmd205-thermal-subfloor: thermal-only points at 900 and 800 MHz / 820 mV below the 1000 MHz floor, owner 2026-10-05; on kmd204-warm87: DPM warm zone at 87 C, raises one level per 1-4 s from 70 C to 87 C, on kmd203-dpm-ramp, on kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
+    },
+    {
+      "component": "d3d9-stub",
+      "path": "payload/system32/bc250umd.dll",
+      "source": "scratch/build/bc250kmd-07100/package-umd/bc250umd.dll",
+      "sha256": "D5BD1AD82C00438900DC47A50B3EFA36D98F9A9CC7F6987D0F1545A0DE4CB661",
+      "size": 4096,
+      "role": "UMD stub, D3D9 slot of UserModeDriverName (driver/umd-stub)"
+    },
+    {
+      "component": "d3d12-shell",
+      "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/m15/native-caps001/attempts/native-caps308/package/amdgpu_wddm_d3d12.dll",
+      "sha256": "5A1B7BAFB40FE96D267346DA9205D33D99AD17A443D4A76C05640E82DC7F54A9",
+      "size": 921088,
+      "role": "D3D12 shell adapter119 (m15/replay-wake e9f5e701)"
+    },
+    {
+      "component": "d3d12-engine",
+      "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/m15/pso-cache/engine-artifact-6/amdgpu_wddm_vkd3d.dll",
+      "sha256": "5D4C1CB20C0B00DE3366EF5E87AA1E1BDBAD9D45A0FB15E8E9841E8AAF61BF14",
+      "size": 3701248,
+      "role": "D3D12 engine (vkd3d-proton fork amdgpu-wddm/compile-limiter 220099f5: pipeline compile limiter, cache hits without a slot, 2 slots, 1 slot from 80 C die temperature; driver cache snapshot every 2 s off the compiling thread)"
+    },
+    {
+      "component": "d3d12-icd",
+      "path": "payload/d3d12/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
+      "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
+      "size": 22361600,
+      "role": "D3D12 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563: MESA_DISK_CACHE_SINGLE_FILE=1 keeps the shader disk cache, one writer thread)"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/bc250d3d_router.dll",
+      "source": "scratch/approuter-fix/build-router-631d25da/bc250d3d_router.dll",
+      "sha256": "692D9060203763F1278DA68E395932E606FEA74574CCD1A5071D2F76AFB62E3B",
+      "size": 22528,
+      "role": "desktop/application router (amdgpu-wddm 631d25da, driver/umd/router: gpu-default keeps Windows components and unresolved images on the CPU UMD)"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/bc250d3d_zink.dll",
+      "source": "scratch/bd058/artifacts/zink/bc250d3d_zink.dll",
+      "sha256": "396A61F9B234AE6F09F72BFE2D5BF237120A82F9AC91C94A6884C7A518C40356",
+      "size": 15197696,
+      "role": "hosted zink D3D11 UMD for DWM on the GPU (BD-058 fix, mesa fork amdgpu-wddm/hosted-umd-bd058 8cb22844)"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/gpu-dwm-t0/kit/attempts/gpu-dwm-003/amdgpu_wddm_radv.dll",
+      "sha256": "66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200",
+      "size": 21508096,
+      "role": "hosted ICD for zink"
+    },
+    {
+      "component": "desktop-umd",
+      "path": "payload/desktop/bc250d3d.dll",
+      "source": "scratch/bd058/artifacts/cpu/bc250d3d.dll",
+      "sha256": "195FB220D124558202C6FE73F80A984F5E2B78F5FD11130A9354C96F10306217",
+      "size": 68602880,
+      "role": "CPU D3D11 UMD (BD-058 256-byte shared pitch, mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c; fallback route, D3D11 applications not on the allowlist)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/bd065/artifact/amdgpu_wddm_d3d11.dll",
+      "sha256": "AD750E519F9260F7CDC554B391880CF051DA4C168A5338521CD8C3FFE288D797",
+      "size": 605184,
+      "role": "GPU D3D11 shell (amdgpu-wddm bd065-shell-bgra-shadow 32b074a5 = BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, on m14/d3d11-composed-primaries 7ae6462f = 7abf21de engine-private DXGI hints, static CRT + 3274b3d3 shared A8/FP16/RGB10A2 runtime surfaces + composed RGB10A2/RGBA16F primaries that keep their VidPn source + surface step diagnostics; built against DXVK fork 0c187731)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
+      "source": "scratch/m15/pso-cache/umd-config/config-72e1d192.bin",
+      "sha256": "4AEA1C550D42757F0489ECA274C5D4FE23AD599CD6AC237C8C7EC69CC932CA3F",
+      "size": 132,
+      "role": "GPU D3D11 caps record for engine 7D28D8F5 and ICD 72E1D192 (tools/build/write-umd-config.py; capabilities carried from FD848638, the record of F9DCB33B; only the ICD pin changes)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/approuter-fix/d3d11-dp5/amdgpu_wddm_dxvk.dll",
+      "sha256": "7D28D8F57368C89082E65FD33991AE988B3523C7922909206F0598BF6FBB0554",
+      "size": 4403200,
+      "role": "GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49: r8 0c187731 + the initializer's throttle wait)"
+    },
+    {
+      "component": "d3d11-umd",
+      "path": "payload/d3d11/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/pso-cache/icd-artifact-ae98c795-sf-q1/amdgpu_wddm_radv.dll",
+      "sha256": "72E1D19286FA1D7A757669A88F2AF17A100C1C312008A6AF070CC292DA1649EE",
+      "size": 22361600,
+      "role": "GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563, static CRT): the same build as payload/d3d12/amdgpu_wddm_radv.dll, so a process using D3D11 and D3D12 loads one RADV build"
+    },
+    {
+      "component": "vulkan-icd",
+      "path": "payload/vulkan/vulkan_radeon.dll",
+      "source": "scratch/icd-candidates/vulkan_radeon.CF3948D6.dll",
+      "sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+      "size": 24258560,
+      "role": "system Vulkan ICD (lab registered ICD)"
+    },
+    {
+      "component": "vulkan-icd",
+      "path": "payload/vulkan/radeon_icd.json",
+      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "size": 131,
+      "role": "Vulkan ICD manifest"
+    },
+    {
+      "component": "d3d9-stub-wow64",
+      "path": "payload/syswow64/bc250umd.dll",
+      "source": "scratch/wow64/artifact/stub/bc250umd.dll",
+      "sha256": "5114AE264CA2D3B6AA6762C9A69A160F7F5D1D8007A12C2B8AF78A39F9ED4123",
+      "size": 3584,
+      "role": "x86 UMD stub, D3D9 slot of UserModeDriverNameWow (driver/umd-stub, BD-064)"
+    },
+    {
+      "component": "desktop-umd-wow64",
+      "path": "payload/wow64/desktop/bc250d3d_router.dll",
+      "source": "scratch/wow64/artifact/router/bc250d3d_router.dll",
+      "sha256": "7D09B81ECD2B1BA976C10362FCD3638C9794E425EF35DC05A6E44C222B4FAD36",
+      "size": 130560,
+      "role": "x86 application router for 32-bit processes (amdgpu-wddm wow64/router-x86 on 631d25da: the Wow path values, the 64-bit policy keys read through KEY_WOW64_64KEY, plain export names; static CRT; BD-064)"
+    },
+    {
+      "component": "desktop-umd-wow64",
+      "path": "payload/wow64/desktop/bc250d3d.dll",
+      "source": "scratch/wow64/artifact/cpu/bc250d3d.dll",
+      "sha256": "81DC610BC4DF876DFE119C7BF027F2D08E46333C1F26823F20017D0D80D2FEE2",
+      "size": 56194048,
+      "role": "x86 CPU D3D11 UMD for 32-bit processes (mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c, unmodified, LLVM 23.1.2 x86; the router's fallback route; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.dll",
+      "sha256": "69AFE349D430E63029959DBE0D7C805F1D9AC5C7AB0C0A179DB91BF3F89430C6",
+      "size": 521728,
+      "role": "x86 GPU D3D11 shell for 32-bit processes (amdgpu-wddm 32b074a5 = 7ae6462f + BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, + the x86 export and test patch; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
+      "source": "scratch/m15/pso-cache/umd-config/config-x86-e03a79ca.bin",
+      "sha256": "388DA562248F5D4047B5EDC9EAD65CB321F50796280DB5CADDD4AC40F77B173B",
+      "size": 132,
+      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and ICD E03A79CA (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the ICD pin changes)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_dxvk.dll",
+      "sha256": "0D4AE6590EAB3D0116CECFDD0DCB5C237CF2BFA8C6EE3BA3054F56E7843E281C",
+      "size": 4005888,
+      "role": "x86 GPU D3D11 engine (DXVK fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49, unmodified; BD-064)"
+    },
+    {
+      "component": "d3d11-umd-wow64",
+      "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
+      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
+      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
+      "size": 20133888,
+      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563 + the x86 host-import and fallback-stub patch 9C645734, static CRT; BD-064)"
+    },
+    {
+      "component": "vulkan-icd-wow64",
+      "path": "payload/wow64/vulkan/vulkan_radeon.dll",
+      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
+      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
+      "size": 20133888,
+      "role": "x86 system Vulkan ICD for 32-bit processes (the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll; BD-064)"
+    },
+    {
+      "component": "vulkan-icd-wow64",
+      "path": "payload/wow64/vulkan/radeon_icd.json",
+      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
+      "size": 131,
+      "role": "x86 Vulkan ICD manifest (the 64-bit manifest: library_path is relative to the manifest)"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/bc250kmd_cli.exe",
+      "source": "scratch/release/control-app/build/app-7294c09d/bc250kmd_cli.exe",
+      "sha256": "EE9C508119AEFDA461D25E99C9527476DDF6628C8B7E8E2A57257B4026894B14",
+      "size": 219648,
+      "role": "KMD control CLI from the control-app build (gui/p1-control 7294c09d; the same bytes as dd30a44d and d8347cf0): the same bc250kmd_cli.c as bc250control.dll, every form in cli-commands.json (test-cli-commands.ps1)"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/m15/d3d12caps/build/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "9EE94801160B6DC981936B7FB32041F24B23C72F8F11555DE295E529F90C3F53",
+      "size": 312832,
+      "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify"
+    },
+    {
+      "component": "control",
+      "path": "payload/control/amdgpu_wddm_control.exe",
+      "source": "scratch/release/control-app/build/app-7294c09d/amdgpu_wddm_control.exe",
+      "sha256": "DB1CA2F23E287D0D4724EC61AA00133AB45472ECC0B22286B6641DF2AEDA8D46",
+      "size": 583168,
+      "role": "control application 0.5.0.0 (GUI phase 1, gui/p1-control 7294c09d)"
+    },
+    {
+      "component": "control",
+      "path": "payload/control/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-7294c09d/bc250control.dll",
+      "sha256": "F2D7B0BBA3341A67824B0A51224550223BA9BE7E43CC38F8B3AF8B5FB001E4F0",
+      "size": 147968,
+      "role": "control DLL for the control application (gui/p1-control 7294c09d build, static CRT)"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/bc250control.dll",
+      "source": "scratch/release/control-app/build/app-7294c09d/bc250control.dll",
+      "sha256": "F2D7B0BBA3341A67824B0A51224550223BA9BE7E43CC38F8B3AF8B5FB001E4F0",
+      "size": 147968,
+      "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
+    },
+    {
+      "component": "tool",
+      "path": "payload/tools/vulkaninfo.exe",
+      "source": "scratch/m8/vulkaninfo.exe",
+      "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
+      "size": 2925496,
+      "role": "vulkaninfo 1.4.335 (Khronos Vulkan-Tools, LunarG-signed), used by the bug report"
+    }
+  ],
+  "firmware": {
+    "repository": "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git",
+    "commit": "2b8daaf611fbade74f26a5b58ec1defe6a02f5e0",
+    "pinned_list": "tools/firmware/cyan_skillfish2.json",
+    "url_templates": [
+      "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/{path}?id={commit}",
+      "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/{commit}/{path}"
+    ],
+    "install_dir": "C:\\BC250\\firmware",
+    "licence": {
+      "name": "LICENSE.amdgpu",
+      "path": "LICENSES/LICENSE.amdgpu",
+      "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE",
+      "size": 2938
+    }
+  },
+  "licenses": [
+    {
+      "file": "Mesa-license.rst",
+      "source": "docs/testing/licenses/Mesa-license.rst",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "docs/license.rst",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "0D1A0472ECC81830E75C20D59B0EA02841E3DB21255E0EBAD97AB682C54D6615"
+    },
+    {
+      "file": "Mesa-MIT.txt",
+      "source": "docs/testing/licenses/Mesa-MIT.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/MIT",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "323C587D0CCF10E376F8BF9A7F31FB4CA6078105194B42E0B1E0EE2BC9BDE71F"
+    },
+    {
+      "file": "Mesa-BSL-1.0.txt",
+      "source": "docs/testing/licenses/Mesa-BSL-1.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/BSL-1.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "9B9FEA7520A816107FCAC2598B7C0155222F16BC430E989706B22F4367F1DF7D"
+    },
+    {
+      "file": "Mesa-SGI-B-2.0.txt",
+      "source": "docs/testing/licenses/Mesa-SGI-B-2.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/SGI-B-2.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "686BF035A1FD22076416FD3B90370AC67771E884BF57F55693D51F8CE7C710A7"
+    },
+    {
+      "file": "Mesa-Apache-2.0.txt",
+      "source": "docs/testing/licenses/Mesa-Apache-2.0.txt",
+      "repository": "D-Ogi/mesa-amdgpu-wddm",
+      "path": "licenses/Apache-2.0",
+      "ref": "ae98c795516061670b4de42a12809d6967cfcf49",
+      "sha256": "7E4D3FBA250D15E9E0AFA380D4B611828FA2560CC8FDEBE95BCF2F01A487DE12"
+    },
+    {
+      "file": "zlib-LICENSE.txt",
+      "source": "docs/testing/licenses/zlib-LICENSE.txt",
+      "repository": "madler/zlib",
+      "path": "LICENSE",
+      "ref": "v1.3.1",
+      "sha256": "845EFC77857D485D91FB3E0B884AAA929368C717AE8186B66FE1ED2495753243"
+    },
+    {
+      "file": "LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "source": "docs/testing/licenses/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+      "repository": "llvm/llvm-project",
+      "path": "llvm/LICENSE.TXT",
+      "ref": "llvmorg-23.1.2",
+      "sha256": "8D85C1057D742E597985C7D4E6320B015A9139385CFF4CBAE06FFC0EBE89AFEE"
+    },
+    {
+      "file": "DXVK-zlib.txt",
+      "source": "docs/testing/licenses/DXVK-zlib.txt",
+      "repository": "D-Ogi/dxvk",
+      "path": "LICENSE",
+      "ref": "0c187731d88db839b9d4b3a6798fbd146b92eabc",
+      "sha256": "A5CB1A6DED7D2D7E92D550BA28EDD21BE2D1D4044662B399887351023E30CE64"
+    },
+    {
+      "file": "OpenVR-BSD-3-Clause.txt",
+      "source": "docs/testing/licenses/OpenVR-BSD-3-Clause.txt",
+      "repository": "D-Ogi/dxvk",
+      "path": "include/openvr/LICENSE",
+      "ref": "0c187731d88db839b9d4b3a6798fbd146b92eabc",
+      "sha256": "DB64BCF32BE090CA9D1EA7E3DF5541A07F4CF5729206B44E57A1182F05554F3F"
+    },
+    {
+      "file": "dxbc-spirv-MIT.txt",
+      "source": "docs/testing/licenses/dxbc-spirv-MIT.txt",
+      "repository": "D-Ogi/dxbc-spirv",
+      "path": "LICENSE",
+      "ref": "f241996e050d4c04091dd5c03cb84fc5523611c8",
+      "sha256": "0F8A5E687BEA942A30A8E39B9915294FBE44ECA866E71307A9B7083EE0E69AD8"
+    },
+    {
+      "file": "vkd3d-proton-LGPL-2.1.txt",
+      "source": "docs/testing/licenses/vkd3d-proton-LGPL-2.1.txt",
+      "repository": "D-Ogi/vkd3d-proton",
+      "path": "LICENSE",
+      "ref": "c3710ac1a6a857deb286af2cb15ef7335cb50095",
+      "sha256": "DC626520DCD53A22F727AF3EE42C770E56C97A64FE3ADB063799D8AB032FE551"
+    },
+    {
+      "file": "vkd3d-proton-COPYING.txt",
+      "source": "docs/testing/licenses/vkd3d-proton-COPYING.txt",
+      "repository": "D-Ogi/vkd3d-proton",
+      "path": "COPYING",
+      "ref": "c3710ac1a6a857deb286af2cb15ef7335cb50095",
+      "sha256": "F51AD4BF5A3BD2B5F383FE28150B23D01E6F5D7B620B194150E7C6A620C43C1F"
+    },
+    {
+      "file": "dxil-spirv-MIT.txt",
+      "source": "docs/testing/licenses/dxil-spirv-MIT.txt",
+      "repository": "D-Ogi/dxil-spirv",
+      "path": "LICENSE.MIT",
+      "ref": "bc773cf2d287e64838fb0a7fc3aabdec323a0a19",
+      "sha256": "B3EC61378A66F09835A73F53926D9B5CF79A09C9E2FE8BDD0E39AA5403325E1E"
+    },
+    {
+      "file": "SPIRV-Headers-LICENSE.txt",
+      "source": "docs/testing/licenses/SPIRV-Headers-LICENSE.txt",
+      "repository": "KhronosGroup/SPIRV-Headers",
+      "path": "LICENSE",
+      "ref": "f88a2d766840fc825af1fc065977953ba1fa4a91",
+      "sha256": "EA43B1DE38A6F90C488800D66DEC1ED671E68CDA530266BC96951FB5B6307613"
+    },
+    {
+      "file": "Vulkan-Headers-LICENSE.md",
+      "source": "docs/testing/licenses/Vulkan-Headers-LICENSE.md",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSE.md",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "95AD366D23FADF701D355BC45FB8B82AE2D700239471D35D41286AC3B08FF903"
+    },
+    {
+      "file": "Vulkan-Headers-Apache-2.0.txt",
+      "source": "docs/testing/licenses/Vulkan-Headers-Apache-2.0.txt",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSES/Apache-2.0.txt",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30"
+    },
+    {
+      "file": "Vulkan-Headers-MIT.txt",
+      "source": "docs/testing/licenses/Vulkan-Headers-MIT.txt",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "path": "LICENSES/MIT.txt",
+      "ref": "ee2ec5fd83dafce291024683b50dc89219333076",
+      "sha256": "1CA3502222D967F3BE5751C55F6B7EE735B5383909C3B501495F54B216DBF227"
+    },
+    {
+      "file": "Vulkan-Tools-LICENSE.txt",
+      "source": "docs/testing/licenses/Vulkan-Tools-LICENSE.txt",
+      "repository": "KhronosGroup/Vulkan-Tools",
+      "path": "LICENSE.txt",
+      "ref": "vulkan-sdk-1.4.335.0",
+      "sha256": "CFC7749B96F63BD31C3C42B5C471BF756814053E847C10F3EB003417BC523D30"
+    },
+    {
+      "file": "LICENSE.amdgpu",
+      "source": "docs/testing/licenses/LICENSE.amdgpu",
+      "repository": "git.kernel.org/linux-firmware",
+      "path": "LICENSES/LICENSE.amdgpu",
+      "ref": "2b8daaf611fbade74f26a5b58ec1defe6a02f5e0",
+      "sha256": "572872598565DC3513470DE971A32BF9DB301F47AFEEF3636345EADAE33B2EEE"
+    },
+    {
+      "file": "Linux-amdgpu-MIT.txt",
+      "source": "docs/testing/licenses/Linux-amdgpu-MIT.txt",
+      "repository": "torvalds/linux",
+      "path": "per-file MIT headers, drivers/gpu/drm/amd (copies in driver/amdgpu-import, third_party/linux-amdgpu)",
+      "ref": "v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+      "sha256": "55ED31A97F6B6470B0CC1F1BC905036EEEB578255ACE9CA6F69889D7D0352233"
+    }
+  ]
+}

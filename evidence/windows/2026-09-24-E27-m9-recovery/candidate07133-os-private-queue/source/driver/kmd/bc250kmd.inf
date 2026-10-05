@@ -1,0 +1,140 @@
+; bc250kmd: WDDM display-only miniport for the ASRock BC-250 GPU (milestone M3, ADR 0006).
+; Test-signed lab driver. Matches exactly one device; everything else keeps its own driver.
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = Display
+ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
+Provider    = %Provider%
+CatalogFile = bc250kmd.cat
+DriverVer   = 09/24/2026,0.7.133.0
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+;@UMD Bc250_UmdFiles = 11
+
+[SourceDisksNames]
+1 = %DiskName%
+
+[SourceDisksFiles]
+bc250kmd.sys = 1
+;@UMD bc250umd.dll = 1
+
+[Manufacturer]
+%Provider% = Models,NTamd64
+
+[Models.NTamd64]
+%DeviceName% = Bc250_Install, PCI\VEN_1002&DEV_13FE
+
+[Bc250_Install]
+FeatureScore = F8
+CopyFiles    = Bc250_Files                      ;@PLAIN-ONLY
+;@UMD CopyFiles    = Bc250_Files, Bc250_UmdFiles
+;@UMD AddReg       = Bc250_UserModeDriver
+
+[Bc250_Files]
+bc250kmd.sys
+
+; ---------------------------------------------------------------------------------------------------------------
+; M7 stage A, second run only. Commented out on purpose, and NOT by hand: the markers below are the contract
+; between this file and driver\kmd\build.ps1.
+;
+;   ;@UMD <line>        the line is part of the second run's package. build.ps1 -UmdStub uncomments it.
+;   <line> ;@PLAIN-ONLY the line is part of the first run's package. build.ps1 -UmdStub comments it out.
+;
+; So there is one INF in the repository and two packages come out of it, and the diff between the packages is
+; exactly this block rather than whatever somebody remembered to edit. build.ps1 throws if it finds no markers.
+;
+; Stage A is run twice, and the difference between the two runs is exactly this block (driver\kmd\README.md):
+;
+;   first run   no marked line is enabled. The adapter has no UserModeDriverName at all, so Direct3D cannot even
+;               load a user-mode driver for it. This is the cheaper failure and is measured first.
+;   second run  the marked lines enabled and bc250umd.dll (driver\umd-stub) in the package. The DLL loads and
+;               every OpenAdapter entry point returns E_NOTIMPL. A runtime that gets that far has done more work
+;               than one that found no driver name, and DWM may well treat the two differently.
+;
+; The three entries of the REG_MULTI_SZ are D3D9, D3D10 and D3D11 in that order; the same stub answers all three.
+; 0x00010000 is REG_MULTI_SZ. Research section 2.1 quotes a Learn page that calls this value a REG_SZ; that page
+; is the OpenGL ICD one and predates WDDM. Every shipping WDDM display INF writes a REG_MULTI_SZ here, so that is
+; what is prepared - but if the second run shows the DLL is never loaded, a single REG_SZ (0x00000000) naming the
+; same file is the first thing to try, and copying to the driver store (dirid 13) instead of System32 is the
+; second, before concluding anything about the runtime.
+;
+; UserModeDriverNameWow, the 32-bit list, is deliberately NOT written. We build only a 64-bit stub, and a Wow
+; value naming bc250umd.dll would point a 32-bit process at a file that is not in SysWOW64 - which makes "the
+; runtime never asked for a 32-bit driver" and "the runtime asked and the load failed" the same observation, and
+; telling those two apart is the entire purpose of the second run. A missing value is the honest statement that
+; there is no 32-bit driver. (The nearby reference INF ref\keshas-driver__WARN-AGENTS-md-is-not-facts\inf\amdbc250_dream.inf line 114 points
+; its Wow value at its 64-bit DLL; that is the mistake being avoided here, not a precedent.) If a 32-bit consumer
+; ever has to be measured: build the stub a second time for x86 - which first needs the x86 SDK libraries, not
+; currently unpacked under toolchain\nuget - copy it into SysWOW64, whose dirid is 16425 and not 10, and add the
+; Wow line then.
+;
+;@UMD [Bc250_UmdFiles]
+;@UMD bc250umd.dll
+;@UMD
+;@UMD [Bc250_UserModeDriver]
+;@UMD HKR,, UserModeDriverName, 0x00010000, bc250umd.dll, bc250umd.dll, bc250umd.dll
+; ---------------------------------------------------------------------------------------------------------------
+
+; Message-signalled interrupts (milestone M6). The function has MSI (1 of 4 messages) and MSI-X (3) capabilities
+; (evidence/linux/2026-09-21-E01-recon/lspci-gpu-vvv.txt); amdgpu used them on this unit. Without this section
+; Windows assigns the line interrupt. The driver enables no interrupt source unless the EnableIh gate is open.
+[Bc250_Install.HW]
+AddReg = Bc250_Msi
+
+[Bc250_Msi]
+HKR, "Interrupt Management", , 0x00000010
+HKR, "Interrupt Management\MessageSignaledInterruptProperties", , 0x00000010
+HKR, "Interrupt Management\MessageSignaledInterruptProperties", MSISupported, 0x00010001, 1
+HKR, "Interrupt Management\MessageSignaledInterruptProperties", MessageNumberLimit, 0x00010001, 1
+
+[Bc250_Install.Services]
+AddService = bc250kmd, 0x00000002, Bc250_Service
+
+[Bc250_Service]
+DisplayName   = %DeviceName%
+ServiceType   = 1                   ; SERVICE_KERNEL_DRIVER
+StartType     = 3                   ; SERVICE_DEMAND_START
+ErrorControl  = 0                   ; SERVICE_ERROR_IGNORE: a failed start must never stop the boot
+LoadOrderGroup = Video
+ServiceBinary = %13%\bc250kmd.sys
+AddReg        = Bc250_Parameters
+
+[Bc250_Parameters]
+; Boot-loop guard (guard.c). Installing the package grants a fresh start budget.
+HKR, Parameters, UnconfirmedStarts, 0x00010001, 0
+; Register access gates (mmio.c, ADR 0007). Every install closes them; an experiment opens them on purpose.
+HKR, Parameters, EnableMmio,        0x00010001, 0
+HKR, Parameters, EnableMmioWrite,   0x00010001, 0
+HKR, Parameters, EnableVram,        0x00010001, 0
+HKR, Parameters, EnableVramWrite,   0x00010001, 0
+HKR, Parameters, EnableGart,        0x00010001, 0
+HKR, Parameters, EnablePsp,         0x00010001, 0
+HKR, Parameters, EnableGfx,         0x00010001, 0
+HKR, Parameters, EnableIh,          0x00010001, 0
+; The gated DCN flip (dcn.c, 0.7.20, ADR 0011 point 3 step 2). Needs EnableMmio; the fill needs EnableVramWrite too.
+HKR, Parameters, EnableDcnWrite,    0x00010001, 0
+; SetVidPnSourceAddress's own hardware flip plus the VUPDATE_NO_LOCK interrupt (dcn.c/wddm.c, 0.7.24, E22 step 3,
+; ADR 0011 point 3 step 3). Needs EnableDcnWrite; meaningful only with EnableFullWddm open too. Closed by every
+; install, like every gate above.
+HKR, Parameters, EnableVidPnFlip,   0x00010001, 0
+; The DDI table gate (entry.c, ADR 0008). 0 = DxgkInitializeDisplayOnlyDriver, the driver that runs the display
+; today. 1 = DxgkInitialize with the full WDDM table of wddm.c. Closed by every install, like every gate above.
+HKR, Parameters, EnableFullWddm,    0x00010001, 0
+HKR, Parameters, EnableGpuVa,       0x00010001, 0
+HKR, Parameters, EnableGpuSubmit,   0x00010001, 0
+; ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. Needs
+; EnableGpuSubmit's own preconditions (EnableGfx, EnableIh); closed by every install, like every gate above.
+HKR, Parameters, EnablePagingNode,  0x00010001, 0
+HKR, Parameters, EnablePresentBlit, 0x00010001, 0
+; The log ring into a file under C:\BC250\kmdlog at every device stop (guard.c GuardLogKeep). A synchronous file
+; write in a PnP stop, so disabled by default. Preserve an explicitly enabled capture across
+; an upgrade: AddReg may run before the old driver stops. DWORD | NOCLOBBER affects only logging.
+HKR, Parameters, KeepLog,           0x00010003, 0
+
+[Strings]
+Provider   = "BC-250 lab (D-Ogi)"
+DiskName   = "bc250kmd installation media"
+DeviceName = "BC-250 GPU (bc250kmd, display-only, lab build)"

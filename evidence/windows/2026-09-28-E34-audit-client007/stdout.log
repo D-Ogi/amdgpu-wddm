@@ -1,0 +1,15 @@
+checkpoint_ack marker=1 tick=12396812
+checkpoint_ack marker=2 tick=12397359
+checkpoint_ack marker=3 tick=12397359
+pixels expected=ffff00ff bad=0 total=76800
+pixels expected=ff00ff00 bad=0 total=76800
+checkpoint_ack marker=4 tick=12397375
+gpu_work=texture_draw draws=18
+checkpoint_ack marker=5 tick=12397390
+copy_api=UpdateSubresource
+deliberate_cpu_copy frames=12 bytes=3686400
+checkpoint_ack marker=6 tick=12397796
+checkpoint_ack marker=7 tick=12397796
+pixels expected=ff00ffff bad=0 total=76800
+checkpoint_ack marker=8 tick=12397812
+PASS GPU texture draws, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints

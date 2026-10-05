@@ -1,0 +1,13 @@
+test.c
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL all stops ordered and firmware released
+FAIL readiness failure unwind
+FAIL geometry failure before writes or complete unwind
+FAIL geometry failure before writes or complete unwind
+291 checks, 11 failures

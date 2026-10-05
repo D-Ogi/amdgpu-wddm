@@ -1,0 +1,68 @@
+[
+  {
+    "line": 1693,
+    "context": [
+      "           !PagingResolve(&stream.Common,dst,chunk,&destinationMc))goto Done;",
+      "        if(!(sourceMc&PAGING_SYSTEM_ADDRESS) || !(destinationMc&PAGING_SYSTEM_ADDRESS)) {",
+      "            status=STATUS_NOT_SUPPORTED;goto Done;",
+      "        }",
+      "    }",
+      "    if(!gfx->PagingWindowReady || gfx->PagingCopyStaging.size<PAGE_SIZE)goto Done;"
+    ]
+  },
+  {
+    "line": 1721,
+    "context": [
+      "            // Classification finishes before any packet or progress is published.",
+      "            if(!(sources[i]&PAGING_SYSTEM_ADDRESS) || !(destinations[i]&PAGING_SYSTEM_ADDRESS)) {",
+      "                status=STATUS_NOT_SUPPORTED;goto Done;",
+      "            }",
+      "            sources[i]&=~PAGING_SYSTEM_ADDRESS;destinations[i]&=~PAGING_SYSTEM_ADDRESS;",
+      "        } else if(!PagingSourceIdentity(&stream,src+position,chunk,sources+i) ||"
+    ]
+  },
+  {
+    "line": 1835,
+    "context": [
+      "    if(workBytes<captureBytes)workBytes=captureBytes;",
+      "    captureBytes=sizeof(*c)+workBytes+(SIZE_T)pages*(2*sizeof(PAGING_U64)+2*sizeof(unsigned)+4);",
+      "    c=ExAllocatePool2(POOL_FLAG_PAGED,captureBytes,BC250_GFX_TAG);",
+      "    if(!c)return STATUS_INSUFFICIENT_RESOURCES;",
+      "    c->Owner.PoolTag=BC250_GFX_TAG;",
+      "    c->Linear=offset!=(Destination&4095);c->SourcePageCount=sourceCount;c->DestinationPageCount=destinationCount;"
+    ]
+  },
+  {
+    "line": 1886,
+    "context": [
+      "        // A single physical identity must have a consistent access/cache domain.",
+      "        // Supporting conflicting local/system views needs a proven alias policy.",
+      "        if(c->SystemPages[at]!=2 && c->SystemPages[at]!=system){status=STATUS_NOT_SUPPORTED;goto Done;}",
+      "        c->SystemPages[at]=system;",
+      "    }",
+      "    if(c->Linear) {"
+    ]
+  },
+  {
+    "line": 1894,
+    "context": [
+      "        if(!PagingPageAliasDirection(c->SourceIndex,sourceCount,c->DestinationIndex,destinationCount,",
+      "            c->Identities,c->Readers,offset,(unsigned)(Destination&4095),&backward)) {",
+      "            status=STATUS_NOT_SUPPORTED;goto Done;",
+      "        }",
+      "        c->Backward=(unsigned)backward;",
+      "        *Capture=c;c=NULL;status=STATUS_SUCCESS;goto Done;"
+    ]
+  },
+  {
+    "line": 1906,
+    "context": [
+      "        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));",
+      "    c->RequiredDwords=required;c->MaxAtomicMoves=capacity/required;",
+      "    if(c->MaxAtomicMoves<3){status=STATUS_NOT_SUPPORTED;goto Done;}",
+      "    for(i=0;i<c->BandCount;i++) {",
+      "        PAGING_PAGE_BAND* band=c->Bands+i;",
+      "        if(!PagingPageGraphPlan(c->SourceIndex+band->FirstPage,c->DestinationIndex+band->FirstPage,"
+    ]
+  }
+]

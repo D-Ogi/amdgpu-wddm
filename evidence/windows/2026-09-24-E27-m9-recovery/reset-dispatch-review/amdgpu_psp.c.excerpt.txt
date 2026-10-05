@@ -1,0 +1,21 @@
+Source: drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c
+235: 	case IP_VERSION(11, 0, 8):
+236: 		if (adev->apu_flags & AMD_APU_IS_CYAN_SKILLFISH2) {
+237: 			psp_v11_0_8_set_psp_funcs(psp);
+238: 		}
+239: 		psp->autoload_supported = false;
+240: 		psp->boot_time_tmr = false;
+241: 		break;
+3393: int psp_gpu_reset(struct amdgpu_device *adev)
+3394: {
+3395: 	int ret;
+3396: 
+3397: 	if (adev->firmware.load_type != AMDGPU_FW_LOAD_PSP)
+3398: 		return 0;
+3399: 
+3400: 	mutex_lock(&adev->psp.mutex);
+3401: 	ret = psp_mode1_reset(&adev->psp);
+3402: 	mutex_unlock(&adev->psp.mutex);
+3403: 
+3404: 	return ret;
+3405: }

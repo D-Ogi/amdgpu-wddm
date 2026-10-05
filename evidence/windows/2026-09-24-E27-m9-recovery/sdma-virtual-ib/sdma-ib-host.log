@@ -1,0 +1,12 @@
+compile (user mode, SDMA copy/fill packets)
+  Generowanie kodu...
+  Generowanie kodu...
+link
+  bc250_sdma.obj : error LNK2019: nierozpoznany symbol zewnętrzny bc250_gfx_rlc_safe_enter przywołany w funkcji bc250_sdma_quiesce_for_reload
+  bc250_sdma.obj : error LNK2019: nierozpoznany symbol zewnętrzny bc250_gfx_rlc_safe_exit przywołany w funkcji bc250_sdma_quiesce_for_reload
+  P:\bc-250\scratch\build\sdma-ib-main\sdma_copy_packets.exe : fatal error LNK1120: liczba nierozpoznanych elementów zewnętrznych: 2
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_sdma_copy.ps1:40
+Line |
+  40 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | link.exe failed (1120)

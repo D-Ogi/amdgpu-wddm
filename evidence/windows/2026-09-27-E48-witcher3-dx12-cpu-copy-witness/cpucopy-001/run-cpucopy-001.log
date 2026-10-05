@@ -1,0 +1,112 @@
+start 2026-09-27T07:43:34.5571345+02:00
+temperature_before=66.4
+boot 2026-09-26T18:44:31.5000000+02:00
+dwm_before=4596
+health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=21247 age_ms=1337 ready_ms=3630531
+stage A-cached icd_swapped=50E99A84
+run A-cached-640x480 start 2026-09-27T07:43:35.9243095+02:00
+pid=1296
+t=0 tctl=66.4 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+t=2 tctl=66.4 present_csv_bytes=0
+module 4s C:\BC250\m10\wsi-final\vulkan_radeon.dll 50E99A84
+t=4 tctl=66.4 present_csv_bytes=0
+screenshot A-cached-640x480 4E17528C1EAD
+t=8 tctl=66.4 present_csv_bytes=10183
+t=10 tctl=66.4 present_csv_bytes=13511
+t=12 tctl=66.4 present_csv_bytes=20167
+t=14 tctl=66.4 present_csv_bytes=26823
+t=17 tctl=66.4 present_csv_bytes=30151
+t=19 tctl=66.4 present_csv_bytes=36807
+t=21 tctl=66.4 present_csv_bytes=43463
+run A-cached-640x480 exit=0 elapsed=23s
+header: # chain 000002444B393B30 640x480 format 44 images 3 path gdi mode 2
+header: # chain 000002444B393B30 image memory type 0 properties 0x1
+
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+run A-cached-1920x1200 start 2026-09-27T07:43:59.6987341+02:00
+pid=6636
+t=0 tctl=66.5 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 50E99A84
+t=2 tctl=66.5 present_csv_bytes=199
+t=4 tctl=66.5 present_csv_bytes=3657
+screenshot A-cached-1920x1200 5D9F74BBE4E7
+t=7 tctl=66.5 present_csv_bytes=7113
+t=9 tctl=66.5 present_csv_bytes=10569
+t=11 tctl=66.6 present_csv_bytes=10569
+t=13 tctl=66.6 present_csv_bytes=14025
+t=16 tctl=66.6 present_csv_bytes=17481
+t=18 tctl=66.8 present_csv_bytes=20937
+t=20 tctl=66.8 present_csv_bytes=20937
+t=22 tctl=66.8 present_csv_bytes=24392
+t=24 tctl=66.8 present_csv_bytes=27848
+t=26 tctl=66.9 present_csv_bytes=31304
+t=28 tctl=66.9 present_csv_bytes=34760
+t=30 tctl=66.9 present_csv_bytes=34760
+t=32 tctl=66.9 present_csv_bytes=38216
+t=34 tctl=66.9 present_csv_bytes=41672
+t=36 tctl=67 present_csv_bytes=45128
+t=38 tctl=67 present_csv_bytes=45128
+run A-cached-1920x1200 exit=0 elapsed=40s
+header: # chain 0000017A2447F5E0 1920x1181 format 44 images 3 path gdi mode 2
+header: # chain 0000017A2447F5E0 image memory type 0 properties 0x1
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+stage B-wc icd_swapped=6661C2D2
+run B-wc-640x480 start 2026-09-27T07:44:41.3265125+02:00
+pid=4972
+t=0 tctl=67 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 6661C2D2
+t=2 tctl=67 present_csv_bytes=129
+t=4 tctl=67 present_csv_bytes=6785
+screenshot B-wc-640x480 14C814C5B4A1
+t=8 tctl=67 present_csv_bytes=16769
+t=10 tctl=67 present_csv_bytes=20097
+t=12 tctl=67 present_csv_bytes=26753
+t=14 tctl=67 present_csv_bytes=33409
+t=16 tctl=67 present_csv_bytes=40065
+t=18 tctl=67 present_csv_bytes=46721
+run B-wc-640x480 exit=0 elapsed=20s
+header: # chain 000001FB8879E890 640x480 format 44 images 3 path gdi
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+run B-wc-1920x1200 start 2026-09-27T07:45:02.7188703+02:00
+pid=7192
+t=0 tctl=67 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 6661C2D2
+t=2 tctl=67 present_csv_bytes=131
+t=4 tctl=67 present_csv_bytes=3590
+screenshot B-wc-1920x1200 8131144A9F66
+t=7 tctl=67 present_csv_bytes=7046
+t=9 tctl=67 present_csv_bytes=10503
+t=11 tctl=67 present_csv_bytes=10503
+t=13 tctl=67.1 present_csv_bytes=13959
+t=15 tctl=67.1 present_csv_bytes=17415
+t=18 tctl=67.1 present_csv_bytes=20871
+t=20 tctl=67.1 present_csv_bytes=20871
+t=22 tctl=67.2 present_csv_bytes=24327
+t=24 tctl=67.2 present_csv_bytes=27783
+t=26 tctl=67.2 present_csv_bytes=27783
+t=28 tctl=67.2 present_csv_bytes=31239
+t=30 tctl=67.2 present_csv_bytes=34695
+t=32 tctl=67.2 present_csv_bytes=38150
+t=34 tctl=67.2 present_csv_bytes=41606
+t=36 tctl=67.2 present_csv_bytes=41606
+t=38 tctl=67.2 present_csv_bytes=45063
+run B-wc-1920x1200 exit=0 elapsed=40s
+header: # chain 000001FB4CAEF5E0 1920x1181 format 44 images 3 path gdi
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+registered ICD restored to 93B1D1FD
+registered_icd_after=93B1D1FD
+health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=24910 age_ms=490 ready_ms=3760159
+temperature_after=67.2
+dwm_after=4596
+end 2026-09-27T07:45:44.6270173+02:00
+run_exit=0
+
+

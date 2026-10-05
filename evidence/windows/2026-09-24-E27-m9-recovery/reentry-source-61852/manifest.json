@@ -1,0 +1,226 @@
+[
+  {
+    "file": "alpine\\0001-powerpc-boot-wrapper-Add-z-notext-flag-for-ppc64le.patch",
+    "sha256": "5a69e7352716b95d15d37dac1682629b9f7f8b375bad12b4eae267bf928de067"
+  },
+  {
+    "file": "alpine\\0001-x86-CPU-AMD-avoid-printing-reset-reasons-on-Xen-domU.patch",
+    "sha256": "ca3a6ead247a6168fd4db8eea803715dca6f6a2451cc36356b6b2c223301fdd9"
+  },
+  {
+    "file": "alpine\\0002-x86-Compress-vmlinux-with-zstd-19-instead-of-22.patch",
+    "sha256": "2b1433795c145ef1979d53806db17ce46d6c87df297c67db41c2ffad21374d12"
+  },
+  {
+    "file": "alpine\\0003-kexec-add-kexec_load_disabled-boot-option.patch",
+    "sha256": "919d4e8fcb4f12a22f5224c9f012b9fcb544766830aadf19a2e15044adb3fb7b"
+  },
+  {
+    "file": "alpine\\0004-objtool-respect-AWK-setting.patch",
+    "sha256": "2b5228aff141f02d67a3ed4c8e5c0cb9ca2c0aebf939badb472dd3a8fdb8fa3a"
+  },
+  {
+    "file": "alpine\\0005-powerpc-config-defang-gcc-check-for-stack-protector-.patch",
+    "sha256": "37ee66d4894f1daf6086d5bf546b0f8640f8719895eeb647147f54a86f69deab"
+  },
+  {
+    "file": "alpine\\APKBUILD",
+    "sha256": "15ae860704ae8547162e7eb9c20e55f792c2c6654ec250a438f5be0124579f29"
+  },
+  {
+    "file": "alpine\\lts.x86_64.config",
+    "sha256": "d96e636b7f8bb257a38209af661e17ca3b79f1de4de8818a82d57c62bb12483b"
+  },
+  {
+    "file": "alpine\\sophgo-fixes.patch",
+    "sha256": "e462aecb428768a9c688055db1aa53e336e13fe113602c70a56706f5eb7302dc"
+  },
+  {
+    "file": "alpine-provenance.json",
+    "sha256": "647a9ee5e63aee96e0c0a85f36fd36239a928aafbb6483da7cd5593d8139809b"
+  },
+  {
+    "file": "amdgpu_device.c.diff",
+    "sha256": "42f7589b63646b725ffdb5fb15d3fc5fcc3fffe78a93bd23d7f0472a3a6f75ee"
+  },
+  {
+    "file": "amdgpu_device.c.normalized.diff",
+    "sha256": "336a572fd498b46ac552d7868a0cb80da21855b5c324a0bb82838b0c4a38e050"
+  },
+  {
+    "file": "amdgpu_psp.c.diff",
+    "sha256": "14457398059425ef1a098ff50035f424ca33d537744368ca7011e1d0c4b11f22"
+  },
+  {
+    "file": "amdgpu_psp.c.normalized.diff",
+    "sha256": "408cb93297d551161a50dd02931aaa8fff4527176461cb687d74ee6a89a80c85"
+  },
+  {
+    "file": "amdgpu_reset.c.diff",
+    "sha256": "c94c3677f87aca99964f1ec8fe8d81abb9461ee5db64663275c52e858d7625ee"
+  },
+  {
+    "file": "amdgpu_reset.c.normalized.diff",
+    "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+  },
+  {
+    "file": "amdgpu_sdma.c.normalized.diff",
+    "sha256": "f03f4aa36b0040ce024bf5c0b2ebab263d8585aa1bb4699b36fd4781d3a033f5"
+  },
+  {
+    "file": "amdgpu_ucode.c.diff",
+    "sha256": "d8d3f0717fa57e890a9c03da4a0bc0c77b8038f9860ab4680e950df267c37888"
+  },
+  {
+    "file": "amdgpu_ucode.c.normalized.diff",
+    "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+  },
+  {
+    "file": "comparison.json",
+    "sha256": "babc01282d5d9a1ce7fc1ecde3d419333493de2faf8ff998d3d60eaeb45becc5"
+  },
+  {
+    "file": "gfx_v10_0.c.diff",
+    "sha256": "b22484b5b31f76af29201088193e14f166307b5214d83194a8caf1a18638f8aa"
+  },
+  {
+    "file": "gfx_v10_0.c.normalized.diff",
+    "sha256": "200ad95437f776e49f86026f349b94482161afb14e04e4e7ba2df65aee0f0ac5"
+  },
+  {
+    "file": "normalized-comparison.json",
+    "sha256": "a100f4fe5be2308b3a971438ac01644992e076d80914db0181214e00579a0d74"
+  },
+  {
+    "file": "PLAN.md",
+    "sha256": "223e57ee0fe1eebd55fe0b08651d7ec09b03ec36ee25ecb8102904cb5fa54b86"
+  },
+  {
+    "file": "psp_v11_0.c.diff",
+    "sha256": "8a48a126bb44f7001168b3f6ceb60a45e64b268097cdbce9ba5b2dcc53a7c446"
+  },
+  {
+    "file": "psp_v11_0.c.normalized.diff",
+    "sha256": "9424c3c965714327485fd3227af762359699078a3b3e953a7858837dee767f98"
+  },
+  {
+    "file": "reset-dispatch-retrieval.json",
+    "sha256": "de4d9ca1cf783362c4a0f0ad1305a80ae3ac720774eb513c4c669ead1153cf14"
+  },
+  {
+    "file": "RESULT.md",
+    "sha256": "90b1becab58ee8f084ae694a327ad457986c4be7e5c9ca3ce9a6e3fa06a00d3f"
+  },
+  {
+    "file": "retrieval.json",
+    "sha256": "06554b2a9ae404ac21502f57070a1694a14080d5d19d87fc4238088fe02d2138"
+  },
+  {
+    "file": "sdma_v5_0.c.diff",
+    "sha256": "1f1af64572ad6768e9ab4679593b644463626db265eb17f5b5edf16ac0792a7a"
+  },
+  {
+    "file": "sdma_v5_0.c.normalized.diff",
+    "sha256": "631966853815af36ad29193d96d3073ae8674fd79a08146aa46d54d608dcfab2"
+  },
+  {
+    "file": "selected-functions.json",
+    "sha256": "3a03b0270db1b6f48e9776d53d88e159f4c97ca9478387f8f24c720472d64876"
+  },
+  {
+    "file": "soc15.c.diff",
+    "sha256": "85ccacd7380c6fb43a01879090d1f15c12fef08b93c18884b7a3ccf5dc36ed62"
+  },
+  {
+    "file": "soc15.c.normalized.diff",
+    "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+  },
+  {
+    "file": "v6.18\\amdgpu_device.c",
+    "sha256": "b41793be1d7e8a8b87dbc44d3e7644f82c9d19d3d02a8e19258033e462e87172"
+  },
+  {
+    "file": "v6.18\\amdgpu_psp.c",
+    "sha256": "8882e555989988c350d0df0206888c15095d237e4d1d81118c7e7d45399b5a91"
+  },
+  {
+    "file": "v6.18\\amdgpu_reset.c",
+    "sha256": "a4ce113c1546da6cc234e6d999a82162f9bcff2b663862b31fbcad5761075564"
+  },
+  {
+    "file": "v6.18\\amdgpu_sdma.c",
+    "sha256": "ce00affb90e6ea036d76a587be20f6320ccee3e68445fcf6ae41e248b95888cd"
+  },
+  {
+    "file": "v6.18\\amdgpu_ucode.c",
+    "sha256": "9533489d496e5de74ffc73d4403c3240314cd071dfd5f4772b32d827d45697a9"
+  },
+  {
+    "file": "v6.18\\gfx_v10_0.c",
+    "sha256": "41b4e75728f3ad25f69c179536f8b7ae30118026315216d5fd891f445a6a7e99"
+  },
+  {
+    "file": "v6.18\\psp_v11_0.c",
+    "sha256": "17e092f780a8770bebeca351ab5fc216c3c5f16df61793259950234a554c547c"
+  },
+  {
+    "file": "v6.18\\sdma_v5_0.c",
+    "sha256": "d38d98e12e323ce658e41d47ea1e4b617fab07d5037548f945054845fac68cec"
+  },
+  {
+    "file": "v6.18\\soc15.c",
+    "sha256": "8734b47fa927ef3a6347b51a4770861b5d6d38d36748ed4de881f91737326d4c"
+  },
+  {
+    "file": "v6.18.52\\amdgpu.h",
+    "sha256": "4e74a2496e74ac620f7e0b19c1b24c21f5d5a832bb72797b2cb5c4487087cb51"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_device.c",
+    "sha256": "f54c388fcc69b549b3e5d139869fcf59c11b204d03fde2c16330b9ec1b5fe2fd"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_drv.c",
+    "sha256": "0018f6bfd9667d07f2777f2bd324bdb661f9dab500930c7a7ed461f13e7cb3f5"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_job.c",
+    "sha256": "244a861bccfc6beb0c7cb4b7e4f4c9899f81e1368c6ec4054633d71ecd1ff4c2"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_psp.c",
+    "sha256": "3082701d18cb59bc454613c4ce0ad17bfaa969a6bcd30f9fd06c36091aee75a4"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_reset.c",
+    "sha256": "deb643b5dfb77a0252b7703ac95b919ce50a868fd9f8bba0c88348c76261f95c"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_ring.c",
+    "sha256": "32af0ac0a2f043c7cb7b5594270279ade457ea74ccf463babec6dd4c7e84c6b1"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_sdma.c",
+    "sha256": "522822484f13f2dee0a274c9f1dc6d56066bf884714a2b129afa547c4bf2fd56"
+  },
+  {
+    "file": "v6.18.52\\amdgpu_ucode.c",
+    "sha256": "c28085638023bc9bf40eb21ddd94b06e62e935f87d948810e80cc8c4b2858b46"
+  },
+  {
+    "file": "v6.18.52\\gfx_v10_0.c",
+    "sha256": "d3ad9a579ba3763e3b696a62c4218e27451868d847601b930ae20de1eb111033"
+  },
+  {
+    "file": "v6.18.52\\psp_v11_0.c",
+    "sha256": "93cca2738d9758c866517798aa2ce638cf43fc2f88b1f28bd2e2b936a25f16bb"
+  },
+  {
+    "file": "v6.18.52\\sdma_v5_0.c",
+    "sha256": "c1c9bdb4dbc63442917586a3c8a1e96520fc9950e920848bbd4dbc248aa6ce82"
+  },
+  {
+    "file": "v6.18.52\\soc15.c",
+    "sha256": "e51e3c71fd479abe29b1ab667474de1a8416243e6a83bc9ce743306b1b17aea8"
+  }
+]

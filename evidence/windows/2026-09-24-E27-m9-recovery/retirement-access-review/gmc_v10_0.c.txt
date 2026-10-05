@@ -1,0 +1,106 @@
+PROVENANCE: Linux amdgpu (AMD MIT); local Linux6.18.0 reference, not the exact E28 Alpine6.18.52 binary.
+
+251: 					uint32_t vmhub, uint32_t flush_type)
+252: {
+253: 	bool use_semaphore = gmc_v10_0_use_invalidate_semaphore(adev, vmhub);
+254: 	struct amdgpu_vmhub *hub = &adev->vmhub[vmhub];
+255: 	u32 inv_req = hub->vmhub_funcs->get_invalidate_req(vmid, flush_type);
+256: 	/* Use register 17 for GART */
+257: 	const unsigned int eng = 17;
+258: 	unsigned char hub_ip = 0;
+259: 	u32 sem, req, ack;
+260: 	unsigned int i;
+261: 	u32 tmp;
+262: 
+263: 	sem = hub->vm_inv_eng0_sem + hub->eng_distance * eng;
+264: 	req = hub->vm_inv_eng0_req + hub->eng_distance * eng;
+265: 	ack = hub->vm_inv_eng0_ack + hub->eng_distance * eng;
+266: 
+267: 	/* flush hdp cache */
+268: 	amdgpu_device_flush_hdp(adev, NULL);
+269: 
+270: 	/* This is necessary for SRIOV as well as for GFXOFF to function
+271: 	 * properly under bare metal
+272: 	 */
+273: 	if (adev->gfx.kiq[0].ring.sched.ready && !adev->enable_mes &&
+274: 	    (amdgpu_sriov_runtime(adev) || !amdgpu_sriov_vf(adev))) {
+275: 		amdgpu_gmc_fw_reg_write_reg_wait(adev, req, ack, inv_req,
+276: 						 1 << vmid, GET_INST(GC, 0));
+277: 		return;
+278: 	}
+279: 
+280: 	/* This path is needed before KIQ/MES/GFXOFF are set up */
+281: 	hub_ip = (vmhub == AMDGPU_GFXHUB(0)) ? GC_HWIP : MMHUB_HWIP;
+282: 
+283: 	spin_lock(&adev->gmc.invalidate_lock);
+284: 	/*
+285: 	 * It may lose gpuvm invalidate acknowldege state across power-gating
+286: 	 * off cycle, add semaphore acquire before invalidation and semaphore
+287: 	 * release after invalidation to avoid entering power gated state
+288: 	 * to WA the Issue
+289: 	 */
+290: 
+291: 	/* TODO: It needs to continue working on debugging with semaphore for GFXHUB as well. */
+292: 	if (use_semaphore) {
+293: 		for (i = 0; i < adev->usec_timeout; i++) {
+294: 			/* a read return value of 1 means semaphore acuqire */
+295: 			tmp = RREG32_RLC_NO_KIQ(sem, hub_ip);
+296: 			if (tmp & 0x1)
+297: 				break;
+298: 			udelay(1);
+299: 		}
+300: 
+301: 		if (i >= adev->usec_timeout)
+302: 			DRM_ERROR("Timeout waiting for sem acquire in VM flush!\n");
+303: 	}
+304: 
+305: 	WREG32_RLC_NO_KIQ(req, inv_req, hub_ip);
+306: 
+307: 	/*
+308: 	 * Issue a dummy read to wait for the ACK register to be cleared
+309: 	 * to avoid a false ACK due to the new fast GRBM interface.
+310: 	 */
+311: 	if ((vmhub == AMDGPU_GFXHUB(0)) &&
+312: 	    (amdgpu_ip_version(adev, GC_HWIP, 0) < IP_VERSION(10, 3, 0)))
+313: 		RREG32_RLC_NO_KIQ(req, hub_ip);
+314: 
+315: 	/* Wait for ACK with a delay.*/
+316: 	for (i = 0; i < adev->usec_timeout; i++) {
+317: 		tmp = RREG32_RLC_NO_KIQ(ack, hub_ip);
+318: 		tmp &= 1 << vmid;
+319: 		if (tmp)
+320: 			break;
+321: 
+322: 		udelay(1);
+323: 	}
+324: 
+325: 	/* TODO: It needs to continue working on debugging with semaphore for GFXHUB as well. */
+326: 	if (use_semaphore)
+327: 		WREG32_RLC_NO_KIQ(sem, 0, hub_ip);
+
+1016:  * gmc_v10_0_gart_disable - gart disable
+1017:  *
+1018:  * @adev: amdgpu_device pointer
+1019:  *
+1020:  * This disables all VM page table.
+1021:  */
+1022: static void gmc_v10_0_gart_disable(struct amdgpu_device *adev)
+1023: {
+1024: 	if (!adev->in_s0ix)
+1025: 		adev->gfxhub.funcs->gart_disable(adev);
+1026: 	adev->mmhub.funcs->gart_disable(adev);
+1027: }
+1028: 
+1029: static int gmc_v10_0_hw_fini(struct amdgpu_ip_block *ip_block)
+1030: {
+1031: 	struct amdgpu_device *adev = ip_block->adev;
+1032: 
+1033: 	gmc_v10_0_gart_disable(adev);
+1034: 
+1035: 	if (amdgpu_sriov_vf(adev)) {
+1036: 		/* full access mode, so don't touch any GMC register */
+1037: 		DRM_DEBUG("For SRIOV client, shouldn't do anything.\n");
+1038: 		return 0;
+1039: 	}
+1040: 
+1041: 	amdgpu_irq_put(adev, &adev->gmc.vm_fault, 0);

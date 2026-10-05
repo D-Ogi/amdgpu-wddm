@@ -1,0 +1,40 @@
+{
+  "frames": 600,
+  "native_results": {
+    "0": 600
+  },
+  "capture_holds_after_frames": [
+    1,
+    61
+  ],
+  "present_return_fps_excluding_capture_holds": 50.865069565395125,
+  "present_intervals_ms": {
+    "n": 597,
+    "min": 13.8932,
+    "median": 16.8583,
+    "p95": 49.110099999999996,
+    "max": 69.3519
+  },
+  "draw_present_ms": {
+    "n": 600,
+    "min": 13.4865,
+    "median": 16.63005,
+    "p95": 48.8971,
+    "max": 69.1071
+  },
+  "hardware_vsync_samples": 919,
+  "hardware_refresh_hz": 59.94996920380531,
+  "hardware_vsync_intervals_ms": {
+    "n": 918,
+    "min": 16.448999999999998,
+    "median": 16.68025,
+    "p95": 16.7588,
+    "max": 16.9024
+  },
+  "dwm_hr": {
+    "0": 600
+  },
+  "dwm_refresh_delta": {
+    "1": 597
+  }
+}

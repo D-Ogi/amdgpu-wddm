@@ -1,0 +1,63 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\BC-250\bc250-win\experiments\E34-native-d3d-zink\..\..\..\scratch\m13-native-zink-build'
+[1/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/meson-generated_.._zink_instance.c.obj
+[2/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_fence.c.obj
+[3/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_blit.c.obj
+[4/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_kopper.c.obj
+[5/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_batch.c.obj
+[6/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_bo.c.obj
+[7/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_clear.c.obj
+[8/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_descriptors.c.obj
+[9/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_pipeline.c.obj
+[10/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_query.c.obj
+[11/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_render_pass.c.obj
+[12/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_surface.c.obj
+[13/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_state.c.obj
+[14/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_resource.c.obj
+[15/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_program.c.obj
+[16/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_screen.c.obj
+[17/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/meson-generated_.._zink_device_info.c.obj
+[18/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_context.c.obj
+[19/35] Compiling C++ object src/gallium/drivers/zink/libzink.a.p/zink_synchronization.cpp.obj
+[20/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Adapter.cpp.obj
+[21/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Draw.cpp.obj
+[22/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Device.cpp.obj
+[23/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Format.cpp.obj
+[24/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/InputAssembly.cpp.obj
+[25/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[26/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/OutputMerger.cpp.obj
+[27/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Query.cpp.obj
+[28/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Rasterizer.cpp.obj
+[29/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Resource.cpp.obj
+[30/35] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Shader.cpp.obj
+[31/35] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[32/35] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_compiler.c.obj
+[33/35] Compiling C++ object src/gallium/drivers/zink/libzink.a.p/zink_draw.cpp.obj
+[34/35] Linking static target src/gallium/drivers/zink/libzink.a
+[35/35] Linking target src/gallium/targets/d3d10umd/bc250d3d_zink.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d_zink.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d_zink.exp
+
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+kmd-commands PASS 0.75s
+kmd-contract PASS 0.42s
+radv-contract PASS 0.26s
+umd-contract PASS 0.25s
+blob-abi PASS 1.02s
+surface-control PASS 0.24s
+kmd-analysis PASS 0.71s
+umd-analysis PASS 3.84s

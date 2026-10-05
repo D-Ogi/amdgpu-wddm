@@ -1,0 +1,35 @@
+**********************
+Windows PowerShell transcript start
+Start time: 20260926225144
+Username: [redacted]
+RunAs User: [redacted]
+Configuration Name: 
+Machine: [redacted]
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\BC250\tmp\run.ps1
+Process ID: 4284
+PSVersion: 5.1.22621.6133
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.6133
+BuildVersion: 10.0.22621.6133
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Baselines verified
+DWM before=9960
+PS>TerminatingError(Get-Content): "The running command stopped because the preference variable "ErrorActionPreference" or common parameter is set to Stop: The process cannot access the file 'C:\BC250\m13\dwm-hosted006\dwm-12224.log' because it is being used by another process."
+Baselines verified
+Get-Content : The process cannot access the file 'C:\BC250\m13\dwm-hosted006\dwm-12224.log' 
+because it is being used by another process.
+At C:\BC250\tmp\run.ps1:44 char:183
++ ... lse{0};log_tail=if(Test-Path $log){@(Get-Content $log -Tail 4)}else{@ ...
++                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\BC250\m13\dwm-hosted006\dwm-12224.log:String) [Get-C 
+   ontent], IOException
+    + FullyQualifiedErrorId : GetContentReaderIOError,Microsoft.PowerShell.Commands.GetContentCom 
+   mand
+**********************
+Windows PowerShell transcript end
+End time: 20260926225157
+**********************

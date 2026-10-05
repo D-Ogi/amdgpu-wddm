@@ -1,0 +1,5 @@
+paging_permutation.c
+paging_permutation_test.c
+Generowanie kodu...
+1GiB page identities: 262144, normalization CPU seconds 0.015000
+page permutations: 46233 cases, 0 snapshot-oracle failures

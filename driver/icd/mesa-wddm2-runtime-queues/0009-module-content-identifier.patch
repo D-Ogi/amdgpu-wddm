@@ -1,0 +1,71 @@
+diff --git a/src/util/disk_cache_os.c b/src/util/disk_cache_os.c
+index 66a3f5b1..7ebdea12 100644
+--- a/src/util/disk_cache_os.c
++++ b/src/util/disk_cache_os.c
+@@ -42,6 +42,53 @@
+ 
+ #include <windows.h>
+ 
++#include "util/simple_mtx.h"
++
++/* The digest of the module's file content, hashed once per module and process. A copy of the same DLL, such as a
++ * redeployed driver, keeps its identifier; the last-write time below changes with every copy and discarded every
++ * pipeline cache keyed on it. */
++static simple_mtx_t module_digest_mtx = SIMPLE_MTX_INITIALIZER;
++static HMODULE module_digest_mod;
++static blake3_hash module_digest;
++
++static bool
++module_content_digest(HMODULE mod, const WCHAR *filename, blake3_hash digest)
++{
++   bool ret = false;
++
++   simple_mtx_lock(&module_digest_mtx);
++   if (module_digest_mod == mod) {
++      memcpy(digest, module_digest, sizeof(blake3_hash));
++      simple_mtx_unlock(&module_digest_mtx);
++      return true;
++   }
++
++   HANDLE file = CreateFileW(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
++                             FILE_ATTRIBUTE_NORMAL, NULL);
++   LARGE_INTEGER size;
++   if (file != INVALID_HANDLE_VALUE && GetFileSizeEx(file, &size) && size.QuadPart > 0 &&
++       (uint64_t)size.QuadPart <= SIZE_MAX) {
++      HANDLE mapping = CreateFileMappingW(file, NULL, PAGE_READONLY, 0, 0, NULL);
++      const void *view = mapping ? MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0) : NULL;
++      if (view) {
++         blake3_hasher hasher;
++         _mesa_blake3_init(&hasher);
++         _mesa_blake3_update(&hasher, view, (size_t)size.QuadPart);
++         _mesa_blake3_final(&hasher, digest);
++         UnmapViewOfFile(view);
++         module_digest_mod = mod;
++         memcpy(module_digest, digest, sizeof(blake3_hash));
++         ret = true;
++      }
++      if (mapping)
++         CloseHandle(mapping);
++   }
++   if (file != INVALID_HANDLE_VALUE)
++      CloseHandle(file);
++   simple_mtx_unlock(&module_digest_mtx);
++   return ret;
++}
++
+ bool
+ disk_cache_get_function_identifier(void *ptr, blake3_hasher *ctx)
+ {
+@@ -58,6 +105,12 @@ disk_cache_get_function_identifier(void *ptr, blake3_hasher *ctx)
+    if (filename_length == 0 || filename_length == ARRAY_SIZE(filename))
+       return false;
+ 
++   blake3_hash digest;
++   if (module_content_digest(mod, filename, digest)) {
++      _mesa_blake3_update(ctx, digest, sizeof(digest));
++      return true;
++   }
++
+    HANDLE mod_as_file = CreateFileW(
+         filename,
+         GENERIC_READ,

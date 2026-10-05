@@ -1,0 +1,6 @@
+Extracted actual visibility, synchronized enable/ISR and visibility DDI
+display_visibility_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 75: (value&ALL_CLEAR)==OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_CLEAR_MASK
+display visibility/sync: 109 checks, 1 failures

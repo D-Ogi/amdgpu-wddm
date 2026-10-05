@@ -1,0 +1,9 @@
+now=2026-09-25T01:21:57
+{"stop":false}
+cli_sha256=36C298D454A75C73483C610802A6D7A6E8940FB973FDAF7B1CABFF93BC219021
+UnconfirmedStarts = 0 (flushed to disk)
+budget=0
+policy=2
+boot=2026-09-25T00:53:18
+bc250mon pid=4228 start=2026-09-25T00:54:21
+dwm pid=1720 start=2026-09-25T00:54:20

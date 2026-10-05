@@ -1,0 +1,2392 @@
+[
+  {
+    "time": "2026-09-23T01:14:47.737430500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      56",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:47.882107300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      55",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.023612500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      54",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.171741700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      53",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.314874100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      52",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.452109900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      51",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.588027500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      50",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.773112100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      49",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:48.916104300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      48",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.057963900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      47",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.195046000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      46",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.330204800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      45",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.467113700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      44",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.603509800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      43",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.743901100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      42",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:49.881829800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      41",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.020050000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      40",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.161302100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      39",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.294729200+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      38",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.428770800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      37",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.558983800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      36",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.694061100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      35",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.830376800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      34",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:50.968084500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      33",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.095789000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      32",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.232290700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      31",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.368628700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      30",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.502568200+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      29",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.639346600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      28",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.777150100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      27",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:51.914939800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      26",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.051996000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      25",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.187571800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      24",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.325085900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      23",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.462277700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      22",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.598103600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      21",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.733574000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      20",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:52.870407900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      19",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.008383300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      18",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.146272000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      17",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.282120400+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      16",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.418397300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      15",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.554265800+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      14",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.690982000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      13",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.829583900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      12",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:53.967608700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      11",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.104940900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      10",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.241225400+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       9",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.379558500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       8",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.517016600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       7",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.657694700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       6",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.793662400+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       5",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:54.930560300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       4",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.067802100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       3",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.204754600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       2",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.342524100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       1",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.480528700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "       0",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.618366600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      63",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.754532200+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      62",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:55.892895000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      61",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.022064100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      60",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.158421500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      59",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.295315700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      58",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.433849600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      57",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.571368700+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      56",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.708996000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      55",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.845619900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      54",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:56.985860400+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      53",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.123644100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      52",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.255139200+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      51",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.386666300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      50",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.518038500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      49",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.654041000+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      48",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.787618400+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      47",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:57.920403300+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      46",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:58.053989400+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      45",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:58.183554600+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      44",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:58.331824500+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      43",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:58.473016900+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      42",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:58.609155100+01:59",
+    "pid": "5948",
+    "data": {
+      "Index": "      41",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10608",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:59.221528700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      62",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:59.355907800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      61",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:59.495037800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      60",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:59.643550500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      59",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:59.790711100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      58",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:14:59.933378100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      57",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.069818600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      56",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.208745000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      55",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.345094300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      54",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.492320300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      53",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.624032300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      52",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.752617000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      51",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:00.888725600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      50",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.025935000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      49",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.159586800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      48",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.302694900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      47",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.433628600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      46",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.570224900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      45",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.704483400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      44",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.835948100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      43",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:01.978714100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      42",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:02.123739300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      41",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:02.265522100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      40",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:02.415857400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      39",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:02.559660100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      38",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:02.701220800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      37",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:02.837667000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      36",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:03.227995300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      35",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:03.371841200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      34",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:03.767918900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      33",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:03.912938000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      32",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:04.287619100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      31",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:04.429263000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      30",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:04.768840600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      29",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:04.905562200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      28",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:05.231813400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      27",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:05.372445300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      26",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:05.695345100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      25",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:05.832331500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      24",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:06.166533700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      23",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:06.301498600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      22",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:06.631368000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      21",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:06.769212500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      20",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:07.102361900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      19",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:07.241010800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      18",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:07.568548500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      17",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:07.708431800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      16",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:08.918423800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      15",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:09.264605400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      14",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:09.402868400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      13",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:09.727962200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      12",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:09.866447300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      11",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:10.198334700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      10",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:10.330989100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       9",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:10.663428600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       8",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:10.801911300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       7",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:11.126952300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       6",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:11.257297500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       5",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:11.586224200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       4",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:11.724135400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       3",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:12.047423400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       2",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:12.184920300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       1",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:12.516711500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       0",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:12.658769600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      63",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:12.983324100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      62",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:13.120098000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      61",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:13.445101000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      60",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:13.575430900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      59",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:13.907646100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      58",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:14.043197500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      57",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:14.370826900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      56",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:14.507738900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      55",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:14.835055900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      54",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:14.973591900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      53",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:15.299659700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      52",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:15.437596700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      51",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:15.772274700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      50",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:15.905762600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      49",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:16.234325400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      48",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:16.365724400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      47",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:16.703339500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      46",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:16.837772700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      45",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:17.165260000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      44",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:17.307710800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      43",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:17.629302400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      42",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:17.766831400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      41",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:18.094223900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      40",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:18.231316400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      39",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:18.565209500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      38",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:18.703881500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      37",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:19.027196200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      36",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:19.158085800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      35",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:19.487612900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      34",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:19.624263200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      33",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:19.953610500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      32",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:20.091912300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      31",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:20.420910200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      30",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:20.557464300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      29",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:20.882628700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      28",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:21.019105200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      27",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:21.347473300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      26",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:21.478988000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      25",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:21.805675200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      24",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:21.941773400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      23",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:22.265833700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      22",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:22.404908000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      21",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:22.731412800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      20",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:22.873443600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      19",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:23.194692100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      18",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:23.331469700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      17",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:23.662432700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      16",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:23.801881500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      15",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:24.124592100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      14",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:24.257850000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      13",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:24.586555700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      12",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:24.722201600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      11",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:25.047033100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      10",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:25.184698400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       9",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:25.508553400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       8",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:25.645528600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       7",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:25.971727300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       6",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:26.109690300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       5",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:26.439451600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       4",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:26.570626500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       3",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:26.903412500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       2",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:27.039366100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       1",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:27.372792200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "       0",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:27.502584500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      63",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:27.829269900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      62",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:27.958260900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      61",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:28.288562100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      60",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:28.418459500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      59",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:28.750417900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      58",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:28.891037200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      57",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:29.214301100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      56",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:29.344311200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      55",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:29.685339500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      54",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:29.823091300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      53",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:30.148957900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      52",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:30.285768000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      51",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:30.618814500+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      50",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:30.746249800+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      49",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:30.885080200+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      48",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.097052400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      47",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.235177600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      46",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.362676400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      45",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.498217400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      44",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.626242700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      43",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.753236300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      42",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:31.883447300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      41",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:32.019444000+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      40",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:32.153530600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      39",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:32.284424900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      38",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:32.417336300+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      37",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:32.546783700+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      36",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:32.681065600+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      35",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:33.002846400+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      34",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:33.304910900+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      33",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  },
+  {
+    "time": "2026-09-23T01:15:33.442296100+01:59",
+    "pid": "6932",
+    "data": {
+      "Index": "      32",
+      "Code": "0xC01E0005",
+      "ThreadId": "   10664",
+      "Message": "SetDisplayMode"
+    }
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "supervisor": {
+    "error": null,
+    "elapsed": 25.2068674,
+    "postflight": true,
+    "passed": true
+  },
+  "result": {
+    "start_utc": "2026-09-28T16:59:53.4080663Z",
+    "scope": "D3D12 engine ABI1.0, direct ICD, non-hosted; no native D3D12 DDI",
+    "timeout": false,
+    "stop": false,
+    "exit": 0,
+    "temperature": 67,
+    "seconds": 7.7280676999999995,
+    "end_utc": "2026-09-28T17:00:01.1387114Z"
+  },
+  "artifacts": {
+    "engine_sha256": "DD0F97EAFBECA801E338CD1871996DCFFA59E6DF51E2EB7C74F7489F438D68B1",
+    "test_sha256": "969462ACB1053EE4165C2B9E8995ED199FF874E70EB3167EB53FB1A907FFB6C8",
+    "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F"
+  },
+  "job": {
+    "cancelled": false,
+    "console_session": 0,
+    "root_exit_observed": true,
+    "child_exit": 0,
+    "timed_out": false,
+    "termination_requested": true,
+    "job_empty": true
+  },
+  "baseline_unchanged": true
+}

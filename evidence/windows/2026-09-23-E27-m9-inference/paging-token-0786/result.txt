@@ -1,0 +1,21 @@
+M218 UINT slice-progress codec and Fill integration, 2026-09-23.
+Dirty worktree over base-commit.txt; changed sources included. E27 procedure and
+integration extension recorded before corresponding tests.
+TokenGeometry counts union of two periodic page-boundary sequences (or one for
+Fill/equal offsets). TokenEncode/Decode map64-bit byte progress to UINT slice count.
+Reject whole ranges exceeding UINT capacity before progress0 can be accepted.
+Portable tests compare12405 actual stream boundaries plus wide-carry, maximum token,
+invalid boundary/overflow controls. Existing >4GiB, fragmentation and kernel compile pass.
+Physical Fill uses same tokens as before; virtual Fill switches byte tokens to slices
+and removes its UINT byte-size cap. Adapter test resumes at4GiB-4, publishes8196 bytes
+in3 slices, ending at4GiB+8192 with correct private-record coverage.
+Routing9129/0; omitted logical commits602 failures expected, exit1.
+Initial integration compile caught ULONG*/unsigned* mismatch and missing header;
+corrected local type/include. No warnings disabled. Initial logs preserved.
+Full0786 WDK build/sign passes. SYS SHA256
+CFD877B93A8D1C5938A632AAF49B4D5F435A773742626C35AE6AE5724F4962E4
+Package scratch/build/bc250kmd-0786/package-umd NOT DEPLOYED. Virtual token formats
+must not be mixed in-flight; install/restart creates a new device session.
+No lab access/reboot/USB change/private-data redaction. No GPU/performance acceptance.
+Physical Transfer DDI integration, arbitrary table-copy effects, aperture ops, OS
+failure policy, cache/lifetime/recovery and hardware pressure remain open.

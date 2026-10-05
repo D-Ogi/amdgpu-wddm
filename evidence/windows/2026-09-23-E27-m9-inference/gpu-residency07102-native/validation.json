@@ -1,0 +1,96 @@
+[
+  {
+    "name": "vram64k",
+    "bytes": 65536,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "65536",
+        "1"
+      ],
+      [
+        "65536",
+        "2"
+      ],
+      [
+        "65536",
+        "3"
+      ],
+      [
+        "65536",
+        "4"
+      ]
+    ],
+    "departure_status": [
+      "2",
+      "2",
+      "2"
+    ],
+    "cumulative_gfx": [
+      "2499",
+      "2499",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "212440",
+      "212440",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "0",
+      "0",
+      "0"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  },
+  {
+    "name": "vram1g",
+    "bytes": 1073741824,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "1073741824",
+        "1024"
+      ],
+      [
+        "1073741824",
+        "2048"
+      ],
+      [
+        "1073741824",
+        "3072"
+      ],
+      [
+        "1073741824",
+        "4096"
+      ]
+    ],
+    "departure_status": [
+      "3",
+      "3",
+      "3"
+    ],
+    "cumulative_gfx": [
+      "6595",
+      "6595",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "395467",
+      "395467",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "6360",
+      "6266",
+      "6266"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  }
+]

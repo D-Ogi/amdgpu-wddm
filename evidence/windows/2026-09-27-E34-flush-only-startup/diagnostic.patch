@@ -1,0 +1,23 @@
+--- a/src/gallium/frontends/d3d10umd/Draw.cpp
++++ b/src/gallium/frontends/d3d10umd/Draw.cpp
+@@ -44,7 +44,19 @@
+ struct Bc250DrawTimer {
+    Device *device; LARGE_INTEGER start;
+    Bc250DrawTimer(Device *d):device(d){QueryPerformanceCounter(&start);}
+-   ~Bc250DrawTimer(){LARGE_INTEGER end;QueryPerformanceCounter(&end);
++   ~Bc250DrawTimer(){
++      char mode[2] = {};
++      if (GetEnvironmentVariableA("BC250_HOST_DIAG_DRAW_IDLE", mode, sizeof(mode)) == 1 && (mode[0] == '1' || mode[0] == '2')) {
++         struct pipe_fence_handle *fence = NULL;
++         device->pipe->flush(device->pipe, &fence, 0);
++         bool complete = mode[0] == '2' || !fence || device->pipe->screen->fence_finish(device->pipe->screen, device->pipe, fence, UINT64_MAX);
++         device->pipe->screen->fence_reference(device->pipe->screen, &fence, NULL);
++         static LONG calls;
++         LONG call = InterlockedIncrement(&calls);
++         if (call <= 3 || !complete)
++            fprintf(stderr, "BC250 diagnostic draw mode=%c call=%ld complete_or_skipped=%u\n", mode[0], call, complete ? 1u : 0u);
++      }
++      LARGE_INTEGER end;QueryPerformanceCounter(&end);
+       UINT64 ticks=end.QuadPart-start.QuadPart;
+       device->profileDrawTicks+=ticks;device->profileDrawCalls++;
+       if(ticks>device->profileDrawMax)device->profileDrawMax=ticks;}

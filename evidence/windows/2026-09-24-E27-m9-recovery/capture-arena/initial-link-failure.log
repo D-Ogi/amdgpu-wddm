@@ -1,0 +1,7 @@
+compile (user mode, paging-node packets)
+  Generowanie kodu...
+  Generowanie kodu...
+link
+  bc250_sdma.obj : error LNK2019: nierozpoznany symbol zewnętrzny bc250_gfx_rlc_safe_enter przywołany w funkcji bc250_sdma_quiesce_for_reload
+  bc250_sdma.obj : error LNK2019: nierozpoznany symbol zewnętrzny bc250_gfx_rlc_safe_exit przywołany w funkcji bc250_sdma_quiesce_for_reload
+  P:\BC-250\scratch\m9\capture-arena-route\paging_packets.exe : fatal error LNK1120: liczba nierozpoznanych elementów zewnętrznych: 2

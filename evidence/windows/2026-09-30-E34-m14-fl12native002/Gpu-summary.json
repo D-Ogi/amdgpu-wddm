@@ -1,0 +1,32 @@
+{
+    "phase":  "Gpu",
+    "child_exit":  0,
+    "observed":  true,
+    "feature_level":  "FEATURE_LEVEL 0xC100",
+    "options":  [
+                    "OPTIONS1 TiledResourcesTier=2 MinMaxFiltering=1 ClearViewDepthOnly=1 MapOnDefaultBuffers=1",
+                    "OPTIONS2 PSStencilRef=1 TypedUAVLoadAdditionalFormats=1 ROVs=1 ConservativeTier=3 TiledResourcesTier=3 MapOnDefaultTextures=1 StandardSwizzle=0 UMA=0",
+                    "OPTIONS3 VPAndRTArrayIndexFromAnyShader=1"
+                ],
+    "tiling":  "tiling tiles=2 shape=128x128x1 packed=0 subresource0=2x1x1",
+    "checks_failed":  [
+
+                      ],
+    "final":  "PASSED: 0 failure(s)",
+    "native_shell_loaded":  1,
+    "cpu_umd_loaded":  0,
+    "engine_loaded":  1,
+    "icd_loaded":  1,
+    "policy":  [
+                   "DEBUG M14: instance policy sparse=1 source=0 status=C0000034 result=00000000"
+               ],
+    "caps_not_answered":  [
+                              "DEBUG M14: GetCaps type 151 not answered"
+                          ],
+    "ddi_errors":  [
+
+                   ],
+    "second_chance":  [
+
+                      ]
+}

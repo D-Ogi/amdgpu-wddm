@@ -1,0 +1,38 @@
+{
+  "result": "measured",
+  "exit": 0,
+  "mode": "offscreen",
+  "width": 64,
+  "height": 64,
+  "feature_level": "10_0",
+  "adapter": {
+    "vendor": "1002",
+    "device": "13fe",
+    "description": "BC-250 GPU (bc250kmd, display-only, lab build)"
+  },
+  "d3d11": "system",
+  "modules": [
+    {
+      "path": "C:\\Windows\\SYSTEM32\\d3d11.dll",
+      "bytes": 2476552
+    },
+    {
+      "path": "C:\\Windows\\SYSTEM32\\dxgi.dll",
+      "bytes": 1017976
+    },
+    {
+      "path": "C:\\Windows\\SYSTEM32\\D3DCOMPILER_47.dll",
+      "bytes": 4050944
+    },
+    {
+      "path": "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+      "bytes": 68604928
+    }
+  ],
+  "icds": [],
+  "image": {
+    "name": "draws",
+    "checksum": "21f6950fc86132f4",
+    "api_failures": 0
+  }
+}

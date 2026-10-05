@@ -1,0 +1,10 @@
+{
+  "driver/kmd/pnp.c": "e4f30c2c2a3c845c5e8ac466576d933f437a41d1a40494103f21a75acada96f5",
+  "driver/kmd/guard.c": "5f7a7747113f17dc343dbfd3d74c24350806d1d0a19cef81587f03180758c016",
+  "driver/kmd/bc250kmd.h": "a949473b5a7eb986f2c6c5407e592f1492246d8cf0b6c964011c098b1cf03168",
+  "driver/kmd/gfx.c": "11a9018173e8ac00cfaa9f380e1cefc93847e29f120358f7ec04eee25b9153f7",
+  "driver/shim/bc250_gfx.c": "595e28f59beb6bab14149f2332d3dadf2fe3a631d4dc3eea4d29fa3728b0f42e",
+  "reference:gfx_v10_0.c": "3b2013dcb603845c3785fe02fc9aeee848b391f10d462e9384a1e4f370a4fb1b",
+  "GfxExecute_matches_07101_snapshot": true,
+  "GfxInitializeHardware_matches_07101_snapshot": true
+}

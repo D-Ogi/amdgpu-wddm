@@ -1,0 +1,12 @@
+{
+  "snapshots": 16,
+  "blank_control_zero": 16,
+  "latch_match_pending_clear": 16,
+  "raster_samples": 1024,
+  "raster_failures": 0,
+  "active": 992,
+  "blank": 32,
+  "refresh_numerator": 154000000,
+  "refresh_denominator": 2568800,
+  "observation_limitation": "HardwareAccess escape idles graphics scheduling. Owner reported stutter during investigation, smooth input after observation stopped; causality not established."
+}

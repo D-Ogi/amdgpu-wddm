@@ -34,7 +34,7 @@
  * Mesa built for Windows does not include the kernel header. src/amd/common/ac_linux_drm.h:16-321
  * declares its own copies of the same structures. Two of the three are NOT layout-compatible with
  * the kernel's, and a winsys that memcpy()s this blob into Mesa's types will silently read
- * garbage. Measured against Mesa main (P:\BC-250\ref\mesa, origin/main 3ae3d2e):
+ * garbage. Measured against Mesa main (<BC250_ROOT>\ref\mesa, origin/main 3ae3d2e):
  *
  *   struct drm_amdgpu_info_device   65 members, identical names, order and widths. Compatible.
  *                                   448 bytes on both sides. Pass it through by pointer.

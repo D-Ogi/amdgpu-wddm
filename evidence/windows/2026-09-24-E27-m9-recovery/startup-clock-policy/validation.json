@@ -1,0 +1,11 @@
+{
+  "positive_checks": 192,
+  "positive_failures": 0,
+  "readback_mutation_failures": 4,
+  "unlock_mutation_failures": 63,
+  "kernel_object_sha256": "17e1294d531774d13fd1ae20082374c76d2887a4928e6bad2c6a19c9b4702238",
+  "host_exe_sha256": "912566a332d6832c7630540563a03cca4dad74c466a1daec75f991e1f307d166",
+  "upstream_commit": "7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+  "deployed": false,
+  "wired_to_startup": false
+}

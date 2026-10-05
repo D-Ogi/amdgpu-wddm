@@ -1,0 +1,9 @@
+test.c
+FAIL failure refuses full table
+FAIL failed write does not flush
+FAIL failure after simulated reboot remains closed
+FAIL failure refuses full table
+FAIL failure after simulated reboot remains closed
+FAIL consume failure cannot fall back to enabled default
+FAIL flush failure cannot fall back to oneshot default
+40 checks, 7 failures

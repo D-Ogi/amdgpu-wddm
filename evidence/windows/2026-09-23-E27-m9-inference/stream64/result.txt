@@ -1,0 +1,15 @@
+M210 - portable 64-bit paging progress
+Date: 2026-09-23
+Base commit: bed764da5192be7132d646be0e6331c1edeb30fd (dirty working tree; tested source snapshots included)
+Procedure: experiments/E27-m9-inference/README.md, 64-bit portable transfer progress.
+Commands: pwsh -NoProfile -File driver/kmd/test/run_paging_stream.ps1 -Out P:\bc-250\scratch\m9\stream64
+pwsh -NoProfile -File driver/shim/test/run_paging.ps1 -KmdRouting -Out P:\bc-250\scratch\m9\stream64-routing
+Both commands returned 0. Host and kernel-flags compilation passed; routing 8960/0.
+Full >4GiB unaligned copy checks every packet's addresses and exact byte coverage.
+Additional resumed copy/fill cross 4GiB; insufficient capacity preserves wide progress;
+address failure after tentative emission publishes zero words/original progress.
+Overflow, invalid start, fill alignment and already-complete transfer checked.
+Legacy 32-bit interface and existing 1GiB/fragmentation/canary tests pass.
+No physical Transfer DDI integration, external MultipassOffset encoding, full driver
+package build, hardware measurement, deployment, reboot or USB changes this turn.
+No private data removed from logs. Simulated packets do not prove GPU execution.

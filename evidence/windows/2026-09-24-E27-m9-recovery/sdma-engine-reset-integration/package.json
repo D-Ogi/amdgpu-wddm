@@ -1,0 +1,364 @@
+{
+  "tool": "packagecheck",
+  "tool_version": "1.0",
+  "generated": "2026-09-24T06:00:46+00:00",
+  "package": "P:\\BC-250\\scratch\\build\\bc250kmd-07118\\package-umd",
+  "model": "full",
+  "expect_version": "0.7.118.1",
+  "expect_commit": null,
+  "result": "pass",
+  "counts": {
+    "error": 0,
+    "warn": 0,
+    "note": 13,
+    "ok": 25
+  },
+  "facts": {
+    "files": [
+      {
+        "name": "bc250-lab-test.cer",
+        "size": 792,
+        "sha256": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd"
+      },
+      {
+        "name": "bc250kmd.cat",
+        "size": 2839,
+        "sha256": "a194c01be4ad273f1800114d6459763c018b5d8640897f3f6bac7a35495a0492"
+      },
+      {
+        "name": "bc250kmd.inf",
+        "size": 7603,
+        "sha256": "dcbd6b3dcbf5c48e1bef4bf3aa499d9a561680d0151638a97c32b67225d0a8e9"
+      },
+      {
+        "name": "bc250kmd.sys",
+        "size": 347024,
+        "sha256": "4e7cbc5804ed68d63cdad346f227d7550ca57fa493a99bfc1e4018e8d755b132"
+      },
+      {
+        "name": "bc250umd.dll",
+        "size": 4096,
+        "sha256": "d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661"
+      }
+    ],
+    "package": "P:\\BC-250\\scratch\\build\\bc250kmd-07118\\package-umd",
+    "inf": "bc250kmd.inf",
+    "inf_encoding": "utf-8 (no BOM)",
+    "catalog": "bc250kmd.cat",
+    "driver_ver": "09/24/2026,0.7.118.1",
+    "provider": "BC-250 lab (D-Ogi)",
+    "models_sections": [
+      "Models.NTamd64"
+    ],
+    "hardware_ids": [
+      "PCI\\VEN_1002&DEV_13FE"
+    ],
+    "install_sections": [
+      "Bc250_Install"
+    ],
+    "service": "bc250kmd",
+    "service_binary": "%13%\\bc250kmd.sys",
+    "start_type": "3",
+    "default_dest_dir": "13",
+    "copyfiles_sections": [
+      "Bc250_Files",
+      "Bc250_UmdFiles"
+    ],
+    "model": "full",
+    "model_inferred": [
+      "bc250umd.dll"
+    ],
+    "umd_entries": [
+      {
+        "value": "UserModeDriverName",
+        "flags": "0x00010000",
+        "names": [
+          "bc250umd.dll",
+          "bc250umd.dll",
+          "bc250umd.dll"
+        ],
+        "section": "Bc250_UserModeDriver",
+        "host": "bc250_install"
+      }
+    ],
+    "images": [
+      {
+        "name": "bc250kmd.sys",
+        "valid": true,
+        "machine": "AMD64",
+        "subsystem": "NATIVE",
+        "pe32plus": true,
+        "timestamp": 1790229582,
+        "timestamp_utc": "2026-09-24T05:59:42+00:00",
+        "is_dll": false,
+        "signed": true,
+        "file_version": null,
+        "pdb": "P:\\BC-250\\scratch\\build\\bc250kmd-07118\\bc250kmd.pdb",
+        "pdb_guid": "58AAF69A-1D69-4016-AF20-86E71AD7D56A+1"
+      },
+      {
+        "name": "bc250umd.dll",
+        "valid": true,
+        "machine": "AMD64",
+        "subsystem": "WINDOWS_GUI",
+        "pe32plus": true,
+        "timestamp": 1790007689,
+        "timestamp_utc": "2026-09-21T16:21:29+00:00",
+        "is_dll": true,
+        "signed": false,
+        "file_version": null,
+        "pdb": null,
+        "pdb_guid": null
+      }
+    ],
+    "exports": {
+      "bc250umd.dll": [
+        "OpenAdapter",
+        "OpenAdapter10",
+        "OpenAdapter10_2"
+      ]
+    },
+    "catalog_members": [
+      "bc250kmd.inf",
+      "bc250kmd.sys",
+      "bc250umd.dll"
+    ],
+    "signtool": "P:\\BC-250\\toolchain\\nuget\\microsoft.windows.sdk.cpp\\c\\bin\\10.0.26100.0\\x64\\signtool.exe",
+    "infverif": "P:\\BC-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\tools\\10.0.26100.0\\x64\\infverif.exe",
+    "inf2cat": "P:\\BC-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\bin\\10.0.26100.0\\x86\\Inf2Cat.exe"
+  },
+  "findings": [
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "INF004",
+      "text": "bc250kmd.inf parsed, 16 sections, utf-8 (no BOM)"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "VER006",
+      "text": "Class Display {4d36e968-e325-11ce-bfc1-08002be10318}"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "VER009",
+      "text": "CatalogFile bc250kmd.cat present"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "VER013",
+      "text": "DriverVer 09/24/2026,0.7.118.1"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "HW004",
+      "text": "hardware id PCI\\VEN_1002&DEV_13FE present"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "SRV009",
+      "text": "ServiceBinary bc250kmd.sys present (dirid 13)"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "CPY008",
+      "text": "bc250kmd.sys copied by [Bc250_Files] to dirid 13, present"
+    },
+    {
+      "group": "inf",
+      "level": "ok",
+      "code": "CPY008",
+      "text": "bc250umd.dll copied by [Bc250_UmdFiles] to dirid 11, present"
+    },
+    {
+      "group": "umd",
+      "level": "ok",
+      "code": "UMD005",
+      "text": "UserModeDriverName is REG_MULTI_SZ (0x00010000) with 3 name(s): bc250umd.dll, bc250umd.dll, bc250umd.dll"
+    },
+    {
+      "group": "umd",
+      "level": "ok",
+      "code": "UMD012",
+      "text": "user-mode driver bc250umd.dll present"
+    },
+    {
+      "group": "umd",
+      "level": "note",
+      "code": "UMD015",
+      "text": "no UserModeDriverNameWow: deliberate, the stub is 64-bit only (bc250kmd.inf explains why a Wow value pointing at the 64-bit DLL would be worse)"
+    },
+    {
+      "group": "files",
+      "level": "note",
+      "code": "FIL001",
+      "text": "bc250-lab-test.cer is in the package but not named by the INF (known extra)"
+    },
+    {
+      "group": "pe",
+      "level": "ok",
+      "code": "PE003",
+      "text": "bc250kmd.sys is AMD64 PE32+"
+    },
+    {
+      "group": "pe",
+      "level": "ok",
+      "code": "PE005",
+      "text": "bc250kmd.sys subsystem NATIVE"
+    },
+    {
+      "group": "pe",
+      "level": "note",
+      "code": "PE010",
+      "text": "bc250kmd.sys linked 2026-09-24 05:59:42 UTC"
+    },
+    {
+      "group": "pe",
+      "level": "note",
+      "code": "PE013",
+      "text": "bc250kmd.sys has no version resource",
+      "detail": "driver\\kmd\\build.ps1 runs no rc.exe, so no binary in this package carries one; the version check below reads the BC250_KMD_VERSION immediate out of the code instead"
+    },
+    {
+      "group": "pe",
+      "level": "note",
+      "code": "PE014",
+      "text": "bc250kmd.sys debug id 58AAF69A-1D69-4016-AF20-86E71AD7D56A age 1",
+      "detail": "pdb: P:\\BC-250\\scratch\\build\\bc250kmd-07118\\bc250kmd.pdb"
+    },
+    {
+      "group": "pe",
+      "level": "ok",
+      "code": "PE003",
+      "text": "bc250umd.dll is AMD64 PE32+"
+    },
+    {
+      "group": "pe",
+      "level": "note",
+      "code": "PE009",
+      "text": "bc250umd.dll has no embedded signature; it is catalog-signed only, which is how driver\\kmd\\build.ps1 builds it"
+    },
+    {
+      "group": "pe",
+      "level": "note",
+      "code": "PE010",
+      "text": "bc250umd.dll linked 2026-09-21 16:21:29 UTC"
+    },
+    {
+      "group": "pe",
+      "level": "note",
+      "code": "PE013",
+      "text": "bc250umd.dll has no version resource",
+      "detail": "driver\\kmd\\build.ps1 runs no rc.exe, so no binary in this package carries one; the version check below reads the BC250_KMD_VERSION immediate out of the code instead"
+    },
+    {
+      "group": "exports",
+      "level": "ok",
+      "code": "EXP002",
+      "text": "bc250umd.dll exports OpenAdapter"
+    },
+    {
+      "group": "exports",
+      "level": "ok",
+      "code": "EXP002",
+      "text": "bc250umd.dll exports OpenAdapter10"
+    },
+    {
+      "group": "exports",
+      "level": "ok",
+      "code": "EXP002",
+      "text": "bc250umd.dll exports OpenAdapter10_2"
+    },
+    {
+      "group": "load",
+      "level": "ok",
+      "code": "LDR006",
+      "text": "bc250umd.dll loaded in-process"
+    },
+    {
+      "group": "load",
+      "level": "ok",
+      "code": "LDR008",
+      "text": "bc250umd.dll!OpenAdapter returned E_NOTIMPL (0x80004001)"
+    },
+    {
+      "group": "load",
+      "level": "ok",
+      "code": "LDR008",
+      "text": "bc250umd.dll!OpenAdapter10 returned E_NOTIMPL (0x80004001)"
+    },
+    {
+      "group": "load",
+      "level": "ok",
+      "code": "LDR008",
+      "text": "bc250umd.dll!OpenAdapter10_2 returned E_NOTIMPL (0x80004001)"
+    },
+    {
+      "group": "version",
+      "level": "ok",
+      "code": "VRS006",
+      "text": "DriverVer 0.7.118.1 matches --expect-version 0.7.118.1"
+    },
+    {
+      "group": "version",
+      "level": "ok",
+      "code": "VRS010",
+      "text": "bc250kmd.sys carries BC250_KMD_VERSION 0x00070076 (0.7.118): 13 occurrence(s) in code"
+    },
+    {
+      "group": "buildinfo",
+      "level": "note",
+      "code": "BLD002",
+      "text": "no BUILDINFO.json: this package cannot be tied to a commit",
+      "detail": "the .sys carries only its PDB path and debug id (P:\\BC-250\\scratch\\build\\bc250kmd-07118\\bc250kmd.pdb)"
+    },
+    {
+      "group": "catalog",
+      "level": "ok",
+      "code": "CAT002",
+      "text": "bc250kmd.cat names all 3 installed file(s)"
+    },
+    {
+      "group": "catalog",
+      "level": "note",
+      "code": "CAT009",
+      "text": "bc250kmd.inf is a member of bc250kmd.cat; the chain ends in an untrusted root, which is what a test certificate does on this PC"
+    },
+    {
+      "group": "catalog",
+      "level": "note",
+      "code": "CAT009",
+      "text": "bc250kmd.sys is a member of bc250kmd.cat; the chain ends in an untrusted root, which is what a test certificate does on this PC"
+    },
+    {
+      "group": "catalog",
+      "level": "note",
+      "code": "CAT009",
+      "text": "bc250umd.dll is a member of bc250kmd.cat; the chain ends in an untrusted root, which is what a test certificate does on this PC"
+    },
+    {
+      "group": "tools",
+      "level": "ok",
+      "code": "IVF003",
+      "text": "infverif: syntax clean, 1 warning(s)"
+    },
+    {
+      "group": "tools",
+      "level": "note",
+      "code": "IVF005",
+      "text": "infverif: WARNING(1199) in P:\\BC-250\\scratch\\build\\bc250kmd-07118\\package-umd\\bc250kmd.inf, line 0: The syntax 'DIRID 13 (CopyFiles)' was introduced in OS version 10.0.16299, but DDInstall sections utilizing the syntax will install on earlier OS versions. Those DDInstall sections should be restricted to only install on 10.0.16299 or higher using a TargetOSVersion decoration."
+    },
+    {
+      "group": "tools",
+      "level": "ok",
+      "code": "I2C007",
+      "text": "Inf2Cat rebuild lists the same members as the shipped catalog"
+    }
+  ]
+}

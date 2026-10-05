@@ -1,0 +1,23 @@
+{
+  "029": {
+    "sha256": "a371b8e5518347f39b478e5a4eeb384baa0f5dda04822b3075075608b80b6d78",
+    "lines": 67,
+    "common_normalized_prefix_lines": 67,
+    "first_device_size_line": null,
+    "first_create_success_line": null
+  },
+  "027": {
+    "sha256": "635b3350be77e8597484bb8681cd23c80c71eafb88104fa7ca58632ec3f619b1",
+    "lines": 882,
+    "common_normalized_prefix_lines": 67,
+    "first_device_size_line": 133,
+    "first_create_success_line": 206
+  },
+  "023": {
+    "sha256": "fd67596423731b49610c27eeac2874eee5cdd8c52660dd1fbdb8334bbc8be51a",
+    "lines": 16350,
+    "common_normalized_prefix_lines": 67,
+    "first_device_size_line": 133,
+    "first_create_success_line": 206
+  }
+}

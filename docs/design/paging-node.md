@@ -1,5 +1,10 @@
 # Stage D design note: the paging node on SDMA0 (ADR 0008 stage D, ADR 0013)
 
+Historical stage-D decision. The physical route below is deployed; M416 starts
+an explicitly separate [GPU-VA paging integration](sdma-virtual-paging.md) to
+address retained-capture resource costs. Packet controls exist, hardware proof
+and production routing remain open. Do not treat either design as proof of the other.
+
 Read-only survey plus the decisions taken from it, 2026-09-22, against bc250kmd 0.7.22. Every claim carries a
 `file:line`; lines marked **DECISION** are this note's own choice, not something measured. Style follows
 `P:\BC-250\scratch\tmp\stageC_design.md`, stage C's own brief.
@@ -353,20 +358,20 @@ no change to show these: they ride the same `GuardLog` ring every other summary 
 
 ## 9. What run 001 hung on
 
-E24 run 001 (2026-09-22 09:41-09:48, bc250kmd 0.7.24, commit `85fbf5c`, fact M96,
+E24 run 001 (2026-09-22 09:41-09:48, bc250kmd 0.7.24, commit `f14c11c`, fact M96,
 `evidence/windows/2026-09-22-E24-paging-node-run-001/`) ran gate-open (`EnablePagingNode` 1, full stage C
 table) through E19 run 003's own bring-up: gate -> gart enable (OK) -> psp load (OK) -> ih init (OK, ring
 enabled) -> `gfx run 8` at 09:42:48, which never returned. Both network addresses died inside that one escape
 call, the monitor went black, no bugcheck, no TDR, no dump - a hard hang, not a crash. The same sequence
 completed on 0.7.13 (E19 run 003) and on 0.7.23-era code with the gate closed (E15/E23, stage 7). The one
 thing this run added on top of both of those is `EnablePagingNode` open, so this section treats 0.7.23's own
-diff (`git show abea97f --stat`) as the suspect set.
+diff (`git show 9f1c8a5 --stat`) as the suspect set.
 
 **Read, not guessed: two invariant violations, fixed.**
 
 - **Gap A.** Every comment above `GfxPagingBuild`/`PagingRangeContiguous` claimed the function runs "PASSIVE_
   LEVEL, under GartLock, like GfxSubmitIb." It does not: `Bc250WddmBuildPagingBuffer` (wddm.c, the
-  `VIRTUAL_TRANSFER`/`VIRTUAL_FILL` arms `abea97f` added) never takes `Device->GartLock` before calling into
+  `VIRTUAL_TRANSFER`/`VIRTUAL_FILL` arms `9f1c8a5` added) never takes `Device->GartLock` before calling into
   it - confirmed by grepping every `ExAcquireFastMutex(&Device->GartLock)` in the tree, all in gart.c/psp.c/
   ih.c/gfx.c's own bring-up and submit paths, none in wddm.c. The obvious fix, taking `GartLock` there too,
   does not work: `ExAcquireFastMutex` raises IRQL to APC_LEVEL, and `VidMmTranslate` (`vidmm.c:238`) refuses
@@ -421,7 +426,7 @@ closing the hang would not be honest.
    independent of `PagingReady`, and had the whole run to call any of these against it. This is the largest
    gap this session leaves open, and the leading remaining suspect.
 5. **(e) something inside stage 8 itself that 0.7.23 broke** - REFUTED by diff: `StageInterrupts` (gfx.c:
-   53-61, stage 8's own function) has zero lines touched by `abea97f` (`git show abea97f -- driver/kmd/gfx.c
+   53-61, stage 8's own function) has zero lines touched by `9f1c8a5` (`git show 9f1c8a5 -- driver/kmd/gfx.c
    | grep StageInterrupts` - no output). Whatever hung inside `gfx run 8` did so in an environment 0.7.23
    changed around stage 8 (struct layout, `wddm->NodeCount`, the new DDI arms), not in stage 8's own code.
 6. **This note's own earlier suspects** (`VidMmTranslate` cost under continuous traffic; stale shadow bytes

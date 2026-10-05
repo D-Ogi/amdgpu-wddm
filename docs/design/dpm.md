@@ -39,6 +39,12 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 - 1000/820: the lab point, run for weeks. 1500/919: the firmware's own point (M22), one VID above its 918.75.
 - 2000/1000: the ceiling. The community's points interpolate to about 939 mV at 2000 MHz; 1000 mV gives 61 mV of
   margin over that and stays 129 mV under the overdrive maximum of 1129 mV. Nothing above 1000 mV is ever sent.
+- The 2000 MHz ceiling is not a safe clock. The community reports a board-level over-current protection that
+  hard-locks the machine between about 1850 and 2200 MHz on 40-CU boards, and on every tested board at 2400 MHz,
+  with AC removal as the only exit ([M790](../facts/hardware.md#m790), third-party, no log). Our hard ceiling lies
+  inside that band and unit A has 24 CU, so where the band sits on our part is unknown. This is the standing reason
+  for the 1500 MHz release default, for `DpmMaxMHz` as a deliberate act, and for having the smart plug ready before
+  a run above 1500 MHz.
 - `bc250_clock_prepare` accepts only table points: a clock on the 100 MHz grid with a voltage between the table's
   value and 1000 mV. The escape SET and the governor go through the same gate, so the administrator's `clock set` can
   also ask for a point from 500 to 900 MHz while the governor is not running.
@@ -152,9 +158,11 @@ left. The table therefore holds two more points, 900 and 800 MHz, and:
 - A runtime tune floor must be 1000 MHz or more. The two points below it belong to the thermal cap, and a runtime
   floor there would say nothing, because the load never asks for them. `dpm floor 800` is refused with error 6.
 
-The firmware has never been seen below 1000 MHz: its own SCLK levels are 1000/1500/2000 (M47, M15), amdgpu's
-overdrive range starts at 1000 MHz, and Linux clamps its sysfs there. So this is untested silicon behaviour, and the
-KMD treats a refusal as an answer. When a transition to a level below the floor fails - an SMU error, a readback
+The power tables publish no level below 1000 MHz: their SCLK levels are 1000/1500/2000 (M47, M15), amdgpu's
+overdrive range starts at 1000 MHz, and Linux clamps its sysfs there. Unit A's firmware accepts the two points
+anyway: in session 402 the thermal cap held 800 MHz at VID 116 in 49 readbacks and 900 MHz at VID 116 in 4, and
+refused nothing ([M785](../facts/hardware.md#m785), E52). The refusal path stays, because one session on one part
+is not a guarantee for the next part, and the KMD treats a refusal as an answer. When a transition to a level below the floor fails - an SMU error, a readback
 mismatch, a refusal - `driver/kmd/dpm.c` logs one line (`dpm: sub-floor refused: 900 MHz 0x... cap stops at 1000 MHz
 for this start`), calls `bc250_dpm_subfloor_refused()`, applies 1000 MHz instead, and does not count the failure
 towards the SMU give-up limit (`BC250_DPM_ERROR_LIMIT`). From then on, for the rest of that start, the thermal cap's

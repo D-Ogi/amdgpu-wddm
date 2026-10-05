@@ -1,0 +1,106 @@
+{
+  "083": {
+    "batch_cases": [
+      [
+        "batched-scissor-cb-update",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ],
+      [
+        "batched-vb-cb-discard",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ],
+      [
+        "batched-indexed-discard",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ]
+    ],
+    "completion": {
+      "dwm_before": [
+        5748
+      ],
+      "utc": "2026-09-27T00:49:07.3195840Z",
+      "dwm_after": [
+        5748
+      ],
+      "exit": 0
+    }
+  },
+  "084": {
+    "batch_cases": [
+      [
+        "batched-scissor-cb-update",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ],
+      [
+        "batched-vb-cb-discard",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ],
+      [
+        "batched-indexed-discard",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ]
+    ],
+    "completion": {
+      "dwm_before": [
+        5748
+      ],
+      "utc": "2026-09-27T00:49:44.6035791Z",
+      "dwm_after": [
+        5748
+      ],
+      "exit": 0
+    }
+  },
+  "085": {
+    "batch_cases": [
+      [
+        "batched-scissor-cb-update",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ],
+      [
+        "batched-vb-cb-discard",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ],
+      [
+        "batched-indexed-discard",
+        "256",
+        "0",
+        "02e630a05dd4a325"
+      ]
+    ],
+    "completion": {
+      "dwm_before": [
+        5748
+      ],
+      "utc": "2026-09-27T00:50:08.5822104Z",
+      "dwm_after": [
+        5748
+      ],
+      "exit": 0
+    },
+    "kmd-after085": {
+      "objects created/destroyed:": "1068566  29115.169 wddm summary: objects created/destroyed: dev 450/437 ctx 718/707 proc 227/220 alloc 8491/10311, 192 alive",
+      "node 0 hardware:": "1068569  29115.169 wddm summary: node 0 hardware: 215017 submitted, 214884 completed, 0 timeouts, 0 refused"
+    },
+    "kmd-before085": {
+      "objects created/destroyed:": "1067947  29109.165 wddm summary: objects created/destroyed: dev 448/435 ctx 714/703 proc 226/219 alloc 8430/10244, 192 alive",
+      "node 0 hardware:": "1067950  29109.165 wddm summary: node 0 hardware: 214994 submitted, 214861 completed, 0 timeouts, 0 refused"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+Source: drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h
+484: #define psp_bootloader_load_sos(psp) \
+485: 		((psp)->funcs->bootloader_load_sos ? (psp)->funcs->bootloader_load_sos((psp)) : 0)
+486: #define psp_smu_reload_quirk(psp) \
+487: 		((psp)->funcs->smu_reload_quirk ? (psp)->funcs->smu_reload_quirk((psp)) : false)
+488: #define psp_mode1_reset(psp) \
+489: 		((psp)->funcs->mode1_reset ? (psp)->funcs->mode1_reset((psp)) : false)
+490: #define psp_mem_training(psp, ops) \
+491: 	((psp)->funcs->mem_training ? (psp)->funcs->mem_training((psp), (ops)) : 0)

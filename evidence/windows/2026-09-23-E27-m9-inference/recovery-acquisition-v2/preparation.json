@@ -1,0 +1,11 @@
+{
+  "script_sha256": "9545afae94308a8657701afb1a4ad553eb292518a4156c78f0b2276a9bf8c94e",
+  "syntax_check": "PowerShell parser: zero errors",
+  "lab_execution": false,
+  "tcp22_routes": [
+    false,
+    false
+  ],
+  "remote_mutation": false,
+  "pending": "Owner AC recovery result; do not infer completion from request."
+}

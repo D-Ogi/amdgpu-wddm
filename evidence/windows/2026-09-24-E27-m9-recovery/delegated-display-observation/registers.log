@@ -1,0 +1,5 @@
+mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE: NOT FOUND in header (this register does not exist for GC)
+mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH: NOT FOUND in header (this register does not exist for GC)
+mmOTG0_OTG_V_BLANK_START_END: NOT FOUND in header (this register does not exist for GC)
+mmOTG0_OTG_STATUS_POSITION: NOT FOUND in header (this register does not exist for GC)
+mmOTG0_OTG_V_TOTAL: NOT FOUND in header (this register does not exist for GC)

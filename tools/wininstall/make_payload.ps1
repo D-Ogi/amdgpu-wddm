@@ -1,7 +1,7 @@
 # Builds the per-machine payload (answer file, Wi-Fi profile, SSH key, OpenSSH zip) from the secrets folder.
 # Output goes to <SecretsDir>\win\payload and never into the repository. Nothing secret is printed.
 #
-#   pwsh tools\wininstall\make_payload.ps1 -SecretsDir P:\BC-250\secrets -OpenSshZip P:\...\OpenSSH-Win64.zip
+#   pwsh tools\wininstall\make_payload.ps1 -SecretsDir $env:BC250_ROOT\secrets -OpenSshZip P:\...\OpenSSH-Win64.zip
 
 param(
     [Parameter(Mandatory)][string]$SecretsDir,

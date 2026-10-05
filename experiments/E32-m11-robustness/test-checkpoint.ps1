@@ -1,4 +1,4 @@
-param([string]$Workspace='P:\bc-250')
+param([string]$Workspace=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path }))
 $ErrorActionPreference='Stop'
 $source=Join-Path $PSScriptRoot 'worker.ps1'
 $tokens=$null;$parseErrors=$null
@@ -55,7 +55,7 @@ try {
  }
  "PASS: $checks actual-function checks; old read/write collision reproduced; empty-marker reads do not open ACK files"
 } finally {
- # This directory was created by this test, resolved above, and stays inside P:\bc-250.
+ # This directory was created by this test, resolved above, and stays inside the resolved $Workspace directory.
  $finalPath=(Resolve-Path -LiteralPath $Out).ProviderPath
  if($finalPath -ne $resolved -or -not $finalPath.StartsWith($workspacePath,[StringComparison]::OrdinalIgnoreCase)){throw 'Cleanup target changed'}
  Remove-Item -LiteralPath $finalPath -Recurse -Force

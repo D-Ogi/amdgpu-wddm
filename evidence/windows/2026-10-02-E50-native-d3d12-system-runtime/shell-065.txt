@@ -1,0 +1,3 @@
+d3d12-caps instance-policy sparse=1 source=default status=c0000034 unresolved=0 result=00000000
+d3d12-caps experiment raytracing-tier result=00000000
+engine-ddi: CreateStateObject: type 3, 6 subobjects; types 0x5 0xb 0x9 0xa 0x1 0x100000; summary 3 exports (by listed name 3, mangled 0, unmangled 0), 9 associated names; library DXIL part of 584 DWORDs, 3 exports; pipeline config depth 1 flags 0x0; hr 00000000

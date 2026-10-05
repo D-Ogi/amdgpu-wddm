@@ -1,0 +1,105 @@
+{
+  "scope": "Event counts, not distinct token counts. Probe PIDs are bounded by retained process identities and window timestamps; neither PID has any selected event in this trace.",
+  "rows": 4090,
+  "by_event": {
+    "184": 3289,
+    "171": 389,
+    "172": 390,
+    "287": 10,
+    "166": 11,
+    "215": 1
+  },
+  "probe_event_rows": 0,
+  "probe_present_rows": 0,
+  "allocation_rows": [
+    {
+      "utc": "15:32:11.2345393",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff81066e4cb220 Flags=1 Width=1920 Height=1200 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=7680"
+    },
+    {
+      "utc": "15:32:11.2528406",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff81066781d990 Flags=1 Width=320 Height=240 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=1280"
+    },
+    {
+      "utc": "15:32:11.2534910",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff81066781dc60 Flags=1 Width=1920 Height=48 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=7680"
+    },
+    {
+      "utc": "15:32:11.2547846",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff810667820230 Flags=1 Width=1 Height=1 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=8"
+    },
+    {
+      "utc": "15:32:11.2551341",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff8106678205a0 Flags=1 Width=1 Height=1 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=8"
+    },
+    {
+      "utc": "15:32:11.2554652",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff8106678205f0 Flags=1 Width=1 Height=1 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=8"
+    },
+    {
+      "utc": "15:32:11.2557995",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff810667820730 Flags=1 Width=1 Height=1 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=8"
+    },
+    {
+      "utc": "15:32:11.2561531",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff8106678207d0 Flags=1 Width=920 Height=1009 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=3680"
+    },
+    {
+      "utc": "15:32:11.2597519",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff8106733c9fa0 Flags=1 Width=160 Height=120 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=640"
+    },
+    {
+      "utc": "15:32:11.2601786",
+      "id": "287",
+      "pid": "928",
+      "tid": "6564",
+      "data": "pDxgAdapterAllocation=0xffff8106733cc430 Flags=1 Width=200 Height=140 Format=21 GdiSurfaceType=6 GdiSurfaceFlags=0 Pitch=800"
+    }
+  ],
+  "allocations_during_pair": 0,
+  "history_by_event_and_model": [
+    {
+      "event": "171",
+      "model": "7",
+      "rows": 389
+    },
+    {
+      "event": "172",
+      "model": "0",
+      "rows": 390
+    },
+    {
+      "event": "215",
+      "model": "2",
+      "rows": 1
+    }
+  ],
+  "model3_rows": 0
+}

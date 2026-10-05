@@ -1,0 +1,88 @@
+exit=3
+hardware D3D11CreateDevice=8007000e
+
+BC250 private Vulkan instance=000001FE56803220 screen=000001FE567E5EF0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x40001080
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 private Vulkan instance=000001FE56F7D220 screen=000001FE56873F10
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+MESA: error: ZINK: failed to get proc address
+BC250 destroy private Vulkan instance=000001FE56803220
+BC250 destroy private Vulkan instance=000001FE56F7D220
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\runtime-control.exe",
+        "Hash":  "D624FAE36995D3F77AD21379261FCE9512838AEEF8BC695A4571B712B9796704"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\bc250d3d_zink.dll",
+        "Hash":  "45B4624AED0DCC13B0AFF5A83535BE0B949303A5A7BC0B00217D43ABF7A6C9EC"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+CPU UMD file restored
+[
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime003\\vulkan_radeon.dll",
+        "Hash":  "9ED551B8F90F909D7D1F76A3828A464CFEF2EAA39B2E869F5EC3560A991E29D9"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime003\\bc250d3d_zink.dll",
+        "Hash":  "45B4624AED0DCC13B0AFF5A83535BE0B949303A5A7BC0B00217D43ABF7A6C9EC"
+    }
+]
+DWM before=1052 after=1052
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798

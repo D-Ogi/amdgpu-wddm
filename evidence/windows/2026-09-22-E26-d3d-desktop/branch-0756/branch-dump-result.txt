@@ -1,0 +1,1 @@
+MiniDumpWriteDump pid 2284 success 1 error 0

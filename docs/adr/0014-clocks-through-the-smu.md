@@ -1,6 +1,9 @@
 # ADR 0014: clocks through the SMU, measured on Linux first
 
-Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 6 at the owner's suggestion).
+Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 6 at the owner's suggestion). State on
+2026-09-27: point 1 is done (the kernel driver owns the operating point, the legacy startup task is disabled;
+deployment record in the workspace STATE file); points 2 and 3 are open; point 4 (the 85 C stop enforced in
+the driver) is not implemented: the driver reads the temperature (`driver/kmd/smu.c`) but does not act on it.
 
 ## Context
 

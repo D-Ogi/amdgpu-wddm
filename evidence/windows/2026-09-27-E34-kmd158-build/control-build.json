@@ -1,0 +1,7 @@
+{
+  "source_sha256": "cbbe3fa8fea09346baa45e47949c49be59aa877cb70a4a27e63c8304a02ffc72",
+  "binary_sha256": "54d241077ba7a6609f9fb60eb2d62b9ecd917905042cc764351661edf460eb9a",
+  "compile_flags": "/EHsc /W4 /WX /O2 /MT",
+  "compiler_exit": 0,
+  "runtime": "not run"
+}

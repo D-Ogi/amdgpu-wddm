@@ -1,0 +1,15 @@
+2026-09-23 unit A
+Owner reboot after0797. Recovery boot13:00:34,FullWddm0,guardstage90.
+Persisted snapshots confirm all8GFX stages completed. No Ready snapshot observed on disk.
+New minidump092326-63406-01 and kernelMEMORY.DMP pulled to scratch, not public evidence.
+Offline cdb only, no live KDNET. Matching0797PDB resolves driver globals.
+Kernel g_Log extracted168bytes*1024 (8byteheader,160bytetext), nonempty records decoded and sorted by sequence.
+Recovered ring proves both engines ready, WDDM publication, QueryAdapterInfo/CreateContext/OS paging submission.
+Node1 real GPU completions reported fences1..8 (logging capped), subsequent submitsseq9..12.
+First refusalfence13 STATUS_DEVICE_BUSY0x80000011 while gfxseq12inflight andhardwarefenceslot0xB.
+Driver then permanently closesnode1; fence14refusedC0000483. TDRpreemption/resetrefused at3.298s.
+Bugcheck7E access violationreadingNULL in dxgmms2 memcpy, called by VIDMM_DMA_POOL::WriteDmaBufferToMinidump during TDR diagnostics.
+Do not confuse secondary minidump-copyfault with initialGPUprogressfailure.
+Messages ringalloc16>max_dw12/13 occur in temporary packet builder with normal multipass progression; not established fatalcause.
+Source GfxSubmitPaging currently permits onlyoneinflight; WddmSubmitPagingHardware immediately fails busy, callerclosesnode. Needproperpending-workhandling, notsyntheticcompletion or busy-as-success.
+FullWDDM startup now runtime-proven onthisrun; functionalpagingbegan, sustainedOSsubmission/inference NOTpassed.

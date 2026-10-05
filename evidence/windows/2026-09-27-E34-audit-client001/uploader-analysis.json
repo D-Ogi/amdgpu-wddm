@@ -1,0 +1,51 @@
+{
+  "scope": "Validate opt-in uploader events; counts ranges and helper copies, not all CPU stores.",
+  "events": 10,
+  "all_observed_managers_closed": true,
+  "lifetime_coverage": "closed observed managers",
+  "allocations": 2,
+  "requested_bytes": 20,
+  "helper_copy_bytes": 0,
+  "managers": [
+    {
+      "manager": 2545861429536,
+      "created_ns": 22129551122300,
+      "pipe": 2545949265232,
+      "bind": 112,
+      "time_ns": 22130599951100,
+      "generation": 1,
+      "allocations": 2,
+      "requested_bytes": 20,
+      "copy_bytes": 0,
+      "live_buffer": false,
+      "destroyed": true,
+      "capacity": 0,
+      "resource": 2545950091648,
+      "highwater": 4112,
+      "last_alloc": null,
+      "events": 7
+    },
+    {
+      "manager": 2545861427360,
+      "created_ns": 22129551159300,
+      "pipe": 2545949265232,
+      "bind": 112,
+      "time_ns": 22130599991200,
+      "generation": 0,
+      "allocations": 0,
+      "requested_bytes": 0,
+      "copy_bytes": 0,
+      "live_buffer": false,
+      "destroyed": true,
+      "capacity": 0,
+      "resource": 0,
+      "highwater": 0,
+      "last_alloc": null,
+      "events": 3
+    }
+  ],
+  "limitations": [
+    "Cannot detect a manager absent from the entire log.",
+    "Does not count later writes through returned pointers or copies outside this helper."
+  ]
+}

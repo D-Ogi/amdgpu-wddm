@@ -1,0 +1,46 @@
+{
+  "probe_pid": 6084,
+  "probe_events": [
+    {
+      "id": 184,
+      "fields": {
+        "hContext": "1073744256",
+        "hWindow": "0xe049c",
+        "VidPnSourceId": "0",
+        "FlipInterval": "0",
+        "Flags": "193",
+        "ReturnStatus": "3223192386",
+        "hSrcAllocHandle": "0x40000400",
+        "hDstAllocHandle": "0x0"
+      },
+      "pid": 6084,
+      "properties": [
+        1073744256,
+        918684,
+        0,
+        0,
+        193,
+        3223192386,
+        1073742848,
+        0
+      ],
+      "tid": 12420,
+      "utc": "2026-09-27T14:13:26.6421569Z"
+    }
+  ],
+  "all_events_by_id": {
+    "184": 1526,
+    "171": 205,
+    "172": 206,
+    "166": 10,
+    "215": 1
+  },
+  "blits_by_pid": {
+    "928": 10
+  },
+  "dwm_pid": 7564,
+  "dwm_present_count": 1440,
+  "dwm_present_statuses": {
+    "0": 1440
+  }
+}

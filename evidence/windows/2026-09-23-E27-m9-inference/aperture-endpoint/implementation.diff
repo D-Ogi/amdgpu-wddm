@@ -1,0 +1,192 @@
+--- before/vidmm.c
++++ after/vidmm.c
+@@ -227,6 +227,37 @@
+         status=STATUS_SUCCESS;
+     ExReleasePushLockExclusive(&g_VidMm.CpuUpdateLock);KeLeaveCriticalRegion();
+     return status;
++}
++
++BOOLEAN VidMmResolveAperture(ULONGLONG Mc, ULONG Bytes, ULONGLONG* Physical)
++{
++    BOOLEAN result;
++    *Physical=0;
++    KeEnterCriticalRegion();ExAcquirePushLockShared(&g_VidMm.CpuUpdateLock);
++    result=g_VidMm.Ready && g_VidMm.Write &&
++        PagingApertureStateResolve(&g_VidMm.Aperture,Mc,Bytes,Physical);
++    ExReleasePushLockShared(&g_VidMm.CpuUpdateLock);KeLeaveCriticalRegion();
++    return result;
++}
++
++BOOLEAN VidMmApertureRangeValid(ULONGLONG Mc, ULONGLONG Bytes)
++{
++    ULONGLONG offset,physical;BOOLEAN result=FALSE;
++    if (!Bytes || Mc>MAXULONGLONG-Bytes) return FALSE;
++    KeEnterCriticalRegion();ExAcquirePushLockShared(&g_VidMm.CpuUpdateLock);
++    if (!g_VidMm.Ready || !g_VidMm.Write || Mc<g_VidMm.Aperture.aperture.mc) goto Done;
++    offset=Mc-g_VidMm.Aperture.aperture.mc;
++    if (offset>=g_VidMm.Aperture.aperture.bytes || Bytes>g_VidMm.Aperture.aperture.bytes-offset) goto Done;
++    while (Bytes) {
++        ULONG count=PAGE_SIZE-(ULONG)(Mc&(PAGE_SIZE-1));
++        if (count>Bytes) count=(ULONG)Bytes;
++        if (!PagingApertureStateResolve(&g_VidMm.Aperture,Mc,count,&physical)) goto Done;
++        Bytes-=count;Mc+=count;
++    }
++    result=TRUE;
++Done:
++    ExReleasePushLockShared(&g_VidMm.CpuUpdateLock);KeLeaveCriticalRegion();
++    return result;
+ }
+ 
+ // PASSIVE_LEVEL. Immediate CPU_VIRTUAL initialization, or the serialized
+--- before/gfx.c
++++ after/gfx.c
+@@ -1539,7 +1539,12 @@
+         offset=Address-Endpoint->Address;
+     }
+     if (!Bytes || offset>=Endpoint->Length || Bytes>Endpoint->Length-offset) return 0;
+-    if (Endpoint->Mdl!=NULL) {
++    if (Endpoint->Aperture) {
++        if (Endpoint->Mdl || !Stream->Common.Gfx->PagingWindowReady ||
++            !VidMmResolveAperture(Address,Bytes,&physical) ||
++            ((physical & ~(ULONGLONG)(PAGE_SIZE-1)) & ~AMDGPU_PTE_ADDR_MASK)!=0) return 0;
++        *Mc=physical | PAGING_SYSTEM_ADDRESS;
++    } else if (Endpoint->Mdl!=NULL) {
+         if (!Stream->Common.Gfx->PagingWindowReady ||
+             !GfxPagingMdlAddress(Endpoint->Mdl,Endpoint->FirstPage,offset,Bytes,&physical) ||
+             ((physical & ~(ULONGLONG)(PAGE_SIZE-1)) & ~AMDGPU_PTE_ADDR_MASK)!=0) return 0;
+@@ -1573,6 +1578,11 @@
+ {
+     ULONGLONG start,end,begin;
+     if (!Endpoint || !Bytes || Bytes>Endpoint->Length) return FALSE;
++    if (Endpoint->Aperture) {
++        ULONGLONG base=Device->WddmAperture.mc,length=Device->WddmAperture.bytes;
++        return !Endpoint->Mdl && Endpoint->Address>=base && Endpoint->Address-base<length &&
++            Bytes<=length-(Endpoint->Address-base) && Bytes<=MAXULONGLONG-Endpoint->Address;
++    }
+     if (Endpoint->Mdl) {
+         begin=MmGetMdlByteOffset(Endpoint->Mdl);
+         if (sizeof(PFN_NUMBER)!=sizeof(PAGING_U64) ||
+--- before/wddm.c
++++ after/wddm.c
+@@ -207,6 +207,7 @@
+     // re-arm or re-queue itself behind the cancel and the flush that follow. It does not remove the need for
+     // dxgkrnl's own guarantee that no DDI arrives during StopDevice; it removes every race this file could
+     // cause itself, which is the part we control.
++    EX_PUSH_LOCK PagingBuildLock; // serializes logical mappings across each paging DDI batch
+     KSPIN_LOCK Lock;                    // taken at <= DISPATCH_LEVEL, never held across a call into dxgkrnl
+     BOOLEAN Stopping;
+     LIST_ENTRY Objects;                 // devices, contexts, processes and allocations alive
+@@ -1338,6 +1339,7 @@
+     wddm->Device = Device;
+     wddm->TraceUmdProbes = (GuardReadSetting(L"TraceUmdProbes", 0) == 1);
+     (void)KeQueryPerformanceCounter(&wddm->UmdProfileFrequency);
++    ExInitializePushLock(&wddm->PagingBuildLock);
+     KeInitializeSpinLock(&wddm->Lock);
+     InitializeListHead(&wddm->Objects);
+     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
+@@ -1545,10 +1547,20 @@
+ {
+     ULONGLONG appOffset,appLength,tableOffset,tableLength,base,length,address;
+     RtlZeroMemory(Endpoint,sizeof(*Endpoint));
+-    if (!Bytes || !WddmMemoryLayout(Device,&appOffset,&appLength,&tableOffset,&tableLength)) return FALSE;
++    if (!Bytes) return FALSE;
++    if (Segment==BC250_WDDM_SEGMENT_APERTURE) {
++        base=Device->WddmAperture.mc;length=Device->WddmAperture.bytes;
++        if (!length || SegmentAddress<base || SegmentAddress-base>=length ||
++            Offset>MAXULONGLONG-SegmentAddress) return FALSE;
++        address=SegmentAddress+Offset;
++        if (address-base>=length || Bytes>length-(address-base)) return FALSE;
++        Endpoint->Address=address;Endpoint->Length=length-(address-base);Endpoint->Aperture=TRUE;
++        return TRUE;
++    }
++    if (!WddmMemoryLayout(Device,&appOffset,&appLength,&tableOffset,&tableLength)) return FALSE;
+     if (Segment==BC250_WDDM_SEGMENT_VRAM) { base=appOffset;length=appLength; }
+     else if (Segment==BC250_WDDM_SEGMENT_TABLES) { base=tableOffset;length=tableLength; }
+-    else return FALSE; // Aperture addresses require their own mapping, not a VRAM base.
++    else return FALSE; // Unknown segment is not a local-memory endpoint.
+     if (base>MAXULONGLONG-Device->VramMcBase) return FALSE;
+     base+=Device->VramMcBase;
+     if (SegmentAddress<base || SegmentAddress-base>=length ||
+@@ -1590,6 +1602,9 @@
+     if (!GfxPagingEndpointValid(Device,&source,bytes) || !GfxPagingEndpointValid(Device,&destination,bytes) ||
+         !PagingStreamTokenDecode(FALSE,source.Address,destination.Address,bytes,Build->MultipassOffset,&progress))
+         return FALSE;
++    // Whole-range logical preflight once per DDI, not for every copy slice.
++    if ((source.Aperture && !VidMmApertureRangeValid(source.Address,bytes)) ||
++        (destination.Aperture && !VidMmApertureRangeValid(destination.Address,bytes))) return FALSE;
+     *Source=source;*Destination=destination;*Progress=progress;
+     return TRUE;
+ }
+@@ -2598,6 +2613,7 @@
+     if (!WddmLocalPagingEndpoint(Device,Build->Fill.Destination.SegmentId,
+         (ULONGLONG)Build->Fill.Destination.SegmentAddress.QuadPart,0,bytes,&destination) ||
+         ((destination.Address | bytes)&3)!=0 || !Build->pDmaBuffer) return STATUS_INVALID_PARAMETER;
++    if (destination.Aperture && !VidMmApertureRangeValid(destination.Address,bytes)) return STATUS_INVALID_PARAMETER;
+     if (!PagingStreamTokenDecode(TRUE,0,destination.Address,bytes,token,&start))
+         return STATUS_INVALID_PARAMETER;
+     if (start==bytes) return STATUS_SUCCESS;
+@@ -2787,11 +2803,12 @@
+     if (!Build->pDmaBuffer || !WddmPreparePhysicalTransfer(Device,Build,&source,&destination,&progress) ||
+         !PagingStreamTokenEncode(FALSE,source.Address,destination.Address,total,total,&count))
+         return STATUS_INVALID_PARAMETER;
+-    // Different multi-page MDLs can contain arbitrary cross-page alias cycles.
++    // Indirect physical page lists can contain arbitrary cross-page alias cycles.
+     // Dependency analysis/snapshot storage is pending; do not emit a corrupt prefix.
+-    if (source.Mdl && destination.Mdl && source.Mdl!=destination.Mdl && total>PAGE_SIZE)
++    if ((source.Mdl || source.Aperture) && (destination.Mdl || destination.Aperture) &&
++        (source.Aperture || destination.Aperture || source.Mdl!=destination.Mdl) && total>PAGE_SIZE)
+         return STATUS_INVALID_PARAMETER;
+-    if (!source.Mdl && !destination.Mdl) {
++    if (!source.Mdl && !destination.Mdl && !source.Aperture && !destination.Aperture) {
+         overlap=source.Address<=destination.Address ? destination.Address-source.Address<total :
+             source.Address-destination.Address<total;
+         reverse=overlap && destination.Address>source.Address;
+@@ -2825,7 +2842,7 @@
+ }
+ 
+ static DXGKDDI_BUILDPAGINGBUFFER Bc250WddmBuildPagingBuffer;
+-static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGKARG_BUILDPAGINGBUFFER* pBuildPagingBuffer)
++static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKARG_BUILDPAGINGBUFFER* pBuildPagingBuffer)
+ {
+     // The DDI has a restricted return contract. Unsupported-operation/error
+     // handling is still tracked in m9-dma-contract-audit.md; empty SUCCESS is
+@@ -2974,6 +2991,20 @@
+         }
+     }
+     return STATUS_SUCCESS;
++}
++
++// Lock order: paging builder -> GfxPagingLock -> VidMm CPU update lock.
++// PnP excludes StopDevice during this DDI; this lock also prevents map/unmap
++// publication from changing an aperture identity between slices of one batch.
++static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGBUFFER* Build)
++{
++    BC250_WDDM* wddm=WddmOf(hAdapter);
++    NTSTATUS status;
++    if (!wddm) return WddmBuildPagingBufferImpl(hAdapter,Build);
++    KeEnterCriticalRegion();ExAcquirePushLockExclusive(&wddm->PagingBuildLock);
++    status=WddmBuildPagingBufferImpl(hAdapter,Build);
++    ExReleasePushLockExclusive(&wddm->PagingBuildLock);KeLeaveCriticalRegion();
++    return status;
+ }
+ 
+ static NTSTATUS Bc250WddmSubmitCommandImpl(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
+--- before/bc250kmd.h
++++ after/bc250kmd.h
+@@ -459,6 +459,7 @@
+     PMDL Mdl;
+     ULONGLONG Address,Length;
+     ULONG FirstPage;
++    BOOLEAN Aperture; // Address is permanent aperture MC; resolve through planned physical pages.
+ } BC250_PAGING_ENDPOINT;
+ typedef struct _BC250_PAGING_COPY_SLICE {
+     ULONGLONG SourcePhysical,DestinationPhysical;
+@@ -471,6 +472,8 @@
+ NTSTATUS GfxPagingBuildVirtualCopyPage(BC250_DEVICE* Device, ULONGLONG Root,
+     ULONGLONG SourceVa, ULONGLONG DestinationVa, ULONG Bytes, BOOLEAN ForceSnapshot,
+     PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice);
++BOOLEAN VidMmResolveAperture(ULONGLONG Mc, ULONG Bytes, ULONGLONG* Physical);
++BOOLEAN VidMmApertureRangeValid(ULONGLONG Mc, ULONGLONG Bytes);
+ NTSTATUS VidMmCommitPagingAperture(const DXGKARG_BUILDPAGINGBUFFER* Build, ULONG Start, ULONG Next);
+ NTSTATUS VidMmCommitPagingTransfer(const BC250_PAGING_COPY_SLICE* Slice);
+ NTSTATUS GfxPagingBuildCopyPage(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,

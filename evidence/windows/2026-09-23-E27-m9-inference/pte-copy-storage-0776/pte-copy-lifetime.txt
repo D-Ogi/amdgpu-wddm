@@ -1,0 +1,4 @@
+unlocked.c
+FAIL line 120: WaitForSingleObject(stopEntered,300)==WAIT_TIMEOUT && !freed && d.Gfx==&gfx
+after.c
+PASS: actual builder concurrent readers, stop waits beyond200ms, no premature detach/free, post-stop entry and early-return unlocks

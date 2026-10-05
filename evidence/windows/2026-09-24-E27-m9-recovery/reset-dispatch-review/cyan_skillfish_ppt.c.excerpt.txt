@@ -1,0 +1,32 @@
+Source: drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c
+575: static const struct pptable_funcs cyan_skillfish_ppt_funcs = {
+576: 
+577: 	.check_fw_status = smu_v11_0_check_fw_status,
+578: 	.check_fw_version = smu_v11_0_check_fw_version,
+579: 	.init_power = smu_v11_0_init_power,
+580: 	.fini_power = smu_v11_0_fini_power,
+581: 	.init_smc_tables = cyan_skillfish_init_smc_tables,
+582: 	.fini_smc_tables = smu_v11_0_fini_smc_tables,
+583: 	.read_sensor = cyan_skillfish_read_sensor,
+584: 	.print_clk_levels = cyan_skillfish_print_clk_levels,
+585: 	.get_enabled_mask = cyan_skillfish_get_enabled_mask,
+586: 	.is_dpm_running = cyan_skillfish_is_dpm_running,
+587: 	.get_gpu_metrics = cyan_skillfish_get_gpu_metrics,
+588: 	.od_edit_dpm_table = cyan_skillfish_od_edit_dpm_table,
+589: 	.get_dpm_ultimate_freq = cyan_skillfish_get_dpm_ultimate_freq,
+590: 	.register_irq_handler = smu_v11_0_register_irq_handler,
+591: 	.notify_memory_pool_location = smu_v11_0_notify_memory_pool_location,
+592: 	.send_smc_msg_with_param = smu_cmn_send_smc_msg_with_param,
+593: 	.send_smc_msg = smu_cmn_send_smc_msg,
+594: 	.set_driver_table_location = smu_v11_0_set_driver_table_location,
+595: 	.interrupt_work = smu_v11_0_interrupt_work,
+596: };
+597: 
+598: void cyan_skillfish_set_ppt_funcs(struct smu_context *smu)
+599: {
+600: 	smu->ppt_funcs = &cyan_skillfish_ppt_funcs;
+601: 	smu->message_map = cyan_skillfish_message_map;
+602: 	smu->table_map = cyan_skillfish_table_map;
+603: 	smu->is_apu = true;
+604: 	smu_v11_0_set_smu_mailbox_registers(smu);
+605: }

@@ -1,0 +1,3 @@
+DEBUG M14 DDI error HRESULT=80004001 mapped=80004001 line=167 function=void __cdecl bc250::umd::`anonymous-namespace'::create::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG d3d11bench FAIL swap chain hr=0x887a0005
+CHILD_EXIT 4 observed=1 tree_closed=1

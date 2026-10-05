@@ -1,0 +1,506 @@
+DWM route pid=12804 luid=00000000000092AF hosted=1
+BC250 private Vulkan instance=000002B9A7220120 screen=000002B9A720B1E0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001dc0
+allocation handle=0x40001e40
+allocation handle=0x40001ec0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=12804
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 private Vulkan instance=000002B9A7360730 screen=000002B9A7386070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40002bc0
+allocation handle=0x40002c40
+allocation handle=0x40002cc0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=12804
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 destroy private Vulkan instance=000002B9A7220120
+BC250 destroy private Vulkan instance=000002B9A7360730
+DWM route pid=12804 luid=00000000000092AF hosted=1
+BC250 private Vulkan instance=000002B9A7142060 screen=000002B9A720B1E0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x80001a80
+allocation handle=0x40003840
+allocation handle=0x400038c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=12804
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 private Vulkan instance=000002B9A71A3680 screen=000002B9A7244070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x80002980
+allocation handle=0x40004340
+allocation handle=0x400043c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=12804
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+DWM DeviceSize interface=000a0009 version=0000177a bytes=9592
+DWM CreateDevice interface=000a0009 version=0000177a
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=000002B9A73413E0 screen=000002B9A7471570
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=000002B9A733F9E8 queue=80001b00 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80002e80
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80002e40
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x80002c80
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=000002B9A7471570 runtime=000002B9A733F9E8
+BC250 D3D device stage 3
+allocation handle=0xc0001040
+allocation handle=0xc0001080
+allocation handle=0x80001b40
+allocation handle=0x80002a00
+allocation handle=0x800029c0
+allocation handle=0x80002ac0
+allocation handle=0x80002b40
+allocation handle=0x80002b00
+allocation handle=0x80003080
+allocation handle=0x80003040
+allocation handle=0x80002bc0
+allocation handle=0x80002c40
+allocation handle=0x80002cc0
+allocation handle=0x80002d00
+allocation handle=0xc0000dc0
+allocation handle=0x80001bc0
+allocation handle=0x80001cc0
+allocation handle=0x80001d40
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+DWM CreateDevice hr=00000000
+BC250 destroy private Vulkan instance=000002B9A71A3680
+allocation handle=0x80001dc0
+allocation handle=0x80001e40
+allocation handle=0x80001ec0
+allocation handle=0x80001f00
+allocation handle=0x80002d40
+allocation handle=0x40004500
+allocation handle=0x40004540
+allocation handle=0x40004580
+allocation handle=0x400045c0
+allocation handle=0x40004600
+allocation handle=0x40004640
+allocation handle=0x80003580
+allocation handle=0x80003540
+allocation handle=0x80003600
+allocation handle=0x800035c0
+allocation handle=0x40004680
+allocation handle=0x400046c0
+allocation handle=0x40004700
+allocation handle=0x40004740
+allocation handle=0x40004780
+allocation handle=0x400047c0
+allocation handle=0x40004800
+allocation handle=0x40004840
+allocation handle=0xc00018c0
+allocation handle=0xc0001900
+allocation handle=0xc0001980
+BC250 surface hosted=1 allocation=c0001940 pitch=5120 bytes=3379200
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4298637312
+BC250 surface hosted=1 allocation=40004a00 pitch=5120 bytes=3379200
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=69632
+allocation handle=0x40004ac0
+BC250 surface hosted=1 allocation=40004a80 pitch=5120 bytes=4096000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4302016512
+BC250 surface hosted=1 allocation=40004b40 pitch=5120 bytes=4096000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=3448832
+allocation handle=0x80003b00
+BC250 surface hosted=1 allocation=40004bc0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4306112512
+BC250 surface hosted=1 allocation=40004c00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=7544832
+BC250 surface hosted=1 allocation=40004c80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4307161088
+BC250 surface hosted=1 allocation=40004d00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=8593408
+BC250 surface hosted=1 allocation=80003c80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4308209664
+BC250 surface hosted=1 allocation=40004d80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=9641984
+BC250 surface hosted=1 allocation=40004e00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4309258240
+BC250 surface hosted=1 allocation=40004e80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=10690560
+BC250 surface hosted=1 allocation=40004f00 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4310306816
+BC250 surface hosted=1 allocation=40004f80 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=11739136
+BC250 surface hosted=1 allocation=40005000 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4311355392
+BC250 surface hosted=1 allocation=40005080 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=12787712
+BC250 surface hosted=1 allocation=40005100 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4312403968
+BC250 surface hosted=1 allocation=40005180 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=13836288
+BC250 surface hosted=1 allocation=40005200 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4313452544
+BC250 surface hosted=1 allocation=80004180 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=14884864
+BC250 surface hosted=1 allocation=80004200 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4314501120
+BC250 surface hosted=1 allocation=40005280 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=15933440
+BC250 surface hosted=1 allocation=40005300 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4315549696
+BC250 surface hosted=1 allocation=c00027c0 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=16982016
+BC250 surface hosted=1 allocation=80004300 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4316598272
+BC250 surface hosted=1 allocation=c0002840 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=18030592
+BC250 surface hosted=1 allocation=40005380 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4317646848
+BC250 surface hosted=1 allocation=40005400 pitch=2048 bytes=1048576
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=19079168
+BC250 surface hosted=1 allocation=40005480 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4318695424
+allocation handle=0x40005bc0
+BC250 surface hosted=1 allocation=40005b80 pitch=4608 bytes=737280
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=20127744
+BC250 surface hosted=1 allocation=40005c40 pitch=4608 bytes=737280
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=20865024
+BC250 surface hosted=1 allocation=40005cc0 pitch=4608 bytes=737280
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=21602304
+BC250 surface hosted=1 allocation=80004280 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=22339584
+BC250 surface hosted=1 allocation=80004340 pitch=4096 bytes=3932160
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=26271744
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+allocation handle=0x40006180
+allocation handle=0x400061c0
+allocation handle=0x40006200
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40006240
+bc250: gather capacity=4096 bytes required=1728 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0x40006280
+allocation handle=0x400062c0
+allocation handle=0x40006300
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=2 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+BC250 hosted op=4 count=2 hr=00000000
+allocation handle=0x40006340
+bc250: gather capacity=4096 bytes required=2944 ibs=4
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+allocation handle=0x40006380
+allocation handle=0x400063c0
+allocation handle=0x40006400
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=3 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+allocation handle=0x400066c0
+BC250 Allocate hr=00000000 inputRT=000002B9B29F6440 callbackRT=000002B9B29F6440 miscShared=0 format=21 primary=0 allocation=40006740 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40006740 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=30203904
+BC250 Allocate hr=00000000 inputRT=000002B9B29F63E0 callbackRT=000002B9B29F63E0 miscShared=0 format=21 primary=0 allocation=400067c0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=400067c0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4322627584
+BC250 Allocate hr=00000000 inputRT=000002B9B29F6180 callbackRT=000002B9B29F6180 miscShared=0 format=21 primary=0 allocation=40006840 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40006840 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=39419904
+BC250 Allocate hr=00000000 inputRT=000002B9B29F6300 callbackRT=000002B9B29F6300 miscShared=0 format=21 primary=1 allocation=400068c0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=400068c0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4331843584
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=4 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+allocation handle=0x40006900
+bc250: gather capacity=4096 bytes required=800 ibs=2
+allocation handle=0x40006940
+allocation handle=0x40006980
+allocation handle=0x400069c0
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=5 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=6 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+BC250 release runtime resource refs=1 object_refs=1
+BC250 Deallocate 00000000 flags=0
+BC250 Allocate hr=00000000 inputRT=000002B9B29F61A0 callbackRT=000002B9B29F61A0 miscShared=0 format=21 primary=1 allocation=40006a40 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40006a40 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4341059584
+BC250 Allocate hr=00000000 inputRT=000002B9B29F6180 callbackRT=000002B9B29F6180 miscShared=0 format=21 primary=1 allocation=40006ac0 resource=0
+BC250 ALLOCATE ABI size=40 private=0 privateSize=8 hResource=16 hKMResource=24 NumAllocations=28 info2=32
+BC250 surface hosted=1 allocation=40006ac0 pitch=7680 bytes=9216000
+BC250 zink import type=2 modifier=0 identity=000002B9A733F9E8 va=4322627584
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=7 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+allocation handle=0x40006b00
+bc250: gather capacity=4096 bytes required=800 ibs=2
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=80002b80 value=4
+BC250 Present signals value=1 hr=00000000
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21583921 present=1 context=1 sync=80002b80 submitted=4 completed=4 submits=4
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=8 image_calls=0 image_request_bytes=0 buffer_calls=13 buffer_request_bytes=1145732 persistent_calls=5
+allocation handle=0x40006b80
+allocation handle=0x40006bc0
+allocation handle=0x40006c00
+allocation handle=0x40006c40
+allocation handle=0x40006c80
+allocation handle=0x40006cc0
+allocation handle=0x40006d00
+allocation handle=0x40006d40
+allocation handle=0x40006d80
+allocation handle=0x40006dc0
+allocation handle=0x40006e00
+allocation handle=0x40006e40
+allocation handle=0x40006e80
+allocation handle=0x40006ec0
+allocation handle=0x40006f00
+allocation handle=0x40006f40
+allocation handle=0x40006f80
+allocation handle=0x40006fc0
+allocation handle=0x40007000
+allocation handle=0x40007040
+allocation handle=0x40007080
+allocation handle=0x400070c0
+allocation handle=0x40007100
+allocation handle=0x40007140
+allocation handle=0x40007180
+allocation handle=0x400071c0
+allocation handle=0x800054c0
+bc250: gather capacity=163840 bytes required=163712 ibs=6
+BC250 render waits Present value=1 hr=00000000
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=80002b80 value=5
+BC250 Present signals value=2 hr=00000000
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584218 present=2 context=1 sync=80002b80 submitted=5 completed=5 submits=5
+allocation handle=0x40007200
+bc250: gather capacity=12288 bytes required=8448 ibs=4
+BC250 render waits Present value=2 hr=00000000
+BC250 Present GPU wait count=1 hr=00000000 cpu_render_wait=0
+BC250 Present fence=80002b80 value=6
+BC250 Present signals value=3 hr=00000000
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584218 present=3 context=1 sync=80002b80 submitted=6 completed=6 submits=6
+allocation handle=0x40007240
+allocation handle=0x40007280
+allocation handle=0x400072c0
+allocation handle=0x40007300
+bc250: gather capacity=32768 bytes required=32128 ibs=4
+BC250 render waits Present value=3 hr=00000000
+allocation handle=0x40007340
+allocation handle=0x40007380
+allocation handle=0x400073c0
+allocation handle=0x40007400
+allocation handle=0x40007440
+allocation handle=0x40007480
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584312 present=4 context=1 sync=80002b80 submitted=7 completed=7 submits=7
+allocation handle=0x400074c0
+allocation handle=0x40007500
+allocation handle=0x40007540
+allocation handle=0x40007580
+allocation handle=0x400075c0
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+bc250: gather capacity=36864 bytes required=34144 ibs=4
+allocation handle=0x40007600
+allocation handle=0x40007640
+allocation handle=0x40007680
+allocation handle=0x400076c0
+allocation handle=0x40007700
+allocation handle=0x40007740
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584343 present=5 context=1 sync=80002b80 submitted=8 completed=8 submits=8
+allocation handle=0x40007780
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+bc250: gather capacity=8192 bytes required=7872 ibs=4
+allocation handle=0x400077c0
+allocation handle=0x40007800
+allocation handle=0x40007840
+allocation handle=0x40007880
+allocation handle=0x400078c0
+allocation handle=0x40007900
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584406 present=6 context=1 sync=80002b80 submitted=9 completed=9 submits=9
+allocation handle=0x40007940
+bc250: gather capacity=8192 bytes required=7872 ibs=4
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584421 present=7 context=1 sync=80002b80 submitted=10 completed=10 submits=10
+allocation handle=0x40007980
+bc250: gather capacity=12288 bytes required=11648 ibs=4
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21584484 present=8 context=1 sync=80002b80 submitted=11 completed=11 submits=11
+allocation handle=0x400079c0
+bc250: gather capacity=12288 bytes required=8672 ibs=4
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=64 image_calls=153 image_request_bytes=28559952 buffer_calls=619 buffer_request_bytes=48351144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=128 image_calls=174 image_request_bytes=32707152 buffer_calls=703 buffer_request_bytes=55743144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=192 image_calls=195 image_request_bytes=36623952 buffer_calls=783 buffer_request_bytes=62783144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21587250 present=60 context=1 sync=80002b80 submitted=63 completed=63 submits=63
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=256 image_calls=216 image_request_bytes=40771152 buffer_calls=867 buffer_request_bytes=70175144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=320 image_calls=237 image_request_bytes=44687952 buffer_calls=951 buffer_request_bytes=77567144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21590531 present=120 context=1 sync=80002b80 submitted=123 completed=123 submits=123
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=384 image_calls=258 image_request_bytes=48835152 buffer_calls=1035 buffer_request_bytes=84959144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=448 image_calls=279 image_request_bytes=52751952 buffer_calls=1119 buffer_request_bytes=92351144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=512 image_calls=301 image_request_bytes=56975952 buffer_calls=1207 buffer_request_bytes=100095144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21593828 present=180 context=1 sync=80002b80 submitted=183 completed=183 submits=183
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=576 image_calls=321 image_request_bytes=60815952 buffer_calls=1287 buffer_request_bytes=107135144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=640 image_calls=343 image_request_bytes=65039952 buffer_calls=1375 buffer_request_bytes=114879144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=704 image_calls=363 image_request_bytes=68879952 buffer_calls=1455 buffer_request_bytes=121919144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21597203 present=240 context=1 sync=80002b80 submitted=243 completed=243 submits=243
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=768 image_calls=386 image_request_bytes=73411152 buffer_calls=1543 buffer_request_bytes=129663144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=832 image_calls=408 image_request_bytes=77635152 buffer_calls=1627 buffer_request_bytes=137055144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=896 image_calls=428 image_request_bytes=81475152 buffer_calls=1707 buffer_request_bytes=144095144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21600500 present=300 context=1 sync=80002b80 submitted=303 completed=303 submits=303
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=960 image_calls=449 image_request_bytes=85391952 buffer_calls=1791 buffer_request_bytes=151487144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1024 image_calls=470 image_request_bytes=89539152 buffer_calls=1875 buffer_request_bytes=158879144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1088 image_calls=491 image_request_bytes=93455952 buffer_calls=1959 buffer_request_bytes=166271144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21603765 present=360 context=1 sync=80002b80 submitted=363 completed=363 submits=363
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1152 image_calls=513 image_request_bytes=97679952 buffer_calls=2047 buffer_request_bytes=174015144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1216 image_calls=534 image_request_bytes=101827152 buffer_calls=2131 buffer_request_bytes=181407144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1280 image_calls=555 image_request_bytes=105743952 buffer_calls=2215 buffer_request_bytes=188799144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21607046 present=420 context=1 sync=80002b80 submitted=423 completed=423 submits=423
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1344 image_calls=576 image_request_bytes=109891152 buffer_calls=2299 buffer_request_bytes=196191144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1408 image_calls=597 image_request_bytes=113807952 buffer_calls=2383 buffer_request_bytes=203583144 persistent_calls=8
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21610343 present=480 context=1 sync=80002b80 submitted=483 completed=483 submits=483
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1472 image_calls=618 image_request_bytes=117955152 buffer_calls=2467 buffer_request_bytes=210975144 persistent_calls=8
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1536 image_calls=639 image_request_bytes=121871952 buffer_calls=2551 buffer_request_bytes=218367144 persistent_calls=8
+allocation handle=0x40007b00
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1600 image_calls=664 image_request_bytes=126787152 buffer_calls=2635 buffer_request_bytes=225759144 persistent_calls=8
+allocation handle=0x40007b40
+allocation handle=0x40007b80
+allocation handle=0x40007bc0
+BC250 audit progress pid=12804 device=000002B9A733F9E8 tick=21613937 present=540 context=1 sync=80002b80 submitted=545 completed=545 submits=545
+BC250 audit maps ctx=000002B9A7855070 final=0 sample=1664 image_calls=687 image_request_bytes=140227152 buffer_calls=2839 buffer_request_bytes=242900788 persistent_calls=8

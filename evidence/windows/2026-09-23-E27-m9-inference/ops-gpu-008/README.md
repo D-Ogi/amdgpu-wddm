@@ -1,0 +1,1 @@
+Fresh boot03:01:43. Ordinary official completion with --no-warmup still fails: repeated commas,64hardware submissions63completions1timeout204UMDnotrun. CPU control correct. Hardware witness rejects the apparent process exit0. Restored03:04:16, UnconfirmedStarts0. Disabling warmup alone is not a fix.

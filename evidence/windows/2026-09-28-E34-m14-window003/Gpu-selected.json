@@ -1,0 +1,10 @@
+{
+  "result": "failed",
+  "exit": 4,
+  "mode": "window",
+  "width": 64,
+  "height": 64,
+  "feature_level": "11_1",
+  "d3d11": "system",
+  "scenes": []
+}

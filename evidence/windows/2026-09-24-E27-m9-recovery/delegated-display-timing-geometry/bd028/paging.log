@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+paging_mc_test: 3 synthetic geometries, 63 checks, 0 failed
+compile-check (kernel flags, same source, no link)
+
+paging_mc_test.exe exit code 0

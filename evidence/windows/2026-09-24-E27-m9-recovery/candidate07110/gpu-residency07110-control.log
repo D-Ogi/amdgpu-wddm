@@ -1,0 +1,24 @@
+probe_hash=E9566E495A4FB5BB0F37B8A2583AB10F573D0F9ECEE2B84D94E264242529E9C3
+driver_version=0.7.110.1
+installed_sha256=4743B3CE3D177970BD33F30F00E01B242E00EDDCDB2C5353014E808FDA48D9D1
+boot_before=2026-09-24T05:20:01
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+05:40:38 Tctl 70.2 C (raw 775B0FEF)
+launcher_pid=8064
+05:40:40 Tctl 70.6 C (raw 77BB0FEF)
+D3DKMTDestroyAllocation2 [gpu-readback] 0x00000000  STATUS_SUCCESS
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [gpu-ib] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-ib]  0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+gpu_probe_exit=0
+boot_after=2026-09-24T05:20:01

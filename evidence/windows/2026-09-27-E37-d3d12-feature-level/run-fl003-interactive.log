@@ -1,0 +1,64 @@
+{
+    "exit":  0,
+    "utc":  "2026-09-26T23:32:42.2756651Z"
+}
+boot 2026-09-26T18:44:31.5000000+02:00
+start 2026-09-27T01:28:41.5488891+02:00
+7B77ED5C 23040 d3d12.dll
+90B1DAD6 3440640 d3d12core.dll
+2E674A56 847872 dxgi.dll
+30F69C05 143872 fl-probe.exe
+A-baseline-default temperature_before=67.8
+A-baseline-default TIMEOUT
+A-baseline-default exit=-1 icd_in_registered_path=9C40083C
+A-baseline-default description=
+A-baseline-default max_feature_level=
+A-baseline-default tiled_resources_tier=
+A-baseline-default resource_binding_tier=
+A-baseline-default conservative_rasterization_tier=
+A-baseline-default rovs_supported=
+A-baseline-default highest_shader_model=
+A-baseline-default devices_created=
+B-baseline-sparse temperature_before=66.4
+B-baseline-sparse TIMEOUT
+B-baseline-sparse exit=-1 icd_in_registered_path=9C40083C
+B-baseline-sparse description=
+B-baseline-sparse max_feature_level=
+B-baseline-sparse tiled_resources_tier=
+B-baseline-sparse resource_binding_tier=
+B-baseline-sparse conservative_rasterization_tier=
+B-baseline-sparse rovs_supported=
+B-baseline-sparse highest_shader_model=
+B-baseline-sparse devices_created=
+candidate in registered path
+C-candidate-default temperature_before=66.4
+C-candidate-default TIMEOUT
+C-candidate-default exit=-1 icd_in_registered_path=4D027149
+C-candidate-default description=
+C-candidate-default max_feature_level=
+C-candidate-default tiled_resources_tier=
+C-candidate-default resource_binding_tier=
+C-candidate-default conservative_rasterization_tier=
+C-candidate-default rovs_supported=
+C-candidate-default highest_shader_model=
+C-candidate-default devices_created=
+D-candidate-sparse temperature_before=66.2
+D-candidate-sparse TIMEOUT
+D-candidate-sparse exit=-1 icd_in_registered_path=4D027149
+D-candidate-sparse description=
+D-candidate-sparse max_feature_level=
+D-candidate-sparse tiled_resources_tier=
+D-candidate-sparse resource_binding_tier=
+D-candidate-sparse conservative_rasterization_tier=
+D-candidate-sparse rovs_supported=
+D-candidate-sparse highest_shader_model=
+D-candidate-sparse devices_created=
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798
+temperature_after=66.4
+dwm=84
+end 2026-09-27T01:32:42.2756651+02:00
+probe_exit=0
+task_state=Ready
+task_unregistered
+icd_registered=9C40083C
+probe_procs=

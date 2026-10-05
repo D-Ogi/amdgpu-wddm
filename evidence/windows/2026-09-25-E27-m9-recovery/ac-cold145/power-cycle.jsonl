@@ -1,0 +1,3 @@
+{"utc": "2026-09-24T23:57:30.784078+00:00", "command": "status", "transport": "LAN", "relay_on": true, "readback_verified": true}
+{"utc": "2026-09-24T23:57:32.261354+00:00", "command": "off", "transport": "LAN", "relay_on": false, "readback_verified": true}
+{"utc": "2026-09-24T23:58:03.737957+00:00", "command": "on", "transport": "LAN", "relay_on": true, "readback_verified": true}

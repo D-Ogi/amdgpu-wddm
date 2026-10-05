@@ -1,0 +1,4 @@
+EXCEPTION 80000003 first=1 address=00007FFAD4A0CBC4
+DEBUG BC250 Renderer: llvmpipe (LLVM 23.1.2, 256 bits)
+
+CHILD_EXIT 0 observed=1 tree_closed=1

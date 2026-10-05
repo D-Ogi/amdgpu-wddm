@@ -1,0 +1,8 @@
+SAMPLE texture=1 sampler=0 nodes=1 PASS
+SAMPLE_L texture=1 sampler=0 nodes=1 PASS
+SAMPLE_B texture=1 sampler=0 nodes=1 PASS
+SAMPLE_D texture=1 sampler=0 nodes=1 PASS
+SAMPLE_C texture=1 sampler=0 nodes=1 PASS
+SAMPLE_C_LZ texture=1 sampler=0 nodes=1 PASS
+SAMPLE_I texture=1 sampler=0 nodes=1 PASS
+SVIEWINFO texture=1 sampler=0 nodes=2 PASS

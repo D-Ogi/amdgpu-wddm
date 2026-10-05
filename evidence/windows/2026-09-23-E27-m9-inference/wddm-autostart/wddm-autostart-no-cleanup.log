@@ -1,0 +1,6 @@
+test.c
+FAIL failure no publication or resource leak
+FAIL only initialized VidMm cleaned
+FAIL failure no publication or resource leak
+FAIL only initialized VidMm cleaned
+89 checks, 4 failures

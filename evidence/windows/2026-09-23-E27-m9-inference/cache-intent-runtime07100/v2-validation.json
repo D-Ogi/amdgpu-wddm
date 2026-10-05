@@ -1,0 +1,107 @@
+{
+  "2": {
+    "positive_rounds": 32,
+    "stale_control": "detected round1, previous GPU hash retained",
+    "counters": {
+      "before": {
+        "0": [
+          102,
+          102,
+          0,
+          0
+        ],
+        "1": [
+          10864,
+          10864,
+          0,
+          0
+        ]
+      },
+      "after": {
+        "0": [
+          204,
+          204,
+          0,
+          0
+        ],
+        "1": [
+          16284,
+          16284,
+          0,
+          0
+        ]
+      }
+    },
+    "scope": "host-coherent reused Vulkan allocations; no eviction or CPU cache-alias type proof"
+  },
+  "3": {
+    "positive_rounds": 32,
+    "stale_control": "detected round1, previous GPU hash retained",
+    "counters": {
+      "before": {
+        "0": [
+          102,
+          102,
+          0,
+          0
+        ],
+        "1": [
+          10864,
+          10864,
+          0,
+          0
+        ]
+      },
+      "after": {
+        "0": [
+          204,
+          204,
+          0,
+          0
+        ],
+        "1": [
+          16284,
+          16284,
+          0,
+          0
+        ]
+      }
+    },
+    "scope": "host-coherent reused Vulkan allocations; no eviction or CPU cache-alias type proof"
+  },
+  "5": {
+    "positive_rounds": 32,
+    "stale_control": "detected round1, previous GPU hash retained",
+    "counters": {
+      "before": {
+        "0": [
+          102,
+          102,
+          0,
+          0
+        ],
+        "1": [
+          10864,
+          10864,
+          0,
+          0
+        ]
+      },
+      "after": {
+        "0": [
+          204,
+          204,
+          0,
+          0
+        ],
+        "1": [
+          16284,
+          16284,
+          0,
+          0
+        ]
+      }
+    },
+    "scope": "host-coherent reused Vulkan allocations; no eviction or CPU cache-alias type proof"
+  }
+}

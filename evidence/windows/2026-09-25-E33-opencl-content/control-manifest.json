@@ -77,6 +77,6 @@
     "OpenCL-ICD-Loader": "5192c84f8059e5f703e5452929b613f9487f6e4c"
   },
   "changes": "Windows QPC calibrated host domain, ns conversion shared with event sampling, actual host timer resolution. CPU controls pass; GPU validation pending.",
-  "control_commit": "7df26ac",
+  "control_commit": "78f3ef1",
   "runtime_status": "not_run"
 }

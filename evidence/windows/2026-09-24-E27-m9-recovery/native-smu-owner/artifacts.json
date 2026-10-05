@@ -1,0 +1,10 @@
+{
+  "scratch/build/smu-native-dev-v2/package/bc250kmd.sys": {
+    "sha256": "0cd99da68290fdeb3986c8bfb747bd299f7505892cd1698aaea69330c59f5571",
+    "deployed": false
+  },
+  "scratch/build/bc250rd-no-smu/bc250rd.sys": {
+    "sha256": "8cde53b78a6af8e02eba8d408217f2f5c425713f5610e8dd149429a3299ea535",
+    "deployed": false
+  }
+}

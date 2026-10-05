@@ -1,0 +1,24 @@
+{
+  "utc": "2026-09-24T00:19:43.191037+00:00",
+  "routes": [
+    {
+      "route": 0,
+      "tcp22": false
+    },
+    {
+      "route": 1,
+      "tcp22": false
+    },
+    {
+      "route": 2,
+      "tcp22": false
+    },
+    {
+      "route": 3,
+      "tcp22": false
+    }
+  ],
+  "session": 55183,
+  "last_poll": "live,no new output",
+  "owner_monitor_response": "pending"
+}

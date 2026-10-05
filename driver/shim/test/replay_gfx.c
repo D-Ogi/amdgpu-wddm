@@ -72,7 +72,7 @@
  *        nothing in this milestone produces it. It is left unexplained rather than imitated.
  *      - the sixteen GCVM_CONTEXTn_CNTL read-modify-writes at 1.5608, which are gmc_v10_0's late
  *        init writing back what it already set. That is M4's code, closed on hardware in commit
- *        1850ca6, and out of this milestone's scope.
+ *        de3e005, and out of this milestone's scope.
  *
  *    One more thing about this window is a stand-in rather than a reproduction: the four
  *    CP_ME1_PIPEn_INT_CNTL registers are read back at 1.5606 with the value amdkfd's per-pipe enable

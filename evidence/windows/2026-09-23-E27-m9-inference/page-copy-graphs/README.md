@@ -1,0 +1,13 @@
+# M282: whole-page copy dependency graphs
+
+Date2026-09-23. Base commit bed764da5192be7132d646be0e6331c1edeb30fd, captured working-tree sources. Host-only, no lab access/deployment.
+
+PagingPageGraphNormalize builds a sorted unique union of source/destination physical pages (full64bits), with original copy-edge indices preserved. PagingPageGraphPlan accepts repeated sources and different source/destination sets with distinct destinations. Reader counts and a unique writer per identity select copies whose destination has no remaining reader. Emitting one releases its source dependency; after draining the queue, remaining components are disjoint cycles. Those use minimal cycles or M281 bounded swaps. Direct copies are one-action atomic groups; SAVE/RESTORE groups retain the prior batch contract. Total work after normalization is linear in identities/edges; metadata is still rebuilt per callback.
+
+Integrated into GfxPagingBuildPageGraph (renamed from GfxPagingBuildPermutation) and existing WDDM alias route. Workspace128bytes per logical page contains captures, union, graph arrays and up to3N moves. Opaque tagged action resume and final logical-byte accounting are unchanged. Duplicate destinations and partial pages remain unimplemented, as do virtual alias integration and full OS lifetime verification.
+
+Planner test enumerates all280391source vectors for1..6copies overN+2identities, with distinct destinations0..N-1. This includes repeated sources, different sets, fan-out from cycles and acyclic chains. Six budgets3..8, initial-snapshot17word/page oracle, scratch overwritten between batches: zero failures. Existing46233permutation cases remain passing. This exhaustive set uses normalized identities; physical normalization is exercised separately by actual-DDI fixtures.
+
+Actual KMD suite: run_paging.ps1 -KmdRouting -Out P:/bc-250/scratch/m9/page-copy-graph-host,14643checksPASS. Four new MDL/aperture fixtures map source[A,B,A] to destination[B,A,D], with high fragmented physical addresses. Actual emitted PTE/COPY packets must preserve A into D before swapping A/B. Full page-byte oracle, private/DMA capacity and completed-token checks pass. No hardware execution claim.
+
+Negative control changes only generated planner copy output so each acyclic copy reads its destination instead of its source. The same280391graph cases produce7366164page-oracle failures; production source unchanged. See run-mutant.cmd/source/log. WDK build/sign passes, SYS SHA256 A77D39A229054A5782AEF1C846BC342DA7709382EE751DD0F58732D0BF5AC2DD, scratch/build/page-copy-graph-dev. Revision100 still development only. Full M9 not achieved.

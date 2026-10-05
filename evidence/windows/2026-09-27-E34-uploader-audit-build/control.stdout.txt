@@ -1,0 +1,1 @@
+PASS actual uploader: rollover, copied content, allocated-vs-copied bytes, failure, audit disabled; created=3 mapped=3 unmapped=3 destroyed=3

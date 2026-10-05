@@ -1,0 +1,2 @@
+MiniDump pid=11000 ok=1 error=0
+

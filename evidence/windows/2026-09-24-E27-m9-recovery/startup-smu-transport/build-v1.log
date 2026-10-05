@@ -1,0 +1,16 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+P:\bc-250\bc250-win\driver\shim\bc250_smu.c(21): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\bc250-win\driver\shim\bc250_smu.c(21): warning C4005: "ETIME": ponowna definicja makra
+P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\ucrt\errno.h(126): note: zobacz poprzednią definicję „ETIME”
+bc250_clock.c
+smu_test.c
+Generowanie kodu...
+Host build failed
+At P:\BC-250\bc250-win\driver\shim\test\run_smu.ps1:19 char:25
++ if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Host build failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Host build failed
+ 

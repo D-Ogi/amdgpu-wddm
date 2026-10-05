@@ -1,0 +1,7 @@
+pid=7836 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+pid=2276 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+child PASS checked_pixels=20480
+PASS iterations=10 generations=1 parent_pixels=20480 child_pixels=20480 distinct_pids=2276,7836
+
+
+

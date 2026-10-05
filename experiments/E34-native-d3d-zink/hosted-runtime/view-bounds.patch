@@ -1,0 +1,63 @@
+--- a/src/gallium/frontends/d3d10umd/Shader.cpp
++++ b/src/gallium/frontends/d3d10umd/Shader.cpp
+@@ -230,6 +230,15 @@
+    struct pipe_context *pipe = pDevice->pipe;
+ 
+    assert(Offset + NumViews <= D3D10_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT);
++
++   const UINT view_limit = MIN2(PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                pipe->screen->shader_caps[shader_type].max_sampler_views);
++   for (UINT i = 0; i < NumViews; ++i) {
++      if (Offset + i >= view_limit && CastPipeShaderResourceView(phShaderResourceViews[i])) {
++         SetError(hDevice, E_NOTIMPL);
++         return;
++      }
++   }
+ 
+    struct pipe_sampler_view **sampler_views = pDevice->sampler_views[shader_type];
+    for (UINT i = 0; i < NumViews; i++) {
+@@ -249,7 +258,7 @@
+     * XXX: Now that the semantics are actually the same in gallium, should
+     * probably think about not updating all always... It should just work.
+     */
+-   pipe->set_sampler_views(pipe, shader_type, 0, PIPE_MAX_SHADER_SAMPLER_VIEWS,
++   pipe->set_sampler_views(pipe, shader_type, 0, view_limit,
+                            0, sampler_views);
+ }
+ 
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -879,11 +879,17 @@
+    memset(sampler_views, 0, sizeof sampler_views);
+    fprintf(stderr,"D3D destroy stage 6\n"); fflush(stderr);
+    pipe->set_sampler_views(pipe, MESA_SHADER_FRAGMENT, 0,
+-                           PIPE_MAX_SHADER_SAMPLER_VIEWS, 0, sampler_views);
++                           MIN2(PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                pipe->screen->shader_caps[MESA_SHADER_FRAGMENT].max_sampler_views),
++                           0, sampler_views);
+    pipe->set_sampler_views(pipe, MESA_SHADER_VERTEX, 0,
+-                           PIPE_MAX_SHADER_SAMPLER_VIEWS, 0, sampler_views);
++                           MIN2(PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                pipe->screen->shader_caps[MESA_SHADER_VERTEX].max_sampler_views),
++                           0, sampler_views);
+    pipe->set_sampler_views(pipe, MESA_SHADER_GEOMETRY, 0,
+-                           PIPE_MAX_SHADER_SAMPLER_VIEWS, 0, sampler_views);
++                           MIN2(PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                pipe->screen->shader_caps[MESA_SHADER_GEOMETRY].max_sampler_views),
++                           0, sampler_views);
+ 
+    fprintf(stderr,"D3D destroy stage 7\n"); fflush(stderr);
+    pipe->destroy(pipe);
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -454,7 +454,9 @@
+    }
+    if (!changes.empty())
+       for (auto sh : {MESA_SHADER_VERTEX, MESA_SHADER_FRAGMENT, MESA_SHADER_GEOMETRY})
+-         pipe->set_sampler_views(pipe, sh, 0, PIPE_MAX_SHADER_SAMPLER_VIEWS,
++         pipe->set_sampler_views(pipe, sh, 0,
++                                 MIN2(PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                      pipe->screen->shader_caps[sh].max_sampler_views),
+                                  0, device->sampler_views[sh]);
+    return S_OK;
+ }

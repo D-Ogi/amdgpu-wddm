@@ -1,0 +1,117 @@
+now=2026-09-25T03:06:01.8371521+02:00
+boot=2026-09-25T01:58:41.5000000+02:00
+hibernate-request.txt
+2026-09-25T01:01:36.5696878Z
+hibernate-return.txt
+2026-09-25T01:04:09.1339749Z exit=0
+ready.txt
+pid=6000
+first_full_readback=PASS
+sequence=64
+timeout_ms=900000
+processes
+[
+    {
+        "ProcessName":  "bc250mon",
+        "Id":  4384,
+        "StartTime":  "\/Date(1790294384703)\/"
+    },
+    {
+        "ProcessName":  "dwm",
+        "Id":  1736,
+        "StartTime":  "\/Date(1790294383045)\/"
+    },
+    {
+        "ProcessName":  "gpu-residency-probe",
+        "Id":  6000,
+        "StartTime":  "\/Date(1790298008048)\/"
+    }
+]
+health
+health abi=1 version=0x00070092 flags=7 generation=34815300295 epoch=13 completed=33 age_ms=706 ready_ms=113087
+power_events
+
+
+TimeCreated  : 9/25/2026 3:04:10 AM
+Id           : 1
+ProviderName : Microsoft-Windows-Power-Troubleshooter
+Message      : The system has returned from a low power state.
+               
+               Sleep Time: ?2026?-?09?-?25T01:01:36.629698400Z
+               Wake Time: ?2026?-?09?-?25T01:04:08.929360200Z
+               
+               Wake Source: Unknown
+
+TimeCreated  : 9/25/2026 3:04:08 AM
+Id           : 566
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : The system session has transitioned from 2 to 4.
+               
+               Reason WinRT 
+               
+               BootId: 121
+
+TimeCreated  : 9/25/2026 3:04:08 AM
+Id           : 566
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : The system session has transitioned from 1 to 2.
+               
+               Reason SxTransition 
+               
+               BootId: 121
+
+TimeCreated  : 9/25/2026 3:04:08 AM
+Id           : 32
+ProviderName : Microsoft-Windows-Kernel-Boot
+Message      : The bootmgr spent 0 ms waiting for user input.
+
+TimeCreated  : 9/25/2026 3:04:08 AM
+Id           : 18
+ProviderName : Microsoft-Windows-Kernel-Boot
+Message      : There are 0x2 boot options on this system.
+
+TimeCreated  : 9/25/2026 3:04:08 AM
+Id           : 30
+ProviderName : Microsoft-Windows-Kernel-Boot
+Message      : The firmware reported boot metrics.
+
+TimeCreated  : 9/25/2026 3:01:42 AM
+Id           : 107
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : The system has resumed from sleep.
+
+TimeCreated  : 9/25/2026 3:01:37 AM
+Id           : 42
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : The system is entering sleep.
+               
+               Sleep Reason: Application API
+
+TimeCreated  : 9/25/2026 3:01:37 AM
+Id           : 566
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : The system session has transitioned from 0 to 1.
+               
+               Reason ScreenOffGracePeriod 
+               
+               BootId: 121
+
+TimeCreated  : 9/25/2026 3:01:36 AM
+Id           : 187
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : User-mode process attempted to change the system state by calling SetSuspendState 
+               or SetSystemPowerState APIs.
+
+
+
+probe_tail
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 64 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 00000258C74E0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=67108864 all_words_match=1 fence=64 word_base=0
+RESUME_ID phase=ready pid=6000 adapter=40000080 device=400000C0 context=40000240 paging_queue=40000140 paging_fence=40000100 fence=40000280 data=40000180 data_va=0000000000010000 command=400001C0 command_va=0000000004010000 readback=40000200 readback_va=0000000004020000 sequence=64
+RESUME_GATE READY pid=6000 timeout_ms=900000
+postwake_observation_complete
+

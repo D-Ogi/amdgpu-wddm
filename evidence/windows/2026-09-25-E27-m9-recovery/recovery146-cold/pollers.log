@@ -1,0 +1,30 @@
+
+TaskName                         State Executable                     
+--------                         ----- ----------                     
+BC250 GPU clock 1000MHz 820mV Disabled powershell.exe                 
+BC250 monitor overlay          Running C:\BC250\mon\bc250mon.exe      
+BC250 net watchdog             Running powershell.exe                 
+bc250-m8-address32               Ready C:\BC250\m8\address32-suite.cmd
+bc250-m8-full                    Ready C:\BC250\m8\run-full.cmd       
+
+
+
+Name           ProcessId ParentProcessId CreationDate        
+----           --------- --------------- ------------        
+powershell.exe      2612            2480 9/25/2026 3:28:12 AM
+conhost.exe         3484            2612 9/25/2026 3:28:12 AM
+bc250mon.exe        4268            2480 9/25/2026 3:28:14 AM
+powershell.exe      3308            8124 9/25/2026 3:30:35 AM
+conhost.exe         1972            3308 9/25/2026 3:30:35 AM
+powershell.exe      8528            3308 9/25/2026 3:30:35 AM
+
+
+
+Name                                       Length
+----                                       ------
+graphics-modules.json                        1787
+vulkan-inventory-before-history-label.json   2072
+vulkan-inventory.json                        2678
+
+
+poller_inventory_complete

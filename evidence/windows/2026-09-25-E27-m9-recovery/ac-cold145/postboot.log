@@ -1,0 +1,47 @@
+now=2026-09-25T02:01:26
+boot=2026-09-25T01:58:41
+gpu_status=OK
+version=0.7.145.1
+problem=0
+kmd_sha256=ED7B2E0735A41048DDA1428FB4A759C32193A231D5A26A5C2FEAD5D8407903CB
+health abi=1 version=0x00070091 flags=15 generation=606089791 epoch=5 completed=181 age_ms=294 ready_ms=103351
+health_exit=0
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66500 ready=1
+clock_exit=0
+bc250mon pid=4384 start=2026-09-25T01:59:44
+dwm pid=1736 start=2026-09-25T01:59:43
+
+
+EnableFullWddm    : 2
+UnconfirmedStarts : 0
+LastStage         : 50
+
+
+
+
+State
+-----
+Ready
+     
+2026-09-25T01:59:54.9380501+02:00 boot=2026-09-25T01:58:41.5000000+02:00
+2026-09-25T01:59:55.2323027+02:00 cli_sha256=68B346AFFF020631F91B1C26F2B51A656762346D53D6B168992F7A97CF9E3FD4
+2026-09-25T01:59:55.2663619+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=34 age_ms=528 ready_ms=11510
+2026-09-25T02:00:00.2866463+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=49 age_ms=534 ready_ms=16536
+2026-09-25T02:00:05.5211457+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=66 age_ms=330 ready_ms=21770
+2026-09-25T02:00:10.5420715+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=73 age_ms=830 ready_ms=26791
+2026-09-25T02:00:15.5723945+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=82 age_ms=354 ready_ms=31820
+2026-09-25T02:00:20.5947093+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=87 age_ms=874 ready_ms=36844
+2026-09-25T02:00:25.6170261+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=95 age_ms=392 ready_ms=41864
+2026-09-25T02:00:30.6393420+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=102 age_ms=912 ready_ms=46889
+2026-09-25T02:00:35.6656619+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=109 age_ms=432 ready_ms=51913
+2026-09-25T02:00:40.6899808+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=115 age_ms=954 ready_ms=56939
+2026-09-25T02:00:45.7122967+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=124 age_ms=472 ready_ms=61962
+2026-09-25T02:00:50.7366143+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=130 age_ms=474 ready_ms=66986
+2026-09-25T02:00:55.7608635+02:00 budget=1 policy=2 exit=0 health abi=1 version=0x00070091 flags=7 generation=606089791 epoch=5 completed=139 age_ms=494 ready_ms=72010
+2026-09-25T02:01:00.7855244+02:00 budget=0 policy=2 exit=0 health abi=1 version=0x00070091 flags=15 generation=606089791 epoch=5 completed=145 age_ms=514 ready_ms=77033
+2026-09-25T02:01:00.7895621+02:00 automatic_confirmation_observed
+2026-09-25T02:01:00.8355843+02:00 driver_log_exit=0
+2026-09-25T02:01:00.8395872+02:00 recorder_finished_elapsed_s=66
+postboot_record_complete
+
+

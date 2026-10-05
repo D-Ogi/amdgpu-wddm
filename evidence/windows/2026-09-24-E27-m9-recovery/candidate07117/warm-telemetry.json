@@ -1,0 +1,16 @@
+{
+  "queried_utc": "2026-09-24T05:46:43.261402+00:00",
+  "transport": "LAN",
+  "relay_on": true,
+  "raw_dps": {
+    "18": 534,
+    "19": 784,
+    "20": 2424
+  },
+  "current_a": 0.534,
+  "power_w": 78.4,
+  "voltage_v": 242.4,
+  "scale_source": "TinyTuya SocketDevice convention; model calibration unverified",
+  "measurement_age_seconds": null,
+  "stage": "candidate07117-warm-unreachable"
+}

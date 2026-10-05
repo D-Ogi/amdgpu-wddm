@@ -1,0 +1,53 @@
+Selected WSI platform: win32
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x96e15e
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+Selected GPU 0: AMD BC-250 (RADV GFX1013), type: IntegratedGpu, apiVersion: 4211051 (1.4.363), driverVersion: 109060195 (26.2.99) 
+radv_wddm2_winsys_create
+allocation handle=0x40000b80
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000c00
+allocation handle=0x40000c80
+allocation handle=0x40000d00
+allocation handle=0x40000d80
+allocation handle=0x40000e00
+allocation handle=0x40000e80
+allocation handle=0x40000f00
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x400011c0
+allocation handle=0x40001240
+allocation handle=0x400012c0
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40001340
+bc250: gather capacity=4096 bytes required=768 ibs=2
+allocation handle=0x400013c0
+allocation handle=0x40001440
+allocation handle=0x400014c0
+allocation handle=0x40001540
+allocation handle=0x400015c0
+allocation handle=0x40001640
+allocation handle=0x400016c0
+allocation handle=0x40001740
+allocation handle=0x400017c0
+allocation handle=0x40001840
+allocation handle=0x400018c0
+allocation handle=0x40001940
+allocation handle=0x40001a80
+allocation handle=0x40001b00
+allocation handle=0x40001b80
+bc250: gather capacity=4096 bytes required=3424 ibs=2
+allocation handle=0x40001c40
+bc250: gather capacity=4096 bytes required=1056 ibs=2
+allocation handle=0x40001cc0
+allocation handle=0x40001d40
+bc250: gather capacity=4096 bytes required=3424 ibs=2
+allocation handle=0x40001e00
+bc250: gather capacity=4096 bytes required=1056 ibs=2
+allocation handle=0x40001e80
+bc250: gather capacity=4096 bytes required=3424 ibs=2
+allocation handle=0x40001f40
+bc250: gather capacity=4096 bytes required=1056 ibs=2

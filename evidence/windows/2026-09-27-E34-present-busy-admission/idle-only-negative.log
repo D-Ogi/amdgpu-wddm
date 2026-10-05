@@ -1,0 +1,20 @@
+gfx_ring_capacity_test.c
+bc250_ring_actual.c
+Generowanie kodu...
+GFX ring capacity/fence order: 10025 checks, 0 failures
+gfx_pipeline_test.c
+FAIL line 114: WddmSubmitPresentHardware(&d,&w,&c,0x4000,128,2,0)
+FAIL line 115: dispatches==2 && reported==0 && delays==0 && w.GfxPending.Count==2
+FAIL line 118: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,3,0)
+FAIL line 119: delays==2 && dispatches==3 && reported==2 && w.GfxPending.Count==1
+FAIL line 122: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0)
+FAIL line 122: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0)
+FAIL line 122: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0)
+FAIL line 122: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0)
+FAIL line 122: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0)
+FAIL line 122: WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0)
+FAIL line 123: w.GfxPending.Count==7
+FAIL line 126: delays==3 && reported==9 && dispatches==10 && w.GfxPending.Count==1
+FAIL line 130: delays-i==BC250_WDDM_SUBMIT_TIMEOUT_MS && reported==9 && dispatches==10
+FAIL line 134: delays==i && reported==9 && dispatches==10
+GFX WDDM actual submit/completion/watchdog: 4570 checks, 14 failures

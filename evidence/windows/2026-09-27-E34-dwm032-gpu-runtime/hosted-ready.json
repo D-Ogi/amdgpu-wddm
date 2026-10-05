@@ -1,0 +1,52 @@
+{
+    "attempt":  2,
+    "elapsed_ms":  5434,
+    "sample":  {
+                   "stop":  false,
+                   "create_success":  true,
+                   "log_bytes":  25804,
+                   "utc":  "2026-09-27T12:54:35.1338450Z",
+                   "candidates":  [
+                                      {
+                                          "start_utc":  "2026-09-27T12:54:29.9179669Z",
+                                          "pid":  8548,
+                                          "previous":  false
+                                      }
+                                  ],
+                   "identity":  "8548/2026-09-27T12:54:29.9179669Z",
+                   "pid":  8548,
+                   "hashes":  [
+                                  "5C74BF98F2362127173C53F7808950D4B6676E1B1C901A341163F7032AE78965",
+                                  "C294D2608E783486BA4489A64CE31EC6FD4669DED4F571400C2EDD8CFCA92215",
+                                  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E",
+                                  "3508416F7FB6367BC7345970C22603E03DA963A01F4B5C0A1DF1AAAC2D90CF71"
+                              ],
+                   "modules":  [
+                                   {
+                                       "path":  "C:\\BC250\\m13\\dwm-hosted032\\bc250d3d_zink.dll",
+                                       "sha256":  "5C74BF98F2362127173C53F7808950D4B6676E1B1C901A341163F7032AE78965",
+                                       "name":  "bc250d3d_zink.dll"
+                                   },
+                                   {
+                                       "path":  "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+                                       "sha256":  "C294D2608E783486BA4489A64CE31EC6FD4669DED4F571400C2EDD8CFCA92215",
+                                       "name":  "bc250d3d.dll"
+                                   },
+                                   {
+                                       "path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+                                       "sha256":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E",
+                                       "name":  "vulkan_radeon.dll"
+                                   },
+                                   {
+                                       "path":  "C:\\BC250\\m13\\dwm-hosted032\\vulkan_radeon.dll",
+                                       "sha256":  "3508416F7FB6367BC7345970C22603E03DA963A01F4B5C0A1DF1AAAC2D90CF71",
+                                       "name":  "vulkan_radeon.dll"
+                                   }
+                               ]
+               },
+    "ready":  true,
+    "missing":  [
+
+                ],
+    "first_create_success_utc":  "2026-09-27T12:54:35.1338450Z"
+}

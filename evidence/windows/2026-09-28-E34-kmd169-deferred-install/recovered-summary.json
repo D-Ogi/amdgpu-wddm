@@ -1,0 +1,13 @@
+{
+  "utc": "2026-09-28T02:53:33.6038286Z",
+  "version": "0.7.166.1",
+  "kmd_sha256": "AA77E8B34ADF76D90688F146837CDBECB747AB875C75AB0BED00262BE8C936DD",
+  "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+  "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+  "health": "health abi=1 version=0x000700A6 flags=15 generation=4013768302 epoch=5 completed=167 age_ms=126 ready_ms=124029\r\n",
+  "temperature": "04:53:40 Tctl 67.1 C (raw 743B0FEF)\r\n",
+  "source": "Selected final preflight fields; device identifiers excluded",
+  "task_removed": true,
+  "candidate_packages_remaining": 0,
+  "boot_utc": "2026-09-28T02:44:58.5000000Z"
+}

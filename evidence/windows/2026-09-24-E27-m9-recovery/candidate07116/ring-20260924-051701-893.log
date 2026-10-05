@@ -1,0 +1,103 @@
+bc250kmd 0x00070074 log snapshot: 100 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.008 stage 10
+     1      0.010 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.010 stage 20
+     3      0.122 stage 30
+     4      0.124 stage 31
+     5      0.126 stage 32
+     6      0.126 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.126 stage 33
+     8      0.128 stage 34
+     9      0.128 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.128 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.128 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.128 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.128 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.128 gart: ready, dummy page at 0x26FFFA000
+    15      0.128 psp: ready
+    16      0.128 gpumem: ready, doorbells at 0xD0000000
+    17      0.128 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.128 ih: ready
+    19      0.132 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.136 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.136 startup: entering interrupt connection
+    22      0.141 startup: entering firmware preparation
+    23      0.145 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    24      0.145 gfx: unpublished translation bootstrap entered with engines halted
+    25      0.145 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    26      0.145 startup: entering GART initialization
+    27      0.159 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    28      0.159 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    29      0.159 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    30      0.159 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    31      0.159 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    32      0.159 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.159 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    34      0.159 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    35      0.159 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    36      0.159 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    37      0.159 startup: entering PSP initialization
+    38      0.212 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.233 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    40      0.233 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    41      0.233 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 269 us, in TMR at 0x0
+    42      0.233 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    43      0.235 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1908 us, in TMR at 0x0
+    44      0.235 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    45      0.237 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1890 us, in TMR at 0x0
+    46      0.237 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    47      0.243 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5862 us, in TMR at 0xF5FF842000
+    48      0.243 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    49      0.249 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5944 us, in TMR at 0xF5FF883000
+    50      0.249 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    51      0.255 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5912 us, in TMR at 0xF5FF8C4000
+    52      0.255 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    53      0.261 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6013 us, in TMR at 0xF5FF800000
+    54      0.261 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    55      0.261 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    56      0.261 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.267 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6013 us, in TMR at 0xF5FF800000
+    58      0.267 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    59      0.267 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    60      0.267 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    61      0.269 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    62      0.269 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.269 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    64      0.269 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    65      0.269 startup: entering IH initialization
+    66      0.271 ih: init: rc 0, 18 writes
+    67      0.271 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    68      0.271 startup: entering GFX initialization
+    69      0.273 startup: entering GFX stage 1
+    70      0.279 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    71      0.279 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    72      0.283 startup: entering GFX stage 2
+    73      0.285 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+    74      0.285 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    75      0.287 startup: entering GFX stage 3
+    76      0.289 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 4 us
+    77      0.289 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    78      0.293 startup: entering GFX stage 4
+    79      0.295 gfx: stage 4 (constants): rc 0, 157 writes so far, 78 us
+    80      0.295 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    81      0.297 startup: entering GFX stage 5
+    82      0.301 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+    83      0.301 gfx: RLC after-invalidate-request CNTL 0x00000001 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.301 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+    85      0.301 gfx: RLC after-invalidate-request-read CNTL 0x00000001 read 0x00000000 STATUS2 0x01004008 read 0x00000000
+    86      0.301 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+    87      0.301 gfx: RLC after-invalidate-ack CNTL 0x00000001 read 0x00000000 STATUS2 0x01004008 read 0x00000000
+    88      0.301 gpumem: startup GFX translations committed after RLC, before CP
+    89      0.301 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x01004008 read 0x00000000
+    90      0.301 gfx: stage 5 (RLC): rc 0, 10 writes so far, 234 us
+    91      0.301 gfx: op 1 to stage 5 -> 0x00000000, result 0, 10 writes, 0 doorbells
+    92      0.303 startup: entering GFX stage 6
+    93      0.305 startup: entering CP step 1
+    94      0.307 startup: CP1 checkpoint acquire-paging-lock
+    95      0.311 startup: CP1 checkpoint acquire-gart-lock
+    96      0.313 startup: CP1 checkpoint locks-acquired
+    97      0.317 amdgpu[0]: CP resume kiq-init begin
+
+    98      0.317 startup: CP1 checkpoint scheduler
+    99      0.319 startup: CP1 checkpoint scheduler-read

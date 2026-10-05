@@ -1,0 +1,41 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "parent": "e898ff1",
+  "imports": [
+    "37b7c68",
+    "608cada",
+    "d98dd68",
+    "b250ed1",
+    "99c76b5",
+    "54f4d39"
+  ],
+  "compared_existing_driver_and_third_party_files": 303,
+  "changed_existing": [
+    "driver/kmd/bc250kmd.inf",
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/dcn_translate.c",
+    "driver/kmd/dcn_translate.h",
+    "driver/kmd/test/dcn_translate_test.c",
+    "driver/kmd/wddm.c"
+  ],
+  "method": "git blob bytes versus candidate, CRLF normalized only",
+  "working_files": {
+    "driver/kmd/bc250kmd.inf": "510e45c81f62489b9f82e7f779055a881c9cd399c1976742031e164acec13465",
+    "driver/kmd/bc250kmd_escape.h": "c0a29d0d40b5a6b896057aeb9f231e1abe1df04fbc3550be2329e694e3d3ab17",
+    "driver/kmd/gdi_private.h": "d259e64e9f3e1070dbdd47e2b20b686ee3ccc72a4b3b12e6e9de17ad229e90d5",
+    "driver/kmd/test/allocation_identity_test.c": "b27c258bbc5e61444bfbb87d49579f0c5ff27f5259f05f76ab2cd17f79d8c878",
+    "driver/kmd/test/dcn_translate_test.c": "9a602c2df523ec53acd24fb94411cea0fb3cd931737bcc08ddd8762595c5f0e3",
+    "driver/kmd/wddm.c": "f06f726705c54f3088188c85282f7f8b7a3b86a57975b59121b65bf36347434e",
+    "experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md": "60096819b818a3313d36aab2beae13133a036addb7f0121c26536bcefaa2aadc",
+    "driver/kmd/present_range.h": "a645e4c4063e2ffdca3d9b0f4d78e4c67dcefd9dfc5b39b4ab8d6ec68bb848a2"
+  },
+  "patches": {
+    "37b7c68.patch": "c14ce7742dc4b5a7fcf1cf6418f367a8998181d2739405cd8917ea5f15addb8a",
+    "54f4d39-code.patch": "519ea7e9549fec976091fbdf754dd5e8a1db0b929f105abe7a8eaaab07f0e3f0",
+    "54f4d396199d3639e7871e0651f609000056a398.patch": "2d21327eb94b0fa82136ddb8fb0e332bd09cce4f92e6181221c7afbc31fa848c",
+    "608cada.patch": "7169eee43b156eef905ef058e1c22a9c8d90ca9eee9d35d35973a5a3cd215830",
+    "99c76b5.patch": "5624c32902e40a72f057cea73ee4ffac8faf02cd24e7a54ca90963136aff74d0",
+    "b250ed1.patch": "5f09b5b374f37358b6f32393443b3146d2ea880ca6b63ef9887507536673b0da",
+    "d98dd68.patch": "dc46393a357dbe59a0640e2e1ced68c2afefdd8899b3b6dc402e81ceaa670964"
+  }
+}

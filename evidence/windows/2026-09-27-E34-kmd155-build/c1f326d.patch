@@ -1,0 +1,140 @@
+diff --git a/driver/kmd/dcn_translate.c b/driver/kmd/dcn_translate.c
+index 56992f0..a7f4522 100644
+--- a/driver/kmd/dcn_translate.c
++++ b/driver/kmd/dcn_translate.c
+@@ -39,3 +39,15 @@ int DcnSurfaceBytes(unsigned long Width,unsigned long Height,unsigned long Pitch
+     *Bytes=(unsigned long long)Pitch*Height;
+     return 1;
+ }
++
++int DcnSharedTextureLayout(unsigned long Width,unsigned long Height,
++    unsigned long* Pitch,unsigned long long* Bytes)
++{
++    unsigned long pitch;
++    if (!Pitch || !Bytes) return 0;
++    *Pitch=0;*Bytes=0;
++    if (!Height || Height>0xfffffffcul) return 0;
++    pitch=DcnPrimaryPitch(Width);
++    if (!DcnSurfaceBytes(Width,(Height+3ul)&~3ul,pitch,Bytes)) return 0;
++    *Pitch=pitch;return 1;
++}
+diff --git a/driver/kmd/dcn_translate.h b/driver/kmd/dcn_translate.h
+index 9835933..013f882 100644
+--- a/driver/kmd/dcn_translate.h
++++ b/driver/kmd/dcn_translate.h
+@@ -31,6 +31,10 @@ int DcnSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pit
+                     unsigned long long* Bytes);
+ unsigned long DcnPrimaryPitch(unsigned long Width);
+ 
++// LB7A shared-texture layout accepted by the DWM UMD's OpenResource checks.
++int DcnSharedTextureLayout(unsigned long Width, unsigned long Height,
++    unsigned long* Pitch, unsigned long long* Bytes);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/driver/kmd/test/dcn_translate_test.c b/driver/kmd/test/dcn_translate_test.c
+index ec659c3..ce52539 100644
+--- a/driver/kmd/test/dcn_translate_test.c
++++ b/driver/kmd/test/dcn_translate_test.c
+@@ -60,6 +60,19 @@ static void Geometry(unsigned long long mcBase, unsigned long long vramBase,
+ 
+ int main(void)
+ {
++    unsigned long w,h,pitch;unsigned long long bytes;
++    for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
++        CHECK(DcnSharedTextureLayout(w,h,&pitch,&bytes));
++        // Independent consumer contract: Resource.cpp OpenResource on a0ad8af5.
++        CHECK(!(pitch&15u));
++        CHECK(pitch>=((w+3u)&~3u)*4u);
++        CHECK(bytes>=(unsigned long long)pitch*((h+3u)&~3u));
++    }
++    CHECK(DcnSharedTextureLayout(1,1,&pitch,&bytes) && pitch==256 && bytes==1024);
++    CHECK(!DcnSharedTextureLayout(0,1,&pitch,&bytes) && !pitch && !bytes);
++    CHECK(!DcnSharedTextureLayout(1,0,&pitch,&bytes) && !pitch && !bytes);
++    CHECK(!DcnSharedTextureLayout(1,0xfffffffful,&pitch,&bytes) && !pitch && !bytes);
++    CHECK(!DcnSharedTextureLayout(0xfffffffful,1,&pitch,&bytes) && !pitch && !bytes);
+     Geometry(0xF400000000ull, 0x270000000ull, 256ull << 20);
+     Geometry(0xF400000000ull, 0x270000000ull, 8ull << 30);
+     Geometry(0xE800000000ull, 0x670000000ull, 12ull << 30);
+diff --git a/driver/kmd/wddm.c b/driver/kmd/wddm.c
+index 7ab08a6..8d5bb3a 100644
+--- a/driver/kmd/wddm.c
++++ b/driver/kmd/wddm.c
+@@ -2607,12 +2607,23 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
+     default:
+         return STATUS_INVALID_PARAMETER;
+     }
+-    // Scanout rows are aligned to 256 bytes (64 32-bit pixels). Other CPU
+-    // surfaces retain their linear pitch. Extent includes every padded row.
+-    if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
+-    private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
+-        DcnPrimaryPitch(private.Width):private.Width*4;
+-    if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
++    // Standard GDI textures are opened by the DWM UMD. Its LB7A OpenResource
++    // contract needs pitch alignment and a four-row-padded allocation, just like
++    // the UMD-created shared textures. Logical Width/Height remain unchanged.
++    // Scanout uses the same row alignment; other CPU surfaces keep linear pitch.
++    {
++        BOOLEAN texture=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE &&
++            pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_TEXTURE;
++        if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
++        if (texture) {
++            if (!DcnSharedTextureLayout(private.Width,private.Height,&private.Pitch,&private.Size))
++                return STATUS_INVALID_PARAMETER;
++        } else {
++            private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
++                DcnPrimaryPitch(private.Width):private.Width*4;
++            if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
++        }
++    }
+     // These are output fields, not just copies in our private LB7A blob.
+     // E26 ETW rejected shadow/staging creation when the public pitch was zero.
+     if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE)
+diff --git a/experiments/E34-native-d3d-zink/hosted-runtime/present-admission-and-gdi-layout.md b/experiments/E34-native-d3d-zink/hosted-runtime/present-admission-and-gdi-layout.md
+new file mode 100644
+index 0000000..b15306e
+--- /dev/null
++++ b/experiments/E34-native-d3d-zink/hosted-runtime/present-admission-and-gdi-layout.md
+@@ -0,0 +1,29 @@
++# Present admission and standard GDI texture layout
++
++The planned arbitrary offscreen D3DKMTPresent control is not supported by the
++consulted contract. Local WDK26100 reference d3dkmthk.md, D3DKMT_PRESENT fields
++hDestination/hWindow, requires source ownership and appropriate primary surfaces
++for nonzero hDestination. An ordinary destination allocation with the current
++DWM owning VidPn is not an established path to DxgkDdiPresent. Such rejection
++would not validate or invalidate BGP1. No such lab call was made.
++
++The agreed windowed ICD route still requires CDD/DWM interop and its allocation
++obligations; the capability remains off until those are implemented and bounded
++validation is prepared. An exclusive-primary test would need a separate display
++ownership transition and does not replace composition acceptance.
++
++A source-level prerequisite was corrected: standard D3DKMDT_GDISURFACE_TEXTURE
++had width*4 pitch and height*pitch bytes. The current UMD OpenResource in
++scratch/g0-umd-source (a0ad8af5), src/gallium/frontends/d3d10umd/Resource.cpp,
++rejects pitch not divisible by16, pitch less than round_up(width,4)*4, and size
++less than pitch*round_up(height,4). Thus many odd-sized standard textures could
++not open even before GPU sampling. KMD now uses its256-byte row alignment and
++four-row allocation padding for that texture type, keeping logical dimensions.
++Other standard surfaces retain their prior geometry. Integer bounds precede
++padding. This matches the allocation size convention used by DxgiFns.cpp.
++
++This correction does not implement staging policy, A8 staging interpretation,
++existing-system-memory allocations, authoritative shared-open identity, cache
++ordering or the complete interop contract. No new capability or lab deployment.
++The existing isolated154 candidate predates this correction and is not treated
++as a complete CDD/DWM candidate.
+diff --git a/tools/quality/quick.ps1 b/tools/quality/quick.ps1
+index 93709b8..f0a8b44 100644
+--- a/tools/quality/quick.ps1
++++ b/tools/quality/quick.ps1
+@@ -20,6 +20,7 @@ try {
+  Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
+  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
+  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
++ Check 'surface-layout' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_translate.ps1" -Root $Workspace -Out "$Out\surface-layout" -Kits "$Workspace\toolchain\nuget" }
+  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Workspace\toolchain\nuget" }
+  Check 'gfx-copy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_copy.ps1" -Root $Workspace -Out "$Out\gfx-copy" -Kits "$Workspace\toolchain\nuget" }
+  Check 'gfx-blt' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_blt.ps1" -Root $Workspace -Out "$Out\gfx-blt" -Kits "$Workspace\toolchain\nuget" }

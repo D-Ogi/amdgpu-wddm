@@ -3,6 +3,7 @@
 *.sh   text eol=lf
 *.md   text eol=lf
 *.json text eol=lf
+*.yaml text eol=lf
 *.cfg  text eol=lf
 *.conf text eol=lf
 *.h    text eol=lf
@@ -13,3 +14,6 @@
 tools/diagusb/overlay/** text eol=lf
 # Evidence is stored byte for byte, never normalized
 evidence/** -text
+
+# PAM benchmark captures contain binary pixel payloads.
+*.pam binary

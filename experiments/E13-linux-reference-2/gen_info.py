@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Generate info.json for info.py from the amdgpu UAPI header: the AMDGPU_INFO query ids, the sub-queries of FW_VERSION,
 SENSOR, VRAM_GTT-like queries and the hardware IP types. No number is typed here; the header is Mesa's copy of the
-kernel's include/uapi/drm/amdgpu_drm.h (P:/BC-250/ref/mesa/include/drm-uapi/amdgpu_drm.h).
+kernel's include/uapi/drm/amdgpu_drm.h (<BC250_ROOT>/ref/mesa/include/drm-uapi/amdgpu_drm.h). BC250_ROOT is the
+workspace root, by default the parent directory of this repository.
 
 Run:  python experiments/E13-linux-reference-2/gen_info.py [header]
 """
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
-HEADER = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"P:\BC-250\ref\mesa\include\drm-uapi\amdgpu_drm.h")
+ROOT = Path(os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent)))
+HEADER = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "ref" / "mesa" / "include" / "drm-uapi" / "amdgpu_drm.h"
 DEFINE = re.compile(r"^#define\s+(AMDGPU_(?:INFO|HW_IP)_\w+|DRM_AMDGPU_INFO)\s+(0x[0-9a-fA-F]+|\d+)\s*(?:/\*.*)?$")
 
 # Left out on purpose: the VBIOS image and its strings stay out of the repo, register reads go through regs2.py's named

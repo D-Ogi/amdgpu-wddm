@@ -1,0 +1,5 @@
+retained_power_actual.c
+FAIL 154: memcmp((char*)w+off,(const char*)before+off,sizeof(*w)-off)==0
+FAIL 154: memcmp((char*)w+off,(const char*)before+off,sizeof(*w)-off)==0
+FAIL 154: memcmp((char*)w+off,(const char*)before+off,sizeof(*w)-off)==0
+Retained WDDM power: 191 checks, 3 failures

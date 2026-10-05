@@ -1,0 +1,13 @@
+--- before/bc250kmd.h
++++ after/bc250kmd.h
+@@ -164,6 +164,10 @@
+     PVOID Gart;                         // gart.c, NULL unless the EnableGart gate was open at start
+     PVOID Psp;                          // psp.c, NULL unless the EnablePsp gate was open at start
+     PVOID GpuMem;                       // gpumem.c, NULL unless the EnableGfx gate was open at start
++    KSPIN_LOCK GfxAccessLock;           // protects DPC reader admission and reference count
++    KEVENT GfxAccessDrained;
++    ULONG GfxAccessUsers;
++    BOOLEAN GfxAccessClosed;
+     EX_PUSH_LOCK GfxPagingLock;         // builder shared, GfxEscape/Stop exclusive; acquired before GartLock
+     PVOID Gfx;                          // gfx.c, the same
+     PVOID Ih;                           // ih.c, NULL unless the EnableIh gate was open at start

@@ -1,0 +1,7 @@
+Runtime control exit -1073741819
+At C:\BC250\m14\runtime003\phase.ps1:48 char:29
++ ... hild.ExitCode -ne 0){throw "Runtime control exit $($child.ExitCode)"}
++                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Runtime control exit -1073741819:String) [], RuntimeException
+    + FullyQualifiedErrorId : Runtime control exit -1073741819
+ 

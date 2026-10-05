@@ -1,0 +1,222 @@
+#sessionInfo releaseName vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce
+#sessionInfo releaseId 0xf6a29701
+#sessionInfo targetName "Default"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x1002
+#sessionInfo deviceID 0x13fe
+#sessionInfo deviceName AMD BC-250 (RADV GFX1013)
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.ray_query.builtin.flow.comp.triangles --deqp-log-filename=C:\BC250\m15\rt-emulate001\case.qpa --deqp-vk-library-path=C:\BC250\m15\rt-emulate001\cts-direct.dll --deqp-watchdog=enable"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.ray_query.builtin.flow.comp.triangles
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.ray_query.builtin.flow.comp.triangles" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="comp" Description="Program: comp">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <ComputeShader CompileStatus="OK">
+    <ShaderSource>#version 460 core
+#extension GL_EXT_ray_query : require
+layout(set = 0, binding = 0, r32i) uniform iimage3D result;
+layout(set = 0, binding = 1) uniform accelerationStructureEXT rayQueryTopLevelAccelerationStructure;
+
+void main()
+{
+  ivec3       pos      = ivec3(gl_WorkGroupID);
+  ivec3       size     = ivec3(gl_NumWorkGroups);
+  uint        rayFlags = gl_RayFlagsNoOpaqueEXT;
+  uint        cullMask = 0xFF;
+  float       tmin     = 0.0;
+  float       tmax     = 9.0;
+  vec3        origin   = vec3((float(pos.x) + 0.5f) / float(size.x), (float(pos.y) + 0.5f) / float(size.y), 0.0);
+  vec3        direct   = vec3(0.0, 0.0, -1.0);
+  uint        value    = 4;
+  rayQueryEXT rayQuery;
+
+  rayQueryInitializeEXT(rayQuery, rayQueryTopLevelAccelerationStructure, rayFlags, cullMask, origin, tmin, direct, tmax);
+
+  if (rayQueryProceedEXT(rayQuery))
+  {
+    value--;
+    if (rayQueryGetIntersectionTypeEXT(rayQuery, false) == gl_RayQueryCandidateIntersectionTriangleEXT)
+    {
+      value--;
+      rayQueryConfirmIntersectionEXT(rayQuery);
+
+      rayQueryProceedEXT(rayQuery);
+
+      if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
+        value--;
+    }
+  }
+
+  imageStore(result, pos, ivec4(value, 0, 0, 0));
+}
+</ShaderSource>
+    <InfoLog></InfoLog>
+</ComputeShader>
+</ShaderProgram>
+  <Number Name="ComputeCompileTime" Description="Compute shader compile time" Tag="Time" Unit="ms">385.223999</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.024000</Number>
+</Section>
+ <ShaderProgram LinkStatus="OK">
+  <InfoLog></InfoLog>
+  <SpirVAssemblySource>; SPIR-V
+; Version: 1.4
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 105
+; Schema: 0
+OpCapability Shader
+OpCapability RayQueryKHR
+OpExtension &quot;SPV_KHR_ray_query&quot;
+%1 = OpExtInstImport &quot;GLSL.std.450&quot;
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %4 &quot;main&quot; %13 %17 %62 %65 %98
+OpExecutionMode %4 LocalSize 1 1 1
+OpDecorate %13 BuiltIn WorkgroupId
+OpDecorate %17 BuiltIn NumWorkgroups
+OpDecorate %65 Binding 1
+OpDecorate %65 DescriptorSet 0
+OpDecorate %98 Binding 0
+OpDecorate %98 DescriptorSet 0
+%2 = OpTypeVoid
+%3 = OpTypeFunction %2
+%6 = OpTypeInt 32 1
+%7 = OpTypeVector %6 3
+%8 = OpTypePointer Function %7
+%10 = OpTypeInt 32 0
+%11 = OpTypeVector %10 3
+%12 = OpTypePointer Input %11
+%13 = OpVariable %12 Input
+%17 = OpVariable %12 Input
+%20 = OpTypePointer Function %10
+%22 = OpConstant %10 2
+%24 = OpConstant %10 255
+%25 = OpTypeFloat 32
+%26 = OpTypePointer Function %25
+%28 = OpConstant %25 0
+%30 = OpConstant %25 9
+%31 = OpTypeVector %25 3
+%32 = OpTypePointer Function %31
+%34 = OpConstant %10 0
+%35 = OpTypePointer Function %6
+%39 = OpConstant %25 0.5
+%45 = OpConstant %10 1
+%56 = OpConstant %25 -1
+%57 = OpConstantComposite %31 %28 %28 %56
+%59 = OpConstant %10 4
+%60 = OpTypeRayQueryKHR
+%61 = OpTypePointer Private %60
+%62 = OpVariable %61 Private
+%63 = OpTypeAccelerationStructureKHR
+%64 = OpTypePointer UniformConstant %63
+%65 = OpVariable %64 UniformConstant
+%73 = OpTypeBool
+%78 = OpConstant %6 1
+%80 = OpConstantFalse %73
+%81 = OpConstant %6 0
+%89 = OpConstantTrue %73
+%96 = OpTypeImage %6 3D 0 0 0 2 R32i
+%97 = OpTypePointer UniformConstant %96
+%98 = OpVariable %97 UniformConstant
+%103 = OpTypeVector %6 4
+%4 = OpFunction %2 None %3
+%5 = OpLabel
+%9 = OpVariable %8 Function
+%16 = OpVariable %8 Function
+%21 = OpVariable %20 Function
+%23 = OpVariable %20 Function
+%27 = OpVariable %26 Function
+%29 = OpVariable %26 Function
+%33 = OpVariable %32 Function
+%55 = OpVariable %32 Function
+%58 = OpVariable %20 Function
+%14 = OpLoad %11 %13
+%15 = OpBitcast %7 %14
+OpStore %9 %15
+%18 = OpLoad %11 %17
+%19 = OpBitcast %7 %18
+OpStore %16 %19
+OpStore %21 %22
+OpStore %23 %24
+OpStore %27 %28
+OpStore %29 %30
+%36 = OpAccessChain %35 %9 %34
+%37 = OpLoad %6 %36
+%38 = OpConvertSToF %25 %37
+%40 = OpFAdd %25 %38 %39
+%41 = OpAccessChain %35 %16 %34
+%42 = OpLoad %6 %41
+%43 = OpConvertSToF %25 %42
+%44 = OpFDiv %25 %40 %43
+%46 = OpAccessChain %35 %9 %45
+%47 = OpLoad %6 %46
+%48 = OpConvertSToF %25 %47
+%49 = OpFAdd %25 %48 %39
+%50 = OpAccessChain %35 %16 %45
+%51 = OpLoad %6 %50
+%52 = OpConvertSToF %25 %51
+%53 = OpFDiv %25 %49 %52
+%54 = OpCompositeConstruct %31 %44 %53 %28
+OpStore %33 %54
+OpStore %55 %57
+OpStore %58 %59
+%66 = OpLoad %63 %65
+%67 = OpLoad %10 %21
+%68 = OpLoad %10 %23
+%69 = OpLoad %31 %33
+%70 = OpLoad %25 %27
+%71 = OpLoad %31 %55
+%72 = OpLoad %25 %29
+OpRayQueryInitializeKHR %62 %66 %67 %68 %69 %70 %71 %72
+%74 = OpRayQueryProceedKHR %73 %62
+OpSelectionMerge %76 None
+OpBranchConditional %74 %75 %76
+%75 = OpLabel
+%77 = OpLoad %10 %58
+%79 = OpISub %10 %77 %78
+OpStore %58 %79
+%82 = OpRayQueryGetIntersectionTypeKHR %10 %62 %81
+%83 = OpIEqual %73 %82 %34
+OpSelectionMerge %85 None
+OpBranchConditional %83 %84 %85
+%84 = OpLabel
+%86 = OpLoad %10 %58
+%87 = OpISub %10 %86 %78
+OpStore %58 %87
+OpRayQueryConfirmIntersectionKHR %62
+%88 = OpRayQueryProceedKHR %73 %62
+%90 = OpRayQueryGetIntersectionTypeKHR %10 %62 %78
+%91 = OpIEqual %73 %90 %45
+OpSelectionMerge %93 None
+OpBranchConditional %91 %92 %93
+%92 = OpLabel
+%94 = OpLoad %10 %58
+%95 = OpISub %10 %94 %78
+OpStore %58 %95
+OpBranch %93
+%93 = OpLabel
+OpBranch %85
+%85 = OpLabel
+OpBranch %76
+%76 = OpLabel
+%99 = OpLoad %96 %98
+%100 = OpLoad %7 %9
+%101 = OpLoad %10 %58
+%102 = OpBitcast %6 %101
+%104 = OpCompositeConstruct %103 %102 %81 %81 %81
+OpImageWrite %99 %100 %104 SignExtend
+OpReturn
+OpFunctionEnd
+</SpirVAssemblySource>
+</ShaderProgram>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">2369673</Number>
+ <Result StatusCode="Pass">Pass</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 2.46 seconds
+
+#endSession

@@ -1,0 +1,2529 @@
+{
+  "trace": "OS Version: 10.0.22631,Trace Size: 133120KB,Events Lost: 0,Buffers lost: 0,Trace Start: 134347773532267114,Trace Length: 34 sec,PointerSize: 8,Trace Name: scratch\\m9\\input-direct146\\post-s4-01\\graphics.etl",
+  "last_selected_event_us": 29093661,
+  "counts": {
+    "Microsoft-Windows-DxgKrnl/EtwVersion/win:Stop": 1,
+    "Microsoft-Windows-DxgKrnl/Process/win:DC_Start": 139,
+    "Microsoft-Windows-DxgKrnl/MonitoredFence/win:DC_Start": 117,
+    "Microsoft-Windows-DxgKrnl/Fence/win:DC_Start": 2,
+    "Microsoft-Windows-DxgKrnl/ReportSyncObject/win:Start": 26,
+    "Microsoft-Windows-DxgKrnl/FlushScheduler/win:Info": 4,
+    "Microsoft-Windows-DxgKrnl/Adapter/win:DC_Start": 2,
+    "Microsoft-Windows-DxgKrnl/DpiReportAdapter/win:Info": 2,
+    "Microsoft-Windows-DxgKrnl/Brightness/win:Info": 2,
+    "Microsoft-Windows-DxgKrnl/BacklightOptimizationLevel/win:Info": 2,
+    "Microsoft-Windows-DxgKrnl/Device/win:DC_Start": 35,
+    "Microsoft-Windows-DxgKrnl/Context/win:DC_Start": 48,
+    "Microsoft-Windows-DxgKrnl/ChangePriority/win:Info": 59,
+    "Microsoft-Windows-DxgKrnl/AssociateDxgSchedulerObject/win:Info": 31,
+    "Microsoft-Windows-DxgKrnl/AdapterAllocation/win:DC_Start": 773,
+    "Microsoft-Windows-DxgKrnl/DeviceAllocation/win:DC_Start": 792,
+    "Microsoft-Windows-DxgKrnl/PagingQueuePacket/win:Start": 43,
+    "Microsoft-Windows-DxgKrnl/PagingQueuePacket/win:Info": 43,
+    "Microsoft-Windows-DxgKrnl/PagingPreparation/win:Start": 90,
+    "Microsoft-Windows-DxgKrnl/ReportSegment/win:Info": 6,
+    "Microsoft-Windows-DxgKrnl/ReportCommittedGlobalAllocation/win:DC_Start": 4,
+    "Microsoft-Windows-DxgKrnl/AddDmaBuffer/win:Start": 6,
+    "Microsoft-Windows-DxgKrnl/ReportCommittedAllocation/win:Info": 610,
+    "Microsoft-Windows-DxgKrnl/LockAllocationBackingStore/win:Info": 282,
+    "Microsoft-Windows-DxgKrnl/VidMmProcessBudgetChange/win:Info": 21,
+    "Microsoft-Windows-DxgKrnl/VidMmProcessUsageChange/win:Info": 27,
+    "Microsoft-Windows-DxgKrnl/VidMmProcessCommitmentChange/win:Info": 29,
+    "Microsoft-Windows-DxgKrnl/PagingPreparation/win:Stop": 90,
+    "Microsoft-Windows-DxgKrnl/UnwaitCpuWaiter/win:Info": 43,
+    "Microsoft-Windows-DxgKrnl/PagingQueuePacket/win:Stop": 43,
+    "Microsoft-Windows-DxgKrnl/AdapterFeatureState/win:Info": 4,
+    "Microsoft-Windows-DxgKrnl/NodeMetadata/win:Info": 15,
+    "Microsoft-Windows-DxgKrnl/SetDisplayMode/win:Info": 1,
+    "Microsoft-Windows-DxgKrnl/VidMmMakeResident/win:DC_Start": 20,
+    "Microsoft-Windows-DxgKrnl/Profiler/win:Start": 12409,
+    "Microsoft-Windows-DxgKrnl/Profiler/win:Stop": 12410,
+    "Microsoft-Windows-DxgKrnl/VSyncInterrupt/win:Info": 1739,
+    "Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info": 1739,
+    "Microsoft-Windows-DxgKrnl/VSyncDPCMultiPlane/win:Info": 1739,
+    "Microsoft-Windows-DxgKrnl/DWMVsyncSignal/win:Info": 1739,
+    "Microsoft-Windows-DxgKrnl/ProcessAllocationDetails/win:Start": 739,
+    "Microsoft-Windows-DxgKrnl/BlockThread/win:Info": 5,
+    "Microsoft-Windows-DxgKrnl/PageInAllocation/win:Info": 4,
+    "Microsoft-Windows-DxgKrnl/Process/win:Stop": 16,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_WFW/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_WFVB/win:Start": 252,
+    "Microsoft-Windows-DxgKrnl/VSyncWaiterChange/win:Info": 674,
+    "Microsoft-Windows-DxgKrnl/DWMVsyncCountWait/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_WFVB/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_UPDATE_TIMES/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_GETPRESENTSTATS/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_VSYNC_QPC_SMOOTHING_RESET/win:Info": 458,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_VSYNC_QPC_SMOOTHING_UPDATE/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_VSYNC_QPC_SMOOTHING/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_GETPRESENTSTATS1/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT_STATS_DELTAS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_NEW_EFFECTIVE_REFRESH_PERIOD_DELTAS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_GETPRESENTSTATS/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_FRAMEINFO/win:Info": 504,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_UPDATE_TIMES/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDERTIME/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PROCESS_FRAME/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_FRAME_VSYNCDEADLINES/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/CurrentFrameId/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/COMMANDS_COUNT/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY_GetPresentHistory/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENTHISTORYTOKEN_GDISYSMEM/win:Info": 35,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DWMUPDATEWINDOW/win:Info": 32,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSSURFACEUPDATES/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSSURFACEUPDATES/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_CHECKDEVICESTATE/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_CHECKDEVICESTATE/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_CLEAR_D2D_CACHES/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_CLEAR_D2D_CACHES/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/UCE_PROCESSANIMATERESOURCES/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/UCE_PROCESSANIMATERESOURCES/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/PROCESS_EXPRESSIONS/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/PROCESS_EXPRESSIONS/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRECOMPUTEEVENT/win:Start": 58,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DIRTY_ADDRECT/win:Info": 387,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRECOMPUTEEVENT/win:Stop": 58,
+    "Microsoft-Windows-Dwm-Core/OVERLAY_CANDIDATECOLLECTION/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_OCCLUSIONEVENT/win:Start": 279,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_OCCLUSIONEVENT/win:Info": 178,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_OCCLUSIONEVENT/win:Stop": 279,
+    "Microsoft-Windows-Dwm-Core/OVERLAY_CANDIDATECOLLECTION/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWING_CONTEXT_FRAME/win:Start": 74,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_RENDEREVENT/win:Start": 47,
+    "Microsoft-Windows-Dwm-Core/RENDER_CVIPASS/win:Start": 47,
+    "Microsoft-Windows-Dwm-Core/RENDER_CVIPASS/win:Stop": 47,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_RENDEREVENT/win:Stop": 47,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWING_CONTEXT_FRAME/win:Stop": 74,
+    "Microsoft-Windows-DxgKrnl/SignalSynchronizationObjectFromGpu/win:Info": 504,
+    "Microsoft-Windows-DxgKrnl/GetDeviceState/win:Info": 556,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_TIME/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PROCESS_FRAME/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PROCESS_FRAME/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/PROCESS_ATTRIBUTION/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_VBLANK_LOOP/win:Stop": 252,
+    "Microsoft-Windows-Dwm-Core/UNPRESENTED_FRAME/win:Info": 208,
+    "Microsoft-Windows-Dwm-Core/ENDFRAME_DRAWLIST_BATCH_STATS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/ENDFRAME_PRIMITIVE_GROUP_STATS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/ENDFRAME_TESSELLATED_PRIMITIVES_STATS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/ENDFRAME_HW_DRAWLIST_CACHE_STATS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/ENDFRAME_WARP_DRAWLIST_CACHE_STATS/win:Info": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_VBLANK_LOOP/win:Start": 252,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_WFW/win:Start": 252,
+    "Microsoft-Windows-DxgKrnl/Process/win:Start": 16,
+    "Microsoft-Windows-DxgKrnl/SetProcessStatus/win:Info": 7,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT/win:Info": 4570,
+    "Microsoft-Windows-Dwm-Core/COMMAND_PROCESSED_ONBEHALF/win:Info": 9773,
+    "Microsoft-Windows-Dwm-Core/CHANNELBATCHES_PROCESSED/win:Info": 266,
+    "Microsoft-Windows-Dwm-Core/SCHEDULED_COMPOSITION_REASON/win:Info": 353,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchCreate/win:Start": 23,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchCreate/win:Stop": 23,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchClose/win:Start": 46,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchClose/win:Stop": 46,
+    "Microsoft-Windows-DxgKrnl/WaitForVerticalBlankEventInternal/win:Info": 85,
+    "Microsoft-Windows-Dwm-Core/CHANNEL_OPENED_FOR_PROCESS/win:Info": 1,
+    "Microsoft-Windows-Dwm-Core/DCOMPEVENT_RESOURCE/win:Info": 391,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DIRTYREGIONEVENT/win:Info": 43,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_RENDEROPT_DISCARDVIEWEVENT/win:Info": 43,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWEVENT/win:Start": 86,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWEVENT/win:Stop": 86,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_DRAWING_CONTEXT_STATE/win:Info": 462,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_VISUAL_RENDERCONTENT/win:Info": 462,
+    "Microsoft-Windows-Dwm-Core/Dx_Flip_Consumed/win:Info": 6,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start": 42,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRESENTEVENT/win:Start": 42,
+    "Microsoft-Windows-DxgKrnl/Flip/win:Info": 42,
+    "Microsoft-Windows-DxgKrnl/QueuePacket/win:Start": 51,
+    "Microsoft-Windows-DxgKrnl/WorkerThread/win:Stop": 51,
+    "Microsoft-Windows-DxgKrnl/QueuePacket/win:Info": 51,
+    "Microsoft-Windows-DxgKrnl/YieldConditionEvaluation/win:Info": 34,
+    "Microsoft-Windows-DxgKrnl/Present/win:Info": 51,
+    "Microsoft-Windows-DxgKrnl/MMIOFlip/win:Info": 42,
+    "Microsoft-Windows-DxgKrnl/QueuePacket/win:Stop": 51,
+    "Microsoft-Windows-DxgKrnl/WorkerThread/win:Start": 51,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_PRESENT/win:Info": 42,
+    "Microsoft-Windows-Dwm-Core/LEGACYSWAPCHAIN_BUFFERFLIP/win:Info": 42,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_DXGI_PRESENT_SUCCEEDED/win:Info": 42,
+    "Microsoft-Windows-Dwm-Core/MILEVENT_MEDIA_UCE_PRESENTEVENT/win:Stop": 42,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop": 42,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_UPDATE_FRAME_INDEXES/win:Info": 42,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_DERIVEDISPLAYSET/win:Info": 1,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_CVI_UPDATE/win:Info": 24,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_CLEAREVENT/win:Start": 93,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_CLEAREVENT/win:Stop": 93,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_DXGI_OCCLUSION_EVENT/win:Info": 2,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_RETIREFRAME/win:Info": 41,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_GLITCH/win:Info": 31,
+    "Microsoft-Windows-Dwm-Core/CHANNEL_CLOSED_FOR_PROCESS/win:Info": 4,
+    "Microsoft-Windows-Dwm-Core/GDISPRITE_LOGICALSURFACE_ASSOCIATION/win:Info": 5,
+    "Microsoft-Windows-Dwm-Core/WINDOWNODE_GDISPRITE_ASSOCIATION/win:Info": 5,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_BITMAPCOPYEVENT/win:Info": 4,
+    "Microsoft-Windows-Dwm-Core/CHANNELANIMATIONS_ACTIVE/win:Info": 31,
+    "Microsoft-Windows-Dwm-Core/RENDERTARGET_RENDERSKIPPED/win:Info": 18,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchIoctl/win:Start": 2,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchIoctl/win:Stop": 2,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchInternalIoctl/win:Start": 3,
+    "Microsoft-Windows-DxgKrnl/DpiDispatchInternalIoctl/win:Stop": 3,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_TIMEADJUSTED_BETWEENFRAMES/win:Info": 3,
+    "Microsoft-Windows-DxgKrnl/Unlock/win:Info": 7,
+    "Microsoft-Windows-DxgKrnl/TerminateAllocation/win:Info": 7,
+    "Microsoft-Windows-DxgKrnl/DeviceAllocation/win:Stop": 7,
+    "Microsoft-Windows-DxgKrnl/VidMmDereferenceObjectAsync/win:Start": 2,
+    "Microsoft-Windows-DxgKrnl/AdapterAllocation/win:Stop": 2,
+    "Microsoft-Windows-DxgKrnl/VidMmDereferenceObjectAsync/win:Stop": 2,
+    "Microsoft-Windows-DxgKrnl/Context/win:Stop": 1,
+    "Microsoft-Windows-Dwm-Core/PROCESS_COMPOSITION_SURFACE_UPDATE_EVENT/win:Start": 4,
+    "Microsoft-Windows-Dwm-Core/PROCESS_COMPOSITION_SURFACE_UPDATE_EVENT/win:Stop": 4,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_COPYFRONTTOBACKBUFFEREVENT/win:Start": 14,
+    "Microsoft-Windows-DxgKrnl/MonitoredFence/win:Stop": 2,
+    "Microsoft-Windows-DxgKrnl/Device/win:Stop": 1,
+    "Microsoft-Windows-DxgKrnl/PresentHistory/win:Start": 9,
+    "Microsoft-Windows-DxgKrnl/PresentHistory/win:Info": 9,
+    "Microsoft-Windows-DxgKrnl/PresentHistory/win:Stop": 9,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_COPYFRONTTOBACKBUFFEREVENT/win:Stop": 14,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_NEW_EFFECTIVE_REFRESH_PERIOD/win:Info": 17,
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_SURFACEUPDATE/win:Info": 5,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_PUSH_EXTERNAL_LAYER_EVENT/win:Start": 69,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_PUSH_EXTERNAL_LAYER_EVENT/win:Stop": 69,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_POP_EXTERNAL_LAYER_EVENT/win:Start": 69,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_POP_EXTERNAL_LAYER_EVENT/win:Stop": 69,
+    "Microsoft-Windows-Dwm-Core/ETWGUID_D2DLAYERCREATEREASON/win:Info": 162
+  },
+  "render_stop_flags": {
+    "0x00000000": 210,
+    "0x00000001": 42
+  },
+  "seconds": {
+    "0": {
+      "SCHEDULE_RENDER": 20,
+      "SCHEDULE_WFW": 20
+    },
+    "1": {
+      "SCHEDULE_RENDER": 60,
+      "SCHEDULE_WFW": 60
+    },
+    "2": {
+      "SCHEDULE_RENDER": 60,
+      "SCHEDULE_WFW": 60
+    },
+    "3": {
+      "SCHEDULE_RENDER": 44,
+      "SCHEDULE_WFW": 44
+    },
+    "4": {
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "5": {
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_PRESENT": 2,
+      "SCHEDULE_GLITCH": 1
+    },
+    "6": {
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_GLITCH": 2,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_PRESENT": 1
+    },
+    "7": {
+      "SCHEDULE_WFW": 9,
+      "SCHEDULE_RENDER": 9,
+      "SCHEDULE_GLITCH": 3,
+      "SCHEDULE_PRESENT": 5
+    },
+    "8": {
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "9": {
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "10": {
+      "SCHEDULE_WFW": 21,
+      "SCHEDULE_RENDER": 21,
+      "SCHEDULE_GLITCH": 3,
+      "SCHEDULE_PRESENT": 11
+    },
+    "11": {
+      "SCHEDULE_WFW": 3,
+      "SCHEDULE_RENDER": 3,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "12": {
+      "SCHEDULE_PRESENT": 2,
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_GLITCH": 2,
+      "SCHEDULE_RENDER": 2
+    },
+    "13": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "14": {
+      "SCHEDULE_WFW": 4,
+      "SCHEDULE_RENDER": 4,
+      "SCHEDULE_GLITCH": 2,
+      "SCHEDULE_PRESENT": 1
+    },
+    "15": {
+      "SCHEDULE_PRESENT": 1,
+      "SCHEDULE_WFW": 1
+    },
+    "16": {
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "17": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "18": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "19": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "20": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "21": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "22": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "23": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "24": {
+      "SCHEDULE_WFW": 1,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_RENDER": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "25": {
+      "SCHEDULE_WFW": 4,
+      "SCHEDULE_RENDER": 4,
+      "SCHEDULE_GLITCH": 2,
+      "SCHEDULE_PRESENT": 1
+    },
+    "26": {
+      "SCHEDULE_PRESENT": 2,
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_GLITCH": 1
+    },
+    "27": {
+      "SCHEDULE_WFW": 2,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_PRESENT": 1
+    },
+    "28": {
+      "SCHEDULE_WFW": 3,
+      "SCHEDULE_RENDER": 2,
+      "SCHEDULE_GLITCH": 1,
+      "SCHEDULE_PRESENT": 1
+    }
+  },
+  "durations": {
+    "SCHEDULE_WFVB": {
+      "stats_us": {
+        "n": 252,
+        "min": 29,
+        "p50": 15802,
+        "p95": 16112,
+        "max": 16334
+      },
+      "longest": [
+        [
+          16334,
+          1938352,
+          1954686
+        ],
+        [
+          16200,
+          987633,
+          1003833
+        ],
+        [
+          16197,
+          3339654,
+          3355851
+        ],
+        [
+          16161,
+          1721610,
+          1737771
+        ],
+        [
+          16156,
+          3289654,
+          3305810
+        ]
+      ]
+    },
+    "SCHEDULE_GETPRESENTSTATS": {
+      "stats_us": {
+        "n": 252,
+        "min": 10,
+        "p50": 42,
+        "p95": 59,
+        "max": 75
+      },
+      "longest": [
+        [
+          75,
+          10394899,
+          10394974
+        ],
+        [
+          64,
+          7609365,
+          7609429
+        ],
+        [
+          64,
+          920394,
+          920458
+        ],
+        [
+          63,
+          28193120,
+          28193183
+        ],
+        [
+          63,
+          1470905,
+          1470968
+        ]
+      ]
+    },
+    "SCHEDULE_UPDATE_TIMES": {
+      "stats_us": {
+        "n": 252,
+        "min": 13,
+        "p50": 49,
+        "p95": 67,
+        "max": 85
+      },
+      "longest": [
+        [
+          85,
+          10394896,
+          10394981
+        ],
+        [
+          78,
+          7609362,
+          7609440
+        ],
+        [
+          76,
+          28193118,
+          28193194
+        ],
+        [
+          72,
+          1470902,
+          1470974
+        ],
+        [
+          71,
+          3706163,
+          3706234
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_PROCESSQUEUEEVENT": {
+      "stats_us": {
+        "n": 252,
+        "min": 3,
+        "p50": 35,
+        "p95": 484,
+        "max": 3741
+      },
+      "longest": [
+        [
+          3741,
+          5939792,
+          5943533
+        ],
+        [
+          1344,
+          7709509,
+          7710853
+        ],
+        [
+          1201,
+          7469903,
+          7471104
+        ],
+        [
+          1047,
+          8452783,
+          8453830
+        ],
+        [
+          1032,
+          7475899,
+          7476931
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_PROCESSPRESENTHISTORY": {
+      "stats_us": {
+        "n": 252,
+        "min": 2,
+        "p50": 5,
+        "p95": 83,
+        "max": 94
+      },
+      "longest": [
+        [
+          94,
+          887363,
+          887457
+        ],
+        [
+          92,
+          386961,
+          387053
+        ],
+        [
+          89,
+          25917967,
+          25918056
+        ],
+        [
+          88,
+          2889082,
+          2889170
+        ],
+        [
+          86,
+          10411848,
+          10411934
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_PROCESSSURFACEUPDATES": {
+      "stats_us": {
+        "n": 252,
+        "min": 2,
+        "p50": 4,
+        "p95": 4,
+        "max": 78
+      },
+      "longest": [
+        [
+          78,
+          9255798,
+          9255876
+        ],
+        [
+          66,
+          7540884,
+          7540950
+        ],
+        [
+          64,
+          8453893,
+          8453957
+        ],
+        [
+          40,
+          7710879,
+          7710919
+        ],
+        [
+          5,
+          21414445,
+          21414450
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_CHECKDEVICESTATE": {
+      "stats_us": {
+        "n": 252,
+        "min": 1,
+        "p50": 2,
+        "p95": 4,
+        "max": 5
+      },
+      "longest": [
+        [
+          5,
+          7471316,
+          7471321
+        ],
+        [
+          5,
+          5943747,
+          5943752
+        ],
+        [
+          4,
+          18411882,
+          18411886
+        ],
+        [
+          4,
+          7540951,
+          7540955
+        ],
+        [
+          4,
+          6726056,
+          6726060
+        ]
+      ]
+    },
+    "SCHEDULE_CLEAR_D2D_CACHES": {
+      "stats_us": {
+        "n": 252,
+        "min": 1,
+        "p50": 4,
+        "p95": 6,
+        "max": 209
+      },
+      "longest": [
+        [
+          209,
+          14944865,
+          14945074
+        ],
+        [
+          7,
+          2038271,
+          2038278
+        ],
+        [
+          6,
+          23415782,
+          23415788
+        ],
+        [
+          6,
+          21414456,
+          21414462
+        ],
+        [
+          6,
+          19412457,
+          19412463
+        ]
+      ]
+    },
+    "UCE_PROCESSANIMATERESOURCES": {
+      "stats_us": {
+        "n": 252,
+        "min": 0,
+        "p50": 1,
+        "p95": 2,
+        "max": 2
+      },
+      "longest": [
+        [
+          2,
+          16407755,
+          16407757
+        ],
+        [
+          2,
+          10078224,
+          10078226
+        ],
+        [
+          2,
+          7642876,
+          7642878
+        ],
+        [
+          2,
+          3589603,
+          3589605
+        ],
+        [
+          2,
+          3572943,
+          3572945
+        ]
+      ]
+    },
+    "PROCESS_EXPRESSIONS": {
+      "stats_us": {
+        "n": 252,
+        "min": 0,
+        "p50": 199,
+        "p95": 272,
+        "max": 563
+      },
+      "longest": [
+        [
+          563,
+          8453968,
+          8454531
+        ],
+        [
+          315,
+          7471334,
+          7471649
+        ],
+        [
+          313,
+          2655528,
+          2655841
+        ],
+        [
+          292,
+          887486,
+          887778
+        ],
+        [
+          290,
+          4356871,
+          4357161
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_PRECOMPUTEEVENT": {
+      "stats_us": {
+        "n": 58,
+        "min": 6,
+        "p50": 104,
+        "p95": 183,
+        "max": 308
+      },
+      "longest": [
+        [
+          308,
+          8454585,
+          8454893
+        ],
+        [
+          277,
+          9256132,
+          9256409
+        ],
+        [
+          183,
+          7711181,
+          7711364
+        ],
+        [
+          165,
+          7541218,
+          7541383
+        ],
+        [
+          154,
+          10328602,
+          10328756
+        ]
+      ]
+    },
+    "ETWGUID_OCCLUSIONEVENT": {
+      "stats_us": {
+        "n": 279,
+        "min": 0,
+        "p50": 2,
+        "p95": 122,
+        "max": 242
+      },
+      "longest": [
+        [
+          242,
+          5198149,
+          5198391
+        ],
+        [
+          232,
+          4357392,
+          4357624
+        ],
+        [
+          163,
+          20413612,
+          20413775
+        ],
+        [
+          163,
+          19412715,
+          19412878
+        ],
+        [
+          159,
+          10412484,
+          10412643
+        ]
+      ]
+    },
+    "OVERLAY_CANDIDATECOLLECTION": {
+      "stats_us": {
+        "n": 252,
+        "min": 1,
+        "p50": 5,
+        "p95": 125,
+        "max": 245
+      },
+      "longest": [
+        [
+          245,
+          5198148,
+          5198393
+        ],
+        [
+          236,
+          4357391,
+          4357627
+        ],
+        [
+          168,
+          19412713,
+          19412881
+        ],
+        [
+          167,
+          20413611,
+          20413778
+        ],
+        [
+          163,
+          10412483,
+          10412646
+        ]
+      ]
+    },
+    "RENDER_CVIPASS": {
+      "stats_us": {
+        "n": 47,
+        "min": 0,
+        "p50": 3,
+        "p95": 220,
+        "max": 3609
+      },
+      "longest": [
+        [
+          3609,
+          8460729,
+          8464338
+        ],
+        [
+          263,
+          20413791,
+          20414054
+        ],
+        [
+          220,
+          10412658,
+          10412878
+        ],
+        [
+          180,
+          21414887,
+          21415067
+        ],
+        [
+          172,
+          19412894,
+          19413066
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_RENDEREVENT": {
+      "stats_us": {
+        "n": 47,
+        "min": 4,
+        "p50": 343,
+        "p95": 728,
+        "max": 5798
+      },
+      "longest": [
+        [
+          5798,
+          8460728,
+          8466526
+        ],
+        [
+          1283,
+          4357637,
+          4358920
+        ],
+        [
+          728,
+          10412656,
+          10413384
+        ],
+        [
+          695,
+          28193619,
+          28194314
+        ],
+        [
+          684,
+          14949107,
+          14949791
+        ]
+      ]
+    },
+    "ETWGUID_DRAWING_CONTEXT_FRAME": {
+      "stats_us": {
+        "n": 48,
+        "min": 8,
+        "p50": 118,
+        "p95": 1170,
+        "max": 28132
+      },
+      "longest": [
+        [
+          28132,
+          5944428,
+          5972560
+        ],
+        [
+          1407,
+          10328909,
+          10330316
+        ],
+        [
+          1170,
+          10229034,
+          10230204
+        ],
+        [
+          1134,
+          10245689,
+          10246823
+        ],
+        [
+          1130,
+          10212429,
+          10213559
+        ]
+      ]
+    },
+    "SCHEDULE_RENDER": {
+      "stats_us": {
+        "n": 252,
+        "min": 466,
+        "p50": 730,
+        "p95": 251463,
+        "max": 292808
+      },
+      "longest": [
+        [
+          292808,
+          8460003,
+          8752811
+        ],
+        [
+          256511,
+          10411754,
+          10668265
+        ],
+        [
+          256134,
+          11929400,
+          12185534
+        ],
+        [
+          255161,
+          26675292,
+          26930453
+        ],
+        [
+          253120,
+          24411355,
+          24664475
+        ]
+      ]
+    },
+    "SCHEDULE_PROCESS_FRAME": {
+      "stats_us": {
+        "n": 252,
+        "min": 477,
+        "p50": 756,
+        "p95": 748515,
+        "max": 829378
+      },
+      "longest": [
+        [
+          829378,
+          4356601,
+          5185979
+        ],
+        [
+          794490,
+          8459993,
+          9254483
+        ],
+        [
+          773258,
+          5939657,
+          6712915
+        ],
+        [
+          754893,
+          10411734,
+          11166627
+        ],
+        [
+          753392,
+          5186170,
+          5939562
+        ]
+      ]
+    },
+    "SCHEDULE_WFW": {
+      "stats_us": {
+        "n": 251,
+        "min": 4,
+        "p50": 7,
+        "p95": 57794,
+        "max": 709365
+      },
+      "longest": [
+        [
+          709365,
+          15697969,
+          16407334
+        ],
+        [
+          460858,
+          3890305,
+          4351163
+        ],
+        [
+          292361,
+          387571,
+          679932
+        ],
+        [
+          259099,
+          17151335,
+          17410434
+        ],
+        [
+          258672,
+          23156679,
+          23415351
+        ]
+      ]
+    },
+    "SCHEDULE_VBLANK_LOOP": {
+      "stats_us": {
+        "n": 251,
+        "min": 578,
+        "p50": 16706,
+        "p95": 773379,
+        "max": 1453359
+      },
+      "longest": [
+        [
+          1453359,
+          15697968,
+          17151327
+        ],
+        [
+          1295709,
+          3890304,
+          5186013
+        ],
+        [
+          1007268,
+          18153476,
+          19160744
+        ],
+        [
+          1006899,
+          21155873,
+          22162772
+        ],
+        [
+          1003391,
+          24158837,
+          25162228
+        ]
+      ]
+    },
+    "ETWGUID_DRAWEVENT": {
+      "stats_us": {
+        "n": 86,
+        "min": 4,
+        "p50": 372,
+        "p95": 252292,
+        "max": 286276
+      },
+      "longest": [
+        [
+          286276,
+          8466529,
+          8752805
+        ],
+        [
+          254872,
+          10413388,
+          10668260
+        ],
+        [
+          254146,
+          26676301,
+          26930447
+        ],
+        [
+          254023,
+          11931506,
+          12185529
+        ],
+        [
+          252292,
+          24412177,
+          24664469
+        ]
+      ]
+    },
+    "MILEVENT_MEDIA_UCE_PRESENTEVENT": {
+      "stats_us": {
+        "n": 42,
+        "min": 1080,
+        "p50": 493612,
+        "p95": 740612,
+        "max": 757083
+      },
+      "longest": [
+        [
+          757083,
+          4428888,
+          5185971
+        ],
+        [
+          742127,
+          6727540,
+          7469667
+        ],
+        [
+          740612,
+          7712028,
+          8452640
+        ],
+        [
+          740338,
+          5972567,
+          6712905
+        ],
+        [
+          740337,
+          5199216,
+          5939553
+        ]
+      ]
+    },
+    "SCHEDULE_PRESENT": {
+      "stats_us": {
+        "n": 42,
+        "min": 1084,
+        "p50": 493615,
+        "p95": 740615,
+        "max": 757086
+      },
+      "longest": [
+        [
+          757086,
+          4428887,
+          5185973
+        ],
+        [
+          742131,
+          6727539,
+          7469670
+        ],
+        [
+          740615,
+          7712027,
+          8452642
+        ],
+        [
+          740343,
+          5972566,
+          6712909
+        ],
+        [
+          740341,
+          5199215,
+          5939556
+        ]
+      ]
+    },
+    "ETWGUID_CLEAREVENT": {
+      "stats_us": {
+        "n": 93,
+        "min": 0,
+        "p50": 1,
+        "p95": 3,
+        "max": 3
+      },
+      "longest": [
+        [
+          3,
+          28194041,
+          28194044
+        ],
+        [
+          3,
+          26675880,
+          26675883
+        ],
+        [
+          3,
+          21414993,
+          21414996
+        ],
+        [
+          3,
+          10412789,
+          10412792
+        ],
+        [
+          3,
+          9261521,
+          9261524
+        ]
+      ]
+    },
+    "PROCESS_COMPOSITION_SURFACE_UPDATE_EVENT": {
+      "stats_us": {
+        "n": 4,
+        "min": 126,
+        "p50": 148,
+        "p95": 256,
+        "max": 256
+      },
+      "longest": [
+        [
+          256,
+          7476228,
+          7476484
+        ],
+        [
+          148,
+          7476489,
+          7476637
+        ],
+        [
+          128,
+          7476640,
+          7476768
+        ],
+        [
+          126,
+          7476772,
+          7476898
+        ]
+      ]
+    },
+    "ETWGUID_COPYFRONTTOBACKBUFFEREVENT": {
+      "stats_us": {
+        "n": 14,
+        "min": 587,
+        "p50": 2157,
+        "p95": 69402,
+        "max": 69402
+      },
+      "longest": [
+        [
+          69402,
+          10079273,
+          10148675
+        ],
+        [
+          61115,
+          7478622,
+          7539737
+        ],
+        [
+          58213,
+          10012581,
+          10070794
+        ],
+        [
+          50481,
+          7543633,
+          7594114
+        ],
+        [
+          2502,
+          10162965,
+          10165467
+        ]
+      ]
+    },
+    "ETWGUID_PUSH_EXTERNAL_LAYER_EVENT": {
+      "stats_us": {
+        "n": 69,
+        "min": 8,
+        "p50": 18,
+        "p95": 45,
+        "max": 284
+      },
+      "longest": [
+        [
+          284,
+          8464418,
+          8464702
+        ],
+        [
+          159,
+          8464771,
+          8464930
+        ],
+        [
+          113,
+          8464960,
+          8465073
+        ],
+        [
+          45,
+          28193793,
+          28193838
+        ],
+        [
+          44,
+          10412990,
+          10413034
+        ]
+      ]
+    },
+    "ETWGUID_POP_EXTERNAL_LAYER_EVENT": {
+      "stats_us": {
+        "n": 69,
+        "min": 1,
+        "p50": 2,
+        "p95": 4,
+        "max": 5
+      },
+      "longest": [
+        [
+          5,
+          14949480,
+          14949485
+        ],
+        [
+          4,
+          28194005,
+          28194009
+        ],
+        [
+          4,
+          26676016,
+          26676020
+        ],
+        [
+          4,
+          25925232,
+          25925236
+        ],
+        [
+          4,
+          25925183,
+          25925187
+        ]
+      ]
+    }
+  },
+  "gaps": {
+    "Microsoft-Windows-DxgKrnl/VSyncDPC/win:Info": {
+      "n": 1738,
+      "min": 16518,
+      "p50": 16680,
+      "p95": 16729,
+      "max": 16838
+    },
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_RENDER/win:Start": {
+      "n": 251,
+      "min": 2058,
+      "p50": 16687,
+      "p95": 754964,
+      "max": 1458717
+    },
+    "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start": {
+      "n": 41,
+      "min": 16282,
+      "p50": 751561,
+      "p95": 1003584,
+      "max": 1456556
+    }
+  },
+  "error_events": [],
+  "present_events": [
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "4428887",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005561463c2",
+      "0x0000000556095698",
+      "0x000000000002083a",
+      "0x000000000002083a",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "5185973",
+      "dwm.exe ( 704)",
+      "2840",
+      "11",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "5199215",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055689eebb",
+      "0x000000055688991d",
+      "0x000000000002086b",
+      "0x000000000002086b",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "5939556",
+      "dwm.exe ( 704)",
+      "2840",
+      "10",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "5972566",
+      "dwm.exe ( 704)",
+      "2840",
+      "4",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000556ffefbd",
+      "0x0000000556fb21fe",
+      "0x0000000000020898",
+      "0x0000000000020898",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "6712909",
+      "dwm.exe ( 704)",
+      "2840",
+      "7",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "6727539",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005577322e0",
+      "0x000000055772c322",
+      "0x00000000000208c8",
+      "0x00000000000208c8",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "7469670",
+      "dwm.exe ( 704)",
+      "2840",
+      "8",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "7478613",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000557e5bdb2",
+      "0x0000000557e54d3b",
+      "0x00000000000208f5",
+      "0x00000000000208f5",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "7540201",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "7543627",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000557efa94c",
+      "0x0000000557ef7b49",
+      "0x00000000000208f9",
+      "0x00000000000208f9",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "7594553",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "7610873",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000557f9ec22",
+      "0x0000000557f9a9cc",
+      "0x00000000000208fd",
+      "0x00000000000208fd",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "7613003",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "7627155",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000557fc6827",
+      "0x0000000557fc35c1",
+      "0x00000000000208fe",
+      "0x00000000000208fe",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "7628239",
+      "dwm.exe ( 704)",
+      "2840",
+      "0",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "7712027",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000558095b73",
+      "0x000000055808f0d8",
+      "0x0000000000020903",
+      "0x0000000000020903",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "8452642",
+      "dwm.exe ( 704)",
+      "2840",
+      "0",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "8752813",
+      "dwm.exe ( 704)",
+      "2840",
+      "10",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000558a82b26",
+      "0x00000005587b77f8",
+      "0x0000000000020930",
+      "0x0000000000020930",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "9254477",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "9512647",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005591c1c20",
+      "0x0000000558f5a4cd",
+      "0x0000000000020960",
+      "0x0000000000020960",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10009061",
+      "dwm.exe ( 704)",
+      "2840",
+      "0",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10012576",
+      "dwm.exe ( 704)",
+      "2840",
+      "0",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000559686496",
+      "0x0000000559682c8a",
+      "0x000000000002098d",
+      "0x000000000002098d",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10071231",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10079269",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005597291d8",
+      "0x0000000559725beb",
+      "0x0000000000020991",
+      "0x0000000000020991",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10149102",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10162961",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005597f5713",
+      "0x00000005597f15dd",
+      "0x0000000000020996",
+      "0x0000000000020996",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10165896",
+      "dwm.exe ( 704)",
+      "2840",
+      "0",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10179508",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055981dd6c",
+      "0x000000055981a15a",
+      "0x0000000000020997",
+      "0x0000000000020997",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10181944",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10196677",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000559847c10",
+      "0x0000000559842dc5",
+      "0x0000000000020998",
+      "0x0000000000020998",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10199606",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10213566",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000559870fc2",
+      "0x000000055986b95a",
+      "0x0000000000020999",
+      "0x0000000000020999",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10216293",
+      "dwm.exe ( 704)",
+      "2840",
+      "10",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10230210",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005598999ef",
+      "0x00000005598944a7",
+      "0x000000000002099a",
+      "0x000000000002099a",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10233321",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10246830",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005598c2323",
+      "0x00000005598bd03c",
+      "0x000000000002099b",
+      "0x000000000002099b",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10249632",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10263570",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005598eb10c",
+      "0x00000005598e5c61",
+      "0x000000000002099c",
+      "0x000000000002099c",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10266258",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10330321",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055998e087",
+      "0x0000000559988bff",
+      "0x00000000000209a0",
+      "0x00000000000209a0",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "10331628",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "10668267",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000559cc7191",
+      "0x0000000559a545fc",
+      "0x00000000000209a5",
+      "0x00000000000209a5",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "11166621",
+      "dwm.exe ( 704)",
+      "2840",
+      "6",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "11431489",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055a40e6eb",
+      "0x000000055a1a5862",
+      "0x00000000000209d3",
+      "0x00000000000209d3",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "11929301",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "12185536",
+      "dwm.exe ( 704)",
+      "2840",
+      "6",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055ab3f5e3",
+      "0x000000055a8cdfc7",
+      "0x00000000000209ff",
+      "0x00000000000209ff",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "12682179",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "12949956",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055b289a0b",
+      "0x000000055b01f7a9",
+      "0x0000000000020a2e",
+      "0x0000000000020a2e",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "13447370",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "13698232",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055b9ac793",
+      "0x000000055b747f30",
+      "0x0000000000020a5b",
+      "0x0000000000020a5b",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "14193155",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "14449793",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055c0d7570",
+      "0x000000055be70a7f",
+      "0x0000000000020a88",
+      "0x0000000000020a88",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "14944609",
+      "dwm.exe ( 704)",
+      "2840",
+      "10",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "15201297",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055c802107",
+      "0x000000055c5993f7",
+      "0x0000000000020ab5",
+      "0x0000000000020ab5",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "15697934",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "16657853",
+      "dwm.exe ( 704)",
+      "2840",
+      "0",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055d5e61c7",
+      "0x000000055d37019d",
+      "0x0000000000020b0c",
+      "0x0000000000020b0c",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "17151296",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "17660416",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055df75c61",
+      "0x000000055dcfb9cc",
+      "0x0000000000020b48",
+      "0x0000000000020b48",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "18153422",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "18664000",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055e907ede",
+      "0x000000055e686f71",
+      "0x0000000000020b84",
+      "0x0000000000020b84",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "19160705",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "19662412",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055f28d758",
+      "0x000000055f01264c",
+      "0x0000000000020bc0",
+      "0x0000000000020bc0",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "20156027",
+      "dwm.exe ( 704)",
+      "2840",
+      "6",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "20663434",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000055fc195ca",
+      "0x000000055f99deab",
+      "0x0000000000020bfc",
+      "0x0000000000020bfc",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "21155823",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "21666870",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005605ab27c",
+      "0x000000056032942b",
+      "0x0000000000020c38",
+      "0x0000000000020c38",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "22162728",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "22664549",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000560f2ee52",
+      "0x0000000560cb4b31",
+      "0x0000000000020c74",
+      "0x0000000000020c74",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "23156651",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "23665520",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005618baac1",
+      "0x000000056164037e",
+      "0x0000000000020cb0",
+      "0x0000000000020cb0",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "24158787",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "24664478",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000056224188d",
+      "0x0000000561fcb8fa",
+      "0x0000000000020cec",
+      "0x0000000000020cec",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "25162199",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "25423609",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x000000056297ee1c",
+      "0x000000056271ceca",
+      "0x0000000000020d1a",
+      "0x0000000000020d1a",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "25917746",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "26173806",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005630a66b0",
+      "0x0000000562e45752",
+      "0x0000000000020d47",
+      "0x0000000000020d47",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "26667388",
+      "dwm.exe ( 704)",
+      "2840",
+      "10",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "26930456",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x00000005637ddb4a",
+      "0x000000056356e3cf",
+      "0x0000000000020d74",
+      "0x0000000000020d74",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "27427059",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "27693919",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000563f25a18",
+      "0x0000000563cbf5a8",
+      "0x0000000000020da2",
+      "0x0000000000020da2",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "28186828",
+      "dwm.exe ( 704)",
+      "2840",
+      "10",
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Start",
+      "28442538",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      "",
+      "0x0000000564649508",
+      "0x00000005643e8183",
+      "0x0000000000020dcf",
+      "0x0000000000020dcf",
+      "0x00000000"
+    ],
+    [
+      "Microsoft-Windows-Dwm-Core/SCHEDULE_PRESENT/win:Stop",
+      "28936542",
+      "dwm.exe ( 704)",
+      "2840",
+      "9",
+      "",
+      "",
+      "",
+      ""
+    ]
+  ]
+}

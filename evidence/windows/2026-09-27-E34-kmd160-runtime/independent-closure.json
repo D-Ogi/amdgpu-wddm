@@ -1,0 +1,151 @@
+{
+  "utc": "2026-09-27T08:39:04.2700253Z",
+  "version": "0.7.160.1",
+  "kmd_sha256": "8E676C810190EF38BACF3E8332EDC2760E07844FD779E18CB32B22D24AC90218",
+  "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+  "icd_sha256": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+  "boot": "2026-09-26T18:44:31.5000000+02:00",
+  "dwm": [
+    {
+      "modules": [
+        {
+          "sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+          "name": "bc250d3d.dll"
+        }
+      ],
+      "pid": 4596,
+      "start": "2026-09-27T06:12:21.4416579+02:00"
+    }
+  ],
+  "health": "health abi=1 version=0x000700A0 flags=15 generation=570201047032 epoch=5 completed=361 age_ms=222 ready_ms=262809\r\n",
+  "clock": "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66750 ready=1\r\n",
+  "test_processes": [],
+  "running_tasks": [
+    {
+      "TaskName": "BC250 monitor overlay",
+      "State": 4
+    },
+    {
+      "TaskName": "BC250 net watchdog",
+      "State": 4
+    }
+  ],
+  "parameters": {
+    "UnconfirmedStarts": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "LastStage": {
+      "kind": "DWord",
+      "value": 50
+    },
+    "StageHistory": {
+      "kind": "String",
+      "value": "10 20 30 31 32 33 34 35 39 50 "
+    },
+    "EnableMmio": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableMmioWrite": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableVram": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableVramWrite": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableGart": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnablePsp": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableGfx": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableIh": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableFullWddm": {
+      "kind": "DWord",
+      "value": 2
+    },
+    "KeepLog": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "KeepStatus": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableGpuVa": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableGpuSubmit": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnablePresentBlit": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableDcnWrite": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnablePagingNode": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableVidPnFlip": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableRlcReloadReset": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableSdmaIbControl": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableSdmaVaControl": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableNativeSmu": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableSdmaPteControl": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableNativePteCopy": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableGpuPresentBlit": {
+      "kind": "DWord",
+      "value": 0
+    },
+    "EnableHandleIdentityProbe": {
+      "kind": "DWord",
+      "value": 1
+    },
+    "EnableCddDwmInterop": {
+      "kind": "DWord",
+      "value": 0
+    }
+  }
+}

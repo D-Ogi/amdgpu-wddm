@@ -1,0 +1,65 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -860,6 +860,54 @@
+    return lock.pData;
+ }
+ 
++// Diagnostic-only, armed by the probe for one idle, explicitly unmapped BO.
++static void
++bc250_test_evict_unmapped(struct radv_wddm2_bo *bo)
++{
++   char armed[8];
++   if (!GetEnvironmentVariableA("BC250_TEST_EVICT_ON_UNMAP", armed, sizeof(armed)) || strcmp(armed, "1"))
++      return;
++   SetEnvironmentVariableA("BC250_TEST_EVICT_ON_UNMAP", NULL);
++   if (!bo->ws->bc250 || bo->base.size != 4ull * 1024 * 1024) {
++      fprintf(stderr, "EVICT_TEST wrong allocation size=%llu\n", (unsigned long long)bo->base.size); exit(3);
++   }
++   D3DKMT_ALLOCATIONRESIDENCYSTATUS residency = 0;
++   D3DKMT_QUERYALLOCATIONRESIDENCY query = {
++      .hDevice = bo->ws->device_h, .phAllocationList = &bo->base.handle,
++      .AllocationCount = 1, .pResidencyStatus = &residency,
++   };
++   NTSTATUS status = D3DKMTQueryAllocationResidency(&query);
++   fprintf(stderr, "EVICT_TEST before status=%08X residency=%u bytes=%llu\n", status, residency, (unsigned long long)bo->base.size);
++   if (!NT_SUCCESS(status) || residency != D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINGPUMEMORY) exit(3);
++   D3DKMT_EVICT evict = {.hDevice=bo->ws->device_h, .NumAllocations=1, .AllocationList=&bo->base.handle};
++   status = WDDM2_DISPATCH(Evict(&evict));
++   fprintf(stderr, "EVICT_TEST evict status=%08X\n", status);
++   if (!NT_SUCCESS(status)) exit(3);
++   ULONGLONG deadline = GetTickCount64() + 10000;
++   do {
++      status = D3DKMTQueryAllocationResidency(&query);
++      if (!NT_SUCCESS(status) || residency != D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINGPUMEMORY) break;
++      Sleep(10);
++   } while (GetTickCount64() < deadline);
++   fprintf(stderr, "EVICT_TEST evicted status=%08X residency=%u\n", status, residency);
++   if (!NT_SUCCESS(status) || (residency != D3DKMT_ALLOCATIONRESIDENCYSTATUS_NOTRESIDENT &&
++       residency != D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINSHAREDMEMORY)) exit(3);
++   D3DDDI_MAKERESIDENT make = {.hPagingQueue=bo->ws->paging_queue_h,.NumAllocations=1,.AllocationList=&bo->base.handle};
++   status = WDDM2_DISPATCH(MakeResident(&make));
++   fprintf(stderr, "EVICT_TEST restore status=%08X fence=%llu\n", status, (unsigned long long)make.PagingFenceValue);
++   if (!NT_SUCCESS(status)) exit(3);
++   const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait = {
++      .hDevice=bo->ws->device_h,.ObjectCount=1,.ObjectHandleArray=&bo->ws->paging_fence_h,
++      .FenceValueArray=&make.PagingFenceValue,
++   };
++   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   if (!NT_SUCCESS(status)) exit(3);
++   status = D3DKMTQueryAllocationResidency(&query);
++   fprintf(stderr, "EVICT_TEST complete status=%08X residency=%u\n", status, residency);
++   fflush(stderr);
++   if (!NT_SUCCESS(status) || residency != D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINGPUMEMORY) exit(3);
++}
++
+ static void
+ radv_wddm2_bo_unmap(struct radeon_winsys *_ws, struct radeon_winsys_bo *_bo, bool replace)
+ {
+@@ -877,6 +925,7 @@
+    assert(NT_SUCCESS(status));
+    
+    bo->map = NULL;
++   bc250_test_evict_unmapped(bo);
+ }
+ 
+ static VkResult

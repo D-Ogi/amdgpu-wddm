@@ -1,0 +1,6 @@
+test.c
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+clock verified: 1500 MHz, VID 104 (request 900 mV)
+10 scenarios, 0 failures
+clock readback mismatch: MHz=1500 expected=1000 VID=116 expected=116
+clock readback mismatch: MHz=1000 expected=1000 VID=101 expected=116

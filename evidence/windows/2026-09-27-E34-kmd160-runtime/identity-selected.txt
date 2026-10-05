@@ -1,0 +1,32 @@
+startup-log-014.txt
+   326      0.570 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   359      0.576 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   408      1.281 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   440      1.293 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   467      1.305 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   494      1.319 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   599      1.373 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-014.txt
+   639      1.385 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   685      1.769 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   694      1.825 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   701      1.841 wddm: identity bind kind 0 flags 0 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-015.txt
+   708      2.357 wddm: identity bind kind 0 flags 0 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-160.txt
+  3727    164.411 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-160.txt
+  3738    164.599 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-160.txt
+  3742    164.689 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+startup-log-160.txt
+  3746    164.781 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1

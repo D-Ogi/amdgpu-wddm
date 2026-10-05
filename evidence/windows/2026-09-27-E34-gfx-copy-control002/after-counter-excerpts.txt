@@ -1,0 +1,6 @@
+372322   3457.706 wddm summary: objects created/destroyed: dev 40/33 ctx 49/44 proc 19/15 alloc 3827/5093, 33 alive
+372325   3457.706 wddm summary: node 0 hardware: 126107 submitted, 125539 completed, 0 timeouts, 0 refused
+372329   3457.706 wddm summary: node 1 (paging, open): 58716 hardware submitted, 58716 completed, 0 timeouts, 0 refused
+372357   3457.708 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+372363   3457.708 vidmm summary: PTE encoding level 0 segment 0 coherent 127584 noncoherent 3565302 snoop mismatches 0
+372364   3457.708 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 14843458 snoop mismatches 0

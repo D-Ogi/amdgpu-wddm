@@ -1,0 +1,17 @@
+M219 physical Transfer argument preparation, 2026-09-23.
+Dirty worktree over base-commit.txt; relevant source snapshots included.
+WddmPreparePhysicalTransfer prepares independent endpoints and slice progress only;
+not yet called by the Transfer DDI. Shared GfxPagingEndpointValid (formerly static
+PagingPhysicalExtentValid) preflights both complete intervals. No packet or map.
+TransferOffset applies only to segment endpoints, whose addresses are already MC.
+MdlOffset selects PFN page independently for each MDL. Start/End/Idle flags do not
+reset progress. Swizzle/Unswizzle/reserved flags refuse; swizzling not implemented.
+43 new/9172 routing checks pass. Full WDK dev build passes, retains0786,
+scratch/build/transfer-prepare-dev NOT FOR DEPLOYMENT. Official0786 unchanged.
+SYS SHA25606EB45C1C37B5C3A09147C6D8CCC2D8245AA77704940E118383AC4E8F22C3A6A.
+Host model mirrors WDK anonymous bitfield unions; initial C4201 diagnostic preserved,
+then locally push/disable4201/pop around only those model declarations. Production
+WDK compilation unchanged. Tests cover all32 low flag combinations, reserved flag,
+all endpoint pairings, offsets, independent phases, missing MDL and interval/token bounds.
+No lab access, deployment, reset, USB change or private-data redaction. Not GPU or
+OS lifetime/contract acceptance. Transfer publication/table shadow effects pending.

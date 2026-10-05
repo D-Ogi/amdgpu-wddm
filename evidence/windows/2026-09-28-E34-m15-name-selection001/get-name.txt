@@ -1,0 +1,44 @@
+FUNCTION RVA 194328 ?GetUMDFileName@ADAPTER_RENDER@@AEBAJW4_KMTUMDVERSION@@AEAU_UNICODE_STRING@@@Z
+00194328 48895c2408               mov      qword ptr [rsp + 8], rbx
+0019432d 48896c2410               mov      qword ptr [rsp + 0x10], rbp
+00194332 4889742418               mov      qword ptr [rsp + 0x18], rsi
+00194337 57                       push     rdi
+00194338 4883ec50                 sub      rsp, 0x50
+0019433c 8bda                     mov      ebx, edx
+0019433e 498bf8                   mov      rdi, r8
+00194341 488bf1                   mov      rsi, rcx
+00194344 83fa06                   cmp      edx, 6
+00194347 0f836fe30b00             jae      0x2526bc
+0019434d e81e120200               call     0x1b5570 ; ?GetCurrent@DXGPROCESS@@SAPEAV1@XZ+0
+00194352 4885c0                   test     rax, rax
+00194355 0f84b3e30b00             je       0x25270e
+0019435b e810120200               call     0x1b5570 ; ?GetCurrent@DXGPROCESS@@SAPEAV1@XZ+0
+00194360 8b88a8010000             mov      ecx, dword ptr [rax + 0x1a8]
+00194366 8bc1                     mov      eax, ecx
+00194368 c1e803                   shr      eax, 3
+0019436b a801                     test     al, 1
+0019436d 753a                     jne      0x1943a9
+0019436f 83fb04                   cmp      ebx, 4
+00194372 743b                     je       0x1943af
+00194374 83fb05                   cmp      ebx, 5
+00194377 743f                     je       0x1943b8
+00194379 f6c130                   test     cl, 0x30
+0019437c 0f85dee30b00             jne      0x252760
+00194382 488d4314                 lea      rax, [rbx + 0x14]
+00194386 4803c0                   add      rax, rax
+00194389 0f1004c6                 movups   xmm0, xmmword ptr [rsi + rax*8]
+0019438d f30f7f07                 movdqu   xmmword ptr [rdi], xmm0
+00194391 33c0                     xor      eax, eax
+00194393 488b5c2460               mov      rbx, qword ptr [rsp + 0x60]
+00194398 488b6c2468               mov      rbp, qword ptr [rsp + 0x68]
+0019439d 488b742470               mov      rsi, qword ptr [rsp + 0x70]
+001943a2 4883c450                 add      rsp, 0x50
+001943a6 5f                       pop      rdi
+001943a7 c3                       ret      
+001943a8 cc                       int3     
+001943a9 488d431a                 lea      rax, [rbx + 0x1a]
+001943ad ebd7                     jmp      0x194386 ; ?GetUMDFileName@ADAPTER_RENDER@@AEBAJW4_KMTUMDVERSION@@AEAU_UNICODE_STRING@@@Z+5e
+001943af 0f108630020000           movups   xmm0, xmmword ptr [rsi + 0x230]
+001943b6 ebd5                     jmp      0x19438d ; ?GetUMDFileName@ADAPTER_RENDER@@AEBAJW4_KMTUMDVERSION@@AEAU_UNICODE_STRING@@@Z+65
+001943b8 0f108640020000           movups   xmm0, xmmword ptr [rsi + 0x240]
+001943bf ebcc                     jmp      0x19438d ; ?GetUMDFileName@ADAPTER_RENDER@@AEBAJW4_KMTUMDVERSION@@AEAU_UNICODE_STRING@@@Z+65

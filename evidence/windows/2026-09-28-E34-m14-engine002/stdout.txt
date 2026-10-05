@@ -1,0 +1,53 @@
+adapter: AMD BC-250 (RADV GFX1013) (api 1.4.363)
+ok    Bc250DxvkEngineGetFuncs
+ok    GetAdapterInfo
+      MaxFeatureLevel 0xb100
+ok    QueryDeviceRequirements
+      36 device extensions, queue family 0
+PASS  vkCreateDevice with the engine's requirements
+ok    CreateDevice
+ok    GetD3D11Device
+ok    GetImmediateContext
+PASS  device feature level as requested
+PASS  compile VS, strip to tokens and register signatures
+PASS  compile PS, strip to tokens and register signatures
+ok    CreateShader (VS, DDI form)
+ok    CreateShader (PS, DDI form)
+ok    GetVertexFormat R32G32_FLOAT
+ok    GetVertexFormat R32G32B32_FLOAT
+PASS  vertex element sizes 8 and 12
+ok    CreateInputLayout (DDI form)
+ok    GetImageCreateInfo
+PASS  TYPELESS target: mutable image with the engine's view format list in pNext
+      view formats: 5, image format 37, usage 0x17, tiling 0
+PASS  GetImageCreateInfo rejects a CPU-accessible texture
+PASS  shell vkCreateImage from GetImageCreateInfo
+PASS  shell allocates and binds device-local memory
+ok    CreateTexture2DFromImage
+ok    CreateRenderTargetView (UNORM view)
+ok    CreateBuffer (vertices)
+ok    CreateTexture2D (staging)
+ok    SubmitForPresent
+      IsResourceBusy after submit: busy
+ok    WaitForResourceIdle
+PASS  IsResourceBusy == idle after WaitForResourceIdle
+ok    Map staging (READ)
+      pixels: (0,0)=251,2,2  (61,0)=8,245,2  (0,61)=8,2,245  (63,63)=51,102,153  covered=2016
+PASS  clear colour outside the triangle
+PASS  red near the red vertex (VS input register 1 reaches PS)
+PASS  green near the green vertex
+PASS  blue near the blue vertex
+PASS  covered pixel count matches the half-target triangle
+ok    500 x (clear, draw, SubmitForPresent)
+ok    WaitForResourceIdle after the frames
+      107.3 us per frame (wall, submit-bound), private bytes +0.0 MB
+PASS  private bytes grow by less than 64 MB over 500 frames
+ok    Map staging after the frames
+PASS  last frame has the same clear and triangle
+      queue lock calls 1006, from other threads 0
+PASS  the engine brackets queue submissions with QueueLock
+PASS  every QueueLock call came from the calling thread (E2)
+PASS  no thread started inside bc250dxvk.dll (E2)
+ok    WaitForResourceIdle before releasing the imported image
+PASS  final engine Release reports no leaked D3D11 references (E4)
+PASSED: 0 failure(s)

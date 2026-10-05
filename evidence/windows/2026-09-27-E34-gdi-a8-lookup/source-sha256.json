@@ -1,0 +1,21 @@
+{
+  "parent": "7e06e00ada750feb38b6dbd0b9a092cd36aafc67",
+  "files": [
+    {
+      "path": "driver/kmd/gdi_private.h",
+      "sha256": "faf0542ec5c12a54b0a35b7e0382685f2dbe2aea30c8e4401ce46c8d4da181b4"
+    },
+    {
+      "path": "driver/kmd/wddm.c",
+      "sha256": "fc3af6b5ce9419a25fa045c32ea549436924f22f9ed32cd773d497575c193104"
+    },
+    {
+      "path": "driver/kmd/test/dcn_translate_test.c",
+      "sha256": "8915f9c62bc4800d9c3740efac3eda9aaa38d79fdcdebb955407086d0a0d0285"
+    },
+    {
+      "path": "driver/kmd/test/gfx_blt_test.c",
+      "sha256": "ffdf89d8a5dcc9c818c8b39cab7fe976d6e8474848b4cc7d4079a4167e5581c0"
+    }
+  ]
+}

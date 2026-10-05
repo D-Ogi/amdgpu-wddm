@@ -1,0 +1,16 @@
+{
+  "version": "0.7.171.1",
+  "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+  "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+  "confirmed": {
+    "launch": true,
+    "age_ms": 1277,
+    "epoch": 5,
+    "generation": 305821861289,
+    "flags": 15,
+    "completed": 11313,
+    "ready_ms": 8464898,
+    "flag_names": "Full, Ready, Visible, Confirmed"
+  },
+  "temperature": "15:35:41 Tctl 67.0 C (raw 741B0FEF)\r\n"
+}

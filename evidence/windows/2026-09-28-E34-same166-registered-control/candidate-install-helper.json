@@ -1,0 +1,5 @@
+{
+    "stdout":  "{\"child_pid\":1680,\"root_exit_observed\":true,\"child_exit\":0,\"timed_out\":false,\"termination_requested\":true,\"job_empty\":true}\r\n",
+    "stderr":  "",
+    "exit_code":  0
+}

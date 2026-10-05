@@ -1,0 +1,7 @@
+Set-M14Registration : Exception calling "SetValue" with "3" argument(s): "Cannot write to the registry key."
+At C:\BC250\m14\runtime001\phase.ps1:32 char:2
++  Set-M14Registration $key $saved.plan $Phase
++  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Set-M14Registration], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException,Set-M14Registration
+ 

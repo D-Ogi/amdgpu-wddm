@@ -1,0 +1,26 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "parent": "885922a",
+  "imports": [
+    "8462c86"
+  ],
+  "compared_existing_driver_and_third_party_files": 303,
+  "changed_existing": [
+    "driver/kmd/bc250kmd.inf",
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/dcn_translate.c",
+    "driver/kmd/dcn_translate.h",
+    "driver/kmd/test/dcn_translate_test.c",
+    "driver/kmd/wddm.c"
+  ],
+  "method": "git blob bytes versus candidate, CRLF normalized only",
+  "working_files": {
+    "driver/kmd/bc250kmd.inf": "a3974cbdf746f9c24682f6dfb20781fb9e2284504a5dae24e23ecf5825b9cc2f",
+    "driver/kmd/bc250kmd_escape.h": "e49ba097bfd6121ec74832a90ed2bbf803a8d095932b28c524b995c68b6bceb3",
+    "driver/kmd/wddm.c": "a125a0cf11565528d8e6383cf2452e958c34da02e56a45c9cc91531409efc52a",
+    "experiments/E34-native-d3d-zink/hosted-runtime/handle-identity-probe.md": "3a54bb567ccf00941401faa27eca4c41b33ebcbc6278bbf4af6c4300abe9ca7b"
+  },
+  "patches": {
+    "8462c86.patch": "a764e7b527c36cd75d14d26909906adb8010ed82d171f28b0c42e5f9256f1900"
+  }
+}

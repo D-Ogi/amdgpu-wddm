@@ -1,0 +1,97 @@
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -528,7 +528,7 @@
+       pipe_so_target_reference(&pResource->so_target, NULL);
+    }
+ 
+-   for (UINT SubResource = 0; SubResource < pResource->NumSubResources; ++SubResource) {
++   for (UINT SubResource = 0; pResource->transfers && SubResource < pResource->NumSubResources; ++SubResource) {
+       if (pResource->transfers[SubResource]) {
+          if (pResource->buffer) {
+             pipe_buffer_unmap(pipe, pResource->transfers[SubResource]);
+@@ -538,21 +538,15 @@
+          pResource->transfers[SubResource] = NULL;
+       }
+    }
+-   if (pResource->allocation && CastDevice(hDevice)->hosted_state) {
+-      HRESULT idle=Bc250WaitPresentIdle(CastDevice(hDevice));
+-      if (FAILED(idle)) { SetError(hDevice,idle); return; }
+-      if (!d3d10_release_hosted_resource(pipe,&pResource->resource)) {
+-         SetError(hDevice,D3DDDIERR_DEVICEREMOVED); return;
++   Device *device = CastDevice(hDevice);
++   if (pResource->allocation && device->hosted_state) {
++      HRESULT idle=Bc250WaitPresentIdle(device);
++      if (FAILED(idle) || !d3d10_release_hosted_resource(pipe,&pResource->resource)) {
++         Bc250StopHostedSubmission(device);
++         SetError(hDevice,FAILED(idle) ? idle : D3DDDIERR_DEVICEREMOVED);
+       }
+    }
+    if (pResource->allocation) {
+-      Device *device = CastDevice(hDevice);
+-      if (device->hosted_state && pResource->gpuVa) {
+-         D3DDDICB_FREEGPUVIRTUALADDRESS unmap={};
+-         unmap.BaseAddress=pResource->gpuVa; unmap.Size=pResource->gpuBytes;
+-         HRESULT hr=device->KTCallbacks.pfnFreeGpuVirtualAddressCb(device->hDevice,&unmap);
+-         if (FAILED(hr)) { SetError(hDevice,hr); return; }
+-      }
+       if (pResource->cpuMapping) {
+          D3DDDICB_UNLOCK2 unlock = {};
+          unlock.hAllocation = pResource->allocation;
+@@ -568,9 +562,17 @@
+          free.NumAllocations = 1; free.HandleList = &pResource->allocation;
+       }
+       HRESULT hr = device->KTCallbacks.pfnDeallocate2Cb(device->hDevice, &free);
+-      fprintf(stderr, "BC250 Deallocate %08lx\n", hr);
++      fprintf(stderr, "BC250 Deallocate %08lx flags=%u\n", hr, free.Flags.Value);
++      if (FAILED(hr)) {
++         Bc250StopHostedSubmission(device);
++         SetError(hDevice,hr);
++      }
++      pResource->allocation=0;
++      pResource->gpuVa=0;
++      pResource->cpuMapping=NULL;
+    }
+    free(pResource->transfers);
++   pResource->transfers=NULL;
+ 
+    pipe_resource_reference(&pResource->resource, NULL);
+ }
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -402,6 +402,12 @@
+    else s->submission_failed=true;
+    if (value<=3 || FAILED(hr)) fprintf(stderr,"BC250 Present signals value=%llu hr=%08lx\n",(unsigned long long)value,hr);
+    return hr;
++}
++
++void Bc250StopHostedSubmission(Device *device)
++{
++   auto *state=(Bc250HostProbeState *)device->hosted_state;
++   if (state) Bc250HostLost(state);
+ }
+ 
+ HRESULT Bc250WaitPresentIdle(Device *device)
+@@ -889,11 +895,11 @@
+    auto *hosted=(Bc250HostProbeState *)pDevice->hosted_state;
+    if (hosted && hosted->present_sync) {
+       HRESULT hr=Bc250WaitPresentIdle(pDevice);
+-      if (FAILED(hr)) { SetError(hDevice,hr); return; }
++      if (FAILED(hr)) { Bc250StopHostedSubmission(pDevice); SetError(hDevice,hr); }
+       D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT destroy={};
+       destroy.hSyncObject=hosted->present_sync;
+       hr=pDevice->KTCallbacks.pfnDestroySynchronizationObjectCb(pDevice->hDevice,&destroy);
+-      if (FAILED(hr)) { SetError(hDevice,hr); return; }
++      if (FAILED(hr)) SetError(hDevice,hr);
+       hosted->present_sync=0;
+    }
+    if (pDevice->hContext) {
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -190,6 +190,7 @@
+ HRESULT Bc250QueuePresentWait(Device *device);
+ HRESULT Bc250SignalPresent(Device *device);
+ HRESULT Bc250WaitPresentIdle(Device *device);
++void Bc250StopHostedSubmission(Device *device);
+ 
+ static inline Resource *
+ CastResource(D3D10DDI_HRESOURCE hResource)

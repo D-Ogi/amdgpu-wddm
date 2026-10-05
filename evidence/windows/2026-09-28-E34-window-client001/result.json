@@ -1,0 +1,43 @@
+{
+  "pass_control": true,
+  "frames": 31,
+  "images": {
+    "gpu.bmp": {
+      "pass_pixels": true,
+      "pixels": 76800,
+      "mismatches": 0,
+      "client": [
+        616,
+        300,
+        936,
+        540
+      ],
+      "scope": "Frozen full client pixels only; capture ordering and GPU identity require separate evidence"
+    },
+    "screen.png": {
+      "pass_pixels": true,
+      "pixels": 76800,
+      "mismatches": 0,
+      "client": [
+        616,
+        300,
+        936,
+        540
+      ],
+      "scope": "Frozen full client pixels only; capture ordering and GPU identity require separate evidence"
+    }
+  },
+  "closure_utc": "2026-09-28T00:26:21.5142416Z",
+  "scope": "Visible GPU-client control under unchanged CPU DWM; GPU execution and whole-stack no-copy remain separate",
+  "runner": "bdbfc7a",
+  "probe": "c2980b4",
+  "umd_source": "d7948d8e",
+  "umd_sha256": "92697AE5E531BE654BB4A4C97CA4F981D0DF53BDE63F570E2F0DD0039820455B",
+  "raw_sha256": {
+    "gpu.bmp": "82122e5c19d774fcce7315f0cc4108db95521f419a14ab29e54c664fcffc959b",
+    "screen.png": "c3e1ba82e14d9cbb9ac02c63fb03baf2f5fe1aa0e63b4177e40b5707d1fc2944",
+    "stderr.log": "906b92e1cbe2f56fff30eba96a32e07bfcea6e66de9c9e146a9db292f8c480f4",
+    "stdout.log": "97fa657917db8c9832d3e51e8c37d13f724dec380758d6a918cc5f28dbbe2962",
+    "capture.json": "7c10531d38cbc07c8724dd320c967e32d7b86156d00bbc4b88b32cb6acb5ac80"
+  }
+}

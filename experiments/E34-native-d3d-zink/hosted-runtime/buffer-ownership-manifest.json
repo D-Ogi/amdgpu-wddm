@@ -1,0 +1,12 @@
+{
+  "src/gallium/frontends/d3d10umd/InputAssembly.cpp": {
+    "before_raw_sha256": "843b12867267c44a89660da8abf92212c9792df589f5a17f9888b96925a1a723",
+    "before_lf_sha256": "843b12867267c44a89660da8abf92212c9792df589f5a17f9888b96925a1a723",
+    "after_lf_sha256": "9c3324d7a82aae1d142a549a97948000323d65a53f5836ddb1d18ba16897c389"
+  },
+  "src/gallium/frontends/d3d10umd/Resource.cpp": {
+    "before_raw_sha256": "054f5f4133b52b6f6af22af779f07a69ba946c2673527afcebd3f20c00420295",
+    "before_lf_sha256": "054f5f4133b52b6f6af22af779f07a69ba946c2673527afcebd3f20c00420295",
+    "after_lf_sha256": "f51aa95e102d6b0061e20dea104d80d65b7e914a1fe28ba3d8c7fad1eea76da7"
+  }
+}

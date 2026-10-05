@@ -1,5 +1,5 @@
 E12 run 002 (parts B and C), 2026-09-21, unit A, Windows 11 Pro 22631.3880, bc250kmd 0.6.1.0 (source state: commit
-3c1373d), witness bc250rd. No kernel debugger session. Driven over SSH with experiments/E12-interrupts/e12_target.ps1.
+9a716a5), witness bc250rd. No kernel debugger session. Driven over SSH with experiments/E12-interrupts/e12_target.ps1.
 File name suffix is the target's local time. Firmware as in E10. comparison.txt is experiments/E12-interrupts/compare.py
 (ih, irq, rerun) over the logs named in it. Nothing here was edited by hand. The Linux reference is E13
 (evidence/linux/2026-09-21-E13-reference-2/, facts M40).

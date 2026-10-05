@@ -1,0 +1,62 @@
+{
+  "stories15M": [
+    {
+      "prompt": 512,
+      "generation": 0,
+      "avg_ts": 48980.311409,
+      "stddev_ts": 83.507418,
+      "samples_ts": [
+        48925.9,
+        48938.5,
+        49076.5
+      ],
+      "previous_avg_ts": 36012.205752,
+      "change_percent": 36.010306467494836
+    },
+    {
+      "prompt": 0,
+      "generation": 128,
+      "avg_ts": 533.487457,
+      "stddev_ts": 115.862142,
+      "samples_ts": [
+        433.391,
+        506.662,
+        660.409
+      ],
+      "previous_avg_ts": 652.405536,
+      "change_percent": -18.22763180844622
+    }
+  ],
+  "tinyllama": [
+    {
+      "prompt": 512,
+      "generation": 0,
+      "avg_ts": 1101.12822,
+      "stddev_ts": 4.929448,
+      "samples_ts": [
+        1104.51,
+        1095.47,
+        1103.4
+      ],
+      "previous_avg_ts": 1082.32279,
+      "change_percent": 1.7375066083566537
+    },
+    {
+      "prompt": 0,
+      "generation": 128,
+      "avg_ts": 118.277614,
+      "stddev_ts": 6.240878,
+      "samples_ts": [
+        120.995,
+        122.699,
+        111.139
+      ],
+      "previous_avg_ts": 115.061026,
+      "change_percent": 2.7955495547206333
+    }
+  ],
+  "umd_profile": {
+    "delta_calls": 10365,
+    "delta_seconds": 0.1597743
+  }
+}

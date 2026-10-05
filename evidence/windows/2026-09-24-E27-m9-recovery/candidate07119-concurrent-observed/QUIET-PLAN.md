@@ -1,0 +1,3 @@
+# Follow-up quiet-driver interval, before execution
+
+Concurrent clients and30x2s CLI/temperature observation passed. The observer itself calls driver/clock interfaces, so it cannot establish behavior without those accesses. In the same initialized session, send12 OS-only PowerShell time heartbeats separated by5s, no CLI or temperature call inside the interval. Afterwards issue one CLI info and summary. This distinguishes responsiveness without this agent polling GPU, not complete GPU idle: DWM/Windows background work and SSH remain active. No workload restart or device reset. Preserve stream even if ending driver query blocks.

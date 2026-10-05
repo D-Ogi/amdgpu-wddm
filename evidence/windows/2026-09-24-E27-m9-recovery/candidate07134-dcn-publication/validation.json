@@ -1,0 +1,34 @@
+{
+  "gfx": [
+    2610,
+    2610,
+    0,
+    0
+  ],
+  "paging": [
+    6051,
+    6051,
+    0,
+    0
+  ],
+  "flip": [
+    533,
+    0,
+    1,
+    21550,
+    0,
+    0
+  ],
+  "ack_timeout_samples": 11,
+  "ack_timeouts": 0,
+  "full_readbacks": 4,
+  "verified_at": "2026-09-24T19:44:36",
+  "boot": "2026-09-24T18:23:50",
+  "dwm": [
+    "2036",
+    "2026-09-24T18:24:54"
+  ],
+  "guard_observation": "D3DKMTEscape returned STATUS_DEVICE_BUSY at existing FullWddm dispatcher; new inner guard not reached; harness expected wrong layer",
+  "visual_observation": "D3D scanout inspected through a reduced preview: green test window, desktop and whole overlay visible; not a temporal smoothness measurement",
+  "private_scanout_sha256": "a3e67bd481bbeca10a3b9ac756997ac31b0ca686fcce6ec4149d7ddbeb8cdf8a"
+}

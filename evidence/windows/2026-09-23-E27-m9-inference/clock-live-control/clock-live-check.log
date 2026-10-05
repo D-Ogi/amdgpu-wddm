@@ -1,0 +1,17 @@
+clock readback mismatch: MHz=1000 expected=1001 VID=116 expected=116
+cli_sha256=A056C897F9515BE08ADEE41C55F34B67CAE521922B9A2E2F9D2105A95879739D
+positive clock-check 1000 820
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+positive_exit=0
+negative read-only clock-check 1001 820
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+negative_exit=1
+after negative: clock-check 1000 820
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+after_exit=0
+controls_passed

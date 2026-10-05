@@ -1,0 +1,23 @@
+{
+  "native_exit": 4,
+  "complete": false,
+  "watchdog_300s": true,
+  "full_readbacks": [
+    [
+      "1073741824",
+      "1024"
+    ],
+    [
+      "1073741824",
+      "2048"
+    ]
+  ],
+  "cycles_passed": [
+    "1"
+  ],
+  "resident_ms": [
+    "6343",
+    "6297"
+  ],
+  "explicit_mismatch": false
+}

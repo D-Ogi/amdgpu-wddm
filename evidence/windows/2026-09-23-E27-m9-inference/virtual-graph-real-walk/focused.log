@@ -1,0 +1,34 @@
+Paging node packets (ADR 0008 stage D): driver/shim/bc250_sdma_paging.c against
+bc250_sdma_emit_copy_linear()/emit_fill() (driver/shim/bc250_sdma_copy.c, M95), dword for
+dword, plus the room check BuildPagingBuffer's STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER needs.
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+ring alloc of 96 dwords exceeds max_dw 0
+virtual alias ordering: 664 checks, 0 failures

@@ -1,0 +1,68 @@
+{
+  "psp_commands": [
+    [
+      "1",
+      "0",
+      "0x0"
+    ],
+    [
+      "2",
+      "0",
+      "0x0"
+    ],
+    [
+      "3",
+      "0",
+      "0x0"
+    ],
+    [
+      "4",
+      "0",
+      "0x0"
+    ],
+    [
+      "5",
+      "0",
+      "0x0"
+    ],
+    [
+      "6",
+      "0",
+      "0x0"
+    ],
+    [
+      "7",
+      "0",
+      "0x0"
+    ],
+    [
+      "8",
+      "0",
+      "0x0"
+    ],
+    [
+      "9",
+      "0",
+      "0x0"
+    ],
+    [
+      "10",
+      "0",
+      "0x0"
+    ],
+    [
+      "11",
+      "0",
+      "0x0"
+    ]
+  ],
+  "last_persisted_checkpoint": "scheduler-read",
+  "last_checkpoint_seconds": 0.304,
+  "before_after_psp": {
+    "rlc_cntl": "0x00000000",
+    "grbm_status2": "0x01000008"
+  },
+  "exact_fault_instruction_proven": false,
+  "warm_native_exit_available": false,
+  "stale_local_transport_exit": 4294967295
+}

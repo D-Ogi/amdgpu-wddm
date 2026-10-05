@@ -3,19 +3,22 @@
 # contract header with the WDK kernel flags the miniport uses.
 #
 #   pwsh driver\contract\test\run.ps1
-#   pwsh driver\contract\test\run.ps1 -Out P:\BC-250\scratch\contract -Mesa P:\BC-250\ref\mesa
+#   pwsh driver\contract\test\run.ps1 -Out $env:BC250_ROOT\scratch\contract -Mesa $env:BC250_ROOT\ref\mesa
 #
 # Host-side only: no lab machine, no hardware, no driver load. Everything is written under -Out
-# (default P:\BC-250\scratch\contract), never into the repository and never onto drive C:.
+# (default <BC250_ROOT>\scratch\contract), never into the repository and never onto drive C:.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this
+# repository.
 #
 # Mesa is NOT forked. Two headers that meson would generate are generated here with Mesa's own
 # scripts, into $Out\gen, and ac_gpu_info.c is compiled from the checkout unmodified. If this
 # script ever needs to patch a Mesa source, that is the signal to stop and say so, not to fork.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\contract',
-    [string]$Mesa = 'P:\BC-250\ref\mesa',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\contract",
+    [string]$Mesa = "$Root\ref\mesa",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Regenerate
 )

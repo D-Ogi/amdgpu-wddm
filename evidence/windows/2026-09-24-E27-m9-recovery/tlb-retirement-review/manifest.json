@@ -1,0 +1,10 @@
+{
+  "bc250-win/driver/shim/bc250_gmc.c": "3bfb8cc5f6adbba84951744576064fda9827fb23499229dec9133053dbe8401e",
+  "bc250-win/driver/kmd/gpumem.c": "d2d7c1b070b5fa3278aaab332323e9c7ecc2a902e12d64953ace5d667c08db60",
+  "bc250-win/driver/shim/bc250_gfx.c": "55a6de6f64b089490e5118e61f8a9ec9f953af378570c0317fa4aa070a0dcbb2",
+  "ref/linux-src/drivers/gpu/drm/amd/amdgpu/gmc_v10_0.c": "69327db125dce89ed32d65f662f1d089ea4cf41aabdd89a0eaa03ece3f9dffc7",
+  "ref/linux-src/drivers/gpu/drm/amd/amdgpu/gfxhub_v2_0.c": "55a041f7f30bc54c8f0a8f9671d74936cabbab5332566c416cceffdddecdc104",
+  "ref/linux-src/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c": "41b4e75728f3ad25f69c179536f8b7ae30118026315216d5fd891f445a6a7e99",
+  "ref/linux-src/drivers/gpu/drm/amd/amdgpu/amdgpu_gart.c": "2f0086f4c2d60049d4691d7aeb14b17ee92bd79ca5861b5a2b3855ef76c0b651",
+  "ref/linux-src/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c": "e69f01d1d3c8ec9abd685e804b5387bfc3fd4c028e4096d13e9c93b08821e7f7"
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "file": "llama-b9564.tar.gz",
+    "bytes": 34751715,
+    "sha256": "2df8480d11208f9ff9614d03ea814a45a52d5dc27ac1789aeb940348b1dbfeb3"
+  },
+  {
+    "file": "ggml-base.dll",
+    "bytes": 635392,
+    "sha256": "5831ea92343d0017d39e003521061f479c7e5ffaf1a91229bb88aa3922a925c7"
+  },
+  {
+    "file": "ggml-cpu.dll",
+    "bytes": 888320,
+    "sha256": "8875afa9ee16152a7f6d8c660f6d04ce277197bfa8d02a391ddfb9e609b4dbcc"
+  },
+  {
+    "file": "ggml-vulkan.dll",
+    "bytes": 58063872,
+    "sha256": "ebcd56d43ff2164616af70619924ec11b1890872486842493d377300d3869fb4"
+  },
+  {
+    "file": "ggml.dll",
+    "bytes": 66560,
+    "sha256": "e344695aec9a6f60820c87cad4baa947d35a758feb2e3d7c6ab426c106a4d7b6"
+  },
+  {
+    "file": "llama-common.dll",
+    "bytes": 9042944,
+    "sha256": "cc158fbc213490becc62b4f9047b1e293c9573c275efb56d7fe7ca6a754f629e"
+  },
+  {
+    "file": "llama.dll",
+    "bytes": 2073088,
+    "sha256": "b8f9fde22b3a8d6ee608e4860e6557b4a93130e3e738c2f2f4a5693c79bf93bb"
+  },
+  {
+    "file": "test-backend-ops.exe",
+    "bytes": 870912,
+    "sha256": "a1a6f0474eb08a7b3763f9e27e2a3bd743ed4e5e69e8a43d52c9e132741e3629"
+  }
+]

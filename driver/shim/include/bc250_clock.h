@@ -45,9 +45,10 @@ struct bc250_clock_report {
  * keep the 100 MHz grid whole, so that a level stays (mhz - MIN) / STEP; no rule of the governor selects
  * them, and only an administrator's own request (DpmIdleMHz, the clock escape) reaches them.
  * The load never asks below the lab floor (the governor's BC250_DPM_FLOOR_LEVEL is 1000 MHz).
- * The firmware has never run below 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its
- * sysfs there), so the KMD treats a refused transition under the floor as "this part has no such point"
- * (driver/kmd/dpm.c): the thermal sub-floor or the idle point is withdrawn for the rest of the start. */
+ * The power tables publish no level below 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps
+ * its sysfs there) although unit A's firmware accepts 800 and 900 MHz at VID 116 (facts M785), so the KMD
+ * still treats a refused transition under the floor as "this part has no such point" (driver/kmd/dpm.c):
+ * the thermal sub-floor or the idle point is withdrawn for the rest of the start. */
 #define BC250_CLOCK_MIN_MHZ 500u        /* the table's lowest clock: the idle point, below the lab floor */
 #define BC250_CLOCK_FLOOR_MHZ 1000u     /* the lab point, and the lowest clock the load may ask for */
 #define BC250_CLOCK_CEILING_MHZ 2000u

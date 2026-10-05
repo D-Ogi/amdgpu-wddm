@@ -1,0 +1,29 @@
+startup-log-013.txt
+   234      0.487 wddm: handle callbacks size 312 get@104=FFFFF802868CE910 acquire@288=FFFFF802867B4100 release@296=FFFFF802867B4760
+startup-log-013.txt
+   326      0.554 wddm: identity probe kind 0 flags 1 handle 80001880 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC4731A10 release FFFFDD82043D4220 live FFF
+startup-log-013.txt
+   359      0.562 wddm: identity probe kind 0 flags 1 handle 80001A00 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC475CD50 release FFFFDD81F7F2B800 live FFF
+startup-log-014.txt
+   406      1.258 wddm: identity probe kind 0 flags 1 handle C0002940 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC798B450 release FFFFDD82011AD670 live FFF
+startup-log-014.txt
+   438      1.268 wddm: identity probe kind 0 flags 1 handle C00028C0 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC798A3B0 release FFFFDD82011AD520 live FFF
+startup-log-014.txt
+   465      1.282 wddm: identity probe kind 0 flags 1 handle C0002840 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC798A9D0 release FFFFDD82011ACDB0 live FFF
+startup-log-014.txt
+   492      1.292 wddm: identity probe kind 0 flags 1 handle C0000AC0 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC798A490 release FFFFDD82011AD590 live FFF
+startup-log-014.txt
+   596      1.342 wddm: identity probe kind 0 flags 1 handle C0005C80 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC798A650 release FFFFDD82011AD830 live FFF
+startup-log-014.txt
+   636      1.354 wddm: identity probe kind 0 flags 1 handle C0005500 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC798A8F0 release FFFFDD82011AD520 live FFF
+startup-log-014.txt
+   683      1.744 wddm: identity probe kind 0 flags 1 handle 400094C0 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC7FB4AB0 release FFFFDD82043D2540 live FFF
+startup-log-015.txt
+   691      1.804 wddm: identity probe kind 0 flags 1 handle 40009540 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC7F85CD0 release FFFFDD82043CB230 live FFF
+startup-log-015.txt
+   699      1.828 wddm: identity probe kind 0 flags 0 handle C0004440 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC7F85CD0 release FFFFDD81FEE24220 live FFF
+startup-log-015.txt
+   706      2.327 wddm: identity probe kind 0 flags 0 handle 80003800 bytes 32 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC7FB4AB0 release FFFFDD81FEE33E20 live FFF
+control004 identity-driver.log
+   234      0.487 wddm: handle callbacks size 312 get@104=FFFFF802868CE910 acquire@288=FFFFF802867B4100 release@296=FFFFF802867B4760
+  9752    515.417 wddm: identity probe kind 1 flags 1 handle 400005C0 bytes 192 irql 0 attempted 1 get 0000000000000000 acquire FFFF978FC4725ED0 release FFFFDD82043D74E0 live FF

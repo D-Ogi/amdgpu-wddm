@@ -1,0 +1,83 @@
+DWM route pid=6264 luid=00000000000092AF hosted=1
+BC250 private Vulkan instance=0000021A85820120 screen=0000021A8580B1E0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001dc0
+allocation handle=0x40001e40
+allocation handle=0x40001ec0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=6264
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 private Vulkan instance=0000021A859C1AD0 screen=0000021A85986070
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40002bc0
+allocation handle=0x40002c40
+allocation handle=0x40002cc0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=6264
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 destroy private Vulkan instance=0000021A85820120
+BC250 destroy private Vulkan instance=0000021A859C1AD0
+DWM route OpenAdapter10_2 hr=00000000 pid=6264
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+DWM route OpenAdapter10_2 hr=00000000 pid=6264
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+DWM DeviceSize interface=000a0009 version=0000177a bytes=9560
+DWM CreateDevice interface=000a0009 version=0000177a
+DWM CreateDevice hr=00000000

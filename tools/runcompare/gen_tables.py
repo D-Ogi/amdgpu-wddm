@@ -22,7 +22,7 @@ checked in with the Kit version it came from (the repo spells generated files
 underscore). Run it again after a Kit or driver header change:
 
     python tools/runcompare/gen_tables.py
-    python tools/runcompare/gen_tables.py --kits P:\\BC-250\\toolchain\\nuget --check
+    python tools/runcompare/gen_tables.py --kits <BC250_ROOT>\\toolchain\\nuget --check
 
 --check exits non-zero when the checked-in table no longer matches the headers.
 

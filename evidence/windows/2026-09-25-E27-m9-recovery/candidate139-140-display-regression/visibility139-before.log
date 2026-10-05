@@ -1,0 +1,8 @@
+Extracted actual visibility, synchronized enable/ISR and visibility DDI
+display_visibility_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 312: model.writes==writes+1 && d.SourceVisible && !d.DcnBlanked
+FAIL 314: !(model.blank&(OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK | OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK))
+FAIL 321: !(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+display visibility/sync: 140 checks, 3 failures

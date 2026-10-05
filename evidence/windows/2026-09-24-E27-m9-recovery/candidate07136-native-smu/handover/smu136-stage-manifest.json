@@ -1,0 +1,67 @@
+[
+  {
+    "relative": "package-umd/bc250-lab-test.cer",
+    "sha256": "6A967B055DEF34C084FCF5A71432BCE54DBFF807D056655B33B5763CCCBE6CFD",
+    "bytes": 792
+  },
+  {
+    "relative": "package-umd/bc250kmd.cat",
+    "sha256": "4467CD16A1F4C6842711BDFB7CFCE53050D923090B18D8ABEA28F6D81406D472",
+    "bytes": 2839
+  },
+  {
+    "relative": "package-umd/bc250kmd.inf",
+    "sha256": "094B443687E9FEAEE2F8E6DE088ED371E4EB3B14426A4E3F5009A8F9E0D8E6D2",
+    "bytes": 7632
+  },
+  {
+    "relative": "package-umd/bc250kmd.sys",
+    "sha256": "1C93F3578BC53FFA4DF0C32B2B12C93201671A54754D4B59C27EDE1613C1517D",
+    "bytes": 369552
+  },
+  {
+    "relative": "package-umd/bc250umd.dll",
+    "sha256": "D5BD1AD82C00438900DC47A50B3EFA36D98F9A9CC7F6987D0F1545A0DE4CB661",
+    "bytes": 4096
+  },
+  {
+    "relative": "client/bc250kmd_cli.exe",
+    "sha256": "524868999AE84E90CD26A27AB7B329B496E4999ED97A593804B1FAD730E93A01",
+    "bytes": 188928
+  },
+  {
+    "relative": "client/bc250control.dll",
+    "sha256": "D743A306D09DE6239BD9BD17630FA5F26CA5FBD30DD524A097861E585F11560D",
+    "bytes": 142336
+  },
+  {
+    "relative": "reader/bc250rd.sys",
+    "sha256": "EB7FCA76B14A0C0817333509C8A88073571A3D607D5AB154F765E6C57873B625",
+    "bytes": 42896
+  },
+  {
+    "relative": "reader/bc250rd_cli.exe",
+    "sha256": "88BF51BA3E942A6C977A56DE6E70620595C45109994DE026F58ECB8221D807E3",
+    "bytes": 179200
+  },
+  {
+    "relative": "reader/bc250control.dll",
+    "sha256": "D743A306D09DE6239BD9BD17630FA5F26CA5FBD30DD524A097861E585F11560D",
+    "bytes": 142336
+  },
+  {
+    "relative": "monitor/bc250mon.exe",
+    "sha256": "50FDB96D46809F68E0C93CD07603A9CC32BD1FF9941B414FED6847468C39BCC1",
+    "bytes": 66048
+  },
+  {
+    "relative": "monitor/bc250control.dll",
+    "sha256": "D743A306D09DE6239BD9BD17630FA5F26CA5FBD30DD524A097861E585F11560D",
+    "bytes": 142336
+  },
+  {
+    "relative": "monitor/graphics-modules.json",
+    "sha256": "6875CEA0849AE379C0A0F9E9587D127D56E994FA69E49D3D33E8551B47244AF0",
+    "bytes": 1787
+  }
+]

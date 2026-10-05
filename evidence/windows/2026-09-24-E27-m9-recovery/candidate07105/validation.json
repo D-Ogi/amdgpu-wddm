@@ -1,0 +1,61 @@
+{
+  "positive": {
+    "exit": 0,
+    "rounds": 16,
+    "evictions": 0,
+    "restores": 0
+  },
+  "evict": {
+    "exit": 0,
+    "rounds": 16,
+    "evictions": 3,
+    "restores": 3
+  },
+  "stale": {
+    "exit": 1,
+    "rounds": 2,
+    "evictions": 1,
+    "restores": 1
+  },
+  "counters": {
+    "before": {
+      "0": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "1": [
+        1032,
+        1032,
+        0,
+        0
+      ]
+    },
+    "after": {
+      "0": [
+        34,
+        34,
+        0,
+        0
+      ],
+      "1": [
+        4768,
+        4768,
+        0,
+        0
+      ]
+    }
+  },
+  "scope": "4MiB buffers, explicit diagnostic eviction; no arbitrary alias or PFN relocation proof",
+  "capture_plans": {
+    "before": [
+      0,
+      0
+    ],
+    "after": [
+      20,
+      0
+    ]
+  }
+}

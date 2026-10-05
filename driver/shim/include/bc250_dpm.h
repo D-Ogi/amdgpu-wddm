@@ -39,8 +39,9 @@
  * reaches down to 500 MHz (index 2 in 0.7.205, with 900 and 800 MHz under it). */
 #define BC250_DPM_FLOOR_LEVEL	5u
 /* 800 MHz: the lowest level the thermal cap may reach (0.7.205, owner decision 2026-10-05, after RotTR scene
- * 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy). The firmware has never
- * run below 1000 MHz (facts M47), so the KMD may withdraw it for a start: bc250_dpm_subfloor_refused(). */
+ * 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy). The tables publish no
+ * level below 1000 MHz (facts M47) although unit A's firmware accepts 800 and 900 MHz (facts M785), so the
+ * KMD may still withdraw it for a start: bc250_dpm_subfloor_refused(). */
 #define BC250_DPM_THERMAL_FLOOR_LEVEL	3u
 /* 500 MHz: the idle point (0.7.207). Only the idle state goes there, and only while the GPU has no work; the
  * levels between it and the thermal floor (700 and 600 MHz) exist to keep the 100 MHz grid whole and no rule
@@ -344,8 +345,9 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level);
 /* The caller could not put the hardware at a level below BC250_DPM_FLOOR_LEVEL (the SMU refused it, the
  * readback did not match). From here on, for the rest of this start, the thermal cap's lowest level is the
- * lab floor again, and a cap already below it is raised to it. The firmware has never been seen below
- * 1000 MHz (facts M47), so one refusal is enough: the governor does not try the same point again and again. */
+ * lab floor again, and a cap already below it is raised to it. The two sub-floor points are outside the
+ * published tables (facts M47), so one refusal is enough: the governor does not try the same point again and
+ * again. Unit A's own firmware accepts them (facts M785). */
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g);
 
 /* ---- the idle state (0.7.207) ----------------------------------------------------------------- */

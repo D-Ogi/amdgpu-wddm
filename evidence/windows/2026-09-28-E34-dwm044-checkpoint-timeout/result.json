@@ -1,0 +1,26 @@
+{
+  "restoration_succeeded": true,
+  "utc": "2026-09-27T22:41:06.4472838Z",
+  "trial_seconds": 25.9418905,
+  "success": false,
+  "markers": 1,
+  "measured_seconds": 0,
+  "published_qpc": 79880301738,
+  "qpc_frequency": 10000000,
+  "published_ns": 7988030173800,
+  "marker_ns": 7992868729200,
+  "marker_delay_ns": 4838555400,
+  "log_sha256": "671ca6372eb8e4b731349bed1d3ed17d3621ff7bc8be0c57dcae2f448ff3214f",
+  "log_bytes": 463940,
+  "reader_start_offset": 40839,
+  "observed_chars": 240824,
+  "pending_chars": 73,
+  "closure": {
+    "utc": "2026-09-27T22:46:49.1703038Z",
+    "version": "0.7.166.1",
+    "health": "health abi=1 version=0x000700A6 flags=15 generation=79973322831 epoch=5 completed=517 age_ms=248 ready_ms=354361\r\n",
+    "clock": "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67000 ready=1\r\n",
+    "temperature": "00:46:55 Tctl 67.0 C (raw 741B0FEF)\r\n",
+    "test_processes": []
+  }
+}

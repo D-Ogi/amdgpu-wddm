@@ -1,0 +1,86 @@
+start 2026-09-27T02:45:12.9224796+02:00
+temperature_before=67.4
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=89 completed=598 age_ms=130 ready_ms=399867
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67375 ready=1
+exe 609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5 4.0.0.103190(Build Machine)
+settings_before=58327E6D88E3C801FFD56F2472FC68CAF87DAC8F2DA1AA5080B45C9E4B3E4606
+package placed
+pid=13008
+t=0 tctl=67.5 ws_mb=4 responding=True
+module 3s sl.interposer.dll EBFCEDCF C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\sl.interposer.dll
+module 3s d3d12.dll 7B77ED5C C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\d3d12.dll
+module 3s libxess.dll D393A7A2 C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\libxess.dll
+module 3s dxgi.dll 2E674A56 C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\dxgi.dll
+module 3s vulkan-1.dll 5C42CA8E C:\Windows\SYSTEM32\vulkan-1.dll
+module 3s vulkan_radeon.dll 93B1D1FD C:\BC250\m10\wsi-final\vulkan_radeon.dll
+module 3s d3d12core.dll 90B1DAD6 C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\d3d12core.dll
+t=3 tctl=69 ws_mb=691 responding=True
+t=6 tctl=71 ws_mb=349 responding=True
+window 10s 'The Witcher 3'
+t=10 tctl=72.2 ws_mb=873 responding=True
+t=14 tctl=72.6 ws_mb=1579 responding=True
+t=17 tctl=72 ws_mb=1332 responding=True
+t=20 tctl=71.5 ws_mb=1382 responding=True
+screenshot 0 at 21s
+t=24 tctl=70.9 ws_mb=1332 responding=True
+t=27 tctl=70.4 ws_mb=1332 responding=True
+t=30 tctl=70.1 ws_mb=1333 responding=True
+t=34 tctl=69.8 ws_mb=1333 responding=True
+t=37 tctl=69.5 ws_mb=1332 responding=True
+t=40 tctl=71 ws_mb=1332 responding=True
+t=43 tctl=71.4 ws_mb=1332 responding=True
+t=46 tctl=70.9 ws_mb=1332 responding=True
+t=49 tctl=70.5 ws_mb=1332 responding=True
+t=52 tctl=70.1 ws_mb=1324 responding=True
+t=55 tctl=69.8 ws_mb=1324 responding=True
+t=58 tctl=69.5 ws_mb=1292 responding=True
+t=61 tctl=69.2 ws_mb=1292 responding=True
+screenshot 1 at 62s
+t=65 tctl=69.1 ws_mb=1292 responding=True
+t=68 tctl=68.9 ws_mb=1290 responding=True
+t=71 tctl=68.8 ws_mb=1290 responding=True
+t=74 tctl=68.5 ws_mb=1290 responding=True
+t=78 tctl=68.5 ws_mb=1290 responding=True
+t=81 tctl=68.5 ws_mb=1290 responding=True
+t=84 tctl=68.4 ws_mb=1290 responding=True
+t=87 tctl=68.1 ws_mb=1290 responding=True
+t=90 tctl=68.1 ws_mb=1290 responding=True
+t=93 tctl=68.1 ws_mb=1290 responding=True
+t=96 tctl=68.1 ws_mb=1290 responding=True
+t=99 tctl=68.1 ws_mb=1290 responding=True
+t=102 tctl=68.1 ws_mb=1290 responding=True
+t=105 tctl=68 ws_mb=1290 responding=True
+t=108 tctl=68 ws_mb=1290 responding=True
+t=111 tctl=68 ws_mb=1290 responding=True
+t=114 tctl=68 ws_mb=1290 responding=True
+t=117 tctl=68.9 ws_mb=1290 responding=True
+t=120 tctl=69.4 ws_mb=1290 responding=True
+screenshot 2 at 122s
+t=125 tctl=69.2 ws_mb=1290 responding=True
+t=128 tctl=69 ws_mb=1290 responding=True
+t=131 tctl=68.9 ws_mb=1290 responding=True
+t=134 tctl=69.2 ws_mb=1067 responding=True
+t=137 tctl=69.1 ws_mb=1067 responding=True
+t=140 tctl=69 ws_mb=1067 responding=True
+t=143 tctl=68.9 ws_mb=1067 responding=True
+t=146 tctl=68.6 ws_mb=1061 responding=True
+t=149 tctl=68.5 ws_mb=1061 responding=True
+{
+    "elapsed_seconds":  152,
+    "exit_code":  null,
+    "has_exited":  false,
+    "bounded_stop":  true,
+    "last_title":  "The Witcher 3",
+    "screenshots":  3
+}
+killing pid 13008
+removed d3d12.dll
+removed dxgi.dll
+removed d3d12core.dll
+settings unchanged
+icd_after=93B1D1FD
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=89 completed=4903 age_ms=548 ready_ms=555714
+temperature_after=69.2
+dwm=5748
+end 2026-09-27T02:47:48.8121417+02:00
+run_exit=0

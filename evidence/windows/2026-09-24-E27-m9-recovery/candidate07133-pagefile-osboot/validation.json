@@ -1,0 +1,24 @@
+{
+  "pagefile_mib": 32768,
+  "commit_limit": 42655780864,
+  "boot": "2026-09-24T18:23:50",
+  "boot_full_wddm": false,
+  "gate_status": "0xC000014D",
+  "pnp_full_wddm": true,
+  "small_probe_exit": 0,
+  "gpu_readbacks": 4,
+  "cycles": 3,
+  "gfx": [
+    256,
+    256,
+    0,
+    0
+  ],
+  "paging": [
+    1868,
+    1868,
+    0,
+    0
+  ],
+  "final_time": "2026-09-24T18:37:43"
+}

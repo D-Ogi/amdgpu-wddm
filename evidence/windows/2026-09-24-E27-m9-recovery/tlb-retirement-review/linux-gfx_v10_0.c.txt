@@ -1,0 +1,77 @@
+ref/linux-src/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c
+7529: static int gfx_v10_0_hw_fini(struct amdgpu_ip_block *ip_block)
+7530: {
+7531: 	struct amdgpu_device *adev = ip_block->adev;
+7532: 
+7533: 	cancel_delayed_work_sync(&adev->gfx.idle_work);
+7534: 
+7535: 	amdgpu_irq_put(adev, &adev->gfx.priv_reg_irq, 0);
+7536: 	amdgpu_irq_put(adev, &adev->gfx.priv_inst_irq, 0);
+7537: 	amdgpu_irq_put(adev, &adev->gfx.bad_op_irq, 0);
+7538: 
+7539: 	/* WA added for Vangogh asic fixing the SMU suspend failure
+7540: 	 * It needs to set power gating again during gfxoff control
+7541: 	 * otherwise the gfxoff disallowing will be failed to set.
+7542: 	 */
+7543: 	if (amdgpu_ip_version(adev, GC_HWIP, 0) == IP_VERSION(10, 3, 1))
+7544: 		gfx_v10_0_set_powergating_state(ip_block, AMD_PG_STATE_UNGATE);
+7545: 
+7546: 	if (!adev->no_hw_access) {
+7547: 		if (amdgpu_async_gfx_ring) {
+7548: 			if (amdgpu_gfx_disable_kgq(adev, 0))
+7549: 				DRM_ERROR("KGQ disable failed\n");
+7550: 		}
+7551: 
+7552: 		if (amdgpu_gfx_disable_kcq(adev, 0))
+7553: 			DRM_ERROR("KCQ disable failed\n");
+7554: 	}
+7555: 
+7556: 	if (amdgpu_sriov_vf(adev)) {
+7557: 		gfx_v10_0_cp_gfx_enable(adev, false);
+7558: 		/* Remove the steps of clearing KIQ position.
+7559: 		 * It causes GFX hang when another Win guest is rendering.
+7560: 		 */
+7561: 		return 0;
+7562: 	}
+7563: 	gfx_v10_0_cp_enable(adev, false);
+7564: 	gfx_v10_0_enable_gui_idle_interrupt(adev, false);
+7565: 
+7566: 	return 0;
+7567: }
+8430: static int gfx_v10_0_set_powergating_state(struct amdgpu_ip_block *ip_block,
+8431: 					  enum amd_powergating_state state)
+8432: {
+8433: 	struct amdgpu_device *adev = ip_block->adev;
+8434: 	bool enable = (state == AMD_PG_STATE_GATE);
+8435: 
+8436: 	if (amdgpu_sriov_vf(adev))
+8437: 		return 0;
+8438: 
+8439: 	switch (amdgpu_ip_version(adev, GC_HWIP, 0)) {
+8440: 	case IP_VERSION(10, 1, 10):
+8441: 	case IP_VERSION(10, 1, 1):
+8442: 	case IP_VERSION(10, 1, 2):
+8443: 	case IP_VERSION(10, 3, 0):
+8444: 	case IP_VERSION(10, 3, 2):
+8445: 	case IP_VERSION(10, 3, 4):
+8446: 	case IP_VERSION(10, 3, 5):
+8447: 		amdgpu_gfx_off_ctrl(adev, enable);
+8448: 		break;
+8449: 	case IP_VERSION(10, 3, 1):
+8450: 	case IP_VERSION(10, 3, 3):
+8451: 	case IP_VERSION(10, 3, 6):
+8452: 	case IP_VERSION(10, 3, 7):
+8453: 		if (!enable)
+8454: 			amdgpu_gfx_off_ctrl(adev, false);
+8455: 
+8456: 		gfx_v10_cntl_pg(adev, enable);
+8457: 
+8458: 		if (enable)
+8459: 			amdgpu_gfx_off_ctrl(adev, true);
+8460: 
+8461: 		break;
+8462: 	default:
+8463: 		break;
+8464: 	}
+8465: 	return 0;
+8466: }

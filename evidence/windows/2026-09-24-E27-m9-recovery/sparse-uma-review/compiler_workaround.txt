@@ -1,0 +1,38 @@
+/*
+ * Copyright © 2026 Valve Corporation
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include "ac_nir.h"
+#include "nir/nir_builder.h"
+
+/* SMEM reads on a NULL PRT page fail or hang depending on the hw gen.
+ *
+ * To workaround that, the driver splits the total VA space in half, so that a single bit controls
+ * whether it's the "HIGH" or the "LOW" address space. Every sparse residency buffer allocations
+ * that might be used with SMEM get two allocations:
+ *
+ * - the "HIGH" address space is mapped normally and its VA is returned to the application.
+ * - the "LOW" address space is explicitly mapped to a zero-initialized buffer when it's allocated
+ *   or when it's unmapped.
+ *
+ * Other buffer allocations are always allocated in the "LOW" address space, so that control bit is
+ * always 0.
+ *
+ * Mask out the bit that controls whether it's the "HIGH" or the "LOW" address space to implement
+ * the workaround for sparse residency buffer allocations.
+ */
+typedef struct {
+   uint8_t control_bit;
+} fixup_smem_loads_null_prt_state;
+
+static uint64_t bits_may_be_1(nir_scalar scalar, unsigned depth)
+{
+   assert(scalar.def->bit_size == 64);
+
+   if (nir_scalar_is_const(scalar))
+      return nir_scalar_as_uint(scalar);
+   else if (!nir_scalar_is_alu(scalar) || depth >= 4)
+      return UINT64_MAX;
+

@@ -1,0 +1,18 @@
+{
+    "boot":  "2026-09-27T10:58:57.5000000Z",
+    "icd":  "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+    "tasks_removed":  [
+                          "BC250-G0-DwmRun028",
+                          "BC250-G0-DwmWatch028",
+                          "BC250-G0-Composition028"
+                      ],
+    "umd":  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "utc":  "2026-09-27T11:20:33.4404906Z",
+    "old_processes_terminated_by_reboot":  true,
+    "cpu_dwm":  [
+                    2016
+                ],
+    "health":  "health abi=1 version=0x000700A3 flags=15 generation=10927242330 epoch=5 completed=266 age_ms=1128 ready_ms=201667\r\n",
+    "normal_terminal_receipts_not_synthesized":  true,
+    "outcome":  "BUGCHECK_0x116"
+}

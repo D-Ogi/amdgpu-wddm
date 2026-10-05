@@ -1,0 +1,65 @@
+#### Field MultipassOffset
+
+[in/out] A UINT value that specifies the progress of the paging operation if multiple paging buffers are required. The driver sets this value to indicate a split into multiple paging buffers for more than one transfer operation. For example, the driver can store the page number that was last transferred for a paged-based transfer.
+
+#### Field Transfer
+
+[in] A structure that describes the transfer operation.
+
+#### Field Transfer.hAllocation
+
+[in] A handle to the allocation that the driver's [**DxgkDdiCreateAllocation**](#nc-d3dkmddi-dxgkddi_createallocation) function previously returned in the **hAllocation** member of a [**DXGK_ALLOCATIONINFO**](#ns-d3dkmddi-_dxgk_allocationinfo) structure, which is part of the [**DXGKARG_CREATEALLOCATION**](#ns-d3dkmddi-_dxgkarg_createallocation) structure's **pAllocationInfo** member. The allocation handle points to a buffer that contains private driver data for the transfer.
+
+#### Field Transfer.TransferOffset
+
+[in] The offset, in bytes, of the first page within the allocation that is transferred. This offset is applied only to a location that a segment location describes. This offset does not apply to an [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) description of a memory range. If the driver requires more than one paging buffer to complete the transfer (that is, the driver returns STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER from its [**DxgkDdiBuildPagingBuffer**](#nc-d3dkmddi-dxgkddi_buildpagingbuffer) function), **TransferOffset** is the same for each call to **DxgkDdiBuildPagingBuffer** for this transfer.
+
+#### Field Transfer.TransferSize
+
+[in] The size, in bytes, of the memory information to transfer.
+
+#### Field Transfer.Source
+
+[in] A structure that describes the source allocation. This structure contains a **SegmentId** member and a union that contains either an offset into a segment of the source allocation (**SegmentAddress**) or a pointer to an [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) for the source (**pMdl**).
+
+#### Field Transfer.Source.SegmentId
+
+[in] The identifier of a segment within the source allocation, or zero if the source allocation is described by the **pMdl** member of the union that **Source** contains.
+
+#### Field Transfer.Source.SegmentAddress
+
+[in] The source segment address, if the **SegmentId** member of **Source** is nonzero. The DirectX graphics kernel subsystem computes the segment address as the sum of the segment offset and the base address of the segment: ```SegmentAddress = SegmentOffset + Segment.BaseAddr```.
+
+#### Field Transfer.Source.pMdl
+
+[in] A pointer to a buffer that contains the [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) structure that describes the system memory pages for the source, if the **SegmentId** member of **Source** is zero.
+
+#### Field Transfer.Destination
+
+[in] A structure that describes the destination allocation. This structure contains a **SegmentId** member and a union that contains either an offset into a segment of the destination allocation (**SegmentAddress**) or a pointer to an [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) for the destination (**pMdl**).
+
+#### Field Transfer.Destination.SegmentId
+
+[in] The identifier of a segment within the destination allocation, or zero if the destination allocation is described by the **pMdl** member of the union that **Destination** contains.
+
+#### Field Transfer.Destination.SegmentAddress
+
+[in] The destination segment address, if the **SegmentId** member of **Destination** is nonzero. The DirectX graphics kernel subsystem computes the segment address as the sum of the segment offset and the base address of the segment: ```SegmentAddress = SegmentOffset + Segment.BaseAddr```.
+
+#### Field Transfer.Destination.pMdl
+
+[in] A pointer to a buffer that contains the [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) structure that describes the system memory pages for the destination, if the **SegmentId** member of **Destination** is zero.
+
+#### Field Transfer.Flags
+
+[in] A [**DXGK_TRANSFERFLAGS**](#ns-d3dkmddi-_dxgk_transferflags) structure that identifies, in bit-field flags, the type of special-lock-transfer operation to perform.
+
+#### Field Transfer.MdlOffset
+
+[in] The offset, in system memory pages, within the [**MDL**](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_mdl) structure that the **pMdl** member points to, to the first system memory page for the current operation. The driver can obtain the physical address of the first system memory page by calling the [**MmGetMdlPfnArray**](/windows-hardware/drivers/kernel/mm-bad-pointer#mmgetmdlpfnarray) function as follows.
+
+```cpp
+MmGetMdlPfnArray(pMdl)[MdlOffset];
+```
+
+#### Field Fill

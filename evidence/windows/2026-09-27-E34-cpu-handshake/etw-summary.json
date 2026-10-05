@@ -1,0 +1,16 @@
+{
+  "models_present_in_payload": {
+    "7": 39,
+    "0": 39
+  },
+  "history_rows_without_model": 0,
+  "probe_present_rows": {
+    "1444": 0,
+    "11060": 0
+  },
+  "cdd_standard_allocation_rows": 0,
+  "trace_losses": {
+    "events": 0,
+    "buffers": 0
+  }
+}

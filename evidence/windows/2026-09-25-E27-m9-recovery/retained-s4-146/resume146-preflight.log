@@ -1,0 +1,17 @@
+now=2026-09-25T02:53:55
+boot=2026-09-25T01:58:41
+health abi=1 version=0x00070091 flags=15 generation=606089791 epoch=5 completed=4577 age_ms=410 ready_ms=3252300
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66250 ready=1
+disabled_legacy_task=Disabled
+bc250mon pid=4384 start=2026-09-25T01:59:44
+bc250mon module=C:\BC250\mon\bc250control.dll sha256=02412B52C68E4B02030BBD26E33CD948FADDE74AADD14406813B2EB46B2B0962
+dwm pid=1736 start=2026-09-25T01:59:43
+dwm module=C:\BC250\m13\mesa-main-umd\bc250d3d.dll sha256=D438EA42314A3ADD6817665A6133628A64404B5282FB82227230199DA22F768D
+02:00:59.070	Good	kmd	full-WDDM start confirmed after 60 s observed progress: generation 606089791, epoch 5, completed 142
+{
+    "UnconfirmedStarts":  0,
+    "EnableFullWddm":  2,
+    "EnableSdmaIbControl":  0,
+    "EnableSdmaVaControl":  0
+}
+cold145_final_record_complete

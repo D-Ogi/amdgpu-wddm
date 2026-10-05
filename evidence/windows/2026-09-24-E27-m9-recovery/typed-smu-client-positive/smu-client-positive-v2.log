@@ -1,0 +1,10 @@
+command=['bc250rd_cli.exe', 'clock', '1000', '820'] expected=0 exit=0
+clock verified: 1000 MHz, VID 116 (request 820 mV), backend=kmd-smu
+command=['bc250rd_cli.exe', 'clock-check', '1000', '820'] expected=0 exit=0
+clock verified: 1000 MHz, VID 116 (request 820 mV), backend=kmd-smu
+command=['bc250rd_cli.exe', 'clock', '2000', '1129'] expected=2 exit=2
+command=['bc250rd_cli.exe', 'smu', '37'] expected=2 exit=2
+usage: bc250rd_cli info | temp [count [interval_s]] | clock <MHz> <mV> | clock-check <MHz> <mV> | sweep <reglist.txt> [prefix]
+command=['ManagedPositive.exe'] expected=0 exit=0
+Actual managed Driver READ/SET and temperature passed with fixture DLL; no hardware access
+5 client path checks passed with a fixture DLL, no hardware access

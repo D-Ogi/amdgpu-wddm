@@ -1,0 +1,24 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -463,11 +463,20 @@
+       struct bc250_alloc_blob blob;
+       memset(&blob, 0, sizeof(blob));
+       blob.magic = BC250_ALLOC_MAGIC;
+-      blob.version = 1;
++      /* BC2A v2 makes cache intent explicit; v1 KMD allocations retain WC. */
++      blob.version = 2;
+       blob.size = sizeof(blob);
+       blob.alloc_size = phys_size;
+       blob.phys_alignment = phys_alignment;
+       blob.preferred_heap = (initial_domain & RADEON_DOMAIN_VRAM) ? BC250_HEAP_VRAM : BC250_HEAP_GTT;
++      /* AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED / NO_CPU_ACCESS / CPU_GTT_USWC,
++       * matching radv_amdgpu_bo.c. Other GEM flags have no new WDDM policy here. */
++      if (flags & RADEON_FLAG_CPU_ACCESS)
++         blob.gem_flags |= 1ull << 0;
++      if (flags & RADEON_FLAG_NO_CPU_ACCESS)
++         blob.gem_flags |= 1ull << 1;
++      if (flags & RADEON_FLAG_GTT_WC)
++         blob.gem_flags |= 1ull << 2;
+       blob.requested_va = address;
+       blob.va_size = phys_size;
+       if (address)

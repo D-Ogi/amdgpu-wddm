@@ -1,0 +1,30 @@
+02:23:04 Tctl 67.1 C (raw 743B0FEF)
+
+02:23:20 Tctl 69.8 C (raw 76DB0FEF)
+
+02:23:20 Tctl 69.8 C (raw 76DB0FEF)
+
+02:23:20 Tctl 69.8 C (raw 76DB0FEF)
+
+02:23:20 Tctl 69.8 C (raw 76DB0FEF)
+
+02:23:20 Tctl 69.8 C (raw 76DB0FEF)
+
+02:23:20 Tctl 69.8 C (raw 76DB0FEF)
+
+02:23:20 Tctl 69.9 C (raw 76FB0FEF)
+
+02:23:21 Tctl 70.1 C (raw 773B0FEF)
+
+02:23:21 Tctl 70.4 C (raw 777B0FEF)
+
+02:23:21 Tctl 70.4 C (raw 777B0FEF)
+
+02:23:21 Tctl 70.5 C (raw 779B0FEF)
+
+02:23:21 Tctl 70.5 C (raw 779B0FEF)
+
+02:23:23 Tctl 71.2 C (raw 785B0FEF)
+
+02:23:26 Tctl 71.4 C (raw 787B0FEF)
+

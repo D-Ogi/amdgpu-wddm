@@ -1,0 +1,33 @@
+usb_identity_verified=true
+file=boot\grub\grub.cfg sha256=380176A8F3AA952BA4CD2FB001F3B365A460BE6F986CF5679B680AB4C70E68B6
+file=efi\boot\bootx64.off sha256=840E9A73F25507362E2A06CC8234FB51BEF8BD536122275194270C4FA7552F6C
+file=bc250diag.apkovl.tar.gz sha256=E86E11EA30E7E123CD56BDC4E7F020F19AEBB72F884BC52747BFD411A716A3A8
+set timeout=5
+set default=4
+
+menuentry "BC-250 diagnostics: full (raw probe, then load amdgpu)" {
+linux	/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=full
+initrd	/boot/initramfs-lts
+}
+
+menuentry "BC-250 diagnostics: raw probe only (amdgpu is never loaded)" {
+linux	/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=noload
+initrd	/boot/initramfs-lts
+}
+
+menuentry "BC-250 diagnostics: strictly read-only raw probe (no MMIO writes, no amdgpu)" {
+linux	/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=readonly
+initrd	/boot/initramfs-lts
+}
+
+menuentry "Alpine Linux shell only (no diagnostics)" {
+linux	/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=off
+initrd	/boot/initramfs-lts
+}
+
+menuentry "BC-250 reference: network only, no GPU probe" {
+linux /boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=network
+initrd /boot/initramfs-lts
+}
+loader_active=False
+usb_inspection_complete

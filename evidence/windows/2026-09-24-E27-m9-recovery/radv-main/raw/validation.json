@@ -1,0 +1,13 @@
+{
+  "shader_hash_matches": 8,
+  "stories15M": {
+    "reference_match": true,
+    "layers": "offloaded 7/7 layers to GPU",
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  "tinyllama": {
+    "reference_match": true,
+    "layers": "offloaded 23/23 layers to GPU",
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  }
+}

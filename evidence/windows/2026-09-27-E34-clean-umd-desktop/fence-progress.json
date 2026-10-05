@@ -1,0 +1,36 @@
+{
+  "scope": "Sampled per-Present queue fence progress, not a one-to-one ETW ID mapping or a display-scanout timestamp.",
+  "queues": [
+    {
+      "identity": [
+        "000002276EB3DB28",
+        1,
+        "80002a00"
+      ],
+      "samples": 62,
+      "first": {
+        "pid": 9948,
+        "device": "000002276EB3DB28",
+        "tick": 41090968,
+        "present": 1,
+        "context": 1,
+        "sync": "80002a00",
+        "submitted": 4,
+        "completed": 4,
+        "submits": 4
+      },
+      "last": {
+        "pid": 9948,
+        "device": "000002276EB3DB28",
+        "tick": 41268109,
+        "present": 3240,
+        "context": 1,
+        "sync": "80002a00",
+        "submitted": 3253,
+        "completed": 3253,
+        "submits": 3253
+      },
+      "samples_caught_up": 53
+    }
+  ]
+}

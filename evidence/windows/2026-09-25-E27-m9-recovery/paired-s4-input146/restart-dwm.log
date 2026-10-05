@@ -1,0 +1,6 @@
+old_dwm=704
+boot_before=2026-09-25T03:57:55.5000000+02:00
+[{"ProcessName":"bc250mon","Id":4432,"SessionId":1,"StartTime":"\/Date(1790301538827)\/"},{"ProcessName":"dwm","Id":6076,"SessionId":1,"StartTime":"\/Date(1790304164551)\/"}]
+health abi=1 version=0x00070092 flags=7 generation=588676524 epoch=15 completed=1 age_ms=1066 ready_ms=1078
+boot_after=2026-09-25T03:57:55.5000000+02:00
+now=2026-09-25T04:42:45.5093218+02:00

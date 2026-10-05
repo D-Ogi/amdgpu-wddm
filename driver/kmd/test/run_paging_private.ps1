@@ -1,9 +1,11 @@
 # Host tests for the actual portable page splitter and live-ring budget calculation.
 # No lab access. Per-buffer identities and exact-range validation before ring writes.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\pagingprivate',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\pagingprivate",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$ReuseFirstQueueSlot
 )

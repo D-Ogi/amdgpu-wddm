@@ -1,0 +1,3 @@
+# Linux to Windows transition
+
+USB identity: unique diagnostic layout, USB parent,64160400896bytes; loader and GRUB hashes match the Windows preflight receipt. Initial identity script had a copied expected-hash typo and refused before mutation; fixed using the recorded hash. Loader renamed to bootx64.off, sync/remount read-only, Linux reboot accepted. No SSH returned within36polls; independent configured-address checks for both OSes returned0, subnet scan found no pinned Windows lab. One recorded OFF/8s/ON recovery completed. Windows boot observation pending. Linux and development-host UTC clocks differ by about2hours; do not combine them as synchronized timestamps.

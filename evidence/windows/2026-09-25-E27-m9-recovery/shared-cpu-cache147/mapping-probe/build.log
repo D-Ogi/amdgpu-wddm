@@ -1,0 +1,16 @@
+shared-map-probe.c
+shared-map-probe --run v1|v2 : target only; fixed4MiB,3reads,30s watchdog
+shared-map-probe --selftest : host-safe memory/ABI oracle only
+SELFTEST PASS full4MiB oracle, three corruptions, sequential checksum, ABI v1/v2; no KMT calls
+Invalid arguments; use --help. No KMT calls made.
+Invalid arguments; use --help. No KMT calls made.
+Invalid arguments; use --help. No KMT calls made.
+Invalid arguments; use --help. No KMT calls made.
+Invalid arguments; use --help. No KMT calls made.
+
+Algorithm       Hash                                                                   Path
+---------       ----                                                                   ----
+SHA256          55536D5AA735DBB461BAADA07A3DE5F4C798E46CD51A4B9B6DB4E78D54811CC6       P:\BC-250\scratch\m9\shared-map-…
+SHA256          817B4E02EFD223A7E06262F42399D6EA9E26C00D2A5A5CA674AEA01DC411FF82       P:\BC-250\scratch\m9\shared-map-…
+SHA256          8340F1498F6FB0CCE941625199D0A7AC655168915FA1747FB08BAFD50077C6B3       P:\BC-250\scratch\m9\shared-map-…
+

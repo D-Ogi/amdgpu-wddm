@@ -1,0 +1,125 @@
+--- frozen139/dcn.c
++++ fixed/dcn.c
+@@ -644,9 +644,20 @@
+ {
+     ULONG value, waited=0;
+     NTSTATUS status;
+-    if (Visible && !Device->DcnBlanked) return STATUS_SUCCESS;
++    // A display-only profile has no hardware ownership to restore. Once MMIO
++    // writes are owned, software DcnBlanked is not proof that inherited/live
++    // hardware is visible (for example after adapter reinitialization).
++    if (Device->Mmio==NULL || !Device->DcnWriteEnabled)
++        return Visible && !Device->DcnBlanked ? STATUS_SUCCESS : STATUS_DEVICE_NOT_READY;
+     status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&value);
+     if (!NT_SUCCESS(status)) return status;
++    if (Visible && !(value & (OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
++                              OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK |
++                              OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)))
++    {
++        Device->DcnBlanked=FALSE;
++        return STATUS_SUCCESS; // hardware readback, never a cached visibility guess
++    }
+     value &= ~(OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
+                OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK);
+     if (!Visible) value|=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK;
+--- frozen139/display.c
++++ fixed/display.c
+@@ -664,22 +664,29 @@
+ 
+ NTSTATUS Bc250SetVidPnSourceVisibility(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETVIDPNSOURCEVISIBILITY* Visibility)
+ {
++    static volatile LONG calls;
+     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+-
+-    NTSTATUS status;
+-    if (Visibility->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
+-    if (device->VidPnFlipEnabled)
+-    {
+-        status=DcnSetVisibility(device,Visibility->Visible);
+-        if (!NT_SUCCESS(status)) return status;
+-    }
++    LONG call=InterlockedIncrement(&calls);
++    NTSTATUS status=STATUS_SUCCESS;
++
++    // Normal PASSIVE_LEVEL visibility DDI only. The shared quiet restore helper
++    // must remain usable at bugcheck without a logger, allocation or lock.
++    if (call<=32) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
++        call,Visibility->VidPnSourceId,Visibility->Visible,device->SourceVisible,device->VidPnFlipEnabled,device->DcnBlanked);
++    if (Visibility->VidPnSourceId != 0) status=STATUS_INVALID_PARAMETER;
++    else if (device->VidPnFlipEnabled) status=DcnSetVisibility(device,Visibility->Visible);
+     else if (!Visibility->Visible && device->SourceVisible && device->Framebuffer != NULL)
+         RtlZeroMemory(device->Framebuffer, device->FramebufferLength); // legacy no-MMIO display-only fallback
+-    device->SourceVisible = Visibility->Visible;
+-    // M7 stage A: a visible source is the earliest point at which dxgkrnl can queue a flip, and a flip is only
+-    // retired by a VSync report. Does nothing at all while the EnableFullWddm gate is closed.
+-    WddmSourceVisibility(device, Visibility->Visible);
+-    return STATUS_SUCCESS;
++    if (NT_SUCCESS(status))
++    {
++        device->SourceVisible = Visibility->Visible;
++        // Visibility does not suppress requested VSync signals. A visible source
++        // can queue a flip immediately, so ensure its report source is armed.
++        WddmSourceVisibility(device, Visibility->Visible);
++    }
++    if (call<=32) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
++        call,status,device->SourceVisible,device->DcnBlanked);
++    return status;
+ }
+ 
+ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITVIDPN* const Commit)
+--- frozen139/test/display_visibility_test.c
++++ fixed/test/display_visibility_test.c
+@@ -5,6 +5,7 @@
+ #include "regs.generated.h"
+ #include "dcn_2_0_1_sh_mask.h"
+ typedef unsigned long ULONG;
++typedef long LONG;
+ typedef int32_t NTSTATUS;
+ typedef int BOOLEAN;
+ typedef void* PVOID;
+@@ -122,9 +123,31 @@
+         CHECK(model.arms==arms+1 && d.DcnVsyncArmed==1);
+         CHECK(memcmp(fb,before,sizeof(fb))==0);
+     }
++    // Reinitialization/inherited hardware: cached false cannot suppress unblank.
++    d.DcnBlanked=FALSE;d.SourceVisible=FALSE;visible.Visible=TRUE;
++    model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
++        OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
++    writes=model.writes;
++    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS);
++    CHECK(model.writes==writes+1 && d.SourceVisible && !d.DcnBlanked);
++    CHECK(!(model.blank&(OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
++        OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)));
++    CHECK(memcmp(fb,before,sizeof(fb))==0);
++    // Already-visible positive path samples hardware and avoids redundant writes.
++    writes=model.writes;CHECK(DcnSetVisibility(&d,TRUE)==STATUS_SUCCESS);CHECK(model.writes==writes);
++    // Current state can still be blank with the request bit cleared.
++    model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
++    CHECK(DcnSetVisibility(&d,TRUE)==STATUS_SUCCESS);
++    CHECK(!(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+     d.DcnWriteEnabled=FALSE;visible.Visible=FALSE;
+     CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_DEVICE_NOT_READY);
+     CHECK(d.SourceVisible && !d.DcnBlanked && memcmp(fb,before,sizeof(fb))==0);
++    // Preserve the inherited no-MMIO display-only show path and its fallback.
++    d.VidPnFlipEnabled=FALSE;d.Mmio=NULL;visible.Visible=FALSE;
++    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS && !d.SourceVisible);
++    for(i=0;i<16;i++)CHECK(fb[i]==0);
++    visible.Visible=TRUE;CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS && d.SourceVisible);
++    CHECK(DcnSetVisibility(&d,TRUE)==STATUS_SUCCESS);
+     CHECK(model.stalls==0); // immediate model latch is the positive control, no busy polling required
+     printf("display visibility/sync: %u checks, %u failures\n",checks,failures);return failures?1:0;
+ }
+--- frozen139/test/post_display_test.c
++++ fixed/test/post_display_test.c
+@@ -145,6 +145,11 @@
+     model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
+     CHECK(d.SystemDisplayReady && !d.DcnBlanked && model.writes==1);
++    // Hardware blank can survive while a new software context starts at false.
++    init(&d,fb);d.DcnBlanked=FALSE;
++    model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
++    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
++    CHECK(d.SystemDisplayReady && !d.DcnBlanked && !(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+     // Untouched basic-display path needs no MMIO or programming.
+     init(&d,fb);d.DcnFirmwareKnown=0;d.DcnDiverged=0;d.Mmio=NULL;
+     CHECK(Bc250SystemDisplayEnable(&d,D3DDDI_ID_UNINITIALIZED,NULL,&width,&height,&fmt)==STATUS_SUCCESS);

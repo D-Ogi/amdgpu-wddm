@@ -1,0 +1,3 @@
+# Current07102 inference baseline
+
+Run only after the native-file residency comparison finishes and its full acceptance passes. Same working GPU session; no restart. Repeat M274 benchmark settings and exact isolated ICD6B589A8686DF6FFBB2BE447845222A3607E7E162B89923FA5976FCD9FD412754: llama-bench b9564, Vulkan,ngl99,t6,pp512/tg128,r3, stories15M and TinyLlama Q4_0. STOP/clock/temp preflight and loader/actual-submit witnesses required; collect native exits and full JSON, final hardware counters/boot. No global ICD change. Performance-only workload, not model-output correctness proof. Single-run differences are not causal optimization proof. Existing Linux1119.59/154.92 baseline has documented configuration limits from M274.

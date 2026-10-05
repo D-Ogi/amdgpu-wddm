@@ -1,0 +1,17 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+FAIL line 252: actual && ((actual->Known[j/64]>>(j%64))&1)==known && (!known || ((actual->Entries[j/8]>>((j%8)*8))&255)==((expected->Entries[j/8]>>((j%8)*8))&255))
+2672416 checks, 61361 failures: FAIL
+compile-check (kernel flags, same source, no link)
+
+paging_pt_shadow_test.exe exit code 1

@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "note": "Meson option sets for build-vkd3d.ps1, the only copy it reads. Options are compared with the new meson log's 'Build Options:' line after configure; targets are the ninja targets built and hashed.",
+  "configs": {
+    "per-app": {
+      "description": "Upstream vkd3d-proton as application-local d3d12.dll and d3d12core.dll: the per-application D3D12 path of M12 and the comparison path for the proposed system D3D12 driver (G4)",
+      "options": [
+        "-Dbuildtype=release",
+        "-Denable_tests=false"
+      ],
+      "targets": [
+        "libs/d3d12/d3d12.dll",
+        "libs/d3d12core/d3d12core.dll"
+      ]
+    },
+    "ddi-engine": {
+      "description": "amdgpu_wddm_vkd3d.dll, vkd3d-proton's D3D12 device as the engine behind the proposed system D3D12 DDI UMD (G4), and its offline test; needs the amdgpu-wddm/ddi-engine vkd3d-proton branch. Static C runtime, which the branch enforces for the engine",
+      "options": [
+        "-Dbuildtype=release",
+        "-Denable_tests=false",
+        "-Denable_ddi_engine=true",
+        "-Db_vscrt=mt"
+      ],
+      "targets": [
+        "libs/ddi/amdgpu_wddm_vkd3d.dll",
+        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"
+      ]
+    }
+  }
+}

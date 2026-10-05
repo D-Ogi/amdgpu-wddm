@@ -1,0 +1,18 @@
+Extracted VramStart, framebuffer resolver, segment layout and actual GART setup caller
+vram_geometry_actual.c
+FAIL line197: VramStart(&d)==STATUS_DEVICE_CONFIGURATION_ERROR
+FAIL line198: !d.VramEnabled && !d.VramWriteEnabled && !d.VramLength && !os_checks
+FAIL line199: !WddmMemoryLayout(&d,&off,&len,&table,&tablelen)
+FAIL line200: !off && !len && !table && !tablelen
+FAIL line201: VramStart(&d)==STATUS_DEVICE_CONFIGURATION_ERROR && !d.VramEnabled
+FAIL line197: VramStart(&d)==STATUS_DEVICE_CONFIGURATION_ERROR
+FAIL line198: !d.VramEnabled && !d.VramWriteEnabled && !d.VramLength && !os_checks
+FAIL line199: !WddmMemoryLayout(&d,&off,&len,&table,&tablelen)
+FAIL line200: !off && !len && !table && !tablelen
+FAIL line201: VramStart(&d)==STATUS_DEVICE_CONFIGURATION_ERROR && !d.VramEnabled
+FAIL line197: VramStart(&d)==STATUS_DEVICE_CONFIGURATION_ERROR
+FAIL line198: !d.VramEnabled && !d.VramWriteEnabled && !d.VramLength && !os_checks
+FAIL line199: !WddmMemoryLayout(&d,&off,&len,&table,&tablelen)
+FAIL line200: !off && !len && !table && !tablelen
+FAIL line201: VramStart(&d)==STATUS_DEVICE_CONFIGURATION_ERROR && !d.VramEnabled
+VRAM geometry: 72 checks, 15 failures

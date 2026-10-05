@@ -1,0 +1,47 @@
+{
+  "name": "warm2-64m",
+  "bytes": 67108864,
+  "cycles": 3,
+  "gpu_readbacks": [
+    [
+      "67108864",
+      "64"
+    ],
+    [
+      "67108864",
+      "128"
+    ],
+    [
+      "67108864",
+      "192"
+    ],
+    [
+      "67108864",
+      "256"
+    ]
+  ],
+  "departure_status": [
+    "3",
+    "3",
+    "3"
+  ],
+  "cumulative_gfx": [
+    "256",
+    "256",
+    "0",
+    "0"
+  ],
+  "cumulative_sdma": [
+    "19577",
+    "19577",
+    "0",
+    "0"
+  ],
+  "bulk_resident_ms": [
+    "469",
+    "453",
+    "453"
+  ],
+  "physical_endpoints_verified": false,
+  "shader_cache_policy_verified": false
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "file": "amdgpu_device.c",
+    "normalized_identical": false,
+    "diff_lines": 395
+  },
+  {
+    "file": "amdgpu_psp.c",
+    "normalized_identical": false,
+    "diff_lines": 24
+  },
+  {
+    "file": "amdgpu_reset.c",
+    "normalized_identical": true,
+    "diff_lines": 1
+  },
+  {
+    "file": "amdgpu_ucode.c",
+    "normalized_identical": true,
+    "diff_lines": 1
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "normalized_identical": false,
+    "diff_lines": 95
+  },
+  {
+    "file": "psp_v11_0.c",
+    "normalized_identical": false,
+    "diff_lines": 12
+  },
+  {
+    "file": "sdma_v5_0.c",
+    "normalized_identical": false,
+    "diff_lines": 41
+  },
+  {
+    "file": "soc15.c",
+    "normalized_identical": true,
+    "diff_lines": 1
+  }
+]

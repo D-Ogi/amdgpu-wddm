@@ -1,0 +1,59 @@
+WDK10.0.26100 ntddk.h SHA256 96a8ed921dfb6b38ce338089b72c017c24e7374072600950cc7e78a579ad9da3
+10766:      );
+10767: #endif
+10768: 
+10769: #if (NTDDI_VERSION >= NTDDI_WIN2K)
+10770: NTKERNELAPI
+10771: PHYSICAL_ADDRESS
+10772: MmGetPhysicalAddress (
+10773:     _In_ PVOID BaseAddress
+10774:     );
+10775: #endif
+10776: 
+10777: #if (NTDDI_VERSION >= NTDDI_WINBLUE)
+10778: _IRQL_requires_max_ (DISPATCH_LEVEL)
+10779: NTKERNELAPI
+10780: NTSTATUS
+10781: MmGetCacheAttribute (
+10782:     _In_ PHYSICAL_ADDRESS PhysicalAddress,
+10783:     _Out_ MEMORY_CACHING_TYPE *CacheType
+10784:     );
+10785: 
+10786: typedef struct _MM_COPY_ADDRESS {
+10787:     union {
+10788:         PVOID VirtualAddress;
+10789:         PHYSICAL_ADDRESS PhysicalAddress;
+10790:     };
+10791: } MM_COPY_ADDRESS, *PMMCOPY_ADDRESS;
+10792: 
+10793: #define MM_COPY_MEMORY_PHYSICAL             0x1
+10794: #define MM_COPY_MEMORY_VIRTUAL              0x2
+10795: 
+10796: _IRQL_requires_max_ (APC_LEVEL)
+10797: NTKERNELAPI
+10798: NTSTATUS
+10799: MmCopyMemory (
+10800:     _Out_writes_bytes_ (NumberOfBytes) PVOID TargetAddress,
+10801:     _In_ MM_COPY_ADDRESS SourceAddress,
+10802:     _In_ SIZE_T NumberOfBytes,
+10803:     _In_ ULONG Flags,
+10804:     _Out_ PSIZE_T NumberOfBytesTransferred
+10805:     );
+10806: 
+10807: #endif
+10808: 
+10809: #if (NTDDI_VERSION >= NTDDI_WIN10_MN)
+10810: 
+10811: #define MM_GET_CACHE_ATTRIBUTE_IO_SPACE     0x1
+10812: 
+10813: _IRQL_requires_max_ (DISPATCH_LEVEL)
+10814: NTSTATUS
+10815: MmGetCacheAttributeEx (
+10816:     _In_ PHYSICAL_ADDRESS PhysicalAddress,
+10817:     _In_ ULONG Flags,
+10818:     _Out_ MEMORY_CACHING_TYPE *CacheType
+10819:     );
+10820: 
+10821: #endif
+10822: 
+10823: #if (NTDDI_VERSION >= NTDDI_WIN2K)

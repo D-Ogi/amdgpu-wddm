@@ -1,0 +1,10 @@
+{
+  "sys_sha256": "3B82B87F13B9592E3CB82D3F3D226C6ABADAA886B3EFAEE4BF1090D0F7BDE979",
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "dirty_worktree": true,
+  "thermal_samples": 24,
+  "exact_raw_three_way": 22,
+  "bar_in_smn_bracket": 24,
+  "active_filename_means": "post-workload cooldown; worker finished21:30:00, samples21:30:12-15",
+  "render_probe_sha256": "366be5f68f9a5764a0ceb3a49b968c8ed709de9f164ab81122af67099f7fa078"
+}

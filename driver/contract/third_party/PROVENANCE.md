@@ -2,7 +2,7 @@
 
 One file, unmodified, from the Linux kernel, tag **v6.18**, commit
 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, taken 2026-09-21 from the local checkout
-(`P:\BC-250\ref\linux-src`, see `linux-src.PROVENANCE.txt` next to it). Same tag and same commit as
+(`<BC250_ROOT>\ref\linux-src`, see `linux-src.PROVENANCE.txt` next to it). Same tag and same commit as
 `driver/amdgpu-import/PROVENANCE.md`, on purpose: the caps blob and the imported IP-block code have
 to describe the same hardware through the same structures, and a second tag would be a second
 answer.

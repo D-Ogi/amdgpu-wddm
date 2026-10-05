@@ -1,0 +1,10 @@
+{
+  "large_probe_ssh_exit": 0,
+  "collector_first_attempt": "syntax error before any network call",
+  "collector_second_attempt": "SSH connect timeout; terminal, no file copied",
+  "independent_configured_tcp_answers": 0,
+  "pinned_subnet_matches": 0,
+  "concurrent_probe_started": false,
+  "collector_resumed_after_recovery": "copy only; probe not rerun",
+  "all_observers_terminal": true
+}

@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS: fragmented copy/fill byte equality, unaligned copy, canaries, tiny buffers, fault rollback, overflow, live-ring reservation limits, 1GiB resume exactly once
+compile-check (kernel flags, same source, no link)
+
+paging_stream_test.exe exit code 0

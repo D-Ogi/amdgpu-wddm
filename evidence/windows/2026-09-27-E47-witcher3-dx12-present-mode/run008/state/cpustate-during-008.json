@@ -1,0 +1,89 @@
+{
+    "tag":  "during-008",
+    "utc":  "2026-09-27T05:21:19.7359779Z",
+    "counters":  {
+                     "\\system\\processor queue length":  [
+                                                              0,
+                                                              0,
+                                                              0
+                                                          ],
+                     "\\processor information(_total)\\processor frequency":  [
+                                                                                  3194,
+                                                                                  3194,
+                                                                                  3194
+                                                                              ],
+                     "\\processor information(_total)\\% of maximum frequency":  [
+                                                                                     86,
+                                                                                     85,
+                                                                                     87
+                                                                                 ],
+                     "\\memory\\pages/sec":  [
+                                                 63.7,
+                                                 63.7,
+                                                 63.7
+                                             ],
+                     "\\processor(_total)\\% processor time":  [
+                                                                   49.9,
+                                                                   45.2,
+                                                                   47.9
+                                                               ],
+                     "\\processor information(_total)\\% processor performance":  [
+                                                                                      86,
+                                                                                      86,
+                                                                                      86
+                                                                                  ]
+                 },
+    "top_cpu_3s":  [
+                       {
+                           "pid":  4596,
+                           "name":  "dwm",
+                           "cpu_s_per_3s":  10.45
+                       },
+                       {
+                           "pid":  5584,
+                           "name":  "witcher3",
+                           "cpu_s_per_3s":  6.34
+                       },
+                       {
+                           "pid":  4,
+                           "name":  "System",
+                           "cpu_s_per_3s":  0.31
+                       },
+                       {
+                           "pid":  4436,
+                           "name":  "bc250mon",
+                           "cpu_s_per_3s":  0.25
+                       },
+                       {
+                           "pid":  2436,
+                           "name":  "Memory Compression",
+                           "cpu_s_per_3s":  0.23
+                       },
+                       {
+                           "pid":  7084,
+                           "name":  "MsMpEng",
+                           "cpu_s_per_3s":  0.17
+                       },
+                       {
+                           "pid":  5572,
+                           "name":  "powershell",
+                           "cpu_s_per_3s":  0.14
+                       },
+                       {
+                           "pid":  10576,
+                           "name":  "powershell",
+                           "cpu_s_per_3s":  0.09
+                       }
+                   ],
+    "defender":  {
+                     "signatures":  "09/26/2026 10:54:02",
+                     "realtime":  true,
+                     "quick_end":  "09/26/2026 13:08:32",
+                     "full_start":  "",
+                     "quick_start":  "09/26/2026 13:08:07",
+                     "scan_age_days":  0,
+                     "full_end":  ""
+                 },
+    "power_plan":  "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)",
+    "uptime_h":  12.6
+}

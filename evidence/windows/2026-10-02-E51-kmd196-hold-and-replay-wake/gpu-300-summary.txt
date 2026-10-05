@@ -1,0 +1,24 @@
+trace span 46.91 s, vsync interrupts 2808 (59.9/s)
+
+GPU DMA packets by process (execution Start->Stop):
+  ?                                n= 15401 busy= 36.373 s ( 77.5% of span) median=  0.340 ms p95=  9.726 ms max=  26.374 ms
+  "Unknown" (   4)                 n=  1353 busy=  0.116 s (  0.2% of span) median=  0.077 ms p95=  0.148 ms max=   0.925 ms
+
+Queue latency by process (QueuePacket Start->Stop, submit to completion):
+  "Unknown" (13452)                n= 14753 median=   2.678 ms p95=  26.233 ms max=   66.932 ms
+  "Unknown" (2288)                 n=  4788 median=   0.365 ms p95=   8.810 ms max=   24.453 ms
+  "Unknown" (   4)                 n=  1353 median=   0.143 ms p95=   0.263 ms max=   16.256 ms
+  "Unknown" (12568)                n=    44 median=   0.596 ms p95=  11.233 ms max=   11.786 ms
+  "Unknown" (13888)                n=    29 median=   1.026 ms p95=  13.856 ms max=   14.535 ms
+  "Unknown" (14160)                n=    27 median=   1.405 ms p95=  11.892 ms max=   14.121 ms
+  "Unknown" (1588)                 n=    27 median=   0.057 ms p95=  10.160 ms max=   10.554 ms
+  "Unknown" (13488)                n=    25 median=   1.334 ms p95=  14.372 ms max=   14.438 ms
+  "Unknown" (7452)                 n=    23 median=   1.651 ms p95=  12.039 ms max=   14.741 ms
+  "Unknown" (12028)                n=    21 median=   0.156 ms p95=   8.862 ms max=   12.018 ms
+  "Unknown" (13640)                n=    21 median=   1.297 ms p95=  13.969 ms max=   14.912 ms
+
+GPU busy (union of all DMA packets) 33.716 s = 71.9% of span
+
+Presents by process:
+  "Unknown" (13452)                n=  2414 rate=  51.5/s interval median=  18.66 ms p95=  25.65 ms p99=  32.76 ms max=   42.30 ms >50ms=0 >100ms=0 >250ms=0
+  "Unknown" (2288)                 n=  2394 rate=  51.0/s interval median=  18.30 ms p95=  28.20 ms p99=  34.14 ms max=   55.16 ms >50ms=1 >100ms=0 >250ms=0

@@ -1,0 +1,47 @@
+[
+  {
+    "file": "amdgpu_fence-6.18.52.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_fence.c",
+    "sha256": "7beb6bf374d019a41338107eec81401215f4c03840e8a4b09372ee3bb43aad9e"
+  },
+  {
+    "file": "sdma-reset-probe.py",
+    "source": "bc250-win\\experiments\\E27-m9-inference\\sdma-reset-probe.py",
+    "sha256": "370d663e9798d57f3aeabdd50c8cac4a7fd9b998336128941a63b2f72a34d9f4"
+  },
+  {
+    "file": "gen-sdma-reset-packets.c",
+    "source": "bc250-win\\experiments\\E27-m9-inference\\gen-sdma-reset-packets.c",
+    "sha256": "a50175be27abd3aed0fedadd39179583d38ed8907887a89e7936a24ebcb0851c"
+  },
+  {
+    "file": "upstream-deadlock_tests.c",
+    "source": "ref\\libdrm\\tests\\amdgpu\\deadlock_tests.c",
+    "sha256": "2b6bafd62f0b84a2154c21eae1f8a72b66b5f74f15552719781e13325998562b"
+  },
+  {
+    "file": "navi10_sdma_pkt_open.h",
+    "source": "bc250-win\\third_party\\linux-amdgpu\\navi10_sdma_pkt_open.h",
+    "sha256": "ff093a7c887625f20b21c2e64ee1f464d942c6da36e145cf69e1e9f530d3e01d"
+  },
+  {
+    "file": "dispatch.py",
+    "source": "bc250-win\\experiments\\E13-linux-reference-2\\dispatch.py",
+    "sha256": "87b3a433d3ed38c35aa41ebe67def53404f5c2521c5da7314d7109b3d1488578"
+  },
+  {
+    "file": "dispatch.json",
+    "source": "bc250-win\\experiments\\E13-linux-reference-2\\dispatch.json",
+    "sha256": "22553bc23ed3401ec2a2b18472650296120f70b178ef1402e04833f4e35b9276"
+  },
+  {
+    "file": "packets.json",
+    "source": "scratch\\m9\\sdma-reset-probe\\packets.json",
+    "sha256": "9590d58ccaaca24c165d2c3154d5b2580b2f42c052c33a664d3e2e27e85b6740"
+  },
+  {
+    "file": "build.log",
+    "source": "scratch\\m9\\build-sdma-reset-packets.log",
+    "sha256": "5f633f50903d5cf52562bf6241e03d47637d05dd4f9d4f196e63ebc9e1838c4a"
+  }
+]

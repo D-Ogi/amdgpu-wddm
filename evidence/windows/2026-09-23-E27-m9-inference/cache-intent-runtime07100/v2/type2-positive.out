@@ -1,0 +1,43 @@
+physical devices 1, using index 0
+device        AMD BC-250 (RADV GFX1013)
+ids           vendor=0x1002 device=0x13fe type=1
+driverVersion 0x06801063 (26.1.99)
+apiVersion    0x0040415c (1.4.348)
+queue family  0
+subgroup      size=64 supportedStages=0x3f3f supportedOps=0x6ff
+limits        wgInvocations=1024 wgSize=1024x1024x1024 sharedMem=65536 pushConst=256 storageBuffersPerStage=8388606
+memory types  11 heaps 2
+  type  0 heap 1 flags 0x001
+  type  1 heap 1 flags 0x001
+  type  2 heap 0 flags 0x006
+  type  3 heap 1 flags 0x007
+  type  4 heap 1 flags 0x007
+  type  5 heap 0 flags 0x00e
+  type  6 heap 0 flags 0x00e
+  type  7 heap 1 flags 0x0c1
+  type  8 heap 0 flags 0x0c6
+  type  9 heap 1 flags 0x0c7
+  type 10 heap 0 flags 0x0ce
+  heap  0 size 4008 MiB flags 0x0
+  heap  1 size 8017 MiB flags 0x1
+BUFFER memory_type=2 heap=0 flags=0x6 bytes=4194304
+BUFFER memory_type=2 heap=0 flags=0x6 bytes=4194304
+BUFFER memory_type=2 heap=0 flags=0x6 bytes=4194304
+COHERENCY rounds=16 words=1048576 same_allocations=1 host_coherent=1 dispatches_per_round=2 stale_control=0
+coherency00  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0x6747a9c9b5e067b5 match=yes t_submit_to_idle_us=    964.2 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+coherency01  n=1048576   hash=0xd7bd083bb8a604c8 cpu_hash=0xd7bd083bb8a604c8 match=yes t_submit_to_idle_us=    201.0 first_words=83187ac4 3ec9b4d0 44c90d3a 3fe5fe95 96c91fd4 df76b74c 48f416a9 ebde67da
+coherency02  n=1048576   hash=0xabb1ea02aef79462 cpu_hash=0xabb1ea02aef79462 match=yes t_submit_to_idle_us=    213.9 first_words=d628e7c6 ba87fbb3 ce8a8157 1e6c1fd0 18c2b78d 9e09c148 434e6c92 8f20d06d
+coherency03  n=1048576   hash=0xb81128ca9e2bf9fc cpu_hash=0xb81128ca9e2bf9fc match=yes t_submit_to_idle_us=    248.5 first_words=8e5ebb16 05ec6af5 d981a272 9d23f272 3d061415 2baf9773 670f7f72 79a89795
+coherency04  n=1048576   hash=0x406ef8d38e28e6e2 cpu_hash=0x406ef8d38e28e6e2 match=yes t_submit_to_idle_us=    269.8 first_words=265cc2f3 0c429325 e22c0708 44a3f893 36736efd ebc2c2f7 26dea281 5c2439bf
+coherency05  n=1048576   hash=0x4c10ffc711ed6be9 cpu_hash=0x4c10ffc711ed6be9 match=yes t_submit_to_idle_us=    225.3 first_words=4162145f 3fda9a9a 966a7c2c fff3e2c0 cacda39c e0407963 f654fa13 f8ecec48
+coherency06  n=1048576   hash=0xaef6555048380c37 cpu_hash=0xaef6555048380c37 match=yes t_submit_to_idle_us=   2178.0 first_words=a7491447 33138707 34a84e92 05c0fa68 a6d13920 c1718ed1 725a9d1d f11ed8d7
+coherency07  n=1048576   hash=0xdd10378e2f510b74 cpu_hash=0xdd10378e2f510b74 match=yes t_submit_to_idle_us=    245.1 first_words=043192b0 09909144 fce2fe50 543a4ed1 2e8853f4 5a9f0f0f 99b3c812 510a2164
+coherency08  n=1048576   hash=0xd3fc531fcf44a94d cpu_hash=0xd3fc531fcf44a94d match=yes t_submit_to_idle_us=    240.6 first_words=d466dea5 e8004475 83db66c5 cc966b60 33fd2c35 4a6da783 eedc9282 0e9e59d2
+coherency09  n=1048576   hash=0xf6f3889b1158eb19 cpu_hash=0xf6f3889b1158eb19 match=yes t_submit_to_idle_us=    203.0 first_words=776e3e9c 26295fbb f7525686 c0339b54 6e6597d5 92fd199b 0d3e7663 24f11300
+coherency10  n=1048576   hash=0x15d2c15a246ac775 cpu_hash=0x15d2c15a246ac775 match=yes t_submit_to_idle_us=    218.4 first_words=48744412 3263a103 fe751cb5 5bf53bb0 2d8aa60e d63ac3b0 331a8a5d 46ac19f6
+coherency11  n=1048576   hash=0x9a9f46573a94c577 cpu_hash=0x9a9f46573a94c577 match=yes t_submit_to_idle_us=    198.4 first_words=79c70b20 f6a461b0 16216d11 b93cbe40 f1df0edc 3cda36d9 ad390598 3db5eee7
+coherency12  n=1048576   hash=0x6fd43e71b77c15aa cpu_hash=0x6fd43e71b77c15aa match=yes t_submit_to_idle_us=    237.8 first_words=4a754055 2618cbf2 09648d3e 39f5f088 adec1777 51acd0d0 61f08d2b 26da2d7c
+coherency13  n=1048576   hash=0xf028ddbba76a3ebe cpu_hash=0xf028ddbba76a3ebe match=yes t_submit_to_idle_us=    282.0 first_words=3c958d4a c2c0bc19 f079f68d 62e7c3ae 728d0bea 726a9c36 0b4bc8dc e0ac1c45
+coherency14  n=1048576   hash=0xa0ec13d31b42c2c7 cpu_hash=0xa0ec13d31b42c2c7 match=yes t_submit_to_idle_us=    234.6 first_words=c9219a65 00f8dc57 6f829795 0738eb55 c85f0eac cc2b9e88 eb42bd9e 04deb785
+coherency15  n=1048576   hash=0x5a47aa502a94f091 cpu_hash=0x5a47aa502a94f091 match=yes t_submit_to_idle_us=    206.5 first_words=6cca2d08 aed48eee b5bc5ca8 0ee99516 c459a477 1352c024 73c961d6 a9feedfe
+COHERENCY completed=16 mismatches=0

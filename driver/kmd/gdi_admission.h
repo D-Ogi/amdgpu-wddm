@@ -4,10 +4,10 @@
 
 // BD-060: the answer of DxgkDdiGetStandardAllocationDriverData, and what dxgkrnl asked for, per adapter start.
 // The old evidence counted successes only (Calls[] advances after the last refusal), so four GDI successes did not
-// bound refused types (Codex 900/901). Here a request is counted on entry, before any refusal, by standard
+// bound refused types (review 900/901). Here a request is counted on entry, before any refusal, by standard
 // allocation kind and phase, and for GDI surfaces by type and phase; its final status is counted by class. The
 // CreateAllocation and OpenAllocation outcomes of LB7A allocations are counted by type beside them, and every
-// CreateAllocation call by its final outcome (Codex 904: an allocation admitted and then rolled back by a later
+// CreateAllocation call by its final outcome (review 904: an allocation admitted and then rolled back by a later
 // failure of the same call is counted as rolled back, not lost).
 //
 // Plain C over plain integers, host-tested (test/gdi_admission_test.c, gate "gdi-admission"). wddm.c defines

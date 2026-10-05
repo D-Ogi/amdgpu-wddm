@@ -1,0 +1,63 @@
+{
+  "umd_source": "d7948d8ef7af2948750652136fecfb9340efb643",
+  "umd_sha256": "92697AE5E531BE654BB4A4C97CA4F981D0DF53BDE63F570E2F0DD0039820455B",
+  "runner": "6a1c9b3",
+  "presents": 29,
+  "presented_resource_ids": [
+    26,
+    30
+  ],
+  "runtime_maps": [],
+  "checkpoint_snapshot": {
+    "checkpoint_seq": "165",
+    "marker": "8",
+    "status": "0",
+    "completed": "29",
+    "signaled": "29"
+  },
+  "descriptor_gpu_interval": {
+    "completed": 32,
+    "bytes": 1792,
+    "mapped_resource_ids": [
+      3,
+      6,
+      9,
+      12,
+      52,
+      57,
+      62
+    ],
+    "duration_ns": 546834100
+  },
+  "known_application_copy_bytes": 3686400,
+  "closure": {
+    "utc": "2026-09-27T23:54:27.7256441Z",
+    "version": "0.7.166.1",
+    "clock": "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67125 ready=1\r\n",
+    "temperature": "01:54:33 Tctl 67.1 C (raw 743B0FEF)\r\n",
+    "confirmed": {
+      "launch": true,
+      "age_ms": 456,
+      "epoch": 5,
+      "generation": 92113106355,
+      "flags": 15,
+      "completed": 4523,
+      "ready_ms": 3197948,
+      "flag_names": "Full, Ready, Visible, Confirmed"
+    }
+  },
+  "closed": {
+    "utc": "2026-09-27T23:56:02.1115972Z",
+    "umd": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+    "done": {
+      "exit": 0,
+      "utc": "2026-09-27T23:54:33.4325951Z"
+    }
+  },
+  "raw_sha256": {
+    "stderr.log": "b45309d528161a5349991857040e377efb0eafe98870a3d526bba4e1f4af4a2b",
+    "stdout.log": "57145a8059a4de60972bca6786c1d437c5f620ba7a8bdf6f9145c05e567267a4",
+    "receipts.zip": "1773071cd6bf759147f8ed2d34adac6dd8f3461f329175214c3b9111a22c49a9"
+  }
+}

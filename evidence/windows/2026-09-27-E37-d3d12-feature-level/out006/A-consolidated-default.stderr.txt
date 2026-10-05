@@ -1,0 +1,58 @@
+﻿radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+120c:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+120c:info:vkd3d_config_flags_init_once: VKD3D_CONFIG=''.
+120c:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.1.0.
+120c:info:vkd3d_instance_init: vkd3d-proton - build: 472989aabdcf3e3.
+radv_wddm2_winsys_create
+120c:info:vkd3d_physical_device_info_init_maint9: Implementation supports eliding QFOT for non-compressed optimal images.
+radv_wddm2_winsys_create
+allocation handle=0x400017c0
+allocation handle=0x40001840
+allocation handle=0x400018c0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001980
+allocation handle=0x40001a00
+allocation handle=0x40001a80
+allocation handle=0x40001b00
+allocation handle=0x40001b80
+allocation handle=0x40001c00
+allocation handle=0x40001c80
+allocation handle=0x40001d00
+allocation handle=0x40001d80
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+allocation handle=0x40001f80
+allocation handle=0x40002000
+allocation handle=0x40002080
+allocation handle=0x40002100
+120c:info:vkd3d_memory_info_decide_hvv_usage: Topology: No more than 1 device local heap, HVV access is viable.
+120c:info:vkd3d_memory_info_upload_hvv_memory_properties: Topology: largest device local heap is too small (8406929408 bytes) for effective ReBAR.
+allocation handle=0x400021c0
+allocation handle=0x40002240
+120c:info:vkd3d_bindless_state_get_bindless_flags: Enabling fast paths for advanced ExecuteIndirect() graphics and compute (EXT_dgc).
+120c:info:vkd3d_bindless_state_get_bindless_flags: Device supports VK_EXT_mutable_descriptor_type.
+120c:info:vkd3d_bindless_state_get_bindless_flags: Device supports ultra-fast path for descriptor copies.
+120c:info:vkd3d_bindless_state_get_bindless_flags: Device supports packed metadata path for descriptor copies.
+120c:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+120c:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+120c:info:vkd3d_bindless_state_add_binding: Device supports VK_EXT_descriptor_buffer!
+allocation handle=0x40002300
+120c:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.6.
+120c:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.7.
+120c:info:d3d12_device_caps_init_shader_model: Enabling support for SM 6.8.
+120c:info:d3d12_device_determine_ray_tracing_tier: DXR support enabled.
+120c:info:d3d12_device_determine_ray_tracing_tier: DXR 1.1 support enabled.
+120c:info:vkd3d_pipeline_library_init_disk_cache: Remapping VKD3D_SHADER_CACHE to: vkd3d-proton.cache.
+120c:info:vkd3d_pipeline_library_init_disk_cache: Attempting to load disk cache from: vkd3d-proton.cache.
+2fa0:info:vkd3d_pipeline_library_disk_thread_main: Performing async setup of stream archive ...
+2fa0:info:vkd3d_pipeline_library_disk_cache_merge: No write cache exists. No need to merge any disk caches.
+2fa0:info:vkd3d_pipeline_library_disk_cache_initial_setup: Merging pipeline libraries took 0.155 ms.
+2fa0:info:vkd3d_pipeline_library_disk_cache_initial_setup: Failed to map read-only cache: vkd3d-proton.cache.
+2fa0:info:vkd3d_pipeline_library_disk_thread_main: Done performing async setup of stream archive.
+

@@ -1,0 +1,18 @@
+﻿{
+    "SchemaVersion":  1,
+    "Status":  "error",
+    "CapturedUtc":  "2026-09-24T21:22:41.5620123Z",
+    "Error":  "vulkaninfo timed out; no subsequent Vulkan workload permitted",
+    "ToolSha256":  "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
+    "Collector":  "vulkaninfo 1.4.335.0",
+    "IcdPath":  "C:\\BC250\\m9\\radv-main-icd2\\radeon_icd.json",
+    "IcdSha256":  "4C31C43E22BA17E4D9020F23B25AFC92846C93F43986E6DEFBBDB057041858EC",
+    "IcdLibraryPath":  "C:\\BC250\\m9\\radv-main-icd2\\vulkan_radeon.dll",
+    "IcdLibrarySha256":  "DB886B8D53E6BEE89665287AF5EE19A1868E5874868C795F6B11472FBB4A3986",
+    "KmdVersion":  "0.7.136.1",
+    "BootUtc":  "2026-09-24T19:14:48.5000000Z",
+    "Command":  "vulkaninfo --text --show-formats",
+    "ExitCode":  null,
+    "TimedOut":  true,
+    "ProcessId":  6784
+}

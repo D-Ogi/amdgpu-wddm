@@ -2,6 +2,9 @@
 
 Date: 2026-09-21. Status: **accepted** the same day. The condition was that experiment E05 shows that a
 display-only driver can own `1002:13FE` on unit A and keep the firmware's display; run 001 showed it (facts M26).
+Historical since M7 (noted 2026-09-27): points 1 and 2 describe the M3 driver (display-only, CPU copy into the
+firmware framebuffer, no MMIO) and no longer describe the driver; points 3 to 5 (boot-loop guard, breadcrumbs
+and log, one install and one rollback path) and point 6 remain in force.
 
 ## Context
 

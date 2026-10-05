@@ -1,0 +1,66 @@
+BC250 private Vulkan instance=000001A513720110 screen=000001A51370B1E0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x93940d
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40002ac0
+allocation handle=0x40002b40
+allocation handle=0x40002bc0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=5608
+DWM Caps type=130 size=4 hr=00000000
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 private Vulkan instance=000001A51400C950 screen=000001A515F0B1D0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x80001540
+allocation handle=0x40003680
+allocation handle=0x40003700
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+DWM route OpenAdapter10_2 hr=00000000 pid=5608
+DWM Versions requested=0 supplied=0 count=3 hr=00000000
+DWM Versions requested=3 supplied=1 count=3 hr=00000000
+ version=000a000100040000
+ version=000a000600000000
+ version=000a000900000000
+BC250 destroy private Vulkan instance=000001A513720110
+BC250 destroy private Vulkan instance=000001A51400C950

@@ -1,0 +1,12 @@
+{
+  "parent": "a1f3bf9f900e571a3da79459b1133ac7069b62eb",
+  "source": "85667a7031e5744439ff5200362cc29afad2de4c",
+  "import": "b9a0276",
+  "patch_sha256": "0656629f1206602d8080d10991423dd5e61790be91f3829b1dc19c8350276cce",
+  "changed_files": {
+    "driver/kmd/bc250kmd.inf": "3c599ec8d2fa9e3f88aaca7e2fd3b27fdee9fd054e816d8e2aedc3384b89de07",
+    "driver/kmd/bc250kmd_escape.h": "cbe024ac19aabc6e9940b42f7bf25bdeb6f37db9f6e731aa6a0f053f011db609",
+    "driver/kmd/wddm.c": "1478d90f3a581c213826caab4501260057193fd1ea10824b671c835eda402add"
+  },
+  "scope": "exact160 plus retained observations and version identifiers"
+}

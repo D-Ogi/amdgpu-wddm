@@ -1,0 +1,11 @@
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -85,7 +85,7 @@
+    }
+    struct SurfacePrivate { UINT magic, version, width, height, pitch, format; UINT64 size; };
+    static_assert(sizeof(SurfacePrivate) == 32, "LB7A ABI");
+-   const UINT pitchAlignment = resource->primary ? 256u : 64u;
++   const UINT pitchAlignment = 256u;
+    const UINT pitch = resource->allocation ? resource->surfacePitch :
+       (width * 4 + pitchAlignment - 1) & ~(pitchAlignment - 1);
+    const UINT64 bytes = resource->allocation ? resource->surfaceBytes :

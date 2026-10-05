@@ -1,0 +1,1138 @@
+log          477849 lines since this driver load, 476825 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 2
+     2      0.004 stage 20
+     3      0.174 stage 30
+     4      0.176 guard: count 0 -> 1 flushed, durable required 1
+     5      0.178 stage 31
+     6      0.178 stage 32
+     7      0.178 post display 1920x1200 pitch 7680 format 22 target 2424833
+     8      0.180 stage 33
+     9      0.180 stage 34
+    10      0.180 interrupt resource 1: message, vector 0x80, flags 0x3
+    11      0.180 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    12      0.180 smu: native owner start status 0x00000000
+    13      0.180 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    14      0.180 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    15      0.182 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    16      0.182 gart: ready, dummy page at 0x26FFFA000
+    17      0.182 psp: ready
+    18      0.182 gpumem: ready, doorbells at 0xD0000000
+    19      0.182 gfx: ready, GPU submission allowed, paging node allowed
+    20      0.182 ih: ready
+    21      0.186 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    22      0.192 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    23      0.192 startup: entering interrupt connection
+    24      0.198 startup: entering firmware preparation
+    25      0.220 startup: entering native clock preparation
+    26      0.222 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 68875mc staged 0
+    27      0.226 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    28      0.226 gfx: unpublished translation bootstrap entered with engines halted
+    29      0.226 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.226 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    31      0.226 startup: entering GART initialization
+    32      0.242 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    33      0.242 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    34      0.242 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    35      0.242 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    36      0.242 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    37      0.242 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    38      0.242 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    39      0.242 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    40      0.242 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    41      0.242 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    42      0.242 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    43      0.242 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    44      0.242 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    45      0.242 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    46      0.242 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    47      0.242 startup: entering PSP initialization
+    48      0.296 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    49      0.296 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    50      0.318 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.318 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    52      0.318 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    53      0.318 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 255 us, in TMR at 0x0
+    54      0.318 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    55      0.318 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    56      0.320 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1897 us, in TMR at 0x0
+    57      0.320 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    58      0.320 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    59      0.322 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1891 us, in TMR at 0x0
+    60      0.322 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    61      0.322 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    62      0.328 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5916 us, in TMR at 0xF5FF842000
+    63      0.328 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    64      0.328 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    65      0.334 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5915 us, in TMR at 0xF5FF883000
+    66      0.334 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    67      0.334 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    68      0.340 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF8C4000
+    69      0.340 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    70      0.340 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    71      0.346 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5967 us, in TMR at 0xF5FF800000
+    72      0.346 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    73      0.346 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    74      0.346 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 136 us, in TMR at 0x0
+    75      0.346 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    76      0.346 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    77      0.352 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5975 us, in TMR at 0xF5FF800000
+    78      0.352 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    79      0.352 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    80      0.352 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    81      0.352 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    82      0.352 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    83      0.354 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1694 us, in TMR at 0x0
+    84      0.354 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    85      0.354 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    86      0.354 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    87      0.354 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    88      0.354 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    89      0.354 startup: entering IH initialization
+    90      0.358 ih: init: rc 0, 18 writes
+    91      0.358 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    92      0.358 startup: entering GFX initialization
+    93      0.360 startup: entering GFX stage 1
+    94      0.364 gfx: RLC startup policy pp_gfxoff 0
+    95      0.370 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    96      0.370 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    97      0.374 startup: entering GFX stage 2
+    98      0.378 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    99      0.378 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+   100      0.380 startup: entering GFX stage 3
+   101      0.384 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 4 us
+   102      0.384 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   103      0.388 startup: entering GFX stage 4
+   104      0.390 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+   105      0.390 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   106      0.394 startup: entering GFX stage 5
+   107      0.396 startup: RLC boundary acquire-paging-lock
+   108      0.400 startup: RLC boundary acquire-gart-lock
+   109      0.404 startup: RLC boundary locks-acquired
+   110      0.406 startup: RLC boundary before-rlc-resume
+   111      0.410 startup: RLC boundary after-rlc-resume
+   112      0.412 startup: RLC boundary before-gfx-visibility
+   113      0.416 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   114      0.418 startup: visibility observer returned after-invalidate-request
+   115      0.420 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   116      0.424 startup: visibility observer returned after-invalidate-request-read
+   117      0.426 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   118      0.428 startup: visibility observer returned after-invalidate-ack
+   119      0.432 startup: visibility GFX returned 0, entering MMHUB
+   120      0.434 startup: visibility MMHUB returned 0
+   121      0.438 gpumem: startup GFX translations committed after RLC, before CP
+   122      0.442 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   123      0.442 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   124      0.442 startup: visibility publication observer returned
+   125      0.446 startup: RLC boundary after-gfx-visibility
+   126      0.448 gfx: stage 5 (RLC): rc 0, 11 writes so far, 41987 us
+   127      0.448 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   128      0.452 startup: entering GFX stage 6
+   129      0.454 startup: entering CP step 1
+   130      0.458 startup: CP1 checkpoint acquire-paging-lock
+   131      0.462 startup: CP1 checkpoint acquire-gart-lock
+   132      0.464 startup: CP1 checkpoint locks-acquired
+   133      0.468 amdgpu[0]: CP resume kiq-init begin
+
+   134      0.468 startup: CP1 checkpoint scheduler
+   135      0.470 startup: CP1 checkpoint scheduler-read
+   136      0.474 startup: CP1 checkpoint scheduler-write
+   137      0.478 startup: CP1 checkpoint scheduler-done
+   138      0.480 startup: CP1 checkpoint clear-mqd
+   139      0.484 startup: CP1 checkpoint select-queue
+   140      0.486 startup: CP1 checkpoint build-mqd
+   141      0.490 startup: CP1 checkpoint disable-wptr-poll
+   142      0.494 startup: CP1 checkpoint read-active
+   143      0.496 startup: CP1 checkpoint program-hqd
+   144      0.500 startup: CP1 checkpoint activate-hqd
+   145      0.502 startup: CP1 checkpoint restore-selection
+   146      0.506 startup: CP1 checkpoint complete
+   147      0.508 amdgpu[0]: CP resume kiq-init end result=0
+
+   148      0.508 gfx: CP step 1: rc 0, 27 writes, 41184 us
+   149      0.508 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   150      0.508 startup: CP step 1 returned 0x00000000 result 0
+   151      0.512 startup: entering CP step 2
+   152      0.516 amdgpu[0]: CP resume compute-unhalt begin
+
+   153      0.516 amdgpu[0]: CP resume compute-unhalt end
+
+   154      0.516 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   155      0.516 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   156      0.516 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   157      0.516 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   158      0.516 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   159      0.516 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   160      0.516 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   161      0.516 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   162      0.516 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   163      0.516 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   164      0.516 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   165      0.516 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   166      0.516 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   167      0.516 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   168      0.516 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   169      0.516 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   170      0.516 gfx: CP step 2: rc 0, 17 writes, 448 us
+   171      0.516 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   172      0.516 startup: CP step 2 returned 0x00000000 result 0
+   173      0.520 startup: entering CP step 3
+   174      0.524 amdgpu[0]: CP resume kcq-enable begin
+
+   175      0.524 amdgpu[0]: CP resume kcq-enable end result=0
+
+   176      0.524 gfx: CP step 3: rc 0, 1 writes, 75 us
+   177      0.524 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   178      0.524 startup: CP step 3 returned 0x00000000 result 0
+   179      0.528 startup: entering CP step 4
+   180      0.532 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   181      0.532 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   182      0.532 gfx: CP step 4: rc 0, 4 writes, 58 us
+   183      0.532 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   184      0.532 startup: CP step 4 returned 0x00000000 result 0
+   185      0.536 startup: entering CP step 5
+   186      0.542 amdgpu[0]: CP resume kgq-enable begin
+
+   187      0.542 amdgpu[0]: CP resume kgq-enable end result=0
+
+   188      0.542 gfx: CP step 5: rc 0, 1 writes, 34 us
+   189      0.542 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   190      0.542 startup: CP step 5 returned 0x00000000 result 0
+   191      0.546 startup: entering CP step 6
+   192      0.548 amdgpu[0]: CP resume gfx-start begin
+
+   193      0.548 amdgpu[0]: CP resume gfx-start end result=0
+
+   194      0.548 gfx: CP step 6: rc 0, 3 writes, 34 us
+   195      0.548 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   196      0.548 startup: CP step 6 returned 0x00000000 result 0
+   197      0.552 startup: entering CP step 7
+   198      0.556 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   199      0.556 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   200      0.556 gfx: CP step 7: rc 0, 1 writes, 42 us
+   201      0.556 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   202      0.556 startup: CP step 7 returned 0x00000000 result 0
+   203      0.560 startup: entering CP step 8
+   204      0.564 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   205      0.564 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   206      0.564 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   207      0.564 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   208      0.564 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   209      0.564 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   210      0.564 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   211      0.564 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   212      0.564 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   213      0.564 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   214      0.564 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   215      0.564 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   216      0.564 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   217      0.564 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   218      0.564 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   219      0.564 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   220      0.564 gfx: CP step 8: rc 0, 8 writes, 285 us
+   221      0.564 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   222      0.564 startup: CP step 8 returned 0x00000000 result 0
+   223      0.572 startup: entering GFX stage 7
+   224      0.576 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 172 us
+   225      0.576 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   226      0.580 startup: entering GFX stage 8
+   227      0.584 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   228      0.584 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   229      0.584 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   230      0.586 startup: both engines ready
+   231      0.590 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   232      0.590 wddm: GPU initialized before adapter admission
+   233      0.590 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   234      0.590 stage 35
+   235      0.592 stage 39
+   236      0.592 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   237      0.592 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   238      0.592 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   239      0.592 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   240      0.592 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   241      0.592 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   242      0.592 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   243      0.592 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   244      0.592 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   245      0.592 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   246      0.592 wddm: GetNodeMetadata node 0 adapter 0
+   247      0.592 wddm: GetNodeMetadata node 1 adapter 0
+   248      0.592 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   249      0.592 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   250      0.592 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   251      0.592 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   252      0.594 wddm: CreateProcess flags 0x00000001 pasids 1
+   253      0.594 wddm: CreateDevice flags 0x00000001 pasid 0
+   254      0.594 wddm: CreateDevice flags 0x00000001 pasid 0
+   255      0.596 wddm: capture reservation ready 22020400 bytes
+477081   4921.902 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477082   4921.946 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477083   4921.946 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477084   4921.946 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477085   4921.946 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477086   4921.988 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477087   4921.988 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477088   4921.988 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477089   4921.988 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477090   4922.038 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477091   4922.038 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477092   4922.038 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477093   4922.038 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477094   4922.086 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477095   4922.086 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477096   4922.086 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477097   4922.086 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477098   4922.120 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477099   4922.120 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477100   4922.120 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477101   4922.120 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477102   4922.156 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477103   4922.156 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477104   4922.156 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477105   4922.156 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477106   4922.202 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477107   4922.202 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477108   4922.202 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477109   4922.202 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477110   4922.238 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477111   4922.238 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477112   4922.238 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477113   4922.238 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477114   4922.286 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477115   4922.286 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477116   4922.286 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477117   4922.286 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477118   4922.320 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477119   4922.320 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477120   4922.320 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477121   4922.320 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477122   4922.368 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477123   4922.368 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477124   4922.368 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477125   4922.368 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477126   4922.404 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477127   4922.404 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477128   4922.404 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477129   4922.404 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477130   4922.440 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477131   4922.440 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477132   4922.440 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477133   4922.440 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477134   4922.484 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477135   4922.484 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477136   4922.486 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477137   4922.486 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477138   4922.522 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477139   4922.522 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477140   4922.522 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477141   4922.522 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477142   4922.570 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477143   4922.570 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477144   4922.570 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477170   4922.855 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477171   4922.855 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477172   4922.855 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477173   4922.855 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477174   4922.903 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477175   4922.903 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477176   4922.903 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477177   4922.903 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477178   4922.937 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477179   4922.937 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477180   4922.937 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477181   4922.937 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477182   4922.971 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477183   4922.971 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477184   4922.973 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477185   4922.973 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477186   4923.019 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477187   4923.019 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477188   4923.019 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477189   4923.019 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477190   4923.057 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477191   4923.057 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477192   4923.057 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477193   4923.057 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477194   4923.103 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477195   4923.103 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477196   4923.103 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477197   4923.103 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477198   4923.139 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477199   4923.139 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477200   4923.139 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477201   4923.139 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477202   4923.153 wddm summary: ---- DDI calls: name, count, first log line ----
+477203   4923.153 wddm summary: QueryAdapterInfo                   27  first at 238
+477204   4923.153 wddm summary: GetNodeMetadata                     2  first at 246
+477205   4923.153 wddm summary: CreateDevice                       56  first at 253
+477206   4923.153 wddm summary: DestroyDevice                      48  first at 402
+477207   4923.153 wddm summary: CreateContext                      68  first at 256
+477208   4923.153 wddm summary: DestroyContext                     62  first at 401
+477209   4923.153 wddm summary: CreateProcess                      29  first at 252
+477210   4923.155 wddm summary: DestroyProcess                     24  first at 3585
+477211   4923.155 wddm summary: SetRootPageTable                   17  first at 279
+477212   4923.155 wddm summary: CreateAllocation                 5242  first at 324
+477213   4923.155 wddm summary: DestroyAllocation                7014  first at 524
+477214   4923.155 wddm summary: DescribeAllocation              30696  first at 353
+477215   4923.155 wddm summary: GetStandardAllocationDriverData      4  first at 322
+477216   4923.155 wddm summary: OpenAllocation                   5244  first at 326
+477217   4923.155 wddm summary: CloseAllocation                  5202  first at 523
+477218   4923.155 wddm summary: BuildPagingBuffer              144211  first at 258
+477219   4923.155 wddm summary: SubmitCommandVirtual           234459  first at 302
+477220   4923.155 wddm summary: PreemptCommand                    378  first at 33320
+477221   4923.155 wddm summary: Present                         30691  first at 660
+477222   4923.155 wddm summary: SetVidPnSourceAddress           30694  first at 384
+477223   4923.155 wddm summary: ControlInterrupt                    3  first at 390
+477224   4923.155 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+477225   4923.155 wddm summary: adapter info type   1       1  first at 238
+477226   4923.155 wddm summary: adapter info type  15       1  first at 239
+477227   4923.155 wddm summary: adapter info type  47       1  first at 240
+477228   4923.155 wddm summary: adapter info type  13       1  first at 241
+477229   4923.155 wddm summary: adapter info type  14       4  first at 242
+477230   4923.155 wddm summary: adapter info type  11       2  first at 249
+477231   4923.155 wddm summary: adapter info type  10       1  first at 251
+477232   4923.155 wddm summary: adapter info type  16       1  first at 251
+477233   4923.155 wddm summary: adapter info type   0      15  first at 4549
+477234   4923.155 wddm summary: capture plans reserved 0 heap 0
+477235   4923.155 wddm summary: capture context peaks plans 0 reserved-bytes 0
+477236   4923.155 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+477237   4923.155 wddm summary: paging operation  11  114135  first at 258
+477238   4923.155 wddm summary: paging operation  12   25912  first at 315
+477239   4923.155 wddm summary: paging operation   9    2167  first at 334
+477240   4923.155 wddm summary: paging operation   2    1135  first at 519
+477241   4923.155 wddm summary: paging operation   8     862  first at 539
+477242   4923.155 wddm summary: objects created/destroyed: dev 56/48 ctx 68/62 proc 29/24 alloc 5242/7014, 141 alive
+477243   4923.155 wddm summary: allocations opened/closed: 5244/5202 calls
+477244   4923.155 wddm summary: submissions 0 physical + 234459 virtual, 378 preemptions, last completed fence 155140
+477245   4923.155 wddm summary: node 0 hardware: 155140 submitted, 154355 completed, 0 timeouts, 0 refused
+477246   4923.155 wddm summary: umd: 5232 allocs (0 refused), 47 contexts, 155140 submits on the ring, 0 not run
+477247   4923.155 wddm profile: umd calls 155140, elapsed ticks 79703024, QPC frequency 10000000
+477248   4923.155 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+477249   4923.155 wddm summary: node 1 (paging, open): 79319 hardware submitted, 79319 completed, 0 timeouts, 0 refused
+477250   4923.155 wddm: paging OS-private queue admissions=79319 (no submit allocation)
+477251   4923.155 wddm summary: SubmitCommandVirtual by node: 0: 155140, 1: 79319, 0 private-buffer refusals
+477252   4923.155 wddm summary: paging DMA VA nonzero 143182 zero 1029, mapping observations 8
+477253   4923.155 wddm summary: native DMA transfers 811 fills 2037 bytes 22680125440
+477254   4923.155 wddm: native PTE copies gate1 ranges0
+477255   4923.155 wddm summary: native DMA exact disjoint checks 596
+477256   4923.155 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x24E182000 CPU_PA0x24E182000
+477257   4923.155 wddm summary: BuildPagingBuffer: 811 transfers, 2037 fills, 22680125440 bytes, 45438 insufficient-buffer
+477258   4923.155 wddm summary: aperture map batches 0, unmap batches 0
+477259   4923.155 wddm summary: paging TLB invalidations 25695, PTE update batches 111643
+477260   4923.155 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+477261   4923.155 wddm summary: presents 30691, flips 30692 of 30694 address calls (30691 arrived above DISPATCH_LEVEL)
+477262   4923.155 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+477263   4923.155 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+477264   4923.155 wddm summary: widest blit 0 rows
+477265   4923.155 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+477266   4923.155 wddm summary: vsync enabled, 0 ticks, 295033 reported to dxgkrnl
+477267   4923.155 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+477268   4923.155 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+477269   4923.155 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+477270   4923.155 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431171458830..431171458948
+477271   4923.155 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 431177822351..431177822571
+477272   4923.155 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 431177901506..431177901849
+477273   4923.155 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431178244347..431178244496
+477274   4923.155 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431178596402..431178596530
+477275   4923.155 wddm summary: dcn lock acknowledgement timeouts 0
+477276   4923.155 wddm summary: vidpn flip open: 30692 hardware flips, 0 refused, 1 hardware vsyncs armed 295076 acked 0 refused 67 completion-deferred 41 old-buffer-reports
+477277   4923.155 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+477278   4923.155 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+477279   4923.155 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+477280   4923.155 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+477281   4923.155 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+477282   4923.155 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+477283   4923.155 vidmm summary: PTE encoding level 0 segment 0 coherent 211816 noncoherent 4780226 snoop mismatches 0
+477284   4923.155 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 19870294 snoop mismatches 0
+477285   4923.155 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+477286   4923.155 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 22722 snoop mismatches 0
+477287   4923.155 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 200 snoop mismatches 0
+477288   4923.155 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 65 snoop mismatches 0
+477289   4923.155 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+477290   4923.155 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 17 roots
+477291   4923.187 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477292   4923.187 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477293   4923.187 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477294   4923.187 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477295   4923.187 wddm: preemption queued fence 379 node 0 hardware pending 1 active submits 0
+477296   4923.187 wddm: preemption report fence 379 node 0 last completed 155142 at DMA boundary
+477297   4923.239 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477298   4923.239 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477299   4923.239 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477300   4923.239 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477301   4923.275 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477302   4923.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477303   4923.275 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477304   4923.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477305   4923.319 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477306   4923.319 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477307   4923.319 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477308   4923.319 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477309   4923.353 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477310   4923.355 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477311   4923.355 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477312   4923.355 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477313   4923.389 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477314   4923.389 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477315   4923.389 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477316   4923.389 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477317   4923.441 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477318   4923.441 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477319   4923.441 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477320   4923.441 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477321   4923.491 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477322   4923.491 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477323   4923.491 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477324   4923.491 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477325   4923.541 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477326   4923.541 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477327   4923.541 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477328   4923.541 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477329   4923.587 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477330   4923.587 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477331   4923.587 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477332   4923.587 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477333   4923.621 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477334   4923.621 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477335   4923.621 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477336   4923.621 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477337   4923.657 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477338   4923.657 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477339   4923.657 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477340   4923.657 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477341   4923.703 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477342   4923.703 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477343   4923.703 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477344   4923.703 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477345   4923.741 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477346   4923.741 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477347   4923.741 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477348   4923.741 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477349   4923.787 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477350   4923.787 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477351   4923.787 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477352   4923.787 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477353   4923.824 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477354   4923.824 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477355   4923.824 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477356   4923.824 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477357   4923.870 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477358   4923.870 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477359   4923.872 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477360   4923.872 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477361   4923.906 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477362   4923.906 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477363   4923.908 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477364   4923.908 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477365   4923.958 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477366   4923.958 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477367   4923.958 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477368   4923.958 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477369   4924.010 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477370   4924.010 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477371   4924.010 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477372   4924.010 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477373   4924.058 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477374   4924.058 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477375   4924.058 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477376   4924.058 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477377   4924.104 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477378   4924.104 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477379   4924.104 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477380   4924.104 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477381   4924.138 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477382   4924.138 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477383   4924.138 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477384   4924.138 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477385   4924.174 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477386   4924.174 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477387   4924.174 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477388   4924.174 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477389   4924.220 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477390   4924.220 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477391   4924.220 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477392   4924.220 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477393   4924.256 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477394   4924.256 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477395   4924.256 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477396   4924.256 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477397   4924.290 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477398   4924.290 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477399   4924.290 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477400   4924.290 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477401   4924.338 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477402   4924.338 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477403   4924.338 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477404   4924.338 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477405   4924.374 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477406   4924.374 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477407   4924.374 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477408   4924.374 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477409   4924.426 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477410   4924.426 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477411   4924.426 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477412   4924.426 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477413   4924.476 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477414   4924.476 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477415   4924.476 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477416   4924.476 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477417   4924.526 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477418   4924.526 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477419   4924.526 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477420   4924.526 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477421   4924.572 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477422   4924.572 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477423   4924.572 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477424   4924.572 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477425   4924.620 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477426   4924.620 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477427   4924.620 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477428   4924.620 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477429   4924.656 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477430   4924.656 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477431   4924.656 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477432   4924.656 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477433   4924.704 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477434   4924.704 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477435   4924.704 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477436   4924.704 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477437   4924.740 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477438   4924.740 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477439   4924.740 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477440   4924.740 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477441   4924.788 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477442   4924.788 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477443   4924.788 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477444   4924.788 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477445   4924.822 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477446   4924.822 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477447   4924.822 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477448   4924.822 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477449   4924.858 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477450   4924.858 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477451   4924.858 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477452   4924.858 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477453   4924.908 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477454   4924.908 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477455   4924.910 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477456   4924.910 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477457   4924.960 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477458   4924.960 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477459   4924.960 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477460   4924.960 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477461   4925.009 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477462   4925.009 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477463   4925.011 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477464   4925.011 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477465   4925.055 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477466   4925.055 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477467   4925.055 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477468   4925.055 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477469   4925.089 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477470   4925.089 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477471   4925.089 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477472   4925.089 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477473   4925.125 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477474   4925.125 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477475   4925.125 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477476   4925.125 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477477   4925.171 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477478   4925.171 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477479   4925.171 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477480   4925.171 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477481   4925.207 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477482   4925.207 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477483   4925.207 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477484   4925.207 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477485   4925.255 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477486   4925.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477487   4925.255 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477488   4925.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477489   4925.289 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477490   4925.289 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477491   4925.289 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477492   4925.289 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477493   4925.325 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477494   4925.325 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477495   4925.325 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477496   4925.325 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477497   4925.371 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477498   4925.371 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477499   4925.371 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477500   4925.371 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477501   4925.447 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477502   4925.447 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477503   4925.447 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477504   4925.447 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477505   4925.491 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477506   4925.491 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477507   4925.491 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477508   4925.491 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477509   4925.541 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477510   4925.541 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477511   4925.541 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477512   4925.541 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477513   4925.547 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477514   4925.547 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477515   4925.547 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477516   4925.547 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477517   4925.589 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477518   4925.589 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477519   4925.589 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477520   4925.589 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477521   4925.623 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477522   4925.623 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477523   4925.623 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477524   4925.623 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477525   4925.671 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477526   4925.671 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477527   4925.671 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477528   4925.671 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477529   4925.707 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477530   4925.707 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477531   4925.707 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477532   4925.707 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477533   4925.755 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477534   4925.755 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477535   4925.755 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477536   4925.755 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477537   4925.789 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477538   4925.789 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477539   4925.791 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477540   4925.791 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477541   4925.827 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477542   4925.827 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477543   4925.827 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477544   4925.827 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477545   4925.873 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477546   4925.873 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477547   4925.875 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477548   4925.875 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477549   4925.927 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477550   4925.927 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477551   4925.927 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477552   4925.927 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477553   4925.975 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477554   4925.975 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477555   4925.977 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477556   4925.977 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477557   4926.027 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477558   4926.027 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477559   4926.027 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477560   4926.027 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477561   4926.071 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477562   4926.071 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477563   4926.071 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477564   4926.071 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477565   4926.105 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477566   4926.105 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477567   4926.107 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477568   4926.107 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477569   4926.142 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477570   4926.142 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477571   4926.142 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477572   4926.142 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477573   4926.188 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477574   4926.188 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477575   4926.188 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477576   4926.188 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477577   4926.224 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477578   4926.224 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477579   4926.224 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477580   4926.224 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477581   4926.258 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477582   4926.258 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477583   4926.260 gfx: VMID 1 root 0x46DFDF000 flush -> 0
+477584   4926.260 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+477585   4926.306 gfx: paging submit, 81 ring dwords reserved for buffer at 0x4109DC, seq 234606
+477586   4926.306 gfx: paging submit, 93 ring dwords reserved for buffer at 0x410B60, seq 234607
+477587   4926.306 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410CD4, seq 234608
+477588   4926.306 gfx: paging submit, 157 ring dwords reserved for buffer at 0x410D50, seq 234609
+477589   4926.306 gfx: paging submit, 157 ring dwords reserved for buffer at 0x400000, seq 234610
+477590   4926.308 gfx: paging submit, 848 ring dwords reserved for buffer at 0x400274, seq 234611
+477591   4926.310 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234612
+477592   4926.310 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234613
+477593   4926.310 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234614
+477594   4926.310 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234615
+477595   4926.310 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 234616
+477596   4926.310 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234617
+477597   4926.312 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234618
+477598   4926.312 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234619
+477599   4926.312 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234620
+477600   4926.316 gfx: paging submit, 173 ring dwords reserved for buffer at 0x400000, seq 234621
+477601   4926.316 gfx: paging submit, 812 ring dwords reserved for buffer at 0x400300, seq 234622
+477602   4926.316 gfx: paging submit, 35 ring dwords reserved for buffer at 0x410000, seq 234623
+477603   4926.316 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41008C, seq 234624
+477604   4926.316 gfx: paging submit, 811 ring dwords reserved for buffer at 0x4100C8, seq 234625
+477605   4926.316 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D74, seq 234626
+477606   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234627
+477607   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234628
+477608   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234629
+477609   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234630
+477610   4926.318 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 234631
+477611   4926.318 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 234632
+477612   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234633
+477613   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234634
+477614   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234635
+477615   4926.318 gfx: paging submit, 889 ring dwords reserved for buffer at 0x410000, seq 234636
+477616   4926.318 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DE4, seq 234637
+477617   4926.318 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234638
+477618   4926.318 gfx: paging submit, 335 ring dwords reserved for buffer at 0x410000, seq 234639
+477619   4926.318 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41053C, seq 234640
+477620   4926.320 gfx: paging submit, 654 ring dwords reserved for buffer at 0x410578, seq 234641
+477621   4926.320 gfx: paging submit, 779 ring dwords reserved for buffer at 0x400000, seq 234642
+477622   4926.320 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C2C, seq 234643
+477623   4926.320 gfx: paging submit, 609 ring dwords reserved for buffer at 0x410000, seq 234644
+477624   4926.320 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410984, seq 234645
+477625   4926.322 gfx: paging submit, 384 ring dwords reserved for buffer at 0x4109C0, seq 234646
+477626   4926.322 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234647
+477627   4926.322 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234648
+477628   4926.324 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234649
+477629   4926.324 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234650
+477630   4926.324 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 234651
+477631   4926.324 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234652
+477632   4926.324 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234653
+477633   4926.324 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234654
+477634   4926.326 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234655
+477635   4926.330 gfx: paging submit, 637 ring dwords reserved for buffer at 0x410000, seq 234656
+477636   4926.330 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A40, seq 234657
+477637   4926.330 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234658
+477638   4926.330 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234659
+477639   4926.330 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234660
+477640   4926.330 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234661
+477641   4926.330 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 234662
+477642   4926.330 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234663
+477643   4926.332 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234664
+477644   4926.332 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234665
+477645   4926.332 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234666
+477646   4926.332 gfx: paging submit, 651 ring dwords reserved for buffer at 0x410000, seq 234667
+477647   4926.332 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410A2C, seq 234668
+477648   4926.332 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410AC8, seq 234669
+477649   4926.332 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410B04, seq 234670
+477650   4926.334 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B40, seq 234671
+477651   4926.334 gfx: paging submit, 545 ring dwords reserved for buffer at 0x400000, seq 234672
+477652   4926.334 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400884, seq 234673
+477653   4926.336 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4008C0, seq 234674
+477654   4926.336 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234675
+477655   4926.336 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234676
+477656   4926.336 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234677
+477657   4926.336 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234678
+477658   4926.338 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 234679
+477659   4926.338 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234680
+477660   4926.338 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234681
+477661   4926.338 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234682
+477662   4926.338 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234683
+477663   4926.342 gfx: paging submit, 573 ring dwords reserved for buffer at 0x400000, seq 234684
+477664   4926.344 gfx: paging submit, 416 ring dwords reserved for buffer at 0x400940, seq 234685
+477665   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234686
+477666   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234687
+477667   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234688
+477668   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234689
+477669   4926.344 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x410000, seq 234690
+477670   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234691
+477671   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234692
+477672   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234693
+477673   4926.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234694
+477674   4926.344 gfx: paging submit, 587 ring dwords reserved for buffer at 0x400000, seq 234695
+477675   4926.344 gfx: paging submit, 417 ring dwords reserved for buffer at 0x40092C, seq 234696
+477676   4926.344 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+477677   4926.346 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410000, seq 234697
+477678   4926.346 gfx: paging submit, 395 ring dwords reserved for buffer at 0x41003C, seq 234698
+477679   4926.346 gfx: paging submit, 37 ring dwords reserved for buffer at 0x410668, seq 234699
+477680   4926.346 gfx: paging submit, 37 ring dwords reserved for buffer at 0x4106FC, seq 234700
+477681   4926.346 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410790, seq 234701
+477682   4926.346 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4107D0, seq 234702
+477683   4926.346 gfx: paging submit, 37 ring dwords reserved for buffer at 0x41080C, seq 234703
+477684   4926.346 gfx: paging submit, 37 ring dwords reserved for buffer at 0x4108A0, seq 234704
+477685   4926.346 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410934, seq 234705
+477686   4926.346 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410974, seq 234706
+477687   4926.346 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4109B0, seq 234707
+477688   4926.346 gfx: paging submit, 37 ring dwords reserved for buffer at 0x4109EC, seq 234708
+477689   4926.346 gfx: paging submit, 37 ring dwords reserved for buffer at 0x410A80, seq 234709
+477690   4926.346 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410B14, seq 234710
+477691   4926.346 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410B54, seq 234711
+477692   4926.346 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410B90, seq 234712
+477693   4926.348 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BCC, seq 234713
+477694   4926.348 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234714
+477695   4926.348 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234715
+477696   4926.348 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 234716
+477697   4926.350 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234717
+477698   4926.350 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234718
+477699   4926.352 gfx: paging submit, 317 ring dwords reserved for buffer at 0x410000, seq 234719
+477700   4926.352 gfx: paging submit, 35 ring dwords reserved for buffer at 0x410540, seq 234720
+477701   4926.352 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4105CC, seq 234721
+477702   4926.352 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410608, seq 234722
+477703   4926.352 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410644, seq 234723
+477704   4926.352 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 234724
+477705   4926.352 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234725
+477706   4926.352 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 234726
+477707   4926.352 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 234727
+477708   4926.354 gfx: paging submit, 937 ring dwords reserved for buffer at 0x400000, seq 234728
+477709   4926.354 gfx: paging submit, 61 ring dwords reserved for buffer at 0x400EA4, seq 234729
+477710   4926.354 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400F98, seq 234730
+477711   4926.354 gfx: paging submit, 59 ring dwords reserved for buffer at 0x410000, seq 234731
+477712   4926.354 gfx: paging submit, 61 ring dwords reserved for buffer at 0x4100EC, seq 234732
+477713   4926.354 gfx: paging submit, 61 ring dwords reserved for buffer at 0x4101E0, seq 234733
+477714   4926.354 gfx: paging submit, 37 ring dwords reserved for buffer at 0x4102D4, seq 234734
+477715   4926.354 gfx: paging submit, 37 ring dwords reserved for buffer at 0x410368, seq 234735
+477716   4926.354 gfx: paging submit, 69 ring dwords reserved for buffer at 0x4103FC, seq 234736
+477717   4926.354 gfx: paging submit, 69 ring dwords reserved for buffer at 0x410510, seq 234737
+477718   4926.354 gfx: paging submit, 37 ring dwords reserved for buffer at 0x410624, seq 234738
+477719   4926.354 gfx: paging submit, 37 ring dwords reserved for buffer at 0x4106B8, seq 234739
+477720   4926.354 gfx: paging submit, 69 ring dwords reserved for buffer at 0x41074C, seq 234740
+477721   4926.354 gfx: paging submit, 69 ring dwords reserved for buffer at 0x410860, seq 234741
+477722   4926.354 gfx: paging submit, 37 ring dwords reserved for buffer at 0x410974, seq 234742
+477723   4926.354 gfx: paging submit, 37 ring dwords reserved for buffer at 0x410A08, seq 234743
+477724   4926.354 gfx: paging submit, 69 ring dwords reserved for buffer at 0x410A9C, seq 234744
+477725   4926.354 gfx: paging submit, 69 ring dwords reserved for buffer at 0x410BB0, seq 234745
+477726   4926.354 gfx: paging submit, 112 ring dwords reserved for buffer at 0x410CC4, seq 234746
+477727   4926.354 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410EBC, seq 234747
+477728   4926.354 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410F38, seq 234748
+477729   4926.354 gfx: paging submit, 31 ring dwords reserved for buffer at 0x400000, seq 234749
+477730   4926.356 gfx: paging submit, 69 ring dwords reserved for buffer at 0x40007C, seq 234750
+477731   4926.356 gfx: paging submit, 69 ring dwords reserved for buffer at 0x400190, seq 234751
+477732   4926.356 gfx: paging submit, 69 ring dwords reserved for buffer at 0x4002A4, seq 234752
+477733   4926.356 gfx: paging submit, 69 ring dwords reserved for buffer at 0x4003B8, seq 234753
+477734   4926.356 gfx: paging submit, 69 ring dwords reserved for buffer at 0x4004CC, seq 234754
+477735   4926.356 gfx: paging submit, 69 ring dwords reserved for buffer at 0x4005E0, seq 234755
+477736   4926.356 gfx: paging submit, 333 ring dwords reserved for buffer at 0x4006F4, seq 234756
+477737   4926.356 gfx: paging submit, 221 ring dwords reserved for buffer at 0x400C60, seq 234757
+477738   4926.356 gfx: paging submit, 123 ring dwords reserved for buffer at 0x410000, seq 234758
+477739   4926.356 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4101EC, seq 234759
+477740   4926.356 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41022C, seq 234760
+477741   4926.356 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410268, seq 234761
+477742   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x4102A4, seq 234762
+477743   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410320, seq 234763
+477744   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x41039C, seq 234764
+477745   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410418, seq 234765
+477746   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410494, seq 234766
+477747   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410510, seq 234767
+477748   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x41058C, seq 234768
+477749   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410608, seq 234769
+477750   4926.356 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410684, seq 234770
+477751   4926.358 gfx: paging submit, 31 ring dwords reserved for buffer at 0x410700, seq 234771
+477752   4926.358 gfx: paging submit, 31 ring dwords reserved for buffer at 0x41077C, seq 234772
+477753   4926.358 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4107F8, seq 234773
+477754   4926.358 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410838, seq 234774
+477755   4926.358 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410878, seq 234775
+477756   4926.358 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4108B4, seq 234776
+477757   4926.358 gfx: paging submit, 16 ring dwords reserved for buffer at 0x4108F0, seq 234777
+477758   4926.358 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410930, seq 234778
+477759   4926.358 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410970, seq 234779
+477760   4928.323 wddm summary: ---- DDI calls: name, count, first log line ----
+477761   4928.323 wddm summary: QueryAdapterInfo                   27  first at 238
+477762   4928.323 wddm summary: GetNodeMetadata                     2  first at 246
+477763   4928.323 wddm summary: CreateDevice                       56  first at 253
+477764   4928.323 wddm summary: DestroyDevice                      49  first at 402
+477765   4928.323 wddm summary: CreateContext                      68  first at 256
+477766   4928.323 wddm summary: DestroyContext                     63  first at 401
+477767   4928.323 wddm summary: CreateProcess                      29  first at 252
+477768   4928.323 wddm summary: DestroyProcess                     25  first at 3585
+477769   4928.323 wddm summary: SetRootPageTable                   17  first at 279
+477770   4928.323 wddm summary: CreateAllocation                 5242  first at 324
+477771   4928.323 wddm summary: DestroyAllocation                7084  first at 524
+477772   4928.323 wddm summary: DescribeAllocation              30786  first at 353
+477773   4928.323 wddm summary: GetStandardAllocationDriverData      4  first at 322
+477774   4928.323 wddm summary: OpenAllocation                   5244  first at 326
+477775   4928.323 wddm summary: CloseAllocation                  5237  first at 523
+477776   4928.323 wddm summary: BuildPagingBuffer              144562  first at 258
+477777   4928.323 wddm summary: SubmitCommandVirtual           234779  first at 302
+477778   4928.323 wddm summary: PreemptCommand                    379  first at 33320
+477779   4928.323 wddm summary: Present                         30781  first at 660
+477780   4928.323 wddm summary: SetVidPnSourceAddress           30784  first at 384
+477781   4928.323 wddm summary: ControlInterrupt                    3  first at 390
+477782   4928.323 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+477783   4928.323 wddm summary: adapter info type   1       1  first at 238
+477784   4928.323 wddm summary: adapter info type  15       1  first at 239
+477785   4928.323 wddm summary: adapter info type  47       1  first at 240
+477786   4928.323 wddm summary: adapter info type  13       1  first at 241
+477787   4928.323 wddm summary: adapter info type  14       4  first at 242
+477788   4928.323 wddm summary: adapter info type  11       2  first at 249
+477789   4928.323 wddm summary: adapter info type  10       1  first at 251
+477790   4928.323 wddm summary: adapter info type  16       1  first at 251
+477791   4928.323 wddm summary: adapter info type   0      15  first at 4549
+477792   4928.323 wddm summary: capture plans reserved 0 heap 0
+477793   4928.323 wddm summary: capture context peaks plans 0 reserved-bytes 0
+477794   4928.323 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+477795   4928.323 wddm summary: paging operation  11  114384  first at 258
+477796   4928.323 wddm summary: paging operation  12   26007  first at 315
+477797   4928.323 wddm summary: paging operation   9    2167  first at 334
+477798   4928.323 wddm summary: paging operation   2    1135  first at 519
+477799   4928.323 wddm summary: paging operation   8     869  first at 539
+477800   4928.323 wddm summary: objects created/destroyed: dev 56/49 ctx 68/63 proc 29/25 alloc 5242/7084, 33 alive
+477801   4928.323 wddm summary: allocations opened/closed: 5244/5237 calls
+477802   4928.323 wddm summary: submissions 0 physical + 234779 virtual, 379 preemptions, last completed fence 79493
+477803   4928.323 wddm summary: node 0 hardware: 155286 submitted, 154501 completed, 0 timeouts, 0 refused
+477804   4928.323 wddm summary: umd: 5232 allocs (0 refused), 47 contexts, 155286 submits on the ring, 0 not run
+477805   4928.323 wddm profile: umd calls 155286, elapsed ticks 79772139, QPC frequency 10000000
+477806   4928.323 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+477807   4928.323 wddm summary: node 1 (paging, open): 79493 hardware submitted, 79493 completed, 0 timeouts, 0 refused
+477808   4928.323 wddm: paging OS-private queue admissions=79493 (no submit allocation)
+477809   4928.323 wddm summary: SubmitCommandVirtual by node: 0: 155286, 1: 79493, 0 private-buffer refusals
+477810   4928.323 wddm summary: paging DMA VA nonzero 143533 zero 1029, mapping observations 8
+477811   4928.323 wddm summary: native DMA transfers 818 fills 2037 bytes 22715785216
+477812   4928.323 wddm: native PTE copies gate1 ranges0
+477813   4928.323 wddm summary: native DMA exact disjoint checks 601
+477814   4928.323 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x24E182000 CPU_PA0x24E182000
+477815   4928.323 wddm summary: BuildPagingBuffer: 818 transfers, 2037 fills, 22715785216 bytes, 45520 insufficient-buffer
+477816   4928.323 wddm summary: aperture map batches 0, unmap batches 0
+477817   4928.323 wddm summary: paging TLB invalidations 25789, PTE update batches 111890
+477818   4928.323 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+477819   4928.323 wddm summary: presents 30781, flips 30782 of 30784 address calls (30781 arrived above DISPATCH_LEVEL)
+477820   4928.323 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+477821   4928.323 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+477822   4928.323 wddm summary: widest blit 0 rows
+477823   4928.323 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+477824   4928.323 wddm summary: vsync enabled, 0 ticks, 295342 reported to dxgkrnl
+477825   4928.323 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+477826   4928.323 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+477827   4928.323 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+477828   4928.323 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431171458830..431171458948
+477829   4928.323 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 431177822351..431177822571
+477830   4928.323 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 431177901506..431177901849
+477831   4928.323 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431178244347..431178244496
+477832   4928.323 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431178596402..431178596530
+477833   4928.323 wddm summary: dcn lock acknowledgement timeouts 0
+477834   4928.323 wddm summary: vidpn flip open: 30782 hardware flips, 0 refused, 1 hardware vsyncs armed 295385 acked 0 refused 67 completion-deferred 41 old-buffer-reports
+477835   4928.323 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+477836   4928.323 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+477837   4928.323 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+477838   4928.323 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+477839   4928.323 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+477840   4928.323 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+477841   4928.323 vidmm summary: PTE encoding level 0 segment 0 coherent 211816 noncoherent 4797638 snoop mismatches 0
+477842   4928.323 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 19887706 snoop mismatches 0
+477843   4928.323 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+477844   4928.323 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 22722 snoop mismatches 0
+477845   4928.323 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 200 snoop mismatches 0
+477846   4928.323 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 65 snoop mismatches 0
+477847   4928.323 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+477848   4928.323 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 17 roots
+477849   4928.331 wddm summary: ---- DDI calls: name, count, first log line ----
+477850   4928.331 wddm summary: QueryAdapterInfo                   27  first at 238
+477851   4928.331 wddm summary: GetNodeMetadata                     2  first at 246
+477852   4928.331 wddm summary: CreateDevice                       56  first at 253
+477853   4928.331 wddm summary: DestroyDevice                      49  first at 402
+477854   4928.331 wddm summary: CreateContext                      68  first at 256
+477855   4928.331 wddm summary: DestroyContext                     63  first at 401
+477856   4928.331 wddm summary: CreateProcess                      29  first at 252
+477857   4928.331 wddm summary: DestroyProcess                     25  first at 3585
+477858   4928.331 wddm summary: SetRootPageTable                   17  first at 279
+477859   4928.331 wddm summary: CreateAllocation                 5242  first at 324
+477860   4928.331 wddm summary: DestroyAllocation                7084  first at 524
+477861   4928.331 wddm summary: DescribeAllocation              30786  first at 353
+477862   4928.331 wddm summary: GetStandardAllocationDriverData      4  first at 322
+477863   4928.331 wddm summary: OpenAllocation                   5244  first at 326
+477864   4928.331 wddm summary: CloseAllocation                  5237  first at 523
+477865   4928.331 wddm summary: BuildPagingBuffer              144562  first at 258
+477866   4928.331 wddm summary: SubmitCommandVirtual           234779  first at 302
+477867   4928.331 wddm summary: PreemptCommand                    379  first at 33320
+477868   4928.331 wddm summary: Present                         30781  first at 660
+477869   4928.331 wddm summary: SetVidPnSourceAddress           30784  first at 384
+477870   4928.331 wddm summary: ControlInterrupt                    3  first at 390
+477871   4928.331 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+477872   4928.331 wddm summary: adapter info type   1       1  first at 238
+477873   4928.331 wddm summary: adapter info type  15       1  first at 239
+477874   4928.331 wddm summary: adapter info type  47       1  first at 240
+477875   4928.331 wddm summary: adapter info type  13       1  first at 241
+477876   4928.331 wddm summary: adapter info type  14       4  first at 242
+477877   4928.331 wddm summary: adapter info type  11       2  first at 249
+477878   4928.331 wddm summary: adapter info type  10       1  first at 251
+477879   4928.331 wddm summary: adapter info type  16       1  first at 251
+477880   4928.331 wddm summary: adapter info type   0      15  first at 4549
+477881   4928.331 wddm summary: capture plans reserved 0 heap 0
+477882   4928.331 wddm summary: capture context peaks plans 0 reserved-bytes 0
+477883   4928.331 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+477884   4928.331 wddm summary: paging operation  11  114384  first at 258
+477885   4928.331 wddm summary: paging operation  12   26007  first at 315
+477886   4928.331 wddm summary: paging operation   9    2167  first at 334
+477887   4928.331 wddm summary: paging operation   2    1135  first at 519
+477888   4928.331 wddm summary: paging operation   8     869  first at 539
+477889   4928.331 wddm summary: objects created/destroyed: dev 56/49 ctx 68/63 proc 29/25 alloc 5242/7084, 33 alive
+477890   4928.331 wddm summary: allocations opened/closed: 5244/5237 calls
+477891   4928.331 wddm summary: submissions 0 physical + 234779 virtual, 379 preemptions, last completed fence 79493
+477892   4928.331 wddm summary: node 0 hardware: 155286 submitted, 154501 completed, 0 timeouts, 0 refused
+477893   4928.331 wddm summary: umd: 5232 allocs (0 refused), 47 contexts, 155286 submits on the ring, 0 not run
+477894   4928.331 wddm profile: umd calls 155286, elapsed ticks 79772139, QPC frequency 10000000
+477895   4928.331 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+477896   4928.331 wddm summary: node 1 (paging, open): 79493 hardware submitted, 79493 completed, 0 timeouts, 0 refused
+477897   4928.331 wddm: paging OS-private queue admissions=79493 (no submit allocation)
+477898   4928.331 wddm summary: SubmitCommandVirtual by node: 0: 155286, 1: 79493, 0 private-buffer refusals
+477899   4928.331 wddm summary: paging DMA VA nonzero 143533 zero 1029, mapping observations 8
+477900   4928.331 wddm summary: native DMA transfers 818 fills 2037 bytes 22715785216
+477901   4928.331 wddm: native PTE copies gate1 ranges0
+477902   4928.331 wddm summary: native DMA exact disjoint checks 601
+477903   4928.331 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x24E182000 CPU_PA0x24E182000
+477904   4928.331 wddm summary: BuildPagingBuffer: 818 transfers, 2037 fills, 22715785216 bytes, 45520 insufficient-buffer
+477905   4928.331 wddm summary: aperture map batches 0, unmap batches 0
+477906   4928.331 wddm summary: paging TLB invalidations 25789, PTE update batches 111890
+477907   4928.331 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+477908   4928.331 wddm summary: presents 30781, flips 30782 of 30784 address calls (30781 arrived above DISPATCH_LEVEL)
+477909   4928.331 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+477910   4928.331 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+477911   4928.331 wddm summary: widest blit 0 rows
+477912   4928.331 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+477913   4928.331 wddm summary: vsync enabled, 0 ticks, 295343 reported to dxgkrnl
+477914   4928.331 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+477915   4928.331 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+477916   4928.331 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+477917   4928.331 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431171458830..431171458948
+477918   4928.331 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 431177822351..431177822571
+477919   4928.331 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 431177901506..431177901849
+477920   4928.331 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431178244347..431178244496
+477921   4928.331 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 431178596402..431178596530
+477922   4928.331 wddm summary: dcn lock acknowledgement timeouts 0
+477923   4928.331 wddm summary: vidpn flip open: 30782 hardware flips, 0 refused, 1 hardware vsyncs armed 295386 acked 0 refused 67 completion-deferred 41 old-buffer-reports
+477924   4928.331 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+477925   4928.331 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+477926   4928.333 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+477927   4928.333 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+477928   4928.333 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+477929   4928.333 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+477930   4928.333 vidmm summary: PTE encoding level 0 segment 0 coherent 211816 noncoherent 4797638 snoop mismatches 0
+477931   4928.333 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 19887706 snoop mismatches 0
+477932   4928.333 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+477933   4928.333 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 22722 snoop mismatches 0
+477934   4928.333 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 200 snoop mismatches 0
+477935   4928.333 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 65 snoop mismatches 0
+477936   4928.333 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+477937   4928.333 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 17 roots
+             1088 lines printed

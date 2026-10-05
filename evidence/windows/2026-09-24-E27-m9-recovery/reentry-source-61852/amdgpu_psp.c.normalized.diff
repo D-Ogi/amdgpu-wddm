@@ -1,0 +1,24 @@
+--- v6.18/amdgpu_psp.c
++++ v6.18.52/amdgpu_psp.c
+@@ -371,6 +371,12 @@
+ 	struct psp_runtime_data_directory db_dir = {0};
+ 	bool ret = false;
+ 	int i;
++
++	/*
++	 * Runtime DB is for dGPUs only.
++	 */
++	if (adev->flags & AMD_IS_APU)
++		return false;
+ 
+ 	if (amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 6) ||
+ 	    amdgpu_ip_version(adev, MP0_HWIP, 0) == IP_VERSION(13, 0, 12) ||
+@@ -726,7 +732,7 @@
+ 		ras_intr = amdgpu_ras_intr_triggered();
+ 		if (ras_intr)
+ 			break;
+-		usleep_range(10, 100);
++		usleep_range(60, 100);
+ 		amdgpu_device_invalidate_hdp(psp->adev, NULL);
+ 	}
+ 

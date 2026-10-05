@@ -79,7 +79,7 @@ function State {
     $reports = @(Get-ChildItem 'C:\Windows\LiveKernelReports' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $since }).Count
     Say ("reports  live kernel reports written since boot: $reports")
     $dwm = @(Get-Process dwm -ErrorAction SilentlyContinue)
-    Say ("dwm      {0} process(es){1}" -f $dwm.Count, $(if ($dwm.Count) { ", started " + ($dwm | ForEach-Object { $_.StartTime.ToString('HH:mm:ss') }) -join ' ' } else { '' }))
+    Say ("dwm      {0} process(es){1}" -f $dwm.Count, $(if ($dwm.Count) { ", started " + ($dwm | ForEach-Object { if ($null -ne $_.StartTime) { $_.StartTime.ToString('HH:mm:ss') } else { 'unavailable' } }) -join ' ' } else { '' }))
 }
 
 Say ("time " + (Get-Date).ToString('s') + "  phase $Phase $Tag")

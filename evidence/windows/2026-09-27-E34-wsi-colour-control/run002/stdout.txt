@@ -1,0 +1,126 @@
+icd_interface=7
+icd=C:\BC250\m13\wsi-colour002\vulkan_radeon.dll pid=4152
+square_corners_hr=00000000
+gpu=AMD BC-250 (RADV GFX1013)
+present frame=0 image=0 rgb=255,0,0 result=0 tick_ms=9387359
+render_fence frame=0 complete=1
+present frame=1 image=1 rgb=255,0,0 result=0 tick_ms=9387593
+render_fence frame=1 complete=1
+present frame=2 image=0 rgb=255,0,0 result=0 tick_ms=9387843
+render_fence frame=2 complete=1
+present frame=3 image=1 rgb=255,0,0 result=0 tick_ms=9388000
+render_fence frame=3 complete=1
+present frame=4 image=0 rgb=255,0,0 result=0 tick_ms=9388187
+render_fence frame=4 complete=1
+present frame=5 image=1 rgb=255,0,0 result=0 tick_ms=9388375
+render_fence frame=5 complete=1
+present frame=6 image=0 rgb=255,0,0 result=0 tick_ms=9388531
+render_fence frame=6 complete=1
+present frame=7 image=1 rgb=255,0,0 result=0 tick_ms=9388656
+render_fence frame=7 complete=1
+present frame=8 image=0 rgb=255,0,0 result=0 tick_ms=9388796
+render_fence frame=8 complete=1
+present frame=9 image=1 rgb=255,0,0 result=0 tick_ms=9388921
+render_fence frame=9 complete=1
+present frame=10 image=0 rgb=255,0,0 result=0 tick_ms=9389062
+render_fence frame=10 complete=1
+present frame=11 image=1 rgb=255,0,0 result=0 tick_ms=9389203
+render_fence frame=11 complete=1
+present frame=12 image=0 rgb=255,0,0 result=0 tick_ms=9389343
+render_fence frame=12 complete=1
+present frame=13 image=1 rgb=255,0,0 result=0 tick_ms=9389484
+render_fence frame=13 complete=1
+present frame=14 image=0 rgb=255,0,0 result=0 tick_ms=9389640
+render_fence frame=14 complete=1
+present frame=15 image=1 rgb=255,0,0 result=0 tick_ms=9389796
+render_fence frame=15 complete=1
+present frame=16 image=0 rgb=255,0,0 result=0 tick_ms=9389921
+render_fence frame=16 complete=1
+present frame=17 image=1 rgb=255,0,0 result=0 tick_ms=9390078
+render_fence frame=17 complete=1
+present frame=18 image=0 rgb=255,0,0 result=0 tick_ms=9390234
+render_fence frame=18 complete=1
+present frame=19 image=1 rgb=255,0,0 result=0 tick_ms=9390359
+render_fence frame=19 complete=1
+present frame=20 image=0 rgb=0,255,0 result=0 tick_ms=9390500
+render_fence frame=20 complete=1
+present frame=21 image=1 rgb=0,255,0 result=0 tick_ms=9390640
+render_fence frame=21 complete=1
+present frame=22 image=0 rgb=0,255,0 result=0 tick_ms=9390781
+render_fence frame=22 complete=1
+present frame=23 image=1 rgb=0,255,0 result=0 tick_ms=9390921
+render_fence frame=23 complete=1
+present frame=24 image=0 rgb=0,255,0 result=0 tick_ms=9391062
+render_fence frame=24 complete=1
+present frame=25 image=1 rgb=0,255,0 result=0 tick_ms=9391203
+render_fence frame=25 complete=1
+present frame=26 image=0 rgb=0,255,0 result=0 tick_ms=9391343
+render_fence frame=26 complete=1
+present frame=27 image=1 rgb=0,255,0 result=0 tick_ms=9391484
+render_fence frame=27 complete=1
+present frame=28 image=0 rgb=0,255,0 result=0 tick_ms=9391640
+render_fence frame=28 complete=1
+present frame=29 image=1 rgb=0,255,0 result=0 tick_ms=9391781
+render_fence frame=29 complete=1
+present frame=30 image=0 rgb=0,255,0 result=0 tick_ms=9391906
+render_fence frame=30 complete=1
+present frame=31 image=1 rgb=0,255,0 result=0 tick_ms=9392062
+render_fence frame=31 complete=1
+present frame=32 image=0 rgb=0,255,0 result=0 tick_ms=9392218
+render_fence frame=32 complete=1
+present frame=33 image=1 rgb=0,255,0 result=0 tick_ms=9392343
+render_fence frame=33 complete=1
+present frame=34 image=0 rgb=0,255,0 result=0 tick_ms=9392484
+render_fence frame=34 complete=1
+present frame=35 image=1 rgb=0,255,0 result=0 tick_ms=9392609
+render_fence frame=35 complete=1
+present frame=36 image=0 rgb=0,255,0 result=0 tick_ms=9392750
+render_fence frame=36 complete=1
+present frame=37 image=1 rgb=0,255,0 result=0 tick_ms=9392875
+render_fence frame=37 complete=1
+present frame=38 image=0 rgb=0,255,0 result=0 tick_ms=9393031
+render_fence frame=38 complete=1
+present frame=39 image=1 rgb=0,255,0 result=0 tick_ms=9393203
+render_fence frame=39 complete=1
+present frame=40 image=0 rgb=0,0,255 result=0 tick_ms=9393359
+render_fence frame=40 complete=1
+present frame=41 image=1 rgb=0,0,255 result=0 tick_ms=9393500
+render_fence frame=41 complete=1
+present frame=42 image=0 rgb=0,0,255 result=0 tick_ms=9393609
+render_fence frame=42 complete=1
+present frame=43 image=1 rgb=0,0,255 result=0 tick_ms=9393750
+render_fence frame=43 complete=1
+present frame=44 image=0 rgb=0,0,255 result=0 tick_ms=9393875
+render_fence frame=44 complete=1
+present frame=45 image=1 rgb=0,0,255 result=0 tick_ms=9394031
+render_fence frame=45 complete=1
+present frame=46 image=0 rgb=0,0,255 result=0 tick_ms=9394203
+render_fence frame=46 complete=1
+present frame=47 image=1 rgb=0,0,255 result=0 tick_ms=9394359
+render_fence frame=47 complete=1
+present frame=48 image=0 rgb=0,0,255 result=0 tick_ms=9394500
+render_fence frame=48 complete=1
+present frame=49 image=1 rgb=0,0,255 result=0 tick_ms=9394656
+render_fence frame=49 complete=1
+present frame=50 image=0 rgb=0,0,255 result=0 tick_ms=9394796
+render_fence frame=50 complete=1
+present frame=51 image=1 rgb=0,0,255 result=0 tick_ms=9394921
+render_fence frame=51 complete=1
+present frame=52 image=0 rgb=0,0,255 result=0 tick_ms=9395046
+render_fence frame=52 complete=1
+present frame=53 image=1 rgb=0,0,255 result=0 tick_ms=9395187
+render_fence frame=53 complete=1
+present frame=54 image=0 rgb=0,0,255 result=0 tick_ms=9395312
+render_fence frame=54 complete=1
+present frame=55 image=1 rgb=0,0,255 result=0 tick_ms=9395453
+render_fence frame=55 complete=1
+present frame=56 image=0 rgb=0,0,255 result=0 tick_ms=9395578
+render_fence frame=56 complete=1
+present frame=57 image=1 rgb=0,0,255 result=0 tick_ms=9395718
+render_fence frame=57 complete=1
+present frame=58 image=0 rgb=0,0,255 result=0 tick_ms=9395843
+render_fence frame=58 complete=1
+present frame=59 image=1 rgb=0,0,255 result=0 tick_ms=9395984
+render_fence frame=59 complete=1
+capture_ready rgb=0,0,255 x=328 y=271 width=640 height=480 hold_ms=10000
+PASS 60 presents and render fences; image and Present completion require independent evidence

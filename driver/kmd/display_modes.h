@@ -15,12 +15,14 @@
 //
 // The list comes from the shared table, never from a second whitelist:
 //   1. the SCANOUT_PRIMARY rows that DXGI can name (dxgi != 0): the plane the firmware left, BGRA8;
-//   2. with Composed, the COMPOSED rows that DXGI can name and that hold a whole displayable pixel, four bytes
-//      or more: RGBA8, RGB10A2, RGBA16F.
-// The size rule keeps the shared surfaces that are not swap-chain buffers out of the mode list. COMPOSED names
-// every surface the compositor opens, which since 0.7.207 includes the 1-byte A8 atlases DirectComposition
-// shares (driver/contract/amdgpu_wddm_surface_format.h). A8 is not a display format: no DXGI swap chain asks
-// for it, and a source mode of it would offer the desktop a format the display pipeline cannot show.
+//   2. with Composed, the COMPOSED rows that DXGI can name of 4 bytes a pixel or more: RGBA8, RGB10A2,
+//      RGBA16F.
+// The size bound keeps the atlas rows out of the display mode list. A source mode's Stride scales the
+// firmware's 4-byte pitch (Bc250SourceModeStride below), and A8, the 1-byte DirectComposition and XAML
+// glyph and mask format, is never a swap-chain format (driver/contract/amdgpu_wddm_surface_format.h), so a
+// display mode of it would name geometry no swap chain can ask for. COMPOSED names every surface the
+// compositor opens, and since 0.7.207 that includes the A8 atlases DirectComposition shares, so the size
+// bound alone keeps A8 out of this list.
 // A mode of step 2 does not change the scan-out. The display keeps the 8-bit plane, SetVidPnSourceAddress keeps
 // refusing allocations without SCANOUT_PRIMARY (wddm.c), and the UMDs present such buffers through composition.
 // The first entry is the GDI format, so a consumer that takes the first mode gets the desktop's format.
@@ -37,8 +39,8 @@ static __inline unsigned long Bc250SourceModeFormats(int Composed, unsigned long
         for (i = 0; i < count; ++i) {
             const int scanout = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY) != 0;
             const int composed = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_COMPOSED) != 0;
-            if (!rows[i].dxgi) continue;
-            if (pass == 0 ? !scanout : (scanout || !composed || rows[i].bytes_per_pixel < 4)) continue;
+            if (!rows[i].dxgi || rows[i].bytes_per_pixel < 4) continue;
+            if (pass == 0 ? !scanout : (scanout || !composed)) continue;
             if (n < Max) Formats[n] = rows[i].d3dddi;
             ++n;
         }

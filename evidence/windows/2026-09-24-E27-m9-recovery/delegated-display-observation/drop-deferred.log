@@ -1,0 +1,9 @@
+Extracted publication and vsync functions from P:\bc-250\scratch\m9\bd007-009\drop-deferred.c
+vidpn_flip_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL line 253: reports==before+1 && reported==10
+FAIL line 255: reports==before+1 && reported==10
+FAIL line 253: reports==before+1 && reported==10
+FAIL line 255: reports==before+1 && reported==10
+vidpn publication: 117 checks, 4 failures

@@ -1,0 +1,30 @@
+{
+  "source_revision": "bf14ecca0700d563482f633e24ab10e306583234",
+  "native_engine_source": "80352134",
+  "renderer_diff_paths": [
+    "src/ddi/engine_test.cpp",
+    "src/ddi/meson.build"
+  ],
+  "artifacts": {
+    "src/d3d11/d3d11.dll": {
+      "bytes": 4354048,
+      "sha256": "41CE2364783DB0DD3291F24516C181329471668FAB8F974AE255AA572A61CDBF"
+    },
+    "src/dxgi/dxgi.dll": {
+      "bytes": 847872,
+      "sha256": "F593D6C2C7F3ABE312094DA1A7F93BD51C6EE6AA7A44EDA1C84BBCBBA2003F81"
+    },
+    "src/d3d10/d3d10core.dll": {
+      "bytes": 135168,
+      "sha256": "0A1235AD3E8EB776E1E1A4EB51BF11FBF474A6FE1F378EE6BC4C3B43C76BB8BD"
+    },
+    "src/d3d9/d3d9.dll": {
+      "bytes": 4067328,
+      "sha256": "72ADDD7C05EA88FDAA2CDCD19BDDE1FF5211250172625E4ECF93E046356552D9"
+    }
+  },
+  "build_config": "per-app",
+  "build_directory": "scratch/m14/dxvk-per-app-bf14ecca",
+  "client_sha256": "84C328CDC5ACB544CAAC09D4BF908EF9FDDCAE9C348D373726E71423259AB06B",
+  "status": "built; not lab-tested"
+}

@@ -1,0 +1,29 @@
+trace span 47.42 s, vsync interrupts 2840 (59.9/s)
+
+GPU DMA packets by process (execution Start->Stop):
+  "Unknown" (12620)                n=  8532 busy= 46.622 s ( 98.3% of span) median=  0.376 ms p95= 26.412 ms max=  38.386 ms
+  (MMIO flip)                      n=  1503 busy=  5.531 s ( 11.7% of span) median=  2.674 ms p95= 15.309 ms max=  22.232 ms
+  "Unknown" (2288)                 n=  1483 busy=  0.450 s (  0.9% of span) median=  0.301 ms p95=  0.349 ms max=   0.757 ms
+  "Unknown" (   4)                 n=   933 busy=  0.073 s (  0.2% of span) median=  0.075 ms p95=  0.125 ms max=   0.197 ms
+
+Queue latency by process (QueuePacket Start->Stop, submit to completion):
+  "Unknown" (12620)                n= 10005 median=  46.988 ms p95=  77.145 ms max=  111.927 ms
+  "Unknown" (2288)                 n=  2966 median=   5.833 ms p95=  16.722 ms max=   40.710 ms
+  "Unknown" (   4)                 n=   933 median=   0.120 ms p95=   0.209 ms max=   13.561 ms
+  "Unknown" (13564)                n=    46 median=   1.769 ms p95=  20.009 ms max=   23.757 ms
+  "Unknown" (9664)                 n=    43 median=   1.794 ms p95=  20.086 ms max=   34.150 ms
+  "Unknown" (2660)                 n=    38 median=   0.178 ms p95=  19.886 ms max=   22.154 ms
+  "Unknown" (5756)                 n=    33 median=   0.334 ms p95=  21.409 ms max=   22.936 ms
+  "Unknown" (9424)                 n=    33 median=   1.403 ms p95=  18.948 ms max=   22.646 ms
+  "Unknown" (5108)                 n=    32 median=   1.339 ms p95=  21.765 ms max=   33.322 ms
+  "Unknown" (13640)                n=    30 median=   0.918 ms p95=  18.200 ms max=   23.231 ms
+  "Unknown" (4152)                 n=    30 median=   0.682 ms p95=  20.710 ms max=   32.525 ms
+  "Unknown" (11828)                n=     2 median=  10.807 ms p95=  21.596 ms max=   21.596 ms
+  "Unknown" (4816)                 n=     1 median=   3.844 ms p95=   3.844 ms max=    3.844 ms
+
+GPU busy (union of all DMA packets) 46.228 s = 97.5% of span
+
+Presents by process:
+  "Unknown" (2288)                 n=  1483 rate=  31.3/s interval median=  31.08 ms p95=  42.37 ms p99=  51.92 ms max=   57.31 ms >50ms=21 >100ms=0 >250ms=0
+  "Unknown" (12620)                n=  1482 rate=  31.3/s interval median=  31.27 ms p95=  42.38 ms p99=  57.62 ms max=   97.20 ms >50ms=31 >100ms=0 >250ms=0
+  "Unknown" (4816)                 n=1

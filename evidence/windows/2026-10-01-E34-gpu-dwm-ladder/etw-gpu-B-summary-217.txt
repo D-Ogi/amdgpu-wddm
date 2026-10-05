@@ -1,0 +1,83 @@
+trace span 49.45 s, vsync interrupts 2963 (59.9/s)
+
+GPU DMA packets by process (execution Start->Stop):
+  ?                                n= 12173 busy= 39.159 s ( 79.2% of span) median=  0.354 ms p95= 12.835 ms max=  28.490 ms
+  "Unknown" (   4)                 n=  4702 busy=  0.418 s (  0.8% of span) median=  0.073 ms p95=  0.168 ms max=   1.109 ms
+
+Queue latency by process (QueuePacket Start->Stop, submit to completion):
+  "Unknown" (5308)                 n= 11272 median=   4.277 ms p95=  46.595 ms max=   90.637 ms
+  "Unknown" (   4)                 n=  4702 median=   0.140 ms p95=   0.467 ms max=   15.527 ms
+  "Unknown" (11364)                n=  3526 median=   0.394 ms p95=  16.615 ms max=   31.117 ms
+  "Unknown" (2096)                 n=    50 median=   0.102 ms p95=   5.969 ms max=   16.440 ms
+  "Unknown" (9412)                 n=    36 median=   0.220 ms p95=  19.890 ms max=   20.624 ms
+  "Unknown" (8520)                 n=    30 median=   0.245 ms p95=  14.743 ms max=   18.619 ms
+  "Unknown" (11044)                n=    25 median=   1.566 ms p95=  13.918 ms max=   15.056 ms
+  "Unknown" (9504)                 n=    24 median=   2.245 ms p95=  19.105 ms max=   23.688 ms
+  "Unknown" (9780)                 n=    24 median=   1.946 ms p95=  15.454 ms max=   19.498 ms
+  "Unknown" (10304)                n=    21 median=   0.301 ms p95=  10.762 ms max=   10.942 ms
+  "Unknown" (4980)                 n=    21 median=   0.313 ms p95=   8.443 ms max=    9.500 ms
+  "Unknown" ( 320)                 n=    20 median=   1.393 ms p95=  15.990 ms max=   15.990 ms
+  "Unknown" (8848)                 n=    19 median=   0.654 ms p95=   8.753 ms max=    8.753 ms
+  "Unknown" (10836)                n=    19 median=   2.006 ms p95=  21.779 ms max=   21.779 ms
+  "Unknown" (5524)                 n=    19 median=   2.061 ms p95=  14.673 ms max=   14.673 ms
+  "Unknown" (6740)                 n=    19 median=   0.087 ms p95=  21.655 ms max=   21.655 ms
+  "Unknown" (12892)                n=    19 median=   3.178 ms p95=  15.979 ms max=   15.979 ms
+  "Unknown" (8264)                 n=    19 median=   2.726 ms p95=  21.843 ms max=   21.843 ms
+  "Unknown" (10176)                n=    18 median=   0.188 ms p95=  11.537 ms max=   11.537 ms
+  "Unknown" (4852)                 n=    18 median=   0.119 ms p95=  19.559 ms max=   19.559 ms
+  "Unknown" (8020)                 n=    18 median=   2.123 ms p95=  16.172 ms max=   16.172 ms
+  "Unknown" (13016)                n=    18 median=   1.750 ms p95=  18.468 ms max=   18.468 ms
+  "Unknown" (2268)                 n=    18 median=   1.520 ms p95=  15.946 ms max=   15.946 ms
+  "Unknown" ( 192)                 n=    18 median=   1.052 ms p95=  15.598 ms max=   15.598 ms
+  "Unknown" (8584)                 n=    17 median=   2.205 ms p95=  14.748 ms max=   14.748 ms
+  "Unknown" (5208)                 n=    17 median=   1.190 ms p95=  13.082 ms max=   13.082 ms
+  "Unknown" (5564)                 n=    17 median=   0.255 ms p95=  11.139 ms max=   11.139 ms
+  "Unknown" (8544)                 n=    17 median=   2.516 ms p95=  15.159 ms max=   15.159 ms
+  "Unknown" (8988)                 n=    17 median=   1.570 ms p95=  22.787 ms max=   22.787 ms
+  "Unknown" (4268)                 n=    17 median=   1.370 ms p95=  17.369 ms max=   17.369 ms
+  "Unknown" (13140)                n=    16 median=   0.140 ms p95=  12.122 ms max=   12.122 ms
+  "Unknown" (5724)                 n=    16 median=   2.032 ms p95=  15.957 ms max=   15.957 ms
+  "Unknown" (3612)                 n=    16 median=   1.308 ms p95=   9.972 ms max=    9.972 ms
+  "Unknown" (11304)                n=    15 median=   2.363 ms p95=  10.890 ms max=   10.890 ms
+  "Unknown" (6356)                 n=    14 median=   0.278 ms p95=  12.925 ms max=   12.925 ms
+  "Unknown" (12916)                n=    14 median=   0.100 ms p95=   9.603 ms max=    9.603 ms
+  "Unknown" (12764)                n=    14 median=   3.395 ms p95=  15.407 ms max=   15.407 ms
+  "Unknown" (10528)                n=    14 median=   2.370 ms p95=  14.767 ms max=   14.767 ms
+  "Unknown" (1644)                 n=    14 median=   0.291 ms p95=  22.012 ms max=   22.012 ms
+  "Unknown" (10716)                n=    14 median=   2.134 ms p95=  14.174 ms max=   14.174 ms
+  "Unknown" (3820)                 n=    13 median=   2.429 ms p95=  15.303 ms max=   15.303 ms
+  "Unknown" (4220)                 n=    13 median=   1.212 ms p95=  16.280 ms max=   16.280 ms
+  "Unknown" (11568)                n=    11 median=   0.311 ms p95=  11.938 ms max=   11.938 ms
+  "Unknown" (8920)                 n=    11 median=   0.120 ms p95=  12.084 ms max=   12.084 ms
+  "Unknown" (12456)                n=    11 median=   0.243 ms p95=  11.243 ms max=   11.243 ms
+  "Unknown" (10960)                n=    11 median=   0.148 ms p95=  13.847 ms max=   13.847 ms
+  "Unknown" (12840)                n=    10 median=   0.090 ms p95=  11.319 ms max=   11.319 ms
+  "Unknown" (3968)                 n=    10 median=   0.141 ms p95=  12.048 ms max=   12.048 ms
+  "Unknown" (3020)                 n=    10 median=   0.508 ms p95=  12.197 ms max=   12.197 ms
+  "Unknown" (12120)                n=     9 median=   1.961 ms p95=  22.703 ms max=   22.703 ms
+  "Unknown" (10800)                n=     9 median=   0.561 ms p95=  10.855 ms max=   10.855 ms
+  "Unknown" (10972)                n=     9 median=   2.518 ms p95=  14.958 ms max=   14.958 ms
+  "Unknown" (8732)                 n=     8 median=   2.174 ms p95=  13.473 ms max=   13.473 ms
+  "Unknown" (4176)                 n=     8 median=   3.772 ms p95=  13.150 ms max=   13.150 ms
+  "Unknown" (10824)                n=     8 median=   0.350 ms p95=  12.398 ms max=   12.398 ms
+  "Unknown" (4232)                 n=     8 median=   0.582 ms p95=  10.015 ms max=   10.015 ms
+  "Unknown" (13064)                n=     8 median=   2.927 ms p95=  13.447 ms max=   13.447 ms
+  "Unknown" (8540)                 n=     8 median=   0.070 ms p95=  10.806 ms max=   10.806 ms
+  "Unknown" (11436)                n=     7 median=   0.103 ms p95=  11.188 ms max=   11.188 ms
+  "Unknown" (8820)                 n=     7 median=   0.267 ms p95=  10.388 ms max=   10.388 ms
+  "Unknown" (1756)                 n=     6 median=   1.625 ms p95=  13.414 ms max=   13.414 ms
+  "Unknown" (11384)                n=     6 median=   0.766 ms p95=   1.595 ms max=    1.595 ms
+  "Unknown" (10816)                n=     6 median=   0.916 ms p95=  13.470 ms max=   13.470 ms
+  "Unknown" (4892)                 n=     6 median=   0.202 ms p95=  12.096 ms max=   12.096 ms
+  "Unknown" (2420)                 n=     6 median=   0.075 ms p95=  11.701 ms max=   11.701 ms
+  "Unknown" (5344)                 n=     6 median=   0.711 ms p95=  12.093 ms max=   12.093 ms
+  "Unknown" (2260)                 n=     5 median=   0.194 ms p95=  11.925 ms max=   11.925 ms
+  "Unknown" (7124)                 n=     5 median=   0.513 ms p95=  11.596 ms max=   11.596 ms
+  "Unknown" (10192)                n=     3 median=   0.757 ms p95=   1.882 ms max=    1.882 ms
+
+GPU busy (union of all DMA packets) 35.073 s = 70.9% of span
+
+Presents by process:
+  "Unknown" (5308)                 n=  1756 rate=  35.5/s interval median=  26.70 ms p95=  40.87 ms p99=  62.42 ms max=   76.08 ms >50ms=44 >100ms=0 >250ms=0
+  "Unknown" (11364)                n=  1755 rate=  35.5/s interval median=  28.02 ms p95=  41.02 ms p99=  53.46 ms max=   82.13 ms >50ms=30 >100ms=0 >250ms=0
+  "Unknown" (2096)                 n=    50 rate=   1.0/s interval median=1005.29 ms p95=1079.88 ms p99=1135.36 ms max= 1135.36 ms >50ms=49 >100ms=49 >250ms=48

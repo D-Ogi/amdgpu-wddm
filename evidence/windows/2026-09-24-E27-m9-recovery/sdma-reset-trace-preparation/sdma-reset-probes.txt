@@ -1,0 +1,20 @@
+p:bc250_m9_reset/amdgpu_job_timedout_enter amdgpu:amdgpu_job_timedout
+r:bc250_m9_reset/amdgpu_job_timedout_return amdgpu:amdgpu_job_timedout result=$retval:s32
+p:bc250_m9_reset/amdgpu_ring_soft_recovery_enter amdgpu:amdgpu_ring_soft_recovery
+r:bc250_m9_reset/amdgpu_ring_soft_recovery_return amdgpu:amdgpu_ring_soft_recovery result=$retval:s32
+p:bc250_m9_reset/sdma_v5_0_reset_queue_enter amdgpu:sdma_v5_0_reset_queue vmid=$arg2:u32
+r:bc250_m9_reset/sdma_v5_0_reset_queue_return amdgpu:sdma_v5_0_reset_queue result=$retval:s32
+p:bc250_m9_reset/amdgpu_sdma_reset_engine_enter amdgpu:amdgpu_sdma_reset_engine instance=$arg2:u32 caller_queues=$arg3:u32
+r:bc250_m9_reset/amdgpu_sdma_reset_engine_return amdgpu:amdgpu_sdma_reset_engine result=$retval:s32
+p:bc250_m9_reset/sdma_v5_0_stop_queue_enter amdgpu:sdma_v5_0_stop_queue
+r:bc250_m9_reset/sdma_v5_0_stop_queue_return amdgpu:sdma_v5_0_stop_queue result=$retval:s32
+p:bc250_m9_reset/sdma_v5_0_soft_reset_engine_enter amdgpu:sdma_v5_0_soft_reset_engine instance=$arg2:u32
+r:bc250_m9_reset/sdma_v5_0_soft_reset_engine_return amdgpu:sdma_v5_0_soft_reset_engine result=$retval:s32
+p:bc250_m9_reset/sdma_v5_0_restore_queue_enter amdgpu:sdma_v5_0_restore_queue
+r:bc250_m9_reset/sdma_v5_0_restore_queue_return amdgpu:sdma_v5_0_restore_queue result=$retval:s32
+p:bc250_m9_reset/amdgpu_ring_reset_helper_end_enter amdgpu:amdgpu_ring_reset_helper_end
+r:bc250_m9_reset/amdgpu_ring_reset_helper_end_return amdgpu:amdgpu_ring_reset_helper_end result=$retval:s32
+p:bc250_m9_reset/amdgpu_device_gpu_recover_enter amdgpu:amdgpu_device_gpu_recover
+r:bc250_m9_reset/amdgpu_device_gpu_recover_return amdgpu:amdgpu_device_gpu_recover result=$retval:s32
+p:bc250_m9_reset/soc15_asic_reset_enter amdgpu:soc15_asic_reset
+r:bc250_m9_reset/soc15_asic_reset_return amdgpu:soc15_asic_reset result=$retval:s32

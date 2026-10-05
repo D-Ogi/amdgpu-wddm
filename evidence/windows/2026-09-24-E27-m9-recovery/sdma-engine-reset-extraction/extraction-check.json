@@ -1,0 +1,11 @@
+{
+  "normalized_original_register_body_matches": true,
+  "allowed_changes": [
+    "public function rename",
+    "instance bounds before MMIO",
+    "omit DRM_DEBUG",
+    "shim delay call"
+  ],
+  "register": "mmGRBM_SOFT_RESET",
+  "regcalc_bar5": "0x08020"
+}

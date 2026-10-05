@@ -1,0 +1,55 @@
+{
+  "interval": {
+    "events": 2026,
+    "requests": 800,
+    "successful": 400,
+    "failed": 400,
+    "ended": 400,
+    "live_map_ids": [],
+    "object_replacements": 0,
+    "staging_successes": 0,
+    "sequenced": true,
+    "checkpoint_count": 26,
+    "last_checkpoint": {
+      "event": "checkpoint",
+      "seq": 2026,
+      "time_ns": 2026,
+      "marker": 12,
+      "requests": 800,
+      "successful": 400,
+      "failed": 400,
+      "ended": 400,
+      "pending": 0,
+      "live": 0
+    },
+    "interval_delta": {
+      "requests": 800,
+      "successful": 400,
+      "failed": 400,
+      "ended": 400
+    },
+    "scope": "sequenced event and checkpoint consistency; CPU stores and uninstrumented paths are not measured"
+  },
+  "final_counts": {
+    "requests": 801,
+    "successful": 401,
+    "failed": 400,
+    "ended": 401
+  },
+  "live_ids": [
+    811
+  ],
+  "rejected": [
+    "whole_map_removed",
+    "whole_map_removed_and_resequenced",
+    "missing_required_marker",
+    "truncated_before_boundary",
+    "forged_request_counter",
+    "forged_live_counter",
+    "live_map_disallowed",
+    "missing_start_marker",
+    "reversed_marker_interval",
+    "absent_end_marker",
+    "mixed_legacy_events"
+  ]
+}

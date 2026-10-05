@@ -1,0 +1,36 @@
+**********************
+Windows PowerShell transcript start
+Start time: 20260926224643
+Username: [redacted]
+RunAs User: [redacted]
+Configuration Name: 
+Machine: [redacted]
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\BC250\tmp\run.ps1
+Process ID: 7296
+PSVersion: 5.1.22621.6133
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.6133
+BuildVersion: 10.0.22621.6133
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Baselines verified
+DWM before=2956
+PS>TerminatingError(Invoke-WebRequest): "The operation has timed out."
+capture 0 failed: The operation has timed out.
+>> TerminatingError(Invoke-RestMethod): "The operation has timed out."
+Baselines verified
+Invoke-RestMethod : The operation has timed out.
+At C:\BC250\tmp\run.ps1:46 char:8
++    if((Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 2).s ...
++        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invok 
+   e-RestMethod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeR 
+   estMethodCommand
+**********************
+Windows PowerShell transcript end
+End time: 20260926224659
+**********************

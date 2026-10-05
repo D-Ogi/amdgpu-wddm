@@ -1,0 +1,7 @@
+# packagecheck manifest: P:\BC-250\scratch\build\bc250kmd-07123\package-umd
+# 2026-09-24 08:55:21 UTC, model full, DriverVer 09/24/2026,0.7.123.1
+6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd        792  bc250-lab-test.cer
+8161310ccfface1ee4c57b31cee8f81e27c9ae64b02d97634c1cab7734fe034d       2839  bc250kmd.cat
+3327d8eacf6d0b0c7543dd05c378182263ac3c581049f217cca1e0bfd66661cb       7603  bc250kmd.inf
+5bd2b358b9a6e016efb0b911f9511aa4da7ca4e1e82de22023512187adcec823     348560  bc250kmd.sys
+d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661       4096  bc250umd.dll

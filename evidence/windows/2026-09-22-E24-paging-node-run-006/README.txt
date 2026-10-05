@@ -1,4 +1,4 @@
-E24 run 006, 2026-09-22 12:01-12:03: bc250kmd 0.7.29 pre-image (0.7.28, commit 963f23a) on unit A, first
+E24 run 006, 2026-09-22 12:01-12:03: bc250kmd 0.7.29 pre-image (0.7.28, commit 2e27f7c) on unit A, first
 bring-up of the 11:59:32 boot (the freshness guard of M78 passed). The VidPn flip gate stayed CLOSED this time:
 the experiment has no use for it, and run 005 left the owner watching M100's unpainted primary for four minutes.
 

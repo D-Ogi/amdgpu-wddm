@@ -1,0 +1,49 @@
+compile (user mode, host test)
+  Generowanie kodu...
+link
+compile (kernel flags, the shim sources only, no link)
+  Generowanie kodu...
+run
+DXGK_PTE -> AMD page table entry, host test
+segments: system 31, VRAM 1 at 0x400000000 for 0x10000000 bytes (the test's own numbers)
+
+== DXGK_PTE layout, against d3dukmdt.h:315-340 as the compiler sees it
+  eleven fields checked, every one where we said
+
+== the GART leaf flags
+  bc250_gart_pte_flags()  0003000000000077
+  bc250_pte_gart_flags()  0003000000000077
+  fact M37 on unit A      0003000000000077
+
+== translations
+  VM leaf, system memory, rwx, coherent                      0000001234567077  0000001234567077 VALID SYSTEM SNOOPED EXE R W MTYPE=NC addr=001234567000
+  VM leaf, VRAM, rwx, coherent (offset + vram_base)          0000000400002075  0000000400002075 VALID SNOOPED EXE R W MTYPE=NC addr=000400002000
+  VM leaf, VRAM, read only, no execute, not coherent         0000000400002021  0000000400002021 VALID R MTYPE=NC addr=000400002000
+  VM leaf, system memory, 64 KB large page (FRAG 4)          0000001234560277  0000001234560277 VALID SYSTEM SNOOPED EXE R W FRAG=04 MTYPE=NC addr=001234560000
+  VM directory, system memory, coherent                      0000000089ABC007  0000000089ABC007 VALID SYSTEM SNOOPED addr=000089ABC000
+  VM directory, VRAM, coherent                               0000000400003005  0000000400003005 VALID SNOOPED addr=000400003000
+  VM directory, VRAM, not coherent                           0000000400003001  0000000400003001 VALID addr=000400003000
+  not valid: every flag clear, and the rest of the entry ignored 0000000000000000  0000000000000000 INVALID
+  GART leaf, system memory: the entry fact M37 measured      0003001234567077  0003001234567077 VALID SYSTEM SNOOPED EXE R W MTYPE=UC addr=001234567000
+  VM leaf, the same page read as a frame number instead of a byte address 0000001234567077  0000001234567077 VALID SYSTEM SNOOPED EXE R W MTYPE=NC addr=001234567000
+  VM leaf, the highest address the 48-bit field can carry    0000FFFFFFFFF077  0000FFFFFFFFF077 VALID SYSTEM SNOOPED EXE R W MTYPE=NC addr=FFFFFFFFF000
+
+== inputs that must be refused
+  20 inputs, all refused with nothing written
+
+== decode and describe
+  round trip through bc250_pte_decode(): every entry above rebuilt exactly
+  0003001234567077 VALID SYSTEM SNOOPED EXE R W MTYPE=UC addr=001234567000
+  0000000000000000 INVALID
+  truncation: 8 bytes holds "0003000", full length 72
+
+== controls
+  the same DXGK_PTE read as bytes 0000000001234077, as a frame number 0000001234000077
+  VM 0000000001234077, GART 0003000001234077, difference 0003000000000000
+  4 KB 0000001234560077, 64 KB 0000001234560277, difference 0000000000000200
+  the same page as a directory entry 0000001234560007
+  dedicated table segment:2048 address/unit/kind combinations plus boundary controls
+
+PASS (0 failures)
+
+replay_pte.exe exit code 0

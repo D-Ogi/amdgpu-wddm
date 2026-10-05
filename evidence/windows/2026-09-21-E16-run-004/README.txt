@@ -3,10 +3,10 @@ Files are copied from C:\BC250\e16\out, C:\BC250\e16-umd\out (the install) and C
 budget-reset.txt is the one line of the target's file that belongs to this run. Nothing was redacted: no MAC, serial,
 UUID or SSID occurs in these files.
 
-Build: bc250kmd 0.7.4 (commit fc3f76f, clean worktree, bc250kmd.sys sha256 c4ad531286bbf43c...), UMD stub package
+Build: bc250kmd 0.7.4 (commit f7502f1, clean worktree, bc250kmd.sys sha256 c4ad531286bbf43c...), UMD stub package
 0.7.4.1 (UserModeDriverName = bc250umd.dll). New against run 003: DxgkDdiSetStablePowerState, SupportDirectFlip,
 FlipCaps.FlipIndependent, segment Flags.DirectFlip, SupportPerEngineTDR with its three DDIs, CollectDbgInfo,
-SupportSmoothRotation. Run 004 was announced in the experiment's README before it happened (commit fbae104).
+SupportSmoothRotation. Run 004 was announced in the experiment's README before it happened (commit 34fe7fe).
 
 What happened, in order (local time = UTC + 2, file):
 

@@ -8,14 +8,19 @@ Windows there is no ioctl. A WDDM user-mode driver calls `D3DKMTQueryAdapterInfo
 `DxgkDdiQueryAdapterInfo`, and whatever bytes the miniport writes arrive verbatim in user mode.
 dxgkrnl neither inspects nor versions them. The shape of those bytes is this directory.
 
-Nothing here is wired into the driver yet. It is the contract and its test, built so that the
-shape can be argued about before anything depends on it.
+The contract is in use. The KMD answers `DXGKQAITYPE_UMDRIVERPRIVATE` with a blob generated from
+this directory's filler (`driver/kmd/umd_caps.c`), includes the firmware and adapter identity
+headers, and reads the submit blobs with host tests against `bc250_umd_submit.h`
+(`driver/kmd/umd_blob.c`). The RADV winsys (`driver/icd`) and the D3D12 shell (`driver/umd/d3d12`)
+build against the same headers. It was built so that the shape could be argued about before
+anything depended on it; the host tests below still hold it to that.
 
 ## Files
 
 | File | What it is |
 |---|---|
 | `bc250_umd_private.h` | The blob. Versioned, fixed-width, **version 3, 1472 bytes**, compile-time size and offset asserts. Compiles both as user-mode C and under the miniport's `/kernel` flags |
+| `amdgpu_wddm_surface_format.h` | The formats a linear surface (LB7A v1) may have: DXGI and D3DDDIFORMAT numbers, bytes a pixel, sRGB sibling, and the policy bits that enable a row for composition or scan-out. The D3D12 shell, engine-ddi, the D3D11 shell's runtime surfaces, the kernel driver and the compositor's UMD read it; each checks the numbers against its SDK/WDK headers |
 | `bc250_umd_private_fields.h` | The member names of the three imported UAPI structures, as X-macro lists. Names only |
 | `third_party/amdgpu_drm.h` | Linux UAPI, MIT, tag v6.18, imported byte for byte. See `third_party/PROVENANCE.md` |
 | `uapi-shim/drm.h` | Ours. The seven names `amdgpu_drm.h` needs from `drm.h`, so it compiles under MSVC unmodified |
@@ -26,9 +31,9 @@ shape can be argued about before anything depends on it.
 | `test/bc250_caps_test.c` | `main()`: the wishlist, the layout comparison, the cross-checks, the assertions, the controls. Also `--radeon-info`, which dumps the derived caps through Mesa's own `ac_print_gpu_info()` |
 | `test/compare_radv_info.py` | Diffs that dump against what RADV derived on unit A. The only check here that compares against the device |
 
-The test needs a Mesa checkout at `P:\BC-250\ref\mesa` (shallow sparse clone; `src/amd/common`,
+The test needs a Mesa checkout at `<BC250_ROOT>\ref\mesa` (shallow sparse clone; `src/amd/common`,
 `src/amd/registers`, `src/amd/addrlib`, `src/util`, `include`). It writes only under
-`P:\BC-250\scratch\contract`. No hardware, no lab, no driver load.
+`<BC250_ROOT>\scratch\contract`. No hardware, no lab, no driver load.
 
 ## The contract in one paragraph
 
@@ -344,7 +349,7 @@ near this contract.
 
 ## How the test is built, and why it is not a fork of Mesa
 
-`ac_gpu_info.c` is compiled straight out of `P:\BC-250\ref\mesa`, unmodified. It needs:
+`ac_gpu_info.c` is compiled straight out of `<BC250_ROOT>\ref\mesa`, unmodified. It needs:
 
 - `/std:c11`, for `_Alignas` in Mesa's `src/util/u_atomic.h:374`;
 - two headers meson would generate, generated here by Mesa's own scripts into `$Out\gen`
@@ -394,8 +399,8 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 
 - `DxgkDdiQueryAdapterInfo(DXGKQAITYPE_UMDRIVERPRIVATE)` copies the unit A caps blob
   (`driver/kmd/umd_caps.c`, 1472 bytes, bc250kmd 0.7.41). A shorter output buffer is refused.
-  The winsys that asks for it is `driver/icd/mesa-wddm2-bc250.patch`. It has not been run on
-  unit A.
+  The winsys that asks for it is `driver/icd/mesa-wddm2-bc250.patch`, run on unit A for M8
+  (M139).
 - `DxgkDdiCreateAllocation`, `DxgkDdiCreateContext` and `DxgkDdiSubmitCommandVirtual` do read the
   three blobs in `bc250_umd_submit.h`, on node 0 only (`driver/kmd/umd_blob.c`, bc250kmd 0.7.40).
   GDI allocations stay on the `"LB7A"` struct. A context with empty private data is unchanged
@@ -417,3 +422,21 @@ to be able to kill the process, and nothing on this PC gets to open a window.
   `driver/kmd/umd_blob.c`. The winsys that fills the blobs is `driver/icd/mesa-wddm2-bc250.patch`.
 - The blob carries no per-process or per-adapter state (GPU VA layout, doorbell assignment,
   paging queue). That is a separate contract and belongs with the M7 memory-manager work.
+
+### Optional adapter identity trailer
+
+Extended UMDRIVERPRIVATE requests of at least 1496 bytes receive the unchanged
+1472-byte v3 caps prefix followed by `bc250_adapter_identity.h` at offset 1472.
+The 24-byte trailer has magic B2AI, version 1, size 24, the two 32-bit LUID words,
+and a zero reserved word. Its LUID comes from the cached
+`DXGK_START_INFO.AdapterLuid` supplied by Windows, not from hardware IDs or an
+application environment variable. Smaller successful queries retain their previous
+prefix-only behavior; no partial trailer is emitted.
+
+Consumers zero-initialize the extended buffer and validate magic, version, size,
+and reserved before using the identity. Older KMDs can return success while leaving
+the trailer untouched; this means unsupported identity transport, not LUID zero.
+The M14 helper preserves its output on callback failure or an invalid trailer.
+This extension requires a rebuilt KMD: KMD170 does not have it; KMD171 carries it, and a
+read-only control on unit A found its LUID equal to `D3DKMTEnumAdapters2`'s (M727).
+Local contract reference: WDK 10.0.26100 `DXGK_START_INFO` in `dispmprt.h`.

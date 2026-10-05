@@ -1,0 +1,16 @@
+{
+    "outcome":  "gdi_blit_required",
+    "present_tested":  false,
+    "gpu_surface_offered":  false,
+    "records":  [
+                    {
+                        "handle":  "0x0000000000000000",
+                        "format":  0,
+                        "update_id":  "0",
+                        "sequence":  1,
+                        "milliseconds":  0,
+                        "hr":  "00263008"
+                    }
+                ],
+    "calls":  1
+}

@@ -1,0 +1,22 @@
+candidate_sha256=8017E7BF050AACE3F16F06097A3BF2BF53229045240C0CE55049706637A3C6F6
+boot_before=2026-09-23T15:39:09
+15:59:09 Tctl 67.0 C (raw 741B0FEF)
+
+guard recovery: logs secured, all hardware gates verified closed
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem74.inf
+Driver package installed on device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\INSTANCE_REDACTED
+
+Total driver packages:  1
+Added driver packages:  1
+pnputil_exit=0
+device_status=OK
+driver_version=0.7.100.1
+installed_sha256=8017E7BF050AACE3F16F06097A3BF2BF53229045240C0CE55049706637A3C6F6
+closed_gates_verified
+boot_after=2026-09-23T15:39:09
+dwm_processes=1
+display_only_install_passed

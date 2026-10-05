@@ -1,0 +1,297 @@
+bc250kmd 0x0007008B log snapshot: 249 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.000 stage 20
+     3      0.125 stage 30
+     4      0.125 stage 31
+     5      0.125 stage 32
+     6      0.125 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.125 stage 33
+     8      0.125 stage 34
+     9      0.125 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.125 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    11      0.125 smu: native owner start status 0x00000000
+    12      0.125 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    13      0.125 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    14      0.125 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    15      0.125 gart: ready, dummy page at 0x26FFFA000
+    16      0.125 psp: ready
+    17      0.125 gpumem: ready, doorbells at 0xD0000000
+    18      0.125 gfx: ready, GPU submission allowed, paging node allowed
+    19      0.125 ih: ready
+    20      0.125 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    21      0.140 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    22      0.140 startup: entering interrupt connection
+    23      0.140 startup: entering firmware preparation
+    24      0.140 startup: entering native clock preparation
+    25      0.156 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 66375mc staged 0
+    26      0.156 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    27      0.156 gfx: unpublished translation bootstrap entered with engines halted
+    28      0.156 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    29      0.156 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    30      0.156 startup: entering GART initialization
+    31      0.171 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    32      0.171 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.171 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.171 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    35      0.171 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.171 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    37      0.171 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    38      0.171 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.171 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    40      0.171 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    41      0.171 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.171 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    43      0.171 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    44      0.171 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.171 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    46      0.171 startup: entering PSP initialization
+    47      0.218 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    48      0.218 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    49      0.250 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    50      0.250 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    51      0.250 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    52      0.250 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 241 us, in TMR at 0x0
+    53      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    54      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.250 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1908 us, in TMR at 0x0
+    56      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.250 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1889 us, in TMR at 0x0
+    59      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    60      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.250 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF842000
+    62      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.265 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF883000
+    65      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    66      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.265 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF8C4000
+    68      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    69      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.265 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5962 us, in TMR at 0xF5FF800000
+    71      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    72      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.265 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    74      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    75      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.281 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5967 us, in TMR at 0xF5FF800000
+    77      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    78      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.281 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 134 us, in TMR at 0x0
+    80      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.281 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    83      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    85      0.281 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    86      0.281 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    87      0.281 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    88      0.281 startup: entering IH initialization
+    89      0.281 ih: init: rc 0, 18 writes
+    90      0.281 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    91      0.281 startup: entering GFX initialization
+    92      0.281 startup: entering GFX stage 1
+    93      0.281 gfx: RLC startup policy pp_gfxoff 0
+    94      0.281 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    95      0.281 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    96      0.296 startup: entering GFX stage 2
+    97      0.296 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    98      0.296 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    99      0.296 startup: entering GFX stage 3
+   100      0.296 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+   101      0.296 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   102      0.296 startup: entering GFX stage 4
+   103      0.296 gfx: stage 4 (constants): rc 0, 157 writes so far, 59 us
+   104      0.296 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   105      0.296 startup: entering GFX stage 5
+   106      0.312 startup: RLC boundary acquire-paging-lock
+   107      0.312 startup: RLC boundary acquire-gart-lock
+   108      0.312 startup: RLC boundary locks-acquired
+   109      0.312 startup: RLC boundary before-rlc-resume
+   110      0.312 startup: RLC boundary after-rlc-resume
+   111      0.312 startup: RLC boundary before-gfx-visibility
+   112      0.312 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   113      0.328 startup: visibility observer returned after-invalidate-request
+   114      0.328 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   115      0.328 startup: visibility observer returned after-invalidate-request-read
+   116      0.328 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   117      0.328 startup: visibility observer returned after-invalidate-ack
+   118      0.328 startup: visibility GFX returned 0, entering MMHUB
+   119      0.328 startup: visibility MMHUB returned 0
+   120      0.328 gpumem: startup GFX translations committed after RLC, before CP
+   121      0.343 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   122      0.343 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   123      0.343 startup: visibility publication observer returned
+   124      0.343 startup: RLC boundary after-gfx-visibility
+   125      0.343 gfx: stage 5 (RLC): rc 0, 11 writes so far, 29198 us
+   126      0.343 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   127      0.343 startup: entering GFX stage 6
+   128      0.343 startup: entering CP step 1
+   129      0.343 startup: CP1 checkpoint acquire-paging-lock
+   130      0.343 startup: CP1 checkpoint acquire-gart-lock
+   131      0.359 startup: CP1 checkpoint locks-acquired
+   132      0.359 amdgpu[0]: CP resume kiq-init begin
+
+   133      0.359 startup: CP1 checkpoint scheduler
+   134      0.359 startup: CP1 checkpoint scheduler-read
+   135      0.359 startup: CP1 checkpoint scheduler-write
+   136      0.359 startup: CP1 checkpoint scheduler-done
+   137      0.359 startup: CP1 checkpoint clear-mqd
+   138      0.359 startup: CP1 checkpoint select-queue
+   139      0.359 startup: CP1 checkpoint build-mqd
+   140      0.375 startup: CP1 checkpoint disable-wptr-poll
+   141      0.375 startup: CP1 checkpoint read-active
+   142      0.375 startup: CP1 checkpoint program-hqd
+   143      0.375 startup: CP1 checkpoint activate-hqd
+   144      0.375 startup: CP1 checkpoint restore-selection
+   145      0.375 startup: CP1 checkpoint complete
+   146      0.375 amdgpu[0]: CP resume kiq-init end result=0
+
+   147      0.375 gfx: CP step 1: rc 0, 27 writes, 27764 us
+   148      0.375 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   149      0.375 startup: CP step 1 returned 0x00000000 result 0
+   150      0.390 startup: entering CP step 2
+   151      0.390 amdgpu[0]: CP resume compute-unhalt begin
+
+   152      0.390 amdgpu[0]: CP resume compute-unhalt end
+
+   153      0.390 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   154      0.390 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   155      0.390 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   156      0.390 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   157      0.390 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   158      0.390 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   159      0.390 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   160      0.390 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   161      0.390 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   162      0.390 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   163      0.390 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   164      0.390 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   165      0.390 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   166      0.390 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   167      0.390 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   168      0.390 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   169      0.390 gfx: CP step 2: rc 0, 17 writes, 336 us
+   170      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   171      0.390 startup: CP step 2 returned 0x00000000 result 0
+   172      0.390 startup: entering CP step 3
+   173      0.390 amdgpu[0]: CP resume kcq-enable begin
+
+   174      0.390 amdgpu[0]: CP resume kcq-enable end result=0
+
+   175      0.390 gfx: CP step 3: rc 0, 1 writes, 59 us
+   176      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   177      0.390 startup: CP step 3 returned 0x00000000 result 0
+   178      0.390 startup: entering CP step 4
+   179      0.390 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   180      0.390 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   181      0.390 gfx: CP step 4: rc 0, 4 writes, 36 us
+   182      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   183      0.390 startup: CP step 4 returned 0x00000000 result 0
+   184      0.406 startup: entering CP step 5
+   185      0.406 amdgpu[0]: CP resume kgq-enable begin
+
+   186      0.406 amdgpu[0]: CP resume kgq-enable end result=0
+
+   187      0.406 gfx: CP step 5: rc 0, 1 writes, 29 us
+   188      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   189      0.406 startup: CP step 5 returned 0x00000000 result 0
+   190      0.406 startup: entering CP step 6
+   191      0.406 amdgpu[0]: CP resume gfx-start begin
+
+   192      0.406 amdgpu[0]: CP resume gfx-start end result=0
+
+   193      0.406 gfx: CP step 6: rc 0, 3 writes, 27 us
+   194      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   195      0.406 startup: CP step 6 returned 0x00000000 result 0
+   196      0.406 startup: entering CP step 7
+   197      0.406 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   198      0.406 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   199      0.406 gfx: CP step 7: rc 0, 1 writes, 21 us
+   200      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   201      0.406 startup: CP step 7 returned 0x00000000 result 0
+   202      0.421 startup: entering CP step 8
+   203      0.421 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   204      0.421 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   205      0.421 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   206      0.421 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   207      0.421 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   208      0.421 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   209      0.421 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   210      0.421 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   211      0.421 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   212      0.421 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   213      0.421 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   214      0.421 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   215      0.421 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   216      0.421 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   217      0.421 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   218      0.421 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   219      0.421 gfx: CP step 8: rc 0, 8 writes, 164 us
+   220      0.421 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   221      0.421 startup: CP step 8 returned 0x00000000 result 0
+   222      0.421 startup: entering GFX stage 7
+   223      0.421 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 126 us
+   224      0.421 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   225      0.421 startup: entering GFX stage 8
+   226      0.437 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   227      0.437 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   228      0.437 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   229      0.437 startup: SDMA control 0 command 16 bytes 4096 begin
+   230      0.437 gfx: sdmacopy 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   231      0.437 startup: SDMA control 0 status 0 NT 0x00000000 result 0 fence 1/1 compare 4096 matched 1
+   232      0.437 startup: SDMA control 1 command 18 bytes 4096 begin
+   233      0.437 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   234      0.453 gfx: sdmaib 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   235      0.453 startup: SDMA control 1 status 0 NT 0x00000000 result 0 fence 2/2 compare 4096 matched 1
+   236      0.453 startup: SDMA control 2 command 18 bytes 65536 begin
+   237      0.453 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   238      0.468 gfx: sdmaib 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   239      0.468 startup: SDMA control 2 status 0 NT 0x00000000 result 0 fence 3/3 compare 65536 matched 1
+   240      0.484 startup: SDMA control 3 command 16 bytes 65536 begin
+   241      0.500 gfx: sdmacopy 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   242      0.500 startup: SDMA control 3 status 0 NT 0x00000000 result 0 fence 4/4 compare 65536 matched 1
+   243      0.500 startup: SDMA VMID2 translated control begin
+   244      0.500 gfx: sdmava root PA0x46E02C000 IB PA0x26FF94000 system PA0x26FF91000 source PA0x46E00C000 VA0x40000000 CSA0x40003000 VMID2
+   245      0.515 gfx: sdmava trial0 sourceVRAM fence5/5 compared4096 status0x00000000
+   246      0.515 gfx: sdmava trial1 sourcesystem-remap fence6/6 compared4096 status0x00000000
+   247      0.515 gfx: sdmava end status0x00000000 result0 fault0x0
+   248      0.515 startup: both engines ready

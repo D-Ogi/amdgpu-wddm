@@ -1,0 +1,26 @@
+health abi=1 version=0x00070093 flags=15 generation=29846309707 epoch=5 completed=4682 age_ms=614 ready_ms=2734534
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66750 ready=1
+
+captured_frame=1
+native_exit=0 
+ORACLE_FORMAT=37\n
+allocation handle=0x40000e80
+bc250: progress before submit previous=0 observed=0 waits=0 signals=1
+allocation handle=0x40000f00
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x40001080
+allocation handle=0x40001100
+allocation handle=0x40001180
+allocation handle=0x40001200
+allocation handle=0x40001280
+allocation handle=0x40001300
+allocation handle=0x40001380
+allocation handle=0x40001400
+allocation handle=0x40001480
+allocation handle=0x40001500
+allocation handle=0x40001640
+allocation handle=0x400016c0
+allocation handle=0x40001780
+health abi=1 version=0x00070093 flags=15 generation=29846309707 epoch=5 completed=4734 age_ms=356 ready_ms=2740281
+baseline_terminal

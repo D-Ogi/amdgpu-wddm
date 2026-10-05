@@ -1,0 +1,25 @@
+2026-09-23T04:20:42
+
+
+TimeCreated : 9/23/2026 4:21:02 AM
+Id          : 41
+Message     : The system has rebooted without cleanly shutting down first. This error could be 
+              caused if the system stopped responding, crashed, or lost power unexpectedly.
+
+TimeCreated : 9/23/2026 4:21:46 AM
+Id          : 6008
+Message     : The previous system shutdown at 4:05:03 AM on ?9/?23/?2026 was unexpected.
+
+TimeCreated : 9/23/2026 4:03:27 AM
+Id          : 1074
+Message     : The process C:\Windows\system32\shutdown.exe (BC250-A) has initiated the restart of 
+              computer BC250-A on behalf of user BC250-A\bc250 for the following reason: No title 
+              for this reason could be found
+               Reason Code: 0x800000ff
+               Shutdown Type: restart
+               Comment: 
+
+
+
+
+ssh_exit=1

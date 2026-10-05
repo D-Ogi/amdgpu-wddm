@@ -1,0 +1,12 @@
+2026-09-23T17:02:11
+2026-09-23T15:39:09
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+17:02:11 Tctl 71.2 C (raw 785B0FEF)
+Status FriendlyName                                  
+------ ------------                                  
+OK     BC-250 GPU (bc250kmd, display-only, lab build)
+
+

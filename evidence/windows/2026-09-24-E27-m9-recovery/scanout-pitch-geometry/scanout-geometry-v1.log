@@ -1,0 +1,5 @@
+Extracted scanout geometry, firmware capture, mapping, fill, row copy and allocation DDI
+scanout_geometry_actual.c
+dcn_translate.c
+Generowanie kodu...
+scanout geometry: 6892 checks, 0 failures

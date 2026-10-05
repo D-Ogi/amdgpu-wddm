@@ -1,0 +1,9 @@
+test.c
+FAIL synchronization failure preserved
+FAIL no hardware after disconnected interrupt
+FAIL synchronization failure preserved
+FAIL no hardware after disconnected interrupt
+FAIL synchronization failure preserved
+FAIL no hardware after disconnected interrupt
+FAIL complete readiness
+333 checks, 7 failures

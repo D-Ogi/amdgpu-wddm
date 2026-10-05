@@ -2,7 +2,7 @@
 # SDK NuGet packages unpacked under -Kits, the compiler from the installed Visual Studio. Same flow as
 # tools\win\bc250rd\build.ps1, minus the driver and the signing.
 #
-#   pwsh tools\win\bc250kmd_cli\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd_cli
+#   pwsh tools\win\bc250kmd_cli\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250kmd_cli
 
 param(
     [Parameter(Mandatory)][string]$Kits,
@@ -28,6 +28,12 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     Write-Warning 'python not found, skipping test_stages.py (stage table against driver/kmd/bc250kmd.h)'
 }
 
+# Host tests of the exports bc250control.dll gives the monitor, with the D3DKMT calls replaced: no adapter is
+# opened and no escape is sent. Each throws on a failure, so no DLL is built past one.
+foreach ($test in 'test-start-health.ps1', 'test-confirm.ps1', 'test-telemetry.ps1') {
+    & (Join-Path $here $test) -Out (Join-Path $Out ('tests\' + [IO.Path]::GetFileNameWithoutExtension($test)))
+}
+
 $env:INCLUDE = ''; $env:LIB = ''
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
@@ -37,5 +43,13 @@ $env:INCLUDE = ''; $env:LIB = ''
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
+
+# The monitor uses the same adapter selection and typed request code in-process.
+& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+    "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
+    "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250control.obj", "/Fe$Out\bc250control.dll",
+    (Join-Path $here 'bc250kmd_cli.c'), '/link', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64", 'gdi32.lib', 'setupapi.lib', 'advapi32.lib')
+if ($LASTEXITCODE -ne 0) { throw "control DLL build failed ($LASTEXITCODE)" }
 
 Get-Item "$Out\bc250kmd_cli.exe" | ForEach-Object { '{0,9}  {1}' -f $_.Length, $_.Name }

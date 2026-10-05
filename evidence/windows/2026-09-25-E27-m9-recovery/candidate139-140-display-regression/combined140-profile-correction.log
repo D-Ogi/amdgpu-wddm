@@ -1,0 +1,39 @@
+
+
+EnableMmio        : 0
+EnableNativeSmu   : 1
+EnableVram        : 0
+EnableGart        : 0
+EnablePsp         : 0
+EnableGfx         : 0
+StageHistory      : 10 20 30 31 32 33 34 91 
+UnconfirmedStarts : 1
+
+
+
+Microsoft PnP Utility
+
+[private instance identifier redacted]
+Device disabled successfully.
+
+Microsoft PnP Utility
+
+[private instance identifier redacted]
+Device enabled successfully.
+
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+[private instance identifier redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+[private instance identifier redacted]
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x0007008C (milestone 7 revision 140)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 0, flips 1 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+UnconfirmedStarts = 0
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66500 ready=1
+full140_profile_ready=2026-09-25T00:03:32

@@ -1,0 +1,16 @@
+M217 actual-walker virtual Fill dependency, 2026-09-23.
+Base commit in base-commit.txt plus dirty working tree; source snapshots included.
+Procedure in E27 README written before test. No production code changed this turn.
+Actual WddmMemoryLayout/VidMmStartLayout and CPU_VIRTUAL table initialization create
+four-level hierarchy: VA10000 maps leaf-table page4, VA11000 maps page5. Rootpage1.
+Zero Fill8192 bytes first targets page4, removing both mappings from the logical
+view; next real walker translation refuses. Exactly4096 bytes/one5-DWORD command
+and private record remain published. Input command offset restored. Zero-capacity
+positive refusal leaves mapping/DMA intact. Live retained table still resolves until
+independent host application of decoded first fill zeroes that memory page.
+Normal9127 checks/0 failures (21 new). Omitted logical commits602 failures, exit1,
+including3 new dependency/prefix assertions. This control is expected to fail.
+No full build rerun: KMD sources/package0785 unchanged from M216. No lab access,
+deployment/reboot/USB change or redaction. Field-level OS models, actual local
+walker code, modeled memory execution; not evidence of GPU execution, real OS
+self-mapping requests, or construction concurrency/recovery acceptance.

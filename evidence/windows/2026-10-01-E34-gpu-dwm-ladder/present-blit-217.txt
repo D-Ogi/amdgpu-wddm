@@ -1,0 +1,2 @@
+kmd 492356   3765.319 wddm: GPU Present calls110 records110 rotate64 refused0
+kmd 492359   3765.319 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous

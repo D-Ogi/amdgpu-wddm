@@ -1,0 +1,209 @@
+bc250kmd 0x00070069 log snapshot: 161 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.004 stage 10
+     1      0.004 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.004 stage 20
+     3      0.074 stage 30
+     4      0.074 stage 31
+     5      0.076 stage 32
+     6      0.076 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.076 stage 33
+     8      0.076 stage 34
+     9      0.076 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.076 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.076 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.076 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.076 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.076 gart: ready, dummy page at 0x26FFFA000
+    15      0.076 psp: ready
+    16      0.076 gpumem: ready, doorbells at 0xD0000000
+    17      0.076 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.076 ih: ready
+    19      0.078 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.080 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.080 startup: entering interrupt connection
+    22      0.082 startup: entering firmware preparation
+    23      0.085 startup: entering GART initialization
+    24      0.097 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.097 startup: entering PSP initialization
+    26      0.165 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.165 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 264 us, in TMR at 0x0
+    28      0.167 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    29      0.169 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1904 us, in TMR at 0x0
+    30      0.175 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5881 us, in TMR at 0xF5FF842000
+    31      0.179 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF883000
+    32      0.185 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5905 us, in TMR at 0xF5FF8C4000
+    33      0.191 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5955 us, in TMR at 0xF5FF800000
+    34      0.191 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.197 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5955 us, in TMR at 0xF5FF800000
+    36      0.199 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.199 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1686 us, in TMR at 0x0
+    38      0.199 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.199 startup: entering IH initialization
+    40      0.201 ih: init: rc 0, 20 writes
+    41      0.201 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.201 startup: entering GFX initialization
+    43      0.203 startup: entering GFX stage 1
+    44      0.207 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.207 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.209 startup: entering GFX stage 2
+    47      0.211 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+    48      0.211 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.211 startup: entering GFX stage 3
+    50      0.213 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 4 us
+    51      0.213 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.215 startup: entering GFX stage 4
+    53      0.215 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+    54      0.215 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.217 startup: entering GFX stage 5
+    56      0.219 gfx: stage 5 (RLC): rc 0, 8 writes so far, 134 us
+    57      0.219 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.219 startup: entering GFX stage 6
+    59      0.221 startup: entering CP step 1
+    60      0.221 startup: CP1 checkpoint acquire-paging-lock
+    61      0.223 startup: CP1 checkpoint acquire-gart-lock
+    62      0.225 startup: CP1 checkpoint locks-acquired
+    63      0.225 amdgpu[0]: CP resume kiq-init begin
+
+    64      0.225 startup: CP1 checkpoint scheduler
+    65      0.227 startup: CP1 checkpoint scheduler-read
+    66      0.229 startup: CP1 checkpoint scheduler-write
+    67      0.229 startup: CP1 checkpoint scheduler-done
+    68      0.231 startup: CP1 checkpoint clear-mqd
+    69      0.231 startup: CP1 checkpoint select-queue
+    70      0.233 startup: CP1 checkpoint build-mqd
+    71      0.235 startup: CP1 checkpoint disable-wptr-poll
+    72      0.237 startup: CP1 checkpoint read-active
+    73      0.237 startup: CP1 checkpoint program-hqd
+    74      0.239 startup: CP1 checkpoint activate-hqd
+    75      0.241 startup: CP1 checkpoint restore-selection
+    76      0.241 startup: CP1 checkpoint complete
+    77      0.243 amdgpu[0]: CP resume kiq-init end result=0
+
+    78      0.243 gfx: CP step 1: rc 0, 27 writes, 18263 us
+    79      0.243 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+    80      0.243 startup: CP step 1 returned 0x00000000 result 0
+    81      0.245 startup: entering CP step 2
+    82      0.247 amdgpu[0]: CP resume compute-unhalt begin
+
+    83      0.247 amdgpu[0]: CP resume compute-unhalt end
+
+    84      0.247 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    85      0.247 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    86      0.247 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    87      0.247 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    88      0.247 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    89      0.247 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    90      0.247 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    91      0.247 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    92      0.247 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    93      0.247 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    94      0.247 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    95      0.247 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    96      0.247 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    97      0.247 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    98      0.247 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    99      0.247 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   100      0.247 gfx: CP step 2: rc 0, 17 writes, 234 us
+   101      0.247 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   102      0.247 startup: CP step 2 returned 0x00000000 result 0
+   103      0.249 startup: entering CP step 3
+   104      0.249 amdgpu[0]: CP resume kcq-enable begin
+
+   105      0.249 amdgpu[0]: CP resume kcq-enable end result=0
+
+   106      0.249 gfx: CP step 3: rc 0, 1 writes, 52 us
+   107      0.249 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   108      0.249 startup: CP step 3 returned 0x00000000 result 0
+   109      0.251 startup: entering CP step 4
+   110      0.253 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   111      0.253 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   112      0.253 gfx: CP step 4: rc 0, 4 writes, 28 us
+   113      0.253 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   114      0.253 startup: CP step 4 returned 0x00000000 result 0
+   115      0.255 startup: entering CP step 5
+   116      0.255 amdgpu[0]: CP resume kgq-enable begin
+
+   117      0.255 amdgpu[0]: CP resume kgq-enable end result=0
+
+   118      0.255 gfx: CP step 5: rc 0, 1 writes, 21 us
+   119      0.255 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   120      0.255 startup: CP step 5 returned 0x00000000 result 0
+   121      0.257 startup: entering CP step 6
+   122      0.259 amdgpu[0]: CP resume gfx-start begin
+
+   123      0.259 amdgpu[0]: CP resume gfx-start end result=0
+
+   124      0.259 gfx: CP step 6: rc 0, 3 writes, 24 us
+   125      0.259 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   126      0.259 startup: CP step 6 returned 0x00000000 result 0
+   127      0.259 startup: entering CP step 7
+   128      0.261 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   129      0.261 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   130      0.261 gfx: CP step 7: rc 0, 1 writes, 14 us
+   131      0.261 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   132      0.261 startup: CP step 7 returned 0x00000000 result 0
+   133      0.263 startup: entering CP step 8
+   134      0.265 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   135      0.265 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   136      0.265 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   137      0.265 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   138      0.265 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   139      0.265 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   140      0.265 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   141      0.265 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   142      0.265 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   143      0.265 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   144      0.265 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   145      0.265 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   146      0.265 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   147      0.265 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   148      0.265 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   149      0.265 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   150      0.265 gfx: CP step 8: rc 0, 8 writes, 69 us
+   151      0.265 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   152      0.265 startup: CP step 8 returned 0x00000000 result 0
+   153      0.267 startup: entering GFX stage 7
+   154      0.269 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 91 us
+   155      0.269 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   156      0.269 startup: entering GFX stage 8
+   157      0.271 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   158      0.271 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   159      0.271 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   160      0.273 startup: both engines ready

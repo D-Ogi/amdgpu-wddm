@@ -1,0 +1,144 @@
+{
+  "sleep": "2026-09-25T01:40:18.4463969Z",
+  "wake": "2026-09-25T01:42:37.9285530Z",
+  "effective_state": "5",
+  "samples": 343,
+  "trailing_nul_bytes_excluded": 139,
+  "groups": {
+    "before": {
+      "samples": 12,
+      "Cpu": {
+        "min": 0.0,
+        "median": 2.0,
+        "max": 18.0,
+        "p95": 18.0
+      },
+      "Dpc": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0,
+        "p95": 0.0
+      },
+      "Irq": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0,
+        "p95": 0.0
+      },
+      "Interrupts": {
+        "min": 1610.0,
+        "median": 2587.0,
+        "max": 21308.0,
+        "p95": 21308.0
+      },
+      "AvailableMB": {
+        "min": 4644.0,
+        "median": 4731.5,
+        "max": 4753.0,
+        "p95": 4753.0
+      },
+      "PagesIn": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0,
+        "p95": 0.0
+      },
+      "PagesOut": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0,
+        "p95": 0.0
+      }
+    },
+    "after": {
+      "samples": 329,
+      "Cpu": {
+        "min": 0.0,
+        "median": 3.0,
+        "max": 100.0,
+        "p95": 23.0
+      },
+      "Dpc": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 1.0,
+        "p95": 0.0
+      },
+      "Irq": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 1.0,
+        "p95": 0.0
+      },
+      "Interrupts": {
+        "min": 1638.0,
+        "median": 2788.0,
+        "max": 68504.0,
+        "p95": 8864.0
+      },
+      "AvailableMB": {
+        "min": 3808.0,
+        "median": 4649.0,
+        "max": 4744.0,
+        "p95": 4735.0
+      },
+      "PagesIn": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 158367.0,
+        "p95": 434.0
+      },
+      "PagesOut": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0,
+        "p95": 0.0
+      }
+    },
+    "after30s": {
+      "samples": 318,
+      "Cpu": {
+        "min": 0.0,
+        "median": 3.0,
+        "max": 100.0,
+        "p95": 22.0
+      },
+      "Dpc": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 1.0,
+        "p95": 0.0
+      },
+      "Irq": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 1.0,
+        "p95": 0.0
+      },
+      "Interrupts": {
+        "min": 1638.0,
+        "median": 2728.0,
+        "max": 68504.0,
+        "p95": 8772.0
+      },
+      "AvailableMB": {
+        "min": 3808.0,
+        "median": 4643.0,
+        "max": 4744.0,
+        "p95": 4735.0
+      },
+      "PagesIn": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 158367.0,
+        "p95": 410.0
+      },
+      "PagesOut": {
+        "min": 0.0,
+        "median": 0.0,
+        "max": 0.0,
+        "p95": 0.0
+      }
+    }
+  }
+}

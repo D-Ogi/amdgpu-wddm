@@ -1,0 +1,7 @@
+{
+    "status":  "recovery-required",
+    "elapsed":  115.1058601,
+    "logging_restored":  true,
+    "reason":  "restore-unverified",
+    "restored":  false
+}

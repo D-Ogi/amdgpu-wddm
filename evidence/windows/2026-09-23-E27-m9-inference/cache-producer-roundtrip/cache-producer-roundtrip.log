@@ -1,0 +1,9 @@
+compile and link (host, contract header, /Zp8)
+  Generowanie kodu...
+run
+cache policy:4096 heap/flag/alignment cases passed if final verdict passes
+umd_blob_test: all cases passed
+actual Mesa producer roundtrip: 4096 cases, 0 failures
+compile-check (kernel flags, reader only, no contract header, no link)
+
+umd_blob_test.exe exit code 0
