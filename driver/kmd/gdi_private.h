@@ -99,7 +99,8 @@ static __inline int WddmSurfaceGeometry(const BC250_WDDM_ALLOCATION_PRIVATE* Sur
     if (!Type) {
         /* Legacy UMD producers may add pitch/row padding. Bound the footprint,
          * but do not require the standard-GDI producer's exact layout. The
-         * bytes of a pixel are the format row's: 4, or 8 for an FP16 buffer. */
+         * bytes of a pixel are the format row's: 4, 8 for an FP16 buffer, 1 for
+         * an A8 atlas. */
         return DcnLinearSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,Bpp,&size) &&
             Surface->Size>=size;
     }

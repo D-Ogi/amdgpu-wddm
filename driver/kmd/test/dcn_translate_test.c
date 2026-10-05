@@ -139,6 +139,7 @@ static void SurfaceFormats(void)
     static const unsigned long widths[]={1,3,64,127,1366,1920}, heights[]={1,3,79,1080};
     BC250_WDDM_ALLOCATION_PRIVATE s={0};
     unsigned long f,t,rule,bpp,accepted=0,refused=0,accepted31=0,refused31=0,accepted113=0,refused113=0;
+    unsigned long accepted28=0,refused28=0;
     unsigned long long bytes;
     unsigned int i,j;
     int rgb10,rgba8;
@@ -166,7 +167,8 @@ static void SurfaceFormats(void)
             s.Format=f;
             /* The table's changes are type 0 only: A2B10G10R10 (DXGI
              * R10G10B10A2) at 4 bytes a pixel, admitted wherever A8B8G8R8 is,
-             * and A16B16G16R16F (DXGI R16G16B16A16_FLOAT) at 8. */
+             * A16B16G16R16F (DXGI R16G16B16A16_FLOAT) at 8, and A8 (DXGI
+             * A8_UNORM) at the 1 byte it always had at the GDI types. */
             bpp=f==113 && !t ? 8 : PixelBytesBeforeTable(f==31 && !t ? 32 : f);
             CHECK(WddmSurfaceAdmitted(&s,t)==WddmSurfaceGeometry(&s,t,bpp));
             if (WddmSurfaceAdmitted(&s,t)) accepted++; else refused++;
@@ -179,8 +181,16 @@ static void SurfaceFormats(void)
         s.Format=113;
         CHECK(WddmSurfaceAdmitted(&s,t)==(!t && DcnLinearSurfaceBytes(s.Width,s.Height,s.Pitch,8,&bytes) && s.Size>=bytes));
         if (!t) { if (WddmSurfaceAdmitted(&s,t)) accepted113++; else refused113++; }
+        /* A8 at type 0 wherever the pitch holds a byte a pixel and the size covers it (195). */
+        s.Format=28;
+        if (!t) {
+            CHECK(WddmSurfaceAdmitted(&s,0)==(DcnLinearSurfaceBytes(s.Width,s.Height,s.Pitch,1,&bytes) && s.Size>=bytes));
+            if (WddmSurfaceAdmitted(&s,0)) accepted28++; else refused28++;
+        }
     }
-    CHECK(accepted && refused && accepted31 && refused31 && accepted113 && refused113);
+    CHECK(accepted && refused && accepted31 && refused31 && accepted113 && refused113 && accepted28 && refused28);
+    CHECK(WddmSurfaceFormatBpp(28,BC250_SURFACE_COMPOSED)==1 && WddmSurfaceFormatBpp(28,BC250_SURFACE_GDI)==1);
+    CHECK(!WddmSurfaceFormatBpp(28,BC250_SURFACE_SCANOUT));
     CHECK(WddmSurfaceFormatBpp(31,BC250_SURFACE_COMPOSED)==4);
     CHECK(!WddmSurfaceFormatBpp(31,BC250_SURFACE_GDI) && !WddmSurfaceFormatBpp(31,BC250_SURFACE_SCANOUT));
     CHECK(WddmSurfaceFormatBpp(113,BC250_SURFACE_COMPOSED)==8);
@@ -192,25 +202,36 @@ static void SurfaceFormats(void)
     CHECK(DcnLinearSurfaceBytes(256,64,2056,8,&bytes) && bytes==2056ull*64u);
     CHECK(DcnLinearSurfaceBytes(256,64,1024,4,&bytes) && bytes==65536ull);
     CHECK(!DcnLinearSurfaceBytes(256,64,2048,2,&bytes) && !DcnLinearSurfaceBytes(256,64,2048,16,&bytes));
+    /* The 1-byte geometry (A8): the row inside the pitch. Task Manager's 32x32 atlas has pitch 256. */
+    CHECK(DcnLinearSurfaceBytes(32,32,256,1,&bytes) && bytes==8192ull);
+    CHECK(DcnLinearSurfaceBytes(256,64,256,1,&bytes) && bytes==16384ull);
+    CHECK(DcnLinearSurfaceBytes(255,3,257,1,&bytes) && bytes==771ull);
+    CHECK(!DcnLinearSurfaceBytes(257,64,256,1,&bytes) && !bytes);
     CHECK(DcnSurfaceBytes(256,64,1024,&bytes) && bytes==65536ull && !DcnSurfaceBytes(256,64,1020,&bytes));
-    /* One 1080p DXGI shared surface: the 4-byte formats in, the unknown ones
-     * (A2R10G10B10, A2B10G10R10_XR_BIAS, UNKNOWN) out, and A16B16G16R16F out
-     * at a 4-byte pitch. At an 8-byte pitch only A16B16G16R16F is new. */
+    /* One 1080p DXGI shared surface: the 4-byte formats and A8 in, the unknown
+     * ones (A2R10G10B10, A2B10G10R10_XR_BIAS, UNKNOWN) out, and A16B16G16R16F
+     * out at a 4-byte pitch. At an 8-byte pitch only A16B16G16R16F is new. */
     s.Width=1920;s.Height=1080;s.Pitch=7680;s.Size=7680ull*1080u;
     for(f=0;f<256;f++) {
         s.Format=f;
-        if (f==21 || f==22 || f==31 || f==32 || f==33) CHECK(WddmSurfaceAdmitted(&s,0));
+        if (f==21 || f==22 || f==28 || f==31 || f==32 || f==33) CHECK(WddmSurfaceAdmitted(&s,0));
         if (f==0 || f==35 || f==113 || f==119) CHECK(!WddmSurfaceAdmitted(&s,0));
     }
     s.Pitch=15360;s.Size=15360ull*1080u;
     for(f=0;f<256;f++) {
         s.Format=f;
-        if (f==21 || f==22 || f==31 || f==32 || f==33 || f==113) CHECK(WddmSurfaceAdmitted(&s,0));
+        if (f==21 || f==22 || f==28 || f==31 || f==32 || f==33 || f==113) CHECK(WddmSurfaceAdmitted(&s,0));
         if (f==0 || f==35 || f==119) CHECK(!WddmSurfaceAdmitted(&s,0));
     }
     s.Format=113;s.Size=15360ull*1080u-1u;CHECK(!WddmSurfaceAdmitted(&s,0));
     s.Size=15360ull*1080u;CHECK(!WddmSurfaceAdmitted(&s,1) && !WddmSurfaceAdmitted(&s,2));
     CHECK(!WddmSurfaceAdmitted(0,0));
+    /* A8 at its own pitch (1920 bytes rounded up to 2048, the D3D11 shell's layout): only A8 fits, and
+     * never as a GDI type with that layout. */
+    s.Pitch=2048;s.Size=2048ull*1080u;
+    for(f=0;f<256;f++) { s.Format=f;CHECK(WddmSurfaceAdmitted(&s,0)==(f==28)); }
+    s.Format=28;CHECK(!WddmSurfaceAdmitted(&s,2) && !WddmSurfaceAdmitted(&s,4));
+    s.Size=2048ull*1080u-1u;CHECK(!WddmSurfaceAdmitted(&s,0));
 }
 
 int main(void)
@@ -261,7 +282,8 @@ int main(void)
     gdi.Surface.Width=3;gdi.Surface.Height=3;
     gdi.Surface.Pitch=256;gdi.Surface.Size=1024;
     CHECK(WddmSurfaceGeometry(&gdi.Surface,0,4)); /* legacy padded UMD */
-    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,1));
+    CHECK(WddmSurfaceGeometry(&gdi.Surface,0,1)); /* a composed A8 surface, the same layout */
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,2)); /* no 2-byte composed row */
     gdi.Surface.Size=767;CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
     gdi.Surface.Size=~0ull;CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
     gdi.Surface.Size=1024;gdi.Surface.Version=2;

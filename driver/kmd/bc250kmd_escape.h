@@ -36,9 +36,10 @@
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
 #define BC250_KMD_VERSION 0x000700CFu       // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
-                                            // carries two changes that were written apart as 0.7.206.1 and
-                                            // 0.7.206.2, and neither of those two revisions was ever
-                                            // deployed. The train keeps both and takes the next number.
+                                            // carries three changes that were written apart as 0.7.195.1,
+                                            // 0.7.206.1 and 0.7.206.2. None of those three revisions was
+                                            // ever deployed. The train keeps all three and takes the next
+                                            // number.
                                             //
                                             // (a) M15.14, the first revision in which an application's own
                                             // swap-chain buffer can be scanned out. SetVidPnSourceAddress no
@@ -79,6 +80,16 @@
                                             // 160-byte ABI 1 request. RUN_DPM_TUNE is unchanged
                                             // (ABI 2, 152 bytes), and a runtime tune floor still has
                                             // to be 1000 MHz or more.
+                                            //
+                                            // (c) Composed A8 surfaces (M14.1). The shared table's A8 row
+                                            // (D3DDDIFMT_A8) carries COMPOSED at 1 byte a pixel and
+                                            // DcnLinearSurfaceBytes takes 1-byte pixels, so a type-0 LB7A A8
+                                            // surface (the shared atlases DirectComposition creates, Task
+                                            // Manager's 32x32 A8 render target) is created and opened. GDI
+                                            // types keep their own set; Present Blt and scan-out still refuse
+                                            // A8. No escape struct or journal layout changed for this change
+                                            // either. The change was written as revision 195 on 0.7.194.1 and
+                                            // was never deployed, so it rides the train too.
                                             //
                                             // revision 205 (INF 0.7.205.1, on 204): the clock table gains
                                             // two thermal-only points below the lab floor, 900 and
