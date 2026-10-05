@@ -142,8 +142,11 @@ void Log(const char *format, ...)
 // with the same text. With no debugger attached a vectored handler sees both first; it only copies into preallocated
 // slots, FlushOds writes them out. This is where the D3D11 shell's "M14 ..." lines, the D3D12 shell's
 // "amdgpu_wddm_d3d12 failure ..." lines and the runtimes' "Removing Device" lines of this process arrive.
+// 640 bytes a slot, because that is the longest line the driver sends: amdgpu_wddm_d3d12's ddi_refusal formats
+// into char[640] and engine-ddi's log_refusal into char[540]. At 480 the tail of a CreateHeapAndResource refusal
+// (castable count, base resource, offset) was cut off, which is exactly the part a shared-resource trial reads.
 static const LONG OdsSlots = 4096;
-static char g_ods[OdsSlots][480];
+static char g_ods[OdsSlots][640];
 static volatile LONG g_odsReady[OdsSlots];
 static volatile LONG g_odsNext = 0;
 static LONG g_odsWritten = 0;
