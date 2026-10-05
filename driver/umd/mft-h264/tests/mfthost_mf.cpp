@@ -288,8 +288,16 @@ HRESULT H264Decoder::PullAll()
             m_lastError = L"ProcessOutput";
             return hr;
         }
+        // A sample we allocated is still owned by `allocated`: taking it over with Attach released it
+        // twice, a use after free that ended a 1080p 600-picture run at picture 421 on unit A (a pure
+        // virtual call in the freed sample). Only a sample the decoder provided carries a reference of
+        // its own.
         ComPtr<IMFSample> sample;
-        sample.Attach(buf.pSample);
+        if (buf.pSample == allocated.Get()) {
+            sample.CopyFrom(buf.pSample);
+        } else {
+            sample.Attach(buf.pSample);
+        }
         if (buf.pEvents != nullptr) {
             buf.pEvents->Release();
         }
@@ -1659,8 +1667,14 @@ HRESULT RunInboxEncoder(const Options& o, const std::vector<std::vector<uint8_t>
             if (FAILED(h)) {
                 return h;
             }
+            // The same ownership rule as H264Decoder::PullAll: a sample we allocated stays owned by
+            // `allocated`, so it is copied, not taken over.
             ComPtr<IMFSample> s;
-            s.Attach(buf.pSample);
+            if (buf.pSample == allocated.Get()) {
+                s.CopyFrom(buf.pSample);
+            } else {
+                s.Attach(buf.pSample);
+            }
             if (buf.pEvents != nullptr) {
                 buf.pEvents->Release();
             }
