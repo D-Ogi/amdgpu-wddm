@@ -10,7 +10,8 @@
 # and the catalog is signed. The package holds the public .cer only.
 # manifest.json lists every file of the package with its SHA256, and every installed component with its role,
 # install location, file version and SHA256 (the control application reads it from the install root).
-# Gates: every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
+# Gates: the work ledger (no finished but unlanded work for a component of this release; override with
+# -AllowLedgerDebt -LedgerDebtReason, which is recorded in this log), every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1. Nothing here opens a window: child processes
 # run with CreateNoWindow and redirected output.
 [CmdletBinding()]
@@ -20,7 +21,9 @@ param(
     [string]$DriverVer = '0.7.205.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
     [string]$Version = '0.7.205.100-tester.11',
     [string]$KitVersion = '10.0.26100.0',
-    [string]$SetupApp                            # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
+    [string]$LedgerDebtReason                    # required with -AllowLedgerDebt: recorded in the build log
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
@@ -40,6 +43,34 @@ $sdk = Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c'
 $signtool = Join-Path $sdk "bin\$KitVersion\x64\signtool.exe"
 $inf2cat = Join-Path $wdk "bin\$KitVersion\x86\Inf2Cat.exe"
 foreach ($t in $signtool, $inf2cat) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
+
+# Work ledger gate: a release must not ship a component whose finished fix is still unlanded.
+# The ledger is a local file of the workspace (BC250_ROOT), so no path of it reaches the package or
+# the public repository. It is skipped only when the workspace has no ledger (a clean checkout
+# somewhere else), and overridden only by -AllowLedgerDebt with a reason, which is logged here.
+$ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
+if (-not (Test-Path -LiteralPath $ledgerTool)) {
+    Write-Host 'work ledger: no scratch\ledger\ledger.py in this workspace, gate skipped'
+} else {
+    Write-Host "work ledger: checking $Version against the release components"
+    $ledgerOut = & python $ledgerTool --root $Root check --release $Version 2>&1
+    $ledgerOk = ($LASTEXITCODE -eq 0)
+    $ledgerOut | ForEach-Object { "  $_" }
+    if (-not $ledgerOk) {
+        if (-not $AllowLedgerDebt) {
+            throw ("work ledger: finished but unlanded work serves a component of this release (see the " +
+                   "lines above). Land it, or build with -AllowLedgerDebt -LedgerDebtReason '<why>'.")
+        }
+        if (-not $LedgerDebtReason) {
+            throw '-AllowLedgerDebt needs -LedgerDebtReason "<why this release ships with unlanded work>"'
+        }
+        Write-Host "work ledger: DEBT ACCEPTED for $Version by -AllowLedgerDebt"
+        Write-Host "work ledger: reason: $LedgerDebtReason"
+        Write-Host "work ledger: accepted at $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')) UTC"
+    } else {
+        Write-Host 'work ledger: no unlanded work for any component of this release'
+    }
+}
 
 if (Test-Path -LiteralPath $pkg) { Remove-Item -LiteralPath $pkg -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
