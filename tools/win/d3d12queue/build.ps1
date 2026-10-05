@@ -21,10 +21,14 @@ param(
     # the back buffer before each Present and reporting DXGI's present statistics. M15.14's scan-out candidate.
     # It opens a fullscreen window and takes the foreground: run it on the lab, not unannounced elsewhere.
     [switch]$Flip,
-    # -Flip: back buffers in the chain.
+    # -Flip: the default number of back buffers in the chain. The client reads
+    # AMDGPU_WDDM_D3D12_FLIP_BUFFERS at run time and this is only the fallback, so one binary serves a
+    # 2-buffer and a 3-buffer arm.
     [ValidateRange(2, 3)][int]$FlipBuffers = 3,
-    # -Flip: frames presented, as many as the session's deadline allows.
-    [ValidateRange(1, 1200)][int]$FlipFrames = 120,
+    # -Flip: the default number of frames presented, as many as the session's deadline allows. Also a run-time
+    # value, AMDGPU_WDDM_D3D12_FLIP_FRAMES: an ETW arm needs several hundred frames, because a capture on this
+    # lab can lead by seconds before it records anything, and a two-second client can fall inside that lead.
+    [ValidateRange(1, 20000)][int]$FlipFrames = 600,
     # -Flip: ask DXGI for exclusive fullscreen on the output instead of a borderless window. A refusal is traced
     # and the run goes on borderless.
     [switch]$FlipFullscreen,

@@ -319,9 +319,15 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                                                        AMDGPU_WDDM_SURFACE_COMPOSED);
         const auto* row=composed;
         // present-cached and present-noprimary describe the opposite intent for the same buffer, so
-        // scan-out stands down rather than failing the allocation when either is also listed.
-        if(ddi_experiment("scanout-flip") && !ddi_experiment("present-cached") &&
-           !ddi_experiment("present-noprimary")){
+        // scan-out stands down rather than failing the allocation when either is also listed. The mode
+        // names its geometry ("scanout-flip-1920x1200") and only a chain of exactly that size asks:
+        // the kernel driver admits a flip at the POST geometry alone, so for any other chain the
+        // request could only end in a refusal - after this buffer had been moved into VRAM with no CPU
+        // mapping, which is a measured regression for a surface that was never eligible.
+        unsigned mode_width=0,mode_height=0;
+        if(ddi_experiment_scanout(&mode_width,&mode_height) && !ddi_experiment("present-cached") &&
+           !ddi_experiment("present-noprimary") &&
+           r->Width==mode_width && r->Height==mode_height){
             const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                                          AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
             if(direct){row=direct;surface_scanout=true;}

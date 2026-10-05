@@ -18,8 +18,28 @@
 #define INTERACTIVE_FLIP_BUFFERS 3
 #endif
 #ifndef INTERACTIVE_FLIP_FRAMES
-#define INTERACTIVE_FLIP_FRAMES 120
+// 600 frames, ten seconds at 60 Hz. The build default used to be 120, about two seconds, and an ETW
+// session on this lab has been seen to lead by 2 to 7.6 s with no events of any process (sessions
+// 397-398), so a capture around a two-second client could legitimately contain no present at all.
+#define INTERACTIVE_FLIP_FRAMES 600
 #endif
+#define INTERACTIVE_FLIP_MAX_BUFFERS 3
+
+// Both counts are read from the environment as well, so one binary serves a 2-buffer arm, a 3-buffer arm
+// and a longer ETW arm: comparing two chain depths must not mean comparing two executable hashes. A value
+// out of range, or text that is not a number, leaves the build default in place.
+inline UINT flip_count_from(const char* variable,UINT fallback,UINT low,UINT high){
+    char text[16]{};
+    const DWORD n=GetEnvironmentVariableA(variable,text,sizeof(text));
+    if(!n || n>=sizeof(text))return fallback;
+    UINT value=0;
+    for(const char* c=text;*c;++c){
+        if(*c<'0' || *c>'9')return fallback;
+        value=value*10u+UINT(*c-'0');
+        if(value>high)return fallback;
+    }
+    return value>=low?value:fallback;
+}
 
 inline LRESULT CALLBACK flip_window_proc(HWND window,UINT message,WPARAM w,LPARAM l){
     // The chain owns what is on screen; nothing is painted from the message loop. WM_CLOSE is ignored: the
@@ -28,12 +48,34 @@ inline LRESULT CALLBACK flip_window_proc(HWND window,UINT message,WPARAM w,LPARA
     return DefWindowProcW(window,message,w,l);
 }
 
+// Whatever happens between the window appearing and this function returning, the operator's screen has to
+// come back. An early return on an API refusal used to leave a black fullscreen window - and, in the
+// -FlipFullscreen build, the display in exclusive fullscreen - until the trial's Stop-Process. The guard
+// owns the window class, the window and the fullscreen state from the moment each is taken, so every
+// return path undoes them, in the right order, including the ones that return before the frame loop.
+struct FlipWindow {
+    Session* session=nullptr;
+    IDXGISwapChain3* chain=nullptr;      // not owned: the Session's own reference outlives this guard
+    HWND window=nullptr;
+    const wchar_t* window_class=nullptr;
+    HINSTANCE instance=nullptr;
+    bool fullscreen=false;
+    ~FlipWindow(){
+        if(chain && fullscreen && session)
+            session->event("after","SetFullscreenState FALSE",chain->SetFullscreenState(FALSE,nullptr));
+        if(window){ShowWindow(window,SW_HIDE);DestroyWindow(window);}
+        if(window_class && instance)UnregisterClassW(window_class,instance);
+    }
+};
+
 inline HRESULT flip(Session& s){
     if(!s.queue || !s.factory || s.pending || s.copy_success)return E_UNEXPECTED;
-    constexpr UINT buffers=INTERACTIVE_FLIP_BUFFERS,frames=INTERACTIVE_FLIP_FRAMES;
+    const UINT buffers=flip_count_from("AMDGPU_WDDM_D3D12_FLIP_BUFFERS",INTERACTIVE_FLIP_BUFFERS,2,INTERACTIVE_FLIP_MAX_BUFFERS);
+    const UINT frames=flip_count_from("AMDGPU_WDDM_D3D12_FLIP_FRAMES",INTERACTIVE_FLIP_FRAMES,1,20000);
     constexpr DXGI_FORMAT format=DXGI_FORMAT_B8G8R8A8_UNORM;
     ID3D12Device* device=s.device.Get();
     HRESULT hr=S_OK;
+    {char label[112]{};sprintf_s(label,"Flip plan: %u buffers, %u frames, present interval 1",buffers,frames);s.event("after",label);}
 
     // The output's desktop rectangle is the only size at which a scan-out candidate can match the POST mode, so
     // the client never picks a size of its own.
@@ -52,13 +94,16 @@ inline HRESULT flip(Session& s){
     WNDCLASSEXW window_class{};window_class.cbSize=sizeof(window_class);window_class.lpfnWndProc=flip_window_proc;
     window_class.hInstance=GetModuleHandleW(nullptr);window_class.lpszClassName=L"amdgpu_wddm_d3d12_queue_flip";
     window_class.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    FlipWindow guard;guard.session=&s;
     if(!RegisterClassExW(&window_class)){hr=HRESULT_FROM_WIN32(GetLastError());s.event("after","RegisterClassEx",hr);return hr;}
+    guard.window_class=window_class.lpszClassName;guard.instance=window_class.hInstance;
     // WS_POPUP with no border, exactly the output's rectangle: the borderless-fullscreen shape a game uses. No
     // WS_EX_TOPMOST, because a window that is merely always on top is not what makes a flip eligible, and a
     // topmost window would also outlive a hung session on the operator's screen.
     const HWND window=CreateWindowExW(0,window_class.lpszClassName,L"amdgpu-wddm D3D12 fullscreen flip",
         WS_POPUP,left,top,static_cast<int>(width),static_cast<int>(height),nullptr,nullptr,window_class.hInstance,nullptr);
     if(!window){hr=HRESULT_FROM_WIN32(GetLastError());s.event("after","CreateWindowEx",hr);return hr;}
+    guard.window=window;
     {char label[80]{};sprintf_s(label,"CreateWindowEx WS_POPUP %ux%u covering the output",width,height);s.event("after",label);}
     ShowWindow(window,SW_SHOW);
     s.event("after","SetForegroundWindow",SetForegroundWindow(window)?S_OK:S_FALSE);
@@ -79,11 +124,13 @@ inline HRESULT flip(Session& s){
     hr=s.api("MakeWindowAssociation",[&]{return s.factory->MakeWindowAssociation(window,DXGI_MWA_NO_ALT_ENTER);});if(FAILED(hr))return hr;
     hr=s.api("QueryInterface IDXGISwapChain3",[&]{return chain1.As(&chain);});if(FAILED(hr))return hr;
     s.extra[0]=chain;
+    guard.chain=chain.Get();
 #ifdef INTERACTIVE_FLIP_FULLSCREEN
     // Exclusive fullscreen on this output. A refusal is traced and the run goes on borderless: the mode list is
     // not this increment's business, and a borderless chain is just as eligible for a flip.
     const HRESULT fullscreen=s.api("SetFullscreenState TRUE",[&]{return chain->SetFullscreenState(TRUE,output.Get());});
     if(SUCCEEDED(fullscreen)){
+        guard.fullscreen=true;      // from here the guard owns the restore, on every return path
         hr=s.api("ResizeBuffers after SetFullscreenState",[&]{return chain->ResizeBuffers(buffers,width,height,format,desc.Flags);});
         if(FAILED(hr))return hr;
     }
@@ -97,7 +144,7 @@ inline HRESULT flip(Session& s){
     hr=s.api("CreateDescriptorHeap RTV",[&]{return device->CreateDescriptorHeap(&views,IID_PPV_ARGS(&view_heap));});if(FAILED(hr))return hr;
     s.extra[1]=view_heap;
     const UINT increment=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    ComPtr<ID3D12Resource> back[buffers];
+    ComPtr<ID3D12Resource> back[INTERACTIVE_FLIP_MAX_BUFFERS];
     for(UINT i=0;i<buffers;++i){
         char label[32]{};sprintf_s(label,"GetBuffer %u",i);
         hr=s.api(label,[&]{return chain->GetBuffer(i,IID_PPV_ARGS(&back[i]));});if(FAILED(hr))return hr;
@@ -267,14 +314,12 @@ inline HRESULT flip(Session& s){
             after_stats.SyncRefreshCount-before_stats.SyncRefreshCount,indices_seen,buffers);
         s.event("after",label);
     }
+    {char label[144]{};sprintf_s(label,"Render window %llu ms to %llu ms of the session (%llu ms)",
+        render_start-s.start,GetTickCount64()-s.start,render_ms);s.event("after",label);}
     {char label[112]{};sprintf_s(label,"Frames per second %llu.%02llu over %llu ms",
         render_ms?presented*1000ull/render_ms:0ull,render_ms?presented*100000ull/render_ms%100ull:0ull,render_ms);
      s.event("after",label);}
 
-#ifdef INTERACTIVE_FLIP_FULLSCREEN
-    // The desktop must come back before the chain is released, whatever happened above.
-    s.event("after","SetFullscreenState FALSE",chain->SetFullscreenState(FALSE,nullptr));
-#endif
     CloseHandle(completed_event);
     const HRESULT removed=device->GetDeviceRemovedReason();
     s.event("after","GetDeviceRemovedReason at the end",removed);
@@ -286,6 +331,5 @@ inline HRESULT flip(Session& s){
     if(SUCCEEDED(hr) && (presented!=frames || mismatched || refused))hr=E_FAIL;
     {char label[144]{};sprintf_s(label,"Fullscreen flip: %u of %u frames presented exact at %ux%u in %u buffers",
         presented,frames,width,height,buffers);s.event("after",label,hr);}
-    ShowWindow(window,SW_HIDE);
-    s.copy_success=hr==S_OK;return hr;
+    s.copy_success=hr==S_OK;return hr;   // the guard restores the desktop and takes the window down
 }

@@ -35,6 +35,30 @@ int main() {
     assert(!native12::ddi_experiment_listed("", "a"));
     assert(!native12::ddi_experiment_listed(nullptr, "a"));
 
+    // M15.14: the scan-out mode carries the geometry it is for in its own token, and nothing else is
+    // the scan-out mode. A bare "scanout-flip" asks for nothing, so an operator who forgets the mode
+    // gets the registered composed path rather than a chain moved into VRAM for a flip that the kernel
+    // driver would refuse at every present.
+    unsigned width = 0, height = 0;
+    assert(native12::ddi_experiment_scanout("scanout-flip-1920x1200", &width, &height));
+    assert(width == 1920 && height == 1200);
+    width = height = 0;
+    assert(native12::ddi_experiment_scanout("raytracing-tier,scanout-flip-1280x720,present-cached", &width, &height));
+    assert(width == 1280 && height == 720);
+    for (const char* refused : {"scanout-flip", "scanout-flip-", "scanout-flip-1920", "scanout-flip-1920x",
+                                "scanout-flip-x1200", "scanout-flip-0x1200", "scanout-flip-1920x0",
+                                "scanout-flip-1920x1200x2", "scanout-flip-1920-1200", "scanout-flip-123456x1200",
+                                "scanout-flip-1920x1200-", "ascanout-flip-1920x1200", "", "a,b"}) {
+        width = height = 7;
+        assert(!native12::ddi_experiment_scanout(refused, &width, &height));
+        assert(width == 7 && height == 7);   // a refusal writes neither output
+    }
+    assert(!native12::ddi_experiment_scanout(nullptr, &width, &height));
+    assert(!native12::ddi_experiment_scanout("scanout-flip-1920x1200", nullptr, &height));
+    assert(!native12::ddi_experiment_scanout("scanout-flip-1920x1200", &width, nullptr));
+    // The token is also syntax the experiment reader accepts, so it can actually be set.
+    assert(detail::experiment_syntax("scanout-flip-1920x1200"));
+
     // The profile key: the image file name after the last separator, either kind.
     wchar_t key[128]{};
     assert(detail::application_profile_key(L"C:\\Games\\bin\\x64_dx12\\witcher3.exe", key, 128));
