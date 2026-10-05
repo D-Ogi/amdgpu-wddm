@@ -233,6 +233,30 @@ class TestNormalize(unittest.TestCase):
         self.assertEqual(rc.normalize_log_lines(MINIMAL), rc.normalize_log_lines(later))
 
 
+class TestObjectsSummary(unittest.TestCase):
+    """One line up to KMD 0.7.206, two from 0.7.207 on (BD-070): both read the same."""
+
+    ONE = MINIMAL[:7] + [
+        "    14      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1 "
+        "alloc 7/6, 3 alive",
+    ]
+    TWO = MINIMAL[:7] + [
+        "    14      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1, "
+        "3 alive",
+        "    15      0.300 wddm summary: objects created/destroyed: alloc 7/6",
+    ]
+
+    def test_one_line_and_two_lines_agree(self):
+        for lines in (self.ONE, self.TWO):
+            pairs, alive = run_from(lines).objects_summary
+            self.assertEqual(pairs, {"dev": (2, 2), "ctx": (1, 1), "proc": (1, 1),
+                                     "alloc": (7, 6)})
+            self.assertEqual(alive, 3)
+
+    def test_no_summary_at_all(self):
+        self.assertEqual(run_from(MINIMAL[:7]).objects_summary, (None, None))
+
+
 class TestDiffSynthetic(unittest.TestCase):
     def test_identical_runs(self):
         diff = rc.Difference(run_from(MINIMAL), run_from(MINIMAL))
