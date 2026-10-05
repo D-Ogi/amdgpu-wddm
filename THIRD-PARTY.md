@@ -22,6 +22,7 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 |---|---|
 | AMD GPU firmware (`cyan_skillfish2_*.bin`) | AMD redistributable-binary license. The user obtains it from `linux-firmware` |
 | `ZEROAESQUERDA/BC250-windowsDriverTest` | No license granted |
+| `bc250-encoding-decoding-fix` (GPL-3.0-only): read for its per-stage profile of a compute H.264 encoder on this silicon, while writing `driver/umd/mft-h264` | GPL-3.0-only, which our license cannot take. No code, no shader and no table of it is here. The shared tables are the published values of ITU-T Rec. H.264 clauses 9.1.2, 9.2 and 8-16/8-17, entered from the standard. Recorded in `driver/umd/mft-h264/PROVENANCE.md` |
 
 ## Candidates for borrowing later (not yet imported)
 

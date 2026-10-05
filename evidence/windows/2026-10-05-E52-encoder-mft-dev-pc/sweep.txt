@@ -1,0 +1,70 @@
+64x48 f1 gop1 qp6                                    PASS exact 1/1  PSNR(Y)  62.51 dB     187680 bit/s    1.13 ms
+64x48 f1 gop1 qp26                                   PASS exact 1/1  PSNR(Y)  45.88 dB      58320 bit/s    1.19 ms
+64x48 f1 gop1 qp51                                   PASS exact 1/1  PSNR(Y)  32.45 dB      33840 bit/s    2.34 ms
+64x48 f8 gop8 qp26                                   PASS exact 8/8  PSNR(Y)  47.38 dB      63210 bit/s    0.87 ms
+64x48 f8 gop60 qp26 --deblock                        PASS exact 8/8  PSNR(Y)  50.29 dB      62190 bit/s    0.92 ms
+64x48 f8 gop60 qp26 --deblock --still                PASS exact 8/8  PSNR(Y)  49.85 dB       9180 bit/s    0.98 ms
+176x144 f10 gop60 qp40 --deblock                     PASS exact 10/10  PSNR(Y)  37.20 dB     177720 bit/s    1.19 ms
+320x240 f6 gop3 qp18 --deblock                       PASS exact 6/6  PSNR(Y)  49.28 dB    1378040 bit/s    1.77 ms
+320x240 f6 gop60 qp26 --deblock --cbr --bitrate 1500000 PASS exact 6/6  PSNR(Y)  46.30 dB     823440 bit/s    1.63 ms
+352x288 f4 gop60 qp26 --deblock --gpu-source         PASS exact 4/4  PSNR(Y)  45.03 dB    1003380 bit/s    1.96 ms
+352x288 f4 gop60 qp26 --deblock --nv12-sys           PASS exact 4/4  PSNR(Y)  46.11 dB    1046820 bit/s    1.84 ms
+176x144 f3 gop60 qp32 --nv12-sys                     PASS exact 3/3  PSNR(Y)  43.26 dB     233040 bit/s    1.21 ms
+1280x720 f3 gop60 qp26 --deblock --nv12-sys          PASS exact 3/3  PSNR(Y)  46.11 dB    9746720 bit/s    6.61 ms
+640x480 f4 gop60 qp26                                PASS exact 4/4  PSNR(Y)  45.82 dB    3038640 bit/s    2.64 ms
+640x480 f4 gop60 qp26 --deblock                      PASS exact 4/4  PSNR(Y)  45.91 dB    3064020 bit/s    3.57 ms
+640x480 f4 gop60 qp34 --deblock                      PASS exact 4/4  PSNR(Y)  40.91 dB    2290500 bit/s    3.59 ms
+640x480 f6 gop60 qp26 --deblock --still              PASS exact 6/6  PSNR(Y)  47.35 dB     593560 bit/s    2.66 ms
+640x482 f3 gop60 qp26 --deblock                      PASS exact 3/3  PSNR(Y)  45.60 dB    3299360 bit/s    3.55 ms
+638x478 f3 gop60 qp26 --deblock                      PASS exact 3/3  PSNR(Y)  45.56 dB    3184480 bit/s    3.44 ms
+1280x720 f4 gop60 qp26 --deblock                     PASS exact 4/4  PSNR(Y)  46.60 dB    9133500 bit/s    6.39 ms
+1280x720 f4 gop60 qp26 --deblock --gpu-source        PASS exact 4/4  PSNR(Y)  44.38 dB   10079880 bit/s    6.38 ms
+1920x1080 f3 gop60 qp30 --deblock                    PASS exact 3/3  PSNR(Y)  43.79 dB   17830800 bit/s   11.67 ms
+320x240 f3 gop60 qp6 --deblock                       PASS exact 3/3  PSNR(Y)  55.74 dB    2131040 bit/s    2.22 ms
+320x240 f3 gop60 qp7 --deblock                       PASS exact 3/3  PSNR(Y)  58.04 dB    2025280 bit/s    1.98 ms
+320x240 f3 gop60 qp8 --deblock                       PASS exact 3/3  PSNR(Y)  63.70 dB    1887440 bit/s    2.02 ms
+320x240 f3 gop60 qp9 --deblock                       PASS exact 3/3  PSNR(Y)  59.90 dB    1914240 bit/s    1.95 ms
+320x240 f3 gop60 qp10 --deblock                      PASS exact 3/3  PSNR(Y)  59.94 dB    1745680 bit/s    2.41 ms
+320x240 f3 gop60 qp11 --deblock                      PASS exact 3/3  PSNR(Y)  62.08 dB    1656080 bit/s    1.99 ms
+320x240 f3 gop60 qp12 --deblock                      PASS exact 3/3  PSNR(Y)  58.63 dB    1630240 bit/s    2.41 ms
+320x240 f3 gop60 qp13 --deblock                      PASS exact 3/3  PSNR(Y)  55.00 dB    1538480 bit/s    6.62 ms
+320x240 f3 gop60 qp14 --deblock                      PASS exact 3/3  PSNR(Y)  55.13 dB    1461760 bit/s    1.85 ms
+320x240 f3 gop60 qp15 --deblock                      PASS exact 3/3  PSNR(Y)  55.19 dB    1446000 bit/s    1.79 ms
+320x240 f3 gop60 qp16 --deblock                      PASS exact 3/3  PSNR(Y)  55.13 dB    1337280 bit/s    2.04 ms
+320x240 f3 gop60 qp17 --deblock                      PASS exact 3/3  PSNR(Y)  53.38 dB    1309280 bit/s    1.87 ms
+320x240 f3 gop60 qp18 --deblock                      PASS exact 3/3  PSNR(Y)  50.26 dB    1288160 bit/s    2.40 ms
+320x240 f3 gop60 qp19 --deblock                      PASS exact 3/3  PSNR(Y)  48.98 dB    1230400 bit/s    2.17 ms
+320x240 f3 gop60 qp20 --deblock                      PASS exact 3/3  PSNR(Y)  49.19 dB    1189760 bit/s    1.86 ms
+320x240 f3 gop60 qp21 --deblock                      PASS exact 3/3  PSNR(Y)  48.48 dB    1047600 bit/s    1.92 ms
+320x240 f3 gop60 qp22 --deblock                      PASS exact 3/3  PSNR(Y)  47.51 dB    1014960 bit/s    1.98 ms
+320x240 f3 gop60 qp23 --deblock                      PASS exact 3/3  PSNR(Y)  47.57 dB     953360 bit/s    2.18 ms
+320x240 f3 gop60 qp24 --deblock                      PASS exact 3/3  PSNR(Y)  47.10 dB     910240 bit/s    2.28 ms
+320x240 f3 gop60 qp25 --deblock                      PASS exact 3/3  PSNR(Y)  47.98 dB     886960 bit/s    1.92 ms
+320x240 f3 gop60 qp26 --deblock                      PASS exact 3/3  PSNR(Y)  45.55 dB     844560 bit/s    1.95 ms
+320x240 f3 gop60 qp27 --deblock                      PASS exact 3/3  PSNR(Y)  46.91 dB     820880 bit/s    1.77 ms
+320x240 f3 gop60 qp28 --deblock                      PASS exact 3/3  PSNR(Y)  45.24 dB     763200 bit/s    1.86 ms
+320x240 f3 gop60 qp29 --deblock                      PASS exact 3/3  PSNR(Y)  44.92 dB     732720 bit/s    1.83 ms
+320x240 f3 gop60 qp30 --deblock                      PASS exact 3/3  PSNR(Y)  43.34 dB     743680 bit/s    1.82 ms
+320x240 f3 gop60 qp31 --deblock                      PASS exact 3/3  PSNR(Y)  43.82 dB     716640 bit/s    1.90 ms
+320x240 f3 gop60 qp32 --deblock                      PASS exact 3/3  PSNR(Y)  42.19 dB     687920 bit/s    1.88 ms
+320x240 f3 gop60 qp33 --deblock                      PASS exact 3/3  PSNR(Y)  42.12 dB     649600 bit/s    1.83 ms
+320x240 f3 gop60 qp34 --deblock                      PASS exact 3/3  PSNR(Y)  41.20 dB     642000 bit/s    1.92 ms
+320x240 f3 gop60 qp35 --deblock                      PASS exact 3/3  PSNR(Y)  40.59 dB     605600 bit/s    2.18 ms
+320x240 f3 gop60 qp36 --deblock                      PASS exact 3/3  PSNR(Y)  39.54 dB     595760 bit/s    2.19 ms
+320x240 f3 gop60 qp37 --deblock                      PASS exact 3/3  PSNR(Y)  39.18 dB     577440 bit/s    1.92 ms
+320x240 f3 gop60 qp38 --deblock                      PASS exact 3/3  PSNR(Y)  36.99 dB     559600 bit/s    1.83 ms
+320x240 f3 gop60 qp39 --deblock                      PASS exact 3/3  PSNR(Y)  37.11 dB     546720 bit/s    1.97 ms
+320x240 f3 gop60 qp40 --deblock                      PASS exact 3/3  PSNR(Y)  35.75 dB     497280 bit/s    1.75 ms
+320x240 f3 gop60 qp41 --deblock                      PASS exact 3/3  PSNR(Y)  35.62 dB     499840 bit/s    2.09 ms
+320x240 f3 gop60 qp42 --deblock                      PASS exact 3/3  PSNR(Y)  33.31 dB     479200 bit/s    2.96 ms
+320x240 f3 gop60 qp43 --deblock                      PASS exact 3/3  PSNR(Y)  33.45 dB     468480 bit/s    2.16 ms
+320x240 f3 gop60 qp44 --deblock                      PASS exact 3/3  PSNR(Y)  32.55 dB     478400 bit/s    2.29 ms
+320x240 f3 gop60 qp45 --deblock                      PASS exact 3/3  PSNR(Y)  31.44 dB     443920 bit/s    2.00 ms
+320x240 f3 gop60 qp46 --deblock                      PASS exact 3/3  PSNR(Y)  31.26 dB     435360 bit/s    2.13 ms
+320x240 f3 gop60 qp47 --deblock                      PASS exact 3/3  PSNR(Y)  30.69 dB     426000 bit/s    1.78 ms
+320x240 f3 gop60 qp48 --deblock                      PASS exact 3/3  PSNR(Y)  30.35 dB     410560 bit/s    1.97 ms
+320x240 f3 gop60 qp49 --deblock                      PASS exact 3/3  PSNR(Y)  28.43 dB     415920 bit/s    7.91 ms
+320x240 f3 gop60 qp50 --deblock                      PASS exact 3/3  PSNR(Y)  26.01 dB     387360 bit/s    2.06 ms
+320x240 f3 gop60 qp51 --deblock                      PASS exact 3/3  PSNR(Y)  26.20 dB     386480 bit/s    2.87 ms
+
+sweep: 68 passed, 0 failed

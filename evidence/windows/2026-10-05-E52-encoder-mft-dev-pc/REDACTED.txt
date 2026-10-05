@@ -1,0 +1,10 @@
+Redacted before the commit that adds this directory (docs/01-evidence-rules.md):
+
+- mf-transform-registry.txt, the display adapter software key block: the DriverDesc of subkey 0000
+  replaced with "(redacted, see REDACTED.txt)". It names an unrelated display driver installed on the
+  development PC. The measurement that line carries is the one that matters and is unchanged: that
+  subkey holds 10 values and none of their names starts with MFT.
+
+Nothing else was changed. The three retained streams of the run are not in the repository, because
+they are encoder output of a synthetic test pattern and add nothing a reader can check. Their sizes
+and SHA-256 sums are in README.md.

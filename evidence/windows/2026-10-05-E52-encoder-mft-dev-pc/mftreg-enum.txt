@@ -1,0 +1,28 @@
+machine wide: 3 H.264 encoder MFT(s)
+  0  NVIDIA H.264 Encoder MFT
+     clsid {60F44560-5A20-4857-BFEF-D29773CB8040}
+     hardware url NVIDIA H.264 Encoder MFT
+     MF_TRANSFORM_ASYNC 1
+     MFT_ENUM_ADAPTER_LUID absent
+  1  H264 Encoder MFT
+     clsid {6CA50344-051A-4DED-9779-A43305165E35}
+     MFT_ENUM_ADAPTER_LUID absent
+  2  Microsoft AVC DX12 Encoder
+     hardware url Microsoft AVC DX12 Encoder
+     MFT_ENUM_ADAPTER_LUID absent
+
+control: an adapter LUID without MFT_ENUM_FLAG_HARDWARE answers 0x80070057 (E_INVALIDARG is 0x80070057)
+
+adapter 0  10de:2684  luid 00000000:000243c1  NVIDIA GeForce RTX 4090
+  2 H.264 encoder MFT(s) for this adapter
+  0  NVIDIA H.264 Encoder MFT
+     clsid {60F44560-5A20-4857-BFEF-D29773CB8040}
+     hardware url NVIDIA H.264 Encoder MFT
+     MF_TRANSFORM_ASYNC 1
+     MFT_ENUM_ADAPTER_LUID absent
+  1  Microsoft AVC DX12 Encoder
+     hardware url Microsoft AVC DX12 Encoder
+     MFT_ENUM_ADAPTER_LUID absent
+
+adapter 1  1414:008c  luid 00000000:00027299  Microsoft Basic Render Driver
+  0 H.264 encoder MFT(s) for this adapter

@@ -3,6 +3,10 @@ __pycache__/
 *.pyc
 .venv/
 
+# Generated shader bytecode headers (fxc /Fh output, reproducible from the build script)
+/driver/umd/mft-h264/shaders/gen/
+/driver/umd/mft-h264/tests/gen/
+
 # Build output (WDK / MSBuild)
 /driver/**/x64/
 /driver/**/Debug/

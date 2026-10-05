@@ -1,0 +1,8 @@
+LIBRARY amdgpu_wddm_mft_h264.dll
+
+EXPORTS
+    DllGetClassObject           PRIVATE
+    DllCanUnloadNow             PRIVATE
+    Bc250CreateH264EncoderMFT   PRIVATE
+    Bc250BuildMftRegistration   PRIVATE
+    Bc250H264EncodedPictureCount PRIVATE
