@@ -116,6 +116,7 @@ void VerdictTimeout(char side, const std::string &stage, const std::string &note
 void VerdictCheck(char side, const Check &c);
 void VerdictGate(const std::string &what, bool held, const std::string &detail);
 void VerdictRoute(char side, const std::string &route, const std::string &fl);
+void VerdictCellEnded();                         // the cell's own work is over; fixes decided_ms for a pass
 void VerdictNote(const std::string &key, const std::string &value);
 void VerdictRemoved(char side, HRESULT removed); // note removed_A or removed_B, unless removed == S_OK
 bool VerdictFailed();

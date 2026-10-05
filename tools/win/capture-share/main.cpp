@@ -308,6 +308,7 @@ static int Run()
         case Kind::Wgc: RunCaptureParent(*cell); break;
         }
     }
+    VerdictCellEnded();
     if (g_peerProcess.process) {
         SetStage("end-peer");
         g_ipc.Send("DONE");

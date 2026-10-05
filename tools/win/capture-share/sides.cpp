@@ -484,7 +484,12 @@ bool Side12::Init(IDXGIAdapter1 *adapter)
     fl = FlText(fls.MaxSupportedFeatureLevel);
     D3D12_FEATURE_DATA_D3D12_OPTIONS4 o4 = {};
     const HRESULT h4 = dev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &o4, sizeof(o4));
-    Log("DEVICE api=12 max_fl=%s shared_resource_compatibility_tier=%s", fl.c_str(),
+    // The tier is the D3D12 runtime's answer, not a driver capability: SharedResourceCompatibilityTier has no
+    // field in d3d12umddi.h, and the runtime builds the value from the WDDM and DDI level the driver reports.
+    // The enum has no value for "not supported", so a driver without shared resources still reports a tier that
+    // promises formats (BD-075). What the cells of this client measure is the only truthful answer.
+    Log("DEVICE api=12 max_fl=%s shared_resource_compatibility_tier=%s (runtime answer, not a driver cap)",
+        fl.c_str(),
         SUCCEEDED(h4) ? std::to_string((int)o4.SharedResourceCompatibilityTier).c_str() : HrText(h4).c_str());
     D3D12_COMMAND_QUEUE_DESC qd = {};
     qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
