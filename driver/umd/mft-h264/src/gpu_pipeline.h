@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Direct3D 11 host side of the encoder's GPU half.
 //
 // Everything runs as compute on the device the client gave us through IMFDXGIDeviceManager, which on

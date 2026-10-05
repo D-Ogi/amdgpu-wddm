@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "mft_h264.h"
 #include <new>
 #include <string.h>

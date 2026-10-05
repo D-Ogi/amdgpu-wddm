@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "h264_syntax.h"
 
 namespace bc250h264 {

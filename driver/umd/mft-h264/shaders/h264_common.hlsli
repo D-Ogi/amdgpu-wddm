@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Shared declarations for the BC-250 H.264 encoder compute passes.
 //
 // The GPU side owns everything that is per-block independent: colour conversion, motion estimation,

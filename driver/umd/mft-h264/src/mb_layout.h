@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // The GPU/CPU hand-off layout: what the compute shaders write and the CPU entropy coder reads.
 //
 // This is the whole interface between the two halves of the encoder. Mirrored, word for word, in

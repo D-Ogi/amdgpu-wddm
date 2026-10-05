@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // The test source picture, drawn on the test's own Direct3D 11 device so that the encoder is fed a
 // real GPU surface rather than an upload. Deterministic in the frame index: the same frame always
 // produces the same pixels, so a bit-exactness result is reproducible.

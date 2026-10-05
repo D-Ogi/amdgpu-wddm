@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "h264_cavlc.h"
 #include "h264_tables.h"
 

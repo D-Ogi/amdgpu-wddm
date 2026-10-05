@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // H.264 tables, entered from ITU-T Rec. H.264 clauses 8 and 9. See h264_tables.h and ../PROVENANCE.md.
 // A length of 0 marks a (trailingOnes, totalCoeff) pair that cannot occur, so the self-test can treat
 // every non-zero entry as a real codeword and check the whole table for prefix-freeness.

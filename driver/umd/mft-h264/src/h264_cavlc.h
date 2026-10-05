@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // CAVLC residual coding and the macroblock layer (ITU-T Rec. H.264 clauses 7.3.5 and 9.2).
 //
 // This is the serial half of the encoder and the reason the split is where it is: every symbol here

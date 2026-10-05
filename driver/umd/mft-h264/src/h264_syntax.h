@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Sequence, picture and slice header syntax for H.264 Constrained Baseline (ITU-T Rec. H.264 7.3.2).
 //
 // Profile choices, all recorded here so the bitstream stays legible:

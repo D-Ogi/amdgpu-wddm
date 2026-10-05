@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Import pass: brings one source picture into the encoder's own planar 8-bit buffers, padding the
 // right and bottom edges out to the coded macroblock multiple by replication, and converting BGRA to
 // BT.709 studio-range Y'CbCr 4:2:0 when the input is RGB. This is the colour-convert compute pass.

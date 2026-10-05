@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Motion estimation, P pictures only. One thread group per macroblock, one candidate motion vector
 // per thread, three integer stages followed by a half sample and a quarter sample refinement. The
 // result is the only thing the macroblock pass needs from here: it is written into MbInfo.mvx/mvy.

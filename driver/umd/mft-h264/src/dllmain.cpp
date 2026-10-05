@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // COM entry points for the encoder transform.
 //
 // There is deliberately no DllRegisterServer: a display driver package registers its MFT from the

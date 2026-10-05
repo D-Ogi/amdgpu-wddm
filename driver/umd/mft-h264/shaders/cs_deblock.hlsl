@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Deblocking filter, ITU-T Rec. H.264 clause 8.7, in place on the reconstruction.
 //
 // The filter is specified macroblock by macroblock in raster order, all vertical edges of a macroblock

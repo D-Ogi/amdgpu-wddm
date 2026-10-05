@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // The Media Foundation hardware encoder transform.
 //
 // Contract, from learn.microsoft.com/windows/win32/medfound/hardware-mfts and the SDK headers in

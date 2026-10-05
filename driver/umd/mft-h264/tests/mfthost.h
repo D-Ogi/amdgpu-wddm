@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Shared declarations of the host test. Nothing here ships; this is the test harness only.
 
 #pragma once

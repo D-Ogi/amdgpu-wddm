@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Emits the registration data for the encoder transform, and - only with two explicit switches and
 // only on the lab - performs a machine-wide registration.
 //

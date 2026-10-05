@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // RBSP bit writer and NAL assembly for H.264 (ITU-T Rec. H.264 clauses 7.3, 7.4.1, 9.1).
 // The writer accumulates RBSP bits; EmitNal appends a start code prefix, the NAL header and the
 // escaped RBSP (emulation prevention, clause 7.4.1.1) to a byte vector.

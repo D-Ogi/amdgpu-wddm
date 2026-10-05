@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // The Media Foundation half of the host test: the inbox decoder used as the oracle, our transform
 // driven through the asynchronous hardware MFT contract, the comparison against the inbox encoder,
 // and a sink writer run that proves a real pipeline can pick our transform up.

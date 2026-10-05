@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Registration data for the encoder transform.
 //
 // Three consumers, one source of truth:

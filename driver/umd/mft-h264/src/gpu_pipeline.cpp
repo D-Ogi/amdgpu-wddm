@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "gpu_pipeline.h"
 #include <dxgi.h>
 #include <mferror.h>

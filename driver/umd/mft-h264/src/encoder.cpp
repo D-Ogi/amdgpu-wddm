@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "encoder.h"
 #include "h264_tables.h"
 #include <windows.h>

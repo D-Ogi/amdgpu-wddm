@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Frame level orchestration: GOP structure, rate control, and the join between the GPU half
 // (gpu_pipeline) and the CPU half (h264_cavlc, h264_syntax).
 

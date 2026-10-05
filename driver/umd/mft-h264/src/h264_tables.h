@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // H.264 variable-length code tables and normative constant tables (ITU-T Rec. H.264, clauses 8 and 9).
 //
 // Every table here is a table of the standard. None is copied from another implementation; see

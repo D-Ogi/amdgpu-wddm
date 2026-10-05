@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Macroblock pass: prediction, forward transform, quantisation, the normative dequantisation and
 // inverse transform, and reconstruction. One thread group of 32 threads per macroblock; threads 0..15
 // own the sixteen luma 4x4 blocks in raster order inside the macroblock, threads 16..23 the eight

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Host test for the BC-250 H.264 encoder MFT. Nothing here registers anything for the machine: the
 // Media Foundation pipeline tests use MFTRegisterLocal, which lives and dies with the process.
 //
