@@ -473,9 +473,17 @@ typedef struct _BC250_WDDM {
     // allocation was an application's own scan-out surface rather than dxgkrnl's shared primary.
     // ScanoutAdmits counts every candidate by Bc250ScanoutAdmit's answer, so a trial that sees no
     // scan-out flip says which clause refused it instead of only that nothing happened.
+    // ScanoutFlips counts only the flips the display hardware was actually programmed with, so a run
+    // with the flip gate closed (EnableVidPnFlip, mmio.c) reports zero rather than one per present.
     volatile LONG ScanoutFlips;
     volatile LONG ScanoutRequests;              // candidates whose creator had asked for scan-out
     volatile LONG ScanoutAdmits[BC250_SCANOUT_STATUSES];
+    volatile LONG ScanoutNotes;                 // guard-log budget of the scan-out flip lines, its own
+    volatile LONG ScanoutTeardowns;             // and of the teardown lines, which a flip must not crowd out
+    // The application allocation the plane is reading, as a value, never dereferenced: DestroyAllocation
+    // compares the handle it is about to free against it and restores the firmware surface on a match,
+    // because nothing else ties an application swap-chain buffer's lifetime to the video present source.
+    volatile LONG64 ScanoutObject;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -3592,8 +3600,11 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     // scanned-out surface has no such reader, and the display core cannot read the aperture at all.
     // CpuVisible as well: a VRAM-only CpuVisible allocation is what VidMm 0xF002 and later refuse (K84,
     // the CDD shadow), and a scanned-out surface needs no CPU mapping - the GPU renders it and the
-    // display core reads it by physical address, which AccessedPhysically below is what asks for.
-    if (object->ScanoutRequested) { policy.Aperture = 0; policy.CpuVisible = 0; policy.Cached = 0; }
+    // display core reads it by physical address, which AccessedPhysically is what asks for. All four
+    // bits move together in WddmGdiScanoutPolicy: AccessedPhysically is derived from Aperture, so
+    // clearing Aperture here and not re-deriving it would declare a VRAM surface VidMm need not back
+    // contiguously - which is exactly the surface the display core must not be given.
+    if (object->ScanoutRequested) WddmGdiScanoutPolicy(&policy);
     info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
     info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
     info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
@@ -3666,9 +3677,11 @@ static DXGKDDI_DESTROYALLOCATION Bc250WddmDestroyAllocation;
 static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
                                            _In_ const DXGKARG_DESTROYALLOCATION* pDestroyAllocation)
 {
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
     UINT i;
 
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiDestroyAllocation))
+    if (WddmFirstCalls(wddm, WddmDdiDestroyAllocation))
         GuardLog("wddm: DestroyAllocation %u allocations", pDestroyAllocation->NumAllocations);
     for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
         BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
@@ -3677,6 +3690,28 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
                                  object->UmdAlloc ? object->UmdBytes : object->Allocation.Size,
                                  object->UmdAlloc ? BC250_PJ_FLAG_UMD_ALLOCATION : 0u,
                                  object->CreatorProcessId, object->UmdBlobVersion, object->UmdGemFlags);
+        // M15.14: the plane may be reading this allocation. Before M15.14 the only programmable surface
+        // was dxgkrnl's own shared primary, whose lifetime dxgkrnl ties to the video present source; an
+        // application swap-chain buffer has no such tie, so a game that exits or resizes with its chain
+        // still bound would leave HUBP0 scanning VRAM that VidMm is free to hand to the next allocation,
+        // with no way back to the firmware surface short of a reboot (no GPU reset exists here, facts
+        // M53). The firmware surface goes back first, and only then is the object freed. Compare and
+        // clear in one step: a flip on another processor either wins the record, in which case it owns
+        // the restore, or finds it already taken away.
+        if (object != NULL && wddm != NULL &&
+            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, (LONG64)(ULONG_PTR)object) ==
+            (LONG64)(ULONG_PTR)object) {
+            NTSTATUS restored = DcnRestorePostDisplay(device);
+            wddm->PrimaryNeedsRestore = TRUE;      // the next flip is a change, whatever address it carries
+            InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, 0);
+            wddm->PrimaryPitch = 0;
+            // Its own budget: the flip lines are written at the frame rate and would otherwise spend the
+            // whole allowance long before the one line that says the plane was taken back.
+            if (InterlockedIncrement(&wddm->ScanoutTeardowns) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: DestroyAllocation freed the scanned-out surface; firmware surface restored 0x%08X",
+                         restored);
+            (void)restored;     // the status is the log line's whole purpose; nothing here can act on it
+        }
         WddmFreeObject(object);
     }
     if (pDestroyAllocation->Flags.DestroyResource && pDestroyAllocation->hResource != NULL)
@@ -6089,6 +6124,9 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         ULONG pitch;
         ULONGLONG bytes;
         BOOLEAN scanout = FALSE;        // M15.14: this flip's allocation was an application scan-out surface
+        BOOLEAN written = FALSE;        // the display hardware was actually written, not only admitted
+        BC250_WDDM_OBJECT* scanoutObject = NULL;   // the admitted scan-out allocation, for the teardown record
+        ULONGLONG physical = 0;         // the address the plane was given, for the scan-out log line
         NTSTATUS status = STATUS_SUCCESS;
         // Nonblocking ownership: a high-IRQL caller must never spin behind a
         // preempted lower-IRQL programmer. The generation also protects vsync's
@@ -6125,26 +6163,50 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                 candidate.Segment=pSetVidPnSourceAddress->PrimarySegment;
                 candidate.Address=(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart;
             }
-            admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,device->Post.Width,device->Post.Height,
-                                    BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
+            // The predicate holds the candidate's 4 KiB alignment against the card address, which is what
+            // this DDI carries; the plane is given the translated physical one (dcn_translate.c:
+            // Address - VramMcBase + VramPhysical). Page alignment survives that subtraction only while
+            // both bases are page-aligned themselves, so the invariant is checked here instead of
+            // assumed, and a board that broke it refuses scan-out rather than programming a plane at a
+            // misaligned address. Checked before the predicate, so that a refusal still leaves the
+            // transaction's pitch and bytes exactly as they were.
+            if (allocation && allocation->ScanoutRequested &&
+                ((device->VramMcBase | (ULONGLONG)device->VramPhysical.QuadPart) & 0xFFFull))
+                admit=BC250_SCANOUT_ALIGNMENT;
+            else
+                admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,device->Post.Width,device->Post.Height,
+                                        BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
             InterlockedIncrement(&wddm->ScanoutAdmits[admit]);
             if (candidate.ScanoutRequested) InterlockedIncrement(&wddm->ScanoutRequests);
             if (admit!=BC250_SCANOUT_ADMIT_OK) {
                 // A refusal leaves pitch and bytes as this transaction computed them for a NULL
                 // allocation, and publishes nothing: the plane keeps the surface it has.
                 status=STATUS_INVALID_PARAMETER;
-                if (candidate.ScanoutRequested && WddmFirstCalls(wddm,WddmDdiSetVidPnSourceAddress))
+                // The scan-out lines have a budget of their own rather than WddmFirstCalls': that
+                // helper counts the DDI call as a side effect, and a call refused here programmed
+                // nothing, so counting it would make "address calls" a denominator of two different
+                // things. It would also spend the shared eight-line budget at the frame rate of a
+                // refusal, which recurs for the life of the swap chain, and bury the one line that
+                // says which clause refused it.
+                if (candidate.ScanoutRequested && InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
                     GuardLog("wddm: scan-out refused: %s (%lux%lu pitch %lu format %lu segment %lu address 0x%llX)",
                              Bc250ScanoutStatusText(admit),candidate.Width,candidate.Height,candidate.Pitch,
                              candidate.Format,candidate.Segment,candidate.Address);
             }
-            else { scanout=candidate.ScanoutRequested?TRUE:FALSE; status=STATUS_SUCCESS; }
+            else {
+                scanout=candidate.ScanoutRequested?TRUE:FALSE;
+                if (scanout) scanoutObject=allocation;
+                status=STATUS_SUCCESS;
+            }
         }
         changed = wddm->PrimaryNeedsRestore || InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0) !=
                   pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch;
         if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
-        if (NT_SUCCESS(status) && changed && device->VidPnFlipEnabled)
-            status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,bytes,NULL);
+        if (NT_SUCCESS(status) && changed && device->VidPnFlipEnabled) {
+            status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,bytes,
+                                       scanout?&physical:NULL);
+            written=NT_SUCCESS(status);
+        }
         if (NT_SUCCESS(status))
         {
             // Publish only after the programming sequence succeeds. A refused
@@ -6156,7 +6218,22 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             wddm->PrimaryPitch=pitch;wddm->PrimaryBytes=bytes;
             if (changed) {
                 InterlockedIncrement(&wddm->Flips);
-                if (scanout) InterlockedIncrement(&wddm->ScanoutFlips);
+                // Only a flip the hardware was written with counts as a scan-out flip. With the flip
+                // gate closed (EnableVidPnFlip) this DDI still succeeds and still publishes, and a
+                // counter that moved there would report the whole increment's headline result on a
+                // machine where no address ever reached HUBP0.
+                if (scanout && written) {
+                    InterlockedIncrement(&wddm->ScanoutFlips);
+                    // The address the plane was given, so that the display side of an ETW capture
+                    // (DxgKrnl VSyncInterrupt's ScannedPhysicalAddress) can be matched to this
+                    // allocation rather than to the compositor's own primary.
+                    if (InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
+                        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu",
+                                 (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,physical,pitch,bytes);
+                }
+                // The teardown record follows the plane: an application surface while one is being
+                // scanned out, nothing while the compositor's own primary is.
+                InterlockedExchange64(&wddm->ScanoutObject,written?(LONG64)(ULONG_PTR)scanoutObject:(LONG64)0);
                 if (device->VidPnFlipEnabled)
                     InterlockedExchange(&wddm->PrimaryProgrammedSequence,(LONG)(generation+2u));
             }

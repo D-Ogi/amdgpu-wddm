@@ -42,6 +42,26 @@ static __inline int WddmGdiAllocationPolicy(unsigned long Type,int SharedCpu,int
     return 1;
 }
 
+// M15.14: the placement of a surface its creator asked to have scanned out. It overrides the three
+// policy bits above, and it is a function and not three assignments at the call site because the
+// fourth bit has to move with them: AccessedPhysically is derived from Aperture, so a caller that
+// clears Aperture and leaves AccessedPhysically alone declares a VRAM surface that VidMm need not
+// back contiguously - and the display core reads it by physical address, with no page walk and no
+// second chance (wddm.c's Blt path says the same rule the other way round: "endpoints alone do not
+// establish contiguity for allocations without AccessedPhysically").
+//   Aperture 0           system memory through the GART is not readable by the display core.
+//   CpuVisible 0         VidMm refuses a CpuVisible VRAM-only allocation (K84); nothing maps this one.
+//   Cached 0             a primary must not have cached CPU backing, and it has none at all here.
+//   AccessedPhysically 1 the physical pages are the contract; this is what asks VidMm for them.
+static __inline void WddmGdiScanoutPolicy(BC250_GDI_ALLOCATION_POLICY* Policy)
+{
+    if (!Policy) return;
+    Policy->Aperture=0;
+    Policy->CpuVisible=0;
+    Policy->Cached=0;
+    Policy->AccessedPhysically=1;
+}
+
 static __inline int WddmGdiPrivate(const void* Data, unsigned int Bytes, unsigned long* Type)
 {
     const BC250_GDI_PRIVATE* gdi=(const BC250_GDI_PRIVATE*)Data;

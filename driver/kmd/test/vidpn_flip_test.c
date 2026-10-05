@@ -45,13 +45,19 @@ typedef struct {
     ULONG PrimaryPitch; ULONGLONG PrimaryBytes;
     unsigned PrimarySegment;
     volatile LONG Flips, FlipsAboveDispatch, VSyncReports;
-    volatile LONG ScanoutFlips, ScanoutRequests, ScanoutAdmits[BC250_SCANOUT_STATUSES];
+    volatile LONG ScanoutFlips, ScanoutRequests, ScanoutAdmits[BC250_SCANOUT_STATUSES], ScanoutNotes, ScanoutTeardowns;
+    volatile LONGLONG ScanoutObject;
     int VSyncEnabled;
     unsigned VSyncTargetId;
 } BC250_WDDM;
 typedef struct {
     struct {ULONG Width,Height,Pitch;} Post;
     BC250_WDDM *Wddm;
+    // M15.14: the two bases the card address is translated through. The scan-out clause refuses a
+    // candidate when either is not page aligned, because the predicate's 4 KiB test is on the card
+    // address and the plane is given the physical one.
+    ULONGLONG VramMcBase;
+    PHYSICAL_ADDRESS VramPhysical;
     int VidPnFlipEnabled;
     volatile LONG DcnVsyncAcked, DcnVsyncDeferred, DcnVsyncOldBufferReports;
     volatile LONG DcnVsyncSkipOddGeneration, DcnVsyncSkipReadFailure, DcnVsyncSkipSameAddress, DcnVsyncSkipChangedGeneration;
@@ -59,12 +65,30 @@ typedef struct {
         DcnVsyncSkipChangedGenerationTime;
 } BC250_DEVICE;
 #define BC250_WDDM_MAGIC_ALLOCATION 123
+#define BC250_WDDM_MAGIC_RESOURCE 124
+#define WddmDdiDestroyAllocation 1
+#define BC250_WDDM_LOG_CALLS 8
+#define BC250_PJ_FLAG_UMD_ALLOCATION 1u
+typedef unsigned UINT;
+typedef unsigned long long ULONG_PTR;
 #define D3DDDIFMT_A8R8G8B8 21
 #define D3DDDIFMT_X8R8G8B8 22
 #define D3DDDIFMT_A8B8G8R8 32
 typedef struct {ULONG Magic; int UmdAlloc; struct {ULONG Width,Height,Pitch,Format;ULONGLONG Size;} Allocation;
-    int ScanoutRequested; ULONG ScanoutWidth,ScanoutHeight,ScanoutPitch,ScanoutFormat; ULONGLONG UmdBytes;} BC250_WDDM_OBJECT;
+    int ScanoutRequested; ULONG ScanoutWidth,ScanoutHeight,ScanoutPitch,ScanoutFormat; ULONGLONG UmdBytes;
+    ULONGLONG UmdRequestedVa,UmdGemFlags; ULONG CreatorProcessId,UmdBlobVersion;} BC250_WDDM_OBJECT;
 static BC250_WDDM_OBJECT* WddmObject(HANDLE h,ULONG magic){BC250_WDDM_OBJECT *a=h;return a && a->Magic==magic?a:NULL;}
+typedef struct {
+    UINT NumAllocations;
+    HANDLE *pAllocationList, hResource;
+    struct { int DestroyResource; } Flags;
+} DXGKARG_DESTROYALLOCATION;
+static unsigned freed,journaled,restores;
+static NTSTATUS restore_result;
+static void PagingJournalDestroy(ULONGLONG va,HANDLE h,ULONGLONG bytes,unsigned flags,ULONG pid,ULONG version,ULONGLONG gem)
+{(void)va;(void)h;(void)bytes;(void)flags;(void)pid;(void)version;(void)gem;++journaled;}
+static void WddmFreeObject(BC250_WDDM_OBJECT *o){if(o)++freed;}
+static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE *d){(void)d;++restores;return restore_result;}
 static ULONG programmed_pitch;
 static unsigned checks,failures,hardware,arms,reports;
 static int irq,pending,inject_update,nested_writer,inject_fallback_update;
@@ -85,6 +109,7 @@ static int WddmStopping(BC250_WDDM *w){(void)w;return 0;}
 static void WddmReport(BC250_DEVICE *d,DXGKARGCB_NOTIFY_INTERRUPT_DATA *data){(void)d;reports++;reported=data->CrtcVsync.PhysicalAddress.QuadPart;}
 static BOOLEAN WddmReadCompletedPrimary(BC250_DEVICE*,BC250_WDDM*,PHYSICAL_ADDRESS*,ULONG*);
 static NTSTATUS Bc250WddmSetVidPnSourceAddress(const HANDLE,const DXGKARG_SETVIDPNSOURCEADDRESS*);
+static NTSTATUS Bc250WddmDestroyAllocation(const HANDLE,const DXGKARG_DESTROYALLOCATION*);
 void WddmDcnVsync(BC250_DEVICE*);
 static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pitch,ULONGLONG bytes,ULONGLONG *out)
 {
@@ -272,6 +297,65 @@ int main(void)
                 request.hAllocation=(HANDLE)&w;
                 CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
                 CHECK(w.ScanoutAdmits[BC250_SCANOUT_NO_ALLOCATION]==1);
+                {
+                    // The two bases the card address is translated through. The predicate's 4 KiB test
+                    // is on the card address; the plane is given Address - VramMcBase + VramPhysical,
+                    // so page alignment only carries over while both bases are page aligned, and a
+                    // board where they are not refuses scan-out instead of programming the plane.
+                    BC250_WDDM_OBJECT good={0};
+                    DXGKARG_DESTROYALLOCATION destroy={0};
+                    HANDLE list[1];
+                    LONG aligned=w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT];
+                    LONG notes;
+                    LONGLONG record=w.ScanoutObject;   // a refusal must leave the teardown record alone
+                    hardware_result=STATUS_SUCCESS;
+                    good.Magic=BC250_WDDM_MAGIC_ALLOCATION;good.UmdAlloc=1;good.ScanoutRequested=1;
+                    good.ScanoutWidth=1366;good.ScanoutHeight=768;good.ScanoutPitch=5632;
+                    good.ScanoutFormat=D3DDDIFMT_A8R8G8B8;good.UmdBytes=5632ull*768;
+                    request.hAllocation=&good;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+                    request.PrimaryAddress.QuadPart=0xC000;
+                    d.VramPhysical.QuadPart=0x270000800;
+                    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                    CHECK(w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==aligned+1 && w.ScanoutObject==record);
+                    d.VramPhysical.QuadPart=0x270000000;d.VramMcBase=0x800;
+                    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                    CHECK(w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==aligned+2);
+                    d.VramMcBase=0;
+                    // Admitted, programmed, and recorded as the surface the plane is reading.
+                    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                    CHECK(w.ScanoutFlips==2 && w.ScanoutObject==(LONGLONG)(ULONG_PTR)&good);
+                    {   // With the flip gate closed this DDI still succeeds and still publishes, and
+                        // no scan-out flip is counted: nothing was written to the display hardware,
+                        // and a counter that moved here would report the whole increment's result on
+                        // a machine where no address ever reached HUBP0.
+                        LONG gated=w.ScanoutFlips;unsigned gatedHardware=hardware;
+                        d.VidPnFlipEnabled=0;request.PrimaryAddress.QuadPart=0xD000;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutFlips==gated && hardware==gatedHardware && w.ScanoutObject==0);
+                        d.VidPnFlipEnabled=1;request.PrimaryAddress.QuadPart=0xC000;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutFlips==gated+1 && w.ScanoutObject==(LONGLONG)(ULONG_PTR)&good);
+                    }
+                    // Freeing the surface the plane is reading restores the firmware surface before
+                    // the object goes: an application swap-chain buffer has no lifetime tie to the
+                    // video present source, so this is the only thing between a crashed game and a
+                    // plane scanning VRAM that VidMm has handed to somebody else.
+                    list[0]=&good;destroy.NumAllocations=1;destroy.pAllocationList=list;
+                    freed=journaled=restores=0;restore_result=STATUS_SUCCESS;
+                    // The flip lines are written per frame and spend their allowance in the first
+                    // seconds; the teardown line keeps its own, so the one line that says the plane
+                    // was taken back is still written after a long run.
+                    w.ScanoutNotes=notes=BC250_WDDM_LOG_CALLS*4;
+                    CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
+                    CHECK(w.ScanoutTeardowns==1 && w.ScanoutNotes==notes);
+                    CHECK(restores==1 && freed==1 && journaled==1 && w.ScanoutObject==0);
+                    CHECK(w.PrimaryNeedsRestore && w.PrimaryAddress.QuadPart==0 && w.PrimaryPitch==0);
+                    // Any other allocation's destroy touches neither the plane nor the record.
+                    w.PrimaryNeedsRestore=FALSE;list[0]=&umd;restores=0;freed=0;
+                    CHECK(Bc250WddmDestroyAllocation(&d,&destroy)==STATUS_SUCCESS);
+                    CHECK(restores==0 && freed==1 && !w.PrimaryNeedsRestore && w.ScanoutObject==0);
+                    w.PrimaryPitch=5632;w.PrimaryAddress.QuadPart=0x4000;
+                }
                 request.hAllocation=NULL;request.PrimarySegment=3;
             }
         }

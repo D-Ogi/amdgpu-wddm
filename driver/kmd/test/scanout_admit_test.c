@@ -52,6 +52,16 @@ static void Inherited(BC250_SCANOUT_CANDIDATE* c)
     c->Address = 0x271000123ull;                // not page aligned, and not in the flip segment
 }
 
+// The shape both shells actually produce: an LB7A type-0 surface whose E26R record carried the
+// scan-out bit. UmdAlloc is 0 and ScanoutRequested is 1, and wddm.c takes the geometry from the LB7A
+// description rather than from the BC2A scan-out words. The rule must treat it exactly as it treats a
+// BC2A request, because it reaches the same plane.
+static void Shell(BC250_SCANOUT_CANDIDATE* c)
+{
+    Requested(c);
+    c->UmdAlloc = 0;
+}
+
 static int Admit(const BC250_SCANOUT_CANDIDATE* c, unsigned long* pitch, unsigned long long* bytes)
 {
     return Bc250ScanoutAdmit(c, POST_WIDTH, POST_HEIGHT, FLIP_SEGMENT, pitch, bytes);
@@ -175,6 +185,27 @@ int main(void)
     //     geometry and refused at another's.
     Requested(&c);
     CHECK(Bc250ScanoutAdmit(&c, 1366ul, 768ul, FLIP_SEGMENT, &pitch, &bytes) == BC250_SCANOUT_GEOMETRY);
+
+    // 12b. The shell's own shape, which is the only one either shell produces today: the request is
+    //      what decides, not the provenance, so an LB7A surface that asked for scan-out gets every
+    //      clause a BC2A one gets - the alignment and the segment included.
+    Shell(&c); pitch = 0; bytes = 0;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+    CHECK(pitch == POST_PITCH && bytes == (unsigned long long)POST_PITCH * POST_HEIGHT);
+    Shell(&c); c.Segment = APERTURE_SEGMENT;     // where an LB7A primary lands unless the bit moved it
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_SEGMENT);
+    Shell(&c); c.Address = 0x271000800ull;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ALIGNMENT);
+    Shell(&c); c.Format = D3DDDIFMT_A2B10G10R10;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_FORMAT);
+    Shell(&c); c.Height = POST_HEIGHT + 2ul;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_GEOMETRY);
+    Shell(&c); c.Size -= 1ull;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_SIZE);
+    // The same four values with the request withdrawn are the inherited class again: admitted with no
+    // alignment and no segment clause. The one bit is the whole difference.
+    Shell(&c); c.ScanoutRequested = 0; c.Segment = APERTURE_SEGMENT; c.Address = 0x271000800ull;
+    CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
 
     // 13. The status text covers every status and nothing outside the table.
     for (i = 0; i < BC250_SCANOUT_STATUSES; i++) CHECK(Bc250ScanoutStatusText((int)i)[0] != 0);

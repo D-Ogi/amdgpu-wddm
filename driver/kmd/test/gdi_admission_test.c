@@ -415,9 +415,35 @@ static void OddShapes(void)
     CHECK(Bc250StdAllocDecide(&r, &a) == BC250_STDALLOC_OK && a.Surface.Pitch == 132 && a.Surface.Format == FMT_A8R8G8B8);
 }
 
+// M15.14: the placement of a surface asked to be scanned out. The three bits the driver used to set by
+// hand are here with the fourth one that must move with them, because AccessedPhysically is derived
+// from Aperture and the display core reads this surface by physical address with no page walk. Every
+// type-0 shape the shells can produce ends in the same four values.
+static void ScanoutPlacement(void)
+{
+    static const int shared[] = { 0, 1 }, cached[] = { 0, 1 };
+    BC250_GDI_ALLOCATION_POLICY p;
+    unsigned i, j;
+    for (i = 0; i < 2; i++) for (j = 0; j < 2; j++) {
+        CHECK(WddmGdiAllocationPolicy(0, shared[i], cached[j], &p));
+        // What the record's shared bit asks for on its own: the aperture, and with it no physical
+        // contract at all. This is the state the scan-out override has to leave behind.
+        CHECK(p.Aperture == (shared[i] != 0) && p.AccessedPhysically == (shared[i] == 0));
+        WddmGdiScanoutPolicy(&p);
+        CHECK(!p.Aperture && !p.CpuVisible && !p.Cached && p.AccessedPhysically);
+    }
+    // Idempotent, and a NULL policy is no crash and no write.
+    CHECK(WddmGdiAllocationPolicy(0, 1, 1, &p));
+    WddmGdiScanoutPolicy(&p); WddmGdiScanoutPolicy(&p);
+    CHECK(!p.Aperture && !p.CpuVisible && !p.Cached && p.AccessedPhysically);
+    WddmGdiScanoutPolicy(NULL);
+    CHECK(!p.Aperture && p.AccessedPhysically);
+}
+
 int main(void)
 {
     SameAsBefore();
+    ScanoutPlacement();
     RefusalsCounted();
     ReceivedBlobs();
     CreateRollback();

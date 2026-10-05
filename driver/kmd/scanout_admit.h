@@ -30,8 +30,13 @@
 //                     the description at CreateAllocation and placed the allocation in the local
 //                     segment for it; here it only re-derives whether that description can be scanned
 //                     out at all.
-// An object that is neither - dxgkrnl's own shared primary, which DWM flips today - keeps exactly the
-// checks it had before this header existed, and is admitted by exactly the same four of them.
+// An object that asked for neither keeps exactly the checks it had before this header existed, and is
+// admitted by exactly the same four of them. That class is dxgkrnl's own shared primary, which DWM
+// flips today, and it is also every LB7A primary of our own shells that did not set the E26R scan-out
+// bit: those are aperture-resident, so the 4 KiB and segment clauses below would be wrong for them and
+// dcn.c refuses their address instead (DcnTranslateCardAddress on an aperture address). Nothing in user
+// mode may be told a flip of such a surface is supported - the D3D11 shell's CheckDirectFlipSupport
+// therefore answers only for a surface that did set the bit.
 #define BC250_SCANOUT_ADMIT_OK 0
 #define BC250_SCANOUT_NO_ALLOCATION 1   // the handle did not resolve to an allocation of this adapter
 #define BC250_SCANOUT_NOT_REQUESTED 2   // an application allocation that never asked to be scanned out
