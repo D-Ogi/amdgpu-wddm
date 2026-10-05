@@ -76,7 +76,7 @@ void negotiation() {
 // M15.14: the rule behind pfnCheckDirectFlipSupport, and the table entry that resolves the handles.
 void ready_primary(RuntimeSurface &s,DXGI_FORMAT format,UINT width,UINT height,UINT pitch,UINT source) {
     s.phase=SurfacePhase::ready; s.allocation.allocation=0x1000+source;
-    s.primary=true; s.vidpn_source=source;
+    s.primary=true; s.vidpn_source=source; s.scanout=true;
     s.desc.Format=format; s.desc.Width=width; s.desc.Height=height; s.pitch=pitch;
 }
 void direct_flip_rule() {
@@ -100,6 +100,11 @@ void direct_flip_rule() {
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.phase=SurfacePhase::quarantined; }));
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.allocation.allocation=0; }));
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.primary=false; }));
+    // The scan-out bit of the resource record. This is the clause that keeps the shell's answer FALSE
+    // while its primaries are still aperture-resident: an aperture address is one the display core
+    // cannot read and SetVidPnSourceAddress refuses, and by then the runtime has skipped the copy.
+    CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.scanout=false; }));
+    CHECK(refuses([](RuntimeSurface &a,RuntimeSurface &b) { a.scanout=false; b.scanout=false; }));
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.vidpn_source=1; }));
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Width=1280; }));
     CHECK(refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Height=1080; }));
@@ -132,6 +137,23 @@ void direct_flip_rule() {
     supported=TRUE; t.pfnCheckDirectFlipSupport(device,ha,hplain,0,&supported); CHECK(supported==FALSE);
     supported=TRUE; t.pfnCheckDirectFlipSupport(device,ha,{},0,&supported); CHECK(supported==FALSE);
     t.pfnCheckDirectFlipSupport(device,ha,hb,0,nullptr); // No output pointer: nothing is written.
+    // What a surface built the way the shipped shell builds one answers today: decode_create_resource
+    // writes PRIMARY and never SCANOUT, so a pair of this shell's own primaries is refused, which is
+    // the pre-M15.14 answer. The day the bit is written, this is the check that has to change -
+    // together with the placement, and not before it.
+    {
+        RuntimeSurface shipped,shipped2;
+        ready_primary(shipped,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+        ready_primary(shipped2,DXGI_FORMAT_B8G8R8A8_UNORM,1920,1200,7680,0);
+        shipped2.allocation.allocation=0x2000;
+        BC250_SURFACE_RESOURCE_PRIVATE record{};
+        record.Access=BC250_SURFACE_RESOURCE_PRIMARY;      // ddi-resource.cpp's own value for a primary
+        shipped.scanout=shipped2.scanout=(record.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
+        CHECK(!direct_flip_supported(&shipped,&shipped2));
+        record.Access|=BC250_SURFACE_RESOURCE_SCANOUT;     // and what the next increment must write
+        shipped.scanout=shipped2.scanout=(record.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
+        CHECK(direct_flip_supported(&shipped,&shipped2));
+    }
 }
 void device_table() {
     const auto t=make_wddm2_0_device_table();

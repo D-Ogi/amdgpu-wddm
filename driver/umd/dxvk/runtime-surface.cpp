@@ -12,6 +12,7 @@ HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
         !runtime_surface_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
     out.owner=&runtime; out.queue=queue; out.desc=desc;
     out.primary=request.primary; out.vidpn_source=request.vidpn_source;
+    out.scanout=(request.texture.Access&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
     out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
     out.phase=SurfacePhase::failed;
     HRESULT hr=allocate_runtime_surface(runtime,request,out.allocation);
