@@ -59,6 +59,12 @@ In the order the function applies them:
 
 The last two apply to a scan-out candidate alone.
 
+The table above is the order the function tests the rules in. The status numbers in
+`driver/kmd/scanout_admit.h` are in a different order, segment before alignment, and the driver's
+summary line `wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated` follows
+the header. `geom` and `align` are short there because the line holds 159 characters, and the
+header gives both names in full.
+
 ## Why the format table is unchanged
 
 Only BGRA8 and X8 carry `SCANOUT_PRIMARY`. RGB10A2 and RGBA16F carry `COMPOSED` only, so a 10-bit or

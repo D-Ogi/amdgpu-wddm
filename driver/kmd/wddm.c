@@ -1963,14 +1963,23 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // allocation pair, the one that grows into six digits, has a line to itself, and it goes
     // first on purpose: both lines carry the same name, so a reader that keeps the last line of
     // that name - and several of our own scripts do - still ends up with the pairs and the live
-    // count it always had. runcompare takes the pairs from either line and the live count from
-    // the line that ends in "alive", in any order.
-    GuardLog("wddm summary: objects created/destroyed: alloc %ld/%ld",
-             Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation]);
-    GuardLog("wddm summary: objects created/destroyed: dev %ld/%ld ctx %ld/%ld proc %ld/%ld, %ld alive",
-             Wddm->Calls[WddmDdiCreateDevice], Wddm->Calls[WddmDdiDestroyDevice],
-             Wddm->Calls[WddmDdiCreateContext], Wddm->Calls[WddmDdiDestroyContext],
-             Wddm->Calls[WddmDdiCreateProcess], Wddm->Calls[WddmDdiDestroyProcess], Wddm->ObjectCount);
+    // count it always had. runcompare reads the two lines as one block, the allocation line
+    // first, and stops at the line that ends in "alive".
+    //
+    // WddmSummary also runs while the adapter runs (the overlay polls it), so the nine counters
+    // go into locals first. Read once per GuardLog call they would be two samples, and a reader
+    // could no longer add the pairs up against the live count inside one report.
+    {
+        LONG devMade = Wddm->Calls[WddmDdiCreateDevice], devGone = Wddm->Calls[WddmDdiDestroyDevice];
+        LONG ctxMade = Wddm->Calls[WddmDdiCreateContext], ctxGone = Wddm->Calls[WddmDdiDestroyContext];
+        LONG procMade = Wddm->Calls[WddmDdiCreateProcess], procGone = Wddm->Calls[WddmDdiDestroyProcess];
+        LONG allocMade = Wddm->Calls[WddmDdiCreateAllocation], allocGone = Wddm->Calls[WddmDdiDestroyAllocation];
+        LONG live = Wddm->ObjectCount;
+
+        GuardLog("wddm summary: objects created/destroyed: alloc %ld/%ld", allocMade, allocGone);
+        GuardLog("wddm summary: objects created/destroyed: dev %ld/%ld ctx %ld/%ld proc %ld/%ld, %ld alive",
+                 devMade, devGone, ctxMade, ctxGone, procMade, procGone, live);
+    }
     {
         // The three move together under the lock; read apart, a concurrent create would look like a mismatch.
         ULONG indexed, misses;
@@ -2064,17 +2073,30 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // Two lines since 0.7.208, because one line did not fit: on the lab the single line ended in
     // "format/geometry/pitch/size/segment/alignment/gated 0/0/" and every refusal count was gone
     // (BD-070). The first line keeps the text the scan-out trial parses, word for word. The second
-    // line carries the refusals and is 158 of the 159 characters a log line holds, so its reason
-    // names are short; scanout_admit.h and docs/design/scanout-admission.md give them in full.
-    GuardLog("wddm summary: scan-out flips %ld of %ld requested candidates; admission ok/no-alloc/not-requested %ld/%ld/%ld",
-             Wddm->ScanoutFlips, Wddm->ScanoutRequests,
-             Wddm->ScanoutAdmits[BC250_SCANOUT_ADMIT_OK], Wddm->ScanoutAdmits[BC250_SCANOUT_NO_ALLOCATION],
-             Wddm->ScanoutAdmits[BC250_SCANOUT_NOT_REQUESTED]);
-    GuardLog("wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated %ld/%ld/%ld/%ld/%ld/%ld/%ld",
-             Wddm->ScanoutAdmits[BC250_SCANOUT_FORMAT],
-             Wddm->ScanoutAdmits[BC250_SCANOUT_GEOMETRY], Wddm->ScanoutAdmits[BC250_SCANOUT_PITCH],
-             Wddm->ScanoutAdmits[BC250_SCANOUT_SIZE], Wddm->ScanoutAdmits[BC250_SCANOUT_SEGMENT],
-             Wddm->ScanoutAdmits[BC250_SCANOUT_ALIGNMENT], Wddm->ScanoutAdmits[BC250_SCANOUT_GATED]);
+    // line carries the refusals and is 158 of the 159 characters a log line holds, so two reason
+    // names are short, "geom" and "align". scanout_admit.h gives all ten status names in full and
+    // in the order of this line. docs/design/scanout-admission.md explains the rules, in the order
+    // the admission function applies them, which is not this one: it tests alignment before
+    // segment.
+    //
+    // WddmSummary also runs while the adapter runs (the overlay polls it), so the twelve counters
+    // go into locals first. Read once per GuardLog call they would be two samples, and the
+    // requested count would no longer have to equal the ten admission counts inside one report.
+    {
+        LONG admit[BC250_SCANOUT_STATUSES];
+        LONG flips = Wddm->ScanoutFlips, requests = Wddm->ScanoutRequests;
+        ULONG status;
+
+        for (status = 0; status < BC250_SCANOUT_STATUSES; status++)
+            admit[status] = Wddm->ScanoutAdmits[status];
+        GuardLog("wddm summary: scan-out flips %ld of %ld requested candidates; admission ok/no-alloc/not-requested %ld/%ld/%ld",
+                 flips, requests, admit[BC250_SCANOUT_ADMIT_OK], admit[BC250_SCANOUT_NO_ALLOCATION],
+                 admit[BC250_SCANOUT_NOT_REQUESTED]);
+        GuardLog("wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated %ld/%ld/%ld/%ld/%ld/%ld/%ld",
+                 admit[BC250_SCANOUT_FORMAT], admit[BC250_SCANOUT_GEOMETRY], admit[BC250_SCANOUT_PITCH],
+                 admit[BC250_SCANOUT_SIZE], admit[BC250_SCANOUT_SEGMENT], admit[BC250_SCANOUT_ALIGNMENT],
+                 admit[BC250_SCANOUT_GATED]);
+    }
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
@@ -2144,7 +2166,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // fallback rather than the ordinary gate-closed/pre-flip case, and the two scanout-remap counters say how
     // much of that mapping work DcnScanoutMapping actually did (once a flip, not once a present - M97).
     // Two lines since 0.7.208 (BD-070): the text alone is 162 characters, so the one line this was
-    // never printed its remap and last-blit numbers at all. Both lines keep the same prefix.
+    // never printed its remap and last-blit numbers at all. Both lines keep the same prefix. They
+    // are two samples while the adapter runs, like every other counter in this summary, and no
+    // number on one line has to be added to a number on the other.
     GuardLog("wddm summary: blit destination: %ld to the flipped surface, %ld to the POST framebuffer (%ld a "
              "failed-mapping fallback)",
              Wddm->BlitsToFlip, Wddm->BlitsToFirmware, Wddm->BlitsMapFailed);
@@ -2187,7 +2211,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // Two lines since 0.7.208 (BD-070): the text of the one line this was is 133 characters, so
     // after a long session the five vsync counts fell off the end of it. The first line keeps the text the
     // overlay and the scan-out trial parse. The second line says "vidpn flip vsyncs" and not
-    // "vidpn flip <state>:", so that neither parser can take it for the flip line.
+    // "vidpn flip <state>:", so that neither parser can take it for the flip line. The two lines
+    // are two samples while the adapter runs, and no number on one is added to a number on the
+    // other: the vsync counts come from the interrupt, the flip counts from the present path.
     GuardLog("wddm summary: vidpn flip %s: %ld hardware flips, %ld refused",
              Wddm->Device->VidPnFlipEnabled ? "open" : "closed", Wddm->Device->DcnFlipsHardware,
              Wddm->Device->DcnFlipRefused);
