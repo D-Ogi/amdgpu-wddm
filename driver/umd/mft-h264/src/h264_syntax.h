@@ -3,7 +3,7 @@
 //
 // Profile choices, all recorded here so the bitstream stays legible:
 //   profile_idc 66 with constraint_set0_flag and constraint_set1_flag set -> Constrained Baseline.
-//   entropy_coding_mode_flag 0  (CAVLC; CABAC is future work, see ../../BOOTSTRAP.md 2.2)
+//   entropy_coding_mode_flag 0  (CAVLC; CABAC is future work, see README.md)
 //   frame_mbs_only_flag 1       (progressive only)
 //   pic_order_cnt_type 2        (decoding order == output order; legal because every picture we emit
 //                                is a reference picture, so the clause 8.2.1.3 restriction holds)

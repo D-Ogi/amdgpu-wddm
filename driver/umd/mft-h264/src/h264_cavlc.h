@@ -3,8 +3,8 @@
 //
 // This is the serial half of the encoder and the reason the split is where it is: every symbol here
 // depends on the symbol before it and on the non-zero counts of the neighbouring blocks, so there is
-// nothing to vectorise. See ../../BOOTSTRAP.md section 2.2 for the measured share of frame time this
-// costs on the target silicon.
+// nothing to vectorise. What this half costs per picture is in the measured section of README.md. No
+// stage of this encoder has run on unit A's GPU yet, so the share on the target silicon is unknown.
 
 #pragma once
 #include <stdint.h>

@@ -1214,6 +1214,48 @@ int RunMft(const Options& o)
         return 2;
     }
 
+    // Which GPU the transform encodes on, which a client asks for by reading MFT_ENUM_ADAPTER_LUID
+    // (mfapi.h:2025) off IMFTransform::GetAttributes. The attribute's documented data type is LUID,
+    // so it has to be an 8 byte blob - a UINT64 of the same bits answers MF_E_INVALIDTYPE to the
+    // GetBlob a client writes - and it has to name the adapter of the device the client handed over
+    // through MFT_MESSAGE_SET_D3D_MANAGER, not an adapter the transform picked for itself.
+    {
+        LUID want = {};
+        ComPtr<IDXGIDevice> dxgiDevice;
+        ComPtr<IDXGIAdapter> adapter;
+        DXGI_ADAPTER_DESC adapterDesc = {};
+        if (SUCCEEDED(device->QueryInterface(__uuidof(IDXGIDevice),
+                                             reinterpret_cast<void**>(&dxgiDevice))) &&
+            SUCCEEDED(dxgiDevice->GetAdapter(&adapter)) &&
+            SUCCEEDED(adapter->GetDesc(&adapterDesc))) {
+            want = adapterDesc.AdapterLuid;
+        }
+        MF_ATTRIBUTE_TYPE luidType = MF_ATTRIBUTE_UINT32;
+        LUID got = {};
+        UINT32 luidSize = 0;
+        if (FAILED(attrs->GetItemType(MFT_ENUM_ADAPTER_LUID, &luidType)) ||
+            luidType != MF_ATTRIBUTE_BLOB) {
+            Say("FAIL MFT_ENUM_ADAPTER_LUID is type %u on the transform's attribute store, not the "
+                "documented LUID blob", static_cast<unsigned>(luidType));
+            ++settingFailures;
+        } else if (FAILED(attrs->GetBlobSize(MFT_ENUM_ADAPTER_LUID, &luidSize)) ||
+                   luidSize != sizeof(got) ||
+                   FAILED(attrs->GetBlob(MFT_ENUM_ADAPTER_LUID, reinterpret_cast<UINT8*>(&got),
+                                         sizeof(got), nullptr))) {
+            Say("FAIL MFT_ENUM_ADAPTER_LUID is %u bytes, not a LUID", luidSize);
+            ++settingFailures;
+        } else if (got.LowPart != want.LowPart || got.HighPart != want.HighPart) {
+            Say("FAIL MFT_ENUM_ADAPTER_LUID is %08lx:%08lx, the client's device is on %08lx:%08lx",
+                static_cast<unsigned long>(got.HighPart), static_cast<unsigned long>(got.LowPart),
+                static_cast<unsigned long>(want.HighPart),
+                static_cast<unsigned long>(want.LowPart));
+            ++settingFailures;
+        } else {
+            Say("MFT_ENUM_ADAPTER_LUID is the client's own adapter, %08lx:%08lx, as an 8 byte blob",
+                static_cast<unsigned long>(got.HighPart), static_cast<unsigned long>(got.LowPart));
+        }
+    }
+
     H264Decoder dec;
     hr = dec.Initialize(o.width, o.height);
     if (FAILED(hr)) {

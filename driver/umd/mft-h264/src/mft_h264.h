@@ -166,7 +166,8 @@ private:
     // Rebuilds MF_MT_MPEG_SEQUENCE_HEADER and MF_MT_MPEG2_LEVEL on the current output type from
     // m_cfg. Called from every path that changes something the parameter sets carry.
     HRESULT RefreshOutputParameterSets();
-    // Publishes MFT_ENUM_ADAPTER_LUID of the adapter the encode runs on, once it is known.
+    // Publishes MFT_ENUM_ADAPTER_LUID of the adapter the encode runs on, once it is known, in the
+    // documented LUID shape (an 8 byte blob).
     void PublishAdapterLuid(ID3D11Device* device);
     HRESULT BuildInputType(DWORD index, IMFMediaType** out) const;
     HRESULT BuildOutputType(IMFMediaType** out) const;

@@ -778,12 +778,21 @@ HRESULT Bc250H264Mft::EnsureEncoder()
     return RefreshOutputParameterSets();
 }
 
-// MFT_ENUM_ADAPTER_LUID (mfapi.h:2025) is how a client binds a hardware encoder to one GPU: it
-// passes the adapter's LUID to MFTEnum2 and expects the transform to carry the same value. A
-// machine-wide registration cannot hold it - a LUID is assigned at boot and is not stable across
-// boots, so no static registry blob can name one - so the live object publishes it as soon as it
-// knows which adapter it encodes on, which is also what a client reading GetAttributes sees.
-// INSTALL.md records what this means for the two registration routes.
+// MFT_ENUM_ADAPTER_LUID (mfapi.h:2025) names the GPU a hardware encoder belongs to. A client that
+// wants the encoder of one particular adapter passes that LUID to MFTEnum2 together with
+// MFT_ENUM_FLAG_HARDWARE; the platform answers from the registration, not from this object, and a
+// static registration cannot hold a LUID anyway, because a LUID is assigned at boot and is not
+// stable across boots. What this object can do, and does here, is answer the question for a client
+// that already holds it: which adapter will the encode run on.
+//
+// The attribute's documented data type is LUID, that is an 8 byte blob
+// (learn.microsoft.com/windows/win32/medfound/mft-enum-adapter-luid, and the MFTEnum2 reference
+// passes it with SetBlob(..., sizeof(LUID))), so a UINT64 of the same bits would answer
+// MF_E_INVALIDTYPE to the GetBlob a client writes. Measured on the development PC, 2026-10-05
+// (mftreg --enum): Media Foundation itself publishes this attribute on none of the three H.264
+// encoder activation objects of this machine, including the NVIDIA hardware encoder's, so a client
+// that reads it off the live transform is reading ours alone. INSTALL.md records what the
+// per-adapter enumeration needs from the registration.
 void Bc250H264Mft::PublishAdapterLuid(ID3D11Device* device)
 {
     if (device == nullptr || !m_attributes) {
@@ -802,9 +811,9 @@ void Bc250H264Mft::PublishAdapterLuid(ID3D11Device* device)
     if (FAILED(adapter->GetDesc(&desc))) {
         return;
     }
-    UINT64 luid = 0;
-    memcpy(&luid, &desc.AdapterLuid, sizeof(luid));
-    m_attributes->SetUINT64(MFT_ENUM_ADAPTER_LUID, luid);
+    m_attributes->SetBlob(MFT_ENUM_ADAPTER_LUID,
+                          reinterpret_cast<const UINT8*>(&desc.AdapterLuid),
+                          sizeof(desc.AdapterLuid));
 }
 
 HRESULT Bc250H264Mft::SampleToFrame(IMFSample* sample, GpuFrameInput* frame, FrameLock* lock)

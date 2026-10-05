@@ -186,7 +186,9 @@ Invoke-Tool $link (@('/nologo', '/Brepro', '/INCREMENTAL:NO', "/OUT:$regExe") +
 # ---------------------------------------------------------------- gate: no C runtime DLL import
 
 foreach ($bin in @($dll, $exe, $regExe)) {
-    $imports = & $dumpbin '/nologo' '/imports' $bin 2>&1 | Where-Object { $_ -match '\.dll$' } |
+    # dumpbin's own "Dump of file <path>.dll" line also ends in .dll, so it has to go out first.
+    $imports = & $dumpbin '/nologo' '/imports' $bin 2>&1 |
+        Where-Object { $_ -match '\.dll$' -and $_ -notmatch '^Dump of file' } |
         ForEach-Object { $_.Trim() } | Sort-Object -Unique
     $bad = $imports | Where-Object { $_ -match '(?i)^(vcruntime|msvcp|msvcr|api-ms-win-crt)' }
     if ($bad) {
