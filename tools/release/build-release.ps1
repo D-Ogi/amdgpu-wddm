@@ -135,7 +135,9 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
 foreach ($f in $taskScripts) { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
-Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
+# TESTERS.md is not shipped any more. It named one package version of its own ("0.7.199.100-tester.11") in every
+# package up to tester.12, it read as the tester-facing note, and no gate held it to the release that carried it. The
+# per-release RELEASE-NOTES.md below replaced it.
 # Release notes (GUI plan WU-044, C16): docs/testing/release-notes/<version>.md in English, with the four sections of the
 # release checklist; the setup window shows them before any change. A translation <version>.<lang>.md goes in as
 # RELEASE-NOTES.<lang>.md; without one the window shows the English text, labelled as English.
@@ -153,6 +155,14 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
+# No shipped document may name a package version other than this one. The release notes are the one exception: they
+# are chosen by version above, and they name an earlier release where a tester needs to know about it.
+foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
+    if ($d.Name -like 'RELEASE-NOTES*') { continue }
+    $named = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
+    if ($named.Count) { throw "$($d.Name) names the package version $($named -join ', '): a shipped document may name only this package's version ($Version), or no version at all" }
+}
+'  documents: {0} name no package version but this one' -f (@(Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' }).Count)
 # The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The installer's
 # continuation runs it from the staged closure after each restart that a setup-window run asked for.
 if ($SetupApp) {

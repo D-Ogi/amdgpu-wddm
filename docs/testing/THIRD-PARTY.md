@@ -14,13 +14,13 @@ and NOTICE in the package root).
 | `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `8433a0014ba471e79b25d94711dcb448e9c40323` (branch `kmd207-train`); the .sys also contains the Linux amdgpu code in the next table |
 | `system32\bc250umd.dll` | amdgpu-wddm `driver/umd-stub` |
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `694e6bac329e0c56fbda326f8b7e9a6c3120b9a5` (branch `m15/d3d12-iflip`) |
-| `desktop\bc250d3d_router.dll` | amdgpu-wddm `6bbcf4f6bcba577e5d9d170246128496c7eb087d` (`driver/umd/router`) |
+| `desktop\bc250d3d_router.dll` | amdgpu-wddm `631d25dad215f0b47896080b5238a237584e5836` (`driver/umd/router`) |
 | `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `f93521ec8bd2f53ce99e2adad5156e7babd7451a` (branch `m14/d3d11-iflip`, `driver/umd/dxvk`) |
 | `syswow64\bc250umd.dll` | amdgpu-wddm `driver/umd-stub`, x86 build |
 | `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `631d25da` (`driver/umd/router`) with the BD-064 x86 changes (Wow path values, 64-bit policy view, plain export names), x86 build |
 | `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `f93521ec8bd2f53ce99e2adad5156e7babd7451a` (`driver/umd/dxvk`) with the BD-064 x86 changes (plain export name), x86 build |
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `8433a0014ba471e79b25d94711dcb448e9c40323` (branch `kmd207-train`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
-| `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `7f4d3485` (`driver/umd/mft-h264`) |
+| `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `70b6f8388309888690a854ddf4cdf5ab35ea594f` (branch `m15/video-encode-mft`, `driver/umd/mft-h264`) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `8433a0014ba471e79b25d94711dcb448e9c40323` (branch `kmd207-train`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |

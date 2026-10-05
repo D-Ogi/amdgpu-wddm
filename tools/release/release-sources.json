@@ -20,10 +20,11 @@
     "d3d11_engine": "dxvk fork amdgpu-wddm/upstream-2026-10-05 5611118e",
     "d3d11_icd": "mesa fork amdgpu-wddm/upstream-2026-10-05 7b17e614",
     "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm f93521ec + x86 patch 02560EAD, engine dxvk 5611118e, ICD mesa 7b17e614 + x86 patch 9C645734; no x86 D3D12",
+    "mft_h264": "bc250-win 70b6f838 (m15/video-encode-mft), the H.264 encoder transform",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "public_commits": {
-    "note": "Built commit -> commit on a public branch, for every pair that differs. b18 has no such pair: each commit this release was built from is published at its own hash (D-Ogi/amdgpu-wddm kmd207-train 8433a001, m15/d3d12-iflip 694e6bac, m14/d3d11-iflip f93521ec, m15/video-encode-mft 7f4d3485; the three engine forks on branch amdgpu-wddm/upstream-2026-10-05). The b17 pairs were 2e61d1fe -> 6c8c31c9, 36745de5 -> 7b8347ba, 7294c09d -> af01d499 and dd30a44d -> 9a6f26d2."
+    "note": "Built commit -> commit on a public branch, for every pair that differs. b18 has no such pair: each commit this release was built from is published at its own hash (D-Ogi/amdgpu-wddm kmd207-train 8433a001, m15/d3d12-iflip 694e6bac, m14/d3d11-iflip f93521ec, m15/video-encode-mft 70b6f838; the three engine forks on branch amdgpu-wddm/upstream-2026-10-05). The b17 pairs were 2e61d1fe -> 6c8c31c9, 36745de5 -> 7b8347ba, 7294c09d -> af01d499 and dd30a44d -> 9a6f26d2."
   },
   "files": [
     {
@@ -277,10 +278,10 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/build/mft-h264-committed/amdgpu_wddm_mft_h264.dll",
-      "sha256": "DA890BBB819EE2B09EFD2F2ADCE6B91CFB47B269BAD623D8327C83A398E216A2",
-      "size": 454656,
-      "role": "H.264 encoder Media Foundation transform, M15.11 (driver/umd/mft-h264, bc250-win 7f4d3485 on m15/video-encode-mft). The installer copies and registers it only while mft_h264.register is true"
+      "source": "scratch/train/build-mft-b18/amdgpu_wddm_mft_h264.dll",
+      "sha256": "141969A3F212619AD6AAFDEEE011AA3F00FDF8C4DC154409993CFF19F54683D5",
+      "size": 455168,
+      "role": "H.264 encoder Media Foundation transform, M15.11 (driver/umd/mft-h264, bc250-win 70b6f838 on m15/video-encode-mft). The installer copies and registers it only while mft_h264.register is true"
     }
   ],
   "firmware": {
