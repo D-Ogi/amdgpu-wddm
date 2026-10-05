@@ -6,6 +6,14 @@
 // metadata remains separate and unchanged. v3 requires a KMD admitting it.
 #define BC250_SURFACE_RESOURCE_MAGIC 0x52363245ul
 #define BC250_SURFACE_RESOURCE_TEXTURE_VERSION 3ul
+// Access intent bits. PRIMARY and CPU_READ are v2's; SCANOUT is M15.14's and means the resource's
+// allocations are meant to reach SetVidPnSourceAddress, so they belong in the local segment the
+// DirectFlip descriptor names rather than in the shared aperture. It implies PRIMARY and excludes
+// CPU_READ: a scanned-out surface has no cached CPU reader.
+#define BC250_SURFACE_RESOURCE_PRIMARY 0x1ul
+#define BC250_SURFACE_RESOURCE_CPU_READ 0x2ul
+#define BC250_SURFACE_RESOURCE_SCANOUT 0x4ul
+#define BC250_SURFACE_RESOURCE_ACCESS_MASK 0x7ul
 typedef struct _BC250_SURFACE_RESOURCE_PRIVATE {
     unsigned long Magic, Version, Shared, Access;
     // D3D11_TEXTURE2D_DESC1, serialized explicitly. Format is DXGI_FORMAT.
@@ -25,9 +33,27 @@ static __inline int Bc250SurfaceResourcePolicy(const void* Data, unsigned int By
     if (words[1]==1 && Bytes==3*sizeof(unsigned long)) { *SharedCpu=(int)words[2]; return 1; }
     if (!((words[1]==2 && Bytes==4*sizeof(unsigned long)) ||
         (words[1]==BC250_SURFACE_RESOURCE_TEXTURE_VERSION && Bytes==sizeof(BC250_SURFACE_RESOURCE_PRIVATE)))) return 0;
-    if (words[3]&~3ul) return 0;
+    if (words[3]&~BC250_SURFACE_RESOURCE_ACCESS_MASK) return 0;
+    // SCANOUT is a scan-out primary and nothing else: without PRIMARY it is a resource claiming the
+    // display pipeline for a surface the runtime never made a primary, and with CPU_READ it is asking
+    // for a cached CPU mapping of a plane the display core reads.
+    if ((words[3]&BC250_SURFACE_RESOURCE_SCANOUT) &&
+        ((words[3]&BC250_SURFACE_RESOURCE_PRIMARY)==0 || (words[3]&BC250_SURFACE_RESOURCE_CPU_READ))) return 0;
     *SharedCpu=(int)words[2];
-    *CachedCpu=*SharedCpu && (words[3]&2ul)!=0 && (words[3]&1ul)==0;
+    *CachedCpu=*SharedCpu && (words[3]&BC250_SURFACE_RESOURCE_CPU_READ)!=0 &&
+        (words[3]&BC250_SURFACE_RESOURCE_PRIMARY)==0;
     return 1;
+}
+
+// M15.14: whether this resource record asks for scan-out. Shape only, and only for a record this
+// parser has already admitted; the caller still decides what placement and what flip that earns.
+// A record of no E26R magic, or of v1, has no access word and therefore never asks.
+static __inline int Bc250SurfaceResourceScanout(const void* Data, unsigned int Bytes)
+{
+    const unsigned long* words=(const unsigned long*)Data;
+    int shared=0,cached=0;
+    if (!Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached)) return 0;
+    if (!Data || Bytes<4*sizeof(unsigned long) || words[0]!=BC250_SURFACE_RESOURCE_MAGIC) return 0;
+    return (words[3]&BC250_SURFACE_RESOURCE_SCANOUT)!=0;
 }
 #endif
