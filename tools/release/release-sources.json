@@ -1,11 +1,11 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.204.1",
-  "kmd_abi": "0x000700CC",
+  "kmd_version": "0.7.205.1",
+  "kmd_abi": "0x000700CD",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "sources": {
-    "kmd": "bc250-win 36745de5 (kmd204-warm87)",
+    "kmd": "bc250-win 2e61d1fe (kmd205-thermal-subfloor)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/compile-limiter 220099f5",
     "d3d12_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
@@ -19,18 +19,18 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/warm87/build-kmd/package/bc250kmd.inf",
-      "sha256": "D98AC1A0D3AA9A4A37860D6BC08F5AB7116CF4ED5BF267C91171A9DB3FBE8A3C",
+      "source": "scratch/subfloor/build-kmd/package/bc250kmd.inf",
+      "sha256": "E175FEC41288DC63BD934A002D5BC4256A902D7D38033CD58DB404126037E0FA",
       "size": 8013,
-      "role": "KMD 0.7.204.1 INF (commit 36745de5, kmd204-warm87 on kmd203-dpm-ramp a6464ef6); the release re-stamps DriverVer and adds the Reboot directive"
+      "role": "KMD 0.7.205.1 INF (commit 2e61d1fe, kmd205-thermal-subfloor on kmd204-warm87 36745de5); the release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/warm87/build-kmd/package/bc250kmd.sys",
-      "sha256": "E5CDD855F76E8C000A43DDBDC54BE0BBEE7969B77554D1AB296608C41B2A8764",
-      "size": 482704,
-      "role": "KMD 0.7.204.1 (commit 36745de5, kmd204-warm87: DPM warm zone at 87 C, raises one level per 1-4 s from 70 C to 87 C, on kmd203-dpm-ramp, on kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
+      "source": "scratch/subfloor/build-kmd/package/bc250kmd.sys",
+      "sha256": "E38F0B5FDCB034B4852A225FCAFDF0A4B1C2A7D7FABE6F66742B3C08F4D94480",
+      "size": 483216,
+      "role": "KMD 0.7.205.1 (commit 2e61d1fe, kmd205-thermal-subfloor: thermal-only points at 900 and 800 MHz / 820 mV below the 1000 MHz floor, owner 2026-10-05; on kmd204-warm87: DPM warm zone at 87 C, raises one level per 1-4 s from 70 C to 87 C, on kmd203-dpm-ramp, on kmd202-bd065-blt-present: Blt Present refusal reasons, on kmd201-dxgi-modes: DXGI display modes in 8-bit RGBA, 10-bit and FP16 formats); re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
