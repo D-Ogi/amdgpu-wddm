@@ -77,6 +77,7 @@ try {
     # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol
     # gate below reads the library with dumpbin, which cannot read /GL objects.
     $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', '/external:W0', '/MT', '/DNOMINMAX', '/Zi',
+        '/Brepro',
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
@@ -109,7 +110,7 @@ try {
         # Native build. /analyze runs with the same /WX, so a finding fails the build.
         Invoke-Step 'native library (/analyze)' { & cl.exe @flags /analyze /analyze:external- /c /Fo:native\ /Fd:native\engine-ddi.pdb @libSources }
         $nativeObjs = @($libSources | ForEach-Object { Join-Path 'native' ([IO.Path]::ChangeExtension((Split-Path -Leaf $_), '.obj')) })
-        Invoke-Step 'native library link' { & lib.exe /nologo /OUT:engine-ddi.lib @nativeObjs }
+        Invoke-Step 'native library link' { & lib.exe /nologo /Brepro /OUT:engine-ddi.lib @nativeObjs }
         $symbols = & dumpbin.exe /nologo /symbols engine-ddi.lib
         if ($LASTEXITCODE) { throw 'dumpbin failed' }
         $harnessSymbols = @($symbols | Select-String -Pattern 'harness_' -SimpleMatch)
@@ -127,7 +128,7 @@ try {
         if (-not $NativeOnly) {
             Invoke-Step 'harness library' { & cl.exe @flags $harnessFlag /c /Fo:harness\ /Fd:harness\engine-ddi.pdb @libSources }
             $harnessObjs = @($libSources | ForEach-Object { Join-Path 'harness' ([IO.Path]::ChangeExtension((Split-Path -Leaf $_), '.obj')) })
-            Invoke-Step 'harness library link' { & lib.exe /nologo /OUT:engine-ddi-harness.lib @harnessObjs }
+            Invoke-Step 'harness library link' { & lib.exe /nologo /Brepro /OUT:engine-ddi-harness.lib @harnessObjs }
             if (-not $harnessSources.Count) { throw 'no harness sources in engine-ddi\tests' }
             Invoke-Step 'harness executable' { & cl.exe @flags $harnessFlag /Fo:harness\ /Fd:harness\ /Fe:engine-ddi-harness.exe @harnessSources engine-ddi-harness.lib dxgi.lib }
         }
