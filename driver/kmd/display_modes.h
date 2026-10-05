@@ -15,7 +15,12 @@
 //
 // The list comes from the shared table, never from a second whitelist:
 //   1. the SCANOUT_PRIMARY rows that DXGI can name (dxgi != 0): the plane the firmware left, BGRA8;
-//   2. with Composed, the COMPOSED rows that DXGI can name: RGBA8, RGB10A2, RGBA16F.
+//   2. with Composed, the COMPOSED rows that DXGI can name and that hold a whole displayable pixel, four bytes
+//      or more: RGBA8, RGB10A2, RGBA16F.
+// The size rule keeps the shared surfaces that are not swap-chain buffers out of the mode list. COMPOSED names
+// every surface the compositor opens, which since 0.7.207 includes the 1-byte A8 atlases DirectComposition
+// shares (driver/contract/amdgpu_wddm_surface_format.h). A8 is not a display format: no DXGI swap chain asks
+// for it, and a source mode of it would offer the desktop a format the display pipeline cannot show.
 // A mode of step 2 does not change the scan-out. The display keeps the 8-bit plane, SetVidPnSourceAddress keeps
 // refusing allocations without SCANOUT_PRIMARY (wddm.c), and the UMDs present such buffers through composition.
 // The first entry is the GDI format, so a consumer that takes the first mode gets the desktop's format.
@@ -33,7 +38,7 @@ static __inline unsigned long Bc250SourceModeFormats(int Composed, unsigned long
             const int scanout = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY) != 0;
             const int composed = amdgpu_wddm_surface_admit(&rows[i], AMDGPU_WDDM_SURFACE_COMPOSED) != 0;
             if (!rows[i].dxgi) continue;
-            if (pass == 0 ? !scanout : (scanout || !composed)) continue;
+            if (pass == 0 ? !scanout : (scanout || !composed || rows[i].bytes_per_pixel < 4)) continue;
             if (n < Max) Formats[n] = rows[i].d3dddi;
             ++n;
         }

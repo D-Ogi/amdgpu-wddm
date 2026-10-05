@@ -10,6 +10,7 @@ static int g_failures, g_checks;
 #define CHECK(cond) \
     do { g_checks++; if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
 
+#define FMT_A8 28ul
 #define FMT_A8R8G8B8 21ul
 #define FMT_X8R8G8B8 22ul
 #define FMT_A2B10G10R10 31ul
@@ -30,6 +31,7 @@ int main(void)
 
     // Full table: the scan-out format first (the desktop takes the first GDI format), then the composed formats
     // DXGI names: R8G8B8A8, R10G10B10A2, R16G16B16A16_FLOAT. X8R8G8B8 has no DXGI display format and stays out.
+    // A8 is COMPOSED and DXGI names it (A8_UNORM), but one byte is not a displayable pixel, so it stays out too.
     n = Bc250SourceModeFormats(1, f, BC250_SOURCE_MODE_MAX);
     CHECK(n == 4);
     CHECK(f[0] == FMT_A8R8G8B8);
@@ -69,6 +71,17 @@ int main(void)
     CHECK(!Bc250SourceModeAdmitted(1, FMT_X8B8G8R8));
     CHECK(!Bc250SourceModeAdmitted(1, FMT_A2R10G10B10));
     CHECK(!Bc250SourceModeAdmitted(1, 0));
+    // The 1-byte composed row (A8, the DirectComposition atlases of 0.7.207) is a shared surface and never a
+    // source mode, with the composed table and without it. Its bytes are still 1 at the composed stage.
+    CHECK(!Bc250SourceModeAdmitted(0, FMT_A8));
+    CHECK(!Bc250SourceModeAdmitted(1, FMT_A8));
+    CHECK(WddmSurfaceFormatBpp(FMT_A8, BC250_SURFACE_COMPOSED) == 1);
+    CHECK(WddmSurfaceFormatBpp(FMT_A8, BC250_SURFACE_SCANOUT) == 0);
+    {
+        const AMDGPU_WDDM_SURFACE_FORMAT* row = amdgpu_wddm_surface_format_by_d3dddi(FMT_A8);
+        CHECK(row != 0 && row->dxgi != 0 && row->bytes_per_pixel == 1);
+        CHECK(row != 0 && amdgpu_wddm_surface_admit(row, AMDGPU_WDDM_SURFACE_COMPOSED) != 0);
+    }
 
     // Stride: the firmware pitch at 4 bytes a pixel, scaled to the row's size. 1920 pixels with the lab's
     // 7680-byte pitch, and a padded pitch of 7936 (1984 pixels).
@@ -80,6 +93,7 @@ int main(void)
     CHECK(Bc250SourceModeStride(FMT_A8R8G8B8, 0) == 0);
     CHECK(Bc250SourceModeStride(FMT_A8R8G8B8, 7681) == 0);
     CHECK(Bc250SourceModeStride(FMT_A2R10G10B10, 7680) == 0);
+    CHECK(Bc250SourceModeStride(FMT_A8, 7680) == 1920);   /* a stride nothing asks for: A8 is not a source mode */
     CHECK(Bc250SourceModeStride(FMT_A16B16G16R16F, 0xfffffffcul) == 0);
     CHECK(Bc250SourceModeStride(FMT_A16B16G16R16F, 0x7ffffffcul) == 0xfffffff8ul);
 
