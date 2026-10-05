@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "../gdi_admission.h"
+// M15.14 increment 2: the one builder of a scan-out resource record, so that the producer and the rule
+// its only consumer applies are checked against each other on this PC and not on the lab.
+#include "../../contract/bc250_scanout_record.h"
 
 static int g_failures, g_checks;
 
@@ -440,10 +443,162 @@ static void ScanoutPlacement(void)
     CHECK(!p.Aperture && p.AccessedPhysically);
 }
 
+// The type-0 placement of CreateAllocation at 0.7.208.1, transcribed from wddm.c: Bc250Lb7aAdmit computed
+// the policy from the three bits WddmSurfaceResourcePolicy had parsed out of the resource record at DDI
+// entry, and the per-allocation loop then applied WddmGdiScanoutPolicy when the record asked for scan-out.
+// 0.7.209.1 replaces those lines with WddmGdiRecordPolicy, which the compositor's user-mode driver calls
+// as well, so this is the oracle for the claim that nothing moved.
+static int OldRecordPolicy(const void* Record, unsigned int Bytes, BC250_GDI_ALLOCATION_POLICY* P)
+{
+    int shared = 0, cached = 0;
+    if (!Bc250SurfaceResourcePolicy(Record, Bytes, &shared, &cached)) return 0;
+    if (!WddmGdiAllocationPolicy(0, shared, cached, P)) return 0;
+    if (Bc250SurfaceResourceScanout(Record, Bytes)) WddmGdiScanoutPolicy(P);
+    return 1;
+}
+
+// A record of this test's own making. Words, so that a shape the parser must refuse can be built at all.
+static unsigned int Record(unsigned long* W, unsigned long Version, unsigned long Shared, unsigned long Access,
+    unsigned int Bytes)
+{
+    memset(W, 0, sizeof(BC250_SURFACE_RESOURCE_PRIVATE));
+    W[0] = BC250_SURFACE_RESOURCE_MAGIC; W[1] = Version; W[2] = Shared; W[3] = Access;
+    return Bytes;
+}
+
+// M15.14 increment 2: the one derivation that the kernel driver places an allocation with and the
+// compositor's user-mode driver asks about, and the two questions that are not the same question.
+// Nothing covered any of this before: the gate's own "same as before" numbers cannot move, because the
+// old lines and the new function read the same record through the same parser.
+static void RecordDerivation(void)
+{
+    unsigned long w[sizeof(BC250_SURFACE_RESOURCE_PRIVATE) / sizeof(unsigned long)];
+    BC250_SURFACE_RESOURCE_PRIVATE built;
+    BC250_GDI_ALLOCATION_POLICY p, old;
+    unsigned long version, access;
+    unsigned int bytes;
+    const unsigned int v1 = 3 * (unsigned int)sizeof(unsigned long);
+    const unsigned int v2 = 4 * (unsigned int)sizeof(unsigned long);
+    const unsigned int v3 = (unsigned int)sizeof(BC250_SURFACE_RESOURCE_PRIVATE);
+
+    // (a) No record at all. The kernel driver must still place a plain type-0 VRAM surface, because that
+    // is what every standard allocation is, so the derivation succeeds and WddmGdiScannable says yes.
+    // This is the shape that makes the derivation fail-safe for the placement and fail-open for the
+    // compositor's question, which is why the two questions have two functions.
+    CHECK(WddmGdiRecordPolicy(NULL, 0, &p) && !p.Aperture && p.AccessedPhysically && p.CpuVisible);
+    CHECK(WddmGdiScannable(&p));
+    CHECK(!WddmGdiRecordScannable(NULL, 0));
+    CHECK(WddmGdiPolicyBits(&p) == (1ul | 8ul | 16ul));     // CpuVisible, AccessedPhysically, scannable
+    // A blob with no E26R magic is the same case: a legacy type-0 surface, placed, not scannable to a
+    // user-mode caller that could not read a record.
+    memset(w, 0, sizeof(w));
+    CHECK(WddmGdiRecordPolicy(w, v3, &p) && WddmGdiScannable(&p));
+    CHECK(!WddmGdiRecordScannable(w, v3));
+    CHECK(Bc250SurfaceResourceIntent(w, v3, &version, &access) && !version && !access);
+
+    // (b) v1, the shape the D3D12 shell writes for a plain primary: shared, no access word, so it can
+    // never ask for scan-out. Shared puts it in the aperture, which the display core cannot read.
+    bytes = Record(w, 1, 1, 0, v1);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p) && p.Aperture && !p.AccessedPhysically);
+    CHECK(!WddmGdiScannable(&p) && !WddmGdiRecordScannable(w, bytes));
+    CHECK(Bc250SurfaceResourceIntent(w, bytes, &version, &access) && version == 1 && !access);
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+    bytes = Record(w, 1, 0, 0, v1);     // not shared: VRAM, physical, and the display core can read it
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p) && WddmGdiScannable(&p));
+    CHECK(!WddmGdiRecordScannable(w, bytes));   // but it never asked, so no shell may flip it
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+
+    // (c) v2: PRIMARY, and PRIMARY|CPU_READ, which is the composed primary of M14.1. Cached CPU backing
+    // is what PRIMARY excludes, so a primary never becomes Cached whatever the access word says.
+    bytes = Record(w, 2, 1, BC250_SURFACE_RESOURCE_PRIMARY, v2);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p) && p.Aperture && !p.Cached && !WddmGdiScannable(&p));
+    CHECK(!WddmGdiRecordScannable(w, bytes));
+    CHECK(Bc250SurfaceResourceIntent(w, bytes, &version, &access) &&
+          version == 2 && access == BC250_SURFACE_RESOURCE_PRIMARY);
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+    bytes = Record(w, 2, 1, BC250_SURFACE_RESOURCE_CPU_READ, v2);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p) && p.Aperture && p.Cached && !WddmGdiScannable(&p));
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+    // v2 cannot carry SCANOUT: only a v3 record of the full size is a scan-out record, and the parser
+    // refuses the bit at any other version by refusing the record.
+    bytes = Record(w, 2, 1, BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT, v2);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p) && !p.Aperture && p.AccessedPhysically);
+    CHECK(WddmGdiRecordScannable(w, bytes) == 0);    // v2 is not the opener's shape
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+
+    // (d) v3 with the scan-out bits: the one shape a flip can ever come from. All four placement bits
+    // move together, and this is the only input for which WddmGdiRecordScannable says yes.
+    bytes = Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+                   BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT, v3);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p));
+    CHECK(!p.Aperture && !p.CpuVisible && !p.Cached && p.AccessedPhysically);
+    CHECK(WddmGdiScannable(&p) && WddmGdiRecordScannable(w, bytes));
+    CHECK(WddmGdiPolicyBits(&p) == (8ul | 16ul));
+    CHECK(Bc250SurfaceResourceIntent(w, bytes, &version, &access) &&
+          version == BC250_SURFACE_RESOURCE_TEXTURE_VERSION &&
+          access == (BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT));
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+    // A v3 record of the right size that did not ask is placed by its shared bit like any other, and no
+    // shell may flip it.
+    bytes = Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1, BC250_SURFACE_RESOURCE_PRIMARY, v3);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p) && p.Aperture && !WddmGdiScannable(&p));
+    CHECK(!WddmGdiRecordScannable(w, bytes));
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+    // A v3 record at the wrong size is refused outright, and the user-mode question says no without
+    // needing the parser's answer at all.
+    (void)Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+                 BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT, v2);
+    CHECK(!WddmGdiRecordPolicy(w, v2, &p) && !OldRecordPolicy(w, v2, &old));
+    CHECK(!WddmGdiRecordScannable(w, v2));
+    CHECK(!Bc250SurfaceResourceIntent(w, v2, &version, &access) && !version && !access);
+
+    // (e) The shapes the parser must refuse, each for its own reason. A refused record means the DDI
+    // fails before any allocation object exists; a placement is never derived from one.
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 1, 1, 0, v2), &p));              // v1 at 16 bytes
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 2, 1, 0, v1), &p));              // v2 at 12 bytes
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 4, 1, 0, v2), &p));              // no such version
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 2, 2, 0, v2), &p));              // shared is a bit
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 2, 1, 0x8ul, v2), &p));          // outside the access mask
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 2, 1, BC250_SURFACE_RESOURCE_SCANOUT, v2), &p));  // no PRIMARY
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+        BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_CPU_READ,
+        v3), &p));                                                          // a cached reader of a plane
+
+    // (f) The one shared builder of a scan-out record (driver/contract/bc250_scanout_record.h) against the
+    // rule its only consumer applies. This case is what closes the producer against the opener with no lab
+    // trial: the compositor's D3D11 opener takes 64 bytes of E26R v3 and validates every field, so a
+    // builder that drifts from it makes the surface unopenable and no flip possible.
+    Bc250ScanoutRecordInit(&built, 1920, 1200, 87ul /* DXGI_FORMAT_B8G8R8A8_UNORM */);
+    CHECK(sizeof(built) == 64 && built.Magic == BC250_SURFACE_RESOURCE_MAGIC);
+    CHECK(built.Version == BC250_SURFACE_RESOURCE_TEXTURE_VERSION && built.Shared == 1);
+    CHECK(built.Access == (BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT));
+    CHECK(built.Width == 1920 && built.Height == 1200 && built.Format == 87ul);
+    CHECK(built.MipLevels == 1 && built.ArraySize == 1 && built.SampleCount == 1 && !built.SampleQuality);
+    CHECK(built.Usage == BC250_SCANOUT_RECORD_USAGE && built.BindFlags == BC250_SCANOUT_RECORD_BIND);
+    CHECK(!built.CpuAccessFlags && !built.MiscFlags && built.TextureLayout == BC250_SCANOUT_RECORD_LAYOUT);
+    CHECK(WddmGdiRecordScannable(&built, (unsigned int)sizeof(built)));
+    CHECK(WddmGdiRecordPolicy(&built, (unsigned int)sizeof(built), &p) && WddmGdiScannable(&p));
+    CHECK(Bc250SurfaceResourceScanout(&built, (unsigned int)sizeof(built)));
+    CHECK(Bc250SurfaceResourceIntent(&built, (unsigned int)sizeof(built), &version, &access) &&
+          version == BC250_SURFACE_RESOURCE_TEXTURE_VERSION &&
+          access == (BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT));
+    // The builder writes nothing through a null pointer, and the one field the opener does not derive
+    // from the image is the one it insists on: BindFlags inside RENDER_TARGET|SHADER_RESOURCE.
+    Bc250ScanoutRecordInit(NULL, 1, 1, 0);
+    CHECK((built.BindFlags & ~(0x20ul | 0x8ul | 0x80ul)) == 0);
+
+    // (g) NULL outputs are refused rather than written through.
+    CHECK(!WddmGdiRecordPolicy(w, v3, NULL));
+    CHECK(!WddmGdiScannable(NULL) && WddmGdiPolicyBits(NULL) == 0);
+    CHECK(!Bc250SurfaceResourceIntent(w, v3, NULL, &access));
+    CHECK(!Bc250SurfaceResourceIntent(w, v3, &version, NULL));
+}
+
 int main(void)
 {
     SameAsBefore();
     ScanoutPlacement();
+    RecordDerivation();
     RefusalsCounted();
     ReceivedBlobs();
     CreateRollback();

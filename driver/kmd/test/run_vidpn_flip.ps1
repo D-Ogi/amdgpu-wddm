@@ -11,7 +11,10 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
 & python "$PSScriptRoot\generate_vidpn_flip_test.py" --source $Source --out "$Out\vidpn_flip_actual.c"
 if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
-& $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\vidpn_flip_test.exe" "$Out\vidpn_flip_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+# /wd4201: the fixture declares DXGK_SETVIDPNSOURCEADDRESS_FLAGS the way the WDK declares it, as a nameless
+# union of a bitfield struct and a Value word, because the extracted driver source reads both. That is the
+# same nonstandard extension driver\kmd\build.ps1 turns off for the WDK's own headers, and for the same reason.
+& $cl /nologo /TC /W4 /WX /wd4201 /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\vidpn_flip_test.exe" "$Out\vidpn_flip_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}
 & "$Out\vidpn_flip_test.exe"
 exit $LASTEXITCODE

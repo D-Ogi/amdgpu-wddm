@@ -81,6 +81,11 @@ static __inline int WddmGdiScannable(const BC250_GDI_ALLOCATION_POLICY* Policy)
 // ApertureOffered never enters a type-0 policy (gdi_admission.h, Bc250Lb7aAdmit) and a standard GDI
 // surface is never a scan-out candidate. 0 means the record was refused; the caller must then refuse
 // the allocation rather than place it.
+//   This is the PLACEMENT, so it is fail-safe in the kernel driver's direction and not in the
+// compositor's: a call with no record at all succeeds, with the plain type-0 VRAM placement a standard
+// allocation must get, and WddmGdiScannable of that placement is 1. A user-mode caller deciding whether
+// the display core can read a surface must therefore use WddmGdiRecordScannable below, which refuses
+// every record it could not read, and never this function with WddmGdiScannable on top of it.
 static __inline int WddmGdiRecordPolicy(const void* Record, unsigned int Bytes,
                                         BC250_GDI_ALLOCATION_POLICY* Policy)
 {
@@ -89,6 +94,28 @@ static __inline int WddmGdiRecordPolicy(const void* Record, unsigned int Bytes,
     if (!WddmGdiAllocationPolicy(0, shared, cached, Policy)) return 0;
     if (Bc250SurfaceResourceScanout(Record, Bytes)) WddmGdiScanoutPolicy(Policy);
     return 1;
+}
+
+// The question the compositor's user-mode driver actually has, which is not the one the kernel driver's
+// CreateAllocation has. WddmGdiRecordPolicy is deliberately fail-safe for the placement: a call with no
+// record, or with a blob that carries no E26R magic, succeeds and places a plain type-0 VRAM surface,
+// because that is what a standard allocation is and the kernel driver must create it. Read as "can the
+// display core read this surface", though, the same answer is fail-OPEN: it says yes about a surface
+// whose record could not be read, and the shell would then agree to a flip of an aperture-resident
+// buffer whose address DcnTranslateCardAddress refuses - after the runtime had stopped copying.
+//   So a user-mode caller asks this function instead. It requires a record the scan-out contract can
+// actually have produced: E26R, version 3, exactly BC250_SURFACE_RESOURCE_PRIVATE bytes, and the SCANOUT
+// bit set. Anything else is FALSE, including every shape the kernel driver still places happily.
+static __inline int WddmGdiRecordScannable(const void* Record, unsigned int Bytes)
+{
+    const unsigned long* words=(const unsigned long*)Record;
+    BC250_GDI_ALLOCATION_POLICY policy;
+    if (!Record || Bytes!=sizeof(BC250_SURFACE_RESOURCE_PRIVATE)) return 0;
+    if (words[0]!=BC250_SURFACE_RESOURCE_MAGIC ||
+        words[1]!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION) return 0;
+    if (!Bc250SurfaceResourceScanout(Record,Bytes)) return 0;
+    if (!WddmGdiRecordPolicy(Record,Bytes,&policy)) return 0;
+    return WddmGdiScannable(&policy);
 }
 
 // The four placement bits as one word, for a log line that must fit the driver's 160-byte log text:

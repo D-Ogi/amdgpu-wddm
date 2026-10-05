@@ -35,7 +35,29 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700D0u       // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
+#define BC250_KMD_VERSION 0x000700D1u       // revision 209 (INF 0.7.209.1, on 208.1): M15.14 increment 2, the
+                                            // DirectFlip handshake's kernel half. One derivation of the type-0
+                                            // placement (WddmGdiRecordPolicy) that CreateAllocation uses and the
+                                            // compositor's user-mode driver asks, with WddmGdiRecordScannable as
+                                            // the user-mode question - that one refuses every record it could not
+                                            // read, because the placement derivation is fail-safe for the kernel
+                                            // driver and fail-open for the shell. A second optional
+                                            // UMDRIVERPRIVATE trailer (bc250_scanout_caps.h, offset 1496, 24
+                                            // bytes) publishes whether this start will admit a client scan-out
+                                            // flip and at what geometry; it is written only when the new REG_DWORD
+                                            // EnableDirectFlipHandshake is 1 AND every start-latched fact the flip
+                                            // path needs is true, so a start with it off is byte for byte 208 at
+                                            // every buffer size and a closed kernel path can never leave the shell
+                                            // agreeing to a flip this driver would refuse. Three new witnesses in
+                                            // the summary: type-0 creates by the resource record they arrived with
+                                            // (a standard primary carries none), the OS's own
+                                            // DXGK_SETVIDPNSOURCEADDRESS_FLAGS per bit, and the Presents carrying
+                                            // RedirectedFlip. No escape struct, no journal record layout and no
+                                            // counter of the escape interface changed; the constant moves because
+                                            // packagecheck VRS010 matches it against the INF revision and because
+                                            // Windows keeps the driver it has when the version ties.
+                                            //
+                                            // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
                                             // guard log that did not fit a log line are two lines each.
                                             // BC250_LOG_TEXT is 160 bytes and RtlStringCchVPrintfA truncates
                                             // without a word, so 0.7.207.1 printed "wddm summary: scan-out ...

@@ -302,6 +302,55 @@ other candidate keeps the checks it had in 0.7.205.1, and the start behaves as t
 INF does not write this value, and the default is 1. The flip gates `EnableMmio`, `EnableDcnWrite` and
 `EnableVidPnFlip` are a different thing: they remove every hardware flip, DWM's own primary included.
 
+## DirectFlip handshake (M15.14 increment 2, 0.7.209.1)
+
+`EnableDirectFlipHandshake` decides whether this adapter start tells the compositor's user-mode driver
+that a client scan-out flip will be admitted. It is a REG_DWORD under the service's `Parameters` key, the
+INF does not write it, and **the default is 0: off.** The one process whose behaviour changes is the
+compositor, and a wrong "yes" costs a copy the OS no longer makes.
+
+With the value at 1 the `DXGKQAITYPE_UMDRIVERPRIVATE` reply carries the `bc250_scanout_caps` trailer
+(`driver/contract/bc250_scanout_caps.h`): 24 bytes at offset 1496, after the adapter identity trailer,
+holding the `DIRECT_FLIP` flag and the POST geometry. A reader must query at least
+`BC250_SCANOUT_CAPS_TOTAL` (1520) bytes; the driver writes the trailer only when the whole of it fits.
+
+The value alone is not enough. `WddmStart` ANDs it with every start-latched fact the flip path needs -
+`EnableScanoutAdmit`, `VidPnFlipEnabled` (that is `EnableMmio` and `EnableDcnWrite` and
+`EnableVidPnFlip`), mapped MMIO, VRAM, page-aligned VRAM bases and a non-empty POST geometry - so a
+closed kernel path can never leave the shell agreeing to a flip this driver would refuse. The start log
+says which input closed it:
+
+```
+wddm: DirectFlip handshake off (no client flip offered)
+wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 0 vram 1 mmio 1 aligned 1 post 1
+```
+
+Rollback order, widest first: set `EnableDirectFlipHandshake` to 0 and restart the adapter; the trailer
+is then absent and the start is byte for byte 0.7.208.1 at every buffer size. `EnableScanoutAdmit` 0 also
+closes it, and additionally refuses every candidate that asks for scan-out. The flip gates below that
+remove every hardware flip and are not a rollback of this feature.
+
+The kernel driver's own admission never reads this switch: `SetVidPnSourceAddress` decides with
+`scanout_admit.h` and `AddressAllowed` alone, so a stale or wrong "yes" in user mode cannot widen what
+may be programmed into HUBP0.
+
+## Scan-out witnesses in the summary
+
+`bc250kmd_cli log summary` carries, besides the two scan-out admission lines:
+
+- `type0 creates asked/not by record ...` and `type0 creates other ...`: every type-0 allocation this
+  start placed, by the E26R resource record it arrived with. `none` is a create with no resource private
+  data at all, which is what every standard allocation is - the compositor's own primary included - so
+  this is the line that says what record DWM's output primaries carry and whether they even are a
+  resource of our shell (`PRIMARY records`, `in a resource group`).
+- `flip flags mode/immediate/shared-transition/independent ... redirected presents ...`: what the OS
+  asked for, from `DXGK_SETVIDPNSOURCEADDRESS_FLAGS` of every accepted address call and from
+  `DXGK_PRESENTFLAGS.RedirectedFlip`. `shared-transition` and `independent` are the kernel-side witness
+  that the OS really entered DirectFlip and then independent flip. The driver reads these as bitfields,
+  never as transcribed masks: the trailing comments in the WDK's `d3dkmddi.h` give `0x00000010` for both
+  `FlipStereoTemporaryMono` and `FlipStereoPreferRight` and are shifted by one bit from there on, so a
+  copied number would report a run that did enter independent flip as a run that never did.
+
 ## Build
 
 ```powershell
