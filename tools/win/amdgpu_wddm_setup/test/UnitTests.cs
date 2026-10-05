@@ -244,17 +244,33 @@ static class UnitTests
         Check(!Regex.IsMatch(text, "Dpm|Enable|Dwm|Experiment|parameters"), "settings: no registry names in the window");
         foreach (var d in new[] { "set", "same", "update", "kept", "command", "reopened", "driver-closed" }) Check(Strings.Has("settings.decision." + d), "settings: decision " + d + " has words");
         // BD-069: a switch the driver closed itself is the driver's act, not the user's choice, and this install
-        // changes nothing by keeping it; a repair sets it back.
+        // changes nothing by keeping it. A repair sets it back. The closed desktop path gets a line of its own,
+        // because the user has to read there why the desktop stays on the processor and what sets it back.
         var closed = new SettingsPlan();
         closed.Rows.Add(new SettingRow { Group = "parameters", Name = "DpmMode", Decision = "driver-closed", Current = 0, Value = 0, Default = 1 });
         closed.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableGpuPresentBlit", Decision = "driver-closed", Current = 0, Value = 0, Default = 1 });
-        var closedText = string.Join("\n", SettingsView.Lines(closed).Select(l => Strings.In("en", l.TextId, l.Args) + (l.DecisionId != null ? ": " + Strings.In("en", l.DecisionId) : "")));
-        Check(closedText.Contains("Automatic graphics clock: off: switched off by the driver"), "settings: a driver closure is reported as the driver's own act");
-        Check(closedText.Contains("1 other driver settings, 0 of them new or changed"), "settings: a driver closure is not a change of this install");
+        closed.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableCddDwmInterop", Decision = "driver-closed", Current = 0, Value = 0, Default = 1 });
+        closed.Rows.Add(new SettingRow { Group = "desktop_router", Name = "DwmForceCpu", Decision = "same", Current = 0, Value = 0 });
+        var closedLines = SettingsView.Lines(closed);
+        var closedText = string.Join("\n", closedLines.Select(l => Strings.In("en", l.TextId, l.Args) + (l.DecisionId != null ? ": " + Strings.In("en", l.DecisionId) : "")));
+        Check(closedText.Contains("Automatic graphics clock: off: switched off by the driver. A repair sets it back"), "settings: a driver closure is reported as the driver's own act");
+        Check(closedText.Contains("Desktop on the graphics chip: switched off by the driver. A repair sets it back"), "settings: a closed desktop path is named, with the repair as its remedy");
+        Check(closedText.Contains("Desktop drawn by the processor until the driver draws it again") && !closedText.Contains("Desktop drawn by the graphics chip"), "settings: a closed desktop path does not promise the graphics chip");
+        Equal(3, closedLines.Count, "settings: the two switches of the desktop path make one line, and none is left for the rest");
+        Check(!Regex.IsMatch(closedText, "Dpm|Enable|Dwm|Interop|parameters"), "settings: no registry names in a closure line");
         var reopened = new SettingsPlan();
         reopened.Rows.Add(new SettingRow { Group = "parameters", Name = "DpmMode", Decision = "reopened", Current = 0, Value = 1, Default = 1 });
+        reopened.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableCddDwmInterop", Decision = "reopened", Current = 0, Value = 1, Default = 1 });
+        reopened.Rows.Add(new SettingRow { Group = "desktop_router", Name = "DwmForceCpu", Decision = "same", Current = 0, Value = 0 });
         var reopenedText = string.Join("\n", SettingsView.Lines(reopened).Select(l => Strings.In("en", l.TextId, l.Args) + (l.DecisionId != null ? ": " + Strings.In("en", l.DecisionId) : "")));
         Check(reopenedText.Contains("Automatic graphics clock: on: set back by this repair"), "settings: a repair reports the value it sets back");
+        Check(reopenedText.Contains("Desktop on the graphics chip: set back by this repair") && reopenedText.Contains("Desktop drawn by the graphics chip"), "settings: a reopened desktop path says so, and the desktop line promises the graphics chip again");
+        // A switch of the desktop path that nobody closed stays among the other settings, as before.
+        var open = new SettingsPlan();
+        open.Rows.Add(new SettingRow { Group = "parameters", Name = "EnableGpuPresentBlit", Decision = "same", Current = 1, Value = 1 });
+        var openLines = SettingsView.Lines(open);
+        Equal(1, openLines.Count, "settings: an open desktop path adds no line of its own");
+        Check(openLines[0].TextId == "settings.other", "settings: an untouched switch of the desktop path is counted among the rest");
     }
 
     static void Notes(string repo)

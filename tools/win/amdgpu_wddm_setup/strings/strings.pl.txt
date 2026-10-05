@@ -124,8 +124,10 @@ settings.clock-limit|mt|9d16b4b1|Limit taktowania grafiki: {0} MHz
 settings.auto-clock.on|mt|499702fd|Automatyczne taktowanie grafiki: włączone
 settings.auto-clock.off|mt|3df7a04f|Automatyczne taktowanie grafiki: wyłączone
 settings.cores|mt|36cd7560|Rdzenie graficzne: {0}
+settings.desktop-path|mt|b1b92ad5|Pulpit na układzie graficznym
 settings.desktop.gpu|mt|7befc32c|Pulpit rysowany przez układ graficzny
 settings.desktop.cpu|mt|0fcc82b2|Pulpit rysowany przez procesor (tryb bezpieczny)
+settings.desktop.cpu-until-repair|mt|ed1263ad|Pulpit rysowany przez procesor, dopóki sterownik nie zacznie go znowu rysować
 settings.d3d11.gpu|mt|c45dd50d|Gry i aplikacje Direct3D 11 i 10.1 rysowane przez układ graficzny (aplikacje samego Windows i aplikacje Direct3D 10.0 zostają na procesorze)
 settings.d3d11.listed|mt|747f87a0|Gry i aplikacje Direct3D 11 rysowane przez procesor, z wyjątkiem tych z listy
 settings.game|mt|f203abf1|Zalecane ustawienia dla {0}
@@ -136,7 +138,7 @@ settings.decision.update|mt|bae122db|nowa zalecana wartość
 settings.decision.kept|mt|b4865f1f|Twoja wartość zostaje zachowana
 settings.decision.command|mt|898239d8|tak, jak wybrano dla tej instalacji
 settings.decision.reopened|mt|4342e37e|przywrócone przez tę naprawę (sterownik to wyłączył)
-settings.decision.driver-closed|mt|c86f7ca5|wyłączone przez sterownik; naprawa to przywróci
+settings.decision.driver-closed|mt|cff55d7f|wyłączone przez sterownik. Naprawa to przywróci
 
 # ---- consents ----
 consent.title|mt-safe|34a195af|Zanim instalator zacznie

@@ -185,8 +185,9 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
   and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
-  page and restart Windows. A normal installation or an upgrade keeps the closed path and names it in the report.
-  Only you can say that the computer is well again. If the driver closes the path again, make a bug report.
+  page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
+  and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
+  bug report instead of repairing a second time.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic

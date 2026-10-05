@@ -124,8 +124,10 @@ settings.clock-limit|mt|9d16b4b1|グラフィックス クロックの上限: {0
 settings.auto-clock.on|mt|499702fd|グラフィックス クロックの自動調整: オン
 settings.auto-clock.off|mt|3df7a04f|グラフィックス クロックの自動調整: オフ
 settings.cores|mt|36cd7560|グラフィックス コア: {0}
+settings.desktop-path|mt|b1b92ad5|グラフィックス チップで描画するデスクトップ
 settings.desktop.gpu|mt|7befc32c|デスクトップをグラフィックス チップで描画
 settings.desktop.cpu|mt|0fcc82b2|デスクトップをプロセッサで描画 (セーフ モード)
+settings.desktop.cpu-until-repair|mt|ed1263ad|ドライバーが再び描画するまで、デスクトップをプロセッサで描画
 settings.d3d11.gpu|mt|c45dd50d|Direct3D 11 と 10.1 のゲームとアプリはグラフィックス チップで描画 (Windows 自体のアプリと Direct3D 10.0 のアプリはプロセッサのまま)
 settings.d3d11.listed|mt|747f87a0|Direct3D 11 のゲームとアプリはプロセッサで描画 (一覧にあるものを除く)
 settings.game|mt|f203abf1|{0} の推奨設定
@@ -136,7 +138,7 @@ settings.decision.update|mt|bae122db|新しい推奨値
 settings.decision.kept|mt|b4865f1f|現在の値を保持
 settings.decision.command|mt|898239d8|このインストールで選んだとおり
 settings.decision.reopened|mt|4342e37e|この修復で元に戻しました (ドライバーが無効にしていました)
-settings.decision.driver-closed|mt|c86f7ca5|ドライバーが無効にしました。修復すると元に戻ります
+settings.decision.driver-closed|mt|cff55d7f|ドライバーが無効にしました。修復すると元に戻ります
 
 # ---- consents ----
 consent.title|mt-safe|34a195af|開始する前に

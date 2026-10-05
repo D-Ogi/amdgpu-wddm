@@ -305,10 +305,13 @@ $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
 $Repair = [switch](@($installInputs.switches) -contains 'Repair')
-# BD-069: a repair writes the release default again over a switch that the driver closed itself (the tester asked for
-# the release as it ships). Every other install keeps the closure and reports it with its remedy. The run after a
-# restart gets -Repair back from the state, so a repair that waits for the driver package still reopens.
-$script:ReopenClosures = ($action.action -eq 'repair') -or [bool]$Repair
+# BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
+# itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
+# keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
+# failed phase (Get-InstallAction): nobody asked for the closure to go, and what made the driver close it may still
+# be there. The run after a restart gets -Repair back from the state, so a repair that waits for the driver package
+# still reopens.
+$script:ReopenClosures = [bool]$Repair
 
 # Verification needs no preflight. It checks the installed release against one manifest, which also names it in the
 # verify report: <install root>\manifest.json, read once (its bytes are hashed and parsed together), whatever package
@@ -495,10 +498,20 @@ function Invoke-Verify {
         $dwmOk = $zink
         $dwmNote = "DwmForceCpu 0, DWM of session $mySession has bc250d3d_zink.dll loaded: $(if ($zink) { 'yes' } else { 'no (CPU route)' })"
     }
-    $ioClosed = ''; if ($io -match 'closed by the driver: (\S+)') { $ioClosed = "; closed by the driver: $($Matches[1])" }
-    if ($io -match 'died in a session') { $ioClosed += '; last boot died in a session' }
-    # BD-069: the driver closed the path itself, so the remedy is a repair install, not a setting the tester has to find.
-    if ($ioClosed) { $ioClosed += '; remedy: run install.cmd -Repair, which opens it again' }
+    # BD-069: the driver closed the path itself, so the remedy is a repair install, not a setting the tester has to
+    # find. The repair reads the driver's own record of the closure (InteropClosedReason), so only the line that
+    # proves the record is there gets the remedy. A boot that died with both switches already at 0 leaves no record,
+    # a repair would change nothing, and the reading says so without naming one.
+    $ioClosed = ''; $ioRemedy = ''
+    if ($io -match 'closed by the driver: (\S+)') {
+        $ioClosed = "; closed by the driver: $($Matches[1])"
+        $ioRemedy = '; remedy: run install.cmd -Repair, which opens it again'
+    }
+    if ($io -match 'died in a session') {
+        $ioClosed += '; last boot died in a session'
+        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in amdgpu-wddm Control' }
+    }
+    $ioClosed += $ioRemedy
     Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
 
     # BD-060: a replacement of the session's DWM that was observed against the start-confirm task's record of this

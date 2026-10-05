@@ -65,18 +65,28 @@ foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop') {
 $d = Get-Decision $p 'DpmMode'
 Check (($d.decision -eq 'reopened') -and ($d.value -eq 1) -and $d.write -and -not $d.PSObject.Properties['clear']) "DpmMode reopened by a repair: $($d.decision) -> $($d.value), no record to clear (every start overwrites DpmLastReason)"
 Check ((Format-RegistryPlan $p) -match 'EnableCddDwmInterop 0 -> 1 \(reopened by this repair: the driver closed the GPU desktop path after a boot that ended with the path in use, InteropClosedReason 4 unclean\)') 'the plan text of a repair names what it reopens and why'
-# A value the tester set by hand has no record of a closure: kept, with a repair too.
+# A value the tester set by hand has no record of a closure: kept, with a repair too. The same reading covers a DPM
+# fallback one more start later, because that start writes DpmLastReason 1 over the record (common.ps1
+# $script:DriverClosures): the installer keeps the 0 until the KMD records the fallback durably.
 $byHand = @{ EnableCddDwmInterop = 0; DpmMode = 0; DpmLastReason = 1 }
 foreach ($reopen in $false, $true) {
     $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $byHand -Reopen:$reopen
-    Check (((Get-Decision $p 'EnableCddDwmInterop').decision -eq 'kept') -and ((Get-Decision $p 'DpmMode').decision -eq 'kept')) "set by the tester (no record; DpmLastReason 1 = DpmMode 0 as asked), repair $($reopen): both kept"
+    Check (((Get-Decision $p 'EnableCddDwmInterop').decision -eq 'kept') -and ((Get-Decision $p 'DpmMode').decision -eq 'kept')) "set by the tester (no record; DpmLastReason 1 = DpmMode 0 as asked, also one start after a fallback), repair $($reopen): both kept"
 }
+# The interop record survives every later start, so the lab's own case (four 0x116 boots, then the install) reopens.
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ EnableGpuPresentBlit = 0; EnableCddDwmInterop = 0; InteropClosedReason = 4; DpmMode = 0; DpmLastReason = 1 } -Reopen
+Check ((@($p | Where-Object { $_.decision -eq 'reopened' }).Count -eq 2) -and ((Get-Decision $p 'DpmMode').decision -eq 'kept')) 'a start after the closure: the interop record still reopens both switches, DpmMode stays kept'
 # A record next to a value that is not the one the driver writes: the value decides, not the record.
 $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ EnableGpuPresentBlit = 1; InteropClosedReason = 4; DpmMode = 1; DpmLastReason = 4; DpmMaxMHz = 1200 } -Reopen
 Check (((Get-Decision $p 'EnableGpuPresentBlit').decision -eq 'same') -and ((Get-Decision $p 'DpmMode').decision -eq 'same') -and ((Get-Decision $p 'DpmMaxMHz').decision -eq 'kept')) 'a record with the value already open: nothing to reopen (same), and the rest judged as before'
-# The DPM guard's other reason, and the reasons that are not the guard's.
-$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = 3 }) 'DpmMode'
-Check (($d.decision -eq 'driver-closed') -and ($d.closure_reason -eq 'unconfirmed')) "DpmMode 0 with DpmLastReason 3: $($d.decision) ($($d.closure_reason))"
+# Every reason the DPM guard persists (the three callers of driver/kmd/dpm.c PersistFallback), and the reasons that
+# are not the guard's.
+foreach ($case in @{ code = 3; name = 'unconfirmed' }, @{ code = 4; name = 'unclean' }, @{ code = 8; name = 'smu-error' }) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = $case.code }) 'DpmMode'
+    Check (($d.decision -eq 'driver-closed') -and ($d.closure_reason -eq $case.name)) "DpmMode 0 with DpmLastReason $($case.code): $($d.decision) ($($d.closure_reason))"
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = $case.code } -Reopen) 'DpmMode'
+    Check (($d.decision -eq 'reopened') -and ($d.value -eq 1)) "DpmMode 0 with DpmLastReason $($case.code), repair: $($d.decision) -> $($d.value)"
+}
 foreach ($reason in 0, 1, 2, 5, 6, 7) {
     $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMode = 0; DpmLastReason = $reason } -Reopen) 'DpmMode'
     Check ($d.decision -eq 'kept') "DpmMode 0 with DpmLastReason $reason (not a guard fallback): $($d.decision)"

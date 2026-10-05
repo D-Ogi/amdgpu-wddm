@@ -283,10 +283,18 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       bc250_interop_decide: persist_close; reason 4 'unclean' is the only one the policy persists today). The next
 #       start that finds a switch open again deletes the record itself (clear_closed), so a reopen writes the default
 #       and deletes the record, the way the control application's "Reopen the GPU desktop path" does.
-#   DpmMode   written 0 with DpmLastReason 3 (an earlier DPM start was never confirmed) or 4 (an earlier start ended
-#       above the floor): the two reasons of the guard (driver/shim/bc250_dpm.c bc250_dpm_decide force_fixed,
-#       driver/kmd/dpm.c PersistFallback). Every start overwrites DpmLastReason with what it decided and no guard
-#       reads it, so a reopen writes DpmMode 1 and deletes nothing.
+#   DpmMode   written 0 with DpmLastReason 3 (an earlier DPM start was never confirmed), 4 (an earlier start ended
+#       above the floor) or 8 (the governor gave up after repeated failed clock changes): the three callers of
+#       driver/kmd/dpm.c PersistFallback (bc250_dpm_decide force_fixed for 3 and 4, DpmGiveUp for 8). Every start
+#       overwrites DpmLastReason with what it decided and no guard reads it, so a reopen writes DpmMode 1 and
+#       deletes nothing.
+#       DpmLastReason names the fallback only inside the boot that wrote it. The next start reads DpmMode 0, decides
+#       BC250_DPM_REASON_NOT_REQUESTED (1) and writes that over the record (driver/kmd/dpm.c, StoreLogged
+#       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
+#       the guard's 0 from a 0 the tester wrote, and the value stays 'kept'. A record that outlives the boot needs a
+#       KMD change: a DpmClosedReason beside DpmMode, written by PersistFallback and deleted by the start that runs
+#       with DpmMode 1, the way interop.c handles InteropClosedReason. InteropClosedReason has no such limit. It
+#       stays until a start finds a switch open again.
 # The record alone is not a closure: the value has to be the one the driver writes. A value the tester set by hand,
 # with no record of a closure, stays 'kept' as before. The KMD's session marker stays the KMD's: the installer never
 # reads or writes it, and a marker that outlived its boot closes the switches again at the next start, which the
@@ -301,9 +309,10 @@ $script:DriverClosures = @{
         text = @{ 4 = 'the driver closed the GPU desktop path after a boot that ended with the path in use' }
         fallback = 'the driver closed the GPU desktop path itself' }
     DpmMode = @{ closed = 0; record = 'DpmLastReason'; any_reason = $false; clear = @()
-        names = @{ 3 = 'unconfirmed'; 4 = 'unclean' }
+        names = @{ 3 = 'unconfirmed'; 4 = 'unclean'; 8 = 'smu-error' }
         text = @{ 3 = 'the driver went back to the base clock after a start with the load-driven clock that was never confirmed'
-                  4 = 'the driver went back to the base clock after a start that ended above it' }
+                  4 = 'the driver went back to the base clock after a start that ended above it'
+                  8 = 'the driver went back to the base clock after repeated clock changes that the firmware refused' }
         fallback = 'the driver went back to the base clock itself' }
 }
 # Pure: the driver closure behind one value, or $null. $Current is the whole key (Read-RegistryValues), because the
