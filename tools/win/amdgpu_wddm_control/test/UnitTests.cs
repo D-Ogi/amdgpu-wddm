@@ -557,6 +557,14 @@ static partial class UnitTests
         Check(line(Recovery.Describe(noReply), "GPU desktop path").Text.Contains("before 0.7.198"), "closed path, version unknown: both causes named");
         Check(line(lines, "Desktop composition").Text.StartsWith("CPU route (GPU route disabled, BD-058)") && line(lines, "Desktop composition").Action == null, "CPU route: release default, no action");
         Check(line(lines, "Clock control").Action == "enable-dpm", "clock fallback recommends enable-dpm");
+        // BD-069: one start after the fallback the live reason is "fixed requested" (1); only the durable record remembers.
+        var later = Closed(); later.Dpm = new DpmState { Mode = 0, Reason = 1 }; later.Parameters["DpmLastReason"] = 1; later.Parameters["DpmClosedReason"] = 8;
+        var ll = line(Recovery.Describe(later), "Clock control");
+        Check(ll.Action == "enable-dpm" && ll.Severity == "warn" && ll.Text.Contains(KmdReply.ReasonText(8)), "a fallback one start later: the durable record still recommends enable-dpm");
+        later.Parameters.Remove("DpmClosedReason");
+        Check(line(Recovery.Describe(later), "Clock control").Action == null, "no durable record, live reason 1: no recommendation");
+        later.Parameters["DpmClosedReason"] = 8; later.Parameters["DpmMode"] = 1;
+        Check(line(Recovery.Describe(later), "Clock control").Action != "enable-dpm", "automatic clock already requested: the record is not a fallback any more");
         var gpuDefault = Open(); gpuDefault.DefaultRouter["DwmForceCpu"] = 0;
         var gl = line(Recovery.Describe(gpuDefault), "Desktop composition");
         Check(gl.Text.StartsWith("CPU route (DwmForceCpu 1). The release default is the GPU route.") && gl.Action == "desktop-gpu", "release default GPU (manifest): the CPU route recommends the GPU route");

@@ -841,10 +841,14 @@ namespace AmdgpuWddmControl
             // Clock control.
             uint? mode = s.P("DpmMode"), max = s.P("DpmMaxMHz"), lastMode = s.P("DpmLastMode"), lastReason = s.P("DpmLastReason");
             uint runReason = s.Dpm != null ? s.Dpm.Reason : lastReason ?? 0;
+            // KMD 0.7.208 keeps a fallback in DpmClosedReason until a start asks for the automatic clock again. One start
+            // after the fallback, the live reason and DpmLastReason only say "fixed clock requested" (BD-069).
+            uint closedReason = s.P("DpmClosedReason") ?? 0;
+            uint fallReason = closedReason != 0 ? closedReason : runReason;
             string stored = "Setting for the next start: " + DpmSettings.Describe(mode, max) + ".";
-            bool fellBack = mode != 1 && (runReason == 3 || runReason == 4 || runReason == 8);
+            bool fellBack = mode != 1 && (closedReason != 0 || runReason == 3 || runReason == 4 || runReason == 8);
             if (fellBack)
-                add("Clock control", "The driver went back to the fixed clock: " + KmdReply.ReasonText(runReason) + ". " + stored, "warn", "enable-dpm", "Re-enable automatic clocks");
+                add("Clock control", "The driver went back to the fixed clock: " + KmdReply.ReasonText(fallReason) + ". " + stored, "warn", "enable-dpm", "Re-enable automatic clocks");
             else if (mode == 1 && s.P("DpmPending") != null && s.P("DpmConfirmed") == null)
                 add("Clock control", "Automatic clocks are on trial for this start; confirming the start keeps them. " + stored, "info",
                     s.DriverRunning && !Confirmed(s.Health) && ConfirmBlocker(s.Health, false) == null ? "confirm-start" : null,
