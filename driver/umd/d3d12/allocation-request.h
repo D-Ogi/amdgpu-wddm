@@ -21,7 +21,7 @@ static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offs
 // PRIMARY=1, CPU_READ=2). The runtime's allocation call accepts the primary with v1 and shared 1.
 struct E26rResource { uint32_t magic,version,shared,access; };
 inline constexpr uint32_t kE26rMagic=0x52363245u;
-inline constexpr uint32_t kE26rV1Bytes=12,kE26rCpuRead=2;
+inline constexpr uint32_t kE26rV1Bytes=12,kE26rPrimary=1,kE26rCpuRead=2,kE26rScanout=4;
 static_assert(sizeof(E26rResource)==16 && offsetof(E26rResource,access)==kE26rV1Bytes);
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
@@ -78,8 +78,14 @@ struct AllocationRequest final {
     }
     // The primary: the 32-byte LB7A v1 description, which the kernel driver and the compositor's
     // opener read, under the 12-byte E26R v1 resource record. pitch and size are the bound image's,
-    // never chosen here. The allocation is a primary of no video present source: it is composed,
-    // not scanned out, so its format is one the surface format table enables for composition.
+    // never chosen here. By default the allocation is a primary of no video present source: it is
+    // composed, not scanned out, so its format is one the surface format table enables for composition.
+    // scanout (M15.14): the selected mode for an eligible 8-bit chain. The record becomes the 16-byte
+    // v2 one with PRIMARY and SCANOUT, which asks the kernel driver for the local segment, and the
+    // allocation names video present source 0, so SetVidPnSourceAddress can be given this surface. The
+    // kernel driver re-derives every fact behind that request and refuses the flip otherwise; this is a
+    // request for scan-out, not a claim that scan-out will happen. Composition of the same buffer stays
+    // possible, which is what the OS falls back to when a window overlaps the output.
     // Two lab experiments change this for the CPU compositor, which reads the surface on every
     // composition (104: dwm ~33% of the machine in llvmpipe shader code for a 1280x720 window; 107:
     // its streaming shadow copy of the default surface runs at ~92 MiB/s in DWM, where the same
@@ -93,11 +99,16 @@ struct AllocationRequest final {
     // GPU writes to the aperture are snooped (CacheCoherent), so a cached CPU reader stays coherent.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
                             uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,
-                            bool primary=true) noexcept {
+                            bool primary=true,bool scanout=false) noexcept {
         blob={};surface={};resource={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
+        // Scan-out needs the SCANOUT_PRIMARY policy bit, which only the 8-bit rows carry, and it needs
+        // the surface to be a primary of video present source 0: a scanned-out buffer with no source is
+        // a contradiction. Composition keeps the COMPOSED bit and every row that has it.
+        if(scanout && (!primary || cpuRead))return E_INVALIDARG;
         const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
-                                                  AMDGPU_WDDM_SURFACE_COMPOSED);
+                                                  scanout?AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY
+                                                         :AMDGPU_WDDM_SURFACE_COMPOSED);
         if(!row)return E_NOTIMPL;
         if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
         const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
@@ -108,10 +119,17 @@ struct AllocationRequest final {
         surface.format=static_cast<uint32_t>(format);surface.size=size;
         info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
         info.Flags=primary?D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY:D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE;
-        info.VidPnSourceId=primary?D3DDDI_ID_UNINITIALIZED:0;
-        resource.magic=kE26rMagic;resource.version=cpuRead?2:1;resource.shared=1;
-        resource.access=cpuRead?kE26rCpuRead:0;
-        args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=cpuRead?sizeof(resource):kE26rV1Bytes;
+        // A composed primary carries no video present source, because it is never the argument of
+        // SetVidPnSourceAddress. A scan-out primary is exactly that argument, so it names source 0 -
+        // the one source this adapter has - and the kernel driver can match the flip to the surface.
+        info.VidPnSourceId=primary&&!scanout?D3DDDI_ID_UNINITIALIZED:0;
+        resource.magic=kE26rMagic;resource.version=cpuRead||scanout?2:1;resource.shared=1;
+        // shared stays 1 for a scan-out surface as well: the OS composes this buffer again whenever a
+        // window overlaps the output, and the compositor can only open what the record shares. What the
+        // SCANOUT bit changes is the placement - the local segment, the only one the display core reads -
+        // and not who may open it (M15.14).
+        resource.access=(cpuRead?kE26rCpuRead:0u)|(scanout?kE26rPrimary|kE26rScanout:0u);
+        args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=cpuRead||scanout?sizeof(resource):kE26rV1Bytes;
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;

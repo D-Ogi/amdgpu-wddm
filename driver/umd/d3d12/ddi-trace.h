@@ -137,6 +137,42 @@ inline bool ddi_experiment_listed(const char* list,const char* name) noexcept {
     return false;
 }
 inline bool ddi_experiment(const char* name) noexcept {return ddi_experiment_listed(ddi_experiment_name(),name);}
+// M15.14: the scan-out mode names the geometry it is for, as one token - "scanout-flip-1920x1200". The
+// experiment syntax is lower-case letters, digits, hyphens and commas, so a mode and its geometry fit in
+// one token and no second variable is needed. Naming it is not decoration. The kernel driver admits a
+// flip only at the POST geometry, so a windowed chain of any other size can never be scanned out, while
+// asking for scan-out anyway would still move that chain into VRAM with no CPU mapping - a placement
+// regression for a buffer that was never eligible, and refusals in the counters that look like a mode
+// mismatch rather than a client that never qualified. Width and height are written on true only.
+inline bool ddi_experiment_scanout(const char* list,unsigned* width,unsigned* height) noexcept {
+    static const char prefix[]="scanout-flip-";
+    const size_t length=sizeof(prefix)-1;
+    if(!list || !width || !height)return false;
+    for(const char* given=list;*given;){
+        const char* end=std::strchr(given,',');
+        const size_t size=end?static_cast<size_t>(end-given):std::strlen(given);
+        if(size>length && !std::memcmp(given,prefix,length)){
+            unsigned value[2]{0,0};unsigned digits[2]{0,0};unsigned part=0;
+            size_t i=length;
+            for(;i<size;++i){
+                const char c=given[i];
+                if(c=='x'){if(part)break;++part;continue;}
+                if(c<'0' || c>'9')break;
+                if(digits[part]>=5)break;                 // 16384 is the widest surface either shell makes
+                value[part]=value[part]*10u+unsigned(c-'0');++digits[part];
+            }
+            if(i==size && part==1 && digits[0] && digits[1] && value[0] && value[1]){
+                *width=value[0];*height=value[1];
+                return true;
+            }
+        }
+        given+=size+(end?1:0);
+    }
+    return false;
+}
+inline bool ddi_experiment_scanout(unsigned* width,unsigned* height) noexcept {
+    return ddi_experiment_scanout(ddi_experiment_name(),width,height);
+}
 // A formatted line of the failures-only mode, under the same budget.
 inline void ddi_mode2_note(const char* text) noexcept {
     if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;

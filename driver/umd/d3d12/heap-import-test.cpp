@@ -456,6 +456,31 @@ int main(){
   // Rows the table does not have, or has without COMPOSED: A2R10G10B10 (35), X8R8G8B8 (scan-out only).
   assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_A2R10G10B10,65536,handle<void*>(2))==E_NOTIMPL);
   assert(fp16.prepare_surface(256,64,1024,D3DDDIFMT_X8R8G8B8,65536,handle<void*>(2))==E_NOTIMPL);
+  // M15.14 scan-out: the v2 record with PRIMARY and SCANOUT, shared still 1, and video present source 0
+  // instead of D3DDDI_ID_UNINITIALIZED. The LB7A description is the composed one, unchanged.
+  AllocationRequest direct;
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==S_OK);
+  assert(direct.args.PrivateDriverDataSize==16);
+  std::memcpy(e,direct.args.pPrivateDriverData,sizeof(e));
+  assert(e[0]==0x52363245u && e[1]==2 && e[2]==1 && e[3]==5);
+  assert(direct.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY && direct.info.VidPnSourceId==0);
+  assert(direct.info.PrivateDriverDataSize==32);
+  {uint32_t d[8];std::memcpy(d,direct.info.pPrivateDriverData,sizeof(d));
+   assert(d[0]==0x4137424Cu && d[1]==1 && d[2]==1920 && d[3]==1200 && d[4]==7680 && d[5]==21 && d[6]==7680u*1200u && !d[7]);}
+  // X8 is the other scan-out row and is admitted here although composition refuses it above.
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_X8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==S_OK);
+  // The composed-only rows cannot be scanned out, which is what keeps the 10-bit and FP16 primaries on
+  // the composition path whatever the instance selects.
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A2B10G10R10,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
+  assert(direct.prepare_surface(1920,1200,15360,D3DDDIFMT_A16B16G16R16F,15360*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8B8G8R8,7680*1200,handle<void*>(2),false,true,true)==E_NOTIMPL);
+  // Scan-out contradicts both of the other two intents and is refused rather than silently reduced.
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),true,true,true)==E_INVALIDARG);
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),false,false,true)==E_INVALIDARG);
+  // The geometry rules are the same ones: a pitch that does not hold the row, and a size that does not
+  // hold the rows, are refused before any record is built.
+  assert(direct.prepare_surface(1920,1200,7676,D3DDDIFMT_A8R8G8B8,7680*1200,handle<void*>(2),false,true,true)==E_INVALIDARG);
+  assert(direct.prepare_surface(1920,1200,7680,D3DDDIFMT_A8R8G8B8,4096,handle<void*>(2),false,true,true)==E_INVALIDARG);
  }
  // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a
  // policy is fixed for the owner's life. The event letters are the callbacks: A allocate, M map, Z the
