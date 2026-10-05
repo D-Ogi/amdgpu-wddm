@@ -4,6 +4,7 @@
 #include <string.h>
 #include "dcn_translate.h"
 #include "surface_format.h"
+#include "scanout_admit.h"
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
@@ -25,6 +26,7 @@ typedef struct { LONGLONG QuadPart; } PHYSICAL_ADDRESS;
 #define DXGK_INTERRUPT_CRTC_VSYNC 1
 #define WddmDdiSetVidPnSourceAddress 0
 #define RtlZeroMemory(p,n) memset(p,0,n)
+#define BC250_WDDM_SEGMENT_VRAM 1u
 #define GuardLog(...) ((void)0)
 typedef struct {
     HANDLE hAllocation;
@@ -43,6 +45,7 @@ typedef struct {
     ULONG PrimaryPitch; ULONGLONG PrimaryBytes;
     unsigned PrimarySegment;
     volatile LONG Flips, FlipsAboveDispatch, VSyncReports;
+    volatile LONG ScanoutFlips, ScanoutRequests, ScanoutAdmits[BC250_SCANOUT_STATUSES];
     int VSyncEnabled;
     unsigned VSyncTargetId;
 } BC250_WDDM;
@@ -58,7 +61,9 @@ typedef struct {
 #define BC250_WDDM_MAGIC_ALLOCATION 123
 #define D3DDDIFMT_A8R8G8B8 21
 #define D3DDDIFMT_X8R8G8B8 22
-typedef struct {ULONG Magic; int UmdAlloc; struct {ULONG Width,Height,Pitch,Format;ULONGLONG Size;} Allocation;} BC250_WDDM_OBJECT;
+#define D3DDDIFMT_A8B8G8R8 32
+typedef struct {ULONG Magic; int UmdAlloc; struct {ULONG Width,Height,Pitch,Format;ULONGLONG Size;} Allocation;
+    int ScanoutRequested; ULONG ScanoutWidth,ScanoutHeight,ScanoutPitch,ScanoutFormat; ULONGLONG UmdBytes;} BC250_WDDM_OBJECT;
 static BC250_WDDM_OBJECT* WddmObject(HANDLE h,ULONG magic){BC250_WDDM_OBJECT *a=h;return a && a->Magic==magic?a:NULL;}
 static ULONG programmed_pitch;
 static unsigned checks,failures,hardware,arms,reports;
@@ -217,6 +222,57 @@ int main(void)
                 allocation.Allocation.Format=D3DDDIFMT_X8R8G8B8;
                 CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
                 CHECK(hardware==7 && w.PrimaryAddress.QuadPart==50 && programmed_pitch==5888);
+            }
+            // M15.14: the inherited primary above asked for no scan-out, so none of these flips counted
+            // as one, and dxgkrnl's shared primary reached the hardware all the same.
+            CHECK(w.ScanoutFlips==0 && w.ScanoutRequests==0);
+            {
+                // An application allocation. Without a scan-out request it is refused exactly as every
+                // UMD allocation was before this revision, and the refusal is now named.
+                BC250_WDDM_OBJECT umd={0};
+                LONG flips=w.Flips,hw=(LONG)hardware;
+                umd.Magic=BC250_WDDM_MAGIC_ALLOCATION;umd.UmdAlloc=1;
+                umd.ScanoutWidth=1366;umd.ScanoutHeight=768;umd.ScanoutPitch=5632;
+                umd.ScanoutFormat=D3DDDIFMT_A8R8G8B8;umd.UmdBytes=5632ull*768;
+                request.hAllocation=&umd;request.PrimaryAddress.QuadPart=0x4000;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_NOT_REQUESTED]==1 && w.ScanoutRequests==0);
+                CHECK(w.Flips==flips && (LONG)hardware==hw && !(w.PrimarySequence&1));
+                // The same allocation, now asking for scan-out and describing the POST surface: the
+                // first flip of an application buffer this driver has ever programmed.
+                umd.ScanoutRequested=1;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                CHECK(w.ScanoutRequests==1 && w.ScanoutAdmits[BC250_SCANOUT_ADMIT_OK]>=1);
+                CHECK(w.Flips==flips+1 && w.ScanoutFlips==1 && programmed_pitch==5632);
+                CHECK(w.PrimaryAddress.QuadPart==0x4000 && w.PrimaryBytes==5632ull*768);
+                // Each refusal of a described surface: the wrong segment, an unaligned address, a
+                // composed-only format, and geometry that is not the POST mode's. None reaches the
+                // hardware, none publishes, and the plane keeps the surface it has.
+                hw=(LONG)hardware;flips=w.Flips;
+                {LONG formats=w.ScanoutAdmits[BC250_SCANOUT_FORMAT],sizes=w.ScanoutAdmits[BC250_SCANOUT_SIZE];
+                request.PrimaryAddress.QuadPart=0x8000;request.PrimarySegment=2;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_SEGMENT]==1);
+                request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x8010;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==1);
+                request.PrimaryAddress.QuadPart=0x8000;umd.ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_FORMAT]==formats+1);
+                umd.ScanoutFormat=D3DDDIFMT_A8R8G8B8;umd.ScanoutHeight=767;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_GEOMETRY]==1);
+                umd.ScanoutHeight=768;umd.UmdBytes=5632ull*768-1;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_SIZE]==sizes+1);
+                }
+                CHECK((LONG)hardware==hw && w.Flips==flips && w.ScanoutFlips==1 && !(w.PrimarySequence&1));
+                CHECK(w.PrimaryAddress.QuadPart==0x4000 && w.PrimaryPitch==5632);
+                // A handle that is not an allocation of this adapter.
+                request.hAllocation=(HANDLE)&w;
+                CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                CHECK(w.ScanoutAdmits[BC250_SCANOUT_NO_ALLOCATION]==1);
+                request.hAllocation=NULL;request.PrimarySegment=3;
             }
         }
         request.hAllocation=NULL;request.PrimaryAddress=w.PrimaryAddress;

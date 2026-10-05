@@ -162,6 +162,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "surface_resource_private.h"
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
+#include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
@@ -206,6 +207,12 @@ typedef struct _BC250_WDDM_OBJECT {
     // KMD193 (bsod-245 items 3 and 4): identity the journal records of this object's destroy and of every job
     // submitted on it would otherwise not have. Values only, taken at CreateAllocation/CreateContext; a dump
     // reader reads them out of the journal, never out of the object, which may be freed by then.
+    // M15.14: the scan-out request its creator made, recorded at CreateAllocation and re-derived at
+    // every flip by Bc250ScanoutAdmit. Scanout* describe the surface for a BC2A allocation, which has
+    // no LB7A description of its own; an LB7A one keeps describing itself in Allocation above and these
+    // stay zero. ExAllocatePool2 zeroes them, so an allocation that asked for nothing asks for nothing.
+    BOOLEAN ScanoutRequested;
+    ULONG ScanoutWidth, ScanoutHeight, ScanoutPitch, ScanoutFormat;
     unsigned long UmdBlobVersion;       // allocations: the BC2A version word (0 = not a UMD allocation)
     ULONGLONG UmdGemFlags;              // allocations: the BC2A gem_flags
     unsigned long CreatorProcessId;     // allocations and contexts: PsGetCurrentProcessId at creation
@@ -462,6 +469,13 @@ typedef struct _BC250_WDDM {
     volatile LONGLONG BlitSourceLast;           // system physical of the last blit source, 0 if none translated
     volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
+    // M15.14. ScanoutFlips is the measurement the lab trial reads: of the flips above, those whose
+    // allocation was an application's own scan-out surface rather than dxgkrnl's shared primary.
+    // ScanoutAdmits counts every candidate by Bc250ScanoutAdmit's answer, so a trial that sees no
+    // scan-out flip says which clause refused it instead of only that nothing happened.
+    volatile LONG ScanoutFlips;
+    volatile LONG ScanoutRequests;              // candidates whose creator had asked for scan-out
+    volatile LONG ScanoutAdmits[BC250_SCANOUT_STATUSES];
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -2026,6 +2040,14 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
+    GuardLog("wddm summary: scan-out flips %ld of %ld requested candidates; admission ok/no-alloc/not-requested %ld/%ld/%ld, "
+             "format/geometry/pitch/size/segment/alignment %ld/%ld/%ld/%ld/%ld/%ld",
+             Wddm->ScanoutFlips, Wddm->ScanoutRequests,
+             Wddm->ScanoutAdmits[BC250_SCANOUT_ADMIT_OK], Wddm->ScanoutAdmits[BC250_SCANOUT_NO_ALLOCATION],
+             Wddm->ScanoutAdmits[BC250_SCANOUT_NOT_REQUESTED], Wddm->ScanoutAdmits[BC250_SCANOUT_FORMAT],
+             Wddm->ScanoutAdmits[BC250_SCANOUT_GEOMETRY], Wddm->ScanoutAdmits[BC250_SCANOUT_PITCH],
+             Wddm->ScanoutAdmits[BC250_SCANOUT_SIZE], Wddm->ScanoutAdmits[BC250_SCANOUT_SEGMENT],
+             Wddm->ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]);
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
@@ -3428,11 +3450,12 @@ static void WddmCpuVisibleAllocationFlags(DXGK_ALLOCATIONINFOFLAGS_WDDM2_0* Flag
 // DXGK_ALLOCATIONINFOFLAGS_WDDM2_0; never infer it from reserved OS flags.
 // MS Cached: readable CPU backing may be cached, but primaries must not be.
 static NTSTATUS WddmSurfaceResourcePolicy(const void* Data, UINT Bytes,
-                                         BOOLEAN* SharedCpu, BOOLEAN* CachedCpu)
+                                         BOOLEAN* SharedCpu, BOOLEAN* CachedCpu, BOOLEAN* Scanout)
 {
     int shared=0,cached=0;
     int valid=Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached);
     *SharedCpu=(BOOLEAN)shared; *CachedCpu=(BOOLEAN)cached;
+    *Scanout=(BOOLEAN)(valid && Bc250SurfaceResourceScanout(Data,Bytes));
     return valid ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
 }
 
@@ -3443,7 +3466,7 @@ typedef struct _BC250_CREATE_CALL {
     BC250_DEVICE* Device;
     BC250_WDDM* Wddm;
     DXGKARG_CREATEALLOCATION* Args;
-    BOOLEAN SharedCpu, CachedCpu;
+    BOOLEAN SharedCpu, CachedCpu, Scanout;
 } BC250_CREATE_CALL;
 
 static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Slot)
@@ -3493,6 +3516,14 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         object->UmdBlobVersion = view.version;
         object->UmdGemFlags = view.gem_flags;
         object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
+        // M15.14: the scan-out request. umd_blob.c has already checked the shape (v3, VRAM heap, a
+        // geometry whose rows fit in the allocation); recorded here so that every later flip of this
+        // allocation is decided by Bc250ScanoutAdmit against the POST mode, and refused if it moved.
+        object->ScanoutRequested = (BOOLEAN)view.scanout;
+        object->ScanoutWidth = view.scanout_width;
+        object->ScanoutHeight = view.scanout_height;
+        object->ScanoutPitch = view.scanout_pitch;
+        object->ScanoutFormat = view.scanout_format;
         segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
         align = 4096;
         if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
@@ -3539,6 +3570,10 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
     object->Allocation = *private;
     object->GdiType=gdiType;
+    // M15.14: a type-0 surface whose resource record carries the scan-out intent. Its own LB7A blob is
+    // the description, so nothing is copied; the flag says the creator meant this surface to reach the
+    // display pipeline, which is what moves it out of the shared aperture below.
+    object->ScanoutRequested = (BOOLEAN)(!gdiType && call->Scanout);
     // WDK26100: standard texture/staging/lookup surfaces are GPU-only;
     // CPU staging uses coherent aperture. Legacy type0 keeps its policy.
     info->hAllocation = object;
@@ -3551,6 +3586,14 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     info->pAllocationUsageHint = NULL;
     info->PitchAlignedSize = 0;                     // the aperture segment is not a pitch-aligned one
     info->PreferredSegment.Value = 0;
+    // A scan-out surface belongs in the local segment, the only one whose descriptor says DirectFlip
+    // (WddmQuerySegment4). Type 0's placement otherwise follows the resource record's shared bit, which
+    // is what puts a composed swap-chain buffer in the aperture for the compositor to read cheaply; a
+    // scanned-out surface has no such reader, and the display core cannot read the aperture at all.
+    // CpuVisible as well: a VRAM-only CpuVisible allocation is what VidMm 0xF002 and later refuse (K84,
+    // the CDD shadow), and a scanned-out surface needs no CPU mapping - the GPU renders it and the
+    // display core reads it by physical address, which AccessedPhysically below is what asks for.
+    if (object->ScanoutRequested) { policy.Aperture = 0; policy.CpuVisible = 0; policy.Cached = 0; }
     info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
     info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
     info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
@@ -3594,9 +3637,9 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
 {
     BC250_CREATE_CALL call;
     BC250_WDDM* wddm = WddmOf(hAdapter);
-    BOOLEAN sharedCpu = FALSE, cachedCpu = FALSE;
+    BOOLEAN sharedCpu = FALSE, cachedCpu = FALSE, scanout = FALSE;
     NTSTATUS resourceStatus=WddmSurfaceResourcePolicy(pCreateAllocation->pPrivateDriverData,
-        pCreateAllocation->PrivateDriverDataSize,&sharedCpu,&cachedCpu);
+        pCreateAllocation->PrivateDriverDataSize,&sharedCpu,&cachedCpu,&scanout);
     int outcome;
 
     if (!NT_SUCCESS(resourceStatus)) {
@@ -3608,6 +3651,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
     call.Args = pCreateAllocation;
     call.SharedCpu = sharedCpu;
     call.CachedCpu = cachedCpu;
+    call.Scanout = scanout;
     outcome = Bc250CreateRun(wddm != NULL ? &wddm->StdAlloc : NULL, &g_WddmCreateOps, &call,
                              pCreateAllocation->NumAllocations);
     if (outcome == BC250_CREATE_NO_MEMORY) return STATUS_INSUFFICIENT_RESOURCES;
@@ -6044,6 +6088,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         BOOLEAN changed;
         ULONG pitch;
         ULONGLONG bytes;
+        BOOLEAN scanout = FALSE;        // M15.14: this flip's allocation was an application scan-out surface
         NTSTATUS status = STATUS_SUCCESS;
         // Nonblocking ownership: a high-IRQL caller must never spin behind a
         // preempted lower-IRQL programmer. The generation also protects vsync's
@@ -6057,13 +6102,43 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         if (!DcnSurfaceBytes(device->Post.Width,device->Post.Height,pitch,&bytes)) status=STATUS_INVALID_PARAMETER;
         if (pSetVidPnSourceAddress->hAllocation)
         {
+            // M15.14. Until 0.7.205.1 this clause refused every application allocation outright, which is
+            // why no game buffer could scan out. The rule now lives in scanout_admit.h, is host-tested
+            // through each of its refusals, and is still followed by dcn.c's AddressAllowed, which holds
+            // the address itself against the firmware plane and the VRAM carve-out. Nothing about
+            // dxgkrnl's own shared primary changes: it asks for no scan-out and is admitted by the same
+            // four checks it always was.
             BC250_WDDM_OBJECT* allocation=WddmObject(pSetVidPnSourceAddress->hAllocation,BC250_WDDM_MAGIC_ALLOCATION);
-            if (!allocation || allocation->UmdAlloc || allocation->Allocation.Width!=device->Post.Width ||
-                allocation->Allocation.Height!=device->Post.Height ||
-                WddmSurfaceFormatBpp(allocation->Allocation.Format,BC250_SURFACE_SCANOUT)!=4 ||
-                !DcnSurfaceBytes(allocation->Allocation.Width,allocation->Allocation.Height,allocation->Allocation.Pitch,&bytes) ||
-                bytes>allocation->Allocation.Size) status=STATUS_INVALID_PARAMETER;
-            else { pitch=allocation->Allocation.Pitch; status=STATUS_SUCCESS; }
+            BC250_SCANOUT_CANDIDATE candidate;
+            int admit;
+            RtlZeroMemory(&candidate,sizeof(candidate));
+            if (allocation) {
+                candidate.UmdAlloc=allocation->UmdAlloc?1:0;
+                candidate.ScanoutRequested=allocation->ScanoutRequested?1:0;
+                // A BC2A allocation has no LB7A description, so its scan-out words are the description;
+                // an LB7A one describes itself and left those words zero.
+                candidate.Width=allocation->UmdAlloc?allocation->ScanoutWidth:allocation->Allocation.Width;
+                candidate.Height=allocation->UmdAlloc?allocation->ScanoutHeight:allocation->Allocation.Height;
+                candidate.Pitch=allocation->UmdAlloc?allocation->ScanoutPitch:allocation->Allocation.Pitch;
+                candidate.Format=allocation->UmdAlloc?allocation->ScanoutFormat:allocation->Allocation.Format;
+                candidate.Size=allocation->UmdAlloc?allocation->UmdBytes:allocation->Allocation.Size;
+                candidate.Segment=pSetVidPnSourceAddress->PrimarySegment;
+                candidate.Address=(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart;
+            }
+            admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,device->Post.Width,device->Post.Height,
+                                    BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
+            InterlockedIncrement(&wddm->ScanoutAdmits[admit]);
+            if (candidate.ScanoutRequested) InterlockedIncrement(&wddm->ScanoutRequests);
+            if (admit!=BC250_SCANOUT_ADMIT_OK) {
+                // A refusal leaves pitch and bytes as this transaction computed them for a NULL
+                // allocation, and publishes nothing: the plane keeps the surface it has.
+                status=STATUS_INVALID_PARAMETER;
+                if (candidate.ScanoutRequested && WddmFirstCalls(wddm,WddmDdiSetVidPnSourceAddress))
+                    GuardLog("wddm: scan-out refused: %s (%lux%lu pitch %lu format %lu segment %lu address 0x%llX)",
+                             Bc250ScanoutStatusText(admit),candidate.Width,candidate.Height,candidate.Pitch,
+                             candidate.Format,candidate.Segment,candidate.Address);
+            }
+            else { scanout=candidate.ScanoutRequested?TRUE:FALSE; status=STATUS_SUCCESS; }
         }
         changed = wddm->PrimaryNeedsRestore || InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0) !=
                   pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch;
@@ -6081,6 +6156,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             wddm->PrimaryPitch=pitch;wddm->PrimaryBytes=bytes;
             if (changed) {
                 InterlockedIncrement(&wddm->Flips);
+                if (scanout) InterlockedIncrement(&wddm->ScanoutFlips);
                 if (device->VidPnFlipEnabled)
                     InterlockedExchange(&wddm->PrimaryProgrammedSequence,(LONG)(generation+2u));
             }

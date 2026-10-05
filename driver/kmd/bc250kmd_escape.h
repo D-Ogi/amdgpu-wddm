@@ -35,7 +35,21 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700CDu       // revision 205 (INF 0.7.205.1, on 204): the clock table gains
+#define BC250_KMD_VERSION 0x000700CEu       // revision 206 (INF 0.7.206.1, on 205): M15.14, the first
+                                            // revision in which an application's own swap-chain buffer
+                                            // can be scanned out. SetVidPnSourceAddress no longer
+                                            // refuses every UMD allocation outright; the rule is
+                                            // scanout_admit.h (format, POST geometry, pitch, size,
+                                            // 4 KiB address, residency in the DirectFlip segment),
+                                            // host-tested through each refusal, and dcn.c's
+                                            // AddressAllowed is unchanged behind it. A surface asks for
+                                            // scan-out through BC2A v3 (UMD_BLOB_A_SCANOUT and four
+                                            // appended geometry words, inside the existing 192-byte
+                                            // wire size) or through the E26R access bit SCANOUT, which
+                                            // also places the allocation in the local segment. The new
+                                            // counters ride the existing LOG_SUMMARY ring, so no
+                                            // escape struct and no escape ABI changed.
+                                            // 205 (INF 0.7.205.1, on 204): the clock table gains
                                             // two thermal-only points below the lab floor, 900 and
                                             // 800 MHz, both at the floor's 820 mV / VID 116 (owner
                                             // decision 2026-10-05: a clock under 1000 MHz is allowed
