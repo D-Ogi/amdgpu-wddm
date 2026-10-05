@@ -249,3 +249,24 @@ The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250
 as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release
 installer puts the first two, and `amdgpu_wddm_d3d12caps.exe`, in one directory, and the CLI and a copy of the DLL in
 `tools`.
+
+## Review oracles (G-CU, G-VER, G-ART)
+
+`test/OracleTests.cs` checks this application against three oracles that the reviewer wrote from the plan alone:
+`oracle-cu.json` (the compute-unit page), `oracle-ver.json` (the version and update rules) and `oracle-art.json` (the
+guide art). They are **not** in this repository and are never copied into it, because a copy here would let the
+implementation be fitted to them. `build.ps1 -Oracle <dir>` passes the directory, `AMDGPU_WDDM_ORACLE` carries it to
+the tests, and without it the three checks print "oracles: not given" and skip.
+
+The directory is `<BC250_ROOT>\scratch\gui\codex`, the reviewer's working directory, beside the trial kits that landed
+as `tools/win/gui-trials` (`BC250_ROOT` is the workspace root, by default the parent directory of this repository).
+Its `T1-manifest.json` records what the tests must read:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `oracle-cu.json` | 192848 | `0A04EB75A8BB4ACC59AAFC77DCDC1635151D83AE7AB95B96BE81D6552735A2D5` |
+| `oracle-ver.json` | 117736 | `5A1C982B876B67354A8BC986562BA2C53847B5FBF43CF88B6719FD0225D71D71` |
+| `oracle-art.json` | 1074541 | `C85905FD7044BD876AF4126DBD4C731C4FCD4F204780A43CCA253D0545251291` |
+
+Check the three hashes before a release build and pass `-Oracle`. A skipped oracle check is silent, so a lost
+directory looks exactly like a passing build.

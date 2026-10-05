@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "id": "the-ascent",
+  "title": "The Ascent",
+  "app_id": 979690,
+  "api": "d3d12",
+  "apis": {
+    "d3d12": {
+      "selection": "DirectX 12 is the game's default since the hotfix of 2021-09-01; the in-game DirectX choice (Main Menu, needs a restart) overrides it",
+      "arguments": "",
+      "router": "not-allow",
+      "witness": {"module": "amdgpu_wddm_d3d12.dll", "sha256": "staged"}
+    },
+    "d3d11": {
+      "selection": "Unreal Engine 4 command line -dx11 (engine documentation; community reports it works for this game), or the in-game DirectX choice",
+      "arguments": "-dx11",
+      "router": "allow",
+      "witness": {"module": "amdgpu_wddm_d3d11.dll", "sha256": "release"}
+    }
+  },
+  "steam": {
+    "client": "C:\\Program Files (x86)\\Steam\\steam.exe",
+    "library": "C:\\Program Files (x86)\\Steam\\steamapps",
+    "install_dir": "The Ascent",
+    "launch_entry": "0: TheAscent.exe -Installed (the Unreal bootstrap at the install root; appinfo cache of 2026-09-30)",
+    "arguments": "",
+    "require_state_flags": 4,
+    "wait_seconds": 90,
+    "eula": "979690_eula_1"
+  },
+  "executable": {"directory": "TheAscent\\Binaries\\Win64", "image": "TheAscent-Win64-Shipping.exe", "direct_arguments": ""},
+  "processes": {
+    "main": "TheAscent-Win64-Shipping",
+    "launch_chain": ["TheAscent", "TheAscent-Win64-Shipping"],
+    "renderers": ["TheAscent-Win64-Shipping"],
+    "end_at_cleanup": ["TheAscent-Win64-Shipping", "TheAscent", "CrashReportClient", "cdb"],
+    "survivors": ["TheAscent-Win64-Shipping", "TheAscent", "CrashReportClient", "cdb"],
+    "writers": ["TheAscent-Win64-Shipping", "TheAscent", "cdb"],
+    "counters": ["TheAscent-Win64-Shipping"],
+    "etw": ["TheAscent-Win64-Shipping"]
+  },
+  "router_images": ["TheAscent-Win64-Shipping.exe", "TheAscent.exe"],
+  "readiness": {"mode": "generic", "control_after_window_seconds": 10, "min_jobs": 50},
+  "modules": ["d3d12.dll", "d3d12core.dll", "dxgi.dll", "d3d11.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll",
+              "amdgpu_wddm_radv.dll", "bc250d3d.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll",
+              "bc250umd.dll", "vulkan-1.dll", "amd_fidelityfx_dx12.dll", "ffx_fsr2_api_dx12_x64.dll", "sl.interposer.dll",
+              "msvcp140.dll"],
+  "settings": {
+    "policy": "record",
+    "directory": "%LOCALAPPDATA%\\TheAscent\\Saved\\Config\\WindowsNoEditor",
+    "files": ["GameUserSettings.ini", "Engine.ini"]
+  },
+  "saves": "",
+  "events_filter": "TheAscent|CrashReportClient|amdgpu_wddm|d3d12|dxgi",
+  "app_profile": {
+    "image": "",
+    "experiment": "",
+    "proposal": "none for the first D3D12 session (the game starts with ray tracing off). For a ray tracing session: TheAscent-Win64-Shipping.exe Experiment=raytracing-tier, the one switch that makes the shell report the engine's raytracing tier (adapter-caps.cpp; without it RaytracingTier is NOT_SUPPORTED and the game cannot offer ray tracing)."
+  },
+  "session": {"default_seconds": 900, "entry": "run-game.sh N the-ascent [SECONDS]"},
+  "notes": [
+    "The shipping image path is the Unreal Engine 4 packaging layout (community); the bootstrap TheAscent.exe at the root comes from the Steam entry. The lab check (DRY_RUN=lab) confirms both before a session.",
+    "Hotfix 2021-09-01: DirectX 12 default; ray tracing off by default and turned on in the Main Menu graphics options; a first start caches shaders for 20-25 s at the main menu.",
+    "Settings are only recorded (hash before and after), never written: policy record.",
+    "Steam's first start (2026-10-01): 267 stopped at the app's EULA dialog (979690_eula_1) past the 90 s wait; it was accepted in the Steam client on the owner's behalf at 21:24:44Z with the click helper started -WindowStyle Hidden (a visible console had covered the button). 268: Steam ran the app's install script runasadmin.vdf (SteamService /installscript exit 0xC000042C, elevation required), the UAC prompt held the secure desktop 21:31:42-21:33:44Z, the wait ran out and the stale presentation witness failed Verify (closed by close-inplace.ps1 -AfterStaleWitness). The lab elevates administrators without a prompt since 21:36Z (STATE.md).",
+    "Start-up crash (268, 269): about 14 s after the start in radv_CreateGraphicsPipelines (spirv_to_nir): dxil-spirv typed the UDiv/UMod helper calls of three vertex shaders with %dx.types.twoi32 (scratch\\m15\\dxil-udiv). 271 ran engine 5B605D32 with the fix (staged, SESSION_ENGINE): modules 3/3, the game window at 17 s, then exit 3 with CrashReportClient after about 70 s; plan-272 names it a device removal."
+  ]
+}
