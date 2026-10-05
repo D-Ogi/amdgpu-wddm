@@ -60,6 +60,9 @@ This directory holds the source of record. Change the file here first. Copy the 
 directory afterwards, and only after a deliberate check, because that copy is the one an operator runs
 while the lab hangs. A fix that stays here never reaches the AC cycle that a recovery actually performs.
 
+First read through this copy, 2026-10-05: `selftest.py` passed, `status` and `telemetry` returned exit
+code 0 with `readback_verified` true, and the operator copy read the same relay state.
+
 ## Two rules the lab depends on
 
 **Power alone never proves that the operating system responds.** A plug that reports watts proves that
