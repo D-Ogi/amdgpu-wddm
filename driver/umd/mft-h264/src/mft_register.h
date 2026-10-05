@@ -2,7 +2,7 @@
 //
 // Three consumers, one source of truth:
 //   - the driver package, which needs the four registry values a Media Foundation transform key
-//     holds (see lab/INF-FRAGMENT.txt);
+//     holds (see INSTALL.md);
 //   - the lab, which may register the transform for the whole machine with MFTRegister;
 //   - the host test, which registers it only inside its own process with MFTRegisterLocal and needs
 //     the very same type lists, so that a difference between test and shipped registration cannot

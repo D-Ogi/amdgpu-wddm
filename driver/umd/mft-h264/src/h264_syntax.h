@@ -37,6 +37,11 @@ struct SequenceParams {
     uint32_t fpsNum = 30;        // frames per second numerator
     uint32_t fpsDen = 1;
     uint32_t maxBitRate = 0;     // 0 omits the HRD; we never write an HRD
+    // vui_parameters colour description, clause E.2.1 code points. 2 is "unspecified".
+    uint32_t colourPrimaries = 1;
+    uint32_t transferCharacteristics = 1;
+    uint32_t matrixCoefficients = 1;
+    bool fullRange = false;      // video_full_range_flag
 };
 
 struct PictureParams {

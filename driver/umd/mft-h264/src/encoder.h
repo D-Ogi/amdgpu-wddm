@@ -39,15 +39,39 @@ struct EncoderConfig {
     uint32_t qpMax = 46;
     bool lowLatency = true;
     bool deblocking = false;              // false emits disable_deblocking_filter_idc 1
+    // VUI colour description, clause E.2.1 code points, written into the SPS as given. The transform
+    // fills these from the input media type; nothing in the encoder converts between colour spaces,
+    // so these describe the samples the client hands over. The default is the BT.709 studio-range
+    // triple the BGRA import shader produces.
+    uint32_t colourPrimaries = 1;         // 1: BT.709
+    uint32_t transferCharacteristics = 1; // 1: BT.709
+    uint32_t matrixCoefficients = 1;      // 1: BT.709
+    bool fullRange = false;               // false: studio range (16..235 luma)
 };
 
+// What one picture cost, in the stages a profile has to tell apart. Every millisecond figure is of
+// the picture just encoded; nothing here is cumulative.
 struct FrameStats {
     bool keyFrame = false;
     uint32_t qp = 0;
     uint32_t bytes = 0;
     uint32_t skippedMbs = 0;
+    // The device's own timestamps around the dispatches. Zero with gpuTimingValid false when the
+    // device gave no usable pair - never the previous picture's figure.
     double gpuMs = 0.0;
+    bool gpuTimingValid = false;
+    // Wall clock of the whole GPU stage as the calling thread sees it: upload, dispatches, the wait
+    // for the GPU and the readback. gpuMs is the part of it the GPU was busy with our dispatches.
+    double gpuWallMs = 0.0;
+    // The part of gpuWallMs spent moving the levels and the macroblock info to the CPU, which is
+    // where the thread waits for the GPU (GpuEncoder::LastReadbackMilliseconds).
+    double readbackMs = 0.0;
+    // The CPU half, after the GPU stage: cpuMs is the whole of it, cavlcMs the entropy coding of the
+    // slice (clause 9.2 CAVLC plus the slice header) and nalMs the byte stream assembly, which is
+    // the emulation prevention scan of clause 7.4.1.1 plus the NAL and parameter set framing.
     double cpuMs = 0.0;
+    double cavlcMs = 0.0;
+    double nalMs = 0.0;
 };
 
 // Derives the sequence and picture parameter sets from a configuration, without a GPU device. The

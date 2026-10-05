@@ -6,14 +6,21 @@ namespace bc250h264 {
 
 namespace {
 
-struct LevelLimit { uint32_t idc; uint32_t maxFs; uint32_t maxMbps; };
-// Annex A, Table A-1, the MaxFS and MaxMBPS columns. Only the levels a desktop capture can need.
+struct LevelLimit { uint32_t idc; uint32_t maxFs; uint32_t maxMbps; uint32_t maxBrKbps; };
+// Annex A, Table A-1: the MaxFS, MaxMBPS and MaxBR columns, in ascending order. MaxBR is in units of
+// 1000 bit/s for the Baseline, Constrained Baseline, Main and Extended profiles (cpbBrVclFactor
+// 1000), which is the only family this encoder emits. All three columns matter: levels 1.3 and 2.0
+// share MaxFS and MaxMBPS and differ only in MaxBR, as do 4.0 and 4.1, so a table without MaxBR
+// declares a level the stream can exceed, and a hardware decoder is entitled to refuse that stream.
 const LevelLimit kLevels[] = {
-    { 10,    99,    1485 }, { 11,   396,    3000 }, { 12,   396,    6000 },
-    { 13,   396,   11880 }, { 21,   792,   19800 }, { 22,  1620,   20250 },
-    { 30,  1620,   40500 }, { 31,  3600,  108000 }, { 32,  5120,  216000 },
-    { 40,  8192,  245760 }, { 42,  8704,  522240 }, { 50, 22080,  589824 },
-    { 51, 36864,  983040 }, { 52, 36864, 2073600 },
+    { 10,    99,    1485,     64 }, { 11,   396,    3000,    192 },
+    { 12,   396,    6000,    384 }, { 13,   396,   11880,    768 },
+    { 20,   396,   11880,   2000 }, { 21,   792,   19800,   4000 },
+    { 22,  1620,   20250,   4000 }, { 30,  1620,   40500,  10000 },
+    { 31,  3600,  108000,  14000 }, { 32,  5120,  216000,  20000 },
+    { 40,  8192,  245760,  20000 }, { 41,  8192,  245760,  50000 },
+    { 42,  8704,  522240,  50000 }, { 50, 22080,  589824, 135000 },
+    { 51, 36864,  983040, 240000 }, { 52, 36864, 2073600, 240000 },
 };
 
 double NowMs()
@@ -54,8 +61,11 @@ uint32_t Encoder::ClampQp(int32_t qp) const
 
 void MakeSequenceParams(const EncoderConfig& cfg, SequenceParams* sps, PictureParams* pps)
 {
-    const uint32_t visW = cfg.width & ~1u;
-    const uint32_t visH = cfg.height & ~1u;
+    // The configured size as it stands: every caller has already refused an odd one
+    // (IsCodableFrameSize), because the SPS crop cannot express it. Masking it down here was how a
+    // 1365x767 negotiation became a 1364x766 bitstream with nothing saying so.
+    const uint32_t visW = cfg.width;
+    const uint32_t visH = cfg.height;
     const uint32_t wmb = (visW + 15u) / 16u;
     const uint32_t hmb = (visH + 15u) / 16u;
     const uint32_t fpsDen = cfg.fpsDen ? cfg.fpsDen : 1u;
@@ -68,18 +78,32 @@ void MakeSequenceParams(const EncoderConfig& cfg, SequenceParams* sps, PicturePa
     sps->cropBottom = hmb * 16u - visH;
     sps->fpsNum = fpsNum;
     sps->fpsDen = fpsDen;
+    sps->colourPrimaries = cfg.colourPrimaries;
+    sps->transferCharacteristics = cfg.transferCharacteristics;
+    sps->matrixCoefficients = cfg.matrixCoefficients;
+    sps->fullRange = cfg.fullRange;
     const uint32_t fs = wmb * hmb;
     const uint32_t mbps = static_cast<uint32_t>(static_cast<uint64_t>(fs) * fpsNum / fpsDen);
+    // The declared level has to cover the peak the client asked for, not only the mean, and has to
+    // round up: 1 bit/s over a level's MaxBR already needs the next level.
+    const uint32_t bps = (cfg.maxBitRate > cfg.meanBitRate) ? cfg.maxBitRate : cfg.meanBitRate;
+    const uint32_t kbps = (bps + 999u) / 1000u;
     sps->levelIdc = 52;
     for (const LevelLimit& l : kLevels) {
-        if (fs <= l.maxFs && mbps <= l.maxMbps) {
+        if (fs <= l.maxFs && mbps <= l.maxMbps && kbps <= l.maxBrKbps) {
             sps->levelIdc = l.idc;
             break;
         }
     }
 
     *pps = PictureParams();
-    pps->picInitQp = static_cast<int32_t>(cfg.qpInit);
+    // pic_init_qp stays at 26 whatever quantiser the encoder runs at: every slice carries its own
+    // quantiser in slice_qp_delta (clause 7.4.3), so nothing in the bitstream needs this field to
+    // follow the configuration. It must not follow it either - MF_MT_MPEG_SEQUENCE_HEADER is built
+    // from this at SetOutputType time and a file sink copies it into the container, so a later
+    // ICodecAPI quantiser change would leave the container's parameter set disagreeing with the
+    // in-band one and every picture would decode at the wrong quantiser.
+    pps->picInitQp = 26;
     pps->chromaQpIndexOffset = 0;
     pps->deblockingFilterControlPresent = true;
 }
@@ -204,12 +228,14 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
     }
     sw.End();
     bw.RbspTrailingBits();
+    const double tCavlc = NowMs();
 
     out.clear();
     if (idr) {
         out.insert(out.end(), m_parameterSets.begin(), m_parameterSets.end());
     }
     EmitNal(out, idr ? 3u : 2u, idr ? kNalSliceIdr : kNalSliceNonIdr, bw.Rbsp());
+    const double tNal = NowMs();
 
     m_gpu.SwapReference();
     if (stats != nullptr) {
@@ -218,8 +244,15 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
         stats->bytes = static_cast<uint32_t>(out.size());
         stats->skippedMbs = sw.SkippedMbs();
         stats->gpuMs = m_gpu.LastGpuMilliseconds();
-        stats->cpuMs = NowMs() - tGpu;
-        (void)t0;
+        stats->gpuTimingValid = m_gpu.LastGpuTimingValid();
+        stats->gpuWallMs = tGpu - t0;
+        stats->readbackMs = m_gpu.LastReadbackMilliseconds();
+        // The CPU half, and the two stages it is made of. They are measured, not apportioned: the
+        // CAVLC stage ends where the last RBSP bit is written, the NAL stage covers the emulation
+        // prevention scan and the framing, and cpuMs is the two of them plus whatever lies between.
+        stats->cavlcMs = tCavlc - tGpu;
+        stats->nalMs = tNal - tCavlc;
+        stats->cpuMs = tNal - tGpu;
     }
 
     UpdateRateControl(static_cast<uint32_t>(out.size()), idr);

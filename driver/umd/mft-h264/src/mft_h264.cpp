@@ -1,45 +1,6 @@
 #include "mft_h264.h"
 #include <new>
 #include <string.h>
-#include <stdio.h>
-#include <stdarg.h>
-
-// Diagnostic trace of the asynchronous event handshake, off unless BC250_MFT_TRACE is set in the
-// environment. It names the calling thread, so the order of ProcessInput, ProcessOutput and the
-// queued events is readable across the client's worker threads. Written straight to the standard
-// error handle: no CRT stream state is shared with a host we are loaded into.
-namespace {
-int MftTraceOn()
-{
-    static int state = -1;
-    if (state < 0) {
-        char buf[8];
-        state = (GetEnvironmentVariableA("BC250_MFT_TRACE", buf, sizeof(buf)) > 0) ? 1 : 0;
-    }
-    return state;
-}
-void MftTrace(const char* fmt, ...)
-{
-    if (MftTraceOn() == 0) {
-        return;
-    }
-    char line[256];
-    const int n = _snprintf_s(line, sizeof(line), _TRUNCATE, "[mft t%05lu] ",
-                              static_cast<unsigned long>(GetCurrentThreadId()));
-    if (n <= 0) {
-        return;
-    }
-    va_list ap;
-    va_start(ap, fmt);
-    const int m = _vsnprintf_s(line + n, sizeof(line) - static_cast<size_t>(n), _TRUNCATE, fmt, ap);
-    va_end(ap);
-    if (m <= 0) {
-        return;
-    }
-    DWORD written = 0;
-    WriteFile(GetStdHandle(STD_ERROR_HANDLE), line, static_cast<DWORD>(n + m), &written, nullptr);
-}
-} // namespace
 
 // {A32438F0-0D79-4CA9-A5BF-9F3C80837253}
 extern "C" const GUID CLSID_Bc250H264EncoderMFT =
@@ -53,6 +14,32 @@ extern "C" long __stdcall Bc250H264EncodedPictureCount(void)
 }
 
 namespace bc250h264 {
+
+// Everything that must outlive an unload of this DLL: every live transform object, every live class
+// object, and every IClassFactory::LockServer the client still holds. COM calls LockServer only for
+// an out-of-process server, never for CoCreateInstance on an in-process one, so counting locks alone
+// would let OLE's idle handling (CoFreeUnusedLibraries) unmap the DLL while a capture topology still
+// holds an IMFTransform of ours, and the next ProcessInput would call into freed pages. The counter
+// lives here rather than in dllmain.cpp because the host test and the registration tool link the
+// transform without the COM entry points.
+namespace {
+long g_moduleLocks = 0;
+}
+
+void ModuleLock()
+{
+    InterlockedIncrement(&g_moduleLocks);
+}
+
+void ModuleUnlock()
+{
+    InterlockedDecrement(&g_moduleLocks);
+}
+
+bool ModuleIsIdle()
+{
+    return InterlockedCompareExchange(&g_moduleLocks, 0, 0) == 0;
+}
 
 namespace {
 
@@ -72,6 +59,68 @@ uint32_t OutputBufferBytes(uint32_t w, uint32_t h)
         bytes = 262144u;
     }
     return static_cast<uint32_t>(bytes);
+}
+
+// ---------------------------------------------------------------- colour description
+//
+// Media Foundation describes the colour of the samples it hands over with four attributes; H.264
+// carries the same information as the clause E.2.1 code points of the VUI. Nothing in this encoder
+// converts between colour spaces, so the VUI must repeat what the client said and nothing else. An
+// enumerant with no H.264 code point becomes "unspecified" (2), which is a true statement, rather
+// than the nearest neighbour, which would not be.
+enum : uint32_t { kColourUnspecified = 2 };
+
+uint32_t PrimariesFromMf(UINT32 mf)
+{
+    switch (mf) {
+    case MFVideoPrimaries_BT709:          return 1;
+    case MFVideoPrimaries_BT470_2_SysM:   return 4;
+    case MFVideoPrimaries_BT470_2_SysBG:  return 5;
+    case MFVideoPrimaries_SMPTE170M:      return 6;
+    case MFVideoPrimaries_SMPTE_C:        return 6;   // SMPTE C shares the 170M primaries
+    case MFVideoPrimaries_SMPTE240M:      return 7;
+    case MFVideoPrimaries_BT2020:         return 9;
+    case MFVideoPrimaries_XYZ:            return 10;
+    case MFVideoPrimaries_DCI_P3:         return 11;
+    case MFVideoPrimaries_Display_P3:     return 12;
+    default:                              return kColourUnspecified;
+    }
+}
+
+uint32_t TransferFromMf(UINT32 mf)
+{
+    switch (mf) {
+    case MFVideoTransFunc_10:          return 8;    // linear
+    case MFVideoTransFunc_22:          return 4;
+    case MFVideoTransFunc_709:         return 1;
+    case MFVideoTransFunc_240M:        return 7;
+    case MFVideoTransFunc_sRGB:        return 13;
+    case MFVideoTransFunc_28:          return 5;
+    case MFVideoTransFunc_Log_100:     return 9;
+    case MFVideoTransFunc_Log_316:     return 10;
+    case MFVideoTransFunc_2020_const:  return 14;
+    case MFVideoTransFunc_2020:        return 14;
+    case MFVideoTransFunc_2084:        return 16;
+    case MFVideoTransFunc_HLG:         return 18;
+    case MFVideoTransFunc_BT1361_ECG:  return 12;
+    case MFVideoTransFunc_SMPTE428:    return 17;
+    default:                           return kColourUnspecified;
+    }
+}
+
+uint32_t MatrixFromMf(UINT32 mf)
+{
+    switch (mf) {
+    case MFVideoTransferMatrix_BT709:      return 1;
+    case MFVideoTransferMatrix_BT601:      return 6;   // SMPTE 170M, the same matrix as BT.470BG
+    case MFVideoTransferMatrix_SMPTE240M:  return 7;
+    case MFVideoTransferMatrix_BT2020_10:  return 9;
+    case MFVideoTransferMatrix_BT2020_12:  return 9;
+    case MFVideoTransferMatrix_Identity:   return 0;   // GBR
+    case MFVideoTransferMatrix_FCC47:      return 4;
+    case MFVideoTransferMatrix_YCgCo:      return 8;
+    default:                               return kColourUnspecified;
+    }
 }
 
 class Lock {
@@ -104,6 +153,8 @@ void Bc250H264Mft::FrameLock::Release()
 
 Bc250H264Mft::Bc250H264Mft()
 {
+    // Keep the DLL mapped for as long as this object lives, whatever route created it.
+    ModuleLock();
     InitializeCriticalSection(&m_lock);
     m_lockInit = true;
 }
@@ -114,6 +165,7 @@ Bc250H264Mft::~Bc250H264Mft()
     if (m_lockInit) {
         DeleteCriticalSection(&m_lock);
     }
+    ModuleUnlock();
 }
 
 HRESULT Bc250H264Mft::Construct()
@@ -426,7 +478,10 @@ HRESULT Bc250H264Mft::SetInputType(DWORD id, IMFMediaType* type, DWORD flags)
         return MF_E_INVALIDMEDIATYPE;
     }
     UINT32 w = 0, h = 0;
-    if (FAILED(MFGetAttributeSize(type, MF_MT_FRAME_SIZE, &w, &h)) || w < 16 || h < 16) {
+    // The same predicate the encoder itself uses, refused here where the client can still
+    // renegotiate. An odd frame size matters most: accepting it and coding one sample less would
+    // leave MF_MT_FRAME_SIZE disagreeing with the bitstream, which the muxer discovers far too late.
+    if (FAILED(MFGetAttributeSize(type, MF_MT_FRAME_SIZE, &w, &h)) || !IsCodableFrameSize(w, h)) {
         return MF_E_INVALIDMEDIATYPE;
     }
     if (m_outputType) {
@@ -451,6 +506,30 @@ HRESULT Bc250H264Mft::SetInputType(DWORD id, IMFMediaType* type, DWORD flags)
     m_inputSubtype = subtype;
     m_cfg.width = w;
     m_cfg.height = h;
+
+    // The colour description of the samples, repeated into the VUI. The BGRA path is the one case
+    // where we know the answer ourselves: cs_import.hlsl converts with the studio-range BT.709
+    // matrix, so whatever the client says about its RGB, what comes out is 709 studio range. For
+    // NV12 and IYUV the samples pass through untouched, so the client's own description is the only
+    // truthful one, and an absent attribute means unspecified.
+    if (subtype == MFVideoFormat_ARGB32) {
+        m_cfg.colourPrimaries = 1;
+        m_cfg.transferCharacteristics = 1;
+        m_cfg.matrixCoefficients = 1;
+        m_cfg.fullRange = false;
+    } else {
+        UINT32 v = 0;
+        m_cfg.colourPrimaries = SUCCEEDED(type->GetUINT32(MF_MT_VIDEO_PRIMARIES, &v))
+                                    ? PrimariesFromMf(v) : kColourUnspecified;
+        m_cfg.transferCharacteristics = SUCCEEDED(type->GetUINT32(MF_MT_TRANSFER_FUNCTION, &v))
+                                    ? TransferFromMf(v) : kColourUnspecified;
+        m_cfg.matrixCoefficients = SUCCEEDED(type->GetUINT32(MF_MT_YUV_MATRIX, &v))
+                                    ? MatrixFromMf(v) : kColourUnspecified;
+        m_cfg.fullRange = SUCCEEDED(type->GetUINT32(MF_MT_VIDEO_NOMINAL_RANGE, &v)) &&
+                          v == static_cast<UINT32>(MFNominalRange_0_255);
+    }
+    // The sequence header already on the output type was built before this, so it has to follow.
+    RefreshOutputParameterSets();
     // A format change restarts the encoder on the next picture.
     m_encoder.Shutdown();
     m_encoderReady = false;
@@ -485,10 +564,7 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
         return MF_E_INVALIDMEDIATYPE;
     }
     UINT32 w = 0, h = 0;
-    if (FAILED(MFGetAttributeSize(type, MF_MT_FRAME_SIZE, &w, &h)) || w < 16 || h < 16) {
-        return MF_E_INVALIDMEDIATYPE;
-    }
-    if (w > 4096 || h > 4096) {
+    if (FAILED(MFGetAttributeSize(type, MF_MT_FRAME_SIZE, &w, &h)) || !IsCodableFrameSize(w, h)) {
         return MF_E_INVALIDMEDIATYPE;
     }
     if (m_inputType) {
@@ -529,21 +605,9 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
     }
     m_cfg = cfg;
 
-    // The sequence header has to be on the output type before the first sample, because a file sink
-    // writes it into the container. MakeSequenceParams needs no device, so this works here.
-    SequenceParams sps;
-    PictureParams pps;
-    MakeSequenceParams(m_cfg, &sps, &pps);
-    std::vector<uint8_t> nals;
-    BuildParameterSetNals(nals, sps, pps);
-
     m_outputType.Reset();
     m_outputType.CopyFrom(type);
-    HRESULT hr = m_outputType->SetBlob(MF_MT_MPEG_SEQUENCE_HEADER, nals.data(),
-                                      static_cast<UINT32>(nals.size()));
-    if (SUCCEEDED(hr)) {
-        hr = m_outputType->SetUINT32(MF_MT_MPEG2_LEVEL, sps.levelIdc);
-    }
+    const HRESULT hr = RefreshOutputParameterSets();
     if (FAILED(hr)) {
         m_outputType.Reset();
         return hr;
@@ -551,6 +615,49 @@ HRESULT Bc250H264Mft::SetOutputType(DWORD id, IMFMediaType* type, DWORD flags)
     m_encoder.Shutdown();
     m_encoderReady = false;
     return S_OK;
+}
+
+// MF_MT_MPEG_SEQUENCE_HEADER and MF_MT_MPEG2_LEVEL on the output type. A file sink copies the blob
+// into the container (the avcC record of an MP4), so it has to be there before the first sample and
+// it has to say exactly what the encoder puts in band in front of every key frame. A blob that
+// disagrees with the in-band sets is not a cosmetic difference: a sink that strips the in-band sets
+// leaves the whole recording decoded against the wrong parameter set.
+//
+// Two sources, and which one applies is decided by whether an encoder exists:
+//   - before the encoder is created, the configuration, because Encoder::Initialize will derive the
+//     in-band sets from that same configuration through the same MakeSequenceParams. Everything that
+//     can still change after SetOutputType - SetInputType, and ICodecAPI - comes back through here.
+//   - once the encoder is running, the encoder's own sets, byte for byte. A setting that changes the
+//     parameter sets, such as a bitrate that needs a higher level, cannot change a sequence that is
+//     already being decoded against them; it takes effect when the encoder is next initialized, and
+//     until then the blob keeps telling the truth about the stream.
+HRESULT Bc250H264Mft::RefreshOutputParameterSets()
+{
+    if (!m_outputType) {
+        return S_OK;
+    }
+    std::vector<uint8_t> nals;
+    uint32_t level = 0;
+    if (m_encoderReady) {
+        nals = m_encoder.ParameterSets();
+        level = m_encoder.Sps().levelIdc;
+    } else {
+        SequenceParams sps;
+        PictureParams pps;
+        MakeSequenceParams(m_cfg, &sps, &pps);
+        BuildParameterSetNals(nals, sps, pps);
+        level = sps.levelIdc;
+        MftTrace("parameter sets rebuilt: level %u, colour %u/%u/%u, range %u, %u bytes\n",
+                 sps.levelIdc, sps.colourPrimaries, sps.transferCharacteristics,
+                 sps.matrixCoefficients, sps.fullRange ? 1u : 0u,
+                 static_cast<unsigned>(nals.size()));
+    }
+    HRESULT hr = m_outputType->SetBlob(MF_MT_MPEG_SEQUENCE_HEADER, nals.data(),
+                                       static_cast<UINT32>(nals.size()));
+    if (SUCCEEDED(hr)) {
+        hr = m_outputType->SetUINT32(MF_MT_MPEG2_LEVEL, level);
+    }
+    return hr;
 }
 
 HRESULT Bc250H264Mft::GetInputCurrentType(DWORD id, IMFMediaType** out)
@@ -662,8 +769,41 @@ HRESULT Bc250H264Mft::EnsureEncoder()
     if (FAILED(hr)) {
         return hr;
     }
+    PublishAdapterLuid(m_encoder.Gpu().Device());
     m_encoderReady = true;
-    return S_OK;
+    // From here on the output type carries the encoder's own parameter sets, so the blob a file sink
+    // copies into the container cannot drift from the bytes in front of the first key frame even if
+    // the configuration and the encoder ever disagreed.
+    return RefreshOutputParameterSets();
+}
+
+// MFT_ENUM_ADAPTER_LUID (mfapi.h:2025) is how a client binds a hardware encoder to one GPU: it
+// passes the adapter's LUID to MFTEnum2 and expects the transform to carry the same value. A
+// machine-wide registration cannot hold it - a LUID is assigned at boot and is not stable across
+// boots, so no static registry blob can name one - so the live object publishes it as soon as it
+// knows which adapter it encodes on, which is also what a client reading GetAttributes sees.
+// INSTALL.md records what this means for the two registration routes.
+void Bc250H264Mft::PublishAdapterLuid(ID3D11Device* device)
+{
+    if (device == nullptr || !m_attributes) {
+        return;
+    }
+    ComPtr<IDXGIDevice> dxgiDevice;
+    if (FAILED(device->QueryInterface(__uuidof(IDXGIDevice),
+                                      reinterpret_cast<void**>(&dxgiDevice)))) {
+        return;
+    }
+    ComPtr<IDXGIAdapter> adapter;
+    if (FAILED(dxgiDevice->GetAdapter(&adapter))) {
+        return;
+    }
+    DXGI_ADAPTER_DESC desc = {};
+    if (FAILED(adapter->GetDesc(&desc))) {
+        return;
+    }
+    UINT64 luid = 0;
+    memcpy(&luid, &desc.AdapterLuid, sizeof(luid));
+    m_attributes->SetUINT64(MFT_ENUM_ADAPTER_LUID, luid);
 }
 
 HRESULT Bc250H264Mft::SampleToFrame(IMFSample* sample, GpuFrameInput* frame, FrameLock* lock)
@@ -808,10 +948,13 @@ HRESULT Bc250H264Mft::ProcessMessage(MFT_MESSAGE_TYPE message, ULONG_PTR param)
         if (FAILED(hr)) {
             return hr;
         }
-        if (!m_streaming) {
-            m_streaming = true;
-            m_forceKeyFrame = true;
-        }
+        m_streaming = true;
+        // Every segment opens with a key frame, not only the first one. A client that drains and then
+        // sends NOTIFY_START_OF_STREAM again - the documented way to restart after a drain, and what
+        // pause and resume in a recording client does - must not get a P slice that references the
+        // previous segment's reconstruction, because the new file or segment would be undecodable
+        // from its own first access unit. COMMAND_FLUSH arms the same thing for the same reason.
+        m_forceKeyFrame = true;
         // Unconditional: the credit bookkeeping in QueueNeedInput makes a repeated message free,
         // and after a drain this is the only thing that restarts the flow of input.
         return QueueNeedInput();
@@ -860,7 +1003,50 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
     if (FAILED(hr)) {
         return hr;
     }
+
+    // Lock order, and it is the reason this is done before the object's own critical section: the
+    // shared Direct3D device lock is the outer lock. A client thread that holds the device lock and
+    // calls ProcessMessage, GetOutputStatus or ProcessOutput takes our critical section while
+    // holding it; if ProcessInput took them the other way round the pipeline would deadlock. The
+    // device manager itself is only ever set through MFT_MESSAGE_SET_D3D_MANAGER before streaming,
+    // and is read here under the critical section before anything else happens.
+    ComPtr<IMFDXGIDeviceManager> manager;
+    {
+        Lock probe(&m_lock);
+        manager.CopyFrom(m_deviceManager.Get());
+    }
+    HANDLE deviceHandle = nullptr;
+    bool deviceLocked = false;
+    if (manager) {
+        if (SUCCEEDED(manager->OpenDeviceHandle(&deviceHandle))) {
+            if (SUCCEEDED(manager->LockDevice(deviceHandle, __uuidof(ID3D11Device), nullptr, TRUE))) {
+                deviceLocked = true;
+            }
+        }
+    }
+    // Releases the device lock on every exit path below, after the critical section is dropped.
+    struct DeviceLockGuard {
+        IMFDXGIDeviceManager* manager;
+        HANDLE handle;
+        bool locked;
+        ~DeviceLockGuard()
+        {
+            if (locked) {
+                manager->UnlockDevice(handle, FALSE);
+            }
+            if (handle != nullptr) {
+                manager->CloseDeviceHandle(handle);
+            }
+        }
+    } deviceGuard{ manager.Get(), deviceHandle, deviceLocked };
+
     Lock guard(&m_lock);
+    // Checked again: the critical section was dropped while the device lock was taken, and a client
+    // thread is free to shut the transform down in that window.
+    hr = CheckValid();
+    if (FAILED(hr)) {
+        return hr;
+    }
     if (!m_inputType || !m_outputType) {
         return MF_E_TRANSFORM_TYPE_NOT_SET;
     }
@@ -884,11 +1070,15 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
     if (bufferCount > 1) {
         // Our input stream declares MFT_INPUT_STREAM_SINGLE_SAMPLE_PER_BUFFER; a split sample is
         // still cheap to join and refusing it would break a well-behaved source.
+        // ConvertToContiguousBuffer replaces the sample's whole buffer list with the joined buffer,
+        // so the GetBufferByIndex(0) in SampleToFrame below sees it; the returned reference is of no
+        // further use here, which is why it is dropped at once.
         ComPtr<IMFMediaBuffer> joined;
         hr = sample->ConvertToContiguousBuffer(&joined);
         if (FAILED(hr)) {
             return hr;
         }
+        joined.Reset();
     }
 
     bool forceKey = m_forceKeyFrame;
@@ -905,28 +1095,11 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
         return hr;
     }
 
-    // Serialise against the client's own use of the shared device. The documented contract for a
-    // D3D11-aware MFT is that it takes this lock around every use of the device.
-    HANDLE deviceHandle = nullptr;
-    bool deviceLocked = false;
-    if (m_deviceManager) {
-        if (SUCCEEDED(m_deviceManager->OpenDeviceHandle(&deviceHandle))) {
-            if (SUCCEEDED(m_deviceManager->LockDevice(deviceHandle, __uuidof(ID3D11Device),
-                                                      nullptr, TRUE))) {
-                deviceLocked = true;
-            }
-        }
-    }
-
+    // The device lock taken at the top of this function is held across the encode: that is the
+    // documented contract for a D3D11-aware MFT, and it serialises our dispatches against the
+    // client's own use of the same device.
     FrameStats stats;
     hr = m_encoder.EncodeFrame(frame, forceKey, m_bitstream, &stats);
-
-    if (deviceLocked) {
-        m_deviceManager->UnlockDevice(deviceHandle, FALSE);
-    }
-    if (deviceHandle != nullptr) {
-        m_deviceManager->CloseDeviceHandle(deviceHandle);
-    }
     held.Release();
     if (FAILED(hr)) {
         return hr;
@@ -970,8 +1143,9 @@ HRESULT Bc250H264Mft::ProcessInput(DWORD id, IMFSample* sample, DWORD flags)
     }
     out->SetSampleDuration(m_lastDuration);
     out->SetUINT32(MFSampleExtension_CleanPoint, stats.keyFrame ? 1u : 0u);
-    // Picture-level diagnostics, read by our own tests. Unknown attributes are ignored by clients.
-    out->SetUINT32(MFSampleExtension_VideoEncodeQP, stats.qp);
+    // The quantiser this picture was coded at. UINT64, as mfapi.h declares the attribute
+    // (mfapi.h:1166 "Type: UINT64"): a client calling GetUINT64 on a UINT32 we wrote would fail.
+    out->SetUINT64(MFSampleExtension_VideoEncodeQP, stats.qp);
 
     m_pendingOutput = std::move(out);
     MftTrace("queue HaveOutput (%u bytes)\n", static_cast<unsigned>(m_bitstream.size()));
@@ -1163,9 +1337,9 @@ HRESULT Bc250H264Mft::CopyAllItems(IMFAttributes* d) { return m_attributes->Copy
 
 HRESULT Bc250H264Mft::SetUINT32(REFGUID k, UINT32 v)
 {
-    if (k == MF_TRANSFORM_ASYNC_UNLOCK) {
-        m_asyncUnlocked = (v != 0);
-    }
+    // MF_TRANSFORM_ASYNC_UNLOCK arrives here, and CheckValid reads it back out of the attribute
+    // store on every streaming call, so there is deliberately no copy of it in a member: one place
+    // holds it and the client can see exactly what we see.
     return m_attributes->SetUINT32(k, v);
 }
 
@@ -1206,10 +1380,62 @@ HRESULT ReadUlong(const VARIANT* v, ULONG* out)
     }
 }
 
+HRESULT ReadUlonglong(const VARIANT* v, ULONGLONG* out)
+{
+    if (v == nullptr) {
+        return E_POINTER;
+    }
+    switch (v->vt) {
+    case VT_UI8: *out = v->ullVal; return S_OK;
+    case VT_I8:  *out = static_cast<ULONGLONG>(v->llVal); return S_OK;
+    case VT_UI4: *out = v->ulVal; return S_OK;
+    case VT_I4:  *out = static_cast<ULONGLONG>(static_cast<LONG>(v->lVal)); return S_OK;
+    default:     return E_INVALIDARG;
+    }
+}
+
 void WriteUlong(VARIANT* v, ULONG value)
 {
     v->vt = VT_UI4;
     v->ulVal = value;
+}
+
+void WriteUlonglong(VARIANT* v, ULONGLONG value)
+{
+    v->vt = VT_UI8;
+    v->ullVal = value;
+}
+
+// CODECAPI_AVEncVideoEncodeQP is a UINT64 (codecapi.h:908) carrying one quantiser per picture type
+// in 16-bit fields: I at bit 0, P at bit 16, B at bit 32. No copy of that page is in the workspace
+// reference set, so the shape was taken from the inbox H264 Encoder MFT, which the host test probes
+// (ProbeInboxQuantiserContract, measured on this development PC, 2026-10-05): under quality rate
+// control it accepts VT_UI8 and refuses VT_UI4 with E_INVALIDARG, takes 26 from the packed value
+// 26 | (28 << 16) | (30 << 32), reports it back as VT_UI8, and refuses an I field above 51.
+// This encoder has one quantiser for the whole picture - an I picture simply takes three steps less
+// - so it reads the I field and requires the others, when present, to be legal. A plain scalar
+// below 2^16 is the same value with only the I field filled, and is accepted as well, which is one
+// thing we are more permissive about than the inbox encoder.
+enum : uint64_t { kQpFieldMask = 0xFFFFull };
+
+HRESULT UnpackFrameTypeQp(ULONGLONG packed, ULONG* qp)
+{
+    for (int shift = 0; shift <= 32; shift += 16) {
+        if (((packed >> shift) & kQpFieldMask) > 51u) {
+            return E_INVALIDARG;
+        }
+    }
+    if ((packed >> 48) != 0) {
+        return E_INVALIDARG;
+    }
+    *qp = static_cast<ULONG>(packed & kQpFieldMask);
+    return S_OK;
+}
+
+ULONGLONG PackFrameTypeQp(ULONG qp)
+{
+    const ULONGLONG q = qp & kQpFieldMask;
+    return q | (q << 16) | (q << 32);
 }
 
 } // namespace
@@ -1255,9 +1481,18 @@ HRESULT Bc250H264Mft::GetParameterRange(const GUID* p, VARIANT* lo, VARIANT* hi,
         WriteUlong(lo, 1); WriteUlong(hi, 600); WriteUlong(step, 1);
         return S_OK;
     }
-    if (*p == CODECAPI_AVEncVideoEncodeQP || *p == CODECAPI_AVEncVideoMinQP ||
-        *p == CODECAPI_AVEncVideoMaxQP) {
-        WriteUlong(lo, 0); WriteUlong(hi, 51); WriteUlong(step, 1);
+    // kQpFloor, not 0: the forward quantiser clamps every level to +-2047 so that level_prefix stays
+    // inside what Baseline CAVLC allows, and below that floor the clamp costs more quality than the
+    // finer quantiser buys (see encoder.h). Advertising 0 would promise a quantiser the encoder
+    // silently refuses to use.
+    if (*p == CODECAPI_AVEncVideoEncodeQP) {
+        WriteUlonglong(lo, PackFrameTypeQp(kQpFloor));
+        WriteUlonglong(hi, PackFrameTypeQp(51));
+        WriteUlonglong(step, 1);
+        return S_OK;
+    }
+    if (*p == CODECAPI_AVEncVideoMinQP || *p == CODECAPI_AVEncVideoMaxQP) {
+        WriteUlong(lo, kQpFloor); WriteUlong(hi, 51); WriteUlong(step, 1);
         return S_OK;
     }
     return E_NOTIMPL;
@@ -1302,7 +1537,7 @@ HRESULT Bc250H264Mft::GetDefaultValue(const GUID* p, VARIANT* value)
         value->vt = VT_BOOL;
         value->boolVal = def.lowLatency ? VARIANT_TRUE : VARIANT_FALSE;
     } else if (*p == CODECAPI_AVEncVideoEncodeQP) {
-        WriteUlong(value, def.qpInit);
+        WriteUlonglong(value, PackFrameTypeQp(def.qpInit));
     } else if (*p == CODECAPI_AVEncVideoMinQP) {
         WriteUlong(value, def.qpMin);
     } else if (*p == CODECAPI_AVEncVideoMaxQP) {
@@ -1335,7 +1570,7 @@ HRESULT Bc250H264Mft::GetValue(const GUID* p, VARIANT* value)
         value->vt = VT_BOOL;
         value->boolVal = c.lowLatency ? VARIANT_TRUE : VARIANT_FALSE;
     } else if (*p == CODECAPI_AVEncVideoEncodeQP) {
-        WriteUlong(value, c.qpInit);
+        WriteUlonglong(value, PackFrameTypeQp(c.qpInit));
     } else if (*p == CODECAPI_AVEncVideoMinQP) {
         WriteUlong(value, c.qpMin);
     } else if (*p == CODECAPI_AVEncVideoMaxQP) {
@@ -1356,6 +1591,22 @@ HRESULT Bc250H264Mft::SetValue(const GUID* p, VARIANT* value)
     if (p == nullptr || value == nullptr) {
         return E_POINTER;
     }
+    if (*p == CODECAPI_AVEncVideoEncodeQP) {
+        ULONGLONG packed = 0;
+        HRESULT hr = ReadUlonglong(value, &packed);
+        if (FAILED(hr)) {
+            return hr;
+        }
+        ULONG qp = 0;
+        hr = UnpackFrameTypeQp(packed, &qp);
+        if (FAILED(hr)) {
+            return hr;
+        }
+        Lock guard(&m_lock);
+        m_cfg.qpInit = qp;
+        m_encoder.SetQp(qp);
+        return S_OK;
+    }
     ULONG v = 0;
     HRESULT hr = ReadUlong(value, &v);
     if (FAILED(hr)) {
@@ -1374,6 +1625,11 @@ HRESULT Bc250H264Mft::SetValue(const GUID* p, VARIANT* value)
         }
         m_cfg.meanBitRate = v;
         m_encoder.SetMeanBitRate(v);
+        // The declared level follows the bitrate, so the sequence header on the output type has to
+        // be rebuilt. A client that sets the bitrate before NOTIFY_BEGIN_STREAMING - the normal
+        // order for the capture engine and for Chromium - would otherwise get a container parameter
+        // set declaring a lower level than the one the encoder writes in band.
+        RefreshOutputParameterSets();
     } else if (*p == CODECAPI_AVEncCommonQuality) {
         if (v > 100) {
             return E_INVALIDARG;
@@ -1391,23 +1647,20 @@ HRESULT Bc250H264Mft::SetValue(const GUID* p, VARIANT* value)
         m_encoder.SetLowLatency(m_cfg.lowLatency);
     } else if (*p == CODECAPI_AVEncVideoForceKeyFrame) {
         m_forceKeyFrame = (v != 0);
-    } else if (*p == CODECAPI_AVEncVideoEncodeQP) {
-        if (v > 51) {
-            return E_INVALIDARG;
-        }
-        m_cfg.qpInit = v;
-        m_encoder.SetQp(v);
     } else if (*p == CODECAPI_AVEncVideoMinQP) {
         if (v > 51) {
             return E_INVALIDARG;
         }
-        m_cfg.qpMin = v;
+        // Raised to the floor the encoder actually uses, which is also the floor GetParameterRange
+        // advertises, so that GetValue reports the bound that will apply and not the one that was
+        // asked for. The request itself is legal, so it is not refused.
+        m_cfg.qpMin = (v < kQpFloor) ? kQpFloor : v;
         m_encoder.SetQpRange(m_cfg.qpMin, m_cfg.qpMax);
     } else if (*p == CODECAPI_AVEncVideoMaxQP) {
         if (v > 51) {
             return E_INVALIDARG;
         }
-        m_cfg.qpMax = v;
+        m_cfg.qpMax = (v < kQpFloor) ? kQpFloor : v;
         m_encoder.SetQpRange(m_cfg.qpMin, m_cfg.qpMax);
     } else if (*p == CODECAPI_AVEncH264CABACEnable) {
         // Refusing is the honest answer: our bitstream is CAVLC and a client that needs CABAC has to
@@ -1442,6 +1695,8 @@ HRESULT Bc250H264Mft::SetAllDefaults()
     m_encoder.SetLowLatency(m_cfg.lowLatency);
     m_encoder.SetQp(m_cfg.qpInit);
     m_encoder.SetQpRange(m_cfg.qpMin, m_cfg.qpMax);
+    // The default bitrate can select a different level than the one negotiated.
+    RefreshOutputParameterSets();
     return S_OK;
 }
 

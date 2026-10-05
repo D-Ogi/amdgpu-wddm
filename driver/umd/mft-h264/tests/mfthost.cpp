@@ -8,7 +8,8 @@
 //   mfthost.exe --sinkwriter     a Media Foundation sink writer run to an .mp4 with our MFT forced
 //   mfthost.exe --all            all of the above
 //
-// Options: --width --height --frames --qp --bitrate --gop --fps --deblock --gpu-source --still --out <dir>
+// Options: --width --height --frames --qp --bitrate --gop --fps --deblock --gpu-source --nv12-sys
+//          --still --out <dir>
 //          --cbr (default is constant quantiser, which is what a bit-exactness run wants)
 
 #include "mfthost.h"
@@ -634,12 +635,88 @@ void SelfTestParameterSets()
         // 3600 macroblocks at 30 Hz is 108000 MB/s, exactly level 3.1's MaxMBPS.
         Fail("1280x720 at 30 Hz chose level %u, expected 31", sps.levelIdc);
     }
+    if (pps.picInitQp != 26) {
+        // The quantiser the encoder runs at travels in slice_qp_delta, never in pic_init_qp: this
+        // field goes into MF_MT_MPEG_SEQUENCE_HEADER, which a file sink copies into the container
+        // before the first ICodecAPI setting is even known.
+        Fail("pic_init_qp is %d, expected 26 whatever the configured quantiser",
+             static_cast<int>(pps.picInitQp));
+    }
+    {
+        EncoderConfig q = cfg;
+        q.qpInit = 44;
+        SequenceParams s2;
+        PictureParams p2;
+        MakeSequenceParams(q, &s2, &p2);
+        if (p2.picInitQp != 26) {
+            Fail("a configured quantiser of 44 moved pic_init_qp to %d",
+                 static_cast<int>(p2.picInitQp));
+        }
+    }
     cfg.width = 1920;
     cfg.height = 1080;
     MakeSequenceParams(cfg, &sps, &pps);
     if (sps.widthMb != 120 || sps.heightMb != 68 || sps.cropBottom != 8) {
         Fail("1920x1080 gave %ux%u macroblocks and crop %u, expected 120x68 crop 8",
              sps.widthMb, sps.heightMb, sps.cropBottom);
+    }
+    // The declared level has to cover the bitrate as well as the frame size and the macroblock rate.
+    // 1920x1080 at 30 Hz is 8160 macroblocks and 244800 MB/s, which fits level 4.0, but level 4.0's
+    // MaxBR for this profile family is 20000 kbit/s: above that the stream needs level 4.1, and a
+    // level the stream exceeds is one a hardware decoder may refuse.
+    {
+        struct LevelCase { uint32_t w, h, fps, bps, want; const char* why; };
+        const LevelCase cases[] = {
+            { 1920, 1080, 30,  6000000, 40, "1080p30 at 6 Mbit/s fits level 4.0" },
+            { 1920, 1080, 30, 20000000, 40, "1080p30 at exactly level 4.0's MaxBR" },
+            { 1920, 1080, 30, 20000001, 41, "one bit over level 4.0's MaxBR needs 4.1" },
+            { 1920, 1080, 30, 60000000, 50, "1080p30 at 60 Mbit/s needs level 5.0" },
+            { 320,   240, 30,   500000, 13, "a small picture at 500 kbit/s fits level 1.3" },
+            { 320,   240, 30,  1500000, 20, "the same picture at 1.5 Mbit/s needs level 2.0" },
+        };
+        for (const LevelCase& c : cases) {
+            EncoderConfig lc;
+            lc.width = c.w;
+            lc.height = c.h;
+            lc.fpsNum = c.fps;
+            lc.fpsDen = 1;
+            lc.meanBitRate = c.bps;
+            SequenceParams ls;
+            PictureParams lp;
+            MakeSequenceParams(lc, &ls, &lp);
+            if (ls.levelIdc != c.want) {
+                Fail("%s: chose level %u, expected %u", c.why, ls.levelIdc, c.want);
+            }
+        }
+        printf("  level selection: frame size, macroblock rate and MaxBR, 6 cases\n");
+    }
+    // The VUI colour description comes from the configuration, which the transform fills from the
+    // input media type, and it has to reach the bitstream. Two descriptions that differ in one code
+    // point must give two different SPS NALs.
+    {
+        EncoderConfig a709;
+        a709.width = 640;
+        a709.height = 480;
+        EncoderConfig b601 = a709;
+        b601.matrixCoefficients = 6;
+        b601.colourPrimaries = 6;
+        b601.transferCharacteristics = 6;
+        b601.fullRange = true;
+        SequenceParams s1, s2;
+        PictureParams p1, p2;
+        MakeSequenceParams(a709, &s1, &p1);
+        MakeSequenceParams(b601, &s2, &p2);
+        if (s1.matrixCoefficients != 1 || s2.matrixCoefficients != 6 || s2.fullRange != true) {
+            Fail("the colour description did not reach the sequence parameters: %u/%u, range %d",
+                 s1.matrixCoefficients, s2.matrixCoefficients, s2.fullRange ? 1 : 0);
+        }
+        std::vector<uint8_t> n1, n2;
+        BuildParameterSetNals(n1, s1, p1);
+        BuildParameterSetNals(n2, s2, p2);
+        if (n1.size() != n2.size() || n1 == n2) {
+            Fail("two different colour descriptions produced the same parameter sets");
+        }
+        printf("  colour description: carried from the configuration into the SPS\n");
     }
     std::vector<uint8_t> nals;
     BuildParameterSetNals(nals, sps, pps);
@@ -662,6 +739,56 @@ void SelfTestParameterSets()
     }
 }
 
+// Which frame sizes the encoder admits. An odd size has to be refused, because the SPS crop counts
+// in two luma samples and cannot express it; the encoder used to mask it down and code a picture one
+// sample smaller than the client negotiated, with nothing in the bitstream or the media type saying
+// so. GpuEncoder::Initialize answers before it touches Direct3D, so this needs no device.
+void SelfTestFrameSizes()
+{
+    printf("frame sizes\n");
+    struct Case { uint32_t w, h; bool want; const char* why; };
+    const Case cases[] = {
+        { 1920, 1080, true,  "1080p" },
+        {   16,   16, true,  "the smallest picture" },
+        { 4096, 4096, true,  "the largest picture" },
+        {  638,  478, true,  "an even size that is not a whole number of macroblocks" },
+        { 1365,  767, false, "the odd size a window capture hands over" },
+        {  640,  481, false, "an odd height" },
+        {  641,  480, false, "an odd width" },
+        {   14,   16, false, "below the smallest picture" },
+        { 4098, 1080, false, "wider than the encoder admits" },
+    };
+    for (const Case& c : cases) {
+        if (IsCodableFrameSize(c.w, c.h) != c.want) {
+            Fail("IsCodableFrameSize(%u, %u) is not %s (%s)", c.w, c.h, c.want ? "true" : "false",
+                 c.why);
+        }
+        if (!c.want) {
+            GpuEncoder gpu;
+            const HRESULT hr = gpu.Initialize(nullptr, c.w, c.h);
+            if (hr != E_INVALIDARG) {
+                Fail("GpuEncoder::Initialize(%u, %u) returned 0x%08lX, expected E_INVALIDARG",
+                     c.w, c.h, static_cast<unsigned long>(hr));
+                gpu.Shutdown();
+            }
+        }
+    }
+    // And nothing is rounded: the parameter sets of an even size that is not a whole number of
+    // macroblocks crop exactly the padding, never a visible column or row.
+    EncoderConfig cfg;
+    cfg.width = 638;
+    cfg.height = 478;
+    SequenceParams sps;
+    PictureParams pps;
+    MakeSequenceParams(cfg, &sps, &pps);
+    if (sps.widthMb != 40 || sps.heightMb != 30 || sps.cropRight != 2 || sps.cropBottom != 2) {
+        Fail("638x478 gave %ux%u macroblocks, crop %u right %u bottom, expected 40x30 crop 2 and 2",
+             sps.widthMb, sps.heightMb, sps.cropRight, sps.cropBottom);
+    } else {
+        printf("  9 sizes classified, odd sizes refused by the encoder, 638x478 crops 2 and 2\n");
+    }
+}
+
 } // namespace
 
 int RunSelfTest()
@@ -671,6 +798,7 @@ int RunSelfTest()
     SelfTestBitWriter();
     SelfTestEmulationPrevention();
     SelfTestParameterSets();
+    SelfTestFrameSizes();
     printf("%s: %d failure(s)\n", (g_failures == 0) ? "selftest PASS" : "selftest FAIL", g_failures);
     return (g_failures == 0) ? 0 : 1;
 }
@@ -832,7 +960,9 @@ int RunEncode(const Options& o)
 {
     printf("encode: %ux%u, %u frames, qp %u, gop %u, deblocking %s, source %s\n",
            o.width, o.height, o.frames, o.qp, o.gop, o.deblock ? "on" : "off",
-           o.gpuSource ? "GPU draw (BGRA texture)" : "CPU synthetic (I420)");
+           o.gpuSource ? "GPU draw (BGRA texture)"
+                       : (o.nv12sys ? "CPU synthetic (NV12 in system memory, padded stride)"
+                                    : "CPU synthetic (I420)"));
 
     EncoderConfig cfg;
     cfg.width = o.width;
@@ -878,12 +1008,19 @@ int RunEncode(const Options& o)
 
     Picture src;
     src.Allocate(o.width, o.height);
+    std::vector<uint8_t> nv12y, nv12c;
     std::vector<uint8_t> stream, frame;
     std::vector<uint8_t> recY, recCb, recCr, srcY, srcCb, srcCr;
     std::vector<std::vector<uint8_t>> recHistoryY, recHistoryCb, recHistoryCr;
     double totalMs = 0.0, totalGpuMs = 0.0, psnrSum = 0.0;
+    // The stages of a picture, summed over the run: the GPU stage as the thread sees it, the readback
+    // inside it, and the CPU half split into entropy coding and byte stream assembly.
+    double totalGpuWallMs = 0.0, totalReadbackMs = 0.0, totalCpuMs = 0.0;
+    double totalCavlcMs = 0.0, totalNalMs = 0.0;
     uint64_t totalBytes = 0;
     uint32_t keyFrames = 0, skipTotal = 0, nnzBad = 0;
+    uint32_t timingBad = 0;
+    size_t importBad = 0;
 
     for (uint32_t i = 0; i < o.frames; ++i) {
         GpuFrameInput in;
@@ -900,12 +1037,40 @@ int RunEncode(const Options& o)
             // zero residual and a zero motion vector: that is the only way to exercise P_Skip and
             // mb_skip_run, and it is also what a desktop capture looks like most of the time.
             MakeSyntheticPicture(src, o.still ? 0u : i);
-            in.kind = InputKind::Planar8;
-            in.planeY = src.y.data();
-            in.planeCb = src.cb.data();
-            in.planeCr = src.cr.data();
-            in.pitchY = o.width;
-            in.pitchC = o.width / 2;
+            if (o.nv12sys) {
+                // NV12 on a stride wider than the picture: the luma plane, then one plane of
+                // interleaved Cb,Cr pairs at half the vertical resolution. Both the plane order and
+                // the stride are what a wrong import would get wrong, and the reconstruction check
+                // and the ReadSource check below both see it.
+                const uint32_t pitch = o.width + 64u;
+                nv12y.assign(static_cast<size_t>(pitch) * o.height, 0x55);
+                nv12c.assign(static_cast<size_t>(pitch) * (o.height / 2u), 0x55);
+                for (uint32_t yy = 0; yy < o.height; ++yy) {
+                    memcpy(&nv12y[static_cast<size_t>(yy) * pitch],
+                           &src.y[static_cast<size_t>(yy) * o.width], o.width);
+                }
+                for (uint32_t yy = 0; yy < o.height / 2u; ++yy) {
+                    uint8_t* dst = &nv12c[static_cast<size_t>(yy) * pitch];
+                    const uint8_t* cb = &src.cb[static_cast<size_t>(yy) * (o.width / 2u)];
+                    const uint8_t* cr = &src.cr[static_cast<size_t>(yy) * (o.width / 2u)];
+                    for (uint32_t xx = 0; xx < o.width / 2u; ++xx) {
+                        dst[xx * 2u] = cb[xx];
+                        dst[xx * 2u + 1u] = cr[xx];
+                    }
+                }
+                in.kind = InputKind::Nv12Sys;
+                in.planeY = nv12y.data();
+                in.planeCb = nv12c.data();
+                in.pitchY = pitch;
+                in.pitchC = pitch;
+            } else {
+                in.kind = InputKind::Planar8;
+                in.planeY = src.y.data();
+                in.planeCb = src.cb.data();
+                in.planeCr = src.cr.data();
+                in.pitchY = o.width;
+                in.pitchC = o.width / 2;
+            }
         }
 
         FrameStats st;
@@ -918,8 +1083,30 @@ int RunEncode(const Options& o)
         }
         totalMs += t1 - t0;
         totalGpuMs += st.gpuMs;
+        totalGpuWallMs += st.gpuWallMs;
+        totalReadbackMs += st.readbackMs;
+        totalCpuMs += st.cpuMs;
+        totalCavlcMs += st.cavlcMs;
+        totalNalMs += st.nalMs;
         totalBytes += st.bytes;
         skipTotal += st.skippedMbs;
+        // The profile has to be of this picture. A GPU time read from a query that had not retired
+        // used to leave the previous picture's figure in place, which is how a profile can show a
+        // picture that cost nothing; a missing measurement now says so instead. The bounds are the
+        // ones the stages cannot break: the GPU cannot have been busy with our dispatches for longer
+        // than the stage the thread measured around them, the readback is part of that stage, and the
+        // two CPU stages are parts of the CPU half. One millisecond of slack covers the counter's own
+        // resolution and the clock difference between the device and the host.
+        const double slack = 1.0;
+        if (!st.gpuTimingValid || st.gpuMs <= 0.0 || st.gpuMs > st.gpuWallMs + slack ||
+            st.readbackMs < 0.0 || st.readbackMs > st.gpuWallMs + slack ||
+            st.cavlcMs < 0.0 || st.nalMs < 0.0 ||
+            st.cavlcMs + st.nalMs > st.cpuMs + slack) {
+            printf("  FAIL picture %u profile: gpu %.3f ms (valid %d) of wall %.3f, readback %.3f, "
+                   "cpu %.3f = cavlc %.3f + nal %.3f\n", i, st.gpuMs, st.gpuTimingValid ? 1 : 0,
+                   st.gpuWallMs, st.readbackMs, st.cpuMs, st.cavlcMs, st.nalMs);
+            ++timingBad;
+        }
         if (st.keyFrame) {
             ++keyFrames;
         }
@@ -936,6 +1123,36 @@ int RunEncode(const Options& o)
         if (FAILED(hr)) {
             printf("  ReadSource(%u) failed 0x%08lX\n", i, static_cast<unsigned long>(hr));
             return 2;
+        }
+        // The import oracle: for a picture that came from system memory we know exactly what every
+        // sample should be, so the imported source planes have to repeat it. This is what tells a
+        // wrong plane order, a wrong stride or a swapped Cb and Cr from a merely different-looking
+        // picture, and it is the only check the NV12 system-memory import has.
+        if (i == 0 && !o.gpuSource) {
+            size_t bad = 0;
+            for (uint32_t yy = 0; yy < o.height; ++yy) {
+                for (uint32_t xx = 0; xx < o.width; ++xx) {
+                    if (srcY[static_cast<size_t>(yy) * padW + xx] !=
+                        src.y[static_cast<size_t>(yy) * o.width + xx]) {
+                        ++bad;
+                    }
+                }
+            }
+            for (uint32_t yy = 0; yy < o.height / 2u; ++yy) {
+                for (uint32_t xx = 0; xx < o.width / 2u; ++xx) {
+                    const size_t g = static_cast<size_t>(yy) * (padW / 2u) + xx;
+                    const size_t c = static_cast<size_t>(yy) * (o.width / 2u) + xx;
+                    if (srcCb[g] != src.cb[c] || srcCr[g] != src.cr[c]) {
+                        ++bad;
+                    }
+                }
+            }
+            if (bad != 0) {
+                printf("  FAIL the import changed %zu of the visible samples handed over\n", bad);
+                importBad += bad;
+            } else {
+                printf("  import exact: every visible sample of picture 0 reached the GPU unchanged\n");
+            }
         }
         if (o.verbose && i == 0) {
             printf("  macroblock (0,0), reconstruction minus source, luma:\n");
@@ -961,9 +1178,9 @@ int RunEncode(const Options& o)
             return 2;
         }
         if (o.verbose) {
-            printf("    %4u %s qp %2u %7u bytes  skip %4u  gpu %6.2f ms  cpu %6.2f ms\n", i,
-                   st.keyFrame ? "IDR" : "P  ", st.qp, st.bytes, st.skippedMbs, st.gpuMs,
-                   st.cpuMs);
+            printf("    %4u %s qp %2u %7u bytes  skip %4u  gpu %6.2f ms  readback %6.2f ms  "
+                   "cavlc %6.2f ms  nal %6.2f ms\n", i, st.keyFrame ? "IDR" : "P  ", st.qp,
+                   st.bytes, st.skippedMbs, st.gpuMs, st.readbackMs, st.cavlcMs, st.nalMs);
         }
     }
     hr = dec.Drain();
@@ -1140,11 +1357,21 @@ int RunEncode(const Options& o)
            static_cast<unsigned long long>(totalBytes), bitrate, o.fps, psnrSum / o.frames);
     printf("  %.2f ms per picture total, %.2f ms of it on the GPU, %.1f pictures per second\n",
            totalMs / o.frames, totalGpuMs / o.frames, 1000.0 * o.frames / totalMs);
+    // The stages, per picture. The GPU stage is wall clock around the dispatches, so it contains the
+    // wait for the GPU: readback is that wait plus the transfer. The CPU half is entropy coding plus
+    // byte stream assembly, and what the two do not account for is the little that lies between
+    // them. Every figure is of this run; nothing is carried over from another.
+    printf("  per picture: gpu stage %.2f ms (gpu busy %.2f, readback %.2f), cpu %.2f ms "
+           "(cavlc %.2f, nal %.2f)\n",
+           totalGpuWallMs / o.frames, totalGpuMs / o.frames, totalReadbackMs / o.frames,
+           totalCpuMs / o.frames, totalCavlcMs / o.frames, totalNalMs / o.frames);
+    printf("  per picture profile accounted for every picture: %s\n",
+           (timingBad == 0) ? "yes" : "FAIL");
     printf("  stream written to %ls\n", path.c_str());
 
     dec.Shutdown();
     enc.Shutdown();
-    return (exact == o.frames && nnzBad == 0) ? 0 : 1;
+    return (exact == o.frames && nnzBad == 0 && importBad == 0 && timingBad == 0) ? 0 : 1;
 }
 
 } // namespace test
@@ -1240,6 +1467,8 @@ int wmain(int argc, wchar_t** argv)
             o.deblock = true;
         } else if (wcscmp(a, L"--gpu-source") == 0) {
             o.gpuSource = true;
+        } else if (wcscmp(a, L"--nv12-sys") == 0) {
+            o.nv12sys = true;
         } else if (wcscmp(a, L"--probe") == 0) {
             o.probeX = static_cast<int32_t>(ArgU(argc, argv, i, 0)); ++i;
             o.probeY = static_cast<int32_t>(ArgU(argc, argv, i, 0)); ++i;

@@ -2,6 +2,8 @@
 #include <dxgi.h>
 #include <mferror.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 #include "gen/cs_import_nv12.h"
 #include "gen/cs_import_nv12sys.h"
@@ -38,7 +40,83 @@ static_assert(sizeof(Constants) == 64, "constant buffer must match h264_common.h
 
 constexpr uint32_t kDivUp(uint32_t a, uint32_t b) { return (a + b - 1u) / b; }
 
+// Wall clock in milliseconds, from the performance counter, for the readback stage. The frame level
+// code has its own copy of this; the two are deliberately independent so that the pipeline needs
+// nothing from the layer above it.
+double NowMs()
+{
+    LARGE_INTEGER f, t;
+    QueryPerformanceFrequency(&f);
+    QueryPerformanceCounter(&t);
+    return 1000.0 * static_cast<double>(t.QuadPart) / static_cast<double>(f.QuadPart);
+}
+
+// How long a timestamp query may take to retire before the encode gives up on the measurement. The
+// picture is already finished when we wait here, so this bound only decides when a diagnostic is
+// reported as absent instead of holding the encode thread.
+constexpr double kQueryWaitMs = 1000.0;
+
 } // namespace
+
+int MftTraceOn()
+{
+    static int state = -1;
+    if (state < 0) {
+        char buf[8];
+        state = (GetEnvironmentVariableA("BC250_MFT_TRACE", buf, sizeof(buf)) > 0) ? 1 : 0;
+    }
+    return state;
+}
+
+void MftTrace(const char* fmt, ...)
+{
+    if (MftTraceOn() == 0) {
+        return;
+    }
+    char line[256];
+    const int n = _snprintf_s(line, sizeof(line), _TRUNCATE, "[mft t%05lu] ",
+                              static_cast<unsigned long>(GetCurrentThreadId()));
+    if (n <= 0) {
+        return;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    const int m = _vsnprintf_s(line + n, sizeof(line) - static_cast<size_t>(n), _TRUNCATE, fmt, ap);
+    va_end(ap);
+    if (m <= 0) {
+        return;
+    }
+    DWORD written = 0;
+    WriteFile(GetStdHandle(STD_ERROR_HANDLE), line, static_cast<DWORD>(n + m), &written, nullptr);
+}
+
+bool IsCodableFrameSize(uint32_t width, uint32_t height)
+{
+    if (width < 16u || height < 16u || width > 4096u || height > 4096u) {
+        return false;
+    }
+    return ((width | height) & 1u) == 0;
+}
+
+HRESULT GpuEncoder::WaitForQuery(ID3D11Asynchronous* query, void* data, uint32_t bytes)
+{
+    // S_FALSE means "not retired yet", and it is the whole reason this function exists: a single
+    // GetData that answers S_FALSE leaves the caller with no data at all, and reporting the previous
+    // picture's number instead is worse than reporting none.
+    const double deadline = NowMs() + kQueryWaitMs;
+    for (;;) {
+        const HRESULT hr = m_ctx->GetData(query, data, bytes, 0);
+        if (hr != S_FALSE) {
+            return hr;
+        }
+        if (NowMs() > deadline) {
+            return E_PENDING;
+        }
+        // Yield rather than spin: the queries normally retired before the readback Map returned, so
+        // this loop is the rare path, and the encode thread may be a real-time one.
+        Sleep(0);
+    }
+}
 
 HRESULT GpuEncoder::CreateRawBuffer(uint32_t bytes, bool uav, Plane* out)
 {
@@ -132,15 +210,15 @@ HRESULT GpuEncoder::CompileShaders()
 
 HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint32_t visibleHeight)
 {
-    if (visibleWidth < 16 || visibleHeight < 16 || visibleWidth > 4096 || visibleHeight > 4096) {
+    // Odd sizes are refused, not rounded down. The coded picture is a whole number of macroblocks and
+    // the SPS crops the rest, but frame_crop_right_offset counts in CropUnitX == 2 luma samples for
+    // 4:2:0, so an odd visible size cannot be written into an SPS at all. Masking it down encoded a
+    // picture one sample smaller than the caller asked for, with nothing saying so.
+    if (!IsCodableFrameSize(visibleWidth, visibleHeight)) {
         return E_INVALIDARG;
     }
     m_visW = visibleWidth;
     m_visH = visibleHeight;
-    // The coded picture is a whole number of macroblocks; the rest is cropped by the SPS. Chroma is
-    // 4:2:0, so the visible size must be even for the chroma planes to be addressable.
-    m_visW &= ~1u;
-    m_visH &= ~1u;
     m_widthMb = kDivUp(m_visW, 16u);
     m_heightMb = kDivUp(m_visH, 16u);
     m_padW = m_widthMb * 16u;
@@ -228,8 +306,11 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     m_device->CreateQuery(&qd, &m_tsBegin);
     m_device->CreateQuery(&qd, &m_tsEnd);
 
-    // An all-grey first reference keeps the first P picture defined even if a client sends one
-    // before any I picture; the encoder itself never does that.
+    // The reconstruction textures are created without initial data, so their first contents are
+    // whatever Direct3D leaves there. Nothing reads them before they are written: the first picture
+    // of every stream is an IDR (Encoder::EncodeFrame, and the transform arms a key frame at every
+    // start of stream and after every flush), an IDR is intra coded throughout, and it writes every
+    // macroblock of the reconstruction before the first P picture reads any of it.
     m_cur = 0;
     return S_OK;
 }
@@ -264,6 +345,11 @@ void GpuEncoder::Shutdown()
     m_tsEnd.Reset();
     m_ctx.Reset();
     m_device.Reset();
+    // The last picture's measurements belong to the device that produced them.
+    m_lastQueryWaitMs = 0.0;
+    m_lastGpuMs = 0.0;
+    m_lastReadbackMs = 0.0;
+    m_lastGpuMsValid = false;
 }
 
 void GpuEncoder::UpdateConstants(const GpuFrameParams& p, uint32_t diagonal, uint32_t diagonalBase)
@@ -556,6 +642,13 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
     m_ctx->End(m_tsDisjoint.Get());
 
     // ---- read back the levels and the macroblock info -------------------------------------------
+    //
+    // Its own timed stage. The two CopyResource calls queue the copies, the first Map blocks until
+    // everything queued for this picture has executed on the GPU, and the two memcpy calls move the
+    // result into the caller's storage. So this block holds the whole wait for the GPU plus the cost
+    // of the transfer, and none of the entropy coding that follows it: without it the frame level
+    // code could only report "GPU" and "CPU" and the wait would hide inside the GPU number.
+    const double readback0 = NowMs();
     m_ctx->CopyResource(m_levelsStaging.Get(), m_levels.buffer.Get());
     m_ctx->CopyResource(m_mbinfoStaging.Get(), m_mbinfo.buffer.Get());
 
@@ -574,14 +667,30 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
     }
     memcpy(info.data(), m.pData, info.size() * sizeof(MbInfo));
     m_ctx->Unmap(m_mbinfoStaging.Get(), 0);
+    m_lastReadbackMs = NowMs() - readback0;
 
+    // ---- the GPU timing of this picture ---------------------------------------------------------
+    //
+    // Cleared first, then read to completion. The earlier version took whatever a single GetData
+    // happened to have ready and left m_lastGpuMs untouched on S_FALSE, so a picture whose query had
+    // not retired reported the previous picture's GPU time as its own, and a profile could not tell
+    // a fast picture from an unavailable measurement. A disjoint interval is thrown away for the
+    // same reason: the clock changed inside it, so the difference means nothing.
+    m_lastGpuMs = 0.0;
+    m_lastGpuMsValid = false;
+    const double query0 = NowMs();
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj = {};
-    UINT64 t0 = 0, t1 = 0;
-    if (m_ctx->GetData(m_tsDisjoint.Get(), &dj, sizeof(dj), 0) == S_OK && !dj.Disjoint &&
-        m_ctx->GetData(m_tsBegin.Get(), &t0, sizeof(t0), 0) == S_OK &&
-        m_ctx->GetData(m_tsEnd.Get(), &t1, sizeof(t1), 0) == S_OK && dj.Frequency != 0) {
-        m_lastGpuMs = 1000.0 * static_cast<double>(t1 - t0) / static_cast<double>(dj.Frequency);
+    UINT64 gpu0 = 0, gpu1 = 0;
+    if (WaitForQuery(m_tsDisjoint.Get(), &dj, sizeof(dj)) == S_OK &&
+        WaitForQuery(m_tsBegin.Get(), &gpu0, sizeof(gpu0)) == S_OK &&
+        WaitForQuery(m_tsEnd.Get(), &gpu1, sizeof(gpu1)) == S_OK &&
+        !dj.Disjoint && dj.Frequency != 0 && gpu1 >= gpu0) {
+        m_lastGpuMs = 1000.0 * static_cast<double>(gpu1 - gpu0) / static_cast<double>(dj.Frequency);
+        m_lastGpuMsValid = true;
     }
+    m_lastQueryWaitMs = NowMs() - query0;
+    MftTrace("gpu picture: readback %.3f ms, query wait %.3f ms, gpu %.3f ms (valid %d)\n",
+             m_lastReadbackMs, m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0);
     return S_OK;
 }
 

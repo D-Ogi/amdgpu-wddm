@@ -40,6 +40,22 @@ private:
     T* m_p = nullptr;
 };
 
+// Diagnostic trace of one encode, off unless BC250_MFT_TRACE is set in the environment. It names
+// the calling thread, so the order of ProcessInput, ProcessOutput, the queued events and the GPU
+// stage is readable across the client's worker threads. It is written straight to the standard error
+// handle: no CRT stream state is shared with a host we are loaded into. It lives at this level
+// because every layer above it traces through it.
+int MftTraceOn();
+void MftTrace(const char* fmt, ...);
+
+// The frame sizes this encoder can code: 16 to 4096 samples each way, and even in both directions.
+// 4:2:0 chroma is sampled on an even grid and the SPS crops in units of two luma samples
+// (CropUnitX == CropUnitY == 2 for frame_mbs_only_flag 1), so an odd visible size has no
+// representation in the bitstream. Every entry point refuses one instead of rounding it down: the
+// transform in SetInputType and SetOutputType, where the client can still renegotiate, and
+// GpuEncoder::Initialize for a direct caller.
+bool IsCodableFrameSize(uint32_t width, uint32_t height);
+
 enum class InputKind { Planar8, Nv12Sys, BgraSys, TextureNV12, TextureBGRA };
 
 struct GpuFrameInput {
@@ -100,7 +116,18 @@ public:
     // Marks the reconstruction just produced as the reference for the next picture.
     void SwapReference();
 
+    // The GPU time between the first and the last dispatch of the last picture, from the device's own
+    // timestamps. Zero, and LastGpuTimingValid false, when the device did not deliver a usable pair:
+    // never the previous picture's number (see the query wait in EncodeFrame).
     double LastGpuMilliseconds() const { return m_lastGpuMs; }
+    bool LastGpuTimingValid() const { return m_lastGpuMsValid; }
+    // Wall-clock cost of moving the last picture's levels and macroblock info to the CPU: the two
+    // CopyResource calls, the two blocking Map calls and the two memcpy calls. This is where the CPU
+    // waits for the GPU, so it is the one number that says whether the pipeline is GPU bound.
+    double LastReadbackMilliseconds() const { return m_lastReadbackMs; }
+    // How long the last picture's timestamp queries took to retire after the readback. Part of the
+    // GPU stage, and the price of a per-picture GPU measurement.
+    double LastQueryWaitMilliseconds() const { return m_lastQueryWaitMs; }
 
 private:
     struct Plane {
@@ -123,6 +150,9 @@ private:
     HRESULT UploadBgraSystem(const uint8_t* rgb, uint32_t pitch, ID3D11Texture2D** out);
     HRESULT ReadPlanes(Plane* y, Plane* cb, Plane* cr, std::vector<uint8_t>& oy,
                        std::vector<uint8_t>& ocb, std::vector<uint8_t>& ocr);
+    // Reads one query to completion. ID3D11DeviceContext::GetData answers S_FALSE while the query
+    // has not retired, so a single call can leave the caller with nothing; this waits, with a bound.
+    HRESULT WaitForQuery(ID3D11Asynchronous* query, void* data, uint32_t bytes);
 
     ComPtr<ID3D11Device> m_device;
     ComPtr<ID3D11DeviceContext> m_ctx;
@@ -156,6 +186,9 @@ private:
     uint32_t m_cur = 0;
     uint32_t m_lastWritten = 0;   // the m_rec index EncodeFrame wrote last, for ReadReconstruction
     double m_lastGpuMs = 0.0;
+    double m_lastReadbackMs = 0.0;
+    double m_lastQueryWaitMs = 0.0;
+    bool m_lastGpuMsValid = false;
 };
 
 } // namespace bc250h264

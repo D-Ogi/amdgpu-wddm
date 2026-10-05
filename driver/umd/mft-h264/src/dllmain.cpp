@@ -1,19 +1,19 @@
 // COM entry points for the encoder transform.
 //
 // There is deliberately no DllRegisterServer: a display driver package registers its MFT from the
-// INF (see lab/INF-FRAGMENT.txt), and a self-registering DLL in a driver package would fail driver
-// package validation. Test processes instantiate the class directly or through
-// MFTRegisterLocalByCLSID, which needs no registry at all.
+// INF (see INSTALL.md), and a self-registering DLL in a driver package would fail driver package
+// validation. Test processes instantiate the class directly or through MFTRegisterLocalByCLSID,
+// which needs no registry at all.
 
 #include "mft_h264.h"
 #include <new>
 
 namespace {
 
-long g_objectCount = 0;
-
 class ClassFactory : public IClassFactory {
 public:
+    ClassFactory() { bc250h264::ModuleLock(); }
+
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override
     {
         if (ppv == nullptr) {
@@ -66,14 +66,16 @@ public:
     HRESULT STDMETHODCALLTYPE LockServer(BOOL lock) override
     {
         if (lock) {
-            InterlockedIncrement(&g_objectCount);
+            bc250h264::ModuleLock();
         } else {
-            InterlockedDecrement(&g_objectCount);
+            bc250h264::ModuleUnlock();
         }
         return S_OK;
     }
 
 private:
+    ~ClassFactory() { bc250h264::ModuleUnlock(); }
+
     long m_refCount = 1;
 };
 
@@ -118,7 +120,9 @@ extern "C" HRESULT __stdcall DllGetClassObject(REFCLSID clsid, REFIID riid, void
 
 extern "C" HRESULT __stdcall DllCanUnloadNow()
 {
-    return (g_objectCount == 0) ? S_OK : S_FALSE;
+    // S_OK means "nothing of mine is alive, unmapping me is safe". Every transform object and every
+    // class object holds a module lock, so this cannot answer S_OK under a live IMFTransform.
+    return bc250h264::ModuleIsIdle() ? S_OK : S_FALSE;
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)

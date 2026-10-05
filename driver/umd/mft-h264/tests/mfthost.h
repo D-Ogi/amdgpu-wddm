@@ -20,6 +20,10 @@ struct Options {
     uint32_t fps = 30;
     bool deblock = false;
     bool gpuSource = false;         // draw the picture on the device instead of generating it on the CPU
+    // --nv12-sys: hand the synthetic picture over as NV12 in system memory, on a stride wider than
+    // the picture, instead of as three tightly packed planes. That is the shape a software capture
+    // source delivers, and it is the one import path with no oracle of its own otherwise.
+    bool nv12sys = false;
     bool noHwTransforms = false;    // --no-hw-transforms: clear MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS
     bool still = false;             // repeat picture 0 so that P_Skip and mb_skip_run are exercised
     bool verbose = false;

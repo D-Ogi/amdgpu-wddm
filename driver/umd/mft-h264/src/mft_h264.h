@@ -41,6 +41,14 @@ extern "C" long __stdcall Bc250H264EncodedPictureCount(void);
 
 namespace bc250h264 {
 
+// The module lock DllCanUnloadNow answers from (dllmain.cpp). Every object this DLL hands out holds
+// one for its whole lifetime, because COM does not call IClassFactory::LockServer for an in-process
+// server and the host may call CoFreeUnusedLibraries while our transform is still streaming.
+void ModuleLock();
+void ModuleUnlock();
+// True when nothing this DLL handed out is alive any more. DllCanUnloadNow's whole answer.
+bool ModuleIsIdle();
+
 class Bc250H264Mft : public IMFTransform,
                      public IMFMediaEventGenerator,
                      public IMFShutdown,
@@ -154,6 +162,11 @@ private:
     ~Bc250H264Mft();
     HRESULT CheckValid() const;
     HRESULT EnsureEncoder();
+    // Rebuilds MF_MT_MPEG_SEQUENCE_HEADER and MF_MT_MPEG2_LEVEL on the current output type from
+    // m_cfg. Called from every path that changes something the parameter sets carry.
+    HRESULT RefreshOutputParameterSets();
+    // Publishes MFT_ENUM_ADAPTER_LUID of the adapter the encode runs on, once it is known.
+    void PublishAdapterLuid(ID3D11Device* device);
     HRESULT BuildInputType(DWORD index, IMFMediaType** out) const;
     HRESULT BuildOutputType(IMFMediaType** out) const;
     // Holds whatever has to stay alive and locked while the encode reads the input sample.
@@ -174,15 +187,17 @@ private:
     bool m_lockInit = false;
     bool m_shutdown = false;
     bool m_streaming = false;
-    bool m_asyncUnlocked = false;
     bool m_haveOutput = false;
     // True while a METransformNeedInput we queued has not been answered by a ProcessInput. The
     // asynchronous contract gives one credit per free input slot and we hold exactly one slot, so
     // this stops a second credit being issued; a drain or a flush makes the client drop whatever
     // request it still holds, so it is cleared there and the next start of stream re-issues it.
     bool m_inputRequested = false;
-    // The work queue the real time client contract handed us, MFASYNC_CALLBACK_QUEUE_UNDEFINED while
-    // none was set, and the work item base priority that came with it.
+    // The work queue and base priority the real time client contract handed us,
+    // MFASYNC_CALLBACK_QUEUE_UNDEFINED while none was set. Recorded, not used: every stage of the
+    // encode runs on the thread that calls ProcessInput, so this transform queues no work item of
+    // its own. The first one that needs one has to run in this queue, at this priority, or it
+    // escapes the topology's own scheduling.
     DWORD m_workQueue = MFASYNC_CALLBACK_QUEUE_UNDEFINED;
     LONG m_workItemPriority = 0;
 

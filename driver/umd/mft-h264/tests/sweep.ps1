@@ -34,6 +34,9 @@ $cases = @(
     @(320, 240, 6, 3, 18, @('--deblock')),
     @(320, 240, 6, 60, 26, @('--deblock', '--cbr', '--bitrate', '1500000')),
     @(352, 288, 4, 60, 26, @('--deblock', '--gpu-source')),
+    @(352, 288, 4, 60, 26, @('--deblock', '--nv12-sys')),
+    @(176, 144, 3, 60, 32, @('--nv12-sys')),
+    @(1280, 720, 3, 60, 26, @('--deblock', '--nv12-sys')),
     @(640, 480, 4, 60, 26, @()),
     @(640, 480, 4, 60, 26, @('--deblock')),
     @(640, 480, 4, 60, 34, @('--deblock')),
@@ -45,7 +48,7 @@ $cases = @(
     @(1920, 1080, 3, 60, 30, @('--deblock'))
 )
 
-# Every quantiser from 16 up, with I and P pictures and deblocking on. This is what guards the three
+# Every quantiser the encoder admits, with I and P pictures and deblocking on. This is what guards the three
 # hand-entered deblocking tables (8-16, 8-17) row by row: indexA equals the quantiser here, and a wrong
 # tc0 row shows up as a reconstruction that a conformant decoder does not reproduce. Below 16 alpha is
 # zero and the filter does nothing, so those quantisers only exercise the coefficient path.

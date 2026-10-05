@@ -12,6 +12,10 @@
 #include <new>
 
 extern "C" HRESULT __stdcall Bc250CreateH264EncoderMFT(REFIID riid, void** ppv);
+// The module lock of dllmain.cpp, linked into this test. A host asks this before unmapping the DLL,
+// so it must answer S_FALSE while any object of ours is alive.
+extern "C" HRESULT __stdcall DllCanUnloadNow(void);
+extern "C" HRESULT __stdcall DllGetClassObject(REFCLSID clsid, REFIID riid, void** ppv);
 
 namespace bc250h264 {
 namespace test {
@@ -480,6 +484,88 @@ HRESULT FindOurTransformByEnumeration(IMFTransform** out, bool* foundHardwareFla
     return result;
 }
 
+// What the inbox encoder does with CODECAPI_AVEncVideoEncodeQP, reported next to our own contract.
+// The property is a UINT64 (codecapi.h:908) and is documented as carrying one quantiser per picture
+// type in 16-bit fields, but no copy of that page is in the workspace reference set, so the inbox
+// encoder on this machine is the reference this test can actually read. Diagnostic only: this prints
+// what the inbox encoder answers and asserts nothing about it. Our own behaviour is asserted in
+// RunMft, and the two have to agree on the variant type and on accepting the packed form.
+void ProbeInboxQuantiserContract(const Options& o)
+{
+    ComPtr<IMFTransform> mft;
+    HRESULT hr = CoCreateInstance(kInboxH264EncoderClsid, nullptr, CLSCTX_INPROC_SERVER,
+                                  __uuidof(IMFTransform), reinterpret_cast<void**>(&mft));
+    if (FAILED(hr)) {
+        Say("inbox encoder not available for the quantiser probe: 0x%08lX",
+            static_cast<unsigned long>(hr));
+        return;
+    }
+    ComPtr<IMFMediaType> outType, inType;
+    if (SUCCEEDED(MakeVideoType(MFVideoFormat_H264, o.width, o.height, o.fps, &outType))) {
+        outType->SetUINT32(MF_MT_AVG_BITRATE, o.bitrate);
+        mft->SetOutputType(0, outType.Get(), 0);
+    }
+    if (SUCCEEDED(MakeVideoType(MFVideoFormat_NV12, o.width, o.height, o.fps, &inType))) {
+        mft->SetInputType(0, inType.Get(), 0);
+    }
+    ComPtr<ICodecAPI> codec;
+    hr = mft->QueryInterface(__uuidof(ICodecAPI), reinterpret_cast<void**>(&codec));
+    if (FAILED(hr)) {
+        Say("the inbox encoder has no ICodecAPI: 0x%08lX", static_cast<unsigned long>(hr));
+        return;
+    }
+    Say("inbox encoder, CODECAPI_AVEncVideoEncodeQP: IsSupported 0x%08lX",
+        static_cast<unsigned long>(codec->IsSupported(&CODECAPI_AVEncVideoEncodeQP)));
+    // Under CBR the quantiser belongs to the rate control, and an encoder is entitled to refuse to
+    // be told one. The quality mode is where a per-picture quantiser means something, so the probe
+    // asks for it first and reports whether that was accepted.
+    {
+        VARIANT v = {};
+        VariantInit(&v);
+        v.vt = VT_UI4;
+        v.ulVal = static_cast<ULONG>(eAVEncCommonRateControlMode_Quality);
+        const HRESULT rc = codec->SetValue(&CODECAPI_AVEncCommonRateControlMode, &v);
+        v.ulVal = 70;
+        const HRESULT qh = codec->SetValue(&CODECAPI_AVEncCommonQuality, &v);
+        VariantClear(&v);
+        Say("  rate control to quality 0x%08lX, quality 70 0x%08lX",
+            static_cast<unsigned long>(rc), static_cast<unsigned long>(qh));
+    }
+    // Zeroed, not only VariantInit'ed: these are printed as UINT64 whatever variant type comes back,
+    // and a VT_UI4 answer leaves the high half of the union untouched. Reading those bits is the
+    // mistake this probe is about, so the probe itself must not make it.
+    VARIANT lo = {}, hi = {}, step = {};
+    VariantInit(&lo); VariantInit(&hi); VariantInit(&step);
+    const HRESULT rh = codec->GetParameterRange(&CODECAPI_AVEncVideoEncodeQP, &lo, &hi, &step);
+    Say("  GetParameterRange 0x%08lX vt %u/%u/%u lo 0x%llX hi 0x%llX",
+        static_cast<unsigned long>(rh), lo.vt, hi.vt, step.vt,
+        static_cast<unsigned long long>(lo.ullVal), static_cast<unsigned long long>(hi.ullVal));
+    VariantClear(&lo); VariantClear(&hi); VariantClear(&step);
+    struct Probe { ULONGLONG value; VARTYPE vt; const char* what; };
+    const Probe probes[] = {
+        { 30ull, VT_UI8, "a plain scalar as VT_UI8" },
+        { 30ull, VT_UI4, "a plain scalar as VT_UI4" },
+        { 26ull | (28ull << 16) | (30ull << 32), VT_UI8, "the packed per-type form" },
+        { 52ull, VT_UI8, "an I field above 51" },
+        { 26ull | (99ull << 16), VT_UI8, "a P field above 51" },
+    };
+    for (const Probe& p : probes) {
+        VARIANT v = {};
+        VariantInit(&v);
+        v.vt = p.vt;
+        if (p.vt == VT_UI8) { v.ullVal = p.value; } else { v.ulVal = static_cast<ULONG>(p.value); }
+        const HRESULT sh = codec->SetValue(&CODECAPI_AVEncVideoEncodeQP, &v);
+        VariantClear(&v);
+        VARIANT back = {};
+        VariantInit(&back);
+        const HRESULT gh = codec->GetValue(&CODECAPI_AVEncVideoEncodeQP, &back);
+        Say("  SetValue %-28s 0x%08lX, GetValue 0x%08lX vt %u value 0x%llX", p.what,
+            static_cast<unsigned long>(sh), static_cast<unsigned long>(gh), back.vt,
+            static_cast<unsigned long long>(back.ullVal));
+        VariantClear(&back);
+    }
+}
+
 struct MftRun {
     uint32_t needInputEvents = 0;
     uint32_t haveOutputEvents = 0;
@@ -491,9 +577,76 @@ struct MftRun {
 
 } // namespace
 
+// DllCanUnloadNow must answer S_FALSE while a transform or a class object of ours is alive, and
+// S_OK only once everything is released. A client reaches the transform through CoCreateInstance,
+// for which COM never calls IClassFactory::LockServer, so without a per-object module lock the host
+// would be free to unmap the DLL between two frames of a live recording.
+int CheckModuleLock()
+{
+    int failures = 0;
+    if (DllCanUnloadNow() != S_OK) {
+        Say("FAIL DllCanUnloadNow does not start at S_OK");
+        ++failures;
+    }
+    {
+        ComPtr<IMFTransform> one;
+        HRESULT hr = Bc250CreateH264EncoderMFT(__uuidof(IMFTransform),
+                                               reinterpret_cast<void**>(&one));
+        if (FAILED(hr) || !one) {
+            SayHr("Bc250CreateH264EncoderMFT", hr);
+            return failures + 1;
+        }
+        if (DllCanUnloadNow() != S_FALSE) {
+            Say("FAIL DllCanUnloadNow says S_OK while a transform object is alive");
+            ++failures;
+        }
+    }
+    if (DllCanUnloadNow() != S_OK) {
+        Say("FAIL DllCanUnloadNow still says S_FALSE after the transform was released");
+        ++failures;
+    }
+    {
+        // The class object counts too: a client may hold it across activations.
+        ComPtr<IClassFactory> cf;
+        HRESULT hr = DllGetClassObject(CLSID_Bc250H264EncoderMFT, __uuidof(IClassFactory),
+                                       reinterpret_cast<void**>(&cf));
+        if (FAILED(hr) || !cf) {
+            SayHr("DllGetClassObject", hr);
+            return failures + 1;
+        }
+        if (DllCanUnloadNow() != S_FALSE) {
+            Say("FAIL DllCanUnloadNow says S_OK while a class object is alive");
+            ++failures;
+        }
+        // And an object created through it, the route a real client takes.
+        ComPtr<IMFTransform> two;
+        hr = cf->CreateInstance(nullptr, __uuidof(IMFTransform),
+                                reinterpret_cast<void**>(&two));
+        if (FAILED(hr) || !two) {
+            SayHr("IClassFactory::CreateInstance", hr);
+            return failures + 1;
+        }
+        cf.Reset();
+        if (DllCanUnloadNow() != S_FALSE) {
+            Say("FAIL DllCanUnloadNow says S_OK while an activated transform is alive");
+            ++failures;
+        }
+    }
+    if (DllCanUnloadNow() != S_OK) {
+        Say("FAIL DllCanUnloadNow does not return to S_OK");
+        ++failures;
+    }
+    if (failures == 0) {
+        Say("DllCanUnloadNow: S_FALSE while a transform or a class object lives, S_OK after");
+    }
+    return failures;
+}
+
 int RunMft(const Options& o)
 {
     printf("mft: the asynchronous hardware transform contract, D3D11 BGRA input\n");
+
+    const int moduleLockFailures = CheckModuleLock();
 
     ComPtr<IClassFactory> factory;
     factory.Attach(new (std::nothrow) TestFactory());
@@ -607,6 +760,42 @@ int RunMft(const Options& o)
         return 2;
     }
 
+    // Negotiation has to refuse what the encoder cannot code exactly. 4:2:0 chroma lives on an even
+    // grid, so an odd frame size - 1365x767 out of a window capture, say - has to come back as
+    // MF_E_INVALIDMEDIATYPE while the client can still renegotiate, instead of being accepted and
+    // then encoded one pixel smaller than MF_MT_FRAME_SIZE says.
+    {
+        uint32_t rejectFailures = 0;
+        const UINT32 sizes[][2] = { { 639, 480 }, { 640, 479 }, { 1365, 767 } };
+        for (const auto& s : sizes) {
+            ComPtr<IMFMediaType> odd;
+            if (FAILED(MakeVideoType(MFVideoFormat_H264, s[0], s[1], o.fps, &odd))) {
+                continue;
+            }
+            HRESULT oh = mft->SetOutputType(0, odd.Get(), MFT_SET_TYPE_TEST_ONLY);
+            if (oh != MF_E_INVALIDMEDIATYPE) {
+                Say("FAIL SetOutputType(%ux%u) returned 0x%08lX, expected MF_E_INVALIDMEDIATYPE",
+                    s[0], s[1], static_cast<unsigned long>(oh));
+                ++rejectFailures;
+            }
+            ComPtr<IMFMediaType> oddIn;
+            if (SUCCEEDED(MakeVideoType(MFVideoFormat_NV12, s[0], s[1], o.fps, &oddIn))) {
+                oh = mft->SetInputType(0, oddIn.Get(), MFT_SET_TYPE_TEST_ONLY);
+                if (oh != MF_E_INVALIDMEDIATYPE) {
+                    Say("FAIL SetInputType(%ux%u) returned 0x%08lX, expected "
+                        "MF_E_INVALIDMEDIATYPE", s[0], s[1], static_cast<unsigned long>(oh));
+                    ++rejectFailures;
+                }
+            }
+        }
+        if (rejectFailures == 0) {
+            Say("an odd frame size is refused on both types during negotiation");
+        } else {
+            UnregisterLocal();
+            return 1;
+        }
+    }
+
     // Types: the output first, as an encoder requires, then the input.
     ComPtr<IMFMediaType> outType;
     hr = MakeVideoType(MFVideoFormat_H264, o.width, o.height, o.fps, &outType);
@@ -639,6 +828,131 @@ int RunMft(const Options& o)
         return 2;
     }
 
+    // Counts every contract failure that is not fatal on its own; the run's exit code folds it in.
+    uint32_t settingFailures = 0;
+
+    // The colour description has to come from the input type. Windows Camera hands over NV12 tagged
+    // BT.601; nothing in this encoder converts, so the VUI has to repeat what the client said. The
+    // one exception is the BGRA path, where cs_import.hlsl itself converts with the studio-range
+    // BT.709 matrix, so the VUI says 709 whatever the RGB type claims.
+    //
+    // The oracle is exact, not comparative: for each input type the expected sequence header is
+    // built here from the encoder's own writer, with the configuration SetOutputType derived (size,
+    // frame rate, bitrate) and the colour description the transform should have read, and the bytes
+    // on the output type have to be those bytes. A check that "different inputs give different
+    // headers" would also pass if the headers differed in the wrong field.
+    {
+        auto blobOf = [&mft](std::vector<uint8_t>* out) -> bool {
+            out->clear();
+            ComPtr<IMFMediaType> t;
+            if (FAILED(mft->GetOutputCurrentType(0, &t))) {
+                return false;
+            }
+            UINT32 size = 0;
+            if (FAILED(t->GetBlobSize(MF_MT_MPEG_SEQUENCE_HEADER, &size)) || size == 0) {
+                return false;
+            }
+            out->resize(size);
+            return SUCCEEDED(t->GetBlob(MF_MT_MPEG_SEQUENCE_HEADER, out->data(), size, &size));
+        };
+        auto expectedBlob = [&o](uint32_t primaries, uint32_t transfer, uint32_t matrix,
+                                 bool full) -> std::vector<uint8_t> {
+            EncoderConfig want;
+            want.width = o.width;
+            want.height = o.height;
+            want.fpsNum = o.fps;
+            want.fpsDen = 1;
+            want.meanBitRate = o.bitrate;
+            want.gopSize = o.gop;
+            want.colourPrimaries = primaries;
+            want.transferCharacteristics = transfer;
+            want.matrixCoefficients = matrix;
+            want.fullRange = full;
+            SequenceParams sps;
+            PictureParams pps;
+            MakeSequenceParams(want, &sps, &pps);
+            std::vector<uint8_t> nals;
+            BuildParameterSetNals(nals, sps, pps);
+            return nals;
+        };
+        // Every tagged case carries MFVideoTransFunc_709, so that the cases differ only in what
+        // their tag is about. The untagged case is the one that has to come out "unspecified" (2).
+        struct ColourCase {
+            const GUID* subtype;
+            bool tagged;
+            UINT32 primaries, transfer, matrix, range;
+            uint32_t wantPrimaries, wantTransfer, wantMatrix;
+            bool wantFull;
+            const char* what;
+        };
+        const ColourCase cases[] = {
+            { &MFVideoFormat_NV12, true, MFVideoPrimaries_SMPTE170M, MFVideoTransFunc_709,
+              MFVideoTransferMatrix_BT601, MFNominalRange_16_235, 6, 1, 6, false,
+              "NV12 tagged BT.601, the shape Windows Camera delivers" },
+            { &MFVideoFormat_NV12, true, MFVideoPrimaries_BT709, MFVideoTransFunc_709,
+              MFVideoTransferMatrix_BT709, MFNominalRange_16_235, 1, 1, 1, false,
+              "NV12 tagged BT.709 studio range" },
+            { &MFVideoFormat_NV12, true, MFVideoPrimaries_BT709, MFVideoTransFunc_709,
+              MFVideoTransferMatrix_BT709, MFNominalRange_0_255, 1, 1, 1, true,
+              "NV12 tagged BT.709 full range" },
+            { &MFVideoFormat_NV12, false, 0, 0, 0, 0, 2, 2, 2, false,
+              "NV12 with no colour description, which is unspecified and not a guess" },
+            { &MFVideoFormat_ARGB32, true, MFVideoPrimaries_SMPTE170M, MFVideoTransFunc_240M,
+              MFVideoTransferMatrix_BT601, MFNominalRange_0_255, 1, 1, 1, false,
+              "ARGB32 tagged BT.601 full range, which the import shader converts to 709 studio" },
+        };
+        uint32_t colourFailures = 0;
+        std::vector<uint8_t> bt601Header;
+        for (const ColourCase& c : cases) {
+            ComPtr<IMFMediaType> t;
+            if (FAILED(MakeVideoType(*c.subtype, o.width, o.height, o.fps, &t))) {
+                ++colourFailures;
+                continue;
+            }
+            if (c.tagged) {
+                t->SetUINT32(MF_MT_VIDEO_PRIMARIES, c.primaries);
+                t->SetUINT32(MF_MT_TRANSFER_FUNCTION, c.transfer);
+                t->SetUINT32(MF_MT_YUV_MATRIX, c.matrix);
+                t->SetUINT32(MF_MT_VIDEO_NOMINAL_RANGE, c.range);
+            }
+            const HRESULT sh = mft->SetInputType(0, t.Get(), 0);
+            std::vector<uint8_t> got;
+            if (FAILED(sh) || !blobOf(&got)) {
+                Say("FAIL %s: SetInputType 0x%08lX, %zu blob bytes", c.what,
+                    static_cast<unsigned long>(sh), got.size());
+                ++colourFailures;
+                continue;
+            }
+            const std::vector<uint8_t> want =
+                expectedBlob(c.wantPrimaries, c.wantTransfer, c.wantMatrix, c.wantFull);
+            if (got != want) {
+                Say("FAIL %s: the sequence header is not the one for colour %u/%u/%u %s range "
+                    "(%zu bytes against %zu)", c.what, c.wantPrimaries, c.wantTransfer,
+                    c.wantMatrix, c.wantFull ? "full" : "studio", got.size(), want.size());
+                ++colourFailures;
+                continue;
+            }
+            if (bt601Header.empty()) {
+                bt601Header = got;
+            } else if (got == bt601Header) {
+                // Every later case describes different colour, so it cannot repeat the first header.
+                Say("FAIL %s gives the same sequence header as the BT.601 case", c.what);
+                ++colourFailures;
+            }
+        }
+        // Back to the untagged ARGB32 type the rest of this run encodes from.
+        if (FAILED(mft->SetInputType(0, inType.Get(), 0))) {
+            Say("FAIL the input type could not be set back to ARGB32");
+            ++colourFailures;
+        }
+        if (colourFailures != 0) {
+            settingFailures += colourFailures;
+        } else {
+            Say("the VUI is the client's own colour description, byte for byte: 5 input types, "
+                "BT.601, BT.709, full range, unspecified, and 709 for the converting BGRA path");
+        }
+    }
+
     // The settings Game Bar and Chromium write.
     ComPtr<ICodecAPI> codec;
     hr = mft->QueryInterface(__uuidof(ICodecAPI), reinterpret_cast<void**>(&codec));
@@ -658,7 +972,6 @@ int RunMft(const Options& o)
         { &CODECAPI_AVEncMPVGOPSize, "AVEncMPVGOPSize", VT_UI4, o.gop },
         { &CODECAPI_AVEncCommonLowLatency, "AVEncCommonLowLatency", VT_BOOL, 1 },
     };
-    uint32_t settingFailures = 0;
     for (const Setting& s : settings) {
         VARIANT v;
         VariantInit(&v);
@@ -723,8 +1036,130 @@ int RunMft(const Options& o)
         }
         VariantClear(&v);
     }
+    // What the inbox encoder does with the same property, printed for comparison before we assert
+    // our own behaviour.
+    ProbeInboxQuantiserContract(o);
+    // The quantiser through ICodecAPI. CODECAPI_AVEncVideoEncodeQP is a UINT64 (codecapi.h:908)
+    // carrying 16 bits per picture type (I at bit 0, P at 16, B at 32), which is what the probe above
+    // shows the inbox encoder doing. So both the packed form and a plain scalar have to work, an
+    // out-of-range field has to be refused, and the answer has to come back as VT_UI8. Min and max
+    // quantiser are UINT32.
+    {
+        VARIANT lo, hi, step;
+        VariantInit(&lo); VariantInit(&hi); VariantInit(&step);
+        if (FAILED(codec->GetParameterRange(&CODECAPI_AVEncVideoEncodeQP, &lo, &hi, &step)) ||
+            lo.vt != VT_UI8 || hi.vt != VT_UI8 || (lo.ullVal & 0xFFFFull) == 0) {
+            Say("FAIL GetParameterRange(AVEncVideoEncodeQP) vt %u/%u lo %llu", lo.vt, hi.vt,
+                static_cast<unsigned long long>(lo.ullVal));
+            ++settingFailures;
+        }
+        const ULONGLONG advertisedFloor = lo.ullVal & 0xFFFFull;
+        VariantClear(&lo); VariantClear(&hi); VariantClear(&step);
+
+        struct QpCase { ULONGLONG set; VARTYPE vt; HRESULT want; ULONG readBack; const char* what; };
+        const QpCase qpCases[] = {
+            { 32ull, VT_UI4, S_OK, 32, "a plain scalar in the smallest variant type" },
+            { 26ull | (28ull << 16) | (30ull << 32), VT_UI8, S_OK, 26, "the packed per-type form" },
+            { 52ull, VT_UI8, E_INVALIDARG, 0, "an I field above 51" },
+            { 26ull | (99ull << 16), VT_UI8, E_INVALIDARG, 0, "a P field above 51" },
+            { advertisedFloor | (advertisedFloor << 16) | (advertisedFloor << 32), VT_UI8, S_OK,
+              static_cast<ULONG>(advertisedFloor), "the advertised floor" },
+        };
+        for (const QpCase& q : qpCases) {
+            VARIANT v;
+            VariantInit(&v);
+            v.vt = q.vt;
+            if (q.vt == VT_UI8) { v.ullVal = q.set; } else { v.ulVal = static_cast<ULONG>(q.set); }
+            const HRESULT sh = codec->SetValue(&CODECAPI_AVEncVideoEncodeQP, &v);
+            VariantClear(&v);
+            if (sh != q.want) {
+                Say("FAIL SetValue(AVEncVideoEncodeQP) with %s returned 0x%08lX, expected 0x%08lX",
+                    q.what, static_cast<unsigned long>(sh), static_cast<unsigned long>(q.want));
+                ++settingFailures;
+                continue;
+            }
+            if (FAILED(q.want)) {
+                continue;
+            }
+            VARIANT back;
+            VariantInit(&back);
+            const HRESULT gh = codec->GetValue(&CODECAPI_AVEncVideoEncodeQP, &back);
+            const bool ok = SUCCEEDED(gh) && back.vt == VT_UI8 &&
+                            (back.ullVal & 0xFFFFull) == q.readBack &&
+                            ((back.ullVal >> 16) & 0xFFFFull) == q.readBack;
+            if (!ok) {
+                Say("FAIL GetValue(AVEncVideoEncodeQP) after %s: 0x%08lX vt %u value %llu", q.what,
+                    static_cast<unsigned long>(gh), back.vt,
+                    static_cast<unsigned long long>(back.ullVal));
+                ++settingFailures;
+            }
+            VariantClear(&back);
+        }
+        for (const GUID* id : { &CODECAPI_AVEncVideoMinQP, &CODECAPI_AVEncVideoMaxQP }) {
+            const bool isMin = (id == &CODECAPI_AVEncVideoMinQP);
+            VARIANT v;
+            VariantInit(&v);
+            v.vt = VT_UI4;
+            v.ulVal = isMin ? 20u : 44u;
+            const HRESULT sh = codec->SetValue(id, &v);
+            VARIANT back;
+            VariantInit(&back);
+            const HRESULT gh = codec->GetValue(id, &back);
+            if (FAILED(sh) || FAILED(gh) || back.vt != VT_UI4 || back.ulVal != v.ulVal) {
+                Say("FAIL the quantiser range round trip: set 0x%08lX get 0x%08lX vt %u value %lu",
+                    static_cast<unsigned long>(sh), static_cast<unsigned long>(gh), back.vt,
+                    static_cast<unsigned long>(back.ulVal));
+                ++settingFailures;
+            }
+            VariantClear(&back);
+            // A bound below the floor the encoder will use: accepted, because the request is legal,
+            // and read back as the floor, because that is the bound that will apply. The floor is
+            // the one GetParameterRange advertises for this property.
+            VARIANT boundLo = {}, boundHi = {}, boundStep = {};
+            VariantInit(&boundLo); VariantInit(&boundHi); VariantInit(&boundStep);
+            if (SUCCEEDED(codec->GetParameterRange(id, &boundLo, &boundHi, &boundStep)) &&
+                boundLo.vt == VT_UI4) {
+                VARIANT zero = {};
+                VariantInit(&zero);
+                zero.vt = VT_UI4;
+                zero.ulVal = 0;
+                const HRESULT zh = codec->SetValue(id, &zero);
+                VariantClear(&zero);
+                VARIANT readBack = {};
+                VariantInit(&readBack);
+                const HRESULT rh2 = codec->GetValue(id, &readBack);
+                if (FAILED(zh) || FAILED(rh2) || readBack.vt != VT_UI4 ||
+                    readBack.ulVal != boundLo.ulVal) {
+                    Say("FAIL a quantiser bound of 0 did not come back as the advertised floor %lu: "
+                        "set 0x%08lX get 0x%08lX vt %u value %lu",
+                        static_cast<unsigned long>(boundLo.ulVal), static_cast<unsigned long>(zh),
+                        static_cast<unsigned long>(rh2), readBack.vt,
+                        static_cast<unsigned long>(readBack.ulVal));
+                    ++settingFailures;
+                }
+                VariantClear(&readBack);
+            }
+            VariantClear(&boundLo); VariantClear(&boundHi); VariantClear(&boundStep);
+            // Back to the default bound, so that this probe does not clamp the run's own quantiser.
+            v.ulVal = isMin ? 14u : 46u;
+            codec->SetValue(id, &v);
+            VariantClear(&v);
+        }
+        // Back to the quantiser this run is supposed to encode at, in the packed form.
+        VARIANT v;
+        VariantInit(&v);
+        v.vt = VT_UI8;
+        v.ullVal = static_cast<ULONGLONG>(o.qp) | (static_cast<ULONGLONG>(o.qp) << 16) |
+                   (static_cast<ULONGLONG>(o.qp) << 32);
+        if (FAILED(codec->SetValue(&CODECAPI_AVEncVideoEncodeQP, &v))) {
+            Say("FAIL SetValue(AVEncVideoEncodeQP) for the run's own quantiser");
+            ++settingFailures;
+        }
+        VariantClear(&v);
+    }
     if (settingFailures == 0) {
-        Say("ICodecAPI: rate control, bitrate, GOP and low latency set and read back; CABAC refused");
+        Say("ICodecAPI: rate control, bitrate, GOP, low latency and the packed UINT64 quantiser set "
+            "and read back; an out-of-range quantiser field and CABAC refused");
     }
 
     Pattern pattern;
@@ -741,6 +1176,33 @@ int RunMft(const Options& o)
         SayHr("QueryInterface(IMFMediaEventGenerator)", hr);
         UnregisterLocal();
         return 2;
+    }
+
+    // The sequence header as it stands after every ICodecAPI setting, which is the order a capture
+    // client uses: SetOutputType, then the settings, then streaming. A file sink copies these bytes
+    // into the container, so they have to be the same bytes the encoder puts in band in front of the
+    // first key frame; the comparison is at the end of this run.
+    std::vector<uint8_t> blob;
+    // The declared level that goes with those bytes, kept for the mid-stream check at the end.
+    UINT32 levelWhileNegotiating = 0;
+    {
+        ComPtr<IMFMediaType> afterSettings;
+        if (SUCCEEDED(mft->GetOutputCurrentType(0, &afterSettings))) {
+            UINT32 size = 0;
+            if (SUCCEEDED(afterSettings->GetBlobSize(MF_MT_MPEG_SEQUENCE_HEADER, &size)) &&
+                size > 0) {
+                blob.resize(size);
+                if (FAILED(afterSettings->GetBlob(MF_MT_MPEG_SEQUENCE_HEADER, blob.data(), size,
+                                                  &size))) {
+                    blob.clear();
+                }
+            }
+            afterSettings->GetUINT32(MF_MT_MPEG2_LEVEL, &levelWhileNegotiating);
+        }
+        if (blob.empty()) {
+            Say("FAIL no MF_MT_MPEG_SEQUENCE_HEADER after the ICodecAPI settings");
+            ++settingFailures;
+        }
     }
 
     hr = mft->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
@@ -840,6 +1302,26 @@ int RunMft(const Options& o)
             if (SUCCEEDED(out->GetUINT32(MFSampleExtension_CleanPoint, &clean)) && clean != 0) {
                 ++run.keyFrames;
             }
+            // mfapi.h:1166 declares MFSampleExtension_VideoEncodeQP as UINT64, so GetUINT64 is what
+            // a client calls and it has to succeed.
+            UINT64 sampleQp = 0;
+            if (FAILED(out->GetUINT64(MFSampleExtension_VideoEncodeQP, &sampleQp)) ||
+                sampleQp > 51) {
+                Say("FAIL output %u carries no UINT64 MFSampleExtension_VideoEncodeQP",
+                    run.outputs - 1);
+                ++settingFailures;
+            }
+            if (run.outputs == 1 && !blob.empty()) {
+                if (curLen < blob.size() || memcmp(data, blob.data(), blob.size()) != 0) {
+                    Say("FAIL the first access unit does not open with the %zu bytes of "
+                        "MF_MT_MPEG_SEQUENCE_HEADER: the container's parameter sets and the in-band "
+                        "ones disagree", blob.size());
+                    ++settingFailures;
+                } else {
+                    Say("the first access unit opens with the exact %zu bytes of "
+                        "MF_MT_MPEG_SEQUENCE_HEADER", blob.size());
+                }
+            }
             stream.insert(stream.end(), data, data + curLen);
             const HRESULT fh = dec.Feed(data, curLen, static_cast<int64_t>(run.outputs - 1) * duration);
             b->Unlock();
@@ -864,6 +1346,115 @@ int RunMft(const Options& o)
         }
     }
     const double t1 = NowMs();
+
+    // A second segment after the drain, without NOTIFY_END_STREAMING in between. That is the
+    // documented way to restart a stream, and it is what pause and resume in a recording client
+    // does. The segment's first access unit has to be a key frame carrying its own parameter sets:
+    // a P slice here would reference the previous segment's reconstruction and the new file would be
+    // undecodable from its own start.
+    if (run.drained) {
+        bool restartFed = false, restartKey = false, restartParams = false, restartOut = false;
+        HRESULT rh = mft->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+        while (SUCCEEDED(rh) && !restartOut) {
+            ComPtr<IMFMediaEvent> ev;
+            rh = events->GetEvent(0, &ev);
+            if (FAILED(rh)) {
+                break;
+            }
+            MediaEventType type = MEUnknown;
+            ev->GetType(&type);
+            if (type == METransformNeedInput && !restartFed) {
+                ComPtr<IMFMediaBuffer> buffer;
+                ComPtr<IMFSample> sample;
+                rh = pattern.Draw(0);
+                if (SUCCEEDED(rh)) {
+                    rh = MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), pattern.Texture(), 0,
+                                                   FALSE, &buffer);
+                }
+                if (SUCCEEDED(rh)) { rh = MFCreateSample(&sample); }
+                if (SUCCEEDED(rh)) { rh = sample->AddBuffer(buffer.Get()); }
+                if (SUCCEEDED(rh)) {
+                    rh = sample->SetSampleTime(static_cast<int64_t>(fed) * duration);
+                }
+                if (SUCCEEDED(rh)) { rh = sample->SetSampleDuration(duration); }
+                if (SUCCEEDED(rh)) { rh = mft->ProcessInput(0, sample.Get(), 0); }
+                restartFed = SUCCEEDED(rh);
+            } else if (type == METransformHaveOutput) {
+                MFT_OUTPUT_DATA_BUFFER buf = {};
+                DWORD status = 0;
+                rh = mft->ProcessOutput(0, 1, &buf, &status);
+                if (FAILED(rh)) {
+                    break;
+                }
+                ComPtr<IMFSample> out;
+                out.Attach(buf.pSample);
+                if (buf.pEvents != nullptr) {
+                    buf.pEvents->Release();
+                }
+                UINT32 clean = 0;
+                restartKey = SUCCEEDED(out->GetUINT32(MFSampleExtension_CleanPoint, &clean)) &&
+                             clean != 0;
+                ComPtr<IMFMediaBuffer> b;
+                BYTE* data = nullptr;
+                DWORD maxLen = 0, curLen = 0;
+                if (SUCCEEDED(out->ConvertToContiguousBuffer(&b)) &&
+                    SUCCEEDED(b->Lock(&data, &maxLen, &curLen))) {
+                    restartParams = !blob.empty() && curLen >= blob.size() &&
+                                    memcmp(data, blob.data(), blob.size()) == 0;
+                    b->Unlock();
+                }
+                restartOut = true;
+            } else if (type == MEError) {
+                break;
+            }
+        }
+        if (!restartFed || !restartOut || !restartKey || !restartParams) {
+            Say("FAIL the segment after the drain: input accepted %d, output %d, key frame %d, "
+                "parameter sets %d", restartFed ? 1 : 0, restartOut ? 1 : 0, restartKey ? 1 : 0,
+                restartParams ? 1 : 0);
+            ++settingFailures;
+        } else {
+            Say("after COMMAND_DRAIN, NOTIFY_START_OF_STREAM opens a new segment with a key frame "
+                "carrying its own parameter sets");
+        }
+    }
+
+    // A setting that would change the parameter sets, arriving while the encoder is already running.
+    // A bitrate of 60 Mbit/s needs a higher level than the sequence header the sink has already
+    // copied into the container, and a running encoder cannot change the parameter sets of a
+    // sequence that is being decoded against them. So the blob has to stay exactly what the stream
+    // carries, and the level on the output type with it: the honest answer, and the opposite of the
+    // stale blob this transform used to publish when a setting changed.
+    {
+        VARIANT v = {};
+        VariantInit(&v);
+        v.vt = VT_UI4;
+        v.ulVal = 60000000u;
+        const HRESULT sh = codec->SetValue(&CODECAPI_AVEncCommonMeanBitRate, &v);
+        VariantClear(&v);
+        std::vector<uint8_t> after;
+        UINT32 levelAfter = 0;
+        ComPtr<IMFMediaType> t;
+        if (SUCCEEDED(mft->GetOutputCurrentType(0, &t))) {
+            UINT32 size = 0;
+            if (SUCCEEDED(t->GetBlobSize(MF_MT_MPEG_SEQUENCE_HEADER, &size)) && size != 0) {
+                after.resize(size);
+                t->GetBlob(MF_MT_MPEG_SEQUENCE_HEADER, after.data(), size, &size);
+            }
+            t->GetUINT32(MF_MT_MPEG2_LEVEL, &levelAfter);
+        }
+        if (FAILED(sh) || after.empty() || after != blob || levelAfter != levelWhileNegotiating) {
+            Say("FAIL a bitrate change while streaming moved the published parameter sets: "
+                "SetValue 0x%08lX, %zu bytes against %zu, level %u against %u",
+                static_cast<unsigned long>(sh), after.size(), blob.size(), levelAfter,
+                levelWhileNegotiating);
+            ++settingFailures;
+        } else {
+            Say("a bitrate change while streaming leaves the published parameter sets and the "
+                "declared level exactly as the stream carries them");
+        }
+    }
+
     mft->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0);
     dec.Drain();
 
@@ -914,7 +1505,7 @@ int RunMft(const Options& o)
         Say("FAIL no output sample was marked as a clean point");
         rc = 1;
     }
-    if (settingFailures != 0) {
+    if (settingFailures != 0 || moduleLockFailures != 0) {
         rc = 1;
     }
     const std::wstring path = o.outDir + L"\\mfthost-mft.264";

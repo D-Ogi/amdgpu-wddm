@@ -37,13 +37,18 @@ void WriteSps(BitWriter& bw, const SequenceParams& sps)
     bw.Flag(true);            // vui_parameters_present_flag
     bw.Flag(false);           // aspect_ratio_info_present_flag
     bw.Flag(false);           // overscan_info_present_flag
-    bw.Flag(true);            // video_signal_type_present_flag
-    bw.U(3, 5);               //   video_format: Unspecified
-    bw.Flag(false);           //   video_full_range_flag: studio range
-    bw.Flag(true);            //   colour_description_present_flag
-    bw.U(8, 1);               //     colour_primaries: BT.709
-    bw.U(8, 1);               //     transfer_characteristics: BT.709
-    bw.U(8, 1);               //     matrix_coefficients: BT.709
+    // The colour description is what the client said its samples are (the transform reads
+    // MF_MT_VIDEO_PRIMARIES, MF_MT_TRANSFER_FUNCTION, MF_MT_YUV_MATRIX and
+    // MF_MT_VIDEO_NOMINAL_RANGE from the input type), not a fixed claim: nothing in this encoder
+    // converts between colour spaces, so writing BT.709 over BT.601 samples would make every player
+    // apply the wrong matrix.
+    bw.Flag(true);                           // video_signal_type_present_flag
+    bw.U(3, 5);                              //   video_format: Unspecified
+    bw.Flag(sps.fullRange);                  //   video_full_range_flag
+    bw.Flag(true);                           //   colour_description_present_flag
+    bw.U(8, sps.colourPrimaries);            //     colour_primaries
+    bw.U(8, sps.transferCharacteristics);    //     transfer_characteristics
+    bw.U(8, sps.matrixCoefficients);         //     matrix_coefficients
     bw.Flag(false);           // chroma_loc_info_present_flag
     bw.Flag(true);            // timing_info_present_flag
     bw.U(32, sps.fpsDen);     //   num_units_in_tick
