@@ -20,7 +20,9 @@ sys.path.insert(0, str(HERE.parent / "regcalc"))
 import decode_qr  # noqa: E402
 import diag  # noqa: E402
 import qrcodec  # noqa: E402
-from gen_probes import build  # noqa: E402
+import gen_probes  # noqa: E402
+import gen_sweep  # noqa: E402
+from gen_probes import build, denied, deny_range  # noqa: E402
 from regcalc import RegMap  # noqa: E402
 
 
@@ -79,6 +81,35 @@ class Probes(unittest.TestCase):
 
     def test_checked_in_probes_json_is_current(self):
         self.assertEqual(json.loads((PAYLOAD / "probes.json").read_text())["id"], build()["id"])
+
+
+class UvdDenyWindow(unittest.TestCase):
+    """The UVD/VCN window is denied by rule. A read there is reported to wedge this SoC (facts M787)."""
+
+    def test_the_band_comes_from_the_ip_table_and_covers_both_uvd_segments(self):
+        low, high = deny_range()
+        # cyan_skillfish_ip_offset.h: UVD0 segments at dword 0x7800 and 0x7E00, next IP base at 0x9000.
+        self.assertEqual((low, high), (0x7800 * 4, 0x9000 * 4))
+        self.assertTrue(denied(0x7800 * 4) and denied(0x7E00 * 4) and denied(high - 4))
+        self.assertFalse(denied(low - 4) or denied(high))
+
+    def test_no_probe_and_no_swept_register_is_inside_the_band(self):
+        self.assertEqual([r for r in build()["regs"] if denied(r["off"])], [])
+        self.assertEqual([r for r in gen_sweep.build()["regs"] if denied(r[2])], [])
+
+    def test_a_spec_entry_inside_the_band_stops_the_generator(self):
+        class FakeMap:
+            regs = {"mmUVD_FAKE": (0, 0)}
+            segs = {0: 0x7800}
+
+            def byte_offset(self, name):
+                return (self.segs[0] + self.regs[name][0]) * 4
+
+        with mock.patch.object(gen_probes, "SPEC", [("UVD0", "nonexistent.h", [("mmUVD_FAKE", False)])]), \
+                mock.patch.object(gen_probes, "RegMap", lambda **kwargs: FakeMap()):
+            with self.assertRaises(SystemExit) as caught:
+                build()
+        self.assertIn("UVD/VCN", str(caught.exception))
 
 
 class PhaseA(unittest.TestCase):

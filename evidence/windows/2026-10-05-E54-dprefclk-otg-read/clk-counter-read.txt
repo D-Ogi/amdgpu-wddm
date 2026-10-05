@@ -1,0 +1,5 @@
+utc 2026-10-05T02:27:47
+read 0x6C9FC (CLK4_0_CLK4_CLK2_CURRENT_CNT), three times
+read 0x6c9fc 00001770
+read 0x6c9fc 00001770
+read 0x6c9fc 00001770

@@ -51,6 +51,7 @@ flowchart LR
   M58["M58<br/>hardware"]
   M59["M59<br/>hardware"]
   M78["M78<br/>kmd"]
+  M90["M90"]
   M95["M95<br/>hardware"]
   M113["M113<br/>kmd"]
   M114["M114<br/>kmd"]
@@ -60,6 +61,8 @@ flowchart LR
   M510["M510"]
   M515["M515<br/>icd"]
   M516["M516"]
+  M787["M787<br/>hardware"]
+  M789["M789<br/>hardware"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -67,6 +70,8 @@ flowchart LR
   M58 --> M55
   M59 --> M55
   M95 --> M53
+  M787 --> M46
+  M789 --> M90
   M78 --> M55
   M113 --> M40
   M114 --> M40
@@ -86,6 +91,6 @@ flowchart LR
   M510 --> M508
   M516 --> M515
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515 other
+  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M789 other
 ```
 

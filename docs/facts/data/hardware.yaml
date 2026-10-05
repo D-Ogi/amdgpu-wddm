@@ -612,6 +612,54 @@ facts:
     claim: "SMU firmware metadata is atomically retained across owner stop/failed restart, with cached queries independent of mailbox locking and hardware readiness. Actual-source concurrent host suite30814/0; clear-on-stop mutation yields3 failures. Full WDK build passes; undeployed. Retained-owner hardware resume remains unimplemented."
     status_text: "CONFIRMED (source/host scope only)"
     evidence: "[retained SMU metadata](../evidence/windows/2026-09-25-E27-m9-recovery/retained-smu-metadata/RESULT.md)"
+  - id: M785
+    status: MEASURED
+    date: "2026-10-04"
+    claim: "The firmware accepts a GFX clock below the 1000 MHz level that its power tables publish. In session 402 the thermal cap put the part at 800 MHz / VID 116 (820 mV) and at 900 MHz / VID 116. That session ran the Rise of the Tomb Raider DirectX 12 benchmark on kernel driver 0.7.205.1, `DpmMaxMHz` 1500. The SMU refused neither point. The clock readback stream holds 49 samples at 800 MHz and 4 at 900 MHz. The 800 MHz samples run from 81.875 to 87.750 C, mean 84.55 C. The 900 MHz samples read 81.500 to 81.750 C. The governor's own telemetry and summary lines report the same two points 22 and 2 times. Each of those lines reads `want 1000 cap 800` or `cap 900`, `throttle thermal-soft` and GPU busy 96.8 to 100.0 %. The log holds no `sub-floor refused` line. So 1000 MHz is the lowest level the tables offer (M47) and amdgpu's own clamp (`CYAN_SKILLFISH_SCLK_MIN`). It is not a measured hardware floor"
+    status_text: "MEASURED (n = 1 session, unit A)"
+    detail: "The table stops at 800 MHz, so nothing lower was requested. Both points carry the floor's own VID 116. This session therefore shows neither the lowest clock the firmware accepts, nor a sub-floor clock at another voltage. Six driver comments and one line of `hardware.md` said that the firmware had never run below 1000 MHz, and cited M47. M47 records only what the tables publish. Those seven places now state what M47 says and what this session measured. `bc250_dpm_subfloor_refused()` stays as insurance for a part that does refuse a sub-floor point"
+    evidence: "[E52](../evidence/windows/2026-10-04-E52-dpm-subfloor-402/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M47"}
+  - id: M786
+    status: MEASURED
+    date: "2026-10-05"
+    claim: "CPU power management on unit A under Windows 11 build 22631, idle desktop, Balanced scheme `381b4222-f694-41f0-9685-ff5bb260df2e`. The processor runs its own P-states (`PERFAUTONOMOUS` 1 on AC) inside the window `PROCTHROTTLEMIN` 5 % to `PROCTHROTTLEMAX` 100 %. The other scheme values are `PERFEPP` 33 %, `PERFBOOSTMODE` 2 (aggressive), `PERFBOOSTPOL` 60 % and no frequency ceiling (`PROCFREQMAX` 0). Idle states are allowed (`IDLEDISABLE` 0, `IDLESTATEMAX` 0). No core is parked on AC (`CPMINCORES` and `CPMAXCORES` 100 %, against 10 % and 100 % on DC). Over 20 idle samples at 1 s: `% of Maximum Frequency` mean 46.00 (42.00 to 100.00), `% Processor Performance` mean 62.66 (42.98 to 106.15), `% Processor Time` mean 3.33 %. Windows reports the part as `AMD BC-250`, 6 cores, 12 logical processors, nominal 3194 MHz. `Processor Frequency` read 3194 in all 20 samples, so that counter gives the nominal frequency and not the live one"
+    status_text: "MEASURED (n = 20 samples, one idle run)"
+    detail: "Read-only probe `tools/win/cpupower/probe-cpu-power.ps1`: `powercfg /qh <active scheme> SUB_PROCESSOR` and four counters. Nothing was written and `powercfg /energy` was not run. The maxima include the samples in which the probe itself ran, so this is idle with a 1 s sampler on it. Open: the same counters under a game or a benchmark, and the wall power next to them. The smart plug was not read in this run. First fact about the CPU P-state and idle behaviour of this board"
+    evidence: "[E53](../evidence/windows/2026-10-05-E53-cpu-power-idle/RESULT.md)"
+  - id: M787
+    status: HYPOTHESIS
+    date: "2026-10-05"
+    claim: "Reported by the community, not measured here. Unit A's video block (VCN 2.0.3, IP discovery hardware id 12, instance 0) is present and not harvested (`harvest = 0`). The firmware keeps its island power- and clock-gated. A kernel built to attach to it wedges the machine at the first VCN MMIO access in `vcn_v2_0_hw_init`. The report shows 10 IP blocks up, SMU 88.6.0 answering, then silence. The PSP refuses the VCN firmware load (`fw_type` 13 = VCN0 in the PSP `t28` blob) with `ITEM_NOT_FOUND`. The cold-reset write that a working part gets from the PSP therefore never happens"
+    status_text: "HYPOTHESIS (third-party reports, the VCN kernel patch source is unpublished, no log in our hands)"
+    detail: "Sources, facts only, no code or text copied. `kalpakprod/amd-bc250-bios-unlock` at `62ea957` (MIT), `docs/06-linux-kernels.md`, mode 2 of its probe kernel. `katzzero/bc250-unofficial-community-guide` at `ee8df94` (MIT), `02-bios-and-firmware.md`, which attributes the PSP decode to a third repository. Our own side: amdgpu answers no UVD, VCE or VCN query on unit A. It adds no driver block for VCN 2.0.3 on this family (M46). There is no reference bring-up to import. Consequence in our tree: `tools/diagusb/gen_probes.py` and `tools/win/bc250rd/gen_allowlist.py` now deny the UVD0 window by rule, each with a host test. Before that the window was outside both lists by construction only. Not a route for M15.11: the only reported way to open the gate is a firmware action, and the hang report is not reproducible here"
+    edges:
+      - {"type": "uses", "to": "M46"}
+  - id: M789
+    status: HYPOTHESIS
+    date: "2026-10-05"
+    claim: "The `mclk and fclk 450 MHz` that amdgpu reports on unit A (M47, M90) is not the memory data rate. The GDDR6 on this board runs at 1750 MHz with `tCL` 24. A 256-bit bus at 14 Gbps gives about 448 GB/s of peak bandwidth. That puts our measured 386-389 GB/s copy (M776) at about 86 % of peak. The 450 MHz figure is a misreport of the same state, and not a low memory state"
+    status_text: "HYPOTHESIS (third-party specification and community reports next to our own measurement)"
+    detail: "Sources, facts only: `kalpakprod/awesome-bc250` at `d18d3ce` (dual licence, documents and code). `docs/en/01-what-is-bc250.md` gives 256-bit GDDR6 at 14 Gbps, about 448 GB/s. `docs/en/09-overclock-undervolt.md` gives the stock 1750 MHz and `tCL` 24 at 1750 MHz and below. `knowledge/bios.md` holds the 450 MHz report with 1750 MHz CL24 behind it. M776 already shows that this bandwidth does not follow the shader clock. Still open, wishlist row L39: our 386-389 GB/s is a Windows measurement and the 450 MHz is a Linux sysfs string. The ratio therefore rests on the specification until one instrument reads both sides"
+    edges:
+      - {"type": "uses", "to": "M47"}
+      - {"type": "uses", "to": "M90"}
+      - {"type": "uses", "to": "M776"}
+  - id: M790
+    status: HYPOTHESIS
+    date: "2026-10-05"
+    claim: "Reported by the community, not measured here. A board-level over-current protection hard-locks the whole BC-250 in a clock band. On 40-CU boards that band starts between about 1850 and 2200 MHz, and it catches every tested board at 2400 MHz. In that state the monitor goes to standby and the reset and power buttons do nothing. Only cutting AC recovers the board. The reporters call it a system-wide power limit and not a GPU voltage limit. A higher CPU overclock lowers the GPU clock at which it trips, and single CUs clock to 2600 MHz without it"
+    status_text: "HYPOTHESIS (three named reporters in one community guide, no log)"
+    detail: "Source, facts only: `katzzero/bc250-unofficial-community-guide` at `ee8df94` (MIT), `01-hardware-specs.md` and `02-bios-and-firmware.md`. Our hard ceiling of 2000 MHz (`BC250_CLOCK_CEILING_MHZ`) lies inside the reported band, and the release default stops at 1500 MHz. That is the standing argument for the 1500 MHz cap, and for the smart-plug procedure before any run above it. Unit A has 24 CU and not 40, so where the band sits on our part is unknown. No experiment is planned to find its edge"
+  - id: M791
+    status: HYPOTHESIS
+    date: "2026-10-05"
+    claim: "Our SMU mailbox is the firmware's own queue 0, from a third-party static read of the firmware. Its descriptor table gives queue 0 the command, argument and response mailboxes at SMN `0x03B10A08`, `0x03B10A48` and `0x03B10A68`. The low 12 bits of those three addresses are the byte offsets `regcalc` computes for `mmMP1_SMN_C2PMSG_66` (`0x58A08`), `mmMP1_SMN_C2PMSG_82` (`0x58A48`) and `mmMP1_SMN_C2PMSG_90` (`0x58A68`). Those are the three registers our transport uses, in the same three roles. All five messages we send have a non-zero handler entry in queue 0's table: `GetSmuVersion` `0x02`, `RequestGfxclk` `0x0E`, `GetGfxFrequency` `0x37`, `GetGfxVid` `0x38` and `ForceGfxVid` `0x3B`"
+    status_text: "HYPOTHESIS (third-party disassembly, the offset match is checkable, their message names are not)"
+    detail: "Sources, facts only, nothing copied. `bc250-collective/bc250_smu_oc` at `327014d` (MIT) gives the descriptor-table offsets. `bc250-collective/amd_smu_reverse_engineering` at `3f47768` (no LICENSE file, all rights reserved, read only) gives the handler addresses. Their message names are applied by index from AMD's own header. Their table therefore shows that a slot exists and has a handler, never what it does. Our rule stands: presence in a header does not authorize use (`hardware.md`). Our side of the match is `regcalc` over `mp_11_0_8_offset.h` and `driver/shim/bc250_smu.c`. The firmware images that the second repository ships stay outside our tree"
+    edges:
+      - {"type": "uses", "to": "M22"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

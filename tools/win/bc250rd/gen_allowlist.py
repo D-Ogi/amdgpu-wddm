@@ -9,6 +9,10 @@ refuses every offset that is not in this table.
 "Without harm" turned out to be too weak a test: some of those reads change state (facts M25). Their
 offsets are taken out here, by offset, so the driver refuses them like any unknown address.
 
+The UVD/VCN window is denied as well, by rule and not by luck: the sweep logs hold no entry inside it
+today, but a wider sweep would pull one in, and a read there is reported to wedge this SoC (facts M787).
+`gen_probes.denied()` holds the band, computed from the IP base table.
+
 Run:  python tools/win/bc250rd/gen_allowlist.py
 """
 
@@ -18,6 +22,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "diagusb"))
+sys.path.insert(0, str(HERE.parents[1] / "regcalc"))
+from gen_probes import denied, deny_range  # noqa: E402  (one definition of the UVD/VCN deny band)
 from gen_sweep import SIDE_EFFECT  # noqa: E402  (one definition for both sweeps)
 
 EVID = HERE.parents[2] / "evidence" / "linux" / "2026-09-21-E03-init-trace"
@@ -37,6 +43,8 @@ def main():
     bad = {off for _, name, off in regs if SIDE_EFFECT.search(name)}
     dropped = [r for r in regs if r[2] in bad]
     regs = [r for r in regs if r[2] not in bad]
+    uvd = [r for r in regs if denied(r[2])]
+    regs = [r for r in regs if not denied(r[2])]
     offsets = sorted({off for _, _, off in regs})
     rows = [", ".join(f"0x{o:05X}" for o in offsets[i:i + 10]) for i in range(0, len(offsets), 10)]
     (HERE / "driver" / "allowlist.h").write_text(
@@ -47,7 +55,9 @@ def main():
         + ",\n    ".join(rows) + "\n};\n", encoding="utf-8", newline="\n")
     (HERE / "reglist.txt").write_text(
         "".join(f"{ip}.{name} 0x{off:05x}\n" for ip, name, off in regs), encoding="utf-8", newline="\n")
-    print(f"{len(regs)} registers, {len(offsets)} unique offsets, {len(dropped)} dropped for read side effects")
+    low, high = deny_range()
+    print(f"{len(regs)} registers, {len(offsets)} unique offsets, {len(dropped)} dropped for read side effects, "
+          f"{len(uvd)} dropped inside the denied UVD/VCN window 0x{low:05X}-0x{high - 1:05X}")
 
 
 if __name__ == "__main__":

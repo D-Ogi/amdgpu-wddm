@@ -40,9 +40,10 @@ struct bc250_clock_report {
  * 2026-10-05: a clock under 1000 MHz is allowed when Tctl reaches 87 C). Both keep the floor's 820 mV
  * (VID 116): a lower clock at the voltage the part is known to run at, never an undervolt, and the
  * anchors' line is not extrapolated below its lowest anchor. The load never asks for them (the governor's
- * BC250_DPM_FLOOR_LEVEL is 1000 MHz); only the thermal cap goes there. The firmware has never run below
- * 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there), so the KMD treats a
- * refused sub-floor transition as "no sub-floor for this start" (driver/kmd/dpm.c). */
+ * BC250_DPM_FLOOR_LEVEL is 1000 MHz); only the thermal cap goes there. The power tables publish no level
+ * below 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there) although unit A's
+ * firmware accepts 800 and 900 MHz at VID 116 (facts M785), so the KMD still treats a refused sub-floor
+ * transition as "no sub-floor for this start" (driver/kmd/dpm.c). */
 #define BC250_CLOCK_MIN_MHZ 800u        /* the table's lowest clock: thermal-only, below the lab floor */
 #define BC250_CLOCK_FLOOR_MHZ 1000u     /* the lab point, and the lowest clock the load may ask for */
 #define BC250_CLOCK_CEILING_MHZ 2000u
