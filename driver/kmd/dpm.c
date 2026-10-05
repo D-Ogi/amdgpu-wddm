@@ -36,6 +36,13 @@
 //                   BC250_DPM_IDLE_BUSY_PERMILLE (2); at most BC250_DPM_IDLE_MAX_BUSY_PERMILLE. The desktop
 //                   on the GPU wakes for single frames, so the rule is this mean, not a strict zero.
 //   DpmLastMode, DpmLastReason   what the last start did, for the tools when the adapter is gone
+//   DpmClosedReason the reason the driver itself wrote DpmMode 0 (3 unconfirmed, 4 unclean, 8 SMU error).
+//                   PersistFallback writes it, the first start that reads a DpmMode other than 0 deletes it,
+//                   and a start that reads DpmMode 0 leaves it alone. DpmLastReason cannot do this work,
+//                   because every start overwrites it: with DpmMode 0 the next start writes 1 (not requested)
+//                   over the fallback. The release installer reads the record one boot later and offers its
+//                   repair instead of taking the 0 for a setting of the tester (BD-069). InteropClosedReason
+//                   works the same way (interop.c).
 //
 // The thread runs in both modes when the native SMU owner is online. Fixed-lab: it samples busy and
 // temperature and logs them, and sends no SET. DPM: every BC250_DPM_TICK_MS it samples, asks the policy
@@ -63,6 +70,7 @@
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
+#define DPM_SETTING_CLOSED L"DpmClosedReason"
 
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 192);        // ABI 2 (0.7.207); the ABI 1 prefix is 160 bytes
 C_ASSERT(BC250_DPM_ABI1_SIZE == 160);
@@ -197,13 +205,19 @@ static void DeleteLogged(PCWSTR Name)
 }
 
 // The automatic fallback: DpmMode back to fixed-lab, durably, so that the next start does not try again.
+// DpmClosedReason records who wrote that 0. It outlives the boot, because no later start overwrites it; only a
+// start that reads a DpmMode other than 0 deletes it (DpmStart below). DpmLastReason keeps its old meaning: the
+// reason of the last start, overwritten at every start.
 static void PersistFallback(ULONG Reason)
 {
     StoreLogged(DPM_SETTING_MODE, BC250_DPM_MODE_FIXED);
     DeleteLogged(DPM_SETTING_CONFIRMED);
     DeleteLogged(DPM_SETTING_PENDING);
     DeleteLogged(DPM_SETTING_SESSION);
+    StoreLogged(DPM_SETTING_CLOSED, Reason);
     StoreLogged(DPM_SETTING_LAST_REASON, Reason);
+    GuardLog("dpm: DpmClosedReason %lu written next to DpmMode 0: this fallback is the driver's own, not a setting",
+             Reason);
 }
 
 static BOOLEAN Governing(const BC250_DPM_STATE* S)
@@ -720,6 +734,7 @@ void DpmStart(BC250_DEVICE* Device)
     r.pending_present = QueryPresent(DPM_SETTING_PENDING, &r.pending);
     r.confirmed_present = QueryPresent(DPM_SETTING_CONFIRMED, &r.confirmed);
     r.session_present = QueryPresent(DPM_SETTING_SESSION, &r.session);
+    r.closed_present = QueryPresent(DPM_SETTING_CLOSED, &r.closed);
     bc250_dpm_decide(&r, d);
 
     if (d->force_fixed) {
@@ -730,6 +745,11 @@ void DpmStart(BC250_DEVICE* Device)
     } else {
         if (d->clear_pending) DeleteLogged(DPM_SETTING_PENDING);
         if (d->clear_session) DeleteLogged(DPM_SETTING_SESSION);
+        if (d->clear_closed) {
+            // DpmMode is not 0 any more: the tester or a repair wrote over the fallback, so its record goes.
+            DeleteLogged(DPM_SETTING_CLOSED);
+            GuardLog("dpm: DpmClosedReason %lu deleted: DpmMode %lu asks for the clock again", r.closed, r.mode);
+        }
     }
     if (d->mark_pending) {
         // Durable before the first raise, or no DPM at all.
