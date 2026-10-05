@@ -1,0 +1,4 @@
+log_test: 19 checks, 0 failures
+log [from] | log summary [from | only], where from is a decimal sequence number, not only
+log [from] | log summary [from | only], where from is a decimal sequence number, not 4294967295
+log [from] | log summary [from | only], where from is a decimal sequence number, not -1

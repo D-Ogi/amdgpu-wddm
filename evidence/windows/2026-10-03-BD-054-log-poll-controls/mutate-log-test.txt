@@ -1,0 +1,5 @@
+unchanged : exit 0, log_test: 19 checks, 0 failures, 0 FAIL lines
+cli196-original : exit 1, log_test: 19 checks, 12 failures, 12 FAIL lines
+pages-hardware-access : exit 1, log_test: 19 checks, 8 failures, 8 FAIL lines
+no-sentinel-fixup : exit 1, log_test: 19 checks, 8 failures, 8 FAIL lines
+no-count-line : exit 1, log_test: 19 checks, 4 failures, 4 FAIL lines

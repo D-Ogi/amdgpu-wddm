@@ -1,0 +1,10 @@
+
+Wyjątek nieobsłużony: System.Exception: unexpected subprocess
+   w Bc250Mon.KmdInfoProvider.Run(String path, String args, Int32 timeout, String& output, String& error)
+   w Bc250Mon.GraphicsPipelineProvider.AddKernelSummary(Panel panel)
+   w GraphicsSummaryTest.Main(String[] args)
+Exception: P:\bc-250\scratch\land-1006\control-overlay\tools\win\bc250mon\test-graphics-summary.ps1:12
+Line |
+  12 |  if($LASTEXITCODE -ne 0){throw 'Summary pause test failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Summary pause test failed
