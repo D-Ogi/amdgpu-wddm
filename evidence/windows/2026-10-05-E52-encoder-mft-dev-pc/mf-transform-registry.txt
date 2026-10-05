@@ -1,0 +1,56 @@
+# Media Foundation transform registration, as this machine spells it
+# Development PC, read-only. Produced by the commands printed next to each block.
+
+## HKLM\SOFTWARE\Classes\MediaFoundation\Transforms
+## (Get-Item <key>).GetSubKeyNames()
+subkeys total          : 62
+class ids, no braces   : 58
+class ids, with braces : 0
+other subkeys          : Categories, DoNotUse, Preferred, PreferredByOutputType
+
+## Categories
+category keys          : 9
+with braces            : 0
+  059c561e-05ae-4b61-b69d-55b61ee54a7b
+  11064c48-3648-4ed0-932e-05ce8ac811b7
+  12e17c21-532c-4a6e-8a1c-40825a736397
+  302ea3fc-aa5f-47f9-9f7a-c2188bb16302
+  90175d57-b7ea-4901-aeb3-933a8747756f
+  91c64bd0-f91e-4d8c-9276-db248279d975
+  9ea73fb4-ef7a-4559-8d5d-719d8f0426c7
+  d6c02d4b-6833-45b4-971a-05a4b04bab91
+  f79eac7d-e545-4387-bdee-d647d7bde42a
+
+## The video encoder category, {f79eac7d-e545-4387-bdee-d647d7bde42a}
+key with braces exists : False
+key without braces     : True
+  60F44560-5A20-4857-BFEF-D29773CB8040  'NVIDIA H.264 Encoder MFT'  MFTFlags=4  values=[,Attributes,InputTypes,MFTFlags,OutputTypes]
+  6ca50344-051a-4ded-9779-a43305165e35  'H264 Encoder MFT'  MFTFlags=  values=[,InputTypes,OutputTypes]
+  7e320092-596a-41b2-bbeb-175d10504eb6  'WMVideo8 Encoder MFT'  MFTFlags=  values=[,InputTypes,OutputTypes]
+  80B80715-8C5A-420D-B346-1A9DC40A5880  'NVIDIA AV1 Encoder MFT'  MFTFlags=4  values=[,Attributes,InputTypes,MFTFlags,OutputTypes]
+  966F107C-8EA2-425D-B822-E4A71BEF01D7  'NVIDIA HEVC Encoder MFT'  MFTFlags=4  values=[,Attributes,InputTypes,MFTFlags,OutputTypes]
+  bc47fcfe-98a0-4f27-bb07-698af24f2b38  'H263 Encoder MFT'  MFTFlags=  values=[,InputTypes,OutputTypes]
+  d23b90d0-144f-46bd-841d-59e4eb19dc59  'WMVideo9 Encoder MFT'  MFTFlags=  values=[,InputTypes,OutputTypes]
+  e6335f02-80b7-4dc4-adfa-dfe7210d20d5  'Microsoft MPEG-2 Video Encoder MFT'  MFTFlags=2  values=[,InputTypes,MFTFlags,OutputTypes]
+
+## The NVIDIA hardware H.264 encoder, which a display driver package installed
+friendly name          : NVIDIA H.264 Encoder MFT
+MFTFlags               : 0x00000004
+InputTypes bytes       : 96
+OutputTypes bytes      : 64
+Attributes bytes       : 318
+holds MFT_ENUM_ADAPTER_LUID (1D39518C-E220-4DA8-A07F-BA172552D6B1): False
+
+## COM key shape of the same class, for comparison
+HKLM\SOFTWARE\Classes\CLSID\{60F44560-...} exists : True
+the same class id without braces exists           : False
+
+## Display adapter software keys, HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}
+## Looking for the MFT0..MFT9 values that route B assumed
+  0000  values=10  DriverDesc='(redacted, see REDACTED.txt)'  MFT* values=[]
+  0001  values=65  DriverDesc='NVIDIA GeForce RTX 4090'  MFT* values=[]
+  Configuration  values=0  DriverDesc=''  MFT* values=[]
+
+## HKLM\SOFTWARE\Microsoft\Windows Media Foundation\HardwareMFT
+  EnableDecoders = 1
+  EnableEncoders = 1

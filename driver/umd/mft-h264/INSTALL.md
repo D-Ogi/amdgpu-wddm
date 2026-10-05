@@ -9,7 +9,7 @@ the same code the transform itself uses, so the registration and the live object
 <build output>\mftreg.exe --inf      INF AddReg lines
 <build output>\mftreg.exe --reg      the same as a .reg file, for a bounded lab experiment
 <build output>\mftreg.exe --show     the blobs in readable form
-<build output>\mftreg.exe --enum     what MFTEnum2 reports for hardware H.264 encoders on this machine
+<build output>\mftreg.exe --enum     the H.264 encoders of this machine, and of each video adapter
 ```
 
 ## Identifiers
@@ -53,15 +53,16 @@ deliberately exports no `DllRegisterServer`, because a driver package registers 
 
 ## Step 2: make it visible to a client that asks for a hardware encoder
 
-Two routes exist. The second is the one a display driver package should use.
+Route A below is the registration the driver package writes. A shipping display driver package on the
+development PC uses the same shape, measured. Route B was named as the preferred shape in an earlier
+version of this page. That claim is withdrawn, and the reason is in route B.
 
-### Route A - machine wide, what `mftreg --inf` emits today
+### Route A - machine wide, what `mftreg --inf` and `mftreg --reg` emit
 
-This is `MFTRegister`'s own on-disk shape. The transform is listed for the whole machine, with no
-adapter behind it.
+This is `MFTRegister`'s own on-disk shape. The transform is listed for the whole machine.
 
 ```
-HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MediaFoundation\Transforms\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}
+HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MediaFoundation\Transforms\A32438F0-0D79-4CA9-A5BF-9F3C80837253
     (Default)       REG_SZ        BC-250 H.264 Encoder MFT
     MFTFlags        REG_DWORD     0x00000006
     InputTypes      REG_BINARY    <96 bytes: 3 MFT_REGISTER_TYPE_INFO pairs>
@@ -70,41 +71,103 @@ HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MediaFoundation\Transforms\{A32438F0-0D79-4C
                                    MF_SA_D3D_AWARE, MFT_SUPPORT_DYNAMIC_FORMAT_CHANGE,
                                    MFT_ENUM_HARDWARE_URL_Attribute, MFT_ENUM_HARDWARE_VENDOR_ID_Attribute>
 
-HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MediaFoundation\Transforms\Categories\{f79eac7d-e545-4387-bdee-d647d7bde42a}\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}
-    (no values; the key's presence is the membership)
+HKEY_LOCAL_MACHINE\SOFTWARE\Classes\MediaFoundation\Transforms\Categories\F79EAC7D-E545-4387-BDEE-D647D7BDE42A\A32438F0-0D79-4CA9-A5BF-9F3C80837253
+    (no values. The presence of the key is the membership)
 ```
 
+The class id and the category carry no braces here. Measured on the development PC on 2026-10-05: all
+58 class id keys and all 9 category keys of that machine are written without braces, and three of the
+class id keys belong to the NVIDIA display driver package. The COM key of step 1 keeps its braces,
+because `SOFTWARE\Classes\CLSID` on the same machine is written that way. Evidence:
+`evidence/windows/2026-10-05-E52-encoder-mft-dev-pc/mf-transform-registry.txt`.
+
 Take the exact `InputTypes`, `OutputTypes` and `Attributes` bytes from `mftreg --inf` (INF `AddReg`
-lines, `FLG_ADDREG_BINVALUETYPE` = `0x00000001`) or from `mftreg --reg`. Do not hand-write them: the
-attribute blob is an `MFGetAttributesAsBlob` serialisation and a wrong byte makes the whole entry
-unreadable to Media Foundation.
+lines, `FLG_ADDREG_BINVALUETYPE` = `0x00000001`) or from `mftreg --reg`. Do not hand-write them. The
+attribute blob is an `MFGetAttributesAsBlob` serialisation, and one wrong byte makes the whole entry
+unreadable to Media Foundation. The category membership line uses `FLG_ADDREG_KEYONLY`
+(`0x00000010`), which creates a key and ignores the value
+(`ref/windows-driver-docs/windows-driver-docs-pr/install/inf-addreg-directive.md`).
+
+`mftreg --inf` names each key in full with `HKLM`. `HKR` is wrong for these keys, and the next section
+says why.
+
+One difference from that precedent is open. We publish `MFTFlags` 0x00000006, which is
+`MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_ASYNCMFT`. The three NVIDIA hardware encoders of the
+development PC publish 0x00000004, which is `MFT_ENUM_FLAG_HARDWARE` alone. `_MFT_ENUM_FLAG` states
+that every MFT belongs to exactly one of the three processing categories, and that a hardware MFT
+always processes data asynchronously. Our value therefore also answers a client that asks for
+asynchronous software transforms. `mfthost --mft` records which flag combination finds the transform,
+and the sink writer stage runs on the same flags, so a change of this value has to be measured against
+both records first.
 
 Removal deletes both keys. `mftreg --unregister-global` does it through `MFTUnregister`, and it needs
 both `--unregister-global` and `BC250_ALLOW_HKLM_MFT=1` in the environment.
 
-### Route B - per adapter under the display driver's software key (preferred, not implemented yet)
+### What a per-adapter enumeration needs
 
-The Windows frame server binds a hardware encoder to the GPU it belongs to by reading `MFT0` to
-`MFT9` from the display adapter's own software key. A hardware MFT shipped inside a display driver
-package is registered this way, and only this way is it correctly attributed to our adapter. In
-`driver/kmd/bc250kmd.inf` it is one `AddReg` line in the `DDInstall` section, next to the commented
-out `Bc250_UserModeDriver` section:
+A client that wants the encoder of one particular GPU calls `MFTEnum2` with the
+`MFT_ENUM_ADAPTER_LUID` attribute set to that adapter's LUID. That call also needs
+`MFT_ENUM_FLAG_HARDWARE`, and `MFTEnum2` answers `E_INVALIDARG` without it.
 
-```
-[Bc250_MediaFoundation]
-HKR,,"MFT0",0x00000001,f0,38,24,a3,79,0d,a9,4c,a5,bf,9f,3c,80,83,72,53
-```
+The registration holds no LUID, and it cannot hold one. Windows assigns a LUID at boot, and the value
+does not survive a restart. Media Foundation answers the per-adapter question itself.
 
-`HKR` in a `DDInstall.AddReg` section is the device's software key, so the value lands under
-`HKLM\SYSTEM\CurrentControlSet\Control\Video\{<adapter GUID>}\0000`. Step 1 is still required: the
-value names the class, and COM has to be able to create it. With route B, route A's
-`MediaFoundation\Transforms` keys are not written at all.
+Measured on the development PC on 2026-10-05 with `mftreg --enum`
+(`evidence/windows/2026-10-05-E52-encoder-mft-dev-pc/mftreg-enum.txt`):
 
-Route B is not wired up yet because nothing of this component has run on unit A, and a per-adapter
-registration takes effect for every client on the machine as soon as the driver is installed. The lab
-plan ([experiments/E50](../../../experiments/E50-m15-11-encoder-mft-lab/README.md)) uses route A under
-`mftreg --register-global`, registered before a trial and removed after it, so that a failure cannot
-survive the trial.
+1. The machine offers 3 H.264 encoder MFTs: the NVIDIA hardware encoder, the inbox software `H264
+   Encoder MFT` and the Microsoft AVC DX12 encoder.
+2. `MFTEnum2` with the LUID of the NVIDIA adapter returns 2 of them. The NVIDIA hardware encoder is
+   one of the 2. The inbox software encoder is not.
+3. `MFTEnum2` with the LUID of the Microsoft Basic Render Driver adapter returns 0 encoders.
+4. The NVIDIA hardware encoder is registered machine wide, in route A's shape. Its `Attributes` blob
+   holds no `MFT_ENUM_ADAPTER_LUID`, and neither display adapter software key of that machine holds
+   an `MFT0` value or any other `MFT*` value.
+5. Media Foundation publishes `MFT_ENUM_ADAPTER_LUID` on none of the 3 activation objects.
+6. The same LUID without `MFT_ENUM_FLAG_HARDWARE` answers `0x80070057`, which is `E_INVALIDARG`.
+
+Point 2 and point 4 together say that a machine-wide registration is not excluded from a per-adapter
+enumeration. Route A is therefore enough for a client that asks per adapter, on that machine and that
+build of Windows.
+
+The transform answers the same question for a client that already holds the object. It publishes
+`MFT_ENUM_ADAPTER_LUID` on `IMFTransform::GetAttributes` as soon as it knows which adapter runs the
+encode. The attribute's documented data type is `LUID`, so the value is an 8 byte blob, and a UINT64
+of the same bits would answer `MF_E_INVALIDTYPE` to a client's `GetBlob`. `mfthost --mft` checks the
+type, the size and the value against the adapter of the device the client handed over.
+
+Sources: `MFTEnum2` (learn.microsoft.com/windows/win32/api/mfapi/nf-mfapi-mftenum2) and the
+`MFT_ENUM_ADAPTER_LUID` data type (learn.microsoft.com/windows/win32/medfound/mft-enum-adapter-luid),
+both read on 2026-10-05. The local snapshot `ref/windows-driver-docs` carries no page about Media
+Foundation transform registration. A search of the whole snapshot for `MFTEnum2`, `MFT0`,
+`SoftwareSettings` and "hardware MFT" returns nothing.
+
+### Route B - per adapter under the display driver's software key (unverified, not implemented)
+
+An earlier version of this page said that the Windows frame server reads `MFT0` to `MFT9` from the
+display adapter's software key, and that a hardware MFT inside a display driver package is registered
+this way and only this way. Both statements are withdrawn. The first has no source. The measurement
+above contradicts the second.
+
+`MFT0` is documented for a camera. "The driver MFT is also known as MFT0 because it is the first MFT
+applied to the video stream captured from the camera"
+(learn.microsoft.com/windows-hardware/drivers/devapps/creating-a-camera-driver-mft, read 2026-10-05).
+That page registers the class id of an AVStream capture device, not of a display adapter.
+
+The earlier version also named the wrong key. In a `DDInstall` AddReg section `HKR` is the device's
+software key. For a display adapter that key is created under the class GUID
+`{4d36e968-e325-11ce-bfc1-08002be10318}`
+(`ref/windows-driver-docs/windows-driver-docs-pr/install/inf-addreg-directive.md`, the HKR table, and
+`.../display/adding-software-registry-settings.md`). It is not
+`HKLM\SYSTEM\CurrentControlSet\Control\Video\{<adapter GUID>}\0000`, which the earlier version named.
+An installer written from that sentence writes `MFT0` where nothing reads it.
+
+A per-adapter route may still exist, and it may still be the better shape for a driver package. It
+needs a measurement first, which belongs to
+[experiments/E52](../../../experiments/E52-m15-11-encoder-mft-lab/README.md). Until that measurement
+exists, the driver package uses route A. The lab plan registers route A with
+`mftreg --register-global` before a trial and removes it after the trial, so a failure cannot survive
+the trial.
 
 ## Step 3: nothing else
 
@@ -119,10 +182,15 @@ survive the trial.
 mftreg.exe --enum
 ```
 
-lists what `MFTEnum2` returns for hardware H.264 encoders. A correct installation shows
-`BC-250 H.264 Encoder MFT` with the hardware URL `amdgpu_wddm://h264-encoder/0`. If it is absent,
-check in this order: the DLL is present and loadable, `HKCR\CLSID\{A32438F0-...}\InprocServer32`
-points at it, and the `Categories` key of step 2 route A exists (or `MFT0` of route B).
+lists the H.264 encoders of the machine, first for the whole machine and then for each video adapter
+in turn. A correct installation lists `BC-250 H.264 Encoder MFT` with the hardware URL
+`amdgpu_wddm://h264-encoder/0` in both listings, and the adapter listing that holds it is our own
+adapter. If the transform is absent, check in this order:
+
+1. the DLL is present and loadable.
+2. `HKCR\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}\InprocServer32` points at it.
+3. The transform key and the `Categories` key of step 2 exist, with the class id written without
+   braces.
 
 ## Diagnostics in the field
 

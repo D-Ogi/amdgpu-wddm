@@ -1,4 +1,4 @@
-# E50: the H.264 encoder MFT on unit A's GPU
+# E52: the H.264 encoder MFT on unit A's GPU
 
 State: planned, not run. Written before the run.
 
@@ -92,7 +92,7 @@ unit A claim; stages 4 and 5 are the acceptance oracle the criterion names.
 
 ## Evidence
 
-`evidence/windows/<date>-E50-encoder-mft-unit-a/` with one directory per stage, the `RESULT.md` that
+`evidence/windows/<date>-E52-encoder-mft-unit-a/` with one directory per stage, the `RESULT.md` that
 `docs/01-evidence-rules.md` asks for, the binary hashes, and the before and after `--enum` output of
 every stage that registered anything.
 
@@ -100,5 +100,14 @@ every stage that registered anything.
 
 - the component: `driver/umd/mft-h264/README.md`, its registration specification `INSTALL.md`
 - the criterion: `docs/m15-reconciliation.md` row M15.11
+- the host baseline each stage is compared against, with the binary hashes of the artifact and the
+  enumeration and registry reads of the development PC:
+  `evidence/windows/2026-10-05-E52-encoder-mft-dev-pc/README.md`
 - the Media Foundation survey of unit A: facts M774, `evidence/windows/2026-10-01-E46-mf-encoder-survey/`
 - the absent video engine: facts M46
+
+One question for this experiment is open since 2026-10-05: does a per-adapter registration shape
+exist for a display driver package at all. On the development PC a per-adapter `MFTEnum2` returns the
+NVIDIA hardware encoder, which its own display driver package registered machine wide with no
+per-adapter value in the registry. `driver/umd/mft-h264/INSTALL.md` holds the measurement. Unit A has
+to answer the same question for our adapter, with the machine-wide registration of route A.

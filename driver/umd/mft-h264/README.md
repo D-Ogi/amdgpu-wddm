@@ -51,6 +51,13 @@ Four gates, each one fatal:
    which is what made the RADV ICD use `/MT` as well - see `docs/build.md`);
 4. `mfthost.exe --selftest` passes, which needs no GPU.
 
+The build is reproducible, and the recorded artifact names the toolchain that made it. `/Brepro` is on
+every `cl` and `link` call, which removes the timestamp from the object and from the image. The script
+prints the compiler version, the SDK version and the SHA-256 of all three binaries, so one log line
+carries what another machine needs to compare. `KitVersion` defaults to `10.0.26100.0`. The compiler
+is whichever MSVC toolset the installed Visual Studio holds, which the script picks by name, so a
+different toolset gives different bytes and the log says which one ran.
+
 ## Tests
 
 ```
@@ -66,7 +73,7 @@ what it reconstructs is by definition what a conformant decoder reconstructs.
 |---|---|
 | `--selftest` | the H.264 tables are structurally sound: prefix freeness and Kraft sums of every `coeff_token`, `total_zeros` and `run_before` table, zig-zag scans are permutations, tables 8-14, 8-15 and 9-4 round trip, the bit writer round trips 45150 bits exactly, no start code emulation, SPS and PPS build, the declared level follows the frame size and the bitrate, the colour description reaches the SPS, and an odd frame size is refused rather than rounded down |
 | `--encode` | the GPU reconstruction is sample-for-sample identical to the inbox decoder's output, and the non-zero coefficient counts the shaders report agree with the CPU's own count of the levels (a wrong `nC` context makes a different but still parseable bitstream, which a decoder cannot see) |
-| `--mft` | the asynchronous hardware MFT contract end to end: found through `MFTEnumEx` with `MFT_ENUM_FLAG_HARDWARE`, streaming refused before `MF_TRANSFORM_ASYNC_UNLOCK`, `MF_MT_MPEG_SEQUENCE_HEADER` on the output type, `ICodecAPI` round trips including the packed UINT64 quantiser, CABAC refused honestly, the `NeedInput`/`HaveOutput`/`DrainComplete` sequence, a key frame at the start of a new segment after a drain, D3D11 texture input, `DllCanUnloadNow` answering S_FALSE while an object of ours lives, an odd frame size refused during negotiation, the VUI repeating the input type's colour description, and every access unit decoded |
+| `--mft` | the asynchronous hardware MFT contract end to end: found through `MFTEnumEx` with `MFT_ENUM_FLAG_HARDWARE`, streaming refused before `MF_TRANSFORM_ASYNC_UNLOCK`, `MF_MT_MPEG_SEQUENCE_HEADER` on the output type, `ICodecAPI` round trips including the packed UINT64 quantiser, CABAC refused honestly, the `NeedInput`/`HaveOutput`/`DrainComplete` sequence, a key frame at the start of a new segment after a drain, D3D11 texture input, `DllCanUnloadNow` answering S_FALSE while an object of ours lives, an odd frame size refused during negotiation, the VUI repeating the input type's colour description, `MFT_ENUM_ADAPTER_LUID` naming the client's own adapter as the documented 8 byte blob, and every access unit decoded |
 | `--texin` | the four Direct3D 11 input shapes a capture client actually delivers: BGRA and NV12, each as a plain texture and as one slice of a texture array, plus `IMFRealTimeClientEx` |
 | `--compare` | our quality, size and speed against the inbox software `H264 Encoder MFT` on the same source at the same settings |
 | `--sinkwriter` | an ordinary `MFCreateSinkWriterFromURL` pipeline to `.mp4` picks the transform up and the file plays |
@@ -81,43 +88,61 @@ inbox decoder.
 These numbers come from an **NVIDIA GeForce RTX 4090**, not from BC-250 silicon: this machine has no
 BC-250 in it, and `gpu_pipeline.cpp` falls back to the first adapter when `1002:13FE` is absent.
 Nothing in this component has yet run on unit A's GPU. The lab plan that closes that gap is
-[experiments/E50](../../../experiments/E50-m15-11-encoder-mft-lab/README.md).
+[experiments/E52](../../../experiments/E52-m15-11-encoder-mft-lab/README.md).
 
-- conformance sweep: **68 of 68 cases pass**, 0 fail.
+Every figure below comes from one retained run, and the logs of that run are in
+[evidence/windows/2026-10-05-E52-encoder-mft-dev-pc](../../../evidence/windows/2026-10-05-E52-encoder-mft-dev-pc/README.md).
+The binaries that produced them: `amdgpu_wddm_mft_h264.dll` 454656 bytes, SHA-256
+`DA890BBB819EE2B09EFD2F2ADCE6B91CFB47B269BAD623D8327C83A398E216A2`, `mfthost.exe` 570368 bytes,
+`93B2A97CE41D5ED90F9B8B5A44248E1CD1EC19FBD90B81AC9C22AF46BF350725`, `mftreg.exe` 412672 bytes,
+`4C55F72BF52B99AEED2B6DC26C2C103AA532C329A98CAF5D8EBAD5F49B58610F`, built with MSVC 14.44.35207 and
+SDK 10.0.26100.0. Two clean builds into two empty directories gave those three hashes.
+
+- conformance sweep: **68 of 68 cases pass**, 0 fail (`sweep.txt`).
 - 1280x720, 6 pictures, qp 26, deblocking on: **6 of 6 pictures bit exact**, nnz agreement exact
-  (0 disagreements), mean PSNR(Y) 47.21 dB, 6.32 ms per picture. The stages of that picture: the GPU
-  stage takes 5.40 ms, the device's own timestamps measure 4.15 ms of dispatches inside it, and
-  4.97 ms of it is the readback that waits for them. The CPU half takes 0.92 ms: 0.88 ms of CAVLC
-  and 0.04 ms of NAL assembly.
+  (0 disagreements), 215930 bytes, mean PSNR(Y) 47.21 dB. The same bytes in all three repeats.
+- the cost of one of those pictures, in the three repeats (`all.txt`, `all-2.txt`, `all-3.txt`):
+  8.66, 6.09 and 6.00 ms in total. The device's own timestamps measure 4.14, 4.03 and 4.05 ms of
+  dispatches. The GPU stage around them takes 7.73, 5.18 and 5.09 ms, of which the readback waits
+  5.11, 4.80 and 4.78 ms. The CPU half takes 0.93, 0.92 and 0.91 ms, of which CAVLC takes 0.89, 0.88
+  and 0.87 ms. The first repeat ran while other work loaded the machine. Treat the dispatch time and
+  the CPU time as measurements, and the total as an upper bound of a shared PC.
 - hardware MFT contract: `MF_TRANSFORM_ASYNC` set, `MF_MT_MPEG_SEQUENCE_HEADER` 36 bytes, 6 fed,
   7 `NeedInput`, 6 `HaveOutput`, 6 outputs, 1 key frame, drain complete, inbox decoder accepted
-  6 of 6 access units, 4.70 ms per picture through the transform interface. A second segment after
-  `COMMAND_DRAIN` opens with a key frame that carries its own parameter sets, and the sequence header
-  on the output type stays what the stream carries when a setting arrives mid-stream.
+  6 of 6 access units, 173283 bytes, and 4.66, 4.74 and 4.83 ms per picture through the transform
+  interface. A second segment after `COMMAND_DRAIN` opens with a key frame that carries its own
+  parameter sets, and the sequence header on the output type stays what the stream carries when a
+  setting arrives mid-stream.
 - the VUI colour description is the client's own, byte for byte, over five input types: NV12 tagged
   BT.601, NV12 tagged BT.709, NV12 full range, NV12 with no description (which gives "unspecified"),
   and ARGB32, where the import shader converts and the answer is BT.709 studio range.
+- `MFT_ENUM_ADAPTER_LUID` on the live transform is an 8 byte blob holding the LUID of the adapter of
+  the device the client handed over, `00000000:000243c1` in this run. `mftreg --enum` reports the same
+  LUID for that adapter.
 - Direct3D 11 input shapes: **4 of 4 cases pass**, which are BGRA plain, BGRA array slice 2 of 4,
   NV12 plain and NV12 array slice 2 of 4. The NV12 cases decode at PSNR(Y) 42.76 dB against the exact
   bytes written into the slice. That is what proves the encoder read the right slice and both planes.
 - against the inbox CPU encoder, 1280x720, CBR 6 Mbit/s, same source: ours 178882 bytes at PSNR
   Y/Cb/Cr 44.89/44.03/42.36 dB, inbox 185964 bytes at 45.85/46.72/46.53 dB. We are 4 % smaller,
-  about 1 dB behind on luma and 4 dB behind on chroma. Those figures are deterministic. The time per
-  picture is not: this run gives ours 6.49 ms against the inbox 7.05 ms, while earlier retained runs
-  of the same test put the inbox between 4.69 ms and 7.07 ms. One run on a shared development PC
-  decides nothing about speed.
-- sink writer: 6 of 6 repeat runs exit 0, deterministic 179781 bytes, all 6 pictures through our
-  transform, and `ffprobe` reads the file as `h264 / Constrained Baseline / 1280x720 / yuv420p /
+  about 1 dB behind on luma and 4 dB behind on chroma. Those figures repeat exactly. The time per
+  picture does not: the three repeats give ours 6.03, 6.14 and 5.86 ms against the inbox 6.35, 6.67
+  and 6.97 ms, while two retained runs of 2026-10-05 before this revision put the inbox at 4.69 ms
+  and at 7.05 ms for the same work. Repeats on a shared development PC decide no speed ratio.
+- sink writer: 6 of 6 repeat runs exit 0, each writing the same 179781 bytes, all 6 pictures through
+  our transform, and `ffprobe` reads the file as `h264 / Constrained Baseline / 1280x720 / yuv420p /
   6 frames`.
 
 ## What is not done yet
 
 - Nothing has run on unit A. On unit A the eight `cs_5_0` shaders go through our D3D11 UMD compute
   path (DXBC to SPIR-V through dxbc-spirv), which this component has never exercised.
-- Throughput on unit A is unknown and is the real risk: 4.15 ms of GPU per 720p picture on a 4090
-  against 24 CU inside a 300 W board that is also rendering.
-- The driver package does not register the transform yet. `INSTALL.md` has the exact keys; the KMD INF
-  has no MFT section.
+- Throughput on unit A is unknown and is the real risk: 4.03 to 4.14 ms of GPU per 720p picture on a
+  4090, against 24 CU inside a 300 W board that is also rendering.
+- The driver package does not register the transform yet. `INSTALL.md` has the exact keys. The KMD
+  INF has no MFT section.
+- Whether a per-adapter registration shape exists for a display driver package is not settled.
+  `INSTALL.md` records what the enumeration does on the development PC with a machine-wide
+  registration, and withdraws the earlier `MFT0` claim.
 - No input sample allocator (`MF_SA_D3D11_ALLOCATE_SAMPLES`), which the frame server prefers but does
   not require.
 - Constrained Baseline only.
