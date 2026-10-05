@@ -125,6 +125,81 @@ panel remains available through the API; the overlay omits that duplicate panel
 when the pipeline panel exists. An overlay update needs only an overlay task
 restart, not a Windows or DWM restart.
 
+## Active 3D app
+
+`GraphicsApiProvider.cs` samples every 3 seconds which graphics API a windowed application in the
+overlay's session started and which driver path serves it. The evidence is the set of image files mapped
+into that process, not the registry or the router configuration. Candidates are the foreground window's
+process and the owners of other visible, uncloaked windows of at least 200x150 (at most 8 per poll).
+The provider excludes shells, launchers and our own tools by name. The panel shows at most 3 applications: the
+foreground one first, then the ones on our GPU path.
+
+A green row needs the whole user-mode stack of one render path: the shell the runtime opened, the engine
+that shell loads and the ICD the engine draws with. The module names are the ones the release installs
+(`tools/release/release-sources.json`), and the x86 payload uses the same names minus D3D12 and zink, which
+it does not have (`tools/release/installer/common.ps1`), so 32-bit processes are covered by the same table.
+
+| Loaded | Row |
+|---|---|
+| `d3d12.dll` / `d3d12core.dll` + `amdgpu_wddm_d3d12.dll` + `amdgpu_wddm_vkd3d.dll` + `amdgpu_wddm_radv.dll` | `D3D12  GPU (amdgpu-wddm vkd3d + RADV)` (green) |
+| `d3d11.dll` / `d3d10*.dll` + `amdgpu_wddm_d3d11.dll` + `amdgpu_wddm_dxvk.dll` + `amdgpu_wddm_radv.dll` | `D3D11  GPU (amdgpu-wddm DXVK + RADV)` (green) |
+| ... shell, or shell and engine, without the rest | `our D3D11 shell loaded, no engine yet` / `... no ICD yet` |
+| ... + `bc250d3d_zink.dll` + `amdgpu_wddm_radv.dll` / `bc250d3d.dll` | `GPU (zink, desktop route)` (green) / `CPU (llvmpipe, app route)` (amber) |
+| ... + `bc250d3d_router.dll` only | `router loaded, no backend yet` |
+| `d3d10warp.dll` | `CPU (WARP)` (amber) |
+| `d3d9.dll` + `d3d9on12.dll` / `bc250umd.dll` | `via D3D9On12 (D3D12 path)` / `stub UMD, no D3D9 renderer` |
+| `vulkan-1.dll` + `vulkan_radeon.dll` | `Vulkan  GPU (RADV ICD)` (green) |
+| a Direct3D runtime or `dxgi.dll` mapped from outside `\Windows\` | `replacement DLL next to the app, not the system runtime` (amber) |
+| `d3d12.dll` in a 32-bit process | `no x86 D3D12 in this package` (amber) |
+
+An API runtime with none of our modules gives `none of our UMDs loaded`: many D3D12 games load `d3d11.dll`
+without drawing with it, so no claim is made, and another adapter's UMD is not ours to name.
+`amdgpu_wddm_radv.dll` is the ICD our own shells load by name. The Vulkan row ignores it, because only the
+registered `vulkan_radeon.dll` proves the Vulkan loader chose RADV.
+
+A shell without its engine or ICD is a device still being created, and the row is grey for the first 10
+seconds. After that it is a failed `LoadLibrary` and the row turns amber with `engine never loaded (load
+failed)`: D3D11 usually falls back to WARP in that case, which the WARP row reports, but D3D12 has no
+implicit fallback, so the shell stays mapped alone for the life of the process and nothing else would say
+so. `d3d10warp.dll` is shared by D3D11 and D3D12. When both runtimes are loaded the WARP row cannot say
+which one uses it.
+
+`bc250d3d.dll` is the CPU UMD of both router decisions (`driver/umd/router/router-policy.h`). `dwm` is
+excluded from this panel, so a process that shows it took the application decision (`AppRouter` `Mode`,
+`Deny`), which is the knob to change. A `HostedClients` entry on the desktop CPU route maps the same two
+files and cannot be told apart from the modules alone.
+
+An OpenGL row appears whenever `opengl32.dll` is mapped and no row claims one of our GPU paths: most GL
+engines map `d3d11.dll` or `dxgi.dll` for the screen output, so the presence of a Direct3D runtime must not hide
+the API the application actually draws with.
+
+A `d3d11.dll`, `d3d12.dll`, `d3d9.dll`, `d3d10*.dll` or `dxgi.dll` mapped from outside the Windows directory
+is a translation layer placed next to the application. The application then does not go through the installed
+Windows driver (it is not native in the sense of the project's acceptance rule), so the row reports the
+replacement instead of a driver path, whatever else is mapped in the process. Paths come from
+`GetMappedFileName`, so the test is on the device path, not on a DOS path the process could change.
+
+A process the overlay cannot open for reading shows `API unknown (access)`. A change of the foreground
+application's paths is written to the log once.
+
+Cost: no KMD escape, no remote thread and no loader lock in the target. `EnumProcessModulesEx` reads the
+loader list with `ReadProcessMemory` while the target runs, and the names (`GetMappedFileName`, one query per
+module) are read again only when the set of module handles changes or the cached list is 30 s old (measured
+here: 0.25 ms for the handle list and 2.1 ms for a full name sweep of a 529-module process).
+
+The scan has two off switches in the data directory, like the pipeline panel's `graphics-summary.pause`:
+
+- `graphics-api.pause` - the next poll opens no process at all and the panel keeps the last rows with
+  `paused; sample HH:mm:ss`. Use it in a measured session, so this provider's cost cannot be mistaken for
+  a driver change.
+- `graphics-api.skip` - process base names, one per line (`#` comments allowed), that are never opened.
+  The name is read through a query-limited-information handle first, so a skipped or excluded process never
+  sees the `PROCESS_VM_READ` handle that an anti-tamper check may dislike.
+`test-graphics-api.ps1` checks classification, side-loading, 32-bit answers, ordering and rows on fake
+module lists. `build.ps1` runs it. The panel is only a report of which modules are mapped: it does not say
+that the application draws anything, and `GraphicsPipelineProvider` above still answers the same question
+for DWM.
+
 ## Cached Vulkan inventory
 
 `VulkanInventoryProvider.cs` reads `vulkan-inventory.json` from the monitor data
@@ -257,7 +332,7 @@ pwsh tools\win\bc250mon\build.ps1 -Out $env:BC250_ROOT\scratch\build\bc250mon -C
 
 The build runs the Python layout tests (`test_stages.py`, `test_telemetry.py`: `DpmSnapshot` against the KMD's
 `BC250_ESCAPE_DPM`, `VideoMemorySnapshot` against the control DLL) and the host tests `test-vulkan-inventory`,
-`test-start-confirmation`, `test-graphics-summary` and `test-telemetry` before it compiles. The telemetry line
+`test-start-confirmation`, `test-graphics-summary`, `test-telemetry` and `test-graphics-api` before it compiles. The telemetry line
 needs a `bc250control.dll` that exports `Bc250Dpm` and `Bc250VideoMemory`; the two files are deployed together.
 
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
