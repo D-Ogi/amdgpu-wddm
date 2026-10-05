@@ -132,6 +132,8 @@ static struct bc250_dpm_request req(void)
 	return r;
 }
 
+static void test_decide_closed_record(void);
+
 static void test_decide(void)
 {
 	struct bc250_dpm_request r;
@@ -216,6 +218,65 @@ static void test_decide(void)
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_NO_SMU);
 	CHECK(!d.force_fixed && !d.clear_pending && !d.clear_session && !d.mark_pending);
+
+	test_decide_closed_record();
+}
+
+/* The durable record of a fallback (0.7.208, BD-069): DpmClosedReason tells the release installer, one boot
+ * later, that the driver wrote DpmMode 0 and the tester did not. force_fixed writes it, a start with a DpmMode
+ * other than 0 deletes it, and a start with DpmMode 0 leaves it where it is. */
+static void test_decide_closed_record(void)
+{
+	struct bc250_dpm_request r;
+	struct bc250_dpm_decision d;
+
+	/* Both fallbacks record their own reason, and neither clears the record it writes. */
+	r = req(); r.mode_present = 1; r.mode = 1; r.pending_present = 1; r.pending = bc250_dpm_encode(1500);
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.force_fixed && d.closed_reason == BC250_DPM_REASON_UNCONFIRMED && d.closed_reason == 3u && !d.clear_closed);
+	r = req(); r.mode_present = 1; r.mode = 1; r.session_present = 1;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.force_fixed && d.closed_reason == BC250_DPM_REASON_UNCLEAN && d.closed_reason == 4u && !d.clear_closed);
+	/* A fallback over an older record writes the new reason. */
+	r.closed_present = 1; r.closed = BC250_DPM_REASON_UNCONFIRMED;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.force_fixed && d.closed_reason == BC250_DPM_REASON_UNCLEAN && !d.clear_closed);
+
+	/* The next start of the fallback's own boot, and every start after it: DpmMode 0, reason NOT_REQUESTED
+	 * over DpmLastReason, and the record untouched. This is the start that made the installer blind before
+	 * the record existed (BD-069). */
+	r = req(); r.mode_present = 1; r.mode = 0; r.closed_present = 1; r.closed = BC250_DPM_REASON_UNCLEAN;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_NOT_REQUESTED);
+	CHECK(d.closed_reason == BC250_DPM_REASON_UNCLEAN && !d.clear_closed && !d.force_fixed);
+	/* The default is the fixed mode, so an absent DpmMode keeps the record too. */
+	r = req(); r.closed_present = 1; r.closed = BC250_DPM_REASON_SMU_ERROR;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.closed_reason == BC250_DPM_REASON_SMU_ERROR && !d.clear_closed);
+
+	/* DpmMode 1 again (the tester, the control application or install.cmd -Repair): the record goes. */
+	r = req(); r.mode_present = 1; r.mode = 1; r.closed_present = 1; r.closed = BC250_DPM_REASON_SMU_ERROR;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.clear_closed && d.closed_reason == 0u);
+	/* Nothing to delete when there is no record. */
+	r.closed_present = 0; r.closed = 0;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && !d.clear_closed && d.closed_reason == 0u);
+	/* An unknown mode is not the fixed mode either: the record describes a 0 that is gone. */
+	r = req(); r.mode_present = 1; r.mode = 2; r.closed_present = 1; r.closed = BC250_DPM_REASON_UNCLEAN;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.reason == BC250_DPM_REASON_INVALID_SETTING && d.clear_closed && d.closed_reason == 0u);
+	/* So is a DPM request with a ceiling out of range. */
+	r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 2300;
+	r.closed_present = 1; r.closed = BC250_DPM_REASON_UNCLEAN;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.reason == BC250_DPM_REASON_INVALID_SETTING && d.clear_closed && d.closed_reason == 0u);
+
+	/* No SMU owner: this start writes nothing at all, so the record stays for the start that has one. */
+	r = req(); r.smu_online = 0; r.mode_present = 1; r.mode = 1;
+	r.closed_present = 1; r.closed = BC250_DPM_REASON_UNCLEAN;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.reason == BC250_DPM_REASON_NO_SMU && !d.clear_closed && d.closed_reason == BC250_DPM_REASON_UNCLEAN);
 }
 
 /* ---- the governor ------------------------------------------------------------------------------- */

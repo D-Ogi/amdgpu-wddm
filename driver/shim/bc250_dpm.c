@@ -87,18 +87,26 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 	d->mode = BC250_DPM_MODE_FIXED;
 	d->max_mhz = BC250_CLOCK_FLOOR_MHZ;
 	d->max_level = BC250_DPM_FLOOR_LEVEL;
+	/* The record of an earlier fallback stays as it is, unless this start closes DPM or opens it again. */
+	d->closed_reason = r->closed_present ? r->closed : 0u;
 	/* Without the owner nothing below runs, so nothing is persisted either. */
 	if (!r->smu_online) {
 		d->reason = BC250_DPM_REASON_NO_SMU;
 		return;
 	}
 	if (d->requested == BC250_DPM_MODE_FIXED) {
-		/* A fixed start never leaves the floor: both marks describe a request no longer made. */
+		/* A fixed start never leaves the floor: both marks describe a request no longer made. The record
+		 * of a fallback is not a mark of a request. It describes who wrote this 0, so it stays: the
+		 * installer reads it one boot later and offers the repair (BD-069). */
 		d->reason = BC250_DPM_REASON_NOT_REQUESTED;
 		d->clear_pending = r->pending_present;
 		d->clear_session = r->session_present;
 		return;
 	}
+	/* DpmMode is not the fixed mode any more, so somebody wrote over the fallback: the record goes, the way
+	 * interop_policy.c clears InteropClosedReason when a switch is open again. */
+	d->clear_closed = r->closed_present;
+	d->closed_reason = 0u;
 	if (d->requested != BC250_DPM_MODE_DPM) {
 		/* Kept as written: the owner's typo is the owner's to fix, the marks stay for the next try. */
 		d->reason = BC250_DPM_REASON_INVALID_SETTING;
@@ -115,11 +123,15 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 		/* Whatever happened to the start that set it, DPM is not tried twice unasked. */
 		d->reason = BC250_DPM_REASON_UNCONFIRMED;
 		d->force_fixed = 1;
+		d->clear_closed = 0;
+		d->closed_reason = d->reason;		/* the driver wrote this 0: DpmClosedReason records it */
 		return;
 	}
 	if (r->session_present) {
 		d->reason = BC250_DPM_REASON_UNCLEAN;
 		d->force_fixed = 1;
+		d->clear_closed = 0;
+		d->closed_reason = d->reason;
 		return;
 	}
 	d->mode = BC250_DPM_MODE_DPM;
