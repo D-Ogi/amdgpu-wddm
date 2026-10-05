@@ -335,6 +335,22 @@ vidpn flip on: 4600 hardware flips, 0 refused
 $before = Read-Counters 'before'
 Write-Host "before: $($before.values | ConvertTo-Json -Compress)"
 
+# The operator's switch, and whether it is in effect. The driver latches EnableDirectFlipHandshake at the
+# adapter start, so this script must not write it: a write here would read as armed while the running driver
+# still answers "off", and the scan-out arm would be judged against a compositor nobody had offered the flip
+# to. It is read, compared with what the driver publishes, and said out loud before the client starts.
+$setting = $null
+try { $setting = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters' `
+                    -Name 'EnableDirectFlipHandshake' -ErrorAction Stop).EnableDirectFlipHandshake }
+catch { $setting = $null }
+$published = if ($before.values.Contains('directflip_handshake')) { $before.values['directflip_handshake'] } else { 'unknown' }
+$handshakeNote = "EnableDirectFlipHandshake $(if ($null -eq $setting) { 'absent (default 0)' } else { $setting }), driver publishes $published"
+if ($Experiment -and $published -eq 'off') {
+    $handshakeNote += $(if ($setting) { ' - SET BUT NOT IN EFFECT: restart the adapter before this arm means anything' }
+                        else { ' - this arm can only end "not reached": set the value to 1 and restart the adapter' })
+}
+Write-Host "handshake: $handshakeNote"
+
 # The client's environment travels in the wrapper the task runs, because a scheduled task does not inherit this
 # session's variables. Written with ASCII and no quoting surprises: paths on this lab have no spaces.
 $stdout = Join-Path $root 'client.out'
@@ -432,6 +448,7 @@ $trialResult = [pscustomobject]@{
     after        = $after.values
     delta        = $delta
     missing      = $missing
+    handshake    = $handshakeNote
 }
 $trialResult | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Report -Encoding ascii
 Write-Host "delta: $($delta | ConvertTo-Json -Compress)"
