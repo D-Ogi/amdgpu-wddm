@@ -1,4 +1,4 @@
-# E56: the ray-tracing CTS list with and without `RADV_PERFTEST=rtwave64` on unit A (M792)
+# E57: the ray-tracing CTS list with and without `RADV_PERFTEST=rtwave64` on unit A (M795)
 
 Unit A, Windows 11, 2026-10-01 16:44-16:46 UTC. The same 140-case ray-tracing list ran twice through the CTS
 batch runner, one `deqp-vk` process per run. The first run used the default RADV settings. The second run added

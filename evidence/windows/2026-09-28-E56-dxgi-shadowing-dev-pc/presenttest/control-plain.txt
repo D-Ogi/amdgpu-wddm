@@ -1,0 +1,83 @@
+mode control-plain (scenario control, policy plain)
+os 10.0.26200
+stage S01 game-loads
+stage S02 wsi-init
+  System32 by full path: dxgi System32\dxgi.dll, dcomp System32\dcomp.dll, d3d11 System32\d3d11.dll
+  trace hooks installed in System32\dxgi.dll: 8 IAT slot(s)
+  trace hooks installed in System32\dcomp.dll: 4 IAT slot(s)
+  trace hooks installed in System32\d3d11.dll: 7 IAT slot(s)
+  gate: GetModuleHandleW(dxgi.dll) -> System32\dxgi.dll, GetModuleHandleW(d3d11.dll) -> System32\d3d11.dll, d3d11!CreateDXGIFactory2 import -> System32\dxgi.dll: clean
+  [System32 d3d11] static dxgi.dll!CreateDXGIFactory2 -> System32\dxgi.dll
+  [System32 d3d11] delay d3d11on12.dll!OpenAdapter_D3D11On12 -> (unresolved)
+  [System32 dcomp] delay d3d11.dll!D3D11CreateDevice -> (unresolved)
+  [System32 dcomp] delay dxgi.dll!CreateDXGIFactory1 -> (unresolved)
+  [System32 dcomp] delay dxgi.dll!CreateDXGIFactory2 -> (unresolved)
+  [System32 dxgi] delay dcomp.dll!#1100 -> (unresolved)
+  [System32 dxgi] delay dcomp.dll!#1102 -> (unresolved)
+  [System32 dxgi] delay dcomp.dll!DCompositionCreateDevice3 -> (unresolved)
+  [System32 dxgi] delay dcomp.dll!#1101 -> (unresolved)
+stage S03 factory
+  System32 CreateDXGIFactory2(IDXGIFactory4): 0x00000000 exc 0x00000000 implemented by System32\dxgi.dll
+  EnumAdapterByLuid(first hardware adapter): 0x00000000 implemented by System32\dxgi.dll
+  trace hooks installed in System32\dxcore.dll: 3 IAT slot(s)
+stage S04 devices
+  presenter D3D11CreateDevice(adapter): 0x00000000 exc 0x00000000 FL 0xB100 implemented by System32\d3d11.dll
+  producer  D3D11CreateDevice(adapter): 0x00000000 exc 0x00000000 FL 0xB100
+stage S05 sharing
+  shared texture: create 0x00000000, CreateSharedHandle 0x00000000, producer OpenSharedResource1 0x00000000
+  shared fence: producer CreateFence 0x00000000, CreateSharedHandle 0x00000000, presenter OpenSharedFence 0x00000000
+stage S06 dcomp
+  DCompositionCreateDevice(NULL): 0x00000000 exc 0x00000000, CreateVisual 0x00000000
+stage S07 swapchain
+  CreateSwapChainForComposition(presenter, 256x256 BGRA8, FLIP_SEQUENTIAL, 2): 0x00000000 exc 0x00000000 implemented by System32\dxgi.dll
+  visual SetContent(swap chain) + Commit: 0x00000000 exc 0x00000000
+stage S08 frames
+  frame 0 back buffer pixel BGRA 191,127,64,255 (expected 191,128,64,255): match
+  frame 0: Signal 0x00000000 Wait 0x00000000 GetBuffer(0) 0x00000000 Present1(1,0) 0x00000000 exc 0x00000000 6.303 ms
+  frame 1: Signal 0x00000000 Wait 0x00000000 GetBuffer(0) 0x00000000 Present1(1,0) 0x00000000 exc 0x00000000 5.827 ms
+  frame 2: Signal 0x00000000 Wait 0x00000000 GetBuffer(0) 0x00000000 Present1(1,0) 0x00000000 exc 0x00000000 5.784 ms
+  frame 3: Signal 0x00000000 Wait 0x00000000 GetBuffer(0) 0x00000000 Present1(1,0) 0x00000000 exc 0x00000000 5.846 ms
+  fence completed value 4
+stage S09 resize
+  ResizeBuffers(320x200) 0x00000000, GetBuffer 0x00000000 (320x200), clear 0x00000000, Present1(0,0) 0x00000000 exc 0x00000000
+stage S10 tearing
+  CheckFeatureSupport(PRESENT_ALLOW_TEARING): 0x00000000 allow 1
+  ALLOW_TEARING swap chain 0x00000000, SetContent+Commit 0x00000000, Present1(0, ALLOW_TEARING) 0x00000000 exc 0x00000000
+stage S11 teardown
+  visual SetContent(NULL) + Commit: 0x00000000 exc 0x00000000
+  [System32 d3d11 final] static dxgi.dll!CreateDXGIFactory2 -> System32\dxgi.dll
+  [System32 d3d11 final] delay d3d11on12.dll!OpenAdapter_D3D11On12 -> (unresolved)
+  [System32 dcomp final] delay d3d11.dll!D3D11CreateDevice -> (unresolved)
+  [System32 dcomp final] delay dxgi.dll!CreateDXGIFactory1 -> (unresolved)
+  [System32 dcomp final] delay dxgi.dll!CreateDXGIFactory2 -> (unresolved)
+  [System32 dxgi final] delay dcomp.dll!#1100 -> (unresolved)
+  [System32 dxgi final] delay dcomp.dll!#1102 -> (unresolved)
+  [System32 dxgi final] delay dcomp.dll!DCompositionCreateDevice3 -> (unresolved)
+  [System32 dxgi final] delay dcomp.dll!#1101 -> (unresolved)
+stage S12 late-game-loads
+  game LoadLibraryW by name after the WSI: d3d11 -> System32\d3d11.dll, dxgi -> System32\dxgi.dll
+  game view of its own modules unchanged: yes
+  [final] 55 modules; graphics-related:
+    System32\dxgi.dll
+    System32\dcomp.dll
+    System32\d3d11.dll
+    System32\dxcore.dll
+trace: 15 distinct loader calls from System32 graphics modules
+     1 x S03 factory | System32\dxgi.dll GetModuleHandleA(csrsrv.dll) -> (null)
+     4 x S03 factory | System32\dxgi.dll GetModuleHandleA(gdi32.dll) -> System32\gdi32.dll
+     1 x S03 factory | System32\dxgi.dll GetModuleHandleExW(DXCaptureReplay.dll) -> (null)
+     1 x S03 factory | System32\dxgi.dll GetModuleHandleW(kernelbase.dll) -> System32\KERNELBASE.dll
+     2 x S03 factory | System32\dxgi.dll GetModuleHandleW(ntdll.dll) -> System32\ntdll.dll
+     1 x S03 factory | System32\dxgi.dll LoadLibraryA(gdi32.dll) -> System32\gdi32.dll
+     1 x S03 factory | System32\dxgi.dll LoadLibraryExW[0x0](ext-ms-win-core-resourcepolicy-l1-1-0.dll) -> System32\resourcepolicyclient.dll
+     3 x S03 factory | System32\dxgi.dll LoadLibraryExW[0x0](gdi32.dll) -> System32\gdi32.dll
+     1 x S04 devices | System32\d3d11.dll GetModuleHandleA(DXGI) -> System32\dxgi.dll
+     4 x S04 devices | System32\d3d11.dll GetModuleHandleExW(DXCaptureReplay.dll) -> (null)
+     1 x S04 devices | System32\d3d11.dll GetModuleHandleW(kernelbase.dll) -> System32\KERNELBASE.dll
+     2 x S04 devices | System32\d3d11.dll GetModuleHandleW(ntdll.dll) -> System32\ntdll.dll
+     2 x S04 devices | System32\dxgi.dll GetModuleHandleA(gdi32.dll) -> System32\gdi32.dll
+     2 x S04 devices | System32\dxgi.dll LoadLibraryExW[0x8](C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvldumdx.dll) -> <DriverStore>\nvldumdx.dll
+     1 x S11 teardown | System32\dxgi.dll LoadLibraryExW[0x0](gdi32.dll) -> System32\gdi32.dll
+leaks: 0
+RESULT mode=control-plain gate=clean route=PASS frames=4 pixel=ok resize=ok tearing=ok leaks=0 game_view=ok
+main returns; process teardown follows

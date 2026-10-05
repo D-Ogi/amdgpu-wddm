@@ -1,0 +1,7 @@
+mode dxvk11-none (scenario dxvk11, policy none)
+os 10.0.26200
+stage S01 game-loads
+  game LoadLibraryW("d3d11.dll") -> APPDIR\d3d11.dll; its dxgi import pulled APPDIR\dxgi.dll
+  [game d3d11] static dxgi.dll!CreateDXGIFactory1 -> APPDIR\dxgi.dll
+RESULT mode=dxvk11-none route=skipped
+main returns; process teardown follows
