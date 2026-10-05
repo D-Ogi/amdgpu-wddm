@@ -6,7 +6,10 @@
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include "dcn_translate.h"
+#include "gdi_private.h"    /* the LB7A blob and its GDI trailer, as wddm.c includes them: never a copy here */
+#include "gdi_admission.h"  /* the request, the answer and the per-adapter counters of the DDI, likewise */
 typedef unsigned long ULONG,*PULONG;
+typedef unsigned int UINT;
 typedef unsigned long long ULONGLONG;
 typedef long long LONGLONG,LONG64;
 typedef long LONG,NTSTATUS;
@@ -45,6 +48,7 @@ static unsigned checks,failures,maps,unmaps;
 static LONG InterlockedCompareExchange(volatile LONG *p,LONG v,LONG c){LONG x=*p;if(x==c)*p=v;return x;}
 static LONG64 InterlockedCompareExchange64(volatile LONG64 *p,LONG64 v,LONG64 c){LONG64 x=*p;if(x==c)*p=v;return x;}
 static LONG InterlockedIncrement(volatile LONG *p){return ++*p;}
+static LONG InterlockedOr(volatile LONG *p,LONG v){LONG x=*p;*p=x|v;return x;}
 static UCHAR *buffer;
 static SIZE_T mapped_bytes;
 static ULONGLONG fw_address;
@@ -62,24 +66,68 @@ static PVOID VramMapCpuRange(const BC250_DEVICE *d,PHYSICAL_ADDRESS p,SIZE_T n,U
 static void MmUnmapIoSpace(PVOID p,SIZE_T n){
  unsigned i;CHECK(p==buffer+64 && n==mapped_bytes);for(i=0;i<64;i++)CHECK(buffer[i]==0xcd && buffer[64+n+i]==0xcd);unmaps++;
 }
-typedef struct {ULONG Magic,Version,Width,Height,Pitch,Format;ULONGLONG Size;} BC250_WDDM_ALLOCATION_PRIVATE;
-typedef struct {ULONG Width,Height,Pitch,Format;} STANDARD_DATA;
+/* One shape for the four D3DKMDT_*SURFACEDATA structs; Type and Flags are the GDI one's. */
+typedef struct {ULONG Width,Height,Pitch,Format,Type;struct {ULONG Value;} Flags;} STANDARD_DATA;
 typedef struct {
  ULONG StandardAllocationType,AllocationPrivateDriverDataSize,ResourcePrivateDriverDataSize;
  STANDARD_DATA *pCreateSharedPrimarySurfaceData,*pCreateShadowSurfaceData,*pCreateStagingSurfaceData,*pCreateGdiSurfaceData;
  PVOID pAllocationPrivateDriverData,pResourcePrivateDriverData;
 } DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA;
-typedef int BC250_WDDM;
-#define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 123
+typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdAlloc;} BC250_WDDM;
 #define D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE 1
 #define D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE 2
 #define D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE 3
 #define D3DKMDT_STANDARDALLOCATION_GDISURFACE 4
 #define D3DDDIFMT_A8R8G8B8 21
 #define WddmDdiGetStandardAllocationDriverData 0
-static BC250_WDDM *WddmOf(HANDLE h){(void)h;return NULL;}
+static BC250_WDDM adapter;
+static BC250_WDDM *WddmOf(HANDLE h){return h ? &adapter : NULL;}
 static BOOLEAN WddmFirstCalls(BC250_WDDM *w,int call){(void)w;(void)call;return FALSE;}
 /* ACTUAL_SOURCE */
+/* Standard GDI surfaces: the DDI's blob is the LB7A prefix plus the GDI trailer, laid out by gdi_private.h, and it
+   must be exactly what the KMD's own admission (WddmSurfaceAdmitted) later accepts from the UMD's OpenResource. */
+static NTSTATUS GdiRequest(STANDARD_DATA *data,BC250_GDI_PRIVATE *gdi,ULONG bytes){
+ DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA request={0};
+ NTSTATUS status;
+ request.StandardAllocationType=D3DKMDT_STANDARDALLOCATION_GDISURFACE;request.pCreateGdiSurfaceData=data;
+ status=Bc250WddmGetStandardAllocationDriverData((HANDLE)&adapter,&request);
+ if(!NT_SUCCESS(status))return status;
+ CHECK(request.AllocationPrivateDriverDataSize==sizeof(*gdi) && !request.pResourcePrivateDriverData);
+ request.pAllocationPrivateDriverData=gdi;request.AllocationPrivateDriverDataSize=bytes;
+ return Bc250WddmGetStandardAllocationDriverData((HANDLE)&adapter,&request);
+}
+static void GdiChecks(void){
+ const ULONG types[]={1,2,3,4};
+ const ULONG sizes[][2]={{1366,768},{257,3}};
+ unsigned i,j;
+ static_assert(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32 && sizeof(BC250_GDI_PRIVATE)==48,"LB7A v1 prefix and GDI trailer");
+ for(i=0;i<4;i++)for(j=0;j<2;j++){
+  STANDARD_DATA data={0};BC250_GDI_PRIVATE gdi;ULONG pitch=0,t=0;ULONGLONG size=0;
+  ULONG format=types[i]==4 ? AMDGPU_WDDM_D3DDDI_A8 : D3DDDIFMT_A8R8G8B8;
+  memset(&gdi,0xcc,sizeof(gdi));
+  data.Width=sizes[j][0];data.Height=sizes[j][1];data.Format=format;data.Type=types[i];
+  CHECK(WddmGdiLayout(data.Width,data.Height,types[i],types[i]==4 ? 1 : 4,&pitch,&size));
+  CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_SUCCESS);
+  CHECK(gdi.Surface.Magic==BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && gdi.Surface.Version==1);
+  CHECK(gdi.Surface.Width==data.Width && gdi.Surface.Height==data.Height && gdi.Surface.Format==format);
+  CHECK(gdi.Surface.Pitch==pitch && gdi.Surface.Size==size && data.Pitch==pitch);
+  CHECK(gdi.Magic==BC250_GDI_PRIVATE_MAGIC && gdi.Type==types[i] && gdi.Flags==0 && gdi.Reserved==0);
+  CHECK(WddmGdiPrivate(&gdi,sizeof(gdi),&t) && t==types[i]);
+  CHECK(WddmSurfaceAdmitted(&gdi.Surface,types[i]));
+  CHECK((adapter.GdiSurfaceTypesLogged>>(types[i]*2)&3)==3);   /* the size query and the fill, each logged once */
+  CHECK(GdiRequest(&data,&gdi,sizeof(gdi.Surface))==STATUS_INVALID_PARAMETER);   /* the v1 prefix alone is too small */
+ }
+ {
+  STANDARD_DATA data={0};BC250_GDI_PRIVATE gdi;
+  data.Width=64;data.Height=64;data.Format=D3DDDIFMT_A8R8G8B8;data.Type=2;data.Flags.Value=1;
+  CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);           /* no GDI flag is implemented */
+  data.Flags.Value=0;data.Type=0;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
+  data.Type=5;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER); /* existing system memory */
+  data.Type=4;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER); /* a lookup table is A8 only */
+  data.Type=1;data.Format=AMDGPU_WDDM_D3DDDI_A8;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
+  data.Type=2;data.Format=0;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
+ }
+}
 int main(void){
  const ULONG widths[]={1366,1440,1680,1920,2560};
  const ULONG pitches[]={5632,5888,6912,7680,10240};
@@ -136,6 +184,7 @@ int main(void){
    free(src);free(dst);
   }
  }
+ GdiChecks();
  free(buffer);CHECK(maps==unmaps);
  printf("scanout geometry: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

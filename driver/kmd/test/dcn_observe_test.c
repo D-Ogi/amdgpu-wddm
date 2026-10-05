@@ -14,8 +14,10 @@ typedef unsigned long ULONG;
 typedef int32_t NTSTATUS;
 typedef int BOOLEAN;
 typedef void* HANDLE;
-typedef struct {void* Mmio;int FullWddm;volatile long DcnSurfaceSequence;} BC250_DEVICE;
-typedef struct {void*pPrivateDriverData;ULONG PrivateDriverDataSize;struct {ULONG Value;} Flags;} DXGKARG_ESCAPE;
+typedef struct {void* Mmio;int FullWddm;volatile long DcnSurfaceSequence;volatile long RetainedPowerPhase;} BC250_DEVICE;
+/* WDK 10.0.26100 d3dukmdt.h: HardwareAccess 0x1, NoAdapterSynchronization 0x8. */
+typedef union {ULONG Value;struct {ULONG HardwareAccess:1,Unused:2,NoAdapterSynchronization:1;};} D3DDDI_ESCAPEFLAGS;
+typedef struct {void*pPrivateDriverData;ULONG PrivateDriverDataSize;D3DDDI_ESCAPEFLAGS Flags;} DXGKARG_ESCAPE;
 #define STATUS_SUCCESS ((NTSTATUS)0)
 #define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022u)
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
@@ -34,6 +36,15 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
     *out=reg^0x5A000001u;return STATUS_SUCCESS;
 }
 static NTSTATUS MmioRead(const BC250_DEVICE*d,ULONG reg,ULONG*out){return MmioDcnRead(d,reg,out);}
+/* The escapes the dispatcher answers ahead of the DCN observer: counted, never reached by an observe request. */
+static unsigned logs,journals,others;
+static NTSTATUS LogEscape(BC250_DEVICE*d,const DXGKARG_ESCAPE*e,BOOLEAN summary){(void)d;(void)e;CHECK(!summary);logs++;return STATUS_SUCCESS;}
+static NTSTATUS PagingJournalEscape(const BC250_DEVICE*d,const DXGKARG_ESCAPE*e){(void)d;(void)e;journals++;return STATUS_SUCCESS;}
+static void StartHealthRequest(BC250_DEVICE*d,BC250_ESCAPE_START_HEALTH*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
+static void CuModeRequest(BC250_DEVICE*d,BC250_ESCAPE_CU_MODE*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
+static void DpmRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
+static void DpmTuneRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_TUNE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
+static void InteropRequest(BC250_DEVICE*d,BC250_ESCAPE_INTEROP*p,ULONG f){(void)d;(void)p;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
 static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)
@@ -75,8 +86,23 @@ int main(void)
     VALUE(TimingVTotalControl,BC250_REG_DMU_OTG0_OTG_V_TOTAL_CONTROL);
     VALUE(TimingReference,BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT);
     Prepare(&o);bump=1;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.SequenceAfter-o.SequenceBefore==44);
-    for(flag=0;flag<32;flag++)if(flag!=1){Prepare(&o);e.Flags.Value=flag;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.Status==BC250_ESCAPE_STATUS_REFUSED && o.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && reads==0 && o.ValidMask==0);}
+    /* Any flag but HardwareAccess alone is refused: NoAdapterSynchronization by the dispatcher, before the observer
+       (the observer touches DCN registers, not adapter-owned state), every other combination by the observer. */
+    for(flag=0;flag<32;flag++)if(flag!=1){
+        NTSTATUS status;Prepare(&o);e.Flags.Value=flag;status=Bc250Escape(&d,&e);CHECK(o.Status==BC250_ESCAPE_STATUS_REFUSED && reads==0);
+        if(flag&8)CHECK(status==STATUS_DEVICE_NOT_READY);
+        else{CHECK(status==STATUS_SUCCESS);CHECK(o.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && o.ValidMask==0);}
+    }
     e.Flags.Value=1;
+    /* A suspended or restoring adapter: refused before any register read. */
+    Prepare(&o);d.RetainedPowerPhase=2;CHECK(Bc250Escape(&d,&e)==STATUS_DEVICE_NOT_READY);CHECK(o.Status==BC250_ESCAPE_STATUS_REFUSED && reads==0);d.RetainedPowerPhase=0;
+    CHECK(logs==0 && journals==0 && others==0);
+    /* The software reads: GET_LOG with NoAdapterSynchronization alone goes to the log, ahead of the power phase;
+       NoAdapterSynchronization with HardwareAccess is not that read and is refused like any other. */
+    Prepare(&o);o.Command=BC250_ESCAPE_GET_LOG;e.Flags.Value=8;d.RetainedPowerPhase=2;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(logs==1 && reads==0);
+    Prepare(&o);o.Command=BC250_ESCAPE_GET_PAGING_JOURNAL;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(journals==1 && reads==0);
+    Prepare(&o);o.Command=BC250_ESCAPE_GET_LOG;e.Flags.Value=9;CHECK(Bc250Escape(&d,&e)==STATUS_DEVICE_NOT_READY);CHECK(logs==1 && o.Status==BC250_ESCAPE_STATUS_REFUSED);
+    d.RetainedPowerPhase=0;e.Flags.Value=1;
     Prepare(&o);admin=0;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.Status==BC250_ESCAPE_STATUS_NOT_ADMIN && reads==0);
     Prepare(&o);o.AbiVersion=2;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.Status==BC250_ESCAPE_STATUS_REFUSED && reads==0);
     Prepare(&o);d.Mmio=NULL;CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && reads==0);d.Mmio=(void*)1;
@@ -87,5 +113,6 @@ int main(void)
     CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.ValidMask==((1u<<11)-1u) && o.TimingControl==0 && o.TimingReference==0);
     Prepare(&o);fail_reg=BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT;
     CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.ValidMask==((1u<<11)-1u) && o.TimingPhase==0);
+    CHECK(others==0);
     printf("DCN observer: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

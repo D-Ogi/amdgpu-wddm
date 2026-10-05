@@ -54,6 +54,87 @@ try {
  Check 'surface-control' { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
  Check 'kmd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$Out\kmd\compile_commands.json" --match '/umd_blob.c$' --out "$Out\analysis-kmd" }
  Check 'umd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" }
+ # Host suites (DEFECTS BD-053): the rest of driver\*\test, each building its fixture from this tree into its own
+ # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
+ # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
+ $kits="$Workspace\toolchain\nuget"
+ $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
+ $suites=@(
+  @{n='display-visibility';s='driver\kmd\test\run_display_visibility.ps1';a=@('-Root',$Workspace)}
+  @{n='post-display-stop';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace)}
+  @{n='scanout-geometry';s='driver\kmd\test\run_scanout_geometry.ps1';a=@('-Root',$Workspace)}
+  @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
+  @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
+  @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
+  @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
+  @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}
+  @{n='display-timing-old-describe';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribe60');Fails=$true}
+  @{n='display-timing-phase-hz';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-AssumePhaseHz');Fails=$true}
+  @{n='gart-retained';s='driver\kmd\test\run_gart_retained.ps1';a=@('-Root',$Workspace)}
+  @{n='gfx-retained';s='driver\kmd\test\run_gfx_retained.ps1';a=@('-Root',$Workspace)}
+  @{n='ih-retained';s='driver\kmd\test\run_ih_retained.ps1';a=@('-Root',$Workspace)}
+  @{n='psp-retained';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace)}
+  @{n='psp-retained-dropped';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace,'-DropRetain');Fails=$true}
+  @{n='retained-gtt';s='driver\kmd\test\run_retained_gtt.ps1';a=@('-Root',$Workspace)}
+  @{n='retained-power';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace)}
+  @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}
+  @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
+  @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
+  @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
+  @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
+  @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}
+  @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
+  @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent');Fails=$true}
+  @{n='gfx-pipeline-no-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutCapacity');Fails=$true}
+  @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}
+  # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
+  @{n='firmware-metadata';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware)}
+  @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
+  @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$kits)}
+  @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits)}
+  @{n='paging-private-slot-reuse';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits,'-ReuseFirstQueueSlot');Fails=$true}
+  @{n='paging-pt-shadow';s='driver\kmd\test\run_paging_pt_shadow.ps1';a=@('-Kits',$kits)}
+  @{n='paging-stream';s='driver\kmd\test\run_paging_stream.ps1';a=@('-Kits',$kits)}
+  @{n='paging-window';s='driver\kmd\test\run_paging_window.ps1';a=@('-Kits',$kits)}
+  @{n='umd-caps';s='driver\kmd\test\run_umd_caps.ps1';a=@('-Kits',$kits)}
+  @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$kits)}
+  @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$kits)}
+  @{n='shim-ih';s='driver\shim\test\run_ih.ps1';a=@('-Kits',$kits)}
+  @{n='shim-psp';s='driver\shim\test\run_psp.ps1';a=@('-Kits',$kits,'-Firmware',$firmware)}
+  @{n='shim-pte';s='driver\shim\test\run_pte.ps1';a=@('-Kits',$kits)}
+  @{n='shim-paging';s='driver\shim\test\run_paging.ps1';a=@('-Kits',$kits)}
+  @{n='sdma-copy';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits)}
+  @{n='sdma-copy-vmid-zero';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits,'-ForceIbVmidZero');Fails=$true}
+  @{n='sdma-copy-no-vm-flush';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits,'-OmitVmFlush');Fails=$true}
+  @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$kits)}
+  @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
+  @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$kits,'-Mesa',"$Workspace\ref\mesa")}
+ )
+ # Every runner is in this file, and every runner tests the tree it lives in: one that took its sources from
+ # -Root\bc250-win tested the main checkout from any worktree, which is how three suites rotted unseen (BD-053).
+ Check 'host-suite-coverage' {
+  $self=Get-Content -LiteralPath $PSCommandPath -Raw
+  $tree=(Resolve-Path -LiteralPath $repo).Path
+  $runners=@(Get-ChildItem "$tree\driver\*\test\run*.ps1" | ForEach-Object { [IO.Path]::GetRelativePath($tree,$_.FullName) })
+  $missing=@($runners | Where-Object { !$self.Contains($_) })
+  $foreign=@($runners | Where-Object { (Get-Content -LiteralPath (Join-Path $tree $_) -Raw) -match 'bc250-win' })
+  if($missing){throw "not in tools\quality\quick.ps1: $($missing -join ', ')"}
+  if($foreign){throw "take their sources from -Root\bc250-win instead of their own tree: $($foreign -join ', ')"}
+  "$($runners.Count) runners, all gated, all self-located"
+ }
+ $runs=$suites | ForEach-Object -ThrottleLimit ([Math]::Max(2,[Environment]::ProcessorCount/2)) -Parallel {
+  $suite=$_; $log=Join-Path $using:Out "$($suite.n).log"; $watch=[Diagnostics.Stopwatch]::StartNew()
+  & pwsh -NoProfile -File (Join-Path $using:repo $suite.s) @($suite.a) -Out (Join-Path $using:Out $suite.n) *> $log
+  [pscustomobject]@{n=$suite.n;code=$LASTEXITCODE;fails=[bool]$suite.Fails;log=$log;seconds=$watch.Elapsed.TotalSeconds}
+ }
+ foreach($run in @($runs | Sort-Object n)){
+  if($run.fails){
+   if($run.code -eq 0){throw "$($run.n) passed, but it is a negative control and must fail; see $($run.log)"}
+   if(!(Select-String -LiteralPath $run.log -Pattern 'FAIL' -CaseSensitive -Quiet)){throw "$($run.n) failed without a FAIL line (build or setup?); see $($run.log)"}
+  } elseif($run.code -ne 0){throw "$($run.n) failed; see $($run.log)"}
+  $results+=@{name=$run.n;status='PASS';seconds=$run.seconds}
+  Write-Host "$($run.n) PASS $([Math]::Round($run.seconds,2))s$(if($run.fails){' (negative control failed as it must)'})"
+ }
  @{status='PASS';seconds=$clock.Elapsed.TotalSeconds;checks=$results} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
 } catch {
  @{status='FAIL';seconds=$clock.Elapsed.TotalSeconds;checks=$results;error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"

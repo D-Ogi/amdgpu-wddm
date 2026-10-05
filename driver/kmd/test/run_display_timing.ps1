@@ -1,6 +1,6 @@
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60)
 $ErrorActionPreference='Stop'
-$repo=Join-Path $Root 'bc250-win'
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 $source=Get-Content (Join-Path $repo 'driver\kmd\display.c') -Raw
@@ -10,7 +10,11 @@ $code=$source.Substring($first,$last-$first)
 [IO.File]::WriteAllText((Join-Path $Out 'display_timing_actual.inc'),$code)
 $wddm=Get-Content (Join-Path $repo 'driver\kmd\wddm.c') -Raw
 $first=$wddm.IndexOf('static NTSTATUS Bc250WddmDescribeAllocation(')
-$last=$wddm.IndexOf('static DXGKDDI_OPENALLOCATIONINFO',$first)
+# The function alone, to its closing brace: what follows it in wddm.c (an .inc of WDK-typed code since 0.7.192) is not
+# this test's to compile.
+$end=[regex]::Match($wddm.Substring($first),'\r?\n}\r?\n')
+if($first -lt 0 -or !$end.Success){throw 'Bc250WddmDescribeAllocation not found in wddm.c'}
+$last=$first+$end.Index+$end.Length
 $describe=$wddm.Substring($first,$last-$first)
 if($OldDescribe60){$describe=$describe.Replace('pDescribeAllocation->RefreshRate = device->InheritedSignal.VSyncFreq;', 'pDescribeAllocation->RefreshRate.Numerator=60000; pDescribeAllocation->RefreshRate.Denominator=1000;')}
 [IO.File]::WriteAllText((Join-Path $Out 'describe_timing_actual.inc'),$describe)

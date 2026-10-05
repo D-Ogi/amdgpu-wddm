@@ -1,6 +1,6 @@
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd007-009\observation",[string]$Dcn='',[string]$Wddm='')
 $ErrorActionPreference='Stop'
-$repo="$Root\bc250-win"
+$repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Dcn){$Dcn="$repo\driver\kmd\dcn.c"}
 if(-not $Wddm){$Wddm="$repo\driver\kmd\wddm.c"}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath

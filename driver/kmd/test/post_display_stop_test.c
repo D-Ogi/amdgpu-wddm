@@ -69,7 +69,8 @@ static void WddmSummaryOf(BC250_WDDM*w){(void)w;}
 static int IsListEmpty(LIST_ENTRY*h){return h->Flink==h;}
 static LIST_ENTRY*RemoveHeadList(LIST_ENTRY*h){LIST_ENTRY*e=h->Flink;h->Flink=e->Flink;h->Flink->Blink=h;return e;}
 static void WddmReleaseCaptures(BC250_WDDM_OBJECT*o){(void)o;CHECK(model.restores==1);}
-static void ExFreePoolWithTag(void*p,int tag){(void)p;(void)tag;CHECK(model.restores==1 && model.vidmm==1);model.objects++;}
+static void*freedOrder[4];
+static void ExFreePoolWithTag(void*p,int tag){(void)tag;CHECK(model.restores==1 && model.vidmm==1);if(model.objects<4)freedOrder[model.objects]=p;model.objects++;}
 static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   /* KMD172: before any teardown */
 static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardStage(int s){(void)s;}
@@ -92,10 +93,16 @@ STOP_STUB(VramStop)
 STOP_STUB(MmioStop)
 static void GfxTraceRlcState(BC250_DEVICE*d,const char*s){(void)d;(void)s;}
 static void DisplayUnmapFramebuffer(BC250_DEVICE*d){CHECK(model.restores==1);d->Framebuffer=NULL;model.unmaps++;}
+static unsigned retireSignals;
+/* KMD196: a held submission is woken after Stopping is set and before anything it could touch is detached or freed. */
+static void GfxRetireSignal(BC250_DEVICE*d)
+{ CHECK(d->Wddm && d->Wddm->Stopping && !d->Wddm->VSyncArmed);CHECK(model.joined==0 && model.restores==0 && model.vidmm==0 && model.objects==0);retireSignals++; }
 /* ACTUAL_SOURCE */
+static char buckets[16];
 static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
 {
-    memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));
+    memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;
+    memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;
     d->Wddm=w;d->Framebuffer=d;d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;
     d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress=0x470000000ull;
     w->Objects.Flink=w->Objects.Blink=&o->Link;o->Link.Flink=o->Link.Blink=&w->Objects;
@@ -107,6 +114,10 @@ int main(void)
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
     /* Three pool blocks: the one object, the object index's buckets (KMD 0.7.192) and the adapter state. */
     CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1);
+    /* The list owns every object, the index only points into it: the objects go first, the index after the last
+       of them, the adapter state last of all (WddmStop's drain). */
+    CHECK(freedOrder[0]==&o && freedOrder[1]==buckets && freedOrder[2]==&w);
+    CHECK(retireSignals==1);
     CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
     CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));
@@ -120,5 +131,6 @@ int main(void)
     init(&d,&w,&o);d.Wddm=NULL;
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,D3DDDI_ID_UNINITIALIZED,&info)==STATUS_SUCCESS);
     CHECK(model.joined==0 && model.restores==1 && model.vidmm==0 && info.TargetId==BC250_CHILD_UID);
+    CHECK(retireSignals==0);   /* no WDDM state, no held submission to wake */
     printf("post display stop: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
