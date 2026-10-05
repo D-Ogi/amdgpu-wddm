@@ -152,7 +152,8 @@ def main(argv=None):
         kept = [t for t in path.read_text(encoding='utf-8').splitlines()
                 if not t.strip() or t.lstrip().startswith('#')
                 or tuple(t.split('\t')[1:3]) in keep]
-        path.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+        # LF, as .gitattributes asks for this file, so that a prune is not also a line-ending diff.
+        path.write_text('\n'.join(kept) + '\n', encoding='utf-8', newline='\n')
         print('guardlog-width: %d baseline lines kept in %s' % (len(keep), path))
         return 0
 
