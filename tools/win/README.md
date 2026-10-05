@@ -16,6 +16,7 @@ Measurement tools that run on the BC-250 under Windows, and the scripts on the d
 | `redirblt-probe/` | The DWM redirected-blt handshake (dwmapi ordinal 100) and `D3DKMTPresent` variants from a non-runtime client, with an ETW decoder for the Present / Blit_Info / token / GDI-surface rows (ADR 0018 Path B) |
 | `cpupower/` | Read-only CPU power probe: the active scheme's processor settings (`powercfg /qh ... SUB_PROCESSOR`) and the processor performance counters over a chosen number of seconds. Writes no setting (facts M786, E53) |
 | `cts/` | Vulkan CTS harness over the pinned deqp-vk 1.4.6.2: the resumable lab runner with its 170 s bound, the 19078-case sparse list in 147 batches, the ray-tracing lists, the host merge and compare tool, and the fault correlator that reads the kernel driver's log ring beside a batch. The binary, the package and the results stay in the workspace scratch directory |
+| `capture-share/` | Capture and shared-surface witness for M15.13. It tests Desktop Duplication and Windows.Graphics.Capture. It also tests shared textures, keyed mutexes and fences across two processes and across D3D11 and D3D12. Each cell has an exact image oracle, a synchronisation gate and a negative control |
 
 ## Reaching the target
 
