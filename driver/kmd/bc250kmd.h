@@ -361,7 +361,7 @@ void DpmResume(BC250_DEVICE* Device);
 void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
-void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULONG EscapeFlags);
+void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
 

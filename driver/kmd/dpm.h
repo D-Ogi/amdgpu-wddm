@@ -22,6 +22,11 @@ typedef struct _BC250_DPM_SNAP {
     ULONG SoftReleases;                     // 0.7.197: Gov.soft_releases
     ULONG WarmHolds;                        // 0.7.200: Gov.warm_holds, driver log only (not in the escape)
     ULONG RampHolds;                        // 0.7.203: Gov.ramp_holds, driver log only (not in the escape)
+    // 0.7.206, the idle state. IdleMHz is the point in force, 0 when the state is off for this start
+    // (bc250_dpm_idle_mhz: DpmIdleMHz 0, a refused setting, or a point the firmware refused).
+    ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
+    ULONG IdleEntries, IdleExits, IdleRefusals;
+    ULONGLONG IdleMs;                       // time held at the idle point
 } BC250_DPM_SNAP;
 
 typedef struct _BC250_DPM_STATE {

@@ -49,10 +49,11 @@ static int smu_cmn_send_smc_msg(struct smu_context *smu,unsigned int msg,unsigne
 
 // The table of bc250_clock.h: from the lab floor up, mV = the anchors' line at that clock, rounded up;
 // vid = its encoding. driver/shim/test/dpm_test.c recomputes every row from the three anchors.
-// The two thermal-only rows below the floor (0.7.205) keep the floor's 820 mV / VID 116: a lower clock at
-// the same voltage, no undervolt and no extrapolation under the lowest anchor.
+// The five rows below the floor keep the floor's 820 mV / VID 116: a lower clock at the same voltage, no
+// undervolt and no extrapolation under the lowest anchor. 900 and 800 MHz are the thermal cap's (0.7.205),
+// 500 MHz is the idle point (0.7.206); 700 and 600 MHz only keep the 100 MHz grid whole.
 const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS]={
-    {800,820,116},{900,820,116},
+    {500,820,116},{600,820,116},{700,820,116},{800,820,116},{900,820,116},
     {1000,820,116},{1100,840,113},{1200,860,110},{1300,880,107},{1400,899,104},{1500,919,100},
     {1600,935,98},{1700,952,95},{1800,968,93},{1900,984,90},{2000,1000,88}
 };
@@ -85,8 +86,8 @@ int bc250_clock_message_allowed(unsigned int message)
 }
 
 // The imported commit refuses a clock below CYAN_SKILLFISH_SCLK_MIN (1000 MHz, the firmware's own lowest
-// SCLK level: facts M47, and amdgpu's own overdrive bound). The two thermal-only points under the lab floor
-// (0.7.205, owner decision 2026-10-05) therefore go out from here, as the two messages the imported
+// SCLK level: facts M47, and amdgpu's own overdrive bound). The points under the lab floor (900 and 800 MHz
+// for the thermal cap, 0.7.205; 500 MHz for the idle state, 0.7.206) therefore go out from here, as the two messages the imported
 // PP_OD_COMMIT_DPM_TABLE sends for a forced voltage, in its order and with its VID encoding, and nothing
 // else. The import stays as extracted; this is the one deviation, and it covers only mhz < SCLK_MIN.
 static int subfloor_commit(struct smu_context *smu,unsigned int mhz,unsigned int mv)
@@ -109,8 +110,8 @@ int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
     if(!report)return BC250_CLOCK_INVALID;
     memset(report,0,sizeof(*report));report->status=BC250_CLOCK_INVALID;
     report->requested_mhz=mhz;report->requested_mv=mv;
-    // The table is narrower than AMD's range (700-1129 mV, 2000 MHz), never wider; its two thermal-only
-    // points are the one place where it goes under AMD's 1000 MHz (subfloor_commit above).
+    // The table is narrower than AMD's range (700-1129 mV, 2000 MHz), never wider; its points below the
+    // lab floor are the one place where it goes under AMD's 1000 MHz (subfloor_commit above).
     if(!io || !io->begin || !io->end || !io->temperature || !io->message ||
        mhz<BC250_CLOCK_MIN_MHZ || mhz>CYAN_SKILLFISH_SCLK_MAX ||
        mv<CYAN_SKILLFISH_VDDC_MIN || mv>CYAN_SKILLFISH_VDDC_MAX ||

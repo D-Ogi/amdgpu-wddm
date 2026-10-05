@@ -36,18 +36,23 @@ struct bc250_clock_report {
  * 1500 MHz / 918.75 mV (VID 101), the firmware's own point (facts M22, M47); 2000 MHz / 1000 mV, the
  * owner's DPM ceiling (2026-09-30), 61 mV above the community curve's interpolated 939 mV and 129 mV
  * below amdgpu's overdrive maximum of 1129 mV. Linear between anchors, rounded up to a whole mV.
- * Below the lab floor the table holds two thermal-only points, 900 and 800 MHz (0.7.205, owner decision
- * 2026-10-05: a clock under 1000 MHz is allowed when Tctl reaches 87 C). Both keep the floor's 820 mV
+ * Below the lab floor the table holds five points, 900 down to 500 MHz, all at the floor's 820 mV
  * (VID 116): a lower clock at the voltage the part is known to run at, never an undervolt, and the
- * anchors' line is not extrapolated below its lowest anchor. The load never asks for them (the governor's
- * BC250_DPM_FLOOR_LEVEL is 1000 MHz); only the thermal cap goes there. The firmware has never run below
- * 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its sysfs there), so the KMD treats a
- * refused sub-floor transition as "no sub-floor for this start" (driver/kmd/dpm.c). */
-#define BC250_CLOCK_MIN_MHZ 800u        /* the table's lowest clock: thermal-only, below the lab floor */
+ * anchors' line is not extrapolated below its lowest anchor. Two of them, 900 and 800 MHz, are the
+ * thermal cap's (0.7.205, owner decision 2026-10-05: a clock under 1000 MHz is allowed when Tctl reaches
+ * 87 C). 500 MHz is the idle point (0.7.206, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj
+ * mu zegar gpu na 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). 700 and 600 MHz
+ * keep the 100 MHz grid whole, so that a level stays (mhz - MIN) / STEP; no rule of the governor selects
+ * them, and only an administrator's own request (DpmIdleMHz, the clock escape) reaches them.
+ * The load never asks below the lab floor (the governor's BC250_DPM_FLOOR_LEVEL is 1000 MHz).
+ * The firmware has never run below 1000 MHz (facts M47: SCLK levels 1000/1500/2000, and Linux clamps its
+ * sysfs there), so the KMD treats a refused transition under the floor as "this part has no such point"
+ * (driver/kmd/dpm.c): the thermal sub-floor or the idle point is withdrawn for the rest of the start. */
+#define BC250_CLOCK_MIN_MHZ 500u        /* the table's lowest clock: the idle point, below the lab floor */
 #define BC250_CLOCK_FLOOR_MHZ 1000u     /* the lab point, and the lowest clock the load may ask for */
 #define BC250_CLOCK_CEILING_MHZ 2000u
 #define BC250_CLOCK_STEP_MHZ 100u
-#define BC250_CLOCK_LEVELS 13u
+#define BC250_CLOCK_LEVELS 16u
 #define BC250_CLOCK_FLOOR_MV 820u
 #define BC250_CLOCK_CEILING_MV 1000u
 #define BC250_CLOCK_HOT_MC 87000     /* no raise of clock or voltage at or above this (owner, 2026-10-01; was 85000) */
@@ -81,7 +86,7 @@ int bc250_clock_message_allowed(unsigned int message);
  * the voltage is carried out however hot the part is, so that the lab point - the one operating point
  * this part is known to run at - is reachable from the two thermal-only points below it. Without it the
  * fixed start/resume request, the stop and power-down applies and the resync would all fail at a hot part.
- * A clock below CYAN_SKILLFISH_SCLK_MIN (the two thermal-only points) cannot go through the imported
+ * A clock below CYAN_SKILLFISH_SCLK_MIN (every point under the lab floor) cannot go through the imported
  * commit, which refuses it; the same two messages are then sent directly, in the same order (bc250_clock.c).
  * Caller must prohibit GPU startup unless report.ready and status zero. */
 int bc250_clock_prepare(const struct bc250_clock_io *io, unsigned int mhz,

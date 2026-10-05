@@ -35,10 +35,14 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700CEu       // revision 206 (INF 0.7.206.1, on 205): M15.14, the first
-                                            // revision in which an application's own swap-chain buffer
-                                            // can be scanned out. SetVidPnSourceAddress no longer
-                                            // refuses every UMD allocation outright; the rule is
+#define BC250_KMD_VERSION 0x000700CFu       // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
+                                            // carries two changes that were written apart as 0.7.206.1 and
+                                            // 0.7.206.2, and neither of those two revisions was ever
+                                            // deployed. The train keeps both and takes the next number.
+                                            //
+                                            // (a) M15.14, the first revision in which an application's own
+                                            // swap-chain buffer can be scanned out. SetVidPnSourceAddress no
+                                            // longer refuses every UMD allocation outright; the rule is
                                             // scanout_admit.h (format, POST geometry, pitch, size,
                                             // 4 KiB address, residency in the DirectFlip segment),
                                             // host-tested through each refusal, and dcn.c's
@@ -48,8 +52,35 @@
                                             // wire size) or through the E26R access bit SCANOUT, which
                                             // also places the allocation in the local segment. The new
                                             // counters ride the existing LOG_SUMMARY ring, so no
-                                            // escape struct and no escape ABI changed.
-                                            // 205 (INF 0.7.205.1, on 204): the clock table gains
+                                            // escape struct and no escape ABI changed for this change.
+                                            //
+                                            // (b) An idle GPU runs at
+                                            // 500 MHz (owner decision 2026-10-05: "jak lab nie pracuje,
+                                            // to ustawiaj mu zegar gpu na 500 MHz" - when the lab does
+                                            // not work, set its GPU clock to 500 MHz). The clock table
+                                            // reaches down to 500 MHz at the lab floor's 820 mV /
+                                            // VID 116: 16 levels, index 0 = 500 MHz (the idle point),
+                                            // index 3 = 800 MHz (BC250_DPM_THERMAL_FLOOR_LEVEL),
+                                            // index 5 = 1000 MHz (BC250_DPM_FLOOR_LEVEL). 700 and
+                                            // 600 MHz keep the 100 MHz grid whole and no rule selects
+                                            // them. The governor holds the idle point after
+                                            // DpmIdleHoldMs (3000) with the mean busy share of the
+                                            // graphics engine and the paging node under
+                                            // DpmIdleBusyPermille (2) and no work on the GFX ring, and
+                                            // leaves it for the lab floor at the first tick with work
+                                            // again; DpmIdleMHz 0 turns the whole state off. A thermal
+                                            // limit, a runtime floor, SetStablePowerState, a missing
+                                            // sensor and a hot part all keep the state out, and a start
+                                            // that does not govern never configures it. A refused
+                                            // idle point falls back to 800 MHz, then off, like the
+                                            // sub-floor, and does not count towards the SMU give-up
+                                            // limit. RUN_DPM is ABI 2 (192 bytes) and appends the
+                                            // state's setting and counters; the driver still takes the
+                                            // 160-byte ABI 1 request. RUN_DPM_TUNE is unchanged
+                                            // (ABI 2, 152 bytes), and a runtime tune floor still has
+                                            // to be 1000 MHz or more.
+                                            //
+                                            // revision 205 (INF 0.7.205.1, on 204): the clock table gains
                                             // two thermal-only points below the lab floor, 900 and
                                             // 800 MHz, both at the floor's 820 mV / VID 116 (owner
                                             // decision 2026-10-05: a clock under 1000 MHz is allowed
@@ -264,7 +295,18 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // it does not know as "?". Since 0.7.205 CurrentMHz, CapMHz, TargetMHz and ObservedMHz may read 900 or 800 MHz,
 // the clock table's two thermal-only points below the lab floor; WantMHz (the load's demand) never does, and
 // MaxMHz stays 1000..2000. Still no level index on the wire, so the layout and the ABI are unchanged.
-#define BC250_DPM_ABI 1u
+// ABI 2 (0.7.206, the idle state) appends the state's setting and counters: IdleMHz (the point in force, 0 when
+// the state is off for this start), IdleHoldMs and IdleBusyPermille (the window the GPU must be quiet for and
+// the busy share it still admits), IdleEntries, IdleExits, IdleRefusals and IdleMs (time at the point).
+// FLAG_IDLE says the clock is at the idle point now, and throttle 10 (idle) names it; both reach an ABI 1
+// caller too, which shows the flag as a number it does not know. CurrentMHz, CapMHz, TargetMHz and ObservedMHz
+// may now read 500 MHz. The driver takes both sizes: AbiVersion 1 with the first BC250_DPM_ABI1_SIZE bytes (the
+// 0.7.205 layout, unchanged) and AbiVersion 2 with all 192. A size that is not its AbiVersion's is refused
+// before any state is read. A driver before 0.7.206 fails the 192-byte escape itself with
+// STATUS_INVALID_PARAMETER: a tool asks with ABI 2 and repeats with ABI 1 on that answer.
+#define BC250_DPM_ABI 2u
+#define BC250_DPM_ABI_1 1u
+#define BC250_DPM_ABI1_SIZE 160u             // the ABI 1 prefix of BC250_ESCAPE_DPM
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_OP_CONFIRM 1u
 #define BC250_DPM_FLAG_RUNNING 1u            // the governor thread runs (fixed-lab too: it samples and logs)
@@ -277,6 +319,7 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_TEMPERATURE 128u      // TemperatureMc is this tick's reading
 #define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
 #define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
+#define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.206)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -293,7 +336,12 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long long ExpectedGeneration;  // in, CONFIRM
     unsigned long SubmitBusyPermille;       // out; in: zero
     unsigned long SdmaBusyPermille;         // out; in: zero
-} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+    // ABI 2 from here (BC250_DPM_ABI1_SIZE bytes above). All out.
+    unsigned long IdleMHz;                  // the idle point in force, 0 when the state is off for this start
+    unsigned long IdleHoldMs, IdleBusyPermille;      // DpmIdleHoldMs and DpmIdleBusyPermille in force
+    unsigned long IdleEntries, IdleExits, IdleRefusals;
+    unsigned long long IdleMs;              // time the governor held the idle point
+} BC250_ESCAPE_DPM; // 192 bytes on Windows, ABI 2 (the first 160 are ABI 1)
 
 // DPM runtime tuning (0.7.185.1; driver/kmd/dpm.c, docs/design/dpm.md "Runtime tuning"). The governor's four
 // thresholds (struct bc250_dpm_tune) and a runtime floor, for A/B experiments on a running DPM start. Software state
