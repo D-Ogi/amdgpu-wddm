@@ -1,0 +1,25 @@
+{
+  "DriverInstalled": true,
+  "RouterInstalled": true,
+  "Parameters": {
+    "EnableGpuPresentBlit": 0, "EnableCddDwmInterop": 0, "InteropClosedReason": 4, "InteropLastState": 768,
+    "InteropLastReason": 4, "InteropLastEnd": 2, "UnconfirmedStarts": 1, "LastStage": 61,
+    "DpmMode": 0, "DpmMaxMHz": 1500, "DpmLastMode": 0, "DpmLastReason": 4
+  },
+  "DwmForceCpu": 1,
+  "RequireKmdSwitches": 1,
+  "DriverError": null,
+  "Interop": { "Version": 458949, "Flags": 21, "Requested": 3, "Effective": 0, "Reason": 4, "ClosedReason": 4, "Users": 0, "LastEnd": 0 },
+  "Health": { "Version": 458949, "Flags": 7, "Generation": 5, "Epoch": 2, "Completed": 40, "LastCompletionAgeMs": 800, "ReadyAgeMs": 70000 },
+  "Dpm": { "Version": 458949, "Mode": 0, "Reason": 4, "MaxMHz": 1500 },
+  "DwmRoute": "cpu",
+  "DwmRouteDetail": "bc250d3d_router.dll, bc250d3d.dll",
+  "GpuDesktopModules": true,
+  "TaskFound": true,
+  "TaskResult": 1,
+  "TaskLastRun": "2026-10-03 10:00",
+  "ConfirmLogLast": null,
+  "DefaultParameters": { "EnableGpuPresentBlit": 1, "EnableCddDwmInterop": 1, "DpmMode": 1, "DpmMaxMHz": 1500 },
+  "DefaultRouter": { "DwmForceCpu": 1 },
+  "DefaultsError": null
+}
