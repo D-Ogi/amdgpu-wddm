@@ -1,0 +1,65 @@
+# guardlog-width ratchet baseline: the GuardLog formats that were already longer than 159
+# characters at their widest when the gate landed (KMD 0.7.207.1, BD-070).
+# tools/quality/guardlog_width.py reads this file and tools/quality/quick.ps1 runs the gate.
+#
+# One line a format: <worst-case width><tab><source file><tab><format text>. No line numbers, so
+# an edit elsewhere in the same file does not move an entry.
+#
+# The gate fails when a format outside this file is over the limit, and when a format in it gets
+# wider. It passes with a note when one shrinks under the limit or leaves the sources, and the note
+# asks for its line to be removed (--prune removes those lines and nothing else).
+#
+# Every width here is a worst case, not what the lab prints: a %s counts as 32 characters and a
+# %ld as 11, so a format whose string is always "open", or whose counters stay in four digits, is
+# well inside the line. The five lines that really did lose numbers on the lab are not in this
+# file; they were split in 0.7.207. Shortening what is left is work for another day, and until
+# then the ratchet holds.
+#
+# To regenerate the list after a split: python tools/quality/guardlog_width.py --list-over
+209	cumode.c	cumode: CuMode %lu%s disable 0x%05X -> mode %lu reason %lu%s%s%s
+247	cumode.c	cumode: applied %lu CUs (%lu counted), reason %lu, consistent %u, wrote %u, RLC_PG_CNTL 0x%08X (PG enables 0x%X), after the RLC stage %s0x%08X (PG enables 0x%X)
+321	dcn.c	dcn: %u registers, status 0x%08X; hubp0 addr 0x%llX pitch %u cntl 0x%08X; otg0 control 0x%08X h_total %u v_total %u; vupdate int_en %u event_occurred %u int_status %u master_locked %u flip_pending %u keepout_en %u
+265	dcn.c	dcnflip: 0x%llX -> 0x%llX%s%s, pending %s (%u us), inuse 0x%08X -> 0x%08X, frame %u -> %u, underflow 0x%X
+273	dpm.c	dpm: %lu -> %lu MHz FAILED 0x%08X (clock status %d, %u of %u messages, initial %u MHz VID %u, observed %u MHz VID %u, %u settle reads), %lu in a row (%s)
+250	dpm.c	dpm: %lu -> %lu MHz/%lu mV VID %u%s, %u settle reads (%s, busy %lu permille, %d.%01d C, throttle %s)
+554	dpm.c	dpm: %s %s %lu MHz/%lu mV (SMU %lu MHz VID %lu) %ld.%01ld C busy %lu.%lu%% avg %lu.%lu%% want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu warm %lu ramp %lu errors %lu resyncs %lu, busy from %s (%lu samples), submit %lu.%lu%%, sdma %lu.%lu%%
+230	dpm.c	dpm: %s idle %lu MHz%s, hold %lu ms under %lu permille, entries %lu exits %lu refusals %lu, %llu ms at the point
+198	dpm.c	dpm: %s up %lu target %lu down %lu permille, hold %lu ms, floor %lu MHz, serial %lu applied %lu, floor ticks %lu
+251	dpm.c	dpm: DpmMode %lu%s DpmMaxMHz %lu%s -> %s, ceiling %lu MHz, reason %lu%s%s
+228	dpm.c	dpm: idle DpmIdleMHz %lu%s hold %lu ms%s under %lu permille%s -> %s (error %d)
+215	dpm.c	dpm: idle point refused: %lu MHz 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), idle now %lu MHz, refusals %lu (%s)
+212	dpm.c	dpm: sub-floor refused: %lu MHz 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), cap stops at %lu MHz for this start (%s)
+176	dpm.c	dpm: tune (%s): hot step %lu->%lu ms, soft release delta %lu->%lu mC step %lu->%lu ms, serial %lu
+223	dpm.c	dpm: tune (%s): up %lu->%lu target %lu->%lu down %lu->%lu permille, hold %lu->%lu ms, floor %lu->%lu MHz, serial %lu
+186	gfx.c	gfx: %s %lu bytes -> 0x%08X, result %d, matched %lu, first mismatch at 0x%lX (got 0x%02lX want 0x%02lX), %lu us
+163	gfx.c	gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX
+199	gfx.c	gfx: sdmava root PA0x%llX IB PA0x%llX system PA0x%llX source PA0x%llX VA0x%llX CSA0x%llX VMID%u
+175	hang.c	hang: detector ARMED: bugcheck 0x%08X after %lu s without a heartbeat (requested %lu), progress %p, dump pages %s
+244	ih.c	ih: GPU FAULT latch status 0x%08X cid %lu %s vmid %lu rw %lu perm 0x%lX walker 0x%lX more %lu mapping %lu page 0x%llX, %lu register(s) refused
+247	ih.c	ih: GPU FAULT va 0x%llX vmid %lu %s %s ring 0x%lX src 0x%lX src1 0x%lX, %lu in the second before, %llu total, burst %lu
+236	ih.c	ih: op %u -> 0x%08X, result %d, %u writes; %u interrupt routine calls, %u ours, %u DPCs, %u vectors; status idle %u input_idle %u bif_interrupt_line %u
+251	interop.c	interop summary: requested 0x%lX effective 0x%lX reason %lu (%s) closed-reason %lu flags 0x%lX users %lu marks %lu unmarks %lu mark-failures %lu last-end %lu
+200	interop.c	interop: requested 0x%lX effective 0x%lX reason %lu (%s) closed-reason %lu flags 0x%lX blit %lu cdd %lu previous-end %lu
+240	interop.c	interop: the last boot died with the GPU DWM path in use (marker of boot %lu, this boot %lu): EnableGpuPresentBlit and EnableCddDwmInterop closed, reason %lu (%s), durable status 0x%08X
+162	mmio.c	mmio: BAR5 at 0x%08X mapped, writes %s, dcn writes %s, vidpn flip %s
+194	startup.c	startup: clock status 0x%08X ready %u request %uMHz/%umV initial %uMHz/VID%u observed %uMHz/VID%u temp %dmc staged %u
+179	vidmm.c	vidmm: table segment %u at physical 0x%llX + 0x%llX, host memory below 0x%llX, updates are %s
+175	vram.c	vram: 0x%llX + 0x%llX, MC 0x%llX, BAR0 0x%llX + 0x%llX, writes %s
+426	wddm.c	wddm profile: held us %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld %s:%ld
+168	wddm.c	wddm summary: DMA mapping matches %ld/%ld last VA0x%llX root0x%llX PA0x%llX CPU_PA0x%llX
+161	wddm.c	wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused
+175	wddm.c	wddm summary: physical transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld
+172	wddm.c	wddm summary: stdalloc %s size/fill %ld/%ld ok %ld refused %ld/%ld/%ld/%ld/%ld
+174	wddm.c	wddm summary: virtual transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld
+162	wddm.c	wddm visibility event: %lu src %lu req %lu status %08X visible %lu blank %lu qpc %lld..%lld
+208	wddm.c	wddm: CalibrateGpuClock node %u, frequency %llu, gpu %llu (tsc %08lX:%08lX%s), cpu %llu, window %llu
+166	wddm.c	wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u tdr %u dflip %u rot %u
+263	wddm.c	wddm: GPU Present refused%lld reason%u side%u ctx%p owner%p src%p fmt%u %ux%u pitch%u dst%p fmt%u %ux%u pitch%u
+313	wddm.c	wddm: GPU Present snapshot refused stopping%lld unopened%lld owner%lld umdopen%lld unbound%lld gone%lld umdbacking%lld descriptor%lld same%lld format%lld
+283	wddm.c	wddm: blit source (reading %d) %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s
+214	wddm.c	wddm: paging DMA mapping op%u VA0x%llX root0x%llX translated%u system%u PA0x%llX CPU_PA0x%llX match%u offset%u
+165	wddm.c	wddm: scan-out refused: %s (%lux%lu pitch %lu format %lu segment %lu address 0x%llX)
+251	wddm.c	wddm: shader 0x%llX lo %08X hi %08X%s -> %s 0x%llX%s leaf 0x%llX dram %08lX %08lX %08lX %08lX
+241	wddm.c	wddm: timeout seq %lu fault cid %lu %s vmid %lu rw %lu perm 0x%lX walker 0x%lX more %lu mapping %lu page 0x%llX, %lu register(s) refused
+193	wddm.c	wddm: timeout seq %lu fence %u node %u %s 0x%08X %s 0x%08X %s 0x%08X
+212	wddm.c	wddm: umd ib 0x%llX %lu bytes -> %s 0x%llX%s leaf 0x%llX dram %08lX %08lX %08lX %08lX
