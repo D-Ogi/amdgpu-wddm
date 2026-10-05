@@ -14,6 +14,7 @@ ADR 0017).
 | `umd/dxvk/` | The system D3D10/11 user-mode driver shell `amdgpu_wddm_d3d11.dll`, with DXVK as its engine (ADR 0017 item 4) |
 | `umd/d3d12/` | The native D3D12 user-mode driver shell `amdgpu_wddm_d3d12.dll`, a diagnostic adapter so far, and `engine-ddi/`, the slot boundary to the vkd3d-proton engine (ADR 0017 item 5) |
 | `umd/router/` | `bc250d3d_router.dll`, the registered D3D10/D3D11 UMD: routes the desktop compositor to the hosted Zink UMD and applications to the DXVK shell or the CPU UMD, by registry policy |
+| `umd/mft-h264/` | `amdgpu_wddm_mft_h264.dll`, the Media Foundation hardware H.264 encoder transform of the package (M15.11): eight Direct3D 11 compute shaders for motion estimation, prediction, transform, quantisation, reconstruction and deblocking, CAVLC on the CPU. Not registered by the package yet. See `umd/mft-h264/README.md` and its `INSTALL.md` |
 | `umd-stub/` | `bc250umd.dll`, the user-mode driver of M7 stage A whose every `OpenAdapter` returns `E_NOTIMPL` |
 
 The Mesa D3D10 user-mode drivers of the desktop (`bc250d3d.dll` on llvmpipe, `bc250d3d_zink.dll` on Zink) are
