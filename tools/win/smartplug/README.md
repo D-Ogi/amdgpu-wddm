@@ -48,6 +48,18 @@ connecting does, so the self-test and any script that only imports the module wo
 
 `BC250_TINYTUYA` points at the protocol package when it is not in the default place.
 
+## The operator copy
+
+A second, older copy of this tool lives in the workspace at `<BC250_ROOT>\scratch\smartplug\plug.py`. It is
+the copy that the workspace recovery instructions name, and committed scripts call it by that path:
+`experiments/E32-m11-robustness/stuck_observe.py` and the power-cycle scripts under
+`evidence/windows/2026-09-25-E27-m9-recovery/`. That copy keeps the workspace root in its source, has no
+`--config` and no `BC250_SMARTPLUG_CONFIG`, and prints a slightly different JSON shape.
+
+This directory holds the source of record. Change the file here first. Copy the change to the operator
+directory afterwards, and only after a deliberate check, because that copy is the one an operator runs
+while the lab hangs. A fix that stays here never reaches the AC cycle that a recovery actually performs.
+
 ## Two rules the lab depends on
 
 **Power alone never proves that the operating system responds.** A plug that reports watts proves that
