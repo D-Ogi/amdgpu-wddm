@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "note": "Every bc250kmd_cli.exe form the release installer and the lab kits call on the release's tools\\bc250kmd_cli.exe. test-cli-commands.ps1 runs the packaged CLI without arguments and requires each form in its usage text; the lab kits' offline gates refuse a call site whose form is not listed here. A form is the command and, where the call has one, its subcommand word.",
+  "forms": {
+    "info": "installer start-confirm.ps1 (probe, fallback view); native-caps preflight",
+    "stages": "installer start-confirm.ps1 (probe, fallback view)",
+    "confirm": "installer start-confirm.ps1 (boot-loop guard fallback)",
+    "interop": "installer install.ps1 (verify); gpu-dwm kit dwm-route.ps1",
+    "list": "offgpu gpu-counters.ps1 (adapter LUID)",
+    "health read": "native-caps wait-fresh-witness.ps1 and preflight; gpu-dwm kit dwm-route.ps1",
+    "health confirm": "gpu-dwm kit dwm-route.ps1",
+    "clock read": "native-caps preflight, game-runtime.ps1 (thermal guard), kmdlog-stream.ps1",
+    "dpm": "native-caps preflight; dpm trial-samplers.ps1; lab-emergency guard-http.sh",
+    "dpm tune": "lab-emergency guard-http.sh (dpm tune reset)",
+    "log": "native-caps kmdlog-stream.ps1",
+    "log summary": "native-caps preflight and kmdlog-stream.ps1; gpu-dwm kit dwm-route.ps1",
+    "journal follow": "dpm trial-samplers.ps1"
+  }
+}

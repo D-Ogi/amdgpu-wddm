@@ -1,0 +1,69 @@
+name: Bug report
+description: A problem with a tester release of amdgpu-wddm on an ASRock BC-250.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. One problem per report, please.
+        Before you start: open "amdgpu-wddm Control" from the Start menu and make a bug report. It shows every file
+        before it writes the zip to your desktop and sends nothing by itself. Read the files, then attach the zip
+        below. If you find personal data in it, do not attach it; say so in the report instead.
+  - type: input
+    id: version
+    attributes:
+      label: Tester version
+      description: The package version, for example 0.7.199.100-tester.11 (amdgpu-wddm Control shows it, and so does TESTERS.md).
+      placeholder: 0.7.199.100-tester.11
+    validations:
+      required: true
+  - type: input
+    id: application
+    attributes:
+      label: Game or application
+      description: Name and version. Write "desktop" if the problem is in Windows itself.
+      placeholder: The Witcher 3 4.04 (Steam)
+    validations:
+      required: true
+  - type: dropdown
+    id: api
+    attributes:
+      label: API
+      description: The graphics API the game or application uses (its graphics settings often say).
+      options:
+        - Direct3D 12
+        - Direct3D 11
+        - Vulkan
+        - OpenGL
+        - Other or not known
+        - Not a game or application (desktop, install, start)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The steps, with the settings of the game or application (resolution, preset, ray tracing) and the time of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Error messages, a black screen, a restart, wrong colours, low frame rate. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Control application zip
+      description: Drag the amdgpu-wddm-report-YYYYMMDD-HHMMSS.zip from your desktop into this field.
+    validations:
+      required: true
