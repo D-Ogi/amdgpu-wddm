@@ -9,7 +9,7 @@ Measurement tools that run on the BC-250 under Windows, and the scripts on the d
 | `bc250mon/` | Monitor and overlay on the BC-250's own screen: sensors, what the remote side is doing, results, log, a STOP brake and basic controls; loopback HTTP API driven from the PC through SSH |
 | `triage/` | Debugger-free first look at a kernel minidump: bugcheck, faulting module and offset, modules on the stack |
 | `dxgimodes/` | Read-only probe: the display modes that dxgkrnl (`D3DKMTGetDisplayModeList`) and DXGI (`GetDisplayModeList1`) report for each output and format. No window |
-| `kd/` | Kernel debugger (`kd.exe`) as a background server plus a non-interactive command sender; also opens dump files |
+| `kd/` | Kernel debugger (`kd.exe`) as a background server, a non-interactive command sender, and one-shot triage of a kernel dump. The dump triage runs on the lab, because a debugger on the development PC grows its nonpaged pool at hundreds of MB/s |
 | `kmtprobe/` | Raw `D3DKMT*` driver of the full WDDM miniport: one allocation at a chosen GPU VA, residency, lock, optional PM4 submission (ADR 0008 stages B and C) |
 | `d3d11mt/` | Multithreaded D3D11 client: deferred contexts, concurrent resource creation, integer-exact checksum equal across vendors, module witness (which UMD a routed application loaded) |
 | `monfence/` | Positive control for a WDDM 2.0 monitored fence written by the GPU itself (RELEASE_MEM to `FenceValueGPUVirtualAddress`): CPU value, CPU-wait wake, GPU-wait release, four threads, and its latency against the kernel `SignalSynchronizationObjectFromGpu` path; `run-lab.ps1` adds the IH VM-fault and vidmm coherence readings |
