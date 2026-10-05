@@ -98,7 +98,7 @@ function Get-Kinds([string[]]$Lines) {
     return $k
 }
 
-# One line a row up to KMD 0.7.206, two from 0.7.207 on: the three 64-bit counters did not fit the
+# One line a row up to KMD 0.7.207, two from 0.7.208 on: the three 64-bit counters did not fit the
 # driver's 160-character log line and the snoop mismatch fell off the end of it (BD-070). Both lines
 # name the level and the segment, so a row is put together again from either shape.
 function Get-Coherence([string[]]$Lines) {

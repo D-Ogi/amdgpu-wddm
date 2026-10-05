@@ -234,20 +234,23 @@ class TestNormalize(unittest.TestCase):
 
 
 class TestObjectsSummary(unittest.TestCase):
-    """One line up to KMD 0.7.206, two from 0.7.207 on (BD-070): both read the same."""
+    """One line up to KMD 0.7.207, two from 0.7.208 on (BD-070): both read the same."""
 
     ONE = MINIMAL[:7] + [
         "    14      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1 "
         "alloc 7/6, 3 alive",
     ]
+    # The driver writes the allocation pair first, so that a reader which keeps the last line of
+    # this name still gets the live count. The order must not matter here either.
     TWO = MINIMAL[:7] + [
-        "    14      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1, "
+        "    14      0.300 wddm summary: objects created/destroyed: alloc 7/6",
+        "    15      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1, "
         "3 alive",
-        "    15      0.300 wddm summary: objects created/destroyed: alloc 7/6",
     ]
+    TWO_REVERSED = MINIMAL[:7] + [TWO[8], TWO[7]]
 
     def test_one_line_and_two_lines_agree(self):
-        for lines in (self.ONE, self.TWO):
+        for lines in (self.ONE, self.TWO, self.TWO_REVERSED):
             pairs, alive = run_from(lines).objects_summary
             self.assertEqual(pairs, {"dev": (2, 2), "ctx": (1, 1), "proc": (1, 1),
                                      "alloc": (7, 6)})

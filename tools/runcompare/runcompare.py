@@ -659,7 +659,7 @@ class Run(object):
     def objects_summary(self):
         """The driver's own count, written into the log at the stop.
 
-        One line up to KMD 0.7.206, two from 0.7.207 on: the nine counters at their widest did
+        One line up to KMD 0.7.207, two from 0.7.208 on: the nine counters at their widest did
         not fit the 160-byte log line, so the allocation pair moved to a second line of the same
         name (BD-070). The pairs are collected from every line that carries them, and the live
         object count from the line that ends in "N alive", so both shapes read the same.

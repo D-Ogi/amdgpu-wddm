@@ -1,5 +1,5 @@
 # guardlog-width ratchet baseline: the GuardLog formats that were already longer than 159
-# characters at their widest when the gate landed (KMD 0.7.207.1, BD-070).
+# characters at their widest when the gate landed (KMD 0.7.208.1, BD-070).
 # tools/quality/guardlog_width.py reads this file and tools/quality/quick.ps1 runs the gate.
 #
 # One line a format: <worst-case width><tab><source file><tab><format text>. No line numbers, so
@@ -12,7 +12,7 @@
 # Every width here is a worst case, not what the lab prints: a %s counts as 32 characters and a
 # %ld as 11, so a format whose string is always "open", or whose counters stay in four digits, is
 # well inside the line. The five lines that really did lose numbers on the lab are not in this
-# file; they were split in 0.7.207. Shortening what is left is work for another day, and until
+# file; they were split in 0.7.208. Shortening what is left is work for another day, and until
 # then the ratchet holds.
 #
 # To regenerate the list after a split: python tools/quality/guardlog_width.py --list-over
