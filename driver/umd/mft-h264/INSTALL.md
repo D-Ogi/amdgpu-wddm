@@ -1,7 +1,7 @@
 # Installing the H.264 encoder MFT
 
 What the installer has to put on the machine, and what it has to write, so that Game Bar, Windows
-Camera and Chromium find the transform. Nothing here is done by the driver INF today; this page is the
+Camera and Chromium find the transform. The driver INF writes none of it today. This page is the
 specification for it. The bytes of every binary value come from `tools/mftreg`, which builds them with
 the same code the transform itself uses, so the registration and the live object cannot drift apart:
 
@@ -100,8 +100,8 @@ asynchronous software transforms. `mfthost --mft` records which flag combination
 and the sink writer stage runs on the same flags, so a change of this value has to be measured against
 both records first.
 
-Removal deletes both keys. `mftreg --unregister-global` does it through `MFTUnregister`, and it needs
-both `--unregister-global` and `BC250_ALLOW_HKLM_MFT=1` in the environment.
+`mftreg --unregister-global` removes both keys through `MFTUnregister`. It needs both
+`--unregister-global` and `BC250_ALLOW_HKLM_MFT=1` in the environment.
 
 ### What a per-adapter enumeration needs
 
@@ -176,7 +176,7 @@ the trial.
 - Game DVR needs no policy change: `GameDVR_Enabled` is already 1 (facts M774).
 - No service, no scheduled task, no resident process.
 
-## Verifying an installation
+## Checking an installation
 
 ```
 mftreg.exe --enum

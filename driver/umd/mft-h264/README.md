@@ -10,7 +10,7 @@ Cyan Skillfish has no usable video engine: amdgpu answers no UVD, VCE or VCN que
 reports VCN firmware `0x00000000` (facts M46), and Media Foundation on unit A offers no hardware
 encoder at all today (facts M774). So the encoder is **compute**: motion estimation, intra and inter
 prediction, the forward and inverse transform, quantisation, reconstruction and the deblocking filter
-are eight Direct3D 11 compute shaders; entropy coding (CAVLC) and bitstream assembly are on the CPU,
+are eight Direct3D 11 compute shaders. Entropy coding (CAVLC) and bitstream assembly are on the CPU,
 which the owner accepted on 2026-10-01.
 
 Output: H.264 Constrained Baseline, one slice per picture, I and P pictures, CAVLC. No CABAC, no
@@ -38,17 +38,17 @@ pwsh driver\umd\mft-h264\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget
 ```
 
 Headers and import libraries come from the SDK NuGet packages, the compiler from the installed Visual
-Studio; no WDK or SDK installation is needed. Output goes to `$BC250_ROOT\scratch\build\mft-h264`,
+Studio. No WDK or SDK installation is needed. Output goes to `$BC250_ROOT\scratch\build\mft-h264`,
 never to drive C:. The shaders are compiled offline with `fxc`, so the shipped DLL has no
 `d3dcompiler` dependency and the bytecode is part of the artifact. The generated shader headers under
 `shaders/gen` and `tests/gen` are build output and are not committed.
 
 Four gates, each one fatal:
 
-1. every shader entry point compiles with `/WX`;
-2. the DLL, the test and the tool compile with `/W4 /WX`;
+1. every shader entry point compiles with `/WX`.
+2. the DLL, the test and the tool compile with `/W4 /WX`.
 3. no binary imports a C runtime DLL (the MFT is loaded into Game Bar, Chromium and the frame server,
-   which is what made the RADV ICD use `/MT` as well - see `docs/build.md`);
+   which is what made the RADV ICD use `/MT` as well - see `docs/build.md`).
 4. `mfthost.exe --selftest` passes, which needs no GPU.
 
 The build is reproducible, and the recorded artifact names the toolchain that made it. `/Brepro` is on
@@ -137,7 +137,8 @@ SDK 10.0.26100.0. Two clean builds into two empty directories gave those three h
 - Nothing has run on unit A. On unit A the eight `cs_5_0` shaders go through our D3D11 UMD compute
   path (DXBC to SPIR-V through dxbc-spirv), which this component has never exercised.
 - Throughput on unit A is unknown and is the real risk: 4.03 to 4.14 ms of GPU per 720p picture on a
-  4090, against 24 CU inside a 300 W board that is also rendering.
+  4090, against the 24 or 40 compute units of the BC-250 (the CU mode of `docs/design/cu-mode.md`)
+  inside a 300 W board that is also rendering.
 - The driver package does not register the transform yet. `INSTALL.md` has the exact keys. The KMD
   INF has no MFT section.
 - Whether a per-adapter registration shape exists for a display driver package is not settled.

@@ -11,12 +11,12 @@ Scope: one 3-minute trial per stage, five stages, run in order and stopped at th
 fails. No driver change, no promotion, no registry value left behind. The transform is registered with
 `mftreg --register-global` before a stage that needs it and removed with `--unregister-global` after it,
 in the same script, so a failure cannot survive the trial. Game Bar's own recording is the only
-interactive stage; it is not a game session, so the 3-minute bound applies to it as well.
+interactive stage. It is not a game session, so the 3-minute bound applies to it as well.
 
 ## Hypotheses
 
 - **H1** The eight `cs_5_0` shaders compile and dispatch on our D3D11 path. They go through
-  DXBC to SPIR-V (dxbc-spirv), which this component has never exercised; the 557 KB inter-prediction
+  DXBC to SPIR-V (dxbc-spirv), which this component has never exercised. The 557 KB inter-prediction
   kernel is the largest shader we have put through it.
 - **H2** The GPU reconstruction on unit A is bit exact against unit A's own inbox H.264 decoder MFT,
   with the same `nnz` agreement as on the development PC. The arithmetic is integer and normative, so
@@ -43,7 +43,7 @@ about to happen (`tools\win\bc250mon\mon.py panel`). Sample Tctl before each sta
 **Stage 1 - the before half of the Game Bar oracle (no registration, ~20 s).**
 `gamebar-trace.ps1` as `LAB-REQUEST.md` R2 describes it: one ETW session, Win+Alt+R on the lab's
 screen, 20 s, stop. Expected: Game Bar refuses, and the trace shows no encoder MFT activation. Keep
-the `.etl`; decode it on the development PC, never on the lab.
+the `.etl`. Decode it on the development PC, never on the lab.
 
 **Stage 2 - do the shaders run at all (no registration, ~60 s).**
 ```
@@ -87,8 +87,8 @@ Sample the smart plug (`scratch\smartplug\plug.py telemetry`) at the start and t
 ## What this decides
 
 Whether M15.11 can be met at all on this hardware, and at what frame rate and picture size. Stage 2
-alone answers the shader-path question; stage 3 turns the development PC's conformance claim into a
-unit A claim; stages 4 and 5 are the acceptance oracle the criterion names.
+alone answers the shader-path question. Stage 3 turns the development PC's conformance claim into a
+unit A claim. Stages 4 and 5 are the acceptance oracle the criterion names.
 
 ## Evidence
 

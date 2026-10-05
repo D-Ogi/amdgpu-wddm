@@ -19,4 +19,4 @@ Projects read for understanding but NOT copied from:
 
 Windows contracts come from the SDK headers under the workspace's
 `toolchain/nuget/microsoft.windows.sdk.cpp` and from
-learn.microsoft.com; every constant used is cited by header and line in the source comments.
+learn.microsoft.com. The source comments cite every constant by header and line.
