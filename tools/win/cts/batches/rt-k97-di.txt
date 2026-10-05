@@ -1,0 +1,2 @@
+dEQP-VK.ray_query.misc.dynamic_indexing
+dEQP-VK.ray_query.misc.dynamic_indexing_use_first

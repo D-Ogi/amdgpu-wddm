@@ -10,10 +10,16 @@
 *.c    text eol=lf
 *.patch text eol=lf
 *.ps1  text eol=crlf
+*.cmd  text eol=crlf
 # Shell scripts without an extension that run on the diagnostic USB
 tools/diagusb/overlay/** text eol=lf
 # Evidence is stored byte for byte, never normalized
 evidence/** -text
+
+# The CTS case lists are hash pinned: batches/manifest.json holds the SHA256 of each batch file, and the
+# runner refuses a batch whose file does not match. Line-ending normalization would break every hash.
+tools/win/cts/batches/** -text
+tools/win/cts/lists/** -text
 
 # PAM benchmark captures contain binary pixel payloads.
 *.pam binary
