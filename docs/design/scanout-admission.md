@@ -81,9 +81,9 @@ flag is the contract. The four values, for every type-0 shape a shell can produc
 ## The switch
 
 `EnableScanoutAdmit`, a `REG_DWORD` under the service's `Parameters` key, read once at `WddmStart`.
-Absent or 1: the rule above decides. 0: a candidate that asks for scan-out is refused with the status
-`gated`, and every other candidate keeps the four checks it had in 0.7.205.1, so the start behaves as
-that revision did. The INF does not write the value, as it does not write `OfferComposedSourceModes`,
+Absent or 1: the rule above decides. 0: the driver refuses a candidate that asks for scan-out and gives it
+the status `gated`, and every other candidate keeps the four checks it had in 0.7.205.1, so the start
+behaves as that revision did. The INF does not write the value, as it does not write `OfferComposedSourceModes`,
 and `WddmStart` logs which way it read.
 
 The switch exists for the release train, not for the feature: b18 carries three driver changes in one
