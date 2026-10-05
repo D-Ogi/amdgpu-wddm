@@ -125,6 +125,35 @@ panel remains available through the API; the overlay omits that duplicate panel
 when the pipeline panel exists. An overlay update needs only an overlay task
 restart, not a Windows or DWM restart.
 
+## Active 3D app
+
+`GraphicsApiProvider.cs` samples every 3 seconds which graphics API a windowed application in the
+overlay's session started and which driver path serves it. The evidence is the set of image files mapped
+into that process, not the registry or the router configuration. Candidates are the foreground window's
+process and the owners of other visible, uncloaked windows of at least 200x150 (at most 8 per poll);
+shells, launchers and our own tools are excluded by name. The panel shows at most 3 applications: the
+foreground one first, then the ones on our GPU path.
+
+| Loaded | Row |
+|---|---|
+| `d3d12.dll` / `d3d12core.dll` + `amdgpu_wddm_d3d12.dll` | `D3D12  GPU (amdgpu-wddm vkd3d + RADV)` (green) |
+| `d3d11.dll` / `d3d10*.dll` + `amdgpu_wddm_d3d11.dll` | `D3D11  GPU (amdgpu-wddm DXVK + RADV)` (green) |
+| ... + `bc250d3d_zink.dll` / `bc250d3d.dll` | `GPU (zink, desktop route)` / `CPU (llvmpipe, desktop route)` (amber) |
+| ... + `bc250d3d_router.dll` only | `router loaded, no backend yet` |
+| `d3d10warp.dll` | `CPU (WARP)` (amber) |
+| `d3d9.dll` + `d3d9on12.dll` / `bc250umd.dll` | `via D3D9On12 (D3D12 path)` / `stub UMD, no D3D9 renderer` |
+| `vulkan-1.dll` + `vulkan_radeon.dll` | `Vulkan  GPU (RADV ICD)` (green) |
+
+An API runtime without a UMD gives `no UMD loaded`: many D3D12 games load `d3d11.dll` without drawing with
+it, so no claim is made. `d3d10warp.dll` is shared by D3D11 and D3D12; when both runtimes are loaded the WARP
+row cannot say which one uses it. A process the overlay cannot open for reading shows
+`API unknown (access)`. A change of the foreground application's paths is written to the log once.
+
+Cost: no KMD escape, no remote thread and no loader lock in the target. `EnumProcessModulesEx` reads the
+loader list with `ReadProcessMemory` while the target runs, and the names (`GetMappedFileName`, one query per
+module) are read again only when the module count changes or the cached list is 30 s old.
+`test-graphics-api.ps1` checks classification, ordering and rows on fake module lists; `build.ps1` runs it.
+
 ## Cached Vulkan inventory
 
 `VulkanInventoryProvider.cs` reads `vulkan-inventory.json` from the monitor data
@@ -257,7 +286,7 @@ pwsh tools\win\bc250mon\build.ps1 -Out $env:BC250_ROOT\scratch\build\bc250mon -C
 
 The build runs the Python layout tests (`test_stages.py`, `test_telemetry.py`: `DpmSnapshot` against the KMD's
 `BC250_ESCAPE_DPM`, `VideoMemorySnapshot` against the control DLL) and the host tests `test-vulkan-inventory`,
-`test-start-confirmation`, `test-graphics-summary` and `test-telemetry` before it compiles. The telemetry line
+`test-start-confirmation`, `test-graphics-summary`, `test-telemetry` and `test-graphics-api` before it compiles. The telemetry line
 needs a `bc250control.dll` that exports `Bc250Dpm` and `Bc250VideoMemory`; the two files are deployed together.
 
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
