@@ -87,7 +87,7 @@ def session_triplet():
 def resolve(args):
     # An id, not a path: Stage loads profiles/<id>.json by the id run-game.sh passes on.
     if not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}', args.profile):
-        raise SystemExit('PROFILE is a profile id (a file name of this tool's profiles directory without .json)')
+        raise SystemExit('PROFILE is a profile id (a file name of the profiles directory without .json)')
     kit = (ROOT / 'scratch/m15' / args.kit) if args.kit else LIVE_KIT
     run = load_run(kit.resolve())
     try:

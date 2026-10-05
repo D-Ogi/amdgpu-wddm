@@ -87,6 +87,14 @@ class OwnerRules(unittest.TestCase):
                 self.assertIn('[Math]::Min([Math]::Max($Seconds, 10), 1200)', text)
 
 
+class Sources(unittest.TestCase):
+    def test_every_script_compiles(self):
+        # A syntax error in a host tool must fail the gate, not the next session that calls it.
+        for path in sorted(HERE.rglob('*.py')):
+            with self.subTest(script=path.name):
+                compile(path.read_text(encoding='utf-8'), str(path), 'exec')
+
+
 class Screenshots(unittest.TestCase):
     def test_lab_screenshots_land_outside_this_repository(self):
         # The lab screen also shows game content; its images never enter the repository (owner, 2026-10-01).
