@@ -168,11 +168,14 @@ HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDI
     D3D12DDI_HRESOURCE driver_resource) {
     const auto engine=engine_create_resource.load();
     const auto device=static_cast<Device*>(handle.pDrvPrivate);
-    if(!engine || !device)return E_UNEXPECTED;
+    // Every failure of this slot leaves it as E_OUTOFMEMORY (engine-ddi.h, admitted_create_failure): a create
+    // DDI that reports anything else costs the application its device (BD-075). The scope's own refusals come
+    // through here as well, which is why the clamp sits outside the scope and not only in engine-ddi.
+    if(!engine || !device)return engine_ddi::admitted_create_failure(E_UNEXPECTED);
     // A resource DDI entered from inside another one of this device is refused before the engine runs.
-    return create_in_owner_scope(engine_imports(*device),[&]() noexcept {
+    return engine_ddi::admitted_create_failure(create_in_owner_scope(engine_imports(*device),[&]() noexcept {
         return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
-    });
+    }));
 }
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP heap,D3D12DDI_HRESOURCE resource) {
     const auto engine=engine_destroy_resource.load();

@@ -8,6 +8,7 @@
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 namespace engine_ddi {
 
@@ -610,13 +611,16 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
                                                const D3D12DDI_CLEAR_VALUES* clear,
                                                D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
     DeviceContext* c = resolve(device);
-    if (!c) return E_INVALIDARG;
-    c->retire_at_resource();
-    if (session.pDrvPrivate) {                          // protected resource sessions
-        log_line("CreateHeapAndResource: protected resource session given: E_NOTIMPL");
-        return E_NOTIMPL;
+    HRESULT hr = E_INVALIDARG;
+    if (c) {
+        c->retire_at_resource();
+        if (session.pDrvPrivate) {                      // protected resource sessions
+            log_line("CreateHeapAndResource: protected resource session given: not implemented");
+            hr = E_NOTIMPL;
+        } else {
+            hr = create_heap_and_resource(c, heap_desc, hheap, rt, res_desc, clear, hres);
+        }
     }
-    const HRESULT hr = create_heap_and_resource(c, heap_desc, hheap, rt, res_desc, clear, hres);
     if (FAILED(hr)) {
         // The call's shape (which of heap only, committed, placed or reserved) and both descriptions: which
         // shape the runtime uses for which API call is otherwise unlogged (engine-ddi.h).
@@ -638,8 +642,75 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
                     r ? r->NumCastableFormats : 0u,
                     r && r->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate ? "given" : "none",
                     r ? static_cast<unsigned long long>(r->ReuseBufferGPUVA.BaseAddress.UMD.Offset) : 0ull);
+        // A create DDI may only report E_OUTOFMEMORY (engine-ddi.h, admitted_create_failure): the refusal above
+        // is the driver's answer, not a reason for the runtime to remove the application's device. BD-075.
+        const HRESULT admitted = admitted_create_failure(hr);
+        if (admitted != hr)
+            log_refusal("CreateHeapAndResource: %08lx reported to the runtime as %08lx, so that the device stays",
+                        static_cast<unsigned long>(hr), static_cast<unsigned long>(admitted));
+        return admitted;
     }
     return hr;
+}
+
+// ---- D64, D65: OpenSharedHandle of a heap or a resource ----------------------------------------------------------
+// Not implemented: a D3D12 resource of this driver publishes no description a second driver could decode, and the
+// shell has no entry point that adopts an allocation the runtime opened instead of allocating one
+// (heap-import.h, RuntimeHeapImports). What the two slots do is refuse without losing the device, and name
+// everything the runtime handed over, because that is what an implementation has to decode: the allocation
+// handles, the per-allocation private data (the kernel driver's LB7A record for a surface this driver's D3D11
+// shell created) and the per-resource private data (its E26R record). docs/d3d12-shared-resources.md holds the
+// plan; SLOTS.md keeps the two slots at P4.
+// Calc answers the private sizes an implemented open would construct, the same records a create builds, so that
+// a later implementation needs no second ABI step and a runtime that calls Calc and then Open sees one shape.
+D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_opened_heap_and_resource(D3D12DDI_HDEVICE,
+                                                                       const D3D12DDIARG_OPENHEAP_0003*,
+                                                                       D3D12DDI_HPROTECTEDRESOURCESESSION_0030) {
+    return {sizeof(HeapRecord), sizeof(ResourceRecord)};
+}
+
+// The first four bytes of a private-data blob, as its writer's magic: 0 when there are not four bytes to read.
+uint32_t blob_magic(const void* data, UINT bytes) noexcept {
+    uint32_t magic = 0;
+    if (data && bytes >= sizeof(magic)) std::memcpy(&magic, data, sizeof(magic));
+    return magic;
+}
+
+uint32_t blob_version(const void* data, UINT bytes) noexcept {
+    uint32_t version = 0;
+    if (data && bytes >= 2 * sizeof(version))
+        std::memcpy(&version, static_cast<const char*>(data) + sizeof(version), sizeof(version));
+    return version;
+}
+
+HRESULT APIENTRY open_heap_and_resource(D3D12DDI_HDEVICE device, const D3D12DDIARG_OPENHEAP_0003* args,
+                                        D3D12DDI_HHEAP hheap, D3D12DDI_HRTRESOURCE rt,
+                                        D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
+    DeviceContext* c = resolve(device);
+    (void)rt;
+    (void)session;
+    const HRESULT hr = c && args ? E_NOTIMPL : E_INVALIDARG;
+    // Same rule as the create slot: the open of a shared handle fails, the device lives (BD-075).
+    const HRESULT admitted = admitted_create_failure(hr);
+    const UINT count = args ? args->NumAllocations : 0u;
+    const D3DDDI_OPENALLOCATIONINFO* first =
+        args && args->pOpenAllocationInfo && count ? &args->pOpenAllocationInfo[0] : nullptr;
+    log_refusal("OpenHeapAndResource: %08lx reported as %08lx, no shared open is implemented; %u allocation(s), "
+                "kernel resource %s, "
+                "resource private data %u bytes (magic 0x%08x, version %u), first allocation private data %u bytes "
+                "(magic 0x%08x, version %u), allocation handle %s, initial state 0x%x, heap handle %s, "
+                "resource handle %s",
+                static_cast<unsigned long>(hr), static_cast<unsigned long>(admitted), count,
+                args && args->hKMResource.handle ? "given" : "none", args ? args->PrivateDriverDataSize : 0u,
+                blob_magic(args ? args->pPrivateDriverData : nullptr, args ? args->PrivateDriverDataSize : 0u),
+                blob_version(args ? args->pPrivateDriverData : nullptr, args ? args->PrivateDriverDataSize : 0u),
+                first ? first->PrivateDriverDataSize : 0u,
+                blob_magic(first ? first->pPrivateDriverData : nullptr, first ? first->PrivateDriverDataSize : 0u),
+                blob_version(first ? first->pPrivateDriverData : nullptr, first ? first->PrivateDriverDataSize : 0u),
+                first && first->hAllocation ? "given" : "none",
+                args ? static_cast<unsigned>(args->InitialResourceState) : 0u,
+                hheap.pDrvPrivate ? "given" : "none", hres.pDrvPrivate ? "given" : "none");
+    return admitted;
 }
 
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, D3D12DDI_HRESOURCE hres) {
@@ -1545,6 +1616,11 @@ void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCalcPrivateHeapAndResourceSizes = calc_heap_and_resource;
     t->pfnCreateHeapAndResource = create_heap_and_resource_slot;
     t->pfnDestroyHeapAndResource = destroy_heap_and_resource;
+    // D64 and D65 refuse every shared open, but they are this module's slots, not fail-safes: a fail-safe
+    // answers E_NOTIMPL, which the runtime takes as a critical driver failure and pays for with the
+    // application's device (BD-075).
+    t->pfnCalcPrivateOpenedHeapAndResourceSizes = calc_opened_heap_and_resource;
+    t->pfnOpenHeapAndResource = open_heap_and_resource;
     t->pfnMapHeap = map_heap;
     t->pfnUnmapHeap = unmap_heap;
     t->pfnCheckResourceVirtualAddress = check_resource_virtual_address;

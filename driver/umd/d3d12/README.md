@@ -121,6 +121,26 @@ resource or heap owner. Size rounding and alignment are checked. Primary,
 shared/coherent-systemwide and texture requests outside this buffer path are
 refused.
 
+Every refusal taken before anything is allocated names its admission check in
+`ImportReport::refusal` and writes one line through `ddi_refusal` (`ddi-trace.h`),
+with the request flags, the heap flags, the bits of them this shell has no use
+for, and the resource description. A caller reads the same facts from
+`last_report()`; the line exists so that a lab log, and `tools/win/capture-share`,
+which copies the debugger channel into its cell log, carry them.
+
+## Shared resources
+
+Not implemented, in either direction. `CreateCommittedResource` with
+`D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource` and
+`ID3D12Device::OpenSharedHandle` of a resource all fail. They fail with
+`E_OUTOFMEMORY`, the one failure a creation DDI may report, so the application
+loses the resource and keeps its device (BD-075; `engine_ddi::admitted_create_failure`).
+Shared fences work in every direction, because the D3D12 DDI has no fence sharing
+in it: the kernel object is the runtime's and the driver only consumes two GPU
+addresses. The plan for shared resources, what each half needs and why the
+runtime still reports `SharedResourceCompatibilityTier` 2, is in
+[docs/d3d12-shared-resources.md](../../../docs/d3d12-shared-resources.md).
+
 A separate KT paging queue maps the allocation. The importer waits at most two
 seconds for a pending map and requires a completed, aligned GPU VA before
 returning memory. An incomplete map or failed cleanup remains owned. The private

@@ -308,6 +308,27 @@ struct ReplayPolicy {
 };
 HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
 
+// ---- Failures a create or open DDI may report -------------------------------------------------------------------
+// windows-driver-docs display handling-errors.md: a creation function of a user-mode display driver is in the
+// AllowOutOfMemory category. The runtime admits E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED from it and treats
+// every other failure as critical: it logs the driver, removes the device and sets the removed reason to
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR. Measured on this stack for E_NOTIMPL out of pfnCreateCommandSignature
+// (INTEGRATION.md) and for pfnCreateHeapAndResource and pfnOpenHeapAndResource of a shared resource
+// (BD-075: hr 0x887A0005, removed reason 0x887A0020, in all 13 shared-resource cells of capture-share).
+// A refusal must therefore leave the create and open slots as E_OUTOFMEMORY, however the refusal was decided
+// inside the driver: the application then sees a creation that failed, not a device it has to recreate. The real
+// HRESULT is in the log_refusal line of the same call, so the diagnosis is not lost.
+// That the D3D12 runtime applies the same rule as D3D10/11 is an INFERENCE from that document plus the two
+// measurements above; it is what the lab script of BD-075 checks.
+inline constexpr HRESULT kDriverDeviceRemoved = static_cast<HRESULT>(0x88760870);  // D3DDDIERR_DEVICEREMOVED
+inline HRESULT admitted_create_failure(HRESULT hr) noexcept {
+    if (SUCCEEDED(hr) || hr == E_OUTOFMEMORY) return hr;
+    if (hr == kDriverDeviceRemoved || hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET ||
+        hr == DXGI_ERROR_DEVICE_HUNG)
+        return hr;
+    return E_OUTOFMEMORY;
+}
+
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);
 

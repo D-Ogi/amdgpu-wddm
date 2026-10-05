@@ -165,6 +165,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | BackgroundProcessingSupported | FALSE | pfnSetBackgroundProcessingMode is the shell's slot; engine-ddi claims nothing for it |
 | 1006 | | DriverManagedShaderCachePresent | FALSE | engine-ddi keeps no driver-managed shader cache |
 | 1006 | | Deterministic64KBUndefinedSwizzle | FALSE | no engine answer |
+| 1006 | | - | not in the DDI | `D3D12_FEATURE_DATA_D3D12_OPTIONS4::SharedResourceCompatibilityTier` and `D3D12_FEATURE_DATA_DISPLAYABLE::SharedResourceCompatibilityTier` have no DDI field: `SharedResourceCompatibilityTier` appears nowhere in `d3d12umddi.h`, and `D3D12DDI_D3D12_OPTIONS_DATA_0089` does not carry it. The D3D12 runtime synthesises the value from the WDDM/DDI level the driver reports (tier 1 "support is built into WDDM 2.4", `ref/sdk-api-docs` `ne-d3d12-d3d12_shared_resource_compatibility_tier.md`), so a driver that does not implement shared resources cannot withdraw the promise, and the enum has no "unsupported" value to report. On unit A the runtime answers tier 2 while every shared create and open fails (BD-075). What the driver can do honestly is refuse those calls without taking the device with it; `docs/d3d12-shared-resources.md` holds the plan that would make the reported tier true |
 | 1004 SHADER | `D3D12DDI_SHADER_CAPS_0084`, 64, H:10515-10534 | MinPrecision, DoubleOps, ShaderSpecifiedStencilRef, TypedUAVLoadAdditionalFormats, ROVs | MinPrecisionSupport, DoublePrecisionFloatShaderOps, PSSpecifiedStencilRefSupported, TypedUAVLoadAdditionalFormats, ROVsSupported | OPTIONS |
 | 1004 | | WaveOps, WaveLaneCountMin, WaveLaneCountMax, TotalLaneCount, Int64Ops | same values (Int64Ops from Int64ShaderOps) | OPTIONS1 |
 | 1004 | | Native16BitOps | Native16BitShaderOpsSupported | OPTIONS4 |
@@ -302,6 +303,25 @@ GetCustomHeapProperties and the L1 check of `d3d12_device_validate_custom_heap_t
 the same policy it gives `set_memory_architecture_policy`, in the one create info that goes to QueryAdapterCaps and
 CreateDevice (V11). IOCoherent and the serialization tiers need no engine field. An engine-ddi-only alternative
 without an ABI change would be to pass NOT_AVAILABLE L1 heaps to the engine as L0.
+
+## Failures a create or an open DDI may report
+
+`windows-driver-docs` display `handling-errors.md` puts every creation function of a user-mode display driver in
+the AllowOutOfMemory category: the runtime admits `E_OUTOFMEMORY` and `D3DDDIERR_DEVICEREMOVED` and treats any
+other failure as critical, which costs the application its device and sets the removed reason to
+`DXGI_ERROR_DRIVER_INTERNAL_ERROR`. Measured twice on this stack: `E_NOTIMPL` out of
+`pfnCreateCommandSignature` (above) and, in all 13 shared-resource cells of `tools/win/capture-share`,
+`pfnCreateHeapAndResource` and `pfnOpenHeapAndResource` of a shared resource (BD-075, hr `0x887A0005`, removed
+reason `0x887A0020`). That the D3D12 runtime follows the same rule as D3D10/11 stays an INFERENCE from that
+document plus those two measurements.
+
+`engine_ddi::admitted_create_failure` (engine-ddi.h) is therefore the last step of `pfnCreateHeapAndResource`
+and `pfnOpenHeapAndResource`: whatever the refusal decided inside the driver, the slot reports `E_OUTOFMEMORY`,
+and the `log_refusal` line of the same call carries the real HRESULT, the heap and resource description and, for
+a refusal the shell took, the admission check that took it (`heap-import.h`, `ImportReport::refusal`). The shell
+applies the same step to its own wrapper of `pfnCreateHeapAndResource` (`native-tables.cpp`), because the owner
+scope around that slot can refuse as well. Other create slots are not covered yet; the shared-resource plan in
+`docs/d3d12-shared-resources.md` names the audit.
 
 ## Device
 
