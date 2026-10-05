@@ -30,6 +30,7 @@
 #include "../router-policy.h"
 #include "../router-identity.h"
 #include "bc250_adapter_identity.h" // driver/contract (build.ps1 /I)
+#include "bc250_scanout_caps.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -829,7 +830,10 @@ static void Child(const std::string &s)
             CHECK(o.hr == S_OK && Loaded(L"app-real\\amdgpu_wddm_d3d11.dll") && !Loaded(L"cpu\\bc250d3d.dll"), "hr=%08lx", o.hr);
             CHECK(o.funcs.pfnCreateDevice && o.funcs.pfnCloseAdapter && o.funcs.pfnCalcPrivateDeviceSize &&
                   o.funcs.pfnGetSupportedVersions && o.funcs.pfnGetCaps, "shell adapter table incomplete");
-            CHECK(QueryCalls == 1 && QuerySize == BC250_ADAPTER_CAPS_BYTES && QueryHandle == (HANDLE)(UINT_PTR)0x5A5A,
+            // The DXVK shell sizes its query from the last trailer in driver/contract, so that a kernel
+            // driver which writes a trailer only when all of it fits can reach it. The hosted UMD above
+            // reads the identity only and still asks for the shorter buffer.
+            CHECK(QueryCalls == 1 && QuerySize == BC250_SCANOUT_CAPS_TOTAL && QueryHandle == (HANDLE)(UINT_PTR)0x5A5A,
                   "adapter query calls=%u size=%u handle=%p", QueryCalls, QuerySize, QueryHandle);
             if (o.funcs.pfnCloseAdapter) CHECK(o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
             CHECK(Has(log, "route=gpu reason=app-allowed fallback=0 gpu_hr=00000000 hr=00000000"), "route log: %s", log.c_str());
