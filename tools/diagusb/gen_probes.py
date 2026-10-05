@@ -8,6 +8,7 @@ what the hand-computed addresses of the previous driver attempt really hit.
 Run:  python tools/diagusb/gen_probes.py
 """
 
+import functools
 import hashlib
 import json
 import sys
@@ -28,8 +29,14 @@ KERNEL_REF = "torvalds/linux master 93f51579e7df (fetched 2026-09-21)"
 DENY_IP = "UVD0"
 
 
+@functools.lru_cache(maxsize=None)
 def deny_range(ip_header=None):
-    """(low, high) BAR5 byte offsets of the denied UVD/VCN window. High is exclusive."""
+    """(low, high) BAR5 byte offsets of the denied UVD/VCN window. High is exclusive.
+
+    Cached: denied() is called once per candidate register of the sweep (6138 of them), and each
+    parse of the IP table costs about 0.6 ms. Without the cache the sweep spends 3.6 s in here.
+    The IP header does not change inside a run.
+    """
     from regcalc import DEFAULT_IP_HEADER, parse_ip_bases  # noqa: PLC0415  (one import site)
     bases = parse_ip_bases(HDR_DIR / (ip_header or DEFAULT_IP_HEADER))
     mine = sorted({seg for inst in bases[DENY_IP].values() for seg in inst.values() if seg})

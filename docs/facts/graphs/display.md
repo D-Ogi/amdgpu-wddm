@@ -10,15 +10,18 @@ Table, with each fact's status: [`../display.md`](../display.md). Edge types: `s
 flowchart LR
   M82["M82"]
   M83["M83"]
+  M86["M86"]
   M98["M98"]
   M99["M99"]
   M103["M103"]
   M106["M106"]
   M656["M656"]
   M657["M657<br/>tooling"]
+  M788["M788"]
   M83 ==>|supersedes| M82
   M99 -.->|refutes| M98
   M106 -.->|refutes| M103
+  M788 ==>|supports| M86
   M657 ==>|supersedes| M656
   classDef other stroke-dasharray:4 3
   class M657 other

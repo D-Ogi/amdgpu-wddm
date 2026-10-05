@@ -1362,7 +1362,11 @@ static int Dcn(void)
     printf("             DCHUBP_CNTL 0x%08lX / 0x000F1002\n", d.Hubp0Cntl);
     printf("otg0         OTG_CONTROL 0x%08lX / 0x80011311, master enable %s / ENABLED\n", d.Otg0Control,
            d.Otg0MasterEnable ? "ENABLED" : "off");
-    printf("             h_total %lu / 2079, v_total %lu / 1234\n", d.Otg0HTotal, d.Otg0VTotal);
+    // Both registers hold the total minus one, as display_timing.h reads them: print the field with the
+    // Linux reference next to it, then the mode it means. The bare name "h_total" on the field value put a
+    // 2079 by 1234 mode into a write-up once (E54).
+    printf("             OTG_H_TOTAL field %lu / 2079, OTG_V_TOTAL field %lu / 1234 (h_total %lu, v_total %lu)\n",
+           d.Otg0HTotal, d.Otg0VTotal, d.Otg0HTotal + 1, d.Otg0VTotal + 1);
     printf("             vblank interrupt enable (GLOBAL_SYNC_STATUS bit 12) %s (no Linux reference for this bit alone)\n",
            d.Otg0VblankIntEnabled ? "on" : "off");
     printf("             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) %s (docs/design/vsync-interrupt-route.md: latches\n"

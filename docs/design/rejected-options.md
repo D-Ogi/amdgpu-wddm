@@ -17,6 +17,7 @@ no text from them, and no AMD or ASRock firmware image goes near our tree.
 `MTSistemi/bc250-vaapi` at `4c667c5`, GPL-3.0-only.
 `rw-r-r-0644/bc250-core-unlock` at `569785a`, MIT.
 `62fixolab/Latest-Bazzite-AMD-BC-250-Patched-Images` at `b0366d9`, MIT.
+`MTSistemi/SkillFishOS` at `7d1628c`, GPL-3.0-only.
 
 ## Rejected, with the reason
 

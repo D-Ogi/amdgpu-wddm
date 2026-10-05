@@ -31,8 +31,11 @@ repository). The extracts are `grep` output, unedited.
    or the readback rejects a point under the lab floor, is absent from the log (0 matches).
 3. **Temperature at the sub-floor points.** At 800 MHz: 81.875 to 87.750 C, mean 84.55 C (n = 49).
    At 900 MHz: 81.500 to 81.750 C (n = 4). 87.750 C is also the maximum of the whole session.
-4. **The cap, not the load, asked for it.** Every governor line in `governor-subfloor-lines.txt` reads
-   `want 1000 cap 800` (or `cap 900`) with `throttle thermal-soft` and GPU busy 96.8 % to 100.0 %.
+4. **The cap, not the load, asked for it.** Of the 24 governor lines in
+   `governor-subfloor-lines.txt`, 22 read `want 1000 cap 800` and one `want 1200 cap 900`, all 23 with
+   `throttle thermal-soft`. The 24th reads `want 1100 cap 1100 throttle thermal-ramp`: the SMU readback
+   was still 900 MHz while the cap had already risen. GPU busy on these lines runs from 90.3 % to
+   100.0 %.
 5. **The clock histogram of the session**: 800 MHz 49, 900 MHz 4, 1000 MHz 170, 1100 MHz 181,
    1200 MHz 45, 1300 MHz 17, 1400 MHz 15, 1500 MHz 5 (486 readbacks in all).
 
@@ -47,9 +50,10 @@ repository). The extracts are `grep` output, unedited.
 
 ## The record this corrects
 
-Six comments and one line of `docs/hardware.md` said that the firmware has never run below 1000 MHz
-and cited fact M47. M47 records what the power tables publish (`sclk` levels 1000, 1500 and 2000 MHz,
-overdrive range 1000 to 2000 MHz), which is a different statement. The 1000 MHz bound of the imported
+Seven driver comments and two documents (`docs/hardware.md` and `docs/design/dpm.md`) said that the
+firmware has never run below 1000 MHz and cited fact M47. M47 records what the power tables publish
+(`sclk` levels 1000, 1500 and 2000 MHz, overdrive range 1000 to 2000 MHz), which is a different
+statement. The 1000 MHz bound of the imported
 Linux path (`CYAN_SKILLFISH_SCLK_MIN`) is amdgpu's own clamp, not a measured hardware floor. Fact
 M785 records what this session measured. The withdraw-on-refusal mechanism stays as insurance for a
 part that does refuse.
