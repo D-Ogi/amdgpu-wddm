@@ -794,8 +794,14 @@ void VidMmSummary(void)
             LONG64 mismatch=InterlockedCompareExchange64(&vm->EncodedSnoopMismatch[level][kind],0,0);
             if(!coherent && !noncoherent && !mismatch)continue;
             segment=kind==0?vm->Pte.system_segment:(kind==1?vm->Pte.vram_segment:vm->Pte.table_segment);
-            GuardLog("vidmm summary: PTE encoding level %u segment %u coherent %lld noncoherent %lld snoop mismatches %lld",
-                     level,segment,coherent,noncoherent,mismatch);
+            // Two lines since 0.7.208 (BD-070): the one line this was is 164 characters at its
+            // widest, and the count that fell off the end was the snoop mismatch - the one
+            // number of the three that must never be anything but zero. Both lines name the level
+            // and the segment, which is how monfence's run-lab.ps1 pairs them again.
+            GuardLog("vidmm summary: PTE encoding level %u segment %u coherent %lld noncoherent %lld",
+                     level,segment,coherent,noncoherent);
+            GuardLog("vidmm summary: PTE encoding level %u segment %u snoop mismatches %lld",
+                     level,segment,mismatch);
         }
     }
     GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls", vm->CpuCalls, vm->GpuCalls);
