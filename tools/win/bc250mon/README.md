@@ -11,7 +11,9 @@ because `bc250rd.sys` is admin-only.
  providers (threads)                  remote agent over SSH      owner at the machine
  GpuProvider, SystemProvider,         mon.py -> HTTP            hotkeys, buttons
  KmdProvider, KmdInfoProvider,        127.0.0.1:2250
- TelemetryProvider
+ TelemetryProvider,
+ OperatingPointProvider,
+ MeasurementGuardProvider
         |                               |                               |
         v                               v                               v
    +---------------------------- State (State.cs) ----------------------------+
@@ -233,6 +235,109 @@ monitor working area's height. Font size, click-through and hotkeys are unchange
 cache replacement and panel geometry without opening a window or querying a GPU;
 `build.ps1` runs this check. The source fixtures are never deployed as live data.
 
+## Operating point
+
+`OperatingPointProvider.cs` samples every 10 seconds. It shows the operating point a measurement depends on:
+the compute units in use, the DPM governor, the health of this device start, and the GPU desktop interop
+switches. One panel holds all four, because they answer one question. Is this machine in the state that the
+measurement assumes?
+
+The compute-unit row exists because of a regression. Between 2026-10-02 and 2026-10-05 the lab ran 24 compute
+units and not 40. `CuMode` is in no INF file and in no installer default table, so a tester release install
+left the value out, and the driver harvested the part to 24 units. Nothing on the screen said so. Every
+Witcher 3 and Rise of the Tomb Raider number of those three days is a 24 CU number. The rule that follows from
+it: anything that changes a measurement or the operating point silently belongs on the overlay, amber as soon
+as it differs from the lab's expectation.
+
+| Row | Source | Amber | Red |
+|---|---|---|---|
+| `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: applied units, counted units, and the pending or confirmed mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | applied units differ from the expectation, 40 applied and nobody confirmed it, or the registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`) | a request for 40 units that applied 24, or 0 units applied (the stage did not run, or the stock restore failed) |
+| `CU setting` | `Parameters\CuMode`, `CuModePending` and `CuModeConfirmed`: what the next start applies | the setting differs from the expectation. An absent `CuMode` reads `the next start harvests to 24` | - |
+| `CU reason` | `Parameters\CuModeLastReason` or the snapshot, by the name of `enum bc250_cu_reason`. The row appears only when the reason is not `none` | any other reason | the five reasons that make the driver write `CuMode = 24` durably: `PENDING_UNCONFIRMED`, `POWER_GATING`, `STOCK_UNEXPECTED`, `READBACK`, `RESTORE_FAILED` |
+| `CU snapshot` | why the escape gave no answer. The row appears only then | always | - |
+| `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`, or `STABLE` (a D3D12 client called `SetStablePowerState` and pinned the clock to the floor), or a snapshot older than 30 seconds | `PENDING` without `CONFIRMED` (a restart falls back to fixed-lab), mode DPM without `GOVERNING`, or SMU errors |
+| `DPM cap` | `CapMHz` against `MaxMHz`, and the throttle by the name of `enum bc250_dpm_throttle` | the thermal cap sits under the ceiling, or the throttle is one of the four thermal ones | throttle `SMU` (the governor stopped after SMU failures), or SMU errors |
+| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch | flags 7 (the start is not confirmed yet), or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation or the epoch changed inside this overlay session, or `FULL` without `READY` |
+| `Interop` | `Parameters\InteropLastState`, which the driver writes at every full start as effective bits plus requested bits shifted left by 8. `InteropSession` and `InteropLastEnd` beside it | a session marker that nobody removed, which closes the next start, or a last end of `device stop` | the effective switches differ from the requested ones (the driver closed the GPU desktop path), or one switch alone |
+
+## Measurement guard
+
+`MeasurementGuardProvider.cs` samples every 10 seconds. The operating-point panel reports what the driver
+decided. This panel reports what the machine around the driver changes without the driver.
+
+| Row | Source | Amber | Red |
+|---|---|---|---|
+| `Parameters` | every REG_DWORD of `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, against the record the installer writes of its own table in `HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`, with `expectations.json` on top of it | any expected value that differs, or that is absent. The row names at most three of them and counts the rest | one of the latched gates is 0 where the installer applied a non-zero: `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `EnableGpuSubmit`, `DpmMode` |
+| `Defaults` | the row appears only when `Release\AppliedDefaults` is absent or does not parse. Then the panel compares `CuMode` alone | always | - |
+| `Markers` | `STOP`, `graphics-summary.pause`, `graphics-api.pause` and `graphics-api.skip` in the data directory, plus `C:\BC250\tools\radv-perftest.txt` and `C:\BC250\tmp\amdgpu_wddm_radv.cfg` on the lab | any of the four markers exists, or one of the two files holds text. An armed file shows its first characters and its age | - |
+| `Release` | `Release\Version` and `Release\InstalledUtc` | no record | - |
+| `KMD image` | the version the live driver reports in its DPM snapshot, against `kmd_abi` of `manifest.json` under `Release\InstallDir` | either side is unknown | the two differ, so somebody swapped a module under a release that claims otherwise |
+
+### The expectations file
+
+`expectations.json` in the monitor data directory (`C:\BC250\mon\expectations.json`) holds what this lab
+expects of itself. The file is optional. Without it the expectation is 40 compute units and the installer's own
+record of the applied defaults.
+
+```json
+{ "schema": 1, "cuMode": 40, "parameters": { "DpmMaxMHz": 2000, "KeepLog": null } }
+```
+
+- `cuMode` drives the `CU` row and the `CuMode` expectation of the `Parameters` row together. The default is 40.
+- `parameters` adds expectations, and replaces an installed default where the lab deviates on purpose.
+- A `null` value switches that one comparison off.
+- A file that does not parse never hides the defaults. The panel keeps the default expectations and shows the
+  parse error in an `Expectations` row.
+
+### Cost
+
+The two panels poll every 10 seconds and send two KMD escapes between them. The driver answers both escapes
+from adapter-owned software state with `NoAdapterSynchronization` alone, as it answers the DPM read. No BAR
+access, no SMU message, and no scheduler idle. The warning above still holds: a `log summary` escape every 5
+seconds once cost a game 300 ms, and that escape takes the adapter lock, which these two do not.
+
+- The DPM mode, cap and throttle cost nothing at all. `TelemetryProvider` reads that snapshot four times a
+  second anyway and publishes it in a `DpmFeed`, which both panels read.
+- The interop state comes from the driver's registry mirror and not from a third escape.
+- The CU read uses the control DLL's cached adapter path, which the DPM read shares. The call costs a few
+  microseconds.
+- The start-health read goes through the control DLL's other lookup, which walks SetupAPI for about 0.7 ms.
+  `KmdProvider` uses that same path already. Once per 10 seconds it is 0.007 % of one core.
+- The release manifest is about 37 kB. The panel parses it only when its write time changes.
+- The host test measures the managed work of both panels at 4.6 us per poll.
+
+`graphics-summary.pause`, the pipeline panel's own marker, also stops both escapes of the operating-point
+panel. The rows then show the last snapshot, and the `Sampled` row says `paused; snapshot HH:mm:ss` in amber,
+so a paused panel never looks like a fresh one. The registry rows and the whole measurement guard keep working
+while paused, because a registry read costs about ten microseconds.
+
+### The log
+
+Each panel writes one line to the log when its state changes, and not once per poll. The line is the state
+itself, in a compact form:
+
+```
+cu=40/40 set=40 flags=21 reason=0 snapshot=yes; dpm=1/10 max=1500 errors=no; health=15 gen=3 epoch=1; interop=3/3 end=3
+parameters=as expected; markers=none; release=0.7.205.100-tester.11 kmd=0x000700CD/0x000700CD
+```
+
+The clock, the temperature, the throttle and the completion counters stay out of that line on purpose. A game
+changes all four every second, and a log full of normal thermal behaviour hides the events that matter. The
+level of the line is the worst level among the panel's rows.
+
+### What these panels cannot see
+
+- The deployed `bc250control.dll` of 2026-09-30 has no `Bc250CuMode` export. The `CU` row then falls back to
+  the driver's registry record and names the reason. Deploy the DLL beside the executable, as `build.ps1`
+  copies it.
+- The panel does not compare the registered UMD and ICD paths. The adapter's class key needs a SetupAPI walk of
+  about 0.7 ms, and the panel keeps its budget instead.
+- The interop registry mirror carries the effective and the requested bits. It does not carry the escape's
+  `UNCLEAN`, `STALE` or `CLOSED_BY_DRIVER` flags. A difference between effective and requested already names
+  the state that matters.
+- The 251 rule for `radv-perftest.txt` belongs to the operator. The overlay does not know when a game session
+  started, so the row shows the content and the age, and the operator applies the rule.
+
 ## Scanout screenshots (the full WDDM table's own picture)
 
 Under the full WDDM table, `screenshot`'s GDI capture (`Screenshot.CaptureScreen`, `CopyFromScreen`) reads the
@@ -331,9 +436,13 @@ pwsh tools\win\bc250mon\build.ps1 -Out $env:BC250_ROOT\scratch\build\bc250mon -C
 ```
 
 The build runs the Python layout tests (`test_stages.py`, `test_telemetry.py`: `DpmSnapshot` against the KMD's
-`BC250_ESCAPE_DPM`, `VideoMemorySnapshot` against the control DLL) and the host tests `test-vulkan-inventory`,
-`test-start-confirmation`, `test-graphics-summary`, `test-telemetry` and `test-graphics-api` before it compiles. The telemetry line
-needs a `bc250control.dll` that exports `Bc250Dpm` and `Bc250VideoMemory`; the two files are deployed together.
+`BC250_ESCAPE_DPM`, `VideoMemorySnapshot` against the control DLL, `test_lab_state.py`: `CuModeSnapshot` against
+`BC250_ESCAPE_CU_MODE`, the DPM, start-health and interop flag bits, the reason and throttle names, and the
+registry value names the operating-point panel reads) and the host tests `test-vulkan-inventory`,
+`test-start-confirmation`, `test-graphics-summary`, `test-telemetry`, `test-graphics-api` and `test-lab-state`
+before it compiles. The telemetry line needs a `bc250control.dll` that exports `Bc250Dpm` and
+`Bc250VideoMemory`, and the `CU` row needs one that also exports `Bc250CuMode`, which the DLL of 2026-09-30
+does not. Deploy the executable and the DLL together.
 
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
 privileges" that runs it. To replace a running one, stop the process, overwrite the file and start the task
@@ -344,6 +453,9 @@ Get-Process bc250mon | Stop-Process -Force
 Copy-Item C:\BC250\mon\new\bc250mon.exe C:\BC250\mon\bc250mon.exe -Force
 schtasks /run /tn "BC250 monitor overlay"
 ```
+
+`expectations.json` in `C:\BC250\mon\` is optional. The lab needs it only where it deviates from 40 compute
+units or from the defaults the installer applied. See "The expectations file" above.
 
 ## mon.py
 
