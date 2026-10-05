@@ -302,6 +302,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
        heap.CreationNodeMask>1 || heap.VisibleNodeMask>1)return E_NOTIMPL;
     if(!surface && (request->surface_row_pitch || request->surface_layout_size))return E_INVALIDARG;
     D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
+    bool surface_scanout=false;
     if(surface){
         const auto* r=request->resource;
         if(!(heap.Flags&D3D12DDI_HEAP_FLAG_PRIMARY) || (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE) ||
@@ -309,9 +310,22 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
            r->ResourceType!=D3D12DDI_RT_TEXTURE2D || r->DepthOrArraySize!=1 || r->MipLevels!=1 ||
            r->SampleDesc.Count!=1 || r->SampleDesc.Quality || r->Width>UINT32_MAX)return E_NOTIMPL;
         // The storage formats the compositor may open, from the one table the kernel driver and the
-        // compositor's UMD read as well.
-        const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
-                                                  AMDGPU_WDDM_SURFACE_COMPOSED);
+        // compositor's UMD read as well. M15.14: when the scan-out mode is selected and this format is
+        // also a SCANOUT_PRIMARY row - BGRA8 or X8, never the 10-bit or FP16 composed primaries - the
+        // buffer is admitted as a scan-out primary instead, so the display pipeline can read it
+        // directly. The mode is off by default; the kernel driver decides whether any flip of the
+        // surface is admitted, against the POST geometry and the segment the allocation landed in.
+        const auto* composed=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
+                                                       AMDGPU_WDDM_SURFACE_COMPOSED);
+        const auto* row=composed;
+        // present-cached and present-noprimary describe the opposite intent for the same buffer, so
+        // scan-out stands down rather than failing the allocation when either is also listed.
+        if(ddi_experiment("scanout-flip") && !ddi_experiment("present-cached") &&
+           !ddi_experiment("present-noprimary")){
+            const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
+                                                         AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
+            if(direct){row=direct;surface_scanout=true;}
+        }
         if(!row)return E_NOTIMPL;
         surface_format=static_cast<D3DDDIFORMAT>(row->d3dddi);
         if(!request->memory_type_bits || !request->surface_row_pitch || !request->surface_layout_size ||
@@ -354,7 +368,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
         hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
             request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
-            ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"));
+            ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout);
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;
