@@ -155,14 +155,6 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
-# No shipped document may name a package version other than this one. The release notes are the one exception: they
-# are chosen by version above, and they name an earlier release where a tester needs to know about it.
-foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
-    if ($d.Name -like 'RELEASE-NOTES*') { continue }
-    $named = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
-    if ($named.Count) { throw "$($d.Name) names the package version $($named -join ', '): a shipped document may name only this package's version ($Version), or no version at all" }
-}
-'  documents: {0} name no package version but this one' -f (@(Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' }).Count)
 # The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The installer's
 # continuation runs it from the staged closure after each restart that a setup-window run asked for.
 if ($SetupApp) {
@@ -196,6 +188,16 @@ foreach ($f in $sources.files) {
     $leaf = ($f.path -replace '^payload/', '') -replace '/', '\'
     if ((Get-Content -LiteralPath (Join-Path $pkg 'THIRD-PARTY.md') -Raw) -notmatch [regex]::Escape("``$leaf``")) { throw "THIRD-PARTY.md has no row for $($f.path)" }
 }
+# No shipped document may name a package version other than this one: TESTERS.md named 0.7.199.100-tester.11 in every
+# package up to tester.12, and it read as the tester-facing note. This runs after the last document is copied, so it
+# covers every one of them. The release notes are the one exception: they are chosen by version above, and they name
+# an earlier release where a tester has to know about it.
+foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
+    if ($d.Name -like 'RELEASE-NOTES*') { continue }
+    $versionNames = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
+    if ($versionNames.Count) { throw "$($d.Name) names the package version $($versionNames -join ', '): a shipped document may name only this package's version ($Version), or no version at all" }
+}
+'  documents: {0} name no package version but this one ({1})' -f @(Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' }).Count, ((Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' } | ForEach-Object { $_.Name }) -join ', ')
 
 # The AMD firmware is not part of the package: manifest.json carries the pinned list (tools/firmware) and the
 # installer downloads the files at install time.
