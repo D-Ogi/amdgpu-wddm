@@ -67,12 +67,50 @@ $patterns = [ordered]@{
         names  = @('presents', 'flips', 'address_calls', 'above_dispatch')
     }
     scanout  = @{
-        # KMD 0.7.207.1 adds a 'gated' column (EnableScanoutAdmit=0 refusals); 0.7.206.1 prints six columns.
-        # 0.7.207.1 also cuts the line at its 160-character log text limit, inside the refusal columns, so those
-        # columns are optional: the verdict rests on the first five counters, which always survive.
-        regex  = 'scan-out flips (\d+) of (\d+) requested candidates; admission ok/no-alloc/not-requested (\d+)/(\d+)/(\d+)(?:, format/geometry/pitch/size/segment/alignment(?:/gated)? (\d+)/(\d+)/(\d+)/(\d+)/(\d+)/(\d+)(?:/(\d+))?)?'
-        names  = @('scanout_flips', 'scanout_requests', 'admit_ok', 'admit_no_allocation', 'admit_not_requested',
-                   'admit_format', 'admit_geometry', 'admit_pitch', 'admit_size', 'admit_segment', 'admit_alignment', 'admit_gated')
+        # The five counters that carry every verdict. They are the head of the line in every driver that has
+        # them (0.7.206.1 and up) and they survive the 160-character cut of 0.7.207.1.
+        #   scanout_requests counts candidates at SetVidPnSourceAddress time, not creates: a zero cannot tell
+        # "no client asked" from "the client asked and the compositor never passed it on". The create counters
+        # below tell those apart.
+        regex  = 'scan-out flips (\d+) of (\d+) requested candidates; admission ok/no-alloc/not-requested (\d+)/(\d+)/(\d+)'
+        names  = @('scanout_flips', 'scanout_requests', 'admit_ok', 'admit_no_allocation', 'admit_not_requested')
+    }
+    refusals = @{
+        # The refusal columns, which have moved and been renamed since 0.7.206.1: six columns on the same line
+        # in 0.7.206.1, a seventh ('gated', EnableScanoutAdmit=0) in 0.7.207.1 where the 160-character cut often
+        # ate them, and since 0.7.208.1 a line of their own with two names shortened to fit ('geom', 'align').
+        # Both spellings are read here, so this trial judges a refusal on any of those drivers. A line that is
+        # cut inside the numbers matches nothing and is reported absent, never as a column of zeros.
+        regex  = 'format/(?:geometry|geom)/pitch/size/segment/(?:alignment|align)(?:/gated)? (\d+)/(\d+)/(\d+)/(\d+)/(\d+)/(\d+)(?:/(\d+))?'
+        names  = @('admit_format', 'admit_geometry', 'admit_pitch', 'admit_size', 'admit_segment', 'admit_alignment', 'admit_gated')
+    }
+    creates  = @{
+        # 0.7.209.1: every type-0 create bucketed by the resource record it arrived with, asked for scan-out
+        # or not. A standard primary arrives with no record at all (none), a client that asks for scan-out
+        # arrives as v3 asked. This is what says whether the client's own buffer ever reached the driver.
+        regex  = 'type0 creates asked/not by record none (\d+)/(\d+) v1 (\d+)/(\d+) v2 (\d+)/(\d+) v3 (\d+)/(\d+)'
+        names  = @('create_none_asked', 'create_none_plain', 'create_v1_asked', 'create_v1_plain',
+                   'create_v2_asked', 'create_v2_plain', 'create_v3_asked', 'create_v3_plain')
+    }
+    creates2 = @{
+        regex  = 'type0 creates other (\d+)/(\d+), PRIMARY records (\d+), in a resource group (\d+)'
+        names  = @('create_other_asked', 'create_other_plain', 'create_primary_records', 'create_in_resource')
+    }
+    flipmode = @{
+        # 0.7.209.1: what the OS asked for on each address call, and how many presents went through the
+        # desktop. independent > 0 is the compositor handing the source over; redirected presents are the
+        # frames it took back.
+        regex  = 'flip flags mode/immediate/shared-transition/independent (\d+)/(\d+)/(\d+)/(\d+), redirected presents (\d+)'
+        names  = @('flip_mode_change', 'flip_immediate', 'flip_shared_transition', 'flip_independent',
+                   'redirected_presents')
+    }
+    handshake = @{
+        # 0.7.209.1: the published DirectFlip answer of this adapter start, which is the operator's
+        # EnableDirectFlipHandshake ANDed with every start-latched fact the flip path needs. It is a state and
+        # not a count: with it off, the compositor is never offered the flip and the scan-out arm can only end
+        # "not reached". Absent on any older driver, which is the same as off.
+        regex  = 'DirectFlip handshake (on|off)'
+        names  = @('directflip_handshake')
     }
     vidpn    = @{
         regex  = 'vidpn flip (\w+): (\d+) hardware flips, (\d+) refused'
@@ -160,6 +198,26 @@ function Write-Verdict {
     }
     else {
         Write-Output 'VERDICT not reached: no scan-out candidate reached SetVidPnSourceAddress, so the stop is above the kernel driver.'
+        # Where above it, as far as the driver can tell. These three answers come from 0.7.209.1 and are
+        # reported only when the running driver carries them; on an older driver the trial says so once and
+        # draws no conclusion from their absence.
+        if ($After.values.Contains('directflip_handshake')) {
+            Write-Output ("  DirectFlip handshake {0} in the running driver: {1}" -f $After.values['directflip_handshake'],
+                $(if ($After.values['directflip_handshake'] -eq 'on') { 'the compositor was told the driver accepts a client buffer, so its refusal is its own' }
+                  else { 'the compositor was never offered the flip, so this arm could not have reached the driver (set EnableDirectFlipHandshake and restart the adapter)' }))
+        }
+        if (Has-Counter $Before $After 'create_v3_asked') {
+            $asked = $Delta.create_v3_asked + $Delta.create_v2_asked + $Delta.create_v1_asked + $Delta.create_none_asked + $Delta.create_other_asked
+            Write-Output ("  type-0 creates during the trial: {0} asked for scan-out ({1} of them with a v3 record), {2} did not - {3}" -f
+                $asked, $Delta.create_v3_asked,
+                ($Delta.create_none_plain + $Delta.create_v1_plain + $Delta.create_v2_plain + $Delta.create_v3_plain + $Delta.create_other_plain),
+                $(if ($asked -gt 0) { 'the buffer was created for scan-out and the flip never came: the compositor kept the source' }
+                  else { 'no buffer was ever created for scan-out, so the stop is in the client or in its shell, not in the compositor' }))
+        }
+        if (Has-Counter $Before $After 'flip_independent') {
+            Write-Output ("  the OS asked for: {0} mode changes, {1} immediate, {2} shared-primary transitions, {3} independent-flip exclusive; {4} presents went through the desktop" -f
+                $Delta.flip_mode_change, $Delta.flip_immediate, $Delta.flip_shared_transition, $Delta.flip_independent, $Delta.redirected_presents)
+        }
         Write-Output '  For a borderless chain that layer is the compositor: DWM decides DirectFlip through its own UMD, which has no CheckDirectFlipSupport entry (see docs/design/scanout-admission.md, "What is still missing").'
         Write-Output '  A D3D12 chain in the fullscreen state is no exception: DXGI keeps it under the compositor. On unit A (2026-10-05) DWM consumed 599 of its 600 presents as windowed flips and scanned out its own three buffers throughout, with GetFullscreenState exclusive (etw-present-mode.py on a -PresentMode capture).'
     }
@@ -185,6 +243,29 @@ vidpn flip on: 4600 hardware flips, 0 refused
 wddm summary: presents 520, flips 4600 of 4601 address calls (0 arrived above DISPATCH_LEVEL)
 wddm summary: scan-out flips 0 of 600 requested candidates; admission ok/no-alloc/not-requested 4500/0/0, format/geometry/pitch/size/segment/alignment 0/0/0/0/600/0
 vidpn flip on: off: 0 hardware flips, 0 refused
+'@
+    # The same driver state as $v1/$v2, as 0.7.209.1 prints it: the refusals on a line of their own with the
+    # short column names, the create and flip-mode witnesses, and the published handshake answer. Every sample
+    # above stays, because the trial must keep reading the drivers that are already deployed.
+    $w1 = @'
+wddm summary: presents 400, flips 4000 of 4001 address calls (0 arrived above DISPATCH_LEVEL)
+wddm summary: scan-out flips 0 of 0 requested candidates; admission ok/no-alloc/not-requested 3900/0/0
+wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+wddm summary: type0 creates asked/not by record none 0/12 v1 0/0 v2 0/0 v3 0/0
+wddm summary: type0 creates other 0/0, PRIMARY records 0, in a resource group 0
+wddm summary: flip flags mode/immediate/shared-transition/independent 1/4000/0/0, redirected presents 400
+wddm: DirectFlip handshake off
+vidpn flip on: 4000 hardware flips, 0 refused
+'@
+    $w2 = @'
+wddm summary: presents 520, flips 4600 of 4601 address calls (0 arrived above DISPATCH_LEVEL)
+wddm summary: scan-out flips 600 of 600 requested candidates; admission ok/no-alloc/not-requested 4500/0/0
+wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+wddm summary: type0 creates asked/not by record none 0/12 v1 0/0 v2 0/0 v3 3/0
+wddm summary: type0 creates other 0/0, PRIMARY records 3, in a resource group 3
+wddm summary: flip flags mode/immediate/shared-transition/independent 1/4600/1/1, redirected presents 400
+wddm: DirectFlip handshake on
+vidpn flip on: 4600 hardware flips, 0 refused
 '@
     $failures = 0
     function Judge { param($BeforeText, $AfterText, $Arm)
@@ -219,6 +300,29 @@ vidpn flip on: off: 0 hardware flips, 0 refused
     # Nothing reached the kernel driver: the verdict names the layer above it, and names DWM.
     Expect 'not reached names DWM' (Judge $v1 $v1 'scanout-flip-1920x1200') 'VERDICT not reached'
     Expect 'not reached explains DWM' (Judge $v1 $v1 'scanout-flip-1920x1200') 'DWM decides DirectFlip'
+    # 0.7.208.1 and 0.7.209.1 print the refusals on their own line, with 'geom' and 'align'. The verdicts must
+    # be the same ones, and the refusal must still be named.
+    Expect 'two-line driver, scan-out confirmed' (Judge $w1 $w2 'scanout-flip-1920x1200') 'confirmed at the display hardware'
+    # The control arm of the same driver: the desktop went on flipping and nothing asked for scan-out.
+    $wQuiet = $w2.Replace('scan-out flips 600 of 600', 'scan-out flips 0 of 0').Replace('v3 3/0', 'v3 0/0').
+        Replace('PRIMARY records 3, in a resource group 3', 'PRIMARY records 0, in a resource group 0').
+        Replace('independent 1/4600/1/1', 'independent 1/4600/0/0').Replace('handshake on', 'handshake off')
+    Expect 'two-line driver, control arm quiet' (Judge $w1 $wQuiet '') 'the registered path is unchanged and still flipping'
+    $wGated = $w2.Replace('scan-out flips 600 of 600', 'scan-out flips 0 of 600').Replace('align/gated 0/0/0/0/0/0/0', 'align/gated 0/0/0/0/600/0/0').Replace('vidpn flip on: 4600', 'vidpn flip on: 4000')
+    Expect 'two-line driver, refusal named' (Judge $w1 $wGated 'scanout-flip-1920x1200') 'VERDICT refused.*admit_segment 600'
+    # The three 0.7.209.1 witnesses in the "not reached" verdict: the handshake state, whether a buffer was ever
+    # created for scan-out, and what the OS asked for. Each is reported only when the driver carries it.
+    Expect 'not reached names the handshake' (Judge $w1 $wQuiet 'scanout-flip-1920x1200') 'DirectFlip handshake off'
+    Expect 'not reached, no scan-out create' (Judge $w1 $wQuiet 'scanout-flip-1920x1200') 'no buffer was ever created for scan-out'
+    $wCreated = $wQuiet.Replace('v3 0/0', 'v3 3/0').Replace('handshake off', 'handshake on')
+    Expect 'not reached, buffer created' (Judge $w1 $wCreated 'scanout-flip-1920x1200') 'the compositor kept the source'
+    Expect 'not reached, handshake on' (Judge $w1 $wCreated 'scanout-flip-1920x1200') 'its refusal is its own'
+    Expect 'not reached names the flip flags' (Judge $w1 $wCreated 'scanout-flip-1920x1200') 'independent-flip exclusive'
+    # An older driver carries none of the three: the verdict stands and says nothing it cannot know.
+    Expect 'older driver, no witness lines' (Judge $v1 $v1 'scanout-flip-1920x1200') 'VERDICT not reached'
+    if ((Judge $v1 $v1 'scanout-flip-1920x1200') -match 'DirectFlip handshake|created for scan-out|independent-flip') {
+        $failures++; Write-Host 'FAIL older driver: the verdict claimed a witness the driver does not print'
+    } else { Write-Host 'ok   older driver claims no witness' }
     # The geometry has to be named: a bare scanout-flip is refused before anything runs.
     try { & $PSCommandPath -SelfTest:$false -Client $PSCommandPath -Cli $PSCommandPath -Directory (Join-Path $env:TEMP 'scanout-selftest-unused') -Experiment 'scanout-flip' | Out-Null
           $failures++; Write-Host 'FAIL bare scanout-flip was accepted' }

@@ -9,7 +9,10 @@
 static unsigned queryMode;
 static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* request) {
     assert(adapter==reinterpret_cast<HANDLE>(UINT_PTR(0x1234)));
-    assert(request->PrivateDriverDataSize==BC250_ADAPTER_CAPS_BYTES);
+    // The kernel driver writes an optional trailer only when all of it fits, so the asked-for size is the
+    // whole contract between the two halves: a buffer sized to an older trailer silently reads zeros where
+    // a newer one would be. This check refuses that, and the scan-out trailer written below would overrun.
+    assert(request->PrivateDriverDataSize==BC250_SCANOUT_CAPS_TOTAL);
     auto bytes=static_cast<unsigned char*>(request->pPrivateDriverData);
     for(unsigned i=0;i<request->PrivateDriverDataSize;++i)assert(bytes[i]==0);
     if(queryMode==1)return E_ACCESSDENIED;
@@ -31,6 +34,11 @@ static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* re
     if(queryMode==11)id.version+=1;
     if(queryMode==12)id.size-=4;
     if(queryMode!=6)memcpy(bytes+BC250_ADAPTER_IDENTITY_OFFSET,&id,sizeof(id));
+    // A driver that writes the last trailer the contract defines. Nothing here reads it yet; it stands
+    // where the kernel driver puts it, so the buffer above is proven to hold a complete one.
+    bc250_scanout_caps scanout{BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,
+        sizeof(bc250_scanout_caps),BC250_SCANOUT_CAPS_DIRECT_FLIP,1920,1200};
+    memcpy(bytes+BC250_SCANOUT_CAPS_OFFSET,&scanout,sizeof(scanout));
     return S_OK;
 }
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
