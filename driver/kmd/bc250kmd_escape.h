@@ -43,11 +43,14 @@
                                             // every scan-out refusal count (BD-070). The scan-out summary, the
                                             // VidPn flip summary, the blit destination summary, the object
                                             // created/destroyed summary and the vidmm PTE encoding summary now
-                                            // write two lines each, every one of them inside the line. The
-                                            // first line of each pair keeps word for word the text its parser
-                                            // reads (the scan-out trial, the overlay, runcompare, monfence), so
-                                            // a tool that knows only the old shape still reads what it read
-                                            // before. No escape struct, no journal record layout, no counter
+                                            // write two lines each, every one of them inside the line. For the
+                                            // scan-out, the VidPn flip and the blit destination summaries the
+                                            // first line keeps word for word the text its parser reads, so the
+                                            // scan-out trial and the overlay read what they always read. The
+                                            // other two pairs needed their reader changed: runcompare takes the
+                                            // object pair as a block of two lines, and monfence's run-lab.ps1
+                                            // keys the vidmm counters by level and segment. No escape struct, no
+                                            // journal record layout, no counter
                                             // and no gate changed, and BC250_LOG_TEXT itself is untouched: the
                                             // constant moves because packagecheck VRS010 matches it against the
                                             // INF revision, and because 0.7.207.1 is installed on the lab and

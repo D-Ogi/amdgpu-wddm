@@ -156,9 +156,17 @@ adapter is the only one in the machine and nothing can render on it. So it is bu
   `wddm summary: scan-out ... format/geometry/pitch/size/segment/alignment/gated 0/0/` and lost every refusal
   count (BD-070). A summary line therefore carries the numbers a tool parses first, and a line that does not
   fit is split into two lines with the same prefix. The gate `guardlog-width` of `tools/quality/quick.ps1`
-  measures every `GuardLog` format at its widest printing and fails on a new line over the limit; the formats
-  that were already over it when the gate landed are listed in `tools/quality/guardlog_width_baseline.txt`,
-  with the width each had, and that list can only shrink.
+  measures every `GuardLog` format in `driver/kmd` at its widest printing and fails on a new line over the
+  limit. It reads the `.c`, `.inc` and `.h` files of that directory, because `wddm.c` includes
+  `wddm_allocation_identity.inc` and that file carries a `GuardLog` call of its own. The formats that were
+  already over the limit when the gate landed are listed in `tools/quality/guardlog_width_baseline.txt`, with
+  the width each had, and that list can only shrink.
+
+  Two lines of a pair are two samples. `WddmSummary` also runs while the adapter runs, because the overlay
+  polls it, so a counter can move between the two `GuardLog` calls. Where a reader adds numbers across the two
+  lines - the scan-out admission counts against the requested count, the object pairs against the live count -
+  the driver copies the counters into locals first and prints both lines from one sample. The other pairs hold
+  no such sum, and they stay what the rest of this summary is: independently sampled counters.
 
 ### Running stage A
 
