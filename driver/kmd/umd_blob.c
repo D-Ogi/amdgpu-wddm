@@ -30,6 +30,7 @@ const char* UmdBlobStatusText(int status)
     case UMD_BLOB_BAD_IP: return "bad ip";
     case UMD_BLOB_BAD_NODE: return "bad node";
     case UMD_BLOB_BAD_IB: return "bad ib";
+    case UMD_BLOB_BAD_SCANOUT: return "bad scanout";
     default: return "unknown";
     }
 }
@@ -57,6 +58,11 @@ static void ClearAlloc(struct umd_alloc_view* out)
     out->exact_va = 0;
     out->gem_flags = 0;
     out->cache_policy_valid = 0;
+    out->scanout = 0;
+    out->scanout_width = 0;
+    out->scanout_height = 0;
+    out->scanout_pitch = 0;
+    out->scanout_format = 0;
 }
 
 static void ClearContext(struct umd_context_view* out)
@@ -81,6 +87,8 @@ int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* ou
     const unsigned char* p = (const unsigned char*)bytes;
     unsigned long magic, version, size, flags, heap;
     unsigned long long allocSize, align, requested;
+    unsigned long scanoutWidth = 0, scanoutHeight = 0, scanoutPitch = 0, scanoutFormat = 0;
+    int scanout = 0;
 
     ClearAlloc(out);
     if (p == 0 || len < UMD_BLOB_ALLOC_BYTES) return UMD_BLOB_TOO_SMALL;
@@ -103,6 +111,25 @@ int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* ou
     // cannot be honoured, so it is a refusal rather than "any VA".
     if ((flags & (UMD_BLOB_A_SPARSE | UMD_BLOB_A_USERPTR)) != 0) return UMD_BLOB_BAD_FLAGS;
     if ((flags & UMD_BLOB_A_EXACT_VA) != 0 && requested == 0) return UMD_BLOB_BAD_VA;
+    // M15.14: the scan-out request. Version 3 is what put the four words in the reserved tail, so an
+    // older producer asking for scan-out is describing nothing and is refused rather than read. The
+    // aperture is never scanned out (wddm.c offers DirectFlip on the local segment alone), so VRAM is
+    // part of the shape, not a later preference. Everything else - the POST geometry, the format's
+    // policy bit, the segment the allocation really landed in - is scanout_admit.h's, at flip time.
+    if ((flags & UMD_BLOB_A_SCANOUT) != 0)
+    {
+        if (version < UMD_BLOB_ALLOC_VERSION_SCANOUT || heap != UMD_BLOB_HEAP_VRAM) return UMD_BLOB_BAD_SCANOUT;
+        scanoutWidth = Rd32(p + UMD_BLOB_ALLOC_SCANOUT_AT + 0);
+        scanoutHeight = Rd32(p + UMD_BLOB_ALLOC_SCANOUT_AT + 4);
+        scanoutPitch = Rd32(p + UMD_BLOB_ALLOC_SCANOUT_AT + 8);
+        scanoutFormat = Rd32(p + UMD_BLOB_ALLOC_SCANOUT_AT + 12);
+        if (scanoutWidth == 0 || scanoutHeight == 0 || scanoutPitch == 0 || scanoutFormat == 0)
+            return UMD_BLOB_BAD_SCANOUT;
+        // The rows must fit in the allocation this same blob asked for, so that no later reader has to
+        // multiply the geometry out again to find that it never did.
+        if ((unsigned long long)scanoutPitch * scanoutHeight > allocSize) return UMD_BLOB_BAD_SCANOUT;
+        scanout = 1;
+    }
     if (out != 0)
     {
         out->bytes = allocSize;
@@ -113,6 +140,11 @@ int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* ou
         out->gem_flags = Rd64(p + 40);
         out->cache_policy_valid = version >= 2;
         out->exact_va = (flags & UMD_BLOB_A_EXACT_VA) != 0;
+        out->scanout = scanout;
+        out->scanout_width = scanoutWidth;
+        out->scanout_height = scanoutHeight;
+        out->scanout_pitch = scanoutPitch;
+        out->scanout_format = scanoutFormat;
     }
     return UMD_BLOB_OK;
 }
