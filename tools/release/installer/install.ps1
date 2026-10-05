@@ -51,6 +51,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'engine.ps1')
 . (Join-Path $here 'release-witness.ps1')
 . (Join-Path $here 'compatibility.ps1')
+. (Join-Path $here 'mft-h264.ps1')
 if ($Plan) { $DryRun = [Management.Automation.SwitchParameter]$true }
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
@@ -829,10 +830,28 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
 $dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
+# The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
+# it is installed at all (manifest.json "mft_h264"). The decision is taken here, before the first change of this
+# stage, and the settings stage below writes or removes its registry keys by the same answer.
+$mft = Get-MftReleaseSwitch -Manifest $script:Manifest -PackageRoot $package
+$mftDll = Join-Path $InstallRoot $mft.install_path
+$mftKeys = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
+$mftAction = Get-MftAction -Switch $mft -PresentKeys $mftKeys -DirPresent (Test-Path -LiteralPath (Split-Path $mftDll))
+if ($mft.register) {
+    if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
+    $dirs += $mft.payload_dir
+}
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
     Invoke-Change "copy payload\$d -> $InstallRoot\$d (same SHA256: kept; in use: replaced by rename)" {
         Copy-TreeSafe -Source $src -Destination (Join-Path $InstallRoot $d)
+    } | Out-Null
+}
+# A release that does not register the encoder takes the files of an earlier install away again; its registry keys go
+# in the settings stage. A repair with the switch off is therefore a rollback.
+if ($mftAction -eq 'rollback' -and (Test-Path -LiteralPath (Split-Path $mftDll))) {
+    Invoke-Change "remove $(Split-Path $mftDll) (the H.264 encoder MFT of an earlier install; this release does not register it)" {
+        Remove-PathOrSchedule (Split-Path $mftDll)
     } | Out-Null
 }
 Invoke-Change "copy the installer's own scripts to $InstallRoot\installer (uninstall works without the package folder)" {
@@ -1023,6 +1042,38 @@ Invoke-Change "$($script:KhronosKeyWow) '$icdJsonWow' = 0 (32-bit system Vulkan 
     New-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_wow_value' $icdJsonWow
+
+# The H.264 encoder MFT (M15.11): route A of driver/umd/mft-h264/INSTALL.md, machine wide under
+# HKLM\SOFTWARE\Classes, which is what HKCR gives every process. A client that wants the encoder of one adapter asks
+# Media Foundation with MFT_ENUM_ADAPTER_LUID; the registration holds no LUID and cannot hold one, because Windows
+# gives a LUID at boot (INSTALL.md, "What a per-adapter enumeration needs"). The four binary values come out of the
+# shipped DLL itself (Bc250BuildMftRegistration), so the enumeration view and the live object cannot differ.
+# The encoder is an extra, never a condition of the driver: a computer whose Windows edition has no Media Foundation
+# gets a warning here and the rest of the install.
+if ($mftAction -eq 'register') {
+    $mftBlobs = $null
+    try { $mftBlobs = Get-MftRegistrationBlobs -DllPath $mft.source }
+    catch { Write-Warn2 "the H.264 encoder MFT is NOT registered: $($_.Exception.Message). The driver itself is not affected." }
+    if ($mftBlobs) {
+        Write-Info "H.264 encoder MFT: $($mft.name) $($mft.clsid), registration values from $($mft.package_path)"
+        Invoke-Change ('register the H.264 encoder MFT: ' + (Format-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)) {
+            [void](Write-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)
+            $mftCheck = Test-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs
+            if (-not $mftCheck.ok) { throw "the H.264 encoder MFT registration does not read back: $($mftCheck.detail)" }
+        } | Out-Null
+        Set-StateValue $state 'mft_h264' $mftDll
+    } else { Set-StateValue $state 'mft_h264' $null }
+} elseif ($mftAction -eq 'rollback') {
+    if ($mftKeys.Count) {
+        Invoke-Change "remove the H.264 encoder MFT registration of an earlier install ($($mftKeys -join ', ')): this release does not register it" {
+            [void](Remove-MftRegistration -ClassesKey $script:ClassesKey)
+        } | Out-Null
+    } else { Write-Info 'H.264 encoder MFT: not registered by this release; no registry key of an earlier install' }
+    Set-StateValue $state 'mft_h264' $null
+} else {
+    Write-Info 'H.264 encoder MFT: not registered by this release, and nothing of an earlier install on this computer'
+    Set-StateValue $state 'mft_h264' $null
+}
 
 # Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 0 composes the desktop on the GPU route (zink);
 # 1 is the kill switch to the CPU route (tester.1 to tester.8 shipped 1 until BD-058 was fixed). RequireKmdSwitches 1

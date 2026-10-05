@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
+. (Join-Path $here 'mft-h264.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -64,6 +65,14 @@ Invoke-Change "remove '$icdJson' from $($script:KhronosKey)" { Remove-ItemProper
 $icdJsonWow = Join-Path $root 'wow64\vulkan\radeon_icd.json'
 Invoke-Change "remove '$icdJsonWow' from $($script:KhronosKeyWow)" { Remove-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -ErrorAction SilentlyContinue } | Out-Null
 Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile, release record)" { Remove-Item -LiteralPath $script:SoftwareKey -Recurse -Force -ErrorAction SilentlyContinue } | Out-Null
+# The H.264 encoder MFT (driver/umd/mft-h264/INSTALL.md): the class id key with its InprocServer32, the transform key
+# and our membership in the video encoder category. The keys go before the files below, so that no COM registration
+# is left pointing at a DLL that is gone. The category key itself stays while another encoder of the machine is in it,
+# and MediaFoundation\Transforms is Windows' own. A release that never registered the encoder has nothing here.
+$mftKeys = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
+Invoke-Change "remove the H.264 encoder MFT registration ($(if ($mftKeys.Count) { $mftKeys -join ', ' } else { 'no key of ours present' }))" {
+    [void](Remove-MftRegistration -ClassesKey $script:ClassesKey)
+} | Out-Null
 
 # The GPU leaves the driver now, under the running desktop: pnputil has no documented way to defer the removal of a
 # driver from a started device to the next restart, and a package kept until then could leave the GPU without a

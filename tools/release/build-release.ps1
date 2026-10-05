@@ -312,6 +312,22 @@ foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMax
 if ($null -eq $regDefaults.defaults.desktop_router.DwmForceCpu) { throw 'registry-defaults.json: desktop_router.DwmForceCpu missing' }
 if (-not $regDefaults.legacy_applied) { throw 'registry-defaults.json: legacy_applied missing' }
 '  registry defaults: {0} parameters, DwmForceCpu {1}' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu
+# The H.264 encoder MFT switch (M15.11): manifest.json carries it, so the package itself says whether the installer
+# registers the transform (installer\mft-h264.ps1, driver/umd/mft-h264/INSTALL.md). The identifiers must be the ones
+# the installer and the DLL use; a release that registers the encoder has to carry its DLL.
+. (Join-Path $PSScriptRoot 'installer\mft-h264.ps1')
+$mftRelease = $null
+if ($sources.PSObject.Properties['mft_h264']) {
+    $mftRelease = [ordered]@{ register = [bool]$sources.mft_h264.register; package_path = [string]$sources.mft_h264.package_path
+        clsid = [string]$sources.mft_h264.clsid; friendly_name = [string]$sources.mft_h264.friendly_name }
+    if ($mftRelease.clsid -ne $script:MftClsid) { throw "release-sources.json mft_h264.clsid $($mftRelease.clsid) is not the installer's $($script:MftClsid)" }
+    if ($mftRelease.friendly_name -ne $script:MftFriendlyName) { throw "release-sources.json mft_h264.friendly_name '$($mftRelease.friendly_name)' is not the installer's '$($script:MftFriendlyName)'" }
+    if ($mftRelease.package_path -ne $script:MftPackagePath) { throw "release-sources.json mft_h264.package_path $($mftRelease.package_path) is not the installer's $($script:MftPackagePath)" }
+    if ($mftRelease.register -and -not (Test-Path -LiteralPath (Join-Path $pkg ($mftRelease.package_path -replace '/', '\')))) {
+        throw "release-sources.json registers the H.264 encoder MFT, but the package has no $($mftRelease.package_path): add its files row"
+    }
+    '  H.264 encoder MFT: {0} ({1} {2})' -f $(if ($mftRelease.register) { 'registered by the installer' } else { 'not registered by this release' }), $mftRelease.package_path, $mftRelease.clsid
+}
 $manifest = [ordered]@{
     schema = 1
     name = $name
@@ -327,6 +343,7 @@ $manifest = [ordered]@{
     work_ledger_gate_reason = $script:ledgerGateReason
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe
+    mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
     sources = $sources.sources
     firmware = $firmware
     defaults = $regDefaults.defaults

@@ -4,6 +4,13 @@
   "kmd_version": "0.7.205.1",
   "kmd_abi": "0x000700CD",
   "control_app_exe": "amdgpu_wddm_control.exe",
+  "mft_h264": {
+    "note": "The H.264 encoder Media Foundation transform (M15.11). register true: the installer copies payload/mft/amdgpu_wddm_mft_h264.dll to <install root>\\mft\\ and writes route A of driver/umd/mft-h264/INSTALL.md machine wide. register false: the installer installs and registers nothing, and takes away what an earlier install of this release family wrote. The value travels into manifest.json, so the package itself says what it does. This is the bisect lever of the encoder wagon.",
+    "register": true,
+    "package_path": "payload/mft/amdgpu_wddm_mft_h264.dll",
+    "clsid": "{A32438F0-0D79-4CA9-A5BF-9F3C80837253}",
+    "friendly_name": "BC-250 H.264 Encoder MFT"
+  },
   "sources": {
     "kmd": "bc250-win 2e61d1fe (kmd205-thermal-subfloor)",
     "d3d12_shell": "bc250-win m15/replay-wake e9f5e701",
@@ -270,6 +277,14 @@
       "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
       "size": 2925496,
       "role": "vulkaninfo 1.4.335 (Khronos Vulkan-Tools, LunarG-signed), used by the bug report"
+    },
+    {
+      "component": "mft-h264",
+      "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
+      "source": "scratch/build/mft-h264-committed/amdgpu_wddm_mft_h264.dll",
+      "sha256": "DA890BBB819EE2B09EFD2F2ADCE6B91CFB47B269BAD623D8327C83A398E216A2",
+      "size": 454656,
+      "role": "H.264 encoder Media Foundation transform, M15.11 (driver/umd/mft-h264, bc250-win 7f4d3485 on m15/video-encode-mft). The installer copies and registers it only while mft_h264.register is true"
     }
   ],
   "firmware": {
