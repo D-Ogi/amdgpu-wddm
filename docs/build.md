@@ -160,6 +160,21 @@ for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/m
 `amdgpu-wddm/icd-v3-0004b`, dec624fe "radv: Exclude the C runtime the build does not use, by b_vscrt"): before it,
 the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120).
 
+#### Host gate after every pull of the Mesa fork
+
+Run both RADV host tests on the new build before the ICD goes to the lab. They need no GPU and no lab unit:
+
+```
+pwsh tools\build\build-radv-queue-tests.ps1 -Source <tree> -Build <dir> -OutputDir <new dir>
+pwsh tools\build\build-radv-unorm10-export-test.ps1 -Source <tree> -Build <dir> -OutputDir <new dir>
+```
+
+The queue tests gate the hosted queue winsys (BD-045, BD-046). The 10-bit UNORM export test gates the rounding
+of BD-049, which every 10-bit Present measurement caveat depends on; its negative control must fail. A pull that
+loses either patch shows up here instead of in a game. Last recorded run of the export test:
+[evidence/windows/2026-10-03-BD-049-unorm10-export-oracle](../evidence/windows/2026-10-03-BD-049-unorm10-export-oracle/RESULT.md),
+57 760 299 checks, 0 failures.
+
 ### Desktop D3D10 UMD on llvmpipe (`-Config llvmpipe-umd -Llvm <LLVM build>`)
 
 ```

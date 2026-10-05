@@ -1,0 +1,17 @@
+After RA:
+ACO shader stage: SW (FS), HW (PIXEL_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, export_end, */
+	 v4: %1:v[0-3],  v4: %2:v[4-7],  v4: %3:v[8-11],  v4: %4:v[12-15],  v4: %5:v[16-19],  v4: %6:v[20-23],  v4: %7:v[24-27],  v4: %8:v[28-31] = p_startpgm
+	p_logical_start
+	 v1: %9:v[0],  v1: %10:v[1],  v1: %11:v[2],  v1: %12:v[3] = p_split_vector %1:v[0-3]
+	 v1: %13:v[4],  v1: %14:v[5],  v1: %15:v[6],  v1: %16:v[7] = p_split_vector %2:v[4-7]
+	 v1: %17:v[0] = v_cvt_pkrtz_f16_f32 %9:v[0], %10:v[1]
+	 v1: %18:v[2] = v_cvt_pkrtz_f16_f32 %11:v[2], %12:v[3]
+	 v1: %19:v[4] = v_cvt_pkrtz_f16_f32 %13:v[4], %14:v[5]
+	 v1: %20:v[6] = v_cvt_pkrtz_f16_f32 %15:v[6], %16:v[7]
+	exp %17:v[0], %18:v[2],  v1: undef,  v1: undef compr mrt0
+	exp %19:v[4], %20:v[6],  v1: undef,  v1: undef compr mrt1
+	p_logical_end
+	s_endpgm
+
