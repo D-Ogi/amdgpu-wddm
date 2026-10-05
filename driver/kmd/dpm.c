@@ -192,32 +192,42 @@ static BOOLEAN QueryPresent(PCWSTR Name, unsigned int* Value)
     return FALSE;
 }
 
-static void StoreLogged(PCWSTR Name, ULONG Value)
+static NTSTATUS StoreLogged(PCWSTR Name, ULONG Value)
 {
     NTSTATUS status = GuardStoreSetting(Name, Value);
     if (!NT_SUCCESS(status)) GuardLog("dpm: writing %ws = %lu failed 0x%08X", Name, Value, status);
+    return status;
 }
 
-static void DeleteLogged(PCWSTR Name)
+static NTSTATUS DeleteLogged(PCWSTR Name)
 {
     NTSTATUS status = GuardDeleteSetting(Name);
     if (!NT_SUCCESS(status)) GuardLog("dpm: deleting %ws failed 0x%08X", Name, status);
+    return status;
 }
 
 // The automatic fallback: DpmMode back to fixed-lab, durably, so that the next start does not try again.
 // DpmClosedReason records who wrote that 0. It outlives the boot, because no later start overwrites it; only a
 // start that reads a DpmMode other than 0 deletes it (DpmStart below). DpmLastReason keeps its old meaning: the
 // reason of the last start, overwritten at every start.
+// The record goes first, before the 0 it describes. Both writes are flushed, so a start that dies between them
+// leaves a record beside a DpmMode that still asks for the clock, and the next start deletes that record by itself
+// (clear_closed). The other order leaves the 0 without its record, which is the state BD-069 is about. The 0 is
+// written whatever the record's status, because a start that tries DPM again is the worse failure.
 static void PersistFallback(ULONG Reason)
 {
-    StoreLogged(DPM_SETTING_MODE, BC250_DPM_MODE_FIXED);
-    DeleteLogged(DPM_SETTING_CONFIRMED);
-    DeleteLogged(DPM_SETTING_PENDING);
-    DeleteLogged(DPM_SETTING_SESSION);
-    StoreLogged(DPM_SETTING_CLOSED, Reason);
-    StoreLogged(DPM_SETTING_LAST_REASON, Reason);
-    GuardLog("dpm: DpmClosedReason %lu written next to DpmMode 0: this fallback is the driver's own, not a setting",
-             Reason);
+    NTSTATUS record = StoreLogged(DPM_SETTING_CLOSED, Reason);
+    (void)StoreLogged(DPM_SETTING_MODE, BC250_DPM_MODE_FIXED);
+    (void)DeleteLogged(DPM_SETTING_CONFIRMED);
+    (void)DeleteLogged(DPM_SETTING_PENDING);
+    (void)DeleteLogged(DPM_SETTING_SESSION);
+    (void)StoreLogged(DPM_SETTING_LAST_REASON, Reason);
+    if (NT_SUCCESS(record))
+        GuardLog("dpm: DpmClosedReason %lu written next to DpmMode 0: this fallback is the driver's own, "
+                 "not a setting", Reason);
+    else
+        GuardLog("dpm: the record of this fallback is not durable; DpmMode 0 stays, and an installer reads it "
+                 "as a setting");
 }
 
 static BOOLEAN Governing(const BC250_DPM_STATE* S)
@@ -741,13 +751,15 @@ void DpmStart(BC250_DEVICE* Device)
         GuardLog("dpm: falling back to fixed-lab and writing DpmMode = 0: %s (pending 0x%08X, session 0x%08X)",
                  d->reason == BC250_DPM_REASON_UNCONFIRMED ? "an earlier DPM start was never confirmed" :
                  "an earlier start ended above the floor", r.pending, r.session);
-        PersistFallback(d->reason);
+        // The record is the shim's answer, not this reason read again: what the host test asserts is what the
+        // key gets (DpmGiveUp has no shim decision and names its own reason).
+        PersistFallback(d->closed_reason);
     } else {
-        if (d->clear_pending) DeleteLogged(DPM_SETTING_PENDING);
-        if (d->clear_session) DeleteLogged(DPM_SETTING_SESSION);
+        if (d->clear_pending) (void)DeleteLogged(DPM_SETTING_PENDING);
+        if (d->clear_session) (void)DeleteLogged(DPM_SETTING_SESSION);
         if (d->clear_closed) {
             // DpmMode is not 0 any more: the tester or a repair wrote over the fallback, so its record goes.
-            DeleteLogged(DPM_SETTING_CLOSED);
+            (void)DeleteLogged(DPM_SETTING_CLOSED);
             GuardLog("dpm: DpmClosedReason %lu deleted: DpmMode %lu asks for the clock again", r.closed, r.mode);
         }
     }
@@ -765,8 +777,8 @@ void DpmStart(BC250_DEVICE* Device)
     }
     s->Confirmed = d->confirmed && d->mode == BC250_DPM_MODE_DPM;
     if (r.smu_online) {
-        StoreLogged(DPM_SETTING_LAST_MODE, d->mode);
-        StoreLogged(DPM_SETTING_LAST_REASON, d->reason);
+        (void)StoreLogged(DPM_SETTING_LAST_MODE, d->mode);
+        (void)StoreLogged(DPM_SETTING_LAST_REASON, d->reason);
     }
     bc250_dpm_init(&s->Gov, d->max_level);
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);

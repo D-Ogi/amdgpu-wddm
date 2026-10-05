@@ -116,7 +116,9 @@ struct bc250_dpm_decision {
 	 * wrote DpmMode 0 and the release installer does not read the 0 as a setting of the tester (BD-069).
 	 * DpmLastReason cannot carry that: every start overwrites it, and a start that reads DpmMode 0 writes
 	 * NOT_REQUESTED over the fallback. */
-	unsigned int	closed_reason;		/* the record this start leaves: 0 for none */
+	unsigned int	closed_reason;		/* the record after this start: force_fixed writes this value into
+						 * DpmClosedReason (driver/kmd/dpm.c PersistFallback), every other
+						 * start reports here what the key keeps. 0 for no record */
 	int		clear_closed;		/* delete DpmClosedReason: DpmMode is not the fixed mode any more */
 };
 

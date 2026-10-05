@@ -428,13 +428,27 @@ overwrites it, and a start that reads `DpmMode` 0 decides NOT_REQUESTED (1).
 start that reads another `DpmMode` deletes it, because somebody wrote over the fallback: the tester, the control
 application or `install.cmd -Repair`. The decision is in the shim (`bc250_dpm_decide`, fields `closed_reason` and
 `clear_closed`, host-tested in `driver/shim/test/dpm_test.c`); `driver/kmd/dpm.c` does the registry work and logs
-both acts. `interop.c` keeps `InteropClosedReason` the same way.
+both acts, and it writes the shim's `closed_reason` itself, so the host test asserts the value the key gets.
+`interop.c` keeps `InteropClosedReason` the same way.
 
-The tester release installer reads the record (`tools/release/installer/common.ps1`, `$script:DriverClosures`): it
-keeps the 0, names the fallback in its report and offers `install.cmd -Repair`, which writes `DpmMode` 1 again and
-deletes the record. Drivers before 0.7.208.1 write no record, so the installer still reads `DpmLastReason` 3, 4 or 8
-for them, with the one-boot limit above. The installer deletes no guard mark: the start that reads `DpmMode` 1
-clears the marks of a request no longer made by itself.
+`PersistFallback` writes the record before the 0 it describes. Both writes are flushed, so a start that dies between
+them leaves a record beside a `DpmMode` that still asks for the clock, and the next start deletes that record by
+itself. The other order leaves a 0 with no record, which is the state this section is about. A failed record write
+does not hold back the 0: a start that tries DPM again is the worse failure, and the log says that the record is not
+durable.
+
+The tester release installer is the other half of BD-069 (`tools/release/installer/common.ps1`,
+`$script:DriverClosures`, branch `bd069-repair-closures`): it keeps the 0, names the fallback in its report and
+offers `install.cmd -Repair`, which writes `DpmMode` 1 again and deletes the record. That half is not in this
+branch. A tester package built from this branch alone writes the record and reads nothing, so the two halves must
+ship in the same release. Drivers before 0.7.208.1 write no record, so the installer still reads `DpmLastReason` 3,
+4 or 8 for them, with the one-boot limit above. The installer deletes no guard mark: the start that reads `DpmMode`
+1 clears the marks of a request no longer made by itself.
+
+The control application does not read the record yet. Its Recovery page reads the reason of the running start and
+`DpmLastReason` (`tools/win/amdgpu_wddm_control/src/Recovery.cs`), so one boot after a fallback it offers no way
+back. That is the remaining half of BD-069. The way back without any record is the automatic-clock box on its
+Graphics page, which writes `DpmMode` 1 whatever the last reason was.
 
 ## Runtime tuning (0.7.185)
 
