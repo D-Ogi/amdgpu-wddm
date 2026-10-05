@@ -6,7 +6,11 @@
 // format is enabled for. Plain integers, so the host tests compile it without a WDK header; wddm.c checks the
 // values against D3DDDIFORMAT with C_ASSERT. The stages are the KMD's:
 //   Composed  a received LB7A blob of GDI type 0: the table's COMPOSED rows (A8R8G8B8, A8B8G8R8, A2B10G10R10 at
-//             4 bytes, A16B16G16R16F at 8; gdi_private.h sizes the row by the returned bytes, never by 4).
+//             4 bytes, A16B16G16R16F at 8, and A8 at 1; gdi_private.h sizes the row by the returned bytes, never
+//             by 4). A8 is answered here with its 1 byte a pixel, but no composed surface reaches the hardware
+//             at that size: DcnLinearSurfaceBytes (dcn_translate.c) takes 4 and 8 bytes a pixel only, so
+//             WddmSurfaceAdmitted refuses a type-0 A8 blob, and Bc250SourceModeFormats (display_modes.h) skips
+//             rows under 4 bytes, so A8 is never offered as a VidPN source mode either.
 //             dxgkrnl's own standard allocations (shared primary, shadow, staging) arrive as type 0 as well, so
 //             the SCANOUT_PRIMARY rows (X8R8G8B8) and X8B8G8R8, which the table does not describe, stay
 //             admitted here exactly as before the table.
@@ -17,7 +21,8 @@
 #define BC250_SURFACE_GDI 0x2ul
 #define BC250_SURFACE_SCANOUT 0x4ul
 
-// Formats the KMD admits that the shared table has no row for.
+// Formats the KMD admits at a stage the shared table does not describe. A8 has a COMPOSED row in the table, but
+// no GDI stage, so the KMD's own pre-table answer for the GDI types stands.
 #define BC250_FORMAT_A8 28ul
 #define BC250_FORMAT_X8B8G8R8 33ul
 
