@@ -95,7 +95,7 @@ int main(void)
     // Every flag word this gate is asked about: the two it admits, their union, the bits of the other escapes
     // and nothing at all.
     static const ULONG words[]={0,1,2,3,4,8,9,10,12,16,24};
-    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count;unsigned old,i;
+    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count;unsigned old,i,cu0,dpm0;
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
@@ -143,6 +143,22 @@ int main(void)
         healthy(&d);CHECK(admitted(&d,BC250_START_HEALTH_CONFIRM,words[i])==(words[i]==8||words[i]==1));
     }
     old=writes;healthy(&d);CHECK(!admitted(&d,BC250_START_HEALTH_CONFIRM,9) && writes==old);
+    // The old flag word end to end, not only past the gate: a CONFIRM from a tool of 0.7.212 or older must still
+    // confirm the start. That is the ordinary state of an upgrade - the installer copies this release's tools and
+    // defers the device restart, so the logon task, the overlay and the control application all talk to the loaded
+    // old driver until the next start - and a confirmation that stops at the gate costs the CU mode and the DPM
+    // request, which is 24 CU and the floor clock at the next start (C57).
+    healthy(&d);old=writes;cu0=cuConfirms;dpm0=dpmConfirms;
+    r=query(&d,0);r.Op=BC250_START_HEALTH_CONFIRM;StartHealthRequest(&d,&r,TRUE,1);
+    CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.NtStatus==(ULONG)STATUS_SUCCESS &&
+          (r.Flags&BC250_START_HEALTH_CONFIRMED) && r.Flags==15 &&
+          writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+    // And the administrator check comes before any of that, on the old word as on the new one.
+    healthy(&d);old=writes;cu0=cuConfirms;dpm0=dpmConfirms;
+    r=query(&d,0);r.Op=BC250_START_HEALTH_CONFIRM;StartHealthRequest(&d,&r,FALSE,1);
+    CHECK(r.Status==BC250_ESCAPE_STATUS_NOT_ADMIN && r.NtStatus==(ULONG)STATUS_ACCESS_DENIED &&
+          !(r.Flags&BC250_START_HEALTH_CONFIRMED) &&
+          writes==old && cuConfirms==cu0 && dpmConfirms==dpm0);
     StartHealthRemove(&d);r=query(&d,0);CHECK(r.NtStatus==(ULONG)STATUS_DELETE_PENDING);
     CHECK(spins==0 && mutexes==0 && closes>0);
     printf("start health actual-source: %u checks, %u failures\n",checks,failures);return failures?1:0;
