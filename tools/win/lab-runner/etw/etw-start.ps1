@@ -6,7 +6,8 @@
 # directory already holds a capture, or when PerfView is not the staged, hashed copy. The task keeps a 5-minute
 # limit as an outer bound only.
 param([Parameter(Mandatory)][ValidatePattern('^[0-9]{3}$')][string]$Trial, [int]$Seconds = 30, [int]$StartA = 5,
-    [int]$DwmPct = 15, [int]$LatestB = 110, [int]$FpsSeconds = 0, [int]$WorldSeconds = 0, [switch]$PresentMode)
+    [int]$DwmPct = 15, [int]$LatestB = 110, [int]$FpsSeconds = 0, [int]$WorldSeconds = 0, [switch]$PresentMode,
+    [switch]$SchedulerStacks)
 $ErrorActionPreference = 'Stop'
 $perf = 'C:\BC250\tools\perfview\PerfView.exe'
 $expect = 'E6B89A6DA0FE7DA5F64302306153C6AAC7A4BE67C800426A91AE014093E4DF2D'
@@ -47,7 +48,13 @@ $fps = ''
 if ($FpsSeconds -gt 0) { $fps = " -GpuOnly -SkipA -SecondsB $FpsSeconds -WorldLog `"$stage\game\game-log.txt`"" }
 # -WorldSeconds N (owner 2026-09-30, "40 ms per frame off the GPU"): the same world-triggered window B with the full
 # PerfView CPU profile (samples, context switches) next to DxgKrnl, for etw-cpu.py.
-elseif ($WorldSeconds -gt 0) { $fps = " -SkipA -SecondsB $WorldSeconds -WorldLog `"$stage\game\game-log.txt`" -ReserveSeconds 25" }
+elseif ($WorldSeconds -gt 0) {
+    # One -ReserveSeconds on the line: a stacked session has more buffers to flush, so the reserve is 35 s
+    # with -SchedulerStacks and 25 s without it. Two of this switch would be a duplicate parameter and the
+    # task would fail with the game already running.
+    $reserve = if ($SchedulerStacks) { 35 } else { 25 }
+    $fps = " -SkipA -SecondsB $WorldSeconds -WorldLog `"$stage\game\game-log.txt`" -ReserveSeconds $reserve"
+}
 if ($process) { $fps += " -Process `"$process`"" }
 # -PresentMode (M15.14): Win32k and Dwm-Core next to DxgKrnl, for etw-present-mode.py. The staged capture script
 # must know the switch, or the task would start and ignore it.
@@ -55,6 +62,16 @@ if ($PresentMode) {
     if (!(Select-String -LiteralPath $script -SimpleMatch -Quiet -Pattern '[switch]$PresentMode')) {
         throw 'the staged etw-capture.ps1 has no -PresentMode: push tools\win\lab-runner\etw\etw-capture.ps1 to C:\BC250\tmp first' }
     $fps += ' -PresentMode'
+}
+# -SchedulerStacks (C49): the stack-enabled scheduler stream. It needs the CPU window, so it goes with
+# -WorldSeconds and is refused with -FpsSeconds, where the capture would ignore it. The reserve goes to 35 s: a
+# stacked session carries more buffers to flush, and 156's full window B already needed 5.5 s with none.
+if ($SchedulerStacks) {
+    if (!(Select-String -LiteralPath $script -SimpleMatch -Quiet -Pattern '[switch]$SchedulerStacks')) {
+        throw 'the staged etw-capture.ps1 has no -SchedulerStacks: push tools\win\lab-runner\etw\etw-capture.ps1 to C:\BC250\tmp first' }
+    if ($FpsSeconds -gt 0) { throw '-SchedulerStacks needs the CPU window: use -WorldSeconds N, not -FpsSeconds' }
+    if ($WorldSeconds -le 0) { throw '-SchedulerStacks needs -WorldSeconds N' }
+    $fps += ' -SchedulerStacks'
 }
 $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"$root\etw-capture.ps1`" -Root `"$root`" -Tag N$Trial -NotAfterQpc $notAfter -Seconds $Seconds -StartA $StartA -DwmPct $DwmPct -LatestB $LatestB$fps")
 $s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds (300 + $extra)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries

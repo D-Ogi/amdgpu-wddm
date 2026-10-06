@@ -19,9 +19,15 @@
 # Present-mode mode (M15.14): -PresentMode adds Microsoft-Windows-Win32k and Microsoft-Windows-Dwm-Core to the
 # DxgKrnl session, with narrow keyword masks, so that etw-present-mode.py can say per frame whether a present was
 # scanned out or composed. It is off by default and changes nothing else about a window.
+# Scheduler-stack mode (C49): -SchedulerStacks adds a second, stack-enabled DxgKrnl stream to PerfView's own user
+# session, filtered to the scheduler's decision events, next to the cheaper kernel set that prices a DPC. It
+# answers one question the packet-level session cannot: which dxgkrnl call site puts a context back into the node's
+# ready set after a DMA completion, and whether that site runs in a DPC or on a thread. It needs the CPU window, so
+# it is ignored with -GpuOnly, and it leaves the logman -gpu session exactly as it is, because that session is what
+# c45b-window.py and c48gaps.py parse.
 param([string]$Root, [string]$Tag, [int]$Seconds = 30, [int]$StartA = 5, [int]$DwmPct = 15, [int]$LatestB = 110,
     [long]$NotAfterQpc = 0, [switch]$Smoke, [switch]$GpuOnly, [switch]$SkipA, [string]$WorldLog = '', [int]$SecondsB = 0,
-    [int]$ReserveSeconds = 0, [string]$Process = 'witcher3', [switch]$PresentMode)
+    [int]$ReserveSeconds = 0, [string]$Process = 'witcher3', [switch]$PresentMode, [switch]$SchedulerStacks)
 $ErrorActionPreference = 'Stop'
 $gameNames = @($Process -split ',' | Where-Object { $_ })
 $perf = 'C:\BC250\tools\perfview\PerfView.exe'
@@ -146,6 +152,47 @@ function Capture([string]$w, [int]$secs = $Seconds) {
         '/KernelEvents:Process,Thread,ImageLoad,Profile,ContextSwitch,Dispatcher,MemoryHardFaults,DiskIO,DiskIOInit,DiskFileIO',
         '/BufferSizeMB:32', '/CircularMB:128', "/MaxCollectSec:$secs", '/NoClrRundown', '/NoNGenRundown',
         '/NoNGenPdbs', '/Merge:false', '/Zip:false', 'collect', $etl)
+    # -SchedulerStacks (C49): the same PerfView collection, with three changes and nothing else.
+    #   1. No CPU sampling and no disk: /Profile and the DiskIO groups are the expensive part of /ThreadTime
+    #      (measured 1.6 ms a frame on the W3 main thread, enough to move the rate by 10 %), and the question here
+    #      is not where CPU time goes. /KernelEvents is given explicitly instead of /ThreadTime so that what is
+    #      recorded is visible in this line: DPCs and interrupts (which routine ran, and for how long), context
+    #      switches and the dispatcher's ready events (who woke whom), plus the process/thread/image rundown every
+    #      stack walk needs to resolve a module.
+    #   2. /StackCompression, because a stack-enabled per-event stream is mostly repeated frames.
+    #   3. One DxgKrnl stream in PerfView's own user session, keyword mask 0x88008001 =
+    #      Base | GPUScheduler | Present | Deprecated (read off the provider manifest, where UpdateContextStatus
+    #      is id 20 under GPUScheduler 0x8000 and SelectContext2 is id 436 under Deprecated 0x80000000), level 5,
+    #      and - the point of the mode - a STACK filter. The ids asked for are the scheduler's decisions (20
+    #      UpdateContextStatus, 238 UnwaitQueuePacket, 436 SelectContext2) and the events that place them in time
+    #      (175-177 DmaPacket, 181 VSyncInterrupt, 17 VSyncDPC, 18/19 WorkerThread, 22 AttemptPreemption), with
+    #      stacks on the three decisions only. A stack on every DmaPacket would be the whole cost again.
+    #
+    #      Two things about that filter, both read off PerfView 3.2.8's own help text rather than assumed. It is
+    #      ADDITIVE: "@EventIDsToEnable - a space separated list of decimal event ID numbers to collect ... in
+    #      addition to any events specified by the Keywords", and TraceEvent's own summary says the same. So the
+    #      keyword mask still decides the base volume (about 19 MB/s on RotTR D3D12) and this list only adds to it;
+    #      what the mode narrows is the stack walking. And the lists are SPACE separated, while /Providers itself is
+    #      "a comma separated list of specifications for providers" - a comma inside an id list would split the spec
+    #      into further providers named "238", "436" and so on, and PerfView would then enable one event id and no
+    #      stack filter at all, which is the one thing this mode exists for. The whole spec is therefore one quoted
+    #      element: Start-Process -ArgumentList adds no quotes in either shell, so they are written here and Windows
+    #      argv splitting hands PerfView one element with its spaces intact (dryrun-args.ps1 proves the round trip).
+    #      The volume this costs is not claimed here: the -Smoke -SchedulerStacks run before the first game window
+    #      reports the measured bytes and the stacked event count, and the plain -WorldSeconds control window prices
+    #      the game-side cost.
+    # The logman -gpu session below is untouched: it stays the unfiltered packet-level source of the gap table.
+    if ($SchedulerStacks -and !$GpuOnly) {
+        $ids = '20 238 436 175 176 177 181 17 18 19 22'
+        $stackIds = '20 238 436'
+        $spec = "/Providers:`"Microsoft-Windows-DxgKrnl:0x88008001:5:@EventIDsToEnable=$ids;@EventIDStacksToEnable=$stackIds`""
+        $pvArgs = @("/LogFile:$log", '/NoGui', '/NoView', '/AcceptEULA', "/SessionName:$session",
+            '/ClrEvents:None', '/StackCompression',
+            '/KernelEvents:Process,Thread,ImageLoad,ContextSwitch,Dispatcher,DeferedProcedureCalls,Interrupt',
+            $spec,
+            '/BufferSizeMB:64', '/CircularMB:512', "/MaxCollectSec:$secs", '/NoClrRundown', '/NoNGenRundown',
+            '/NoNGenPdbs', '/Merge:false', '/Zip:false', 'collect', $etl)
+    }
     # GPU side (owner: what exactly does a frame wait for): DxgKrnl queue packets, DMA packets and VSync/flip in a
     # separate logman session, same shape as the G0 DWM trials (all keywords, level 5, 1 MB buffers, 64-256),
     # circular at 256 MB: up to 256 MB of buffers on top of PerfView's 32 MB request (recorded, Codex 850).
@@ -157,6 +204,9 @@ function Capture([string]$w, [int]$secs = $Seconds) {
     # their first 7-32 s (no event of any process there, read once as a game stall). Size every window for 20 MB/s,
     # capped at 4 GB (P: and the lab disk); the analysis reports the first present, so a wrapped circle still shows.
     $perSecond = 20
+    # -SchedulerStacks does not change this number: it adds no provider to the logman session, and its own
+    # stacked stream is sized by the /CircularMB above. The 40 MB/s the plan reserved for it covers both files
+    # together (20 MB/s here plus the stacked stream, measured at the smoke run before the first game window).
     # -PresentMode: two more providers in the same session. The keyword masks are the narrowest that still carry
     # what a present-mode classifier needs, read off the running system (logman query providers), and the level is
     # Informational, not Verbose:
@@ -184,7 +234,7 @@ function Capture([string]$w, [int]$secs = $Seconds) {
             @('-f', 'bincirc', '-max', "$maxMb", '-bs', '1024') + $buffers) 20 (Join-Path $Root "gpu-$w-start.log")
         Note "window $w gpu session $gpu start $($r.how) exit $($r.exit) providers $(if ($PresentMode) { 'dxgkrnl+win32k+dwm-core' } else { 'dxgkrnl' }) max ${maxMb}MB"
         if ($script:unjoined) { Note "window $w collector not started: unjoined pid $($script:unjoined)"; return }
-        Note "window $w start session=$session seconds=$secs gpu_only=$([bool]$GpuOnly)"
+        Note "window $w start session=$session seconds=$secs gpu_only=$([bool]$GpuOnly) scheduler_stacks=$(if ($SchedulerStacks -and $GpuOnly) { 'ignored-with-GpuOnly' } else { [bool]$SchedulerStacks })"
         if ($GpuOnly) {
             # Only the DxgKrnl session runs: hold it for $secs, never into the reserve, ending early with the game.
             $sw = [Diagnostics.Stopwatch]::StartNew()
