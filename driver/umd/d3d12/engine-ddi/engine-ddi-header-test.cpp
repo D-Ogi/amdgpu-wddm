@@ -24,7 +24,7 @@ constexpr bool tags_unique() {
     }
     return true;
 }
-static_assert(engine_ddi::kBoundaryRevision == 4, "boundary r4");
+static_assert(engine_ddi::kBoundaryRevision == 5, "boundary r5");
 static_assert(tags_unique(), "record tags must be unique and distinct from None/Poisoned");
 static_assert(sizeof(D3D12DDI_DEVICE_FUNCS_CORE_0088) == 976, "core table 0088");
 static_assert(sizeof(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092) == 560, "command list table 0092");
@@ -40,7 +40,23 @@ static_assert(sizeof(engine_ddi::MemoryRequest) == 72 &&
               "MemoryRequest size (r4: the linear surface)");
 static_assert(offsetof(engine_ddi::ImportedMemory, gpu_va) == 32, "ImportedMemory.gpu_va offset");
 static_assert(sizeof(engine_ddi::ImportedMemory) == 48, "ImportedMemory size");
-static_assert(sizeof(engine_ddi::ShellHooks) == 64, "ShellHooks size");
+static_assert(sizeof(engine_ddi::ShellHooks) == 72, "ShellHooks size (r5: adopt_memory)");
+// r5 (BD-075): the open half of a shared surface. AdoptRequest is the shell's side of pfnOpenHeapAndResource and
+// carries the handle the runtime opened, never a size to allocate.
+static_assert(std::is_standard_layout_v<engine_ddi::AdoptRequest>, "AdoptRequest layout");
+static_assert(sizeof(engine_ddi::AdoptRequest) == 40 &&
+                  offsetof(engine_ddi::AdoptRequest, allocation) == 16 &&
+                  offsetof(engine_ddi::AdoptRequest, byte_size) == 24 &&
+                  offsetof(engine_ddi::AdoptRequest, alignment) == 32,
+              "AdoptRequest size (r5: the shared open)");
+static_assert(std::is_same_v<decltype(engine_ddi::ShellHooks::adopt_memory),
+                             HRESULT (APIENTRY*)(void*, const engine_ddi::AdoptRequest*,
+                                                 engine_ddi::ImportedMemory*)>, "adopt_memory");
+static_assert(std::is_same_v<decltype(engine_ddi::AdoptRequest::allocation), D3DKMT_HANDLE>, "adopted handle");
+// The refusal that asks the shell to retry a create as a shared surface never leaves the DDI as itself: the
+// runtime admits only out of memory and device removal from a create or an open.
+static_assert(engine_ddi::admitted_create_failure(engine_ddi::kShareRequired) == E_OUTOFMEMORY,
+              "kShareRequired is clamped at the DDI");
 
 // r2: free_memory returns HRESULT. r3: the adapter caps path takes the engine's function table (ABI 1.2) and the
 // create info of the device to come; build_caps answers from what that query returned.

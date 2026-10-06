@@ -211,6 +211,7 @@ static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_HUNG)==engine_ddi::k
 static_assert(engine_ddi::kDriverDeviceRemoved==kDdiDriverDeviceRemoved);
 std::atomic<decltype(CoreTable{}.pfnCreateHeapAndResource)> engine_create_resource{};
 std::atomic<decltype(CoreTable{}.pfnDestroyHeapAndResource)> engine_destroy_resource{};
+std::atomic<decltype(CoreTable{}.pfnOpenHeapAndResource)> engine_open_resource{};
 HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDIARG_CREATEHEAP_0001* heap,
     D3D12DDI_HHEAP driver_heap,D3D12DDI_HRTRESOURCE runtime,const D3D12DDIARG_CREATERESOURCE_0088* resource,
     const D3D12DDI_CLEAR_VALUES* clear,D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session,
@@ -226,6 +227,21 @@ HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDI
     // A resource DDI entered from inside another one of this device is refused before the engine runs.
     return engine_ddi::admitted_create_failure(create_in_owner_scope(engine_imports(*device),[&]() noexcept {
         return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
+    }));
+}
+// The open slot, in the same scope as the create (BD-075 review, 2026-10-06). An adopted record takes no
+// authority of its own - begin_owner_scope skips it, because a borrowed allocation names no runtime resource - so
+// the scope adds no permission here; what it adds is the refusal of a resource DDI entered from inside another one
+// of this device, which the create has and the open had not, and the clamp outside the scope for the scope's own
+// refusals. Without it the open was the one resource DDI of this table that could nest.
+HRESULT APIENTRY open_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDIARG_OPENHEAP_0003* args,
+    D3D12DDI_HHEAP driver_heap,D3D12DDI_HRTRESOURCE runtime,D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session,
+    D3D12DDI_HRESOURCE driver_resource) {
+    const auto engine=engine_open_resource.load();
+    const auto device=static_cast<Device*>(handle.pDrvPrivate);
+    if(!engine || !device)return engine_ddi::admitted_create_failure(E_UNEXPECTED);
+    return engine_ddi::admitted_create_failure(create_in_owner_scope(engine_imports(*device),[&]() noexcept {
+        return engine(handle,args,driver_heap,runtime,session,driver_resource);
     }));
 }
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP heap,D3D12DDI_HRESOURCE resource) {
@@ -256,7 +272,9 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12D
     if(hr!=S_OK)return hr;
     if(args->hDstResource.pDrvPrivate){
         stage=4;
-        hr=engine_ddi::present_allocation(engine,args->hDstResource,&from.destination);
+        // The destination may also be a surface this device opened (BD-075): the runtime named it and owns it for
+        // the call. The source form stays the strict one.
+        hr=engine_ddi::present_destination_allocation(engine,args->hDstResource,&from.destination);
         if(hr!=S_OK)return hr;
     }
     stage=5;
@@ -320,11 +338,14 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         install_shell_core_entries(shell);install_native_residency_entries(shell);
         shell.pfnGetPresentPrivateDriverDataSize=present_private_size;
         HRESULT hr=compose_core_0092(&original,sizeof(original),shell,fill);if(hr!=S_OK)return hr;
-        if(!original.pfnCreateHeapAndResource || !original.pfnDestroyHeapAndResource)return E_UNEXPECTED;
+        if(!original.pfnCreateHeapAndResource || !original.pfnDestroyHeapAndResource ||
+           !original.pfnOpenHeapAndResource)return E_UNEXPECTED;
         engine_create_resource.store(original.pfnCreateHeapAndResource);
         engine_destroy_resource.store(original.pfnDestroyHeapAndResource);
+        engine_open_resource.store(original.pfnOpenHeapAndResource);
         original.pfnCreateHeapAndResource=create_heap_and_resource;
         original.pfnDestroyHeapAndResource=destroy_heap_and_resource;
+        original.pfnOpenHeapAndResource=open_heap_and_resource;
         hr=DdiEntryTables<EntryPolicy>::wrap_core(original,&wrapped);if(hr!=S_OK)return hr;
         if(engine_ddi::entry_stats_on())time_core(wrapped);
         *static_cast<Core*>(output)=wrapped;return S_OK;

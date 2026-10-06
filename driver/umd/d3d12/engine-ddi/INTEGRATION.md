@@ -473,6 +473,38 @@ through a render target view,
 copied to a READBACK buffer and compared texel by texel. What a reader of the memory itself sees is not
 established by that: the copy goes through the image.
 
+The shared surface (boundary r5, BD-075, the same engine ABI 1.3 V13 image). A shared resource is the other
+linear surface, and nothing in the DDI says that a create is one: `D3D12DDIARG_CREATEHEAP_0001`,
+`..._CREATERESOURCE_0088`, `D3D12DDICB_ALLOCATE_0022` and `D3D12DDI_ALLOCATION_INFO_0022` carry no sharing field
+and no sharing flag, and the heap flags a shared committed texture arrives with (0x26, all three categories, pool
+L1, no CPU access) are an ordinary committed texture's. What does say it is the runtime's own refusal of the
+ordinary allocation shape, measured in the lab trial of 2026-10-05: `pfnAllocateCb` answers `E_INVALIDARG` for
+a shared resource whose allocation publishes no resource-level private data, and for nothing else of the 691
+callbacks of that run. So the create makes at most two attempts:
+
+1. the ordinary create, with `kMemoryShareable` (`0x8`) added to `kMemoryDedicated` when, and only when, the
+   description is inside the shareable envelope (the linear surface's shape on a GPU-only L1 heap without
+   `PRIMARY` and without `COHERENT_SYSTEMWIDE`). The flag changes nothing about the request; it is permission to
+   retry. A shape outside the envelope never carries it and can never be retried;
+2. the retry, only when `allocate_memory` answers the shell-internal `kShareRequired` (`0xA0BC2075`), which it
+   may answer only for a request that carried `kMemoryShareable` and whose runtime callback refused with
+   `E_INVALIDARG` without allocating anything. engine-ddi then asks the engine for the linear image, replaces the
+   heap's `ByteSize` with the backing size and its `Alignment` with 0, and calls `allocate_memory` again with
+   `kMemoryDedicated | kMemoryShareable | kMemoryLinearSurface` and the surface fields, exactly as for a primary.
+
+An ordinary create therefore pays nothing: no engine query, one callback, no retry. `admitted_create_failure`
+maps `kShareRequired` to `E_OUTOFMEMORY`, so a path that ever returned it to the runtime would report a refusal
+rather than a strange status, and a header test pins that.
+
+`adopt_memory` and `AdoptRequest` are the open half (`pfnOpenHeapAndResource`). The allocation exists: the
+runtime opened it, `D3D12DDIARG_OPENHEAP_0003` carries its handle and the two private-data records and no
+resource description, and the runtime destroys it when the opened resource goes. engine-ddi decodes the records
+with `driver/contract/bc250_shared_surface.h`, builds the description, refuses unless this engine's linear image
+of it has the record's row pitch and fits the record's size, and then asks `adopt_memory` for memory it must map,
+make resident and import without any allocation callback. The memory comes back through `free_memory` like any
+other, where the shell's own record knows that it must not deallocate what it never allocated. `adopt_memory` is
+optional even in RuntimeBacked: null means no shared open is served, and the slot refuses as it did before r5.
+
 Heap size left to the resource. H and DDI-ref give `D3D12DDIARG_CREATEHEAP_0001::ByteSize` as "Size of the heap,
 in bytes" (H:319-328) and define no special value. engine-ddi treats a ByteSize of UINT64_MAX as "no size given":
 

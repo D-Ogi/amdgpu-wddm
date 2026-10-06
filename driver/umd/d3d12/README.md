@@ -143,17 +143,32 @@ which copies the debugger channel into its cell log, carry them.
 
 ## Shared resources
 
-Not implemented, in either direction. `CreateCommittedResource` with
-`D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource` and
-`ID3D12Device::OpenSharedHandle` of a resource all fail. They fail with
-`E_OUTOFMEMORY`, one of the two failures a creation DDI may report (the other is
-`D3DDDIERR_DEVICEREMOVED`), so the application loses the resource and keeps its
-device - at every layer that can refuse the call, the thunk included (BD-075;
-`engine_ddi::admitted_create_failure`, `native12::ddi_admitted_create_failure`).
+One shape works: a 2D texture of one mip level, one array slice and one sample on
+a GPU-only heap, in a format with a COMPOSED row of the surface format table. It
+is created as a linear row-major image and published as the same two private-data
+records the D3D11 shell reads and writes, so either shell opens what either shell
+created. Nothing in the DDI says that a create is shared, so the create learns it
+from the runtime's own refusal of the ordinary allocation shape and retries once;
+an ordinary create pays no engine query and no retry. The open adopts the
+allocation the runtime opened and never deallocates it. `CreateCommittedResource`
+with `D3D12_HEAP_FLAG_SHARED`, `ID3D12CompatibilityDevice::CreateSharedResource`
+(keyed mutex, whose mutex is the runtime's own object) and
+`ID3D12Device::OpenSharedHandle` of a resource all take that path.
+
+Every other shape still fails: buffers, mip chains, arrays, 3D textures, MSAA,
+block-compressed and typeless formats, depth-stencil, cross-adapter surfaces,
+CPU-visible shared heaps, a shared heap with no resource and a placed resource on
+one. They fail with `E_OUTOFMEMORY`, one of the two failures a creation DDI may
+report (the other is `D3DDDIERR_DEVICEREMOVED`), so the application loses the
+resource and keeps its device - at every layer that can refuse the call, the thunk
+included (BD-075; `engine_ddi::admitted_create_failure`,
+`native12::ddi_admitted_create_failure`).
+
 Shared fences work in every direction, because the D3D12 DDI has no fence sharing
 in it: the kernel object is the runtime's and the driver only consumes two GPU
-addresses. The plan for shared resources, what each half needs and why the
-runtime still reports `SharedResourceCompatibilityTier` 2, is in
+addresses. What the wire format is, what each half does, what the kernel driver,
+the engine and the ICD need (nothing), and why the runtime still reports
+`SharedResourceCompatibilityTier` 2, are in
 [docs/d3d12-shared-resources.md](../../../docs/d3d12-shared-resources.md).
 
 A separate KT paging queue maps the allocation. The importer waits at most two

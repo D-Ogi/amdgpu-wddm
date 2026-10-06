@@ -10,6 +10,10 @@
 // additively: set_retire_policy, the retire hand-off of submissions to resource DDIs (off unless set),
 // set_release_policy, the two-phase retirement of heap memory, and set_replay_policy, deferred command-list replay
 // on worker threads (both also off unless set).
+// Boundary r5 (2026-10-05): shared resources (BD-075). MemoryRequestFlags grows by kMemoryShareable, allocate_memory
+// may answer the shell-internal kShareRequired for a request that carried it, and ShellHooks grows by the optional
+// adopt_memory, which takes an allocation the runtime opened instead of allocating one. The engine ABI does not
+// change: a shared surface is the same linear image the linear primary already is (1.3 V13).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -37,7 +41,7 @@
 
 namespace engine_ddi {
 
-inline constexpr uint32_t kBoundaryRevision = 4;
+inline constexpr uint32_t kBoundaryRevision = 5;
 
 // ---- Memory policy -----------------------------------------------------------------------------------------
 // RuntimeBacked is the only mode of the native driver. The memory of every heap, and of every committed
@@ -132,7 +136,26 @@ enum MemoryRequestFlags : uint32_t {
     // image's alone. Set only together with kMemoryDedicated and kMemoryPrimary. A primary without it is a
     // description engine-ddi cannot make linear; the shell decides what becomes of it.
     kMemoryLinearSurface = 0x4,
+    // BD-075: the runtime may be creating this resource as a shared one, and the shell may retry with the
+    // shareable argument shape. It changes nothing about the request that carries it; it is permission alone.
+    // The D3D12 DDI has no sharing field and no sharing flag anywhere (d3d12umddi.h: D3D12DDIARG_CREATEHEAP_0001,
+    // ..._CREATERESOURCE_0088, D3D12DDICB_ALLOCATE_0022, D3D12DDI_ALLOCATION_INFO_0022), and the heap flags a
+    // shared committed texture arrives with are an ordinary committed texture's (0x26, all three categories), so
+    // no description tells the two apart. What does tell them apart is the runtime's own refusal of the ordinary
+    // allocation shape: it arrives for a shared resource and for nothing else that reaches this path. engine-ddi
+    // therefore sets this flag on the first attempt for a description inside the shareable envelope, and retries
+    // with kMemoryDedicated|kMemoryShareable|kMemoryLinearSurface when the shell answers kShareRequired.
+    // Set only together with kMemoryDedicated, and never with kMemoryPrimary: a primary is not shared by handle.
+    kMemoryShareable = 0x8,
 };
+
+// The shell's answer to an allocate_memory that carried kMemoryShareable and whose runtime allocation callback
+// refused the ordinary argument shape with E_INVALIDARG: nothing was allocated, and the shell is willing to try
+// the shareable shape. It is internal to this driver and never reaches the runtime; admitted_create_failure
+// clamps it like any other refusal, so a path that forgets to handle it reports E_OUTOFMEMORY and not a code
+// that would cost the application its device. The customer bit is set, so it can never collide with an HRESULT
+// of the platform's.
+inline constexpr HRESULT kShareRequired = static_cast<HRESULT>(0xA0BC2075);
 
 struct MemoryRequest {
     uint32_t size;                              // sizeof(MemoryRequest)
@@ -156,6 +179,27 @@ struct MemoryRequest {
     uint32_t surface_row_pitch;                 // bytes, VkSubresourceLayout::rowPitch; a multiple of 16
     uint32_t reserved2;                         // 0
     uint64_t surface_layout_size;               // VkSubresourceLayout::size
+};
+
+// BD-075, the open half: an allocation the runtime opened for us (D3D12DDIARG_OPENHEAP_0003), which the shell
+// must map, make resident and import into the engine's VkDevice without allocating anything. The record it
+// builds is borrowed: the shell never deallocates it, because it never allocated it, and the runtime destroys
+// it as soon as pfnDestroyHeapAndResource returns. flags is kMemoryDedicated|kMemoryShareable|
+// kMemoryLinearSurface, as the shareable create's second attempt is, so the shell applies the same rules.
+struct AdoptRequest {
+    uint32_t size;                              // sizeof(AdoptRequest)
+    uint32_t flags;                             // MemoryRequestFlags
+    // The runtime owner as the open DDI supplied it: the fourth argument of pfnOpenHeapAndResource. It names the
+    // resource, not an allocation to release, so the shell deliberately keeps no owner for it: the record's
+    // authority stays 0 and RuntimeAllocation::adopt names no resource, which is what makes the owner release form
+    // impossible for a borrowed allocation. The field is here because the request carries the whole shape of the
+    // open for the shell's refusal lines and traces, not because anything is recorded from it. The sentence this
+    // replaces said "the shell records it", which it never did (BD-075 review, 2026-10-06).
+    D3D12DDI_HRTRESOURCE rt_owner;
+    D3DKMT_HANDLE allocation;                   // pOpenAllocationInfo[0].hAllocation; never ours to destroy
+    uint32_t memory_type_bits;                  // the engine's memoryTypeBits for the image, as above
+    uint64_t byte_size;                         // the backing the image needs, page rounded
+    uint64_t alignment;                         // the image's memory alignment
 };
 
 // One runtime allocation that the shell has made and imported. The shell owns it (see the release sequence).
@@ -202,6 +246,11 @@ struct ShellHooks {
     // EnginePrivateTest. allocate_memory fills *memory only when it succeeds; on failure engine-ddi owns nothing.
     HRESULT (APIENTRY* allocate_memory)(void* shell, const MemoryRequest* request, ImportedMemory* memory);
     HRESULT (APIENTRY* free_memory)(void* shell, const ImportedMemory* memory);
+    // BD-075: the borrowed memory of an opened shared resource. Optional, and null means no shared open is
+    // served: pfnOpenHeapAndResource then refuses, as it did before r5. It fills *memory only when it
+    // succeeds, and the memory it fills comes back through free_memory like any other, where the shell's own
+    // record knows that it must not deallocate what it never allocated.
+    HRESULT (APIENTRY* adopt_memory)(void* shell, const AdoptRequest* request, ImportedMemory* memory);
 };
 
 // ---- Device context ------------------------------------------------------------------------------------------
@@ -376,6 +425,9 @@ constexpr HRESULT admitted_create_failure(HRESULT hr) noexcept {
         return kDriverDeviceRemoved;
     return E_OUTOFMEMORY;
 }
+// The shell-internal retry sentinel is a refusal like any other as far as the runtime is concerned: a create path
+// that let it escape would still report a code the AllowOutOfMemory category admits (BD-075).
+static_assert(admitted_create_failure(kShareRequired) == E_OUTOFMEMORY);
 
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);
@@ -483,11 +535,24 @@ HRESULT copy_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE dst, const D3D
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.
 HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource, D3DKMT_HANDLE* allocation,
                             uint64_t* offset) noexcept;
-// Present: the runtime allocation of a surface that can be presented, which is a linear primary of this
-// device: one image from the first byte of its allocation. E_INVALIDARG for any other resource, and
-// *allocation is 0 unless S_OK.
+// Present, and the destroy's owner scope: the runtime allocation of a surface this device created as a linear
+// surface of its own - a linear primary or a shared create - one image from the first byte of its allocation.
+// E_INVALIDARG for any other resource, and *allocation is 0 unless S_OK. An opened shared surface is refused
+// here on purpose: it is nobody's primary and only its creator's own destroy may release that allocation, which
+// is what the destroy slot uses this answer for.
 HRESULT present_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
                            D3DKMT_HANDLE* allocation) noexcept;
+// The same answer for the destination of a blt-model Present, which may also be a surface this device opened
+// (ResourceKind::Opened). The runtime named it and owns it for the call; nothing of its lifetime is ours, so this
+// form must never be used for the destroy's owner scope. Before BD-075 no opened resource could exist and the two
+// questions had one answer; giving the destination the stricter answer turned a legal Present into a removed
+// device at stage 4 (BD-075 review, 2026-10-06).
+HRESULT present_destination_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
+                                       D3DKMT_HANDLE* allocation) noexcept;
+// BD-075: how many creates this process has turned into a shared linear surface after the runtime refused the
+// ordinary allocation shape. The named risk of that retry is that it fires on an ordinary committed texture, so
+// the count is kept whatever the trace switches say and every retry also names itself through log_refusal.
+uint64_t shared_surface_retries() noexcept;
 // MakeResident and Evict (the slots are the shell's): the kernel allocation behind one object of the
 // D3D12DDI_HANDLE_AND_TYPE list, whose Handle is the object's pDrvPrivate (INFERENCE: no runtime list has been
 // logged). *allocation is 0 unless S_OK.

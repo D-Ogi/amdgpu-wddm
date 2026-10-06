@@ -95,7 +95,7 @@ runs only after GPU retirement, on a DDI thread.
 | D62 | 0x1F0 | `pfnMakeResident` | shell | P1 |
 | D63 | 0x1F8 | `pfnEvict` | shell | P1 |
 | D64 | 0x200 | `pfnCalcPrivateOpenedHeapAndResourceSizes` | engine-ddi; the records a create builds | P4 |
-| D65 | 0x208 | `pfnOpenHeapAndResource` | engine-ddi; refuses every shared open with E_OUTOFMEMORY | P4 |
+| D65 | 0x208 | `pfnOpenHeapAndResource` | engine-ddi; opens a shared linear surface, refuses every other shape with E_OUTOFMEMORY | P4 |
 | D66 | 0x210 | `pfnCopyDescriptors` | engine-ddi | P1 |
 | D67 | 0x218 | `pfnCopyDescriptorsSimple` | engine-ddi | P1 |
 | D68 | 0x220 | `pfnCalcPrivateQueryHeapSize` | engine-ddi | P1 |

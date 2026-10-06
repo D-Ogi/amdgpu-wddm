@@ -29,7 +29,7 @@ inline constexpr auto shell_core_members = std::tuple{
     &Core::pfnDestroySchedulingGroup,
     &Core::pfnSetBackgroundProcessingMode
 };
-static_assert(engine_ddi::kBoundaryRevision == 4,
+static_assert(engine_ddi::kBoundaryRevision == 5,
     "Recheck table ownership when the engine boundary changes");
 static_assert(std::tuple_size_v<decltype(shell_core_members)> == 18);
 } // namespace table_detail
