@@ -421,6 +421,24 @@ int main(void)
                     // Admitted, programmed, and recorded as the surface the plane is reading.
                     CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
                     CHECK(w.ScanoutFlips==2 && w.ScanoutObject==(LONGLONG)good.Serial);
+                    {   // P5.4. The base a scan-out create asks VidMm for and the base this clause admits
+                        // are one number, asserted here through the actual DDI and not only over the pure
+                        // header: a create that asked for the wrong alignment would still pass the header
+                        // test. One step of the alignment every other allocation keeps (64 bytes) above an
+                        // admitted base is refused, and that refusal is the one that blanks the output when
+                        // it arrives after SharedPrimaryTransition.
+                        LONG refusals=w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT];
+                        LONG admitted=w.ScanoutFlips;
+                        request.PrimaryAddress.QuadPart=(LONGLONG)Bc250ScanoutCreateAlignment(1)*7;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutFlips==admitted+1 && w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==refusals);
+                        request.PrimaryAddress.QuadPart+=(LONGLONG)Bc250ScanoutCreateAlignment(0);
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_INVALID_PARAMETER);
+                        CHECK(w.ScanoutAdmits[BC250_SCANOUT_ALIGNMENT]==refusals+1 && w.ScanoutFlips==admitted+1);
+                        request.PrimaryAddress.QuadPart=0xC000;
+                        CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+                        CHECK(w.ScanoutFlips==admitted+2 && w.ScanoutObject==(LONGLONG)good.Serial);
+                    }
                     {   // With the flip gate closed this DDI still succeeds and still publishes, and
                         // no scan-out flip is counted: nothing was written to the display hardware,
                         // and a counter that moved here would report the whole increment's result on

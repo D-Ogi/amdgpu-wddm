@@ -217,6 +217,25 @@ int main(void)
     // 14. The pitch the firmware itself left is the one a POST-geometry surface is expected to carry.
     CHECK(DcnPrimaryPitch(POST_WIDTH) == POST_PITCH);
 
+    // 15. The create-time alignment and the flip-time clause are one number (0.7.209.1). A surface that
+    //     asked for scan-out is created on the granularity its own clause demands, so the clause cannot
+    //     refuse the transition flip of a correctly described surface - a refusal there blanks the output
+    //     instead of falling back to composition. Everything else keeps the 64 bytes it had.
+    CHECK(Bc250ScanoutCreateAlignment(1) == BC250_SCANOUT_ADDRESS_ALIGNMENT);
+    CHECK(Bc250ScanoutCreateAlignment(1) == 4096ul);
+    CHECK(Bc250ScanoutCreateAlignment(0) == 64ul);
+    for (i = 0; i < 2; i++) {
+        /* Every base the create alignment can produce is a base the clause admits, and the one below it
+           is not: the two are the same rule read from both ends. */
+        const unsigned long long base = 4ull * 1024ull * 1024ull * 1024ull;
+        Shell(&c);
+        c.Address = base + (unsigned long long)Bc250ScanoutCreateAlignment(1) * (i + 1u);
+        CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+        Shell(&c);
+        c.Address = base + (unsigned long long)Bc250ScanoutCreateAlignment(0) * (i + 1u);
+        CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ALIGNMENT);
+    }
+
     printf("scanout admission: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

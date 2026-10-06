@@ -3807,8 +3807,11 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     info->hAllocation = object;
     info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
     // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
-    // reference drivers do (Alignment 64 is theirs too).
-    info->Alignment = 64;
+    // reference drivers do (Alignment 64 is theirs too). A surface that asked for scan-out asks for the
+    // page alignment its own flip clause demands instead (Bc250ScanoutCreateAlignment): the clause refuses
+    // any other base, and that refusal arrives after the OS has taken SharedPrimaryTransition, which it
+    // does not fall back from. Nothing else moves - 64 bytes for every other allocation, as before.
+    info->Alignment = Bc250ScanoutCreateAlignment(object->ScanoutRequested ? 1 : 0);
     info->HintedBank.Value = 0;
     info->MaximumRenamingListLength = 0;
     info->pAllocationUsageHint = NULL;
