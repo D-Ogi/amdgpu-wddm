@@ -168,6 +168,15 @@ HKR, Parameters, EnableDirectFlipHandshake, 0x00010001, 1
 ; dxgkrnl DPC is not asked for at all: one DPC per completion fewer, measured at 12 to 20 us each. 0 is
 ; 0.7.208.1 exactly, where the notification arrives with the next dxgkrnl DPC.
 HKR, Parameters, NotifyDpcInReport,  0x00010001, 1
+; DisplayPort audio, steps 0 and 1 (dpaudio.c, M819): at every start and resume, the Azalia endpoint of the one DP
+; stream the firmware left running is made present to the inbox HD Audio driver (pin configuration, one LPCM
+; descriptor of 2 channels at 32/44.1/48 kHz and 16 bit, AUDIO_ENABLED). The start checks the codec ID, the audio
+; strap, the stream encoder, the DP SST back end and the endpoint's pin configuration first, and writes nothing
+; unless all of them hold; it needs BAR5 (EnableMmio). No DIG, DP, OTG or DTO register is written: no sound flows
+; until step 2. EnableDpAudio 0 means no audio register is read or written at all, the behaviour before this
+; feature; EnableDpAudioEndpoint 0 does the same for step 1 alone.
+HKR, Parameters, EnableDpAudio,      0x00010001, 1
+HKR, Parameters, EnableDpAudioEndpoint, 0x00010001, 1
 
 [Strings]
 Provider    = "amdgpu-wddm"

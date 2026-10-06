@@ -17,6 +17,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     InteropInitialize(device);
     SmuOwnerInitialize(&device->Smu);
     HwmonInitialize(&device->Hwmon);
+    DpAudioInitialize(device);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
@@ -132,6 +133,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         (void)Bc250StopDevice(device);
         goto failed;
     }
+    // The seamless-boot point: the firmware's DP stream is now ours, and Linux adds audio to such a stream here
+    // (link_dpms.c). Never fails the start; refuses and writes nothing unless its preconditions hold (dpaudio.c).
+    DpAudioStart(device);
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
@@ -166,6 +170,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     CpuStop(device);        // first: a trial's revert needs the mailbox, which SmuOwnerStop below takes away
     DpmStop(device);        // the floor while the owner is still online, then no governor tick
     HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
+    DpAudioStop(device);        // before WddmStop/DcnStop, with BAR5 mapped: the next owner inherits AUDIO_ENABLED 0
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
     device->SystemDisplayReady=FALSE;
     device->PostDisplayStopAttempted=FALSE;
@@ -362,11 +367,15 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         NTSTATUS status;
         // The hang detector judges a started device in D0 only. A failed transition down leaves it paused:
         // silence is the safe side of a diagnostic that bugchecks.
-        if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); CpuPause(device); DpmPause(device); }
+        if (DevicePowerState!=PowerDeviceD0) {
+            HangDetectorPause(); CpuPause(device); DpmPause(device);
+            DpAudioStop(device);    // AUDIO_ENABLED 0 before the display block goes down
+        }
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
         if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
             DpmResume(device);
             CpuResume(device);  // nothing of the CPU surface survives D3 in the chip: read it again (0.7.211)
+            DpAudioResume(device);  // likewise the endpoint: the whole start again, preconditions included
             HangDetectorResume();
             InteropAdapterPower(device,DevicePowerState,ActionType);
         }
@@ -377,6 +386,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         StartHealthClose(device);
         CpuStop(device);
         DpmStop(device);
+        DpAudioStop(device);    // like the governor: stopped here, started again only by the next start
         SmuOwnerStop(&device->Smu);
     }
     return STATUS_SUCCESS;

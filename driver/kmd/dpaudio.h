@@ -1,0 +1,28 @@
+// DisplayPort audio as the miniport keeps it (dpaudio.c): steps 0 and 1 of the DP audio work. The register side
+// with no Windows in it is dpaudio_seq.c. Included by bc250kmd.h after the WDK headers.
+#pragma once
+
+typedef struct _BC250_DPAUDIO {
+    // A leaf lock. Held across every indirect access, because the INDEX/DATA pair of an endpoint is two
+    // separate register accesses, and across the record below. The holder takes nothing else and logs nothing.
+    KSPIN_LOCK Lock;
+    ULONG State;                            // BC250_DPAUDIO_STATE_*
+    ULONG Reason;                           // enum bc250_dpaudio_reason
+    ULONG Notes;                            // BC250_DPAUDIO_NOTE_*
+    ULONG Endpoint, Stream;
+    ULONG SwitchEnable, SwitchEndpoint;     // as the last start read them, BC250_DPAUDIO_NO_SWITCH before
+    ULONG Starts, Resumes, Stops, Refusals, Failures, PathOn, PathOff;
+    ULONG IndirectReads, IndirectWrites, DirectWrites, AccessRefusals;
+    ULONG CodecId, ConfigDefault, HotPlugBefore, HotPlugAfter;
+    LONG LastStatus;
+    BOOLEAN Written;                        // this start wrote the endpoint: the stop path must clear AUDIO_ENABLED
+} BC250_DPAUDIO;
+
+struct _BC250_DEVICE;
+struct _BC250_ESCAPE_DPAUDIO;
+void DpAudioInitialize(struct _BC250_DEVICE* Device);                   // AddDevice
+void DpAudioStart(struct _BC250_DEVICE* Device);                        // StartDevice, after the inherited timing
+void DpAudioResume(struct _BC250_DEVICE* Device);                       // back in D0
+void DpAudioStop(struct _BC250_DEVICE* Device);                         // StopDevice before WddmStop/DcnStop; D3
+void DpAudioPathPower(struct _BC250_DEVICE* Device, BOOLEAN On);        // CommitVidPn path power transition
+void DpAudioRequest(struct _BC250_DEVICE* Device, struct _BC250_ESCAPE_DPAUDIO* Data, BOOLEAN Admin, ULONG EscapeFlags);

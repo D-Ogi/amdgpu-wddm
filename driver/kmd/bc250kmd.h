@@ -75,6 +75,7 @@
 #include "hwmon.h"
 #include "cpu.h"
 #include "interop.h"
+#include "dpaudio.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -159,6 +160,7 @@ typedef struct _BC250_DEVICE {
     BC250_CPU_STATE Cpu;               // cpu.c: the CPU clock limit, undervolt, temperature cap and core mask
     BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     BC250_HWMON_OWNER Hwmon;           // hwmon.c: the board's own hardware monitor, read only, gated
+    BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
