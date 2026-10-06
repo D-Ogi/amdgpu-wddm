@@ -320,16 +320,19 @@ HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) no
 // The direct recording entry is the default wherever the shell installs it (native-tables.cpp: unless the experiment
 // direct-entry-off, recording-bind-off or deferred-replay-off, or the full trace); trial 327 measured it against the
 // shell's entry at Witcher 3 LOW in one process: main thread 0.51 ms/frame less, frames 0.50 ms shorter (+3.8 %).
-// Knobs, for measurements only, read once per process from the environment, else from
-// C:\BC250\tmp\amdgpu_wddm_radv.cfg (KEY=VALUE lines, the ICD's knob file, which also reaches a game that Steam starts):
+// Knobs, for measurements only, read once per process from the environment, else from the file BC250_ENTRY_CFG names
+// (KEY=VALUE lines; a '#' line is a comment). With that variable unset no file is read: there is no machine-wide knob
+// file, for the reasons the ICD removed its own (entry.cpp, mesa 0bb2d1ea). A knob therefore reaches a game that Steam
+// starts through BC250_ENTRY_CFG in the environment of the process that starts it:
 //   BC250_ENTRY_PATH   one letter per arm, rotated every BC250_ENTRY_PHASE_MS (default 2000) at the shell's Present;
 //                      a single letter fixes the arm; without it, b. a: the shell's entry; b: the direct entry;
 //                      c: the direct entry, with spinning replay workers looking for work every BC250_ENTRY_POLL_US
 //                      (default 1) instead of after every pause; d: the shell's entry and a busy wait of
 //                      BC250_ENTRY_PAD_US (default 300) in each Present.
-//   BC250_ENTRY_STATS  1: a row per phase in C:\BC250\tmp\amdgpu_wddm_radv-deferred-<pid>-shell.log (else the same
-//                      name in %TEMP%): frame times, calls and sampled times per timed entry and thread, the direct
-//                      entry's misses, the replay workers' busy, spin, yield and sleep times.
+//   BC250_ENTRY_STATS  1: a row per phase in the file BC250_ENTRY_LOG names ("%p" becomes the process id), else in
+//                      amdgpu_wddm_radv-deferred-<pid>-shell.log in %TEMP%: frame times, calls and sampled times per
+//                      timed entry and thread, the direct entry's misses, the replay workers' busy, spin, yield and
+//                      sleep times.
 // The direct entry is the graphics table's slot for the value-only recording calls (draws, input assembler,
 // viewports and scissors, blend factor and stencil reference, graphics root arguments): with deferred replay on, it
 // writes the slot's own ring entry from the table entry itself, without the shell's entry thunk; anything else, and

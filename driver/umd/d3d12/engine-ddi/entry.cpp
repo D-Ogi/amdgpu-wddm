@@ -58,12 +58,15 @@ uint64_t qpc() noexcept {
     return static_cast<uint64_t>(now.QuadPart);
 }
 
-// The knob file as the ICD reads it: BC250_DEFERRED_CFG names it, else C:\BC250\tmp\amdgpu_wddm_radv.cfg.
+// The knob file: BC250_ENTRY_CFG names it, and with the variable unset no file is opened. There is no default path.
+// A machine-wide file is a value that no trial records, that outlives the trial that wrote it, and that applies to
+// every process on the machine; C:\BC250 lets each user make and change a directory under it, so such a file is also
+// a channel from one user to the D3D12 driver of every other. The ICD removed its own file for those reasons (mesa
+// 0bb2d1ea, host policy version 2) and this shell keeps none either.
 char* read_knob_file() noexcept {
-    char path[MAX_PATH] = "C:\\BC250\\tmp\\amdgpu_wddm_radv.cfg";
-    char named[MAX_PATH];
-    const DWORD n = GetEnvironmentVariableA("BC250_DEFERRED_CFG", named, sizeof(named));
-    if (n && n < sizeof(named)) std::memcpy(path, named, n + 1);
+    char path[MAX_PATH];
+    const DWORD n = GetEnvironmentVariableA("BC250_ENTRY_CFG", path, sizeof(path));
+    if (!n || n >= sizeof(path) || !path[0]) return nullptr;
     FILE* file = nullptr;
     if (fopen_s(&file, path, "rb") || !file) return nullptr;
     auto* text = static_cast<char*>(std::calloc(1, 65537));
@@ -193,21 +196,37 @@ struct Presenter {
 std::atomic<DWORD> g_presenter{0};
 Presenter* g_state = nullptr;
 
+// The rows go to the file BC250_ENTRY_LOG names ("%p" in it becomes the process id, so one setting still gives a game
+// and its helper a file each), else to that name in %TEMP%, which belongs to the user who runs the process. No shared
+// path: the ICD made the same move in mesa 0bb2d1ea.
 void open_log(Presenter& s) noexcept {
     s.opened = true;
-    char path[MAX_PATH];
-    std::snprintf(path, sizeof(path), "C:\\BC250\\tmp\\amdgpu_wddm_radv-deferred-%lu-shell.log", GetCurrentProcessId());
-    s.file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                         OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (s.file == INVALID_HANDLE_VALUE) {
-        char temp[MAX_PATH];
-        const DWORD n = GetTempPathA(sizeof(temp), temp);
-        if (n && n < sizeof(temp)) {
-            std::snprintf(path, sizeof(path), "%samdgpu_wddm_radv-deferred-%lu-shell.log", temp, GetCurrentProcessId());
-            s.file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                 nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    char path[MAX_PATH] = {};
+    char named[MAX_PATH];
+    const DWORD n = GetEnvironmentVariableA("BC250_ENTRY_LOG", named, sizeof(named));
+    if (n && n < sizeof(named) && named[0]) {
+        size_t used = 0;
+        for (const char* p = named; *p && used + 1 < sizeof(path);) {
+            if (p[0] == '%' && p[1] == 'p') {
+                used += static_cast<size_t>(std::snprintf(path + used, sizeof(path) - used, "%lu",
+                                                          GetCurrentProcessId()));
+                p += 2;
+                if (used >= sizeof(path)) { used = sizeof(path) - 1; break; }
+            } else {
+                path[used++] = *p++;
+            }
         }
+        path[used < sizeof(path) ? used : sizeof(path) - 1] = 0;
+    } else {
+        char temp[MAX_PATH];
+        const DWORD t = GetTempPathA(sizeof(temp), temp);
+        if (t && t < sizeof(temp))
+            std::snprintf(path, sizeof(path), "%samdgpu_wddm_radv-deferred-%lu-shell.log", temp,
+                          GetCurrentProcessId());
     }
+    if (path[0])
+        s.file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                             OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     log_line("entry path: rows in %s", s.file == INVALID_HANDLE_VALUE ? "(none: the log could not be opened)" : path);
 }
 
