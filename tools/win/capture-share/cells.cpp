@@ -777,6 +777,20 @@ int RunSelfTest()
                          (HRESULT)strtoul(Field(fail, "removed").c_str(), nullptr, 16) == DXGI_ERROR_DRIVER_INTERNAL_ERROR &&
                          (HRESULT)strtoul(Field(msg, "removed").c_str(), nullptr, 16) == S_OK);
 
+    // The route blocker (BD-075 round 2), on hand-written route strings. Its first execution would otherwise be on
+    // the lab: this host has no CPU D3D11 UMD, so no host row can reach it, and the lab kit's offline test only
+    // checks how a result=skip line is read, not the decision to emit one. A wrong decision here is a row that
+    // measures nothing (a false skip) or three content mismatches nobody can explain (a missed skip).
+    const bool blocker =
+        FenceOrderingBlocker("d3d12", "cpu11").find("cpu11 opener") != std::string::npos &&
+        FenceOrderingBlocker("cpu11", "d3d12").find("cpu11 creator") != std::string::npos &&
+        FenceOrderingBlocker("cpu11", "cpu11").find("cpu11 side") != std::string::npos &&
+        FenceOrderingBlocker("d3d12+11on12", "cpu11").find("cpu11 opener") != std::string::npos &&
+        FenceOrderingBlocker("d3d12", "gpu11").empty() && FenceOrderingBlocker("gpu11", "d3d12").empty() &&
+        FenceOrderingBlocker("nvidia", "nvidia").empty() && FenceOrderingBlocker("?", "").empty() &&
+        FenceOrderingBlocker("", "").empty();
+    record("route-blocker", blocker, FenceOrderingBlocker("d3d12", "cpu11"));
+
     c = CompareImage("A", one, Pattern::A, false, false, 0);
     const Check back = CheckFromText("CHECKA " + CheckText(c));
     record("check-text", back.what == c.what && back.pass == c.pass && back.x == c.x && back.y == c.y &&
