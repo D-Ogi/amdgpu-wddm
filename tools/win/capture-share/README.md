@@ -129,5 +129,9 @@ so the result says where the stop is.
 
 ## Status
 
-The lab run under GPU desktop composition is not done. Row M15.13 of `docs/m15-reconciliation.md` stays "not
-measured on the GPU route" until a lab run exists. The run and that row are later steps.
+The shared half ran on unit A under GPU desktop composition on 2026-10-06: seven passes, 25 rows, 23 of them as
+the kit expects, in `evidence/windows/2026-10-06-BD075-shared-resources-lab/`. Row M15.13 of
+`docs/m15-reconciliation.md` holds the result. Three open parts stay. The capture cells `dda` and `wgc` have not
+run on any route, and they need `--interactive-ok` in the lab's interactive session. The shared rows ran on the
+candidate D3D12 shell of `bd075/d3d12-shared-real`, so they need one confirmation pass on the installed release.
+The kit still prints no release name, CU count or composition route in its summary.

@@ -5,6 +5,12 @@ kit on unit A. Release 0.7.207.100-tester.12 (train b18r1), kernel driver 0.7.20
 40 CU, GPU desktop composition. Each pass ran with `-Trace`, and each pass stayed far inside the
 three-minute bound: the longest pass spent 52 s in its cells, and all seven together spent 229 s.
 
+Of that run context the pass summaries print the kernel driver ABI alone, in their `dpm` lines. The
+release name, the CU count and the composition route come from the lab's install record of the day,
+which is the local workspace state file and not this repository. Train b19 reached the lab at 06:44Z,
+after these passes. The kit prints no release, CU or route line of its own, and it should, as the E52
+kit does.
+
 This is the first lab check of round 2 of the BD-075 fix. It is also the first measurement of
 cross-API sharing on the GPU D3D11 route (the `.gpu11` rows) and the first completed
 `ALLOW_SIMULTANEOUS_ACCESS` row on this driver. The defect is `BD-075` in the local review backlog.

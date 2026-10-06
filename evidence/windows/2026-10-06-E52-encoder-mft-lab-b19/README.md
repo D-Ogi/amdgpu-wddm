@@ -168,7 +168,7 @@ The three targets are the ones the perf work set before this trial. The local wr
 |---|---|
 | T1: 1080p at 60 pictures per second or more, 720p at 120 or more, at the DPM's normal clock | **Met.** 85.4 and 153.0 serial, from `t1080-60` and `t720-60`. The compare cases give 86.9 and 154.9 |
 | T2: GPU busy at 8 ms per 1080p picture or less | **Met.** 6.53 ms, from `t1080-60`. The prediction before the run was 11 to 12 ms, about 40 % over |
-| T3: PSNR-Y within 1.0 dB and chroma within 1.5 dB of the inbox encoder at an equal bit rate | **Missed.** Over 60 pictures at the nominal rate the mean gap is Y -1.34, Cb -3.82, Cr -4.94 dB at 720p and Y -2.31, Cb -4.94, Cr -6.00 dB at 1080p |
+| T3: PSNR-Y within 1.0 dB and chroma within 1.5 dB of the inbox encoder at an equal bit rate | **Missed.** The gap of the mean PSNR over the 60 decoded pictures is Y -1.34, Cb -3.82, Cr -4.94 dB at 720p. At 1080p it is Y -2.31, Cb -4.94, Cr -6.00 dB. Each value is the difference of the two `PSNR` rows of the comparison case. The equal bit rate is the requested one, and item 2 above gives the bytes each encoder spent |
 
 The T2 prediction named the group shared memory of `cs_me` (about 9.8 KB per 32-thread group) as the
 reason it would be missed. The measurement says otherwise. The prediction had priced the serial wall
@@ -180,9 +180,13 @@ measures the gap and does not test those causes.
 
 ## Not in this run
 
-- The `--texin` cases. The NV12 pair fails on this release through BD-071, and `mfthost` runs the four
-  `--texin` cases in one process, so the BGRA pair cannot be isolated. The BGRA pair passed on unit A
-  in train b18, 120 of 120 pictures at 1920x1080.
+- The `--texin` cases. None of the four ran. This release therefore has no NV12 input measurement. The
+  run summary calls the pair a BD-071 failure, but that note names train b18r1. Train b19 carries the
+  BD-071 fix in its GPU D3D11 shell, which is the shell this run used
+  (`tools/release/release-sources.json`, the GPU D3D11 shell role, and the wagon
+  `m14/d3d11-nv12-planes f3ff6ca5`). `mfthost` runs the four `--texin` cases in one process, so the
+  BGRA pair cannot be isolated from the unmeasured NV12 pair either. The BGRA pair passed on unit A in
+  train b18, 120 of 120 pictures at 1920x1080.
 - Game Bar, Windows Camera and Chromium (E52 stages 1 and 5). They find the transform only through the
   machine-wide registration, which this trial does not write. They need a separate trial with
   `mftreg --register-global` and `--unregister-global` inside the same script.
