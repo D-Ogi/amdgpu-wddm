@@ -38,7 +38,7 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
-#define BC250_ESCAPE_RUN_DPAUDIO 30u            // DP audio: step 0 observation and step 1 state (BC250_ESCAPE_DPAUDIO below)
+#define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation and step 1 state (BC250_ESCAPE_DPAUDIO below)
 #define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
                                             // the respin. Seven revisions were written apart on seven branches,
                                             // each taking the next free number for itself: 209 (the DirectFlip
@@ -1545,7 +1545,7 @@ typedef struct _BC250_ESCAPE_PAGING_JOURNAL {
 typedef char BC250_PAGING_JOURNAL_RECORD_SIZE_CHECK[(sizeof(BC250_PAGING_JOURNAL_RECORD) == 72) ? 1 : -1];
 typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) == 4672) ? 1 : -1];
 
-// BC250_ESCAPE_RUN_DPAUDIO (30): DisplayPort audio, steps 0 and 1 (driver/kmd/dpaudio.c, dpaudio_seq.c).
+// BC250_ESCAPE_RUN_DPAUDIO (31): DisplayPort audio, steps 0 and 1 (driver/kmd/dpaudio.c, dpaudio_seq.c).
 //
 // OBSERVE reads the step 0 registers now and returns them by slot (BC250_DPAUDIO_OBS_LIST): the codec root and
 // function parameters, DC_PINSTRAPS, the DCCG audio DTOs, for both stream encoders the DIG/DP/AFMT/HPD state,
