@@ -1,15 +1,15 @@
-# Lab-side bounded ETW CPU profile of a game trial (owner request via Codex 848: use the collected profilers).
+# Lab-side bounded ETW CPU profile of a game trial (owner request, review 848: use the collected profilers).
 # Runs as a one-shot SYSTEM task started by etw-start.ps1 right after the trial's runtime starts. Two windows:
 #   A: $StartA s after the game appears, $Seconds long (owner: DWM misbehaves from the game start). The game is
 #      -Process (comma-separated Get-Process names, wildcards allowed; default witcher3, game runner profiles).
 #   B: when dwm.exe CPU exceeds $DwmPct % of the machine in two consecutive 2 s samples, or at $LatestB s after
 #      the game appeared, whichever first.
 # One deadline bounds everything: $NotAfterQpc is the trial's own runtime cutoff (watch.ps1 origin + 255 s, less a
-# margin, computed by etw-start.ps1 from the trial's start.json) on the shared QPC clock (Codex 854). A window is
+# margin, computed by etw-start.ps1 from the trial's start.json) on the shared QPC clock (review 854). A window is
 # only started when its collection plus the cleanup reserve fits before it, and every wait, logman call and
 # helper exit is cut to what is left; an exit that cannot be verified in time counts as a failed cleanup.
 # Each window owns the sessions named BC250-<Tag>-<W>* (PerfView's own pair plus the DxgKrnl one); cleanup of
-# owned sessions runs in finally, and a failed session query is never taken as absence (Codex 850). The script
+# owned sessions runs in finally, and a failed session query is never taken as absence (review 850). The script
 # exits 1 when any cleanup failed; task exit alone is still not a closure witness: the operator's etw-closure.ps1,
 # run once this task is no longer Running, is the independent receipt.
 # FPS mode (owner, 2026-09-30: Full HD frame-rate tests): -GpuOnly records only the DxgKrnl session (no PerfView
@@ -64,7 +64,7 @@ function Wait-Exit($p, [double]$cap) {
 }
 # One bounded run of a console tool with its output in $out. Returns @{ ok; exit; how } where ok means it exited
 # by itself within the budget; nothing runs once the budget is gone. A helper that outlives its Kill is unjoined:
-# it is noted with its PID, cleanup counts as failed, and no further helper is started (Codex 865).
+# it is noted with its PID, cleanup counts as failed, and no further helper is started (review 865).
 $script:unjoined = $null
 function Invoke-Tool([string]$exe, [string[]]$argv, [double]$cap, [string]$out) {
     if ($script:unjoined) { return @{ ok = $false; exit = $null; how = "blocked by unjoined pid $($script:unjoined)" } }
@@ -76,7 +76,7 @@ function Invoke-Tool([string]$exe, [string[]]$argv, [double]$cap, [string]$out) 
     if ($how -ne 'exited') { return @{ ok = $false; exit = $null; how = $how } }
     return @{ ok = $true; exit = $p.ExitCode; how = $how }
 }
-# Every launch, direct ones included, records an exit it could not witness here (Codex 866).
+# Every launch, direct ones included, records an exit it could not witness here (review 866).
 function Latch([string]$how, $p, [string]$what) {
     if ($how -ne 'unverified') { return }
     $script:cleanupFailed = $true
@@ -195,7 +195,7 @@ function Capture([string]$w, [int]$secs = $Seconds) {
     }
     # GPU side (owner: what exactly does a frame wait for): DxgKrnl queue packets, DMA packets and VSync/flip in a
     # separate logman session, same shape as the G0 DWM trials (all keywords, level 5, 1 MB buffers, 64-256),
-    # circular at 256 MB: up to 256 MB of buffers on top of PerfView's 32 MB request (recorded, Codex 850).
+    # circular at 256 MB: up to 256 MB of buffers on top of PerfView's 32 MB request (recorded in review 850).
     $gpu = "$session-gpu"
     # 161 (3-minute FPS window): 159 wrote 2.4 MB/s, so a GPU-only window longer than 90 s gets 3 MB per second plus
     # 64 MB instead of the 256 MB circle, which would otherwise overwrite the window's start. 257 (LOW at 53 fps with

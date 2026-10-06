@@ -1,4 +1,4 @@
-# Operator's independent closure receipt for a trial's ETW capture (Codex 850, 854): first the capture task
+# Operator's independent closure receipt for a trial's ETW capture (review 850, 854): first the capture task
 # (the producer) must be seen not Running, since between windows zero sessions can be listed while it may still
 # start the next one; only then are this trial's owned sessions (BC250-N<trial>-*) stopped and the final query
 # taken. Query failure or an unfinished logman call is reported as such, never as absence. Removes the one-shot
@@ -24,7 +24,7 @@ try {
 if ($helpers.Count) { "producer helpers alive: $(($helpers | ForEach-Object { "$($_.Name):$($_.ProcessId)" }) -join ','): closure NOT established"; exit 4 }
 # One bounded logman call, each with its own output files; @{ ok = exited by itself within $cap s; exit; out }.
 # A helper that does not exit even after Kill is unjoined: closure stops there (exit 4) with its PID, and no
-# further helper is started, because a zero-session query cannot stand in for that helper's end (Codex 865).
+# further helper is started, because a zero-session query cannot stand in for that helper's end (review 865).
 $script:calls = 0
 function Logman([string[]]$argv, [int]$cap) {
     $script:calls++

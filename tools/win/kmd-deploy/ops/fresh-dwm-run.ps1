@@ -1,5 +1,5 @@
 # Runs ops/fresh-dwm.ps1 on unit A through bounded-child.exe (Job, whole process tree) with one deadline below the
-# three-minute bound (Codex 829). The helpers come from a retained desktop-umd173 attempt directory, checked by hash
+# three-minute bound (review 829). The helpers come from a retained desktop-umd173 attempt directory, checked by hash
 # against the frozen copies; the pushed pre-step script is checked by hash too. A timeout or a nonzero exit is an
 # unfinished preparation: witness the lab again, never stage on it.
 param([Parameter(Mandatory)][ValidatePattern('^C:\\BC250\\m15\\desktop-umd173-[0-9]{3}$')][string]$Helpers,

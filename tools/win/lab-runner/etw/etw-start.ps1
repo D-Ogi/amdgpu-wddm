@@ -1,5 +1,5 @@
 # Starts etw-capture.ps1 as a one-shot SYSTEM task for game trial NNN (runs through target.py ps, elevated
-# session 0). The capture's deadline is the trial's own (Codex 854): watch.ps1 records its QPC origin in the
+# session 0). The capture's deadline is the trial's own (review 854): watch.ps1 records its QPC origin in the
 # stage's start.json and cuts the game runtime at origin + 255 s (templates/watch.ps1, $runtimeEnd for a game);
 # the capture gets origin + 250 s on the same QPC clock, so operator delay before this script cannot extend it.
 # Refuses when the trial has not started, is not a game trial, has less than 60 s left, when the trial
