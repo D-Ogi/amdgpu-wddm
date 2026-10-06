@@ -38,7 +38,7 @@
     },
     "d3d12_applications": {
       "witcher3.exe": {
-        "Experiment": "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay"
+        "Experiment": "present-noprimary,present-cached"
       }
     }
   },
