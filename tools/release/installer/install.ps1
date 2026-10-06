@@ -711,6 +711,31 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     foreach ($row in @($impact.rows | Where-Object { $_.decision -eq 'driver-closed' })) { Write-Info "$($row.name) stays as the driver left it: $($row.closure). Remedy: run install.cmd -Repair." }
     Write-EngineEvent 'settings-plan' ([ordered]@{ summary = $impact.summary; rows = @($impact.rows) })
 }
+# BD-089: the files that the release installed here left, and this package does not install any more. The manifest in
+# the install root is that release's own manifest (the installer copies it with the payload), so its files are known by
+# name and by SHA256. Read here, before any change, so that the plan of this run already names every removal; the
+# files stage below removes them before the new payload is copied. A file whose bytes are not the ones that release
+# installed was changed after it, so it stays and is reported. A manifest that does not parse removes nothing.
+$script:OrphanRows = @()
+if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
+    $installedManifestPath = Join-Path $InstallRoot 'manifest.json'
+    $installedManifest = $null
+    if (Test-Path -LiteralPath $installedManifestPath -PathType Leaf) {
+        try { $installedManifest = Get-Content -LiteralPath $installedManifestPath -Raw | ConvertFrom-Json }
+        catch { Write-Warn2 "$installedManifestPath does not parse ($($_.Exception.Message)): the files of the release installed there are not examined, and none of them is removed" }
+    }
+    if ($installedManifest -and $script:Manifest) {
+        try { $script:OrphanRows = @(Resolve-OrphanFilePlan (Get-OrphanFilePlan -PreviousManifest $installedManifest -NewManifest $script:Manifest -InstallRoot $InstallRoot)) }
+        catch { Write-Warn2 "the files of the release installed in $InstallRoot were not examined ($($_.Exception.Message)): none of them is removed" }
+        $takeAway = @($script:OrphanRows | Where-Object { $_.state -eq 'remove' })
+        $changed = @($script:OrphanRows | Where-Object { $_.state -eq 'changed' })
+        $gone = @($script:OrphanRows | Where-Object { $_.state -eq 'absent' })
+        Write-Info ("files of the installed release $(if ($installedManifest.version) { [string]$installedManifest.version } else { 'of unknown version' }) that $packageVersion does not install: $(@($script:OrphanRows).Count)" +
+            " ($($takeAway.Count) to remove, $($changed.Count) changed after that install and kept, $($gone.Count) already gone)")
+        foreach ($row in $takeAway) { Write-Info "to remove in the files stage: $($row.path) (installed by $($row.from_version))" }
+        foreach ($row in $changed) { Write-Warn2 "kept: $($row.path) was installed by $($row.from_version) and is not in this release, but its bytes are not the ones that release installed. Remove it by hand if you do not want it." }
+    }
+}
 $script:EngineConsents = @($consents)
 if ($Plan) {
     Write-Host ''
@@ -887,6 +912,18 @@ $mftAction = Get-MftAction -Switch $mft -PresentKeys $mftKeys -DirPresent (Test-
 if ($mft.register) {
     if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
     $dirs += $mft.payload_dir
+}
+# BD-089: what the release installed here installed and this one does not, before the new payload goes in. The rows
+# come from the plan that this run printed before any change (above); each removal names the file and the release that
+# installed it. The SHA256 is read again here, so a file that somebody changed between the plan and this step stays.
+# A file in use goes at the next restart (Remove-PathOrSchedule).
+foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' })) {
+    Invoke-Change "remove $($row.path): installed by $($row.from_version), not in $packageVersion" {
+        if (-not (Test-Path -LiteralPath $row.path -PathType Leaf)) { Write-Info "already gone: $($row.path)"; return }
+        $now = Get-Sha256 $row.path
+        if ($now -ne $row.sha256) { Write-Warn2 "kept: $($row.path) changed after the plan of this run (SHA256 $($now.Substring(0, 16)))"; return }
+        Remove-PathOrSchedule $row.path
+    } | Out-Null
 }
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
@@ -1230,6 +1267,31 @@ Enter-Stage 'finish' 'Finish'
 Invoke-Change "keep $($script:Closure) as the active repair set (with the installed firmware), the one before it as the previous set, remove older sets" {
     [void](Complete-RepairSet -Manifest $script:Manifest -Closure $script:Closure -FirmwareFiles @(@($fw.files) | ForEach-Object { Join-Path $script:FirmwareInstallDir $_.name }))
 } | Out-Null
+# BD-089: our older driver packages in the store. Every release adds one bc250kmd.inf package, Windows binds the newest
+# one, and until this release every older one stayed. Kept: the package the GPU is bound to now, and the package of the
+# previous repair set, because a rollback installs that one again. pnputil runs without /uninstall and without /force,
+# so the started device keeps its driver and no device is touched here. A package that Windows refuses to delete is a
+# warning: it changes nothing of this installation.
+$storePlan = $null
+try {
+    $bound = $null
+    if ($instance) { $bound = Get-DeviceDriverPackage -InstanceId $instance }
+    $sets = @(Get-ChildItem -LiteralPath (Get-PackagesDir) -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+    $previousSet = (Get-RepairSetPlan (Read-RepairSetIndex) ([string]$script:Manifest.version) $sets).previous
+    $storePlan = Get-DriverStoreRemovePlan -Packages (Get-OurDriverPackageList) -BoundPublished $bound -PreviousVersion (Get-RepairSetDriverVersion $previousSet)
+} catch { Write-Warn2 "our driver packages in the store were not examined ($($_.Exception.Message)): none of them is removed" }
+if ($storePlan) {
+    Write-Info ("driver store: $(@($storePlan.keep).Count) package(s) of ours kept ($(if (@($storePlan.keep).Count) { @($storePlan.keep) -join ', ' } else { 'none' }))" +
+        $(if ($storePlan.previous) { ", $($storePlan.previous) of them for a rollback" } else { '' }) +
+        "; $(@($storePlan.remove).Count) to remove" + $(if ($storePlan.why) { "; $($storePlan.why)" } else { '' }))
+    foreach ($oldPackage in @($storePlan.remove)) {
+        Invoke-Change "pnputil /delete-driver $oldPackage (an older package of ours; no /uninstall, so the GPU keeps the package it uses)" {
+            $n = Invoke-Native pnputil.exe @('/delete-driver', $oldPackage)
+            Write-Log $n.text
+            if ($n.code -ne 0) { Write-Warn2 "pnputil /delete-driver $oldPackage exit $($n.code): $($n.text). The package stays in the store and changes nothing of this installation." }
+        } | Out-Null
+    }
+}
 Save-Phase 'installed'
 Set-ResumeAtLogon 'verify'
 Write-Host ''
