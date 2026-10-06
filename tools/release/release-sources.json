@@ -12,39 +12,39 @@
     "friendly_name": "BC-250 H.264 Encoder MFT"
   },
   "sources": {
-    "kmd": "bc250-win train/b20-setup, the b20 train driver 0.7.212.1",
-    "d3d12_shell": "bc250-win 62aa9bc0 (train/b19-setup), which is 85ac47b6 plus the knob-channel fix of the entry path",
+    "kmd": "bc250-win 60c97ad3 (train/b20-setup), the b20 train driver 0.7.212.1",
+    "d3d12_shell": "bc250-win aec3679e (train/b20-setup)",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/upstream-2026-10-05 4e9a98e9, with dxil-spirv d2d82332",
     "d3d12_icd": "mesa fork amdgpu-wddm/b19-icd 31844893",
-    "d3d11_shell": "bc250-win 85ac47b6 (train/b19-merge)",
+    "d3d11_shell": "bc250-win 689852a8 (train/b20-setup)",
     "d3d11_engine": "dxvk fork amdgpu-wddm/upstream-2026-10-05 5611118e",
     "d3d11_icd": "mesa fork amdgpu-wddm/b19-icd 31844893",
-    "desktop_umd": "CPU route mesa fork amdgpu-wddm/b19-desktop-umd 76ab2c27, hosted route mesa fork amdgpu-wddm/b19-hosted-umd 7117b189, router bc250-win train/b19-wow64-x86 a748e78e, hosted ICD mesa 48546c73 (unchanged)",
+    "desktop_umd": "CPU route mesa fork amdgpu-wddm/b19-desktop-umd 76ab2c27, hosted route mesa fork amdgpu-wddm/b19-hosted-umd 7117b189, router bc250-win 689852a8 (train/b20-setup), hosted ICD mesa 48546c73 (unchanged)",
     "vulkan_icd": "mesa fork 2732f9c8, published on branch amdgpu-wddm/gdi-immediate-quiet, the build of 0.7.205.100-tester.11, kept for its WSI present work",
-    "control": "bc250-win 3ef45a0f (train/b19-setup): the control application 0.5.1.0, bc250control.dll and bc250kmd_cli.exe from one build",
-    "wow64": "x86 builds for 32-bit processes (BD-064). Router and D3D9 stub: bc250-win train/b19-wow64-x86 a748e78e. CPU UMD: mesa amdgpu-wddm/b19-desktop-umd 76ab2c27. D3D11 shell: bc250-win 85ac47b6 with the -Arch x86 recipes. Engine: dxvk 5611118e. ICD: mesa amdgpu-wddm/b19-icd 31844893. Every x86 file comes from a commit. No tree takes a patch. No x86 D3D12",
-    "mft_h264": "bc250-win 70b6f838 (m15/video-encode-mft), the H.264 encoder transform",
+    "control": "bc250-win aec3679e (train/b20-setup): the control application 0.5.1.0, bc250control.dll and bc250kmd_cli.exe from one build",
+    "wow64": "x86 builds for 32-bit processes (BD-064). Router: bc250-win 689852a8 (train/b20-setup). D3D9 stub: bc250-win train/b19-wow64-x86 a748e78e. CPU UMD: mesa amdgpu-wddm/b19-desktop-umd 76ab2c27. D3D11 shell: bc250-win 689852a8 with the -Arch x86 recipes. Engine: dxvk 5611118e. ICD: mesa amdgpu-wddm/b19-icd 31844893. Every x86 file comes from a commit. No tree takes a patch. No x86 D3D12",
+    "mft_h264": "bc250-win 689852a8 (train/b20-setup), which carries e52/encoder-perf e4d1f630, the H.264 encoder transform",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "public_commits": {
-    "note": "Built commit -> commit on a public branch, for every pair that differs. Every commit this release was built from is published at its own hash. D-Ogi/amdgpu-wddm holds 85ac47b6 on branch train/b19-setup. That commit is the b19 integration merge, and it built the kernel driver and the two D3D11 shells. The same branch holds 3ef45a0f, which built the control application 0.5.1.0, the control DLL and the CLI, and 62aa9bc0, which built the D3D12 shell. 62aa9bc0 is 85ac47b6 with the knob-channel fix of the entry path on top, and no other file of this release comes from it. Every wagon commit is an ancestor of all three. From bc250-win: main d5593267, kmd208-loglines 099aaf0b, m14/d3d11-nv12-planes f3ff6ca5, train/b19-d3d12-shell 46c9a479 and bd075/d3d12-shared-fail-fast 2d91b983. Also train/b19-wow64-x86 a748e78e, train/b19-desktop-umd 2509d282, bd069-gui-closed-record 9324a353, bd069-repair-closures 7ca41cc2 and gui/p1-setup 8279a9d9. D-Ogi/mesa-amdgpu-wddm holds 31844893 on amdgpu-wddm/b19-icd, 76ab2c27 on amdgpu-wddm/b19-desktop-umd and 7117b189 on amdgpu-wddm/b19-hosted-umd. D-Ogi/dxvk, D-Ogi/vkd3d-proton and D-Ogi/dxil-spirv keep branch amdgpu-wddm/upstream-2026-10-05. The system Vulkan ICD is the build of 2732f9c8, which the fork publishes on branch amdgpu-wddm/gdi-immediate-quiet (597fc6e2), as in 0.7.205.100-tester.11. The hosted ICD of the desktop route is the build of 48546c73. No file of this release needs a patch on top of its commit. The x86 patches of the earlier releases are gone (BD-064). The pair note of 0.7.207.100-tester.12 about ae98c795 and 091ad563 therefore no longer applies. Both b19 RADV files report git-3184489333 as their Mesa version, which is 31844893. Under driver, tools/build and third_party the two commits differ in two files only. They are driver/umd/d3d12/engine-ddi/entry.cpp and engine-ddi.h, which the D3D12 shell alone compiles. The other binaries of 85ac47b6 are therefore the binaries of 62aa9bc0. Three files come from the build of the wagon train/b19-wow64-x86 a748e78e, not from a build of 85ac47b6. They are payload/desktop/bc250d3d_router.dll, payload/wow64/desktop/bc250d3d_router.dll and payload/syswow64/bc250umd.dll. The router and stub sources are the same at both commits. Their recipes have no /Brepro, so a build gives a new hash for the same code. For the two routers tools/build/pe_compare.py compared a build from 85ac47b6 with the shipped file. The difference is the COFF time stamp, three debug-directory time stamps and the CodeView identifier. With those fields copied over, the hash is the shipped one again. The kernel driver of this release comes from bc250-win 002a83eb on branch train/b20-setup, the b20 integration, and not from 85ac47b6. That commit is not published yet. Push it to D-Ogi/amdgpu-wddm before this release goes to a tester."
+    "note": "Built commit -> commit on a public branch, for every pair that differs. The b19 part of this release is published: D-Ogi/amdgpu-wddm holds 85ac47b6 and 3ef45a0f on branch train/b19-setup, and D-Ogi/mesa-amdgpu-wddm holds 31844893 on amdgpu-wddm/b19-icd, 76ab2c27 on amdgpu-wddm/b19-desktop-umd and 7117b189 on amdgpu-wddm/b19-hosted-umd. D-Ogi/dxvk, D-Ogi/vkd3d-proton and D-Ogi/dxil-spirv keep branch amdgpu-wddm/upstream-2026-10-05. The system Vulkan ICD is the build of 2732f9c8, which the fork publishes on branch amdgpu-wddm/gdi-immediate-quiet (597fc6e2), as in 0.7.205.100-tester.11. The hosted ICD of the desktop route is the build of 48546c73. The b20 part is NOT published yet. Four commits of bc250-win branch train/b20-setup built it: 60c97ad3 (the kernel driver), 689852a8 (both D3D11 shells, both routers and the encoder transform), aec3679e (the D3D12 shell, the control application, the control DLL and the CLI). The two caps records are byte for byte the b19 ones, because b20 reuses the b19 engines and ICDs. Push train/b20-setup to D-Ogi/amdgpu-wddm before this release goes to a tester. Each b20 wagon is an ancestor of the branch head: train/b19-repro-kmd edae6987, kmd209-iflip2 b03da3a7, fan/read-nct6686 9d1aff7c, c48/notifydpc-in-report 677709c2, tuner/vf-cpu dabdd949, m15/router-iflip-front 99ba8cd8, bd075/capshare-trace 3325c555, bd075/d3d12-shared-real 1fa1cfb6 and e52/encoder-perf e4d1f630, on main 42b85d25. Three files come from a build of a b19 wagon, not from a b20 commit: payload/syswow64/bc250umd.dll from train/b19-wow64-x86 a748e78e, and the two desktop CPU and hosted UMDs from their Mesa branches. The x86 patches of the earlier releases are gone (BD-064). Both b19 RADV files report git-3184489333 as their Mesa version, which is 31844893. The two routers of this release come from a tree at 689852a8 whose only uncommitted change was the router gate's own test file, which e79f72e0 then committed: no source of either DLL differs between the two commits."
   },
   "files": [
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/train/b20-build/kmd/a/package/bc250kmd.inf",
+      "source": "scratch/train/b20-build/kmd/c/package/bc250kmd.inf",
       "sha256": "E630305782691F073271909D2253E270AC2D1856D1FCD656AEC28AF23D31698F",
       "size": 9230,
-      "role": "KMD 0.7.212.1 INF (bc250-win 002a83eb, train/b20-setup). It adds the two Parameters values of the fan reader, both 0. The release re-stamps DriverVer and adds the Reboot directive"
+      "role": "KMD 0.7.212.1 INF (bc250-win 60c97ad3, train/b20-setup). It adds the two Parameters values of the fan reader, both 0. The release re-stamps DriverVer and adds the Reboot directive"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/train/b20-build/kmd/a/package/bc250kmd.sys",
+      "source": "scratch/train/b20-build/kmd/c/package/bc250kmd.sys",
       "sha256": "C3DAF6F3F86A8CC0AF2C16A165074B2BBD58AA158210C01D0EE6F7550C4F17A9",
       "size": 544656,
-      "role": "KMD 0.7.212.1, escape ABI 0x000700D4 (bc250-win 002a83eb, train/b20-setup: main 42b85d25 with the five b20 kernel wagons). The kernel is built with /Brepro and a sorted object list, and two builds gave the same unsigned bytes. Five changes against 0.7.208.1, and each new behaviour is off until a Parameters value turns it on. The driver can hand its own swap-chain buffers to the scan-out hardware (route C, EnableDirectFlipHandshake). It can read the fan speed, the fan duty and its own temperatures from the Super I/O chip (EnableHwmon). It can pair the notification of a finished packet with the report pass itself (NotifyDpcInReport), and it keeps a histogram of the gap between the ring and the vertical blank. The operator can give the automatic clock a voltage curve of their own, and can set a clock limit, an undervolt and a temperature cap for the processor, each one as a trial that falls back by itself. Re-signed with the release certificate, code unchanged"
+      "role": "KMD 0.7.212.1, escape ABI 0x000700D4 (bc250-win 60c97ad3, train/b20-setup: main 42b85d25 with the five b20 kernel wagons). The kernel is built with /Brepro and a sorted object list, and three builds of this lineage gave the same unsigned bytes. Five changes against 0.7.208.1, and each new behaviour is off until a Parameters value turns it on. The driver can hand its own swap-chain buffers to the scan-out hardware (route C, EnableDirectFlipHandshake). It can read the fan speed, the fan duty and its own temperatures from the Super I/O chip (EnableHwmon). It can pair the notification of a finished packet with the report pass itself (NotifyDpcInReport), and it keeps a histogram of the gap between the ring and the vertical blank. The operator can give the automatic clock a voltage curve of their own, and can set a clock limit, an undervolt and a temperature cap for the processor, each one as a trial that falls back by itself. Re-signed with the release certificate, code unchanged"
     },
     {
       "component": "d3d9-stub",
@@ -57,10 +57,10 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b19-build/shells/d3d12/amdgpu_wddm_d3d12.dll",
-      "sha256": "C82938C937EA8316E3D23C7BB329143FD00706A6CB6D0D5B2A07EE68F7F1F891",
-      "size": 1051648,
-      "role": "D3D12 shell (bc250-win 62aa9bc0, train/b19-setup). Heap import retries the ownership unlock (BD-045). ClearRootArguments records the real values (BD-046). The direct recording entry of engine-ddi is the default (M15.9). The shell records each start of an application for the Recent page of the control application. A shared resource that the driver cannot make is refused with E_OUTOFMEMORY, and the device stays alive (BD-075). The entry path reads a knob file only when BC250_ENTRY_CFG names one. It writes its rows where BC250_ENTRY_LOG or %TEMP% puts them. There is no machine-wide file and no shared log directory, as in the ICD. Built with /Brepro, and byte identical over two builds"
+      "source": "scratch/train/b20-build/shells/d3d12-d/amdgpu_wddm_d3d12.dll",
+      "sha256": "A5D61E72F30C8FBACE5920FEC33DEB374C9B56150A98551BDDB6C110F1634152",
+      "size": 1063936,
+      "role": "D3D12 shell (bc250-win aec3679e, train/b20-setup). It makes a shared texture inside a known shape instead of refusing it, and it counts every second create attempt (BD-075). A command queue accepts a wait on a fence and lets the system do the waiting, where the shell before this one lost the device. Every earlier behaviour of the b19 shell is kept: heap import retries the ownership unlock (BD-045), ClearRootArguments records the real values (BD-046), the direct recording entry of engine-ddi is the default (M15.9), and the shell records each start of an application for the Recent page. Built with /Brepro, and byte identical over two builds of this head"
     },
     {
       "component": "d3d12-engine",
@@ -81,10 +81,10 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/land-1006/build-router-x64/bc250d3d_router.dll",
-      "sha256": "11385954DF752A5C0C0C6851CF83F269E4F616314E66373234EEFA367EB05CC8",
-      "size": 22528,
-      "role": "desktop and application router (bc250-win train/b19-wow64-x86 a748e78e, driver/umd/router): gpu-default keeps Windows components and unresolved images on the CPU UMD. The router sources of 85ac47b6 are the same, and the recipe has no /Brepro, so the build of the wagon is kept. tools/build/pe_compare.py shows that a build from 85ac47b6 differs from this file in the COFF time stamp, three debug-directory time stamps and the CodeView identifier only"
+      "source": "scratch/train/b20-build/shells/router-x64/bc250d3d_router.dll",
+      "sha256": "7A5CA311091A469B17AE3F3BAA0FD19D5C58466E8F975A2D81BE9A92EFD08022",
+      "size": 54784,
+      "role": "desktop and application router (bc250-win 689852a8, train/b20-setup, driver/umd/router). gpu-default keeps Windows components and unresolved images on the CPU UMD, as in b19. The router gains the Direct3D 11.1 front of route C (M15.14), which the value DirectFlipFront under HKLM\\SOFTWARE\\amdgpu-wddm\\DesktopRouter turns on. An absent value and a value of the wrong type both leave the shipped router in place, and no installer default writes it. The one later commit of the branch that touches the router (e79f72e0) changes the gate's test file only, not a source of this DLL"
     },
     {
       "component": "desktop-umd",
@@ -113,18 +113,18 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b19-build/shells/d3d11-x64/amdgpu_wddm_d3d11.dll",
-      "sha256": "C15FE971A6A2EC50B72E6AEFE7AC5B1CEC972FE7BCDC216D02FB777DAD9A8941",
-      "size": 709120,
-      "role": "GPU D3D11 shell (bc250-win 85ac47b6, train/b19-merge). The shell accepts NV12 planes as encoder input (BD-071). The DDI error-status audit replaced 99 illegal report sites, and the gate tools/quality/ddi_error_policy.py holds the policy with 37 rows and 8 mutants. Built with /Brepro against DXVK fork 5611118e"
+      "source": "scratch/train/b20-build/shells/d3d11-x64/amdgpu_wddm_d3d11.dll",
+      "sha256": "5C1D9F2C20595021348768DCD52B2A216219C91DEEAD87F63DC8B80975E2B97C",
+      "size": 722432,
+      "role": "GPU D3D11 shell (bc250-win 689852a8, train/b20-setup). The 11 host tests of the recipe and the DDI error-policy gate pass against it. Built with /Brepro against DXVK fork 5611118e, which b20 reuses from b19 unchanged"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b19-build/shells/config/config-b19-x64.bin",
+      "source": "scratch/train/b20-build/shells/config/config-b20-x64.bin",
       "sha256": "0494BA88937D6D568D263C87B72BEC98164B74F08D07AF174D99660C928F23B6",
       "size": 132,
-      "role": "GPU D3D11 caps record for engine C242BA6A and ICD 822134D0 (tools/build/write-umd-config.py). The shell refuses an engine or an ICD whose SHA-256 differs from this record. Capabilities carried from fl12caps001: FL 12_1, tiled resources tier 3, rasterizer ordered views, conservative rasterization tier 3"
+      "role": "GPU D3D11 caps record for engine C242BA6A and ICD 822134D0 (tools/build/write-umd-config.py). The shell refuses an engine or an ICD whose SHA-256 differs from this record. b20 reuses the b19 engine and ICD, so this record is byte for byte the b19 one. Capabilities carried from fl12caps001: FL 12_1, tiled resources tier 3, rasterizer ordered views, conservative rasterization tier 3"
     },
     {
       "component": "d3d11-umd",
@@ -169,10 +169,10 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/land-1006/build-router-x86/bc250d3d_router.dll",
-      "sha256": "CD03C5EDB646352E35F510142062A99C59CD77332A16C3293714362D9F663CA2",
-      "size": 130560,
-      "role": "x86 application router for 32-bit processes (bc250-win train/b19-wow64-x86 a748e78e, driver/umd/router). It holds the Wow path values and plain export names, it reads the 64-bit policy keys through KEY_WOW64_64KEY, and it has the static CRT (BD-064). b19 keeps the build of the wagon, for the reason of the x64 router above"
+      "source": "scratch/train/b20-build/shells/router-x86/bc250d3d_router.dll",
+      "sha256": "0ADD339E1EA3991393874E79A942B517F3A5A7E2AD4A111FF40016A2CEE98BA9",
+      "size": 155648,
+      "role": "x86 application router for 32-bit processes (bc250-win 689852a8, train/b20-setup, driver/umd/router). It holds the Wow path values and plain export names, it reads the 64-bit policy keys through KEY_WOW64_64KEY, and it has the static CRT (BD-064). It carries the same route C front as the x64 router, off by the same value"
     },
     {
       "component": "desktop-umd-wow64",
@@ -185,18 +185,18 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b19-build/shells/d3d11-x86/amdgpu_wddm_d3d11.dll",
-      "sha256": "387F25DD715C4E541EDFE23E8F9DC0135CF42653BE6CC92F1C4BCCB4D8E4AED2",
-      "size": 605184,
-      "role": "x86 GPU D3D11 shell for 32-bit processes (bc250-win 85ac47b6, train/b19-merge, built with the -Arch x86 recipe and the .def export: no patch). /Brepro (BD-064 and BD-071)"
+      "source": "scratch/train/b20-build/shells/d3d11-x86/amdgpu_wddm_d3d11.dll",
+      "sha256": "CBBAA3333DCD965FB4A3393069657B07A45EF5A0F6F0C18F65FBF6F664611C30",
+      "size": 616960,
+      "role": "x86 GPU D3D11 shell for 32-bit processes (bc250-win 689852a8, train/b20-setup, built with the -Arch x86 recipe and the .def export: no patch). /Brepro (BD-064 and BD-071)"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b19-build/shells/config/config-b19-x86.bin",
+      "source": "scratch/train/b20-build/shells/config/config-b20-x86.bin",
       "sha256": "858FDE4F92FE2C17C42DA4FACEAC553EF39AC77A27F92731EBB8A37AB12B93FB",
       "size": 132,
-      "role": "x86 GPU D3D11 caps record for the x86 engine A42ADB6E and the x86 ICD F6392B51 (tools/build/write-umd-config.py). Capabilities carried from fl12caps001, as in the x64 record"
+      "role": "x86 GPU D3D11 caps record for the x86 engine A42ADB6E and the x86 ICD F6392B51 (tools/build/write-umd-config.py). b20 reuses the b19 x86 engine and ICD, so this record is byte for byte the b19 one. Capabilities carried from fl12caps001, as in the x64 record"
     },
     {
       "component": "d3d11-umd-wow64",
@@ -233,10 +233,10 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b19-build/control-app/bc250kmd_cli.exe",
-      "sha256": "0AD206EC4123A36797A09902478B94F6D275D0F3BBB6038CE421CF244633EB86",
-      "size": 220672,
-      "role": "KMD control CLI from the control-app build (bc250-win 3ef45a0f, train/b19-setup, which carries main 4c8b5b96). It answers `log summary only` and prints the escape count line (BD-054), which the new provider of the overlay needs. The same bc250kmd_cli.c makes bc250control.dll, and every form of cli-commands.json answers (test-cli-commands.ps1)"
+      "source": "scratch/train/b20-build/control-fix/bc250kmd_cli.exe",
+      "sha256": "E8545A0E88A13CE9137EF81FFD0CFCA36E4F9E9FA75FA8E114F1A4221141086F",
+      "size": 236544,
+      "role": "KMD control CLI from the control-app build (bc250-win aec3679e, train/b20-setup). It answers the fan reading, the operator voltage curve and the processor surface of the b20 driver, and it names 0.7.212 where it reports what a driver must carry. The same bc250kmd_cli.c makes bc250control.dll, and every form of cli-commands.json answers (test-cli-commands.ps1)"
     },
     {
       "component": "tool",
@@ -249,25 +249,25 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/train/b19-build/control-app/amdgpu_wddm_control.exe",
-      "sha256": "BD047F757EEBDB3E9054F2A51732C8E660DE53509B405997878797927915C3DA",
-      "size": 588288,
-      "role": "control application 0.5.1.0 (GUI phase 1, bc250-win 3ef45a0f, train/b19-setup). The last run of the start-confirm task comes from the Task Scheduler COM API and from WMI, and the newer of the two wins. The Recovery page reads DpmClosedReason, so it offers the way back one boot after the driver turns the automatic clock off (BD-069). The switches of the Games page follow the off names of the D3D12 shell"
+      "source": "scratch/train/b20-build/control-fix/amdgpu_wddm_control.exe",
+      "sha256": "1FE6A77BC0FD938379C652F724AB347F6A8CD6511917B6787FBE464C9FB50368",
+      "size": 690688,
+      "role": "control application 0.5.1.0 (GUI phase 1, bc250-win aec3679e, train/b20-setup). It shows the fan reading of the driver, and its switch catalog carries the two off names of this train's D3D12 shell in the support-only group. Everything the b19 application did is kept: the last run of the start-confirm task from two sources, and the Recovery page that reads DpmClosedReason (BD-069)"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b19-build/control-app/bc250control.dll",
-      "sha256": "BB04D72D2DF59739D06C351B52358BF3F490D21A3CBE9722C27CDBF7BCDC8AEA",
-      "size": 147968,
-      "role": "control DLL for the control application (bc250-win 3ef45a0f build, static CRT). The file is byte for byte the one of 0.7.207.100-tester.12. The whole bc250kmd_cli.c change since then is inside Log() and wmain(). No export reaches those two, so /OPT:REF drops them from the DLL"
+      "source": "scratch/train/b20-build/control-fix/bc250control.dll",
+      "sha256": "EA6693FE77334F528224DA4D33330CD029638C32883123B04A3BA9251C2A4BD1",
+      "size": 150016,
+      "role": "control DLL for the control application (bc250-win aec3679e build, static CRT). It exports the fan, curve and processor calls of the b20 escape table beside the b19 ones"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b19-build/control-app/bc250control.dll",
-      "sha256": "BB04D72D2DF59739D06C351B52358BF3F490D21A3CBE9722C27CDBF7BCDC8AEA",
-      "size": 147968,
+      "source": "scratch/train/b20-build/control-fix/bc250control.dll",
+      "sha256": "EA6693FE77334F528224DA4D33330CD029638C32883123B04A3BA9251C2A4BD1",
+      "size": 150016,
       "role": "KMD start-health client (Bc250StartHealth) for start-confirm.ps1, the same file as control\\bc250control.dll"
     },
     {
@@ -281,10 +281,10 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/build-mft-b18/amdgpu_wddm_mft_h264.dll",
-      "sha256": "141969A3F212619AD6AAFDEEE011AA3F00FDF8C4DC154409993CFF19F54683D5",
-      "size": 455168,
-      "role": "H.264 encoder Media Foundation transform, M15.11 (driver/umd/mft-h264, bc250-win 70b6f838 on m15/video-encode-mft). The installer copies and registers it only while mft_h264.register is true"
+      "source": "scratch/train/b20-build/mft/build/amdgpu_wddm_mft_h264.dll",
+      "sha256": "D3E29E6ED32446BC61ABD3A7AFC46CB3F4C03D1E029A384CC693FA4C0C9872CA",
+      "size": 510464,
+      "role": "H.264 encoder Media Foundation transform (bc250-win 689852a8, train/b20-setup, which carries e52/encoder-perf e4d1f630). The encoder holds two pictures at once, it filters a whole picture in one dispatch, and its rate control reads the quantiser the content needs. A client that asks for low latency still gets one picture at a time. BC250_MFT_DEPTH=1, BC250_MFT_DEBLOCK=waves and BC250_MFT_SERIAL_DEBLOCK each select an older part. The conformance sweep is 76 of 76, and 60 of 60 pictures stay bit exact against the inbox decoder. The build matches the hash the wagon recorded"
     }
   ],
   "firmware": {
