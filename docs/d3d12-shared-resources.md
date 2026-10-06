@@ -249,7 +249,12 @@ submission:
   eleven traced rows of 2026-10-06, but none of those rows waits on an opened shared fence (`s11to12-fence` died
   at `open-shared`, `f12to12` ran untraced), so "never called" does not cover the cross-process case. Each slot
   therefore records its first call per process on the always-on debugger channel (`fence_slot_seen`), and the lab
-  kit counts both slots per row, so the next pass answers this with a number instead of an absence;
+  kit counts both slots per row, so the next pass answers this with a number instead of an absence. `pfnWaitForFence`
+  used to call `queue_failure` unconditionally, so the first wait the runtime sent removed the device; it now
+  answers as the signal does, on by default, and `AMDGPU_WDDM_D3D12_EXPERIMENT=fence-wait-accept-off` restores that
+  older refusal for a bisect. The accept is the default because the alternative default is the device loss, and
+  because the cross-process case is untested in **both** directions: the switch does not make it tested, it only
+  says which of the two untested answers a row got;
 - `pfnSignalFence`'s own comment states the precondition it depends on - "Execute must already have submitted all
   work on that same context" - and `submit_locked` (`engine-ddi/queue.cpp`) forwards to vkd3d-proton's
   `ExecuteCommandLists`, which may hand the work to its submission thread and return. The precondition is
