@@ -1,0 +1,32 @@
+recipe P:\bc-250\scratch\m14\dcomp-a8\wt\tools\build\build-mesa.ps1 SHA256 34D8C3CCFC08C7AD1FDDAA38262B15C3D2EE5A2C92B5B97DA697ECD71F400A23
+source P:\bc-250\scratch\bd037\zink-src at e7d475450b61dc9d7a2aab21933bbed50b0e0e1d, status lines: 5
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+ninja: Entering directory `P:\bc-250\scratch\bd037\build-zink'
+[1/3] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[2/3] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[3/3] Linking target src/gallium/targets/d3d10umd/bc250_ensure_surface_test.exe
+test P:\bc-250\scratch\bd037\build-zink\src\gallium\targets\d3d10umd\bc250_ensure_surface_test.exe SHA256 56DB1400E79031A2DAAA1ACCF9D81F1451F7DDC519F7D66A19A13B3A186783E4
+FAIL TestEnsureRetry:182: hosted, resource_from_handle retried: 1 allocations, 2 maps, VA 100000000 then 110000000
+FAIL TestEnsureRetry:186: hosted, resource_from_handle retried: 2 MakeResident, 2 imports
+FAIL TestEnsureRetry:191: hosted, resource_from_handle retried: 0 Lock2, import of 40000004 at VA 110000000
+FAIL TestEnsureRetry:182: hosted, MakeResident retried: 1 allocations, 2 maps, VA 120000000 then 130000000
+FAIL TestEnsureRetry:191: hosted, MakeResident retried: 0 Lock2, import of 40000008 at VA 130000000
+FAIL TestEnsureRetry:173: hosted, paging fence wait (5 s): fence 0 kept, want 2
+FAIL TestEnsureRetry:182: hosted, paging fence wait (5 s) retried: 1 allocations, 2 maps, VA 140000000 then 150000000
+FAIL TestEnsureRetry:186: hosted, paging fence wait (5 s) retried: 2 MakeResident, 1 imports
+FAIL TestEnsureRetry:191: hosted, paging fence wait (5 s) retried: 0 Lock2, import of 4000000c at VA 150000000
+ensure retry, hosted branch: 3 failed steps retried, the steps before each ran once
+FAIL TestEnsureRetry:182: CPU, resource_from_handle retried: 1 allocations, 2 maps, VA 160000000 then 170000000
+FAIL TestEnsureRetry:186: CPU, resource_from_handle retried: 2 MakeResident, 2 imports
+FAIL TestEnsureRetry:198: CPU, resource_from_handle retried: 2 Lock2, 2 held
+FAIL TestEnsureRetry:203: CPU, resource_from_handle: destroy leaves 1 Lock2 held
+FAIL TestEnsureRetry:182: CPU, MakeResident retried: 1 allocations, 2 maps, VA 180000000 then 190000000
+FAIL TestEnsureRetry:173: CPU, paging fence wait (5 s): fence 0 kept, want 3
+FAIL TestEnsureRetry:182: CPU, paging fence wait (5 s) retried: 1 allocations, 2 maps, VA 1a0000000 then 1b0000000
+FAIL TestEnsureRetry:186: CPU, paging fence wait (5 s) retried: 2 MakeResident, 1 imports
+FAIL TestEnsureRetry:182: CPU, Lock2 retried: 1 allocations, 2 maps, VA 1c0000000 then 1d0000000
+FAIL TestEnsureRetry:186: CPU, Lock2 retried: 2 MakeResident, 1 imports
+ensure retry, CPU branch: 4 failed steps retried, the steps before each ran once
+FAIL: 19 failures
+test exit 1
