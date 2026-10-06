@@ -153,9 +153,14 @@ namespace AmdgpuWddmControl
                     p.Preview.Add(Strings.T("tuner.curve.preview.revert", Seconds(request.WindowMs)));
                     p.Notes.Add("A voltage that is too low shows as a hang or a reset under load, not as a refusal. "
                         + "The driver reverts the curve when the window passes, and after a reset the stored curve comes back.");
+                    p.PlainNotes.Add(Strings.T("tuner.note.curve-risk"));
                     break;
                 case "tune-keep":
                     if (!c.Has(CurveState.FlagOnTrial)) return No(p, "No curve trial is running.", "tuner.refuse.no-trial");
+                    // A curve the governor has not put into the chip has proved nothing, and storing it would run
+                    // it at every later start. The driver refuses the same case with CurveError.Untried.
+                    if (!c.Has(CurveState.FlagApplied))
+                        return No(p, "The governor has not applied the candidate yet.", "tuner.refuse.curve-not-applied");
                     p.Change = "the curve on trial is stored and used at every start";
                     p.Preview.Add(Summary(c.Candidate, c.Default));
                     p.Preview.Add(Strings.T("tuner.curve.preview.keep"));
@@ -205,8 +210,8 @@ namespace AmdgpuWddmControl
                     if (more.CpuClock == null && more.CpuUv == null && more.CpuTemp == null)
                         return No(p, "The request carries no processor value.", "tuner.refuse.cpu-nothing");
                     if (more.CpuClock != null && !CpuTuning.ValidClock(more.CpuClock.Value))
-                        return No(p, "The processor clock must be " + CpuTuning.MinMHz + " to " + CpuTuning.StockMHz
-                            + " MHz on the 100 MHz grid.", "tuner.refuse.cpu-bad-clock", CpuTuning.MinMHz, CpuTuning.StockMHz);
+                        return No(p, "The processor clock must be " + CpuTuning.MinMHz + " to " + CpuTuning.MaxMHz
+                            + " MHz on the 100 MHz grid.", "tuner.refuse.cpu-bad-clock", CpuTuning.MinMHz, CpuTuning.MaxMHz);
                     if (more.CpuUv != null && !CpuTuning.ValidSteps(more.CpuUv.Value))
                         return No(p, "The undervolt must be " + CpuTuning.MaxSteps + " steps or fewer.",
                             "tuner.refuse.cpu-bad-uv", CpuTuning.MaxSteps);
@@ -225,6 +230,7 @@ namespace AmdgpuWddmControl
                     p.Preview.Add(Strings.T("tuner.curve.preview.revert", Seconds(request.WindowMs)));
                     p.Notes.Add("Every bound here is a community report, measured by nobody on this part. The driver "
                         + "reads the voltage back after each write and undoes a change that raises it over the refusal line.");
+                    p.PlainNotes.Add(Strings.T("tuner.note.cpu-risk"));
                     break;
                 case "cpu-keep":
                     if (!u.Has(CpuState.FlagOnTrial)) return No(p, "No processor trial is running.", "tuner.refuse.no-trial");
@@ -249,6 +255,7 @@ namespace AmdgpuWddmControl
                     p.Preview.Add(Strings.T(request.CoreMask == CpuTuning.MaskFull ? "graphics.cpu.cores.8" : "graphics.cpu.cores.6"));
                     p.Notes.Add("The two extra cores are untested on this board. If Windows does not reach the desktop, "
                         + "the driver puts the stock count back at the next start.");
+                    if (request.CoreMask == CpuTuning.MaskFull) p.PlainNotes.Add(Strings.T("tuner.note.cores-risk"));
                     p.Effect = "at the next restart of Windows";
                     p.OfferRestart = true;
                     break;
@@ -262,6 +269,61 @@ namespace AmdgpuWddmControl
             }
             p.Tune = request;
             return null;
+        }
+
+        // The steps that put the tuning settings of this machine back to standard, for an action that is not itself
+        // a tuning action (reset-defaults). The driver stores these settings itself, so they are not in the
+        // release's manifest.json and the installer's defaults say nothing about them: the only way back is the
+        // same escapes the tuning page sends. The return value is the English note about what this start cannot
+        // take back, or null when everything stored could be named.
+        public static string StandardSteps(RecoverySnapshot s, ActionPlan p)
+        {
+            var left = new List<string>();
+            var c = s.Curve;
+            if (c != null && (c.Has(CurveState.FlagStored) || c.Has(CurveState.FlagOnTrial)))
+            {
+                if (c.Has(CurveState.FlagValid) && c.Has(CurveState.FlagGoverning))
+                {
+                    p.TuneSteps.Add(new TuneRequest { Kind = "curve-reset" });
+                    p.Preview.Add(Strings.T("tuner.curve.preview.standard"));
+                }
+                else left.Add("the voltage curve");
+            }
+            var u = s.Cpu;
+            bool stored = u != null && (u.Has(CpuState.FlagStored) || u.Has(CpuState.FlagOnTrial));
+            bool mask = u != null && u.CoreMaskStored != 0 && u.CoreMaskStored != CpuTuning.MaskStock;
+            if (stored || mask)
+            {
+                if (u.Has(CpuState.FlagValid) && u.Has(CpuState.FlagTuneOn) && !u.Has(CpuState.FlagBusy))
+                {
+                    // The driver admits no setter before a readback has answered on this start, so the reset asks
+                    // for one first instead of failing on the step after it.
+                    if (!u.Has(CpuState.FlagQueue3Proven)) p.TuneSteps.Add(new TuneRequest { Kind = "cpu-readback" });
+                    if (stored)
+                    {
+                        p.TuneSteps.Add(new TuneRequest { Kind = "cpu-reset" });
+                        p.Preview.Add(Strings.T("tuner.cpu.preview.reset"));
+                    }
+                    if (mask)
+                    {
+                        p.TuneSteps.Add(new TuneRequest { Kind = "core-mask", CoreMask = CpuTuning.MaskStock });
+                        p.Preview.Add(Strings.T("graphics.cpu.cores.6"));
+                        p.OfferRestart = true;
+                    }
+                }
+                else left.Add("the processor settings");
+            }
+            // Processor tuning goes back off, which is what the release ships: the driver then leaves the processor
+            // alone at its next start, whatever is still stored.
+            long now;
+            if (s.Parameters != null && s.Parameters.TryGetValue("CpuTune", out now) && now != 0)
+            {
+                p.Writes.Add(RegWrite.Remove(Recovery.ParametersPath, "CpuTune"));
+                p.Preview.Add(Strings.T("plan.line.cpu-tune-off"));
+            }
+            if (left.Count == 0) return null;
+            return "This start cannot take " + string.Join(" and ", left) + " back, so they stay stored: "
+                + "restart Windows and reset again.";
         }
 
         // What a processor trial carries, for the log line.

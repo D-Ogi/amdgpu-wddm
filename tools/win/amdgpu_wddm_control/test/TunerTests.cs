@@ -29,7 +29,7 @@ static partial class UnitTests
         return new CpuState
         {
             Version = 0x000700D2, Flags = flags, CoreMHz = new uint[KmdReply.CpuCoreSlots], PstateMHz = new uint[KmdReply.CpuCoreSlots],
-            BaselineMaxMHz = CpuTuning.StockMHz, BaselineTempC = 95, VoltageMv = 1050, CapC = 95,
+            BaselineMaxMHz = CpuTuning.MaxMHz, BaselineTempC = 95, VoltageMv = 1050, CapC = 95,
             Cores = 6, Threads = 12, CoreMask = CpuTuning.MaskStock, Generation = 5,
         };
     }
@@ -138,10 +138,12 @@ static partial class UnitTests
             { "CoreMaskStored", 48 }, { "LastQueue", 49 }, { "LastMessage", 50 }, { "LastStatus", 51 },
             { "LastParameter", 52 }, { "TemperatureMc", 53 }, { "SearchStep", 54 }, { "SearchBest", 55 },
             { "SearchFail", 56 }, { "SearchTested", 57 }, { "Reads", 58 }, { "Writes", 59 }, { "Refusals", 60 }, { "Reverts", 61 },
+            { "RevertRetries", 62 }, { "RevertFailures", 63 }, { "WheaEvents", 64 }, { "ChecksumErrors", 65 },
+            { "Loaded", 66 },
         };
         foreach (var kv in cpuWords) Equal(kv.Value * 4, cp[kv.Key], "CPU " + kv.Key + " offset");
-        Equal(248, cp["Generation"], "CPU Generation offset");
-        Equal(256, cp["ExpectedGeneration"], "CPU ExpectedGeneration offset");
+        Equal(272, cp["Generation"], "CPU Generation offset");
+        Equal(280, cp["ExpectedGeneration"], "CPU ExpectedGeneration offset");
         // The three values a caller must know come from the escape header itself, with the shim as their authority.
         Check(Regex.IsMatch(header, @"#define BC250_CPU_REQUEST_MASK_STOCK 0x" + CpuTuning.MaskStock.ToString("X") + @"u\b"), "stock core mask from the header");
         Check(Regex.IsMatch(header, @"#define BC250_CPU_REQUEST_MASK_FULL 0x" + CpuTuning.MaskFull.ToString("X") + @"u\b"), "full core mask from the header");
@@ -153,8 +155,16 @@ static partial class UnitTests
         Put(b, cp["Cores"], 6u); Put(b, cp["Threads"], 12u); Put(b, cp["CoreMask"], CpuTuning.MaskStock);
         Put(b, cp["CoreMHz"] + 4, 3550u); Put(b, cp["PstateMHz"], 3600u); Put(b, cp["TemperatureMc"], unchecked((uint)71000));
         Put(b, cp["Refusals"], 2u); Put(b, cp["Generation"], 11UL);
+        Put(b, cp["RevertRetries"], 4u); Put(b, cp["RevertFailures"], 1u);
         var u = KmdReply.ParseCpu(b);
         Check(u.Has(CpuState.FlagQueue3Proven) && u.Has(CpuState.FlagOnTrial), "CPU flags");
+        // An owed way back and a temperature that was not read on the last message (0.7.211).
+        Equal(4u, u.RevertRetries, "CPU revert retries"); Equal(1u, u.RevertFailures, "CPU refused reverts");
+        Check(!u.Has(CpuState.FlagRevertOwed) && !u.Has(CpuState.FlagTempValid), "neither new flag is set here");
+        Put(b, cp["Flags"], CpuState.FlagValid | CpuState.FlagRevertOwed | CpuState.FlagTempValid);
+        var owed = KmdReply.ParseCpu(b);
+        Check(owed.Has(CpuState.FlagRevertOwed) && owed.Has(CpuState.FlagTempValid), "the owed revert and the read temperature");
+        Put(b, cp["Flags"], CpuState.FlagValid | CpuState.FlagTuneOn | CpuState.FlagQueue3Proven | CpuState.FlagOnTrial);
         Equal(1337u, u.VoltageMv, "CPU voltage"); Equal(8u, u.AppliedUvSteps, "CPU applied steps");
         Equal(3550u, u.CoreMHz[1], "CPU per-core clock"); Equal(3600u, u.PstateMHz[0], "CPU p-state clock");
         Equal(71000, u.TemperatureMc, "CPU temperature"); Equal(2u, u.Refusals, "CPU refusals"); Equal(11UL, u.Generation, "CPU generation");
@@ -207,7 +217,7 @@ static partial class UnitTests
         var flat = Enumerable.Repeat(Tuner.FloorMv, Tuner.Points).ToArray();
         Equal(CurveError.Depth, Tuner.Check(flat, Tuner.Floors(), out level), "a flat 820 mV curve is too deep, not out of order");
         Equal(2, level, "the flat curve fails at the first level with a deeper floor");
-        foreach (var e in new[] { CurveError.Range, CurveError.Depth, CurveError.Order, CurveError.Floor, CurveError.None })
+        foreach (var e in new[] { CurveError.Range, CurveError.Depth, CurveError.Order, CurveError.Floor, CurveError.None, CurveError.Untried })
         {
             var text = Tuner.ErrorText(e, 1500);
             Check(text.Length > 0 && !text.StartsWith("[", StringComparison.Ordinal), "the " + e + " refusal has a sentence");
@@ -241,8 +251,8 @@ static partial class UnitTests
 
     static void TunerCpuModel()
     {
-        Check(CpuTuning.ValidClock(CpuTuning.StockMHz) && CpuTuning.ValidClock(CpuTuning.MinMHz), "the admitted processor clocks");
-        Check(!CpuTuning.ValidClock(CpuTuning.StockMHz + 100), "over the stock clock is refused: this application only lowers");
+        Check(CpuTuning.ValidClock(CpuTuning.MaxMHz) && CpuTuning.ValidClock(CpuTuning.MinMHz), "the admitted processor clocks");
+        Check(!CpuTuning.ValidClock(CpuTuning.MaxMHz + 100), "over the highest admitted clock is refused: this application only lowers");
         Check(!CpuTuning.ValidClock(CpuTuning.MinMHz - 100) && !CpuTuning.ValidClock(3650), "under the band and off the grid are refused");
         Check(CpuTuning.ValidSteps(0) && CpuTuning.ValidSteps(CpuTuning.MaxSteps) && !CpuTuning.ValidSteps(CpuTuning.MaxSteps + 1), "the undervolt steps");
         Check(CpuTuning.ValidTemp(CpuTuning.MinTempC) && CpuTuning.ValidTemp(CpuTuning.MaxTempC) && !CpuTuning.ValidTemp(84) && !CpuTuning.ValidTemp(101), "the temperature cap band");
@@ -250,7 +260,7 @@ static partial class UnitTests
         Equal(CpuTuning.MaskFull, CpuTuning.MaskFor(8), "8 cores is the full mask");
         Equal(CpuTuning.StockCores, CpuTuning.CoresFor(CpuTuning.MaskStock), "the stock mask is 6 cores");
         var choices = CpuTuning.ClockChoices();
-        Equal(CpuTuning.StockMHz, choices[0], "the clock list starts at stock");
+        Equal(CpuTuning.MaxMHz, choices[0], "the clock list starts at the highest admitted clock");
         Equal(CpuTuning.MinMHz, choices[choices.Length - 1], "the clock list ends at the lowest admitted");
         Check(choices.All(CpuTuning.ValidClock), "every clock the window offers is one the driver takes");
         Equal("standard", CpuTuning.StepsText(0), "no undervolt reads as standard");
@@ -306,8 +316,15 @@ static partial class UnitTests
         var notRunning = Tuned(); notRunning.DriverError = "no answer"; notRunning.Interop = null; notRunning.Health = null; notRunning.Dpm = null;
         Refused(TunePlan("tune-trial", notRunning, args), "driver is not running", "a curve without a driver");
 
+        // A candidate the governor has not put into the chip has proved nothing: a Keep of it would run it at
+        // every later start. The driver refuses the same case, and the window says so first (0.7.211).
+        var untried = CurveFixture(CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagOnTrial);
+        untried.Candidate = mild; untried.TrialRemainingMs = 30000;
+        Refused(TunePlan("tune-keep", Tuned(untried)), "has not applied the candidate", "a keep before the governor applied it");
+        Check(!TunePlan("tune-stop", Tuned(untried)).Refused, "a stop of an unapplied trial is still allowed");
+
         // On trial: keep, stop and reset are the three ways out, and each one names the curve it leaves behind.
-        var onTrial = CurveFixture(CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagOnTrial);
+        var onTrial = CurveFixture(CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagOnTrial | CurveState.FlagApplied);
         onTrial.Candidate = mild; onTrial.Active = mild; onTrial.TrialRemainingMs = 30000;
         var t = Tuned(onTrial);
         foreach (var a in new[] { "tune-keep", "tune-stop", "tune-reset" })
@@ -386,6 +403,64 @@ static partial class UnitTests
             Refused(TunePlan("tune-keep", s), "No curve trial is running", lang + ": a keep without a trial");
         }
         Strings.Language = saved;
+        TunerStandardSteps();
+    }
+
+    // WU-042: one control puts the standard settings back. The driver stores the curve, the processor values and
+    // the core mask itself, so they are not in the release's manifest.json: "Reset driver settings" has to send
+    // the same escapes the tuning page sends, or it leaves a tuned machine behind and says it reset it.
+    static void TunerStandardSteps()
+    {
+        var c = CurveFixture(CurveState.FlagValid | CurveState.FlagGoverning | CurveState.FlagStored);
+        c.Stored = Tuner.Preset("deep", Tuner.Table(), Tuner.Floors());
+        c.Active = c.Stored;
+        var u = CpuFixture(CpuState.FlagValid | CpuState.FlagTuneOn | CpuState.FlagStored);
+        u.StoredMaxMHz = 3200; u.StoredUvSteps = 6; u.AppliedMaxMHz = 3200; u.AppliedUvSteps = 6;
+        u.CoreMaskStored = CpuTuning.MaskFull;
+        var s = Tuned(c, u);
+        var p = TunePlan("reset-defaults", s, new Recovery.PlanArgs { Games = "keep" });
+        Check(!p.Refused, "a tuned machine can be reset: " + p.Refusal);
+        var kinds = p.TuneSteps.Select(x => x.Kind).ToArray();
+        Check(kinds.SequenceEqual(new[] { "curve-reset", "cpu-readback", "cpu-reset", "core-mask" }),
+            "the reset takes the curve, the processor values and the core mask back: " + string.Join(", ", kinds));
+        Equal(CpuTuning.MaskStock, p.TuneSteps.Last().CoreMask, "the core mask goes back to the stock one");
+        Check(p.Writes.Any(w => w.Name == "CpuTune" && w.Delete), "processor tuning itself goes back off");
+        Check(p.OfferRestart, "a core count takes a restart, and the dialog says so");
+        Check(p.Text().Contains("tuning step curve-reset") && p.Text().Contains("tuning step core-mask"),
+            "the log names every step the helper will send");
+        var plain = PlainPlan.Describe(p);
+        Check(plain.Changes.Count >= 4 && plain.Changes.All(x => !x.StartsWith("[", StringComparison.Ordinal)),
+            "the dialog lists the tuning steps as changes");
+        Check(!PlainWords.Findings(plain.Changes.Concat(plain.Notes).ToList()).Any(), "G-NOINT: the reset dialog");
+
+        // A start that cannot take them back says so instead of claiming a reset it did not do.
+        var fixedClock = Tuned(CurveFixture(CurveState.FlagValid | CurveState.FlagStored), u);
+        fixedClock.Curve.Stored = c.Stored;
+        var q = TunePlan("reset-defaults", fixedClock, new Recovery.PlanArgs { Games = "keep" });
+        Check(!q.Refused && !q.TuneSteps.Any(x => x.Kind == "curve-reset"), "a start that does not govern sends no curve reset");
+        Check(q.Notes.Any(x => x.Contains("stay stored")), "and the plan says the curve stays stored");
+
+        // Nothing stored: the action is the one it was before this fix, with no tuning step at all.
+        var clean = Tuned();
+        clean.Parameters.Remove("CpuTune");
+        var r = TunePlan("reset-defaults", clean, new Recovery.PlanArgs { Games = "keep" });
+        Check(r.TuneSteps.Count == 0, "an untuned machine needs no tuning step");
+        Check(!r.Writes.Any(w => w.Name == "CpuTune"), "and CpuTune is not touched when it is not there");
+
+        // WU-042 asks for the risk before the change: the dialog says it in the window's language.
+        var trial = TunePlan("tune-trial", Tuned(), new Recovery.PlanArgs
+            { Curve = TunerPlan.CurveText(Tuner.Preset("mild", Tuner.Table(), Tuner.Floors())) });
+        Check(trial.PlainNotes.Count == 1, "a curve trial carries one plain risk sentence");
+        var dialog = PlainPlan.Describe(trial);
+        Check(dialog.Notes.Contains(trial.PlainNotes[0]), "and the dialog shows it");
+        Check(dialog.Changes.Count >= 2, "and still lists what changes");
+        var cpu = TunePlan("cpu-trial", Tuned(), new Recovery.PlanArgs { CpuUv = 8 });
+        Check(cpu.PlainNotes.Count == 1 && PlainPlan.Describe(cpu).Notes.Contains(cpu.PlainNotes[0]),
+            "a processor trial says its own risk");
+        var cores = TunePlan("core-mask", Tuned(), new Recovery.PlanArgs { Cores = 8 });
+        Check(cores.PlainNotes.Count == 1, "eight cores say what they cost");
+        Check(!PlainWords.Findings(trial.PlainNotes.Concat(cpu.PlainNotes).Concat(cores.PlainNotes).ToList()).Any(),
+            "G-NOINT: the risk sentences");
     }
 
     // The chart lives on the page it rebuilds. A knot that reported every pixel of a drag would dispose the control
@@ -450,7 +525,7 @@ static partial class UnitTests
         if (!File.Exists(path)) return;
         var doc = File.ReadAllText(path);
         foreach (var want in new[] { Tuner.Points.ToString(), Tuner.BandMv + " mV", Tuner.FloorMv + " mV", Tuner.CeilingMv + " mV",
-            CpuTuning.MinMHz.ToString(), CpuTuning.StockMHz.ToString(), CpuTuning.MaxSteps.ToString(), CpuTuning.RefuseMv + " mV" })
+            CpuTuning.MinMHz.ToString(), CpuTuning.MaxMHz.ToString(), CpuTuning.MaxSteps.ToString(), CpuTuning.RefuseMv + " mV" })
             Check(doc.Contains(want), "docs/design/tuner.md names " + want);
         Check(!doc.Contains("—"), "docs/design/tuner.md has no em dash");
     }

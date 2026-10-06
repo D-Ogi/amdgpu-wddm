@@ -326,8 +326,6 @@ search.later.power|src|-|Power limit
 search.later.power.terms|src|-|power limit|watts|TDP
 search.later.fan|src|-|Fan control
 search.later.fan.terms|src|-|fan|fan curve|noise|cooling
-search.later.voltage|src|-|Voltage
-search.later.voltage.terms|src|-|voltage|undervolt|mV
 search.later.fps-counter|src|-|Frame rate display
 search.later.fps-counter.terms|src|-|FPS counter|frame time|overlay|frames per second
 search.later.cache-clear|src|-|Clear the shader cache
@@ -643,7 +641,6 @@ help.setting.hdr|src|-|High dynamic range: brighter highlights and more colours.
 help.setting.vrr|src|-|The monitor follows the game's frame rate for smoother motion. Coming later.
 help.setting.power|src|-|The most power the chip may use. Coming later.
 help.setting.fan|src|-|The board's firmware controls the fan. Control from this app comes later.
-help.setting.voltage|src|-|The chip's voltage. Coming later.
 help.setting.fps-counter|src|-|Shows the frame rate. Coming later.
 help.setting.cache-clear|src|-|Deletes the shader cache. Coming later.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -756,3 +753,13 @@ plan.line.cpu-tune-on|src|-|Processor tuning: on.
 plan.line.cpu-tune-off|src|-|Processor tuning: off.
 tuner.cpu.preview.stop|src|-|the processor goes back to the settings it had before the test
 tuner.cpu.preview.reset|src|-|the processor goes back to its standard settings
+# ---- the fixes of 0.7.211: an owed way back, a Keep the governor has not applied, and WU-042 risk ----
+graphics.cpu.reset|src|-|Standard processor settings
+graphics.cpu.revert-owed|src|-|The driver could not put the old processor settings back and keeps trying. Restart Windows if this stays.
+graphics.tuning.not-applied|src|-|The driver has not used this setting yet. Wait a moment, then keep it.
+tuner.curve.error.untried|src|-|The driver has not used this setting yet. Wait a moment and try again.
+tuner.refuse.curve-not-applied|src|-|The driver has not used the setting under test yet. Wait a moment and try again.
+tuner.curve.preview.standard|src|-|the standard voltage comes back at every speed
+tuner.note.curve-risk|src|-|Less voltage makes the graphics chip cooler and quieter at the same speed. Too little shows up as a game or the screen freezing, not as a message, and the setting goes back by itself when the test ends.
+tuner.note.cpu-risk|src|-|These processor numbers come from other people’s boards. A speed that is too high or a voltage that is too low shows up as the computer freezing. The app only lowers the voltage and reads it back after every change.
+tuner.note.cores-risk|src|-|Eight cores make more heat and use more power than six. Nobody has tested the other two cores on this board.

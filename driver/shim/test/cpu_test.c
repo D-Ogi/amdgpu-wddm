@@ -23,6 +23,11 @@ static int checks, failures;
 typedef char cpu_shape[(BC250_CPU_CORES == 8u && BC250_CPU_PSTATES == 8u && BC250_CPU_QUEUE_CPU == 3u &&
 			BC250_CPU_MASK_STOCK == 0x77u && BC250_CPU_MASK_FULL == 0xFFu &&
 			BC250_CPU_REFUSE_MV == 1300u && BC250_CPU_MAX_MHZ < BC250_CPU_MAX_MHZ_LAB &&
+			/* The release bound is the only stock boost figure any source gives, and above it the lab
+			 * bound needs a real undervolt depth and not one step (0.7.211). */
+			BC250_CPU_MAX_MHZ == 3500u && BC250_CPU_MAX_MHZ_LAB == 4000u &&
+			BC250_CPU_LAB_MIN_UV_STEPS >= 2u &&
+			BC250_CPU_LAB_MIN_UV_STEPS <= BC250_CPU_UV_MAX_STEPS &&
 			/* every step the search ever asks for is inside the admitted undervolt range */
 			BC250_CPU_SEARCH_MAX_STEPS <= BC250_CPU_UV_MAX_STEPS) ? 1 : -1];
 
@@ -75,11 +80,19 @@ static void test_allowlist(void)
 	 * message to get past the gate. */
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 1));
 	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, 0));
-	/* Queue 0: the two reads, the mask, and the two soft CCLK limits. Nothing of the clock transaction. */
-	CHECK(gfxGetters == 2u && gfxSetters == 3u);
+	/* Queue 0: the two reads and the mask, and nothing of the clock transaction. The two soft CCLK limits are
+	 * NOT on the list (0.7.211): no code path sends either, and SetSoftMinCclk would admit a CPU *minimum* of
+	 * 4000 MHz with no undervolt rule - the one message bc250_cpu_settings_check does not cover. */
+	CHECK(gfxGetters == 2u && gfxSetters == 1u);
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_QUERY_CORE_PSTATE, 0));
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_GET_ENABLED_FEATURES, 0));
 	CHECK(bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, 1));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MIN_CCLK, 1));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MAX_CCLK, 1));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MIN_CCLK, 0));
+	CHECK(!bc250_cpu_message_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MAX_CCLK, 0));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MIN_CCLK, 4000u));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_SOFT_MAX_CCLK, 4000u));
 	/* The GFX clock transaction's own messages are not CPU messages on queue 0: GetSmuVersion 0x02,
 	 * RequestGfxclk 0x0E, GetGfxFrequency 0x37, GetGfxVid 0x38, ForceGfxVid 0x3B
 	 * (driver/amdgpu-import/smu_v11_8_ppsmc.h). Two of those numbers are queue 3's own getters in the other
@@ -221,9 +234,15 @@ static void test_settings(void)
 	 * is the whole point - a higher clock at the firmware's own voltage is the shape that destroyed a board. */
 	s = set(BC250_CPU_MAX_MHZ_LAB, 0, 0);
 	CHECK(bc250_cpu_settings_check(&s, 1) == BC250_CPU_ERROR_CLOCK);
+	/* One step is about 5 mV at this clock, which is not "an undervolt already in force": the bar is
+	 * BC250_CPU_LAB_MIN_UV_STEPS (0.7.211). */
 	s = set(BC250_CPU_MAX_MHZ_LAB, 1, 0);
+	CHECK(bc250_cpu_settings_check(&s, 1) == BC250_CPU_ERROR_CLOCK);
+	s = set(BC250_CPU_MAX_MHZ_LAB, BC250_CPU_LAB_MIN_UV_STEPS - 1u, 0);
+	CHECK(bc250_cpu_settings_check(&s, 1) == BC250_CPU_ERROR_CLOCK);
+	s = set(BC250_CPU_MAX_MHZ_LAB, BC250_CPU_LAB_MIN_UV_STEPS, 0);
 	CHECK(bc250_cpu_settings_check(&s, 1) == BC250_CPU_OK);
-	s = set(BC250_CPU_MAX_MHZ_LAB, 1, 0);
+	s = set(BC250_CPU_MAX_MHZ_LAB, BC250_CPU_LAB_MIN_UV_STEPS, 0);
 	CHECK(bc250_cpu_settings_check(&s, 0) == BC250_CPU_ERROR_CLOCK);
 	s = set(BC250_CPU_MAX_MHZ_LAB + 100u, 8, 0);
 	CHECK(bc250_cpu_settings_check(&s, 1) == BC250_CPU_ERROR_CLOCK);
@@ -265,10 +284,12 @@ static void test_plan(void)
 
 	/* A deeper undervolt and a higher clock together: the undervolt goes first, because the predicted voltage
 	 * must never transiently exceed the ceiling. */
-	to = set(3600u, 8u, 0);
+	to = set(BC250_CPU_MAX_MHZ, 8u, 0);
 	CHECK(bc250_cpu_plan(&from, &to, 0, &p) == BC250_CPU_OK);
 	CHECK(p.count == 2 && p.step[0].kind == BC250_CPU_STEP_UV && p.step[1].kind == BC250_CPU_STEP_CLOCK);
-	CHECK(p.step[1].message == BC250_CPU_MSG_SET_MAX_MHZ && p.step[1].parameter == 3600u);
+	CHECK(p.step[1].message == BC250_CPU_MSG_SET_MAX_MHZ && p.step[1].parameter == BC250_CPU_MAX_MHZ);
+	/* The step that lowers the voltage is the one the hot gate admits; the raise is not (0.7.211). */
+	CHECK(p.step[0].cools == 1u && p.step[1].cools == 0u);
 
 	/* A shallower undervolt with the clock unchanged: the clock step is absent and the undervolt is the only
 	 * step, so the order rule has nothing to decide. */
@@ -292,16 +313,24 @@ static void test_plan(void)
 	CHECK(p.step[1].parameter == 0u && p.step[2].parameter == BC250_CPU_TEMP_MAX_C);
 
 	/* A tightening cap goes first, before anything that makes heat. */
-	to = set(3600u, 8u, 88u);
+	to = set(BC250_CPU_MAX_MHZ, 8u, 88u);
 	CHECK(bc250_cpu_plan(&from, &to, 0, &p) == BC250_CPU_OK);
 	CHECK(p.count == 3 && p.step[0].kind == BC250_CPU_STEP_TEMP && p.step[0].parameter == 88u);
 	CHECK(p.step[1].kind == BC250_CPU_STEP_UV && p.step[2].kind == BC250_CPU_STEP_CLOCK);
+	/* A tightened cap cools, a deeper undervolt cools, a higher clock does not. */
+	CHECK(p.step[0].cools == 1u && p.step[1].cools == 1u && p.step[2].cools == 0u);
 
 	/* From nothing applied at all: the first clock limit is a lowering of the firmware's own ceiling. */
 	from = set(0, 0, 0);
 	to = set(3200u, 0, 0);
 	CHECK(bc250_cpu_plan(&from, &to, 0, &p) == BC250_CPU_OK);
-	CHECK(p.count == 1 && p.step[0].kind == BC250_CPU_STEP_CLOCK);
+	CHECK(p.count == 1 && p.step[0].kind == BC250_CPU_STEP_CLOCK && p.step[0].cools == 1u);
+	/* A looser cap is less protection and does not cool. */
+	from = set(0, 0, 90u);
+	to = set(0, 0, 95u);
+	CHECK(bc250_cpu_plan(&from, &to, 0, &p) == BC250_CPU_OK);
+	CHECK(p.count == 1 && p.step[0].kind == BC250_CPU_STEP_TEMP && p.step[0].cools == 0u);
+	from = set(3400u, 4u, 95u);
 
 	/* Every refusal of the ranges is a refusal of the plan, and then nothing is sent at all. */
 	to = set(5000u, 0, 0);
@@ -336,9 +365,106 @@ static void test_plan(void)
 							count++;
 						}
 						CHECK(p.count <= BC250_CPU_PLAN_MAX);
+						/* Two invariants over every plan of the sweep, written as
+						 * literals and not in terms of the code: an undervolt
+						 * step never follows a clock step that raises the clock,
+						 * and cools is set exactly for the steps that lower the
+						 * dissipation (0.7.211). */
+						for (i = 0; i < p.count; i++) {
+							unsigned int j;
+							if (p.step[i].kind != BC250_CPU_STEP_CLOCK ||
+							    b <= a) continue;
+							for (j = i + 1; j < p.count; j++)
+								CHECK(p.step[j].kind !=
+								      BC250_CPU_STEP_UV);
+						}
+						for (i = 0; i < p.count; i++) {
+							unsigned int want = 0;
+							if (p.step[i].kind == BC250_CPU_STEP_CLOCK)
+								want = b < a ? 1u : 0u;
+							else if (p.step[i].kind == BC250_CPU_STEP_UV)
+								want = uvB > uvA ? 1u : 0u;
+							else want = 1u;   /* 95 -> 90 C tightens */
+							CHECK(p.step[i].cools == want);
+						}
 					}
 		CHECK(count > 1000u);
 	}
+}
+
+/* ---- the way back (0.7.211) --------------------------------------------------------------------- */
+
+/* Why this section exists: bc250_cpu_plan lets a target inherit what it does not give, so a revert to a state
+/* that gave nothing used to inherit the trial itself and send no message at all, while the driver logged that
+/* the settings before it had come back. The undervolt then stayed in the chip for the rest of the session.
+/* bc250_cpu_restore_target names every control instead, and these checks are what pins that. */
+static void test_restore(void)
+{
+	struct bc250_cpu_settings from, before, baseline, out;
+	struct bc250_cpu_plan p;
+
+	/* A fresh start: the read stage answered, so the baseline names all three. The trial set the undervolt
+	 * alone, and the state before it gave nothing at all - the shape that sent nothing in 0.7.210. */
+	baseline = set(3500u, 0, 100u);
+	baseline.uv_given = 1;
+	before = set(0, 0, 0);
+	from = set(0, 2u, 0);
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
+	CHECK(out.uv_given && out.uv_steps == 0u);
+	CHECK(!out.max_given && !out.temp_given);       /* the trial changed neither, so neither is sent */
+	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_OK);
+	CHECK(p.count == 1 && p.step[0].kind == BC250_CPU_STEP_UV);
+	CHECK(p.step[0].parameter == bc250_cpu_scale_argument(0u));
+
+	/* One message per control the trial changed, in the order the direction rule asks for. */
+	from = set(3000u, 2u, 95u);
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
+	CHECK(out.max_given && out.max_mhz == 3500u);
+	CHECK(out.uv_given && out.uv_steps == 0u);
+	CHECK(out.temp_given && out.temp_c == 100u);
+	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_OK && p.count == 3);
+
+	/* The state before the trial wins over the baseline: a second trial inside a kept setting goes back to
+	 * the kept setting and not to the firmware's own. */
+	before = set(3200u, 3u, 90u);
+	from = set(3000u, 6u, 95u);
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
+	CHECK(out.max_mhz == 3200u && out.uv_steps == 3u && out.temp_c == 90u);
+
+	/* No baseline at all (the read stage did not answer a P-state): the cap and the undervolt still have
+	 * firmware defaults, the clock limit does not, so the caller is told it cannot be named. */
+	before = set(0, 0, 0);
+	from = set(3000u, 2u, 95u);
+	CHECK(bc250_cpu_restore_target(&from, &before, NULL, &out) == 0);
+	CHECK(!out.max_given);
+	CHECK(out.uv_given && out.uv_steps == 0u);
+	CHECK(out.temp_given && out.temp_c == BC250_CPU_TEMP_MAX_C);
+	baseline = set(0, 0, 0);
+	baseline.uv_given = 1;
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 0);
+
+	/* Nothing applied: nothing to put back, and the plan is empty - which is the one case where
+	 * BC250_CPU_ERROR_NOTHING is the right answer. */
+	from = set(0, 0, 0);
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
+	CHECK(!out.max_given && !out.uv_given && !out.temp_given);
+	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_ERROR_NOTHING && p.count == 0);
+
+	/* A reset is the same call with nothing given as the state before: every control goes back to the
+	 * baseline, and nothing invents a clock the firmware never reported (0.7.210 substituted
+	 * BC250_CPU_MAX_MHZ here, which raised the ceiling and called it a restore). */
+	baseline = set(3500u, 0, 100u);
+	baseline.uv_given = 1;
+	from = set(3000u, 4u, 95u);
+	CHECK(bc250_cpu_restore_target(&from, &before, &baseline, &out) == 1);
+	CHECK(out.max_given && out.max_mhz == baseline.max_mhz);
+	CHECK(bc250_cpu_plan(&from, &out, 0, &p) == BC250_CPU_OK && p.count == 3);
+	/* Both steps raise the voltage the firmware chooses, so neither passes the hot gate on its own: only the
+	 * Restore flag of driver/kmd/cpu.c admits them, which is the whole reason that flag exists. The undervolt
+	 * goes away before the clock goes back up, so the higher clock never runs over the deeper undervolt. */
+	CHECK(p.step[0].kind == BC250_CPU_STEP_UV && p.step[0].cools == 0u);
+	CHECK(p.step[1].kind == BC250_CPU_STEP_CLOCK && p.step[1].cools == 0u);
+	CHECK(p.step[2].kind == BC250_CPU_STEP_TEMP && p.step[2].cools == 0u);
 }
 
 /* ---- the failure signs -------------------------------------------------------------------------- */
@@ -354,6 +480,7 @@ static struct bc250_cpu_sample sample_ok(void)
 	s.target_mhz = 3400u;
 	s.temperature_mc = 70000;
 	s.temperature_valid = 1;
+	s.loaded = 1;
 	return s;
 }
 
@@ -389,9 +516,24 @@ static void test_sample(void)
 	/* A core that did not answer reads 0 and is not evidence either way. */
 	s = sample_ok(); s.core_mhz[3] = 0;
 	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_NONE);
-	/* With no clock limit applied there is nothing to stretch against. */
+	/* With no clock to reach there is nothing to stretch against. */
 	s = sample_ok(); s.target_mhz = 0; s.core_mhz[0] = 500u;
 	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_NONE);
+	/* And nothing is judged over a sample nobody loaded (0.7.211): an idle core sits a gigahertz under the
+	 * limit, so without this the search would fail every step of an undervolt-only run on an idle part. */
+	s = sample_ok(); s.loaded = 0; s.core_mhz[0] = 1200u;
+	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_NONE);
+	s = sample_ok(); s.loaded = 1; s.core_mhz[0] = 1200u;
+	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_STRETCH);
+	/* The other four signs do not need the load: a machine check is a machine check. */
+	s = sample_ok(); s.loaded = 0; s.whea_events = 1;
+	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_WHEA);
+	s = sample_ok(); s.loaded = 0; s.checksum_errors = 1;
+	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_CHECKSUM);
+	s = sample_ok(); s.loaded = 0; s.temperature_mc = BC250_CLOCK_HOT_MC;
+	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_HOT);
+	s = sample_ok(); s.loaded = 0; s.voltage_mv = BC250_CPU_REFUSE_MV + 1u;
+	CHECK(bc250_cpu_check_sample(&s) == BC250_CPU_FAIL_VOLTAGE);
 }
 
 /* ---- the guided search -------------------------------------------------------------------------- */
@@ -447,6 +589,26 @@ static void test_search(void)
 	ok = sample_ok(); ok.whea_events = 2u;
 	CHECK(bc250_cpu_search_next(&s, &ok) == BC250_CPU_SEARCH_DONE);
 	CHECK(!s.running && s.best == 0u && s.fail == (unsigned int)BC250_CPU_FAIL_WHEA);
+
+	/* An undervolt-only search on a part that is already stretching stops at once (0.7.211). The caller
+	 * applies no clock limit, so the clock the cores should reach is the baseline the read stage recorded,
+	 * and driver/kmd/cpu.c passes exactly that into target_mhz. Before this, both were 0 and the search
+	 * offered the deepest step it was allowed to try, on a part whose cores ran at a third of the clock. */
+	bc250_cpu_search_begin(&s, 8u, 0, 1100u, 3500u);
+	CHECK(s.baseline_mhz == 3500u);
+	CHECK(bc250_cpu_search_next(&s, NULL) == BC250_CPU_SEARCH_APPLY);
+	ok = sample_ok();
+	ok.voltage_mv = 1090u;
+	ok.target_mhz = s.baseline_mhz;        /* no limit applied: the firmware's own ceiling */
+	for (i = 0; i < BC250_CPU_CORES; i++) ok.core_mhz[i] = 1200u;
+	CHECK(bc250_cpu_search_next(&s, &ok) == BC250_CPU_SEARCH_DONE);
+	CHECK(!s.running && s.best == 0u && s.fail == (unsigned int)BC250_CPU_FAIL_STRETCH && s.tested == 1u);
+	/* And a WHEA event the caller counted stops it as well, which is the sign the kernel cannot see. */
+	bc250_cpu_search_begin(&s, 8u, 0, 1100u, 3500u);
+	CHECK(bc250_cpu_search_next(&s, NULL) == BC250_CPU_SEARCH_APPLY);
+	ok = sample_ok(); ok.voltage_mv = 1090u; ok.whea_events = 1u;
+	CHECK(bc250_cpu_search_next(&s, &ok) == BC250_CPU_SEARCH_DONE);
+	CHECK(!s.running && s.best == 0u && s.fail == (unsigned int)BC250_CPU_FAIL_WHEA);
 }
 
 /* ---- the core mask ------------------------------------------------------------------------------ */
@@ -472,6 +634,7 @@ int main(void)
 	test_arguments();
 	test_settings();
 	test_plan();
+	test_restore();
 	test_sample();
 	test_search();
 	test_mask();

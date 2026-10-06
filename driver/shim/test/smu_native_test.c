@@ -9,6 +9,14 @@ static volatile ULONG registers[0x80000/sizeof(ULONG)];
 #define BC250_CPU_Q3_RESP_TEST  (BC250_SMU_mmMP1_SMN_C2PMSG_90+6u*4u)
 #define BC250_CPU_Q3_PARAM_TEST (BC250_SMU_mmMP1_SMN_C2PMSG_90+8u*4u)
 static BC250_SMU_OWNER owner;
+// The CPU-domain message as every case below sends it: no hot exception, and the temperature validity bit
+// dropped. The two cases that exercise those (0.7.211) call SmuCpuMessage directly.
+static NTSTATUS CpuMsg(BC250_SMU_OWNER* o,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
+                       ULONG busyPermille,ULONG* value,LONG* temperatureMc,ULONG* firmwareStatus)
+{
+    return SmuCpuMessage(o,queue,message,parameter,write,FALSE,busyPermille,value,temperatureMc,
+                         firmwareStatus,NULL);
+}
 static unsigned phase,pending,mhz,vid,command,argument,reply,ramp,ramp_left,ramp_from,core_mask=0x77u;
 // The temperature the THM register reports, in its own units (536 = 67 C), and the firmware's queue 3 (0.7.210):
 // its own phase, command, argument and response, because "check and drain the previous response before the first
@@ -215,55 +223,84 @@ int main(void) {
         before=calls;cpuBefore=cpu_calls;
         // Not on the allowlist of that queue, in that direction, or outside the argument's range: refused in
         // the owner, before the transport, and nothing reaches either mailbox.
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,0x98u,0,TRUE,0,NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,TRUE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,0x98u,0,TRUE,0,NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,TRUE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,0,FALSE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,0,FALSE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,5000,TRUE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_MAX_MHZ,5000,TRUE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,1,TRUE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,1,TRUE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);   // a positive scale raises the voltage
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_CORE_ENABLE_MASK,0x7Fu,TRUE,0,
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_CORE_ENABLE_MASK,0x7Fu,TRUE,0,
                             NULL,NULL,NULL)==STATUS_INVALID_PARAMETER);  // a harvest pattern
-        CHECK(SmuCpuMessage(&owner,2u,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,2u,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);   // no third queue
         // The clock transaction's own messages are not CPU messages (smu_v11_8_ppsmc.h).
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_GFX,PPSMC_MSG_RequestGfxclk,1500,TRUE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_GFX,PPSMC_MSG_RequestGfxclk,1500,TRUE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_GFX,PPSMC_MSG_ForceGfxVid,116,TRUE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_GFX,PPSMC_MSG_ForceGfxVid,116,TRUE,0,NULL,NULL,NULL)
               ==STATUS_INVALID_PARAMETER);
         CHECK(calls==before && cpu_calls==cpuBefore);
         // The GPU busy gate: at or above the share, nothing is sent at all.
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,
                             BC250_CPU_GPU_BUSY_PERMILLE,&value,NULL,NULL)==STATUS_DEVICE_BUSY);
         CHECK(cpu_calls==cpuBefore && !value);
         // A getter on queue 3: one message on queue 3's mailbox, the firmware's response word, the temperature.
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,&mc,&fw)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,&mc,&fw)
               ==STATUS_SUCCESS);
         CHECK(value==cpu_value && mc==67000 && fw==1u && cpu_calls==cpuBefore+1 &&
               cpu_command==BC250_CPU_MSG_READ_CPU_MV && calls==before);   // queue 0 saw nothing
         // A setter on queue 3, and the core mask on queue 0: each argument reaches its own queue's register.
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CAP_C,95,TRUE,0,NULL,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CAP_C,95,TRUE,0,NULL,NULL,NULL)
               ==STATUS_SUCCESS);
         CHECK(cpu_command==BC250_CPU_MSG_SET_CAP_C && cpu_calls==cpuBefore+2 && calls==before);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_CORE_ENABLE_MASK,BC250_CPU_MASK_FULL,
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_GFX,BC250_CPU_MSG_SET_CORE_ENABLE_MASK,BC250_CPU_MASK_FULL,
                             TRUE,0,NULL,NULL,NULL)==STATUS_SUCCESS);
         CHECK(command==BC250_CPU_MSG_SET_CORE_ENABLE_MASK && core_mask==BC250_CPU_MASK_FULL &&
               calls==before+1 && cpu_calls==cpuBefore+2);
-        // The 87 C gate, read before every message and not once per sequence.
+        // The 87 C gate, read before every message and not once per sequence. Since 0.7.211 it has two
+        // exceptions, both of them the CPU rail's reading of the rule the GPU clock path already carries: the
+        // part must always be returnable to the settings it is known to run at.
+        //   a getter    changes nothing, and the read stage is how the driver learns the part is hot at all
+        //   AllowHot    the way back from a trial, and every step that lowers the dissipation
+        // A trial left in the chip because the part was hot is the worse of the two states, and nothing else
+        // would ever take it out: the firmware keeps no copy and the window has already passed.
         cur_tmp=696u;
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,&mc,NULL)
-              ==STATUS_DEVICE_POWER_FAILURE);
-        CHECK(cpu_calls==cpuBefore+2 && mc==87000 && !value);
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,&mc,NULL)
+              ==STATUS_SUCCESS);
+        CHECK(cpu_calls==cpuBefore+3 && mc==87000 && value==cpu_value);
+        // A setter without the flag is refused, and nothing reaches the mailbox.
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,
+                     bc250_cpu_scale_argument(2),TRUE,0,NULL,&mc,NULL)==STATUS_DEVICE_POWER_FAILURE);
+        CHECK(cpu_calls==cpuBefore+3 && mc==87000);
+        {
+            BOOLEAN valid=FALSE;
+            // The same message with the flag goes out, and the temperature is still read and still reported,
+            // so nothing downstream judges the part as cold.
+            CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,
+                                bc250_cpu_scale_argument(0),TRUE,TRUE,0,NULL,&mc,NULL,&valid)
+                  ==STATUS_SUCCESS);
+            CHECK(cpu_command==BC250_CPU_MSG_SET_CURVE_SCALE && cpu_calls==cpuBefore+4);
+            CHECK(mc==87000 && valid);
+            // The busy gate is not an exception: a restore waits for the GPU, which is seconds and not hours.
+            valid=TRUE;
+            CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_SET_CURVE_SCALE,0,TRUE,TRUE,
+                                BC250_CPU_GPU_BUSY_PERMILLE,NULL,NULL,NULL,&valid)==STATUS_DEVICE_BUSY);
+            CHECK(cpu_calls==cpuBefore+4 && !valid);
+            // Nor is the allowlist: a message that is not on it stays off it however the way back is marked.
+            CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,0x98u,0,TRUE,TRUE,0,NULL,NULL,NULL,&valid)
+                  ==STATUS_INVALID_PARAMETER);
+            CHECK(cpu_calls==cpuBefore+4);
+        }
         cur_tmp=536u;
         SmuCpuEnd(&owner);
         SmuOwnerStop(&owner);
         // Stopped: the flag is gone and no CPU message is sent.
         CHECK(!owner.CpuOnline);
-        CHECK(SmuCpuMessage(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,NULL,NULL)
+        CHECK(CpuMsg(&owner,BC250_CPU_QUEUE_CPU,BC250_CPU_MSG_READ_CPU_MV,0,FALSE,0,&value,NULL,NULL)
               ==STATUS_DEVICE_NOT_READY);
-        CHECK(cpu_calls==cpuBefore+2 && calls==before+1);
+        CHECK(cpu_calls==cpuBefore+4 && calls==before+1);
     }
     {
         LONG before=calls;

@@ -63,7 +63,7 @@ namespace AmdgpuWddmControl
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
-    // BC250_ESCAPE_CPU (272 bytes, driver/kmd/cpu.c): the processor's clock limit, undervolt, temperature cap,
+    // BC250_ESCAPE_CPU (296 bytes, driver/kmd/cpu.c): the processor's clock limit, undervolt, temperature cap,
     // readbacks and core mask. Applied is what the driver last sent, Stored what a Keep wrote, Baseline what the
     // first read of this start recorded.
     public sealed class CpuState
@@ -78,10 +78,12 @@ namespace AmdgpuWddmControl
         public uint LastQueue, LastMessage, LastStatus, LastParameter;
         public int TemperatureMc;
         public uint SearchStep, SearchBest, SearchFail, SearchTested, Reads, Writes, Refusals, Reverts;
+        // An owed way back: a revert was refused and the driver repeats it. RevertFailures counts the refusals.
+        public uint RevertRetries, RevertFailures;
         public ulong Generation;
         public const uint FlagValid = 1, FlagOnTrial = 2, FlagStored = 4, FlagPending = 8, FlagConfirmed = 16,
             FlagQueue3Proven = 32, FlagTuneOn = 64, FlagSearching = 128, FlagCorePending = 256,
-            FlagCoreConfirmed = 512, FlagBusy = 1024;
+            FlagCoreConfirmed = 512, FlagBusy = 1024, FlagRevertOwed = 2048, FlagTempValid = 4096;
         public const uint GivenMax = 1, GivenUv = 2, GivenTemp = 4;
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
@@ -108,7 +110,7 @@ namespace AmdgpuWddmControl
     {
         public const uint Magic = 0x30353242;   // "B250"
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
-        public const int CurveBytes = 360, CpuBytes = 272, CurvePoints = 11, CpuCoreSlots = 8;
+        public const int CurveBytes = 360, CpuBytes = 296, CurvePoints = 11, CpuCoreSlots = 8;
         public const uint CmdCuMode = 22, CmdCurve = 28, CmdCpu = 29;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
@@ -218,7 +220,8 @@ namespace AmdgpuWddmControl
                 TemperatureMc = (int)U(b, 53),
                 SearchStep = U(b, 54), SearchBest = U(b, 55), SearchFail = U(b, 56), SearchTested = U(b, 57),
                 Reads = U(b, 58), Writes = U(b, 59), Refusals = U(b, 60), Reverts = U(b, 61),
-                Generation = Q(b, 248),
+                RevertRetries = U(b, 62), RevertFailures = U(b, 63),
+                Generation = Q(b, 272),
             };
         }
 

@@ -206,9 +206,14 @@ if (-not $NoSmoke) {
         'cpu-keep'    = @(3, 'refused: No processor trial is running.')
         'cpu-reset'   = @(3, 'refused: The processor has its default settings already.')
         'core-mask'   = @(0, 'tuning request core-mask, cores 8', 'at the next restart of Windows')
+        # WU-042: "Reset driver settings" is the one control that puts the standard settings back, so with the
+        # processor surface open it also turns processor tuning off. The tuning steps of a machine that has
+        # settings stored are gated by the host tests (TunerStandardSteps); this snapshot has none stored.
+        'reset-defaults' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
     }
     foreach ($e in $tune.GetEnumerator()) {
         $extra = @(switch ($e.Key) { 'tune-trial' { '--curve', '820,830,850,870,889,909,925,942,958,974,990' }
+            'reset-defaults' { '--games', 'keep' }
             'cpu-trial' { '--cpu-uv', '8' } 'core-mask' { '--cores', '8' } })
         $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $tuned)) "tune-$($e.Key)"
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }

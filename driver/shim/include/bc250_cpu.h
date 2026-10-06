@@ -57,12 +57,15 @@ void bc250_cpu_queue3(struct bc250_cpu_queue *queue);
 /* Queue 0, AMD-named in driver/amdgpu-import/smu_v11_8_ppsmc.h (MIT), which is why they are named and not
  * guessed. QueryCorePstate and GetEnabledSmuFeatures are the first CPU reads this project ever sends;
  * SetCoreEnableMask is the 8-core unlock, and unlike the community's generic SMN write it can put the stock
- * mask back. The two soft CCLK limits are measured for their own sake at core id 0, where the two argument
- * layouts the sources disagree about are the same value. */
+ * mask back. */
 #define BC250_CPU_MSG_QUERY_CORE_PSTATE		0x0Cu	/* in: core id; out: the P-state. Status 0xFF above core 7 */
 #define BC250_CPU_MSG_SET_CORE_ENABLE_MASK	0x2Cu	/* in: mask & 0xFF. The unlock, and the way back */
-#define BC250_CPU_MSG_SET_SOFT_MIN_CCLK		0x35u	/* in: (core << 20) | MHz; out: the clamped MHz */
-#define BC250_CPU_MSG_SET_SOFT_MAX_CCLK		0x36u	/* in: same layout. Not queue 3's 0x36 */
+/* The two soft CCLK limits are named here and are NOT on the allowlist (0.7.211): no code path sends either,
+ * and an entry with no caller that admits a CPU *minimum* of 4000 MHz under no undervolt rule is the bricking
+ * shape through the one message bc250_cpu_settings_check does not cover. They come back when trial B6 needs
+ * them, behind that check and capped at the recorded baseline. */
+#define BC250_CPU_MSG_SET_SOFT_MIN_CCLK		0x35u	/* (core << 20) | MHz. Rejected: no caller */
+#define BC250_CPU_MSG_SET_SOFT_MAX_CCLK		0x36u	/* same layout, not queue 3's 0x36. Rejected */
 #define BC250_CPU_MSG_GET_ENABLED_FEATURES	0x3Du	/* in: 0; out: the feature bits. Changes nothing */
 
 /* Queue 3. Getters first; the three setters are the whole write surface of this driver on the CPU rail. */
@@ -95,11 +98,19 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
  * highest value the release admits: a lowering of the firmware's own ceiling, which lowers the voltage the
  * firmware chooses and so cannot reach the bricking hazard. BC250_CPU_MAX_MHZ_LAB is the lab's own bound under
  * the owner's pre-approval of 2026-10-05, and nothing admits it without an undervolt already in force and a
- * voltage readback under BC250_CPU_REFUSE_MV. The community treats 3500 MHz as stock and 4000 MHz as its daily
- * setting; our own record for unit A is an effective 2.74 to 2.79 GHz, which trial B4 settles. */
+ * voltage readback under BC250_CPU_REFUSE_MV.
+ *
+ * BC250_CPU_MAX_MHZ is 3500 MHz, the only stock boost figure any source gives (the community's own stock
+ * constant, and its detect tool's floor). 3600 stood here until 0.7.211 and no source carried it, so the
+ * release admitted a 100 MHz raise over stock with no undervolt at all - the shape that destroyed a board.
+ * Our own record for unit A is an effective 2.74 to 2.79 GHz, which trial B4 settles; until it does, the
+ * release asks for no more than stock. A clock above the release bound needs an undervolt of at least
+ * BC250_CPU_LAB_MIN_UV_STEPS and not merely one step: one step is about 5 mV at 3500 MHz by the community's
+ * own fitted model, which is not "an undervolt already in force". */
 #define BC250_CPU_MIN_MHZ		2800u
-#define BC250_CPU_MAX_MHZ		3600u
+#define BC250_CPU_MAX_MHZ		3500u
 #define BC250_CPU_MAX_MHZ_LAB		4000u
+#define BC250_CPU_LAB_MIN_UV_STEPS	4u	/* about 13 to 17 mV: what the lab bound needs first */
 /* The undervolt is a step count, not a millivolt count: one step of the firmware's curve scale removes about
  * 0.004325 x f - 10 mV, so 3.0 mV at 3000 MHz and 7.3 mV at 4000 MHz (REPORTED, the community's own fitted
  * model). The reference Control Center's "6.25 mV a step" is exact near 3745 MHz only. The applied voltage
@@ -162,7 +173,9 @@ enum bc250_cpu_step_kind {
 	BC250_CPU_STEP_UV = 2,
 	BC250_CPU_STEP_CLOCK = 3
 };
-struct bc250_cpu_step { unsigned int queue, message, parameter, kind; };
+/* cools: the step lowers the dissipation (a deeper undervolt, a lower clock limit, a tightened temperature
+ * cap), so driver/kmd/smu.c admits it at or above BC250_CLOCK_HOT_MC. Every other step waits to cool. */
+struct bc250_cpu_step { unsigned int queue, message, parameter, kind, cools; };
 struct bc250_cpu_plan { struct bc250_cpu_step step[BC250_CPU_PLAN_MAX]; unsigned int count; };
 /* The steps that take the chip from *from to *to, in the safe order. A value *to does not give keeps whatever
  * *from has. Returns BC250_CPU_ERROR_NOTHING when nothing would change. */
@@ -171,21 +184,40 @@ enum bc250_cpu_error bc250_cpu_plan(const struct bc250_cpu_settings *from, const
 /* The signed curve scale as the mailbox argument: a step count of n is sent as -n, packed into the low 16 bits. */
 unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
 
+/* The target a revert or a reset must ask for, named in full (0.7.211). bc250_cpu_plan lets a target inherit
+ * every value it does not give from *from, which is right for a SET of one control and wrong for the way back:
+ * a revert to a state that gave nothing inherits the trial itself, the plan is BC250_CPU_ERROR_NOTHING, and the
+ * trial stays in the chip while the driver reports that it came back. This names every control *from carries:
+ *   *before    the state before the trial. Every value it gives is used as it stands.
+ *   *baseline  what the read stage of this start answered before the first write of this start.
+ * A control neither of them names goes back to the firmware's own default: no undervolt, and the cap at
+ * BC250_CPU_TEMP_MAX_C. The clock limit has no such default - the firmware's own ceiling is what the baseline
+ * read is for - so the return value is 0 when *from carries a clock limit that neither *before nor *baseline
+ * can name. *out then holds every control that can be named, and the caller must say which one stays. */
+int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *before,
+			     const struct bc250_cpu_settings *baseline, struct bc250_cpu_settings *out);
+
 /* ---- what the hardware said, and the three failure signs --------------------------------------- */
 
 struct bc250_cpu_sample {
 	unsigned int	voltage_mv;			/* BC250_CPU_MSG_READ_CPU_MV */
 	unsigned int	core_mhz[BC250_CPU_CORES];	/* BC250_CPU_MSG_READ_CORE_MHZ, 0 for a core that did not answer */
 	unsigned int	cores;				/* how many of the array are filled */
-	unsigned int	target_mhz;			/* what the clock limit asks for, 0 when none is applied */
+	unsigned int	target_mhz;			/* the clock the cores should reach: the applied limit, or the
+						 * recorded baseline when no limit is applied. 0: unknown */
 	int		temperature_mc;
 	int		temperature_valid;
+	int		loaded;				/* the caller loads the CPU over this sample (0.7.211) */
 	unsigned int	whea_events;			/* machine-check events since the trial began */
 	unsigned int	checksum_errors;		/* wrong answers from the load client */
 };
 /* Why a trial must stop. Three signs, and all three are available on Windows: a WHEA event, clock stretching
  * (two independent reads: the SMU's own per-core clock and the Windows processor counters), and a wrong answer
- * from the load. A temperature at or above the lab's 87 C stops a trial as well. */
+ * from the load. A temperature at or above the lab's 87 C stops a trial as well.
+ *
+ * Two of the five need the caller and are 0 until it gives them (0.7.211): whea_events and checksum_errors
+ * arrive on the escape, and clock stretching is judged only over a sample the caller marked loaded. An idle
+ * core sits far under any limit, so an unloaded sample would otherwise fail every step of the search. */
 enum bc250_cpu_fail {
 	BC250_CPU_FAIL_NONE = 0,
 	BC250_CPU_FAIL_WHEA = 1,

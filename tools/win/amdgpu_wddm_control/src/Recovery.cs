@@ -121,6 +121,13 @@ namespace AmdgpuWddmControl
         // The tuning request of this plan (the voltage curve or the processor). It writes no registry value: the
         // helper sends one escape and the driver owns the trial window and the revert (docs/design/tuner.md).
         public TuneRequest Tune;
+        // More than one tuning step, in order, for an action that is not itself a tuning action: reset-defaults
+        // takes the stored curve, the stored processor settings and the core mask back as well (WU-042). These run
+        // after the registry writes and the CU steps, and a refusal of one stops the rest.
+        public readonly List<TuneRequest> TuneSteps = new List<TuneRequest>();
+        // The notes of this plan in the window's language. Notes is English for the log and the support report;
+        // these are the same sentences for the person, which WU-042 asks for before a tuning change.
+        public readonly List<string> PlainNotes = new List<string>();
         // Per-game switches: image -> new Experiment value, "" = remove the game's key. Backed up and undoable per game.
         public readonly SortedDictionary<string, string> GameWrites = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         // What the dialog shows (in the window's language): one line per change, then the notes.
@@ -139,6 +146,8 @@ namespace AmdgpuWddmControl
             foreach (var g in GameWrites)
                 w.AppendLine("  " + (g.Value.Length == 0 ? "delete HKLM\\" + Profiles.RegistryPath + "\\" + g.Key
                     : "set HKLM\\" + Profiles.RegistryPath + "\\" + g.Key + " " + Profiles.ValueName + " = \"" + g.Value + "\" (String)"));
+            foreach (var t in TuneSteps) w.AppendLine("  tuning step " + t.Kind +
+                (t.CoreMask != 0 ? ", mask " + t.CoreMask : ""));
             if (Tune != null)
             {
                 w.Append("  tuning request " + Tune.Kind);
@@ -1051,6 +1060,11 @@ namespace AmdgpuWddmControl
                         p.Writes.Add(RegWrite.Remove(ParametersPath, "InteropClosedReason"));
                     int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k));
                     if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
+                    // The tuning page's settings are not in manifest.json, because the driver stores them itself
+                    // (DpmCurve*, CpuMaxMHz, CpuUvSteps, CpuTempC, CoreMask). WU-042 asks for one control that puts
+                    // the standard settings back, so this action carries those steps as well.
+                    var left = TunerPlan.StandardSteps(s, p);
+                    if (left != null) p.Notes.Add(left);
                     // The CU part goes through the same setter as "Standard (24)" (WU-042, WU-055).
                     var cu = CuMode.Plan(s.StoredCu(), CuMode.Stock);
                     if (!cu.Refused) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
@@ -1070,9 +1084,11 @@ namespace AmdgpuWddmControl
                             if (s.GameProfiles == null || !s.GameProfiles.ContainsKey(d.Key)) p.GameWrites[d.Key] = d.Value;
                     }
                     else p.Notes.Add("Per-game settings are kept.");
-                    if (p.Writes.All(w => Same(s, w)) && p.Cu == null && p.GameWrites.Count == 0) return Refuse(p, "All these settings have their release defaults already.");
+                    if (p.Writes.All(w => Same(s, w)) && p.Cu == null && p.GameWrites.Count == 0 && p.TuneSteps.Count == 0)
+                        return Refuse(p, "All these settings have their release defaults already.");
                     p.Change = "Sets " + string.Join(", ", p.Writes.Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
-                        (p.Cu != null ? "; graphics cores: Standard (24)" : "") + (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") + ".";
+                        (p.Cu != null ? "; graphics cores: Standard (24)" : "") + (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") +
+                        (p.TuneSteps.Count > 0 ? "; tuning: " + string.Join(", ", p.TuneSteps.Select(t => t.Kind)) : "") + ".";
                     if (p.Cu != null) p.Notes.Add("The graphics-core part cannot be undone: its old values are kept for diagnosis only.");
                     p.OfferRestart = true;
                     break;

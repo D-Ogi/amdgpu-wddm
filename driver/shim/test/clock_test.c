@@ -240,6 +240,15 @@ int main(void){
   CHECK(bc250_clock_prepare(&c,2000,bc250_clock_floor_mv(2000)-1u,&r)==BC250_CLOCK_INVALID);
   CHECK(bc250_clock_floor_mv(1500)==bc250_clock_min_mv(1500)-BC250_CURVE_UNDERVOLT_MV);
   CHECK(bc250_clock_floor_mv(1000)==BC250_CLOCK_FLOOR_MV && bc250_clock_floor_mv(500)==BC250_CLOCK_FLOOR_MV);
+  // The band's depth as literals (0.7.211). Every assertion above is written in terms of the constant itself,
+  // so a mutation of BC250_CURVE_UNDERVOLT_MV was tautological and 301 million checks did not see it. These
+  // three are the table's line at those clocks less 25 mV, worked out by hand: 919 - 25 at 1500 MHz, 1000 - 25
+  // at 2000 MHz, and the floor at 1000 MHz where no curve may act at all. The absolute 820 mV clamp bounds the
+  // damage; this is what bounds the request, so that one typed digit cannot ask for 820 mV at 2000 MHz.
+  CHECK(bc250_clock_floor_mv(1500)==894u);
+  CHECK(bc250_clock_floor_mv(2000)==975u);
+  CHECK(bc250_clock_floor_mv(1000)==820u);
+  CHECK(bc250_clock_min_mv(1500)==919u && bc250_clock_min_mv(2000)==1000u);
   CHECK(!b.begin_count && !b.count && !r.ready);
   c.end=NULL;CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_INVALID);CHECK(!b.begin_count);
  }

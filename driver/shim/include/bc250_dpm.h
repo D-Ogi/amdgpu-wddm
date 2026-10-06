@@ -399,6 +399,11 @@ void bc250_dpm_idle_leave(struct bc250_dpm_governor *g);
 #define BC250_DPM_CURVE_TRIAL_MS	25000u	/* the release default: the reference Control Center's own 25 s */
 #define BC250_DPM_CURVE_TRIAL_MIN_MS	10000u
 #define BC250_DPM_CURVE_TRIAL_MAX_MS	180000u	/* the three-minute lab bound */
+/* A KEEP needs a candidate that has run: this much of the window must have passed, and the governor must have
+ * applied the candidate's own serial (0.7.211). SET and KEEP inside one governor tick stored a curve that never
+ * reached the hardware, and a SET whose apply the clock gate refused as too hot stored the candidate all the
+ * same. Four governor ticks, which is the shortest window in which a level is re-applied and read back. */
+#define BC250_DPM_CURVE_KEEP_MIN_MS	100u
 
 struct bc250_dpm_curve_state {
 	struct bc250_clock_curve stored, active, candidate;
@@ -417,7 +422,9 @@ void bc250_dpm_curve_init(struct bc250_dpm_curve_state *s, const struct bc250_cl
  * and restarts the window; the revert target stays the stored curve, never the first candidate. */
 enum bc250_clock_curve_error bc250_dpm_curve_set(struct bc250_dpm_curve_state *s, const struct bc250_clock_curve *c,
 						 unsigned int trial_ms, unsigned int *level);
-/* 1 when a trial was kept: the candidate is now stored and the caller must persist it. 0 when none ran. */
+/* 1 when a trial was kept: the candidate is now stored and the caller must persist it. 0 when none ran, and -1
+ * when one runs but the governor has not carried it for BC250_DPM_CURVE_KEEP_MIN_MS yet, which is a different
+ * answer for the caller to show (BC250_CLOCK_CURVE_UNTRIED). Nothing is stored in either refusal. */
 int bc250_dpm_curve_keep(struct bc250_dpm_curve_state *s);
 /* 1 when a trial was ended and the stored curve put back (apply raised). 0 when none ran. */
 int bc250_dpm_curve_cancel(struct bc250_dpm_curve_state *s);
@@ -427,8 +434,12 @@ int bc250_dpm_curve_reset(struct bc250_dpm_curve_state *s);
 /* One tick's worth of the window. 1 when the deadline passed and the stored curve was put back. */
 int bc250_dpm_curve_tick(struct bc250_dpm_curve_state *s, unsigned int dt_ms);
 /* 1 once after every change of the active curve: the caller re-applies the current level through its checked
- * transaction. Clears the flag and records the serial as applied. */
+ * transaction. Clears the flag; it does NOT record the serial as applied, because at that point the apply has
+ * not happened yet - bc250_dpm_curve_applied() records it once the transaction went through (0.7.211). */
 int bc250_dpm_curve_take(struct bc250_dpm_curve_state *s);
+/* The serial the caller has just applied to the hardware, after a transaction that went through. Ignored when a
+ * newer SET arrived in the meantime, so a candidate nobody applied can never count as applied. */
+void bc250_dpm_curve_applied(struct bc250_dpm_curve_state *s, unsigned int serial);
 /* The active curve's voltage and VID at a level of the whole table (below BC250_CURVE_FIRST_LEVEL: the table's
  * own, where no curve may act). Every reader of the voltage column goes through these two. */
 unsigned int bc250_dpm_curve_level_mv(const struct bc250_dpm_curve_state *s, unsigned int level);

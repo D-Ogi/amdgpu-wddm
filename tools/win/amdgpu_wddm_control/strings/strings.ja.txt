@@ -320,8 +320,6 @@ search.later.power|mt-safe|fba85679|電力制限
 search.later.power.terms|mt|db72d2b0|電力制限|消費電力|ワット|TDP|パワー リミット
 search.later.fan|mt-safe|8c9a2877|ファン制御
 search.later.fan.terms|mt|f8a14c23|ファン|ファン カーブ|騒音|静音|冷却
-search.later.voltage|mt-safe|4e40d79f|電圧
-search.later.voltage.terms|mt|5cc069f4|電圧|低電圧化|アンダーボルト|mV
 search.later.fps-counter|mt-safe|8e4f7029|フレーム レートの表示
 search.later.fps-counter.terms|mt|40353cf6|FPS カウンター|フレーム時間|フレーム タイム|オーバーレイ|フレーム毎秒|FPS
 search.later.cache-clear|mt-safe|6b923412|シェーダー キャッシュを消去
@@ -625,7 +623,6 @@ help.setting.hdr|mt|af54494e|ハイ ダイナミック レンジ：明るい部�
 help.setting.vrr|mt|4662d04f|モニターがゲームのフレーム レートに合わせて動作し、動きが滑らかになります。今後対応予定です。
 help.setting.power|mt|3659317e|チップが使用できる最大電力です。今後対応予定です。
 help.setting.fan|mt|bfae721d|ファンはボードのファームウェアが制御しています。このアプリからの制御は今後対応予定です。
-help.setting.voltage|mt|9c28b6e1|チップの電圧です。今後対応予定です。
 help.setting.fps-counter|mt|929ada50|フレーム レートを表示します。今後対応予定です。
 help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -738,3 +735,13 @@ plan.line.cpu-tune-on|mt|c3793e19|プロセッサの調整: 有効。
 plan.line.cpu-tune-off|mt|14ef42b2|プロセッサの調整: 無効。
 tuner.cpu.preview.stop|mt|f3995948|プロセッサはテスト前の設定に戻ります
 tuner.cpu.preview.reset|mt|c3cf92af|プロセッサは標準の設定に戻ります
+# ---- 0.7.211 ----
+graphics.cpu.reset|mt|4bd614fa|プロセッサーの標準設定
+graphics.cpu.revert-owed|mt|7214cad3|ドライバーは以前のプロセッサー設定に戻せず、再試行しています。この表示が続く場合は Windows を再起動してください。
+graphics.tuning.not-applied|mt|24166ef8|ドライバーはまだこの設定を使用していません。少し待ってから保存してください。
+tuner.curve.error.untried|mt|6ae732ce|ドライバーはまだこの設定を使用していません。少し待ってからもう一度お試しください。
+tuner.refuse.curve-not-applied|mt|28020c45|ドライバーはまだテスト中の設定を使用していません。少し待ってからもう一度お試しください。
+tuner.curve.preview.standard|mt|0c38511f|すべての速度で標準の電圧に戻ります
+tuner.note.curve-risk|mt|28bb65b2|電圧を下げると、同じ速度でもグラフィックスチップの温度が下がり静かになります。下げすぎるとメッセージではなくゲームや画面のフリーズとして現れ、テストが終わると設定は自動的に戻ります。
+tuner.note.cpu-risk|mt|0e0c4e70|これらのプロセッサーの数値は他の人のボードから得られたものです。速度が高すぎたり電圧が低すぎたりすると、コンピューターのフリーズとして現れます。アプリは電圧を下げるだけで、変更のたびに読み戻します。
+tuner.note.cores-risk|mt|8be50b28|8 コアは 6 コアより発熱が多く、消費電力も大きくなります。このボードで残りの 2 コアを試した人はいません。

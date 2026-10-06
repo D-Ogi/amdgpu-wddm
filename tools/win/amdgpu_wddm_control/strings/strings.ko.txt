@@ -320,8 +320,6 @@ search.later.power|mt-safe|fba85679|전력 제한
 search.later.power.terms|mt|db72d2b0|전력 제한|와트|TDP|파워 리밋
 search.later.fan|mt-safe|8c9a2877|팬 제어
 search.later.fan.terms|mt|f8a14c23|팬|팬 커브|소음|냉각
-search.later.voltage|mt-safe|4e40d79f|전압
-search.later.voltage.terms|mt|5cc069f4|전압|언더볼트|언더볼팅|mV
 search.later.fps-counter|mt-safe|8e4f7029|프레임 속도 표시
 search.later.fps-counter.terms|mt|40353cf6|FPS 카운터|FPS 표시|프레임 타임|오버레이|초당 프레임
 search.later.cache-clear|mt-safe|6b923412|셰이더 캐시 지우기
@@ -625,7 +623,6 @@ help.setting.hdr|mt|af54494e|하이 다이내믹 레인지: 더 밝은 하이라
 help.setting.vrr|mt|4662d04f|모니터가 게임의 프레임 속도에 맞춰 더 부드러운 움직임을 보여 줍니다. 나중에 제공됩니다.
 help.setting.power|mt|3659317e|칩이 사용할 수 있는 최대 전력입니다. 나중에 제공됩니다.
 help.setting.fan|mt|bfae721d|팬은 보드의 펌웨어가 제어합니다. 이 앱에서 제어하는 기능은 나중에 제공됩니다.
-help.setting.voltage|mt|9c28b6e1|칩의 전압입니다. 나중에 제공됩니다.
 help.setting.fps-counter|mt|929ada50|프레임 속도를 표시합니다. 나중에 제공됩니다.
 help.setting.cache-clear|mt|c75227ac|셰이더 캐시를 삭제합니다. 나중에 제공됩니다.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -738,3 +735,13 @@ plan.line.cpu-tune-on|mt|c3793e19|프로세서 조정: 켜짐.
 plan.line.cpu-tune-off|mt|14ef42b2|프로세서 조정: 꺼짐.
 tuner.cpu.preview.stop|mt|f3995948|프로세서가 테스트 전 설정으로 돌아갑니다
 tuner.cpu.preview.reset|mt|c3cf92af|프로세서가 표준 설정으로 돌아갑니다
+# ---- 0.7.211 ----
+graphics.cpu.reset|mt|4bd614fa|프로세서 표주 설정
+graphics.cpu.revert-owed|mt|7214cad3|드라이버가 이전 프로세서 설정으로 되돌리지 못하여 계속 시도하고 있습니다. 이 상황이 계속되면 Windows를 다시 시작하십시오.
+graphics.tuning.not-applied|mt|24166ef8|드라이버가 아직 이 설정을 사용하지 않았습니다. 잠시 기다린 후 저장하십시오.
+tuner.curve.error.untried|mt|6ae732ce|드라이버가 아직 이 설정을 사용하지 않았습니다. 잠시 기다린 후 다시 시도하십시오.
+tuner.refuse.curve-not-applied|mt|28020c45|드라이버가 아직 테스트 중인 설정을 사용하지 않았습니다. 잠시 기다린 후 다시 시도하십시오.
+tuner.curve.preview.standard|mt|0c38511f|모든 속도에서 표주 전입으로 돌아갑니다
+tuner.note.curve-risk|mt|28bb65b2|전입을 낮추면 같은 속도에서도 그래픽 칩이 더 시원하고 조용해집니다. 너무 낮으면 메시지가 아니라 게임이나 화면이 멈추는 형태로 나타나며, 테스트가 끝나면 설정은 저절로 돌아갑니다.
+tuner.note.cpu-risk|mt|0e0c4e70|이 프로세서 값은 다른 사람의 부드에서 나왔습니다. 속도가 너무 높거나 전입이 너무 낮으면 코퓨터가 멈추는 형태로 나타납니다. 이 앱은 전입을 낮추기만 하고 변경할 때마다 다시 읽습니다.
+tuner.note.cores-risk|mt|8be50b28|8코어는 6코어보다 열이 많고 전력을 더 많이 사용합니다. 이 부드에서 나머지 두 코어를 시험한 사람은 없습니다.

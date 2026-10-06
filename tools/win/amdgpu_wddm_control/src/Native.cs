@@ -78,12 +78,15 @@ namespace AmdgpuWddmControl
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Cpu(ref CpuRequest request, [Out] byte[] data, uint bytes);
 
-        // BC250_CPU_REQUEST of tools/win/bc250kmd_cli/bc250kmd_cli.c, 40 bytes. Size says which fields the DLL may
+        // BC250_CPU_REQUEST of tools/win/bc250kmd_cli/bc250kmd_cli.c, 56 bytes. Size says which fields the DLL may
         // read, so an older application and a newer DLL refuse each other instead of guessing.
+        // WheaEvents, ChecksumErrors and Loaded are what the caller knows and the driver cannot see: this app
+        // runs no load of its own, so it leaves all three at 0 and the driver judges no clock stretching.
         [StructLayout(LayoutKind.Sequential, Pack = 8)]
         public struct CpuRequest
         {
             public uint Size, Op, Given, MaxMHz, UvSteps, TempC, TrialMs, CoreMask;
+            public uint WheaEvents, ChecksumErrors, Loaded;
             public ulong ExpectedGeneration;
         }
 

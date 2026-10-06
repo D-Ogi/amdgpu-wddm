@@ -143,13 +143,15 @@ void SmuCpuEnd(BC250_SMU_OWNER* owner)
 }
 
 NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG parameter,BOOLEAN write,
-                       ULONG busyPermille,ULONG* value,LONG* temperatureMc,ULONG* firmwareStatus)
+                       BOOLEAN allowHot,ULONG busyPermille,ULONG* value,LONG* temperatureMc,
+                       ULONG* firmwareStatus,BOOLEAN* temperatureValid)
 {
     int degrees=0,result;
     unsigned read=0,response=0;
     if(value)*value=0;
     if(temperatureMc)*temperatureMc=0;
     if(firmwareStatus)*firmwareStatus=0;
+    if(temperatureValid)*temperatureValid=FALSE;
     if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return STATUS_INVALID_DEVICE_STATE;
     // "No mailbox traffic during sustained compute" (docs/design/rejected-options.md). The caller passes the
     // governor's own share, so a combined CPU and GPU test applies its values first and loads second.
@@ -159,9 +161,14 @@ NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* owner,ULONG queue,ULONG message,ULONG pa
     // Before every message, not once per sequence: a sequence is several hundred milliseconds long and the part
     // can cross 87 C inside one.
     result=Temperature(owner,&degrees);
+    if(!result) { if(temperatureMc)*temperatureMc=degrees;if(temperatureValid)*temperatureValid=TRUE; }
+    // A temperature this owner cannot read refuses every ordinary message, and never the way back: a restore
+    // that waits for a reading that does not come leaves an untested operating point in the chip (0.7.211).
+    else if(allowHot) { degrees=0;result=0; }
     if(!result) {
-        if(temperatureMc)*temperatureMc=degrees;
-        if(degrees>=BC250_CLOCK_HOT_MC)result=BC250_CLOCK_TOO_HOT;
+        // The hot gate. A getter changes nothing and AllowHot names the steps that lower the dissipation and
+        // the way back; everything else waits for the part to cool, exactly as before 0.7.211.
+        if(degrees>=BC250_CLOCK_HOT_MC && write && !allowHot)result=BC250_CLOCK_TOO_HOT;
         else result=CpuDomainMessage(owner,queue,message,parameter,write?1:0,&read,&response);
     }
     OwnerEnd(owner);

@@ -377,6 +377,7 @@ void CpuInitialize(BC250_DEVICE* Device);
 void CpuStart(BC250_DEVICE* Device);
 void CpuStop(BC250_DEVICE* Device);
 void CpuPause(BC250_DEVICE* Device);
+void CpuResume(BC250_DEVICE* Device);
 NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);

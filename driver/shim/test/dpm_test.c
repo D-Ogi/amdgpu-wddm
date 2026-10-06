@@ -623,8 +623,9 @@ static void test_curve(void)
 	CHECK(!s.trial && !s.apply && s.serial == 0 && bc250_dpm_curve_remaining_ms(&s) == 0);
 	CHECK(bc250_dpm_curve_level_mv(&s, BC250_CURVE_FIRST_LEVEL) == BC250_CLOCK_FLOOR_MV);
 	CHECK(bc250_dpm_curve_level_vid(&s, BC250_CURVE_FIRST_LEVEL) == bc250_clock_vid(BC250_CLOCK_FLOOR_MV));
-	/* Nothing on trial: a keep and a cancel both have nothing to do, and neither invents a change. */
-	CHECK(!bc250_dpm_curve_keep(&s) && !bc250_dpm_curve_cancel(&s) && s.serial == 0);
+	/* Nothing on trial: a keep and a cancel both have nothing to do, and neither invents a change. 0 means
+	 * "no trial", which the caller shows differently from -1, "not applied yet" (0.7.211). */
+	CHECK(bc250_dpm_curve_keep(&s) == 0 && !bc250_dpm_curve_cancel(&s) && s.serial == 0);
 	CHECK(!bc250_dpm_curve_reset(&s) && s.serial == 0);
 
 	/* A candidate: active at once, a window of its own, and one forced re-apply owed to the governor. */
@@ -637,22 +638,39 @@ static void test_curve(void)
 	CHECK(bc250_dpm_curve_level_mv(&s, BC250_DPM_TOP_LEVEL) == c.mv[BC250_CURVE_POINTS - 1]);
 	/* Under the lab floor the candidate changes nothing at all. */
 	CHECK(bc250_dpm_curve_level_mv(&s, BC250_DPM_IDLE_LEVEL) == BC250_CLOCK_FLOOR_MV);
-	CHECK(bc250_dpm_curve_take(&s) && s.applied == s.serial);
+	/* take() says the governor owes a re-apply; it does NOT say the hardware has the curve. Only a
+	 * transaction that went through records that, which is what a KEEP is then allowed to rely on. */
+	CHECK(bc250_dpm_curve_take(&s) && s.applied != s.serial);
 	CHECK(!bc250_dpm_curve_take(&s));               /* once per change, not once per tick */
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(s.applied == s.serial);
+	/* A serial that is not the current one is ignored, so a candidate nobody applied cannot count as
+	 * applied because a later apply of an older one happened to land. */
+	bc250_dpm_curve_applied(&s, s.serial + 7u);
+	CHECK(s.applied == s.serial);
 	/* The window runs out and the stored curve comes back by itself, with a re-apply owed again. */
 	for (i = 0; i < 19u; i++) CHECK(!bc250_dpm_curve_tick(&s, 1000u));
 	CHECK(bc250_dpm_curve_remaining_ms(&s) == 1000u);
 	CHECK(bc250_dpm_curve_tick(&s, 1000u));
 	CHECK(!s.trial && s.reverts == 1 && s.serial == 2 && bc250_clock_curve_is_default(&s.active));
-	CHECK(bc250_dpm_curve_take(&s) && s.applied == 2u);
+	CHECK(bc250_dpm_curve_take(&s));
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(s.applied == 2u);
 	CHECK(!bc250_dpm_curve_tick(&s, 100000u));      /* no window, no revert, no serial */
 	CHECK(s.serial == 2u);
 
-	/* A keep inside the window: the candidate becomes the stored curve and the hardware needs nothing. */
+	/* A keep inside the window: the candidate becomes the stored curve and the hardware needs nothing. The
+	 * candidate must have run first (0.7.211): a KEEP in the same governor tick as the SET, and a KEEP after
+	 * an apply the clock gate refused, both answer -1 and store nothing. */
 	CHECK(bc250_dpm_curve_set(&s, &c, 0u, &level) == BC250_CLOCK_CURVE_OK);
 	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MIN_MS);      /* 0 is clamped up, not taken literally */
+	CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial && s.keeps == 0);   /* nothing applied, no time passed */
 	CHECK(bc250_dpm_curve_take(&s));
-	CHECK(bc250_dpm_curve_keep(&s) && !s.trial && s.keeps == 1);
+	CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial);        /* the apply has not gone through yet */
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial);        /* applied, but inside one governor tick */
+	CHECK(!bc250_dpm_curve_tick(&s, BC250_DPM_CURVE_KEEP_MIN_MS));
+	CHECK(bc250_dpm_curve_keep(&s) == 1 && !s.trial && s.keeps == 1);
 	CHECK(!bc250_dpm_curve_take(&s));               /* a keep changes no voltage: nothing to re-apply */
 	for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.stored.mv[i] == c.mv[i] && s.active.mv[i] == c.mv[i]);
 	CHECK(!bc250_clock_curve_is_default(&s.stored));
@@ -668,9 +686,26 @@ static void test_curve(void)
 		CHECK(s.serial == serial + 1u && s.trial);
 		CHECK(bc250_dpm_curve_set(&s, &deeper, 30000u, &level) == BC250_CLOCK_CURVE_OK);
 		CHECK(s.serial == serial + 2u && s.trial_ms == 30000u && bc250_dpm_curve_remaining_ms(&s) == 30000u);
+		/* The second candidate was never applied, so a KEEP here would store a curve the hardware never
+		 * carried: that is refused, and the cancel is the way out. */
+		CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial);
 		CHECK(bc250_dpm_curve_cancel(&s) && s.cancels == 1);
 		for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.active.mv[i] == c.mv[i]);
 		CHECK(bc250_dpm_curve_take(&s));
+		bc250_dpm_curve_applied(&s, s.serial);
+	}
+	/* The apply the clock gate refused: the governor takes the re-apply, the transaction fails, so nothing
+	 * records the serial and the KEEP stays refused however long the window runs (0.7.211). */
+	{
+		unsigned int serial;
+		CHECK(bc250_dpm_curve_set(&s, &line, 30000u, &level) == BC250_CLOCK_CURVE_OK);
+		serial = s.serial;
+		CHECK(bc250_dpm_curve_take(&s));        /* the caller tried and the hardware refused */
+		CHECK(!bc250_dpm_curve_tick(&s, 5000u));
+		CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial && s.applied != serial);
+		CHECK(bc250_dpm_curve_cancel(&s));
+		CHECK(bc250_dpm_curve_take(&s));
+		bc250_dpm_curve_applied(&s, s.serial);
 	}
 	/* A candidate the checks refuse never becomes active and never moves the serial. */
 	{
@@ -689,6 +724,7 @@ static void test_curve(void)
 	CHECK(bc250_dpm_curve_reset(&s));
 	CHECK(!s.trial && bc250_clock_curve_is_default(&s.stored) && bc250_clock_curve_is_default(&s.active));
 	CHECK(bc250_dpm_curve_take(&s));
+	bc250_dpm_curve_applied(&s, s.serial);
 	CHECK(!bc250_dpm_curve_reset(&s));              /* already the line: nothing to change, nothing to apply */
 
 	/* A start that reads a stored curve runs it from its first level change, with nothing owed. */

@@ -478,12 +478,17 @@ the refusal table and the lab plan are in [tuner.md](tuner.md); this section is 
 - A value is admitted between `bc250_clock_floor_mv(MHz)` (the table's line less `BC250_CURVE_UNDERVOLT_MV`,
   25 mV, and never under 820 mV) and 1000 mV. Level 5 stays at 820 mV, and the curve must not fall as the clock
   rises, in millivolts or in the VID they encode to. `bc250_clock_curve_check` names the broken rule (range,
-  depth, order, floor) and the level that broke it; the table's own line is a legal curve.
+  depth, order, floor) and the level that broke it; the table's own line is a legal curve. A seventh answer,
+  `untried`, is not about the curve at all: it refuses a KEEP of a candidate the governor has not applied yet.
 - `bc250_clock_prepare` admits the whole band, so one gate serves the governor, the escape SET and the curve.
   The clock readback still compares the VID against the **active** curve (`DpmLevelVid`), not against the table.
 - The governor takes a new curve at its next 25 ms tick. The level the load asks for does not change, so the
   tick re-applies the same level with the new voltage (`DpmApply(..., "curve")`); without that forced apply a
   curve change would wait for the next level change.
+- The tick records the candidate as applied only after that apply succeeded (`bc250_dpm_curve_applied`), and a
+  KEEP needs that record plus 100 ms of the window (`BC250_DPM_CURVE_KEEP_MIN_MS`). Without both, a candidate
+  that the chip never ran could be stored and then run at every later start. A governor that gives up cancels
+  the trial, so a KEEP cannot store a curve the governor stopped applying.
 - Every voltage reader goes through `DpmLevelMv`/`DpmLevelVid` under the snapshot lock, so a curve change can
   never tear the 11 values that `DpmApply`, `DpmResyncLevel`, the 1000 ms readback and `DpmPublish` read.
 
@@ -503,7 +508,8 @@ that the machine does not survive costs the curve and not the machine, and the d
   starts a trial: the kernel owns the deadline and the revert, and nothing reaches the registry before `keep`.
   `cancel` brings the stored curve back at once, and so do a stop, a pause and a power transition.
 - Escape `BC250_ESCAPE_RUN_DPM_CURVE` (28, `BC250_ESCAPE_DPM_CURVE`, ABI 1, 360 bytes). Writes need an
-  administrator, the generation of the start the caller read, and a governing DPM start.
+  administrator, the generation of the start the caller read, and a governing DPM start. A CANCEL is admitted
+  even after the governor gave up, because ending a trial must never depend on the thing that failed.
 - The log gets the curve as a line of its own: `dpm: curve (stored) 820 835 ... 975 mV`, the trial's
   remaining milliseconds next to every telemetry line, and `dpm: curve (trial over, stored curve back) ...` when
   the kernel reverts it.

@@ -176,7 +176,7 @@ int main(void)
         ULONG mv[BC250_DPM_CURVE_POINTS];
         unsigned i;
         for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) mv[i] = 820 + i * 12;
-        CHECK(sizeof(c) == 360 && sizeof(u) == 272 && sizeof(r) == 40 && BC250_DPM_CURVE_POINTS == 11);
+        CHECK(sizeof(c) == 360 && sizeof(u) == 296 && sizeof(r) == 56 && BC250_DPM_CURVE_POINTS == 11);
         escapeCalls = 0; escapeHardware = -1;
         /* Refused in the DLL, before any escape: no buffer, a wrong size, an operation that does not exist, and a
          * SET without the 11 values. */
@@ -218,7 +218,7 @@ int main(void)
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC000000D);     /* Size 0 */
         r.Size = sizeof(r);
         CHECK(Bc250Cpu(&r, NULL, sizeof(u)) == (LONG)0xC000000D);
-        CHECK(Bc250Cpu(&r, &u, 271) == (LONG)0xC000000D);
+        CHECK(Bc250Cpu(&r, &u, 295) == (LONG)0xC000000D);
         r.Op = 9; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC000000D);
         CHECK(escapeCalls == 0 && escapeHardware == -1);
         /* READ is the software snapshot: no HardwareAccess, no generation. */
@@ -232,14 +232,22 @@ int main(void)
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && sentCpu.ExpectedGeneration == 77);
         r.Op = BC250_CPU_OP_SET; r.Given = BC250_CPU_GIVEN_MAX | BC250_CPU_GIVEN_UV;
         r.MaxMHz = 3300; r.UvSteps = 6; r.TempC = 95; r.TrialMs = 40000;
+        r.WheaEvents = 2; r.ChecksumErrors = 3; r.Loaded = 1;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1);
         CHECK(sentCpu.Given == (BC250_CPU_GIVEN_MAX | BC250_CPU_GIVEN_UV) && sentCpu.MaxMHz == 3300);
         CHECK(sentCpu.UvSteps == 6 && sentCpu.TempC == 95 && sentCpu.TrialMs == 40000);
-        /* KEEP sends none of the three values: it keeps what the driver already applied. */
+        /* The sample the caller alone can see travels on SET and on SEARCH_STEP (0.7.211). */
+        CHECK(sentCpu.WheaEvents == 2 && sentCpu.ChecksumErrors == 3 && sentCpu.Loaded == 1);
+        r.Op = BC250_CPU_OP_SEARCH_STEP;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && sentCpu.Given == 0);
+        CHECK(sentCpu.WheaEvents == 2 && sentCpu.ChecksumErrors == 3 && sentCpu.Loaded == 1);
+        /* KEEP sends none of the three values: it keeps what the driver already applied, and judges nothing. */
         r.Op = BC250_CPU_OP_KEEP;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.Given == 0 && sentCpu.MaxMHz == 0 && sentCpu.TrialMs == 0);
+        CHECK(sentCpu.WheaEvents == 0 && sentCpu.ChecksumErrors == 0 && sentCpu.Loaded == 0);
         r.Op = BC250_CPU_OP_SEARCH_BEGIN;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.UvSteps == 6 && sentCpu.TrialMs == 40000 && sentCpu.Given == 0);
+        CHECK(sentCpu.WheaEvents == 0 && sentCpu.Loaded == 0);
         r.Op = BC250_CPU_OP_CORES; r.CoreMask = 255;
         CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.CoreMask == 255 && sentCpu.UvSteps == 0);
         r.Op = BC250_CPU_OP_READ;

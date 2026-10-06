@@ -61,7 +61,7 @@
 // window with the clock transaction and the first frames.
 #define CPU_START_DELAY_MS 2000u
 
-C_ASSERT(sizeof(BC250_ESCAPE_CPU) == 272);
+C_ASSERT(sizeof(BC250_ESCAPE_CPU) == 296);        // ABI 1; 272 up to 0.7.210, before the sample's three inputs
 // The escape header carries three of the shim's numbers for callers that cannot include the shim
 // (tools/win/bc250kmd_cli, bc250control.dll). They are the same numbers or this does not build.
 C_ASSERT(BC250_CPU_REQUEST_MASK_STOCK == BC250_CPU_MASK_STOCK);
@@ -154,24 +154,30 @@ static BOOLEAN CpuAdapterDown(BC250_DEVICE* Device)
 // One message of an open sequence (the caller holds SmuCpuBegin). Everything the support report wants about it is
 // recorded, including a refusal: "what did the driver last send and what came back" is the first question of every
 // report about this surface.
+// AllowHot is passed on to the owner (smu.h): TRUE for every getter, for a step bc250_cpu_plan marked cools,
+// and for every restore, so the part can always be brought back to the settings it is known to run at.
 static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULONG Parameter, BOOLEAN Write,
-                           _Out_opt_ ULONG* Value)
+                           BOOLEAN AllowHot, _Out_opt_ ULONG* Value)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     ULONG value = 0, firmware = 0;
     LONG temperature = 0;
+    BOOLEAN temperatureValid = FALSE;
     NTSTATUS status;
     KIRQL irql;
 
     if (Value != NULL) *Value = 0;
-    status = SmuCpuMessage(&Device->Smu, Queue, Message, Parameter, Write, CpuBusyPermille(Device), &value,
-                           &temperature, &firmware);
+    status = SmuCpuMessage(&Device->Smu, Queue, Message, Parameter, Write, AllowHot, CpuBusyPermille(Device),
+                           &value, &temperature, &firmware, &temperatureValid);
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->Snap.LastQueue = Queue;
     s->Snap.LastMessage = Message;
     s->Snap.LastParameter = Parameter;
     s->Snap.LastStatus = NT_SUCCESS(status) ? firmware : (ULONG)status;
-    s->Snap.TemperatureMc = temperature;
+    // A temperature the owner could not read leaves the old reading alone and clears the validity bit, so
+    // that nothing downstream judges an unreadable part as cold (BC250_CPU_FAIL_HOT).
+    s->Snap.TemperatureValid = temperatureValid;
+    if (temperatureValid) s->Snap.TemperatureMc = temperature;
     if (NT_SUCCESS(status)) {
         if (Write) s->Snap.Writes++;
         else s->Snap.Reads++;
@@ -184,9 +190,39 @@ static NTSTATUS CpuMessage(BC250_DEVICE* Device, ULONG Queue, ULONG Message, ULO
     return status;
 }
 
+// The baseline this start restores to, from what the firmware has just answered (0.7.211). Until this exists no
+// revert and no reset can name the clock limit, and 0.7.210 invented BC250_CPU_MAX_MHZ in its place, which is a
+// raise sold as a restore. Recorded once per start, and only while this driver has sent nothing:
+//   the cap        message 0x40 when it is inside the admitted range, the firmware's own default otherwise
+//   the undervolt  always 0 steps: nothing of the curve scale persists in the chip across a boot
+//   the clock      the highest P-state clock message 0x3B answered, when it is inside the admitted band. With
+//                  no plausible answer max_given stays 0, and a restore then says the limit stays.
+static void CpuRecordBaseline(BC250_CPU_STATE* s, ULONG Cap, const ULONG* Pstate)
+{
+    struct bc250_cpu_settings b;
+    ULONG i, top = 0;
+    if (s->BaselineValid) return;
+    if (s->Applied.max_given || s->Applied.uv_given || s->Applied.temp_given) return;
+    RtlZeroMemory(&b, sizeof(b));
+    b.temp_given = 1;
+    b.temp_c = (Cap >= BC250_CPU_TEMP_MIN_C && Cap <= BC250_CPU_TEMP_MAX_C) ? Cap : BC250_CPU_TEMP_MAX_C;
+    b.uv_given = 1;
+    b.uv_steps = 0;
+    for (i = 0; i < BC250_CPU_PSTATES; i++)
+        if (Pstate[i] > top) top = Pstate[i];
+    if (top >= BC250_CPU_MIN_MHZ && top <= BC250_CPU_MAX_MHZ_LAB) { b.max_given = 1; b.max_mhz = top; }
+    s->Baseline = b;
+    s->BaselineValid = TRUE;
+    GuardLog("cpu: the baseline of this start is clock %s%lu MHz, undervolt 0 steps, cap %lu C",
+             b.max_given ? "" : "(not answered) ", b.max_mhz, b.temp_c);
+}
+
 // The read stage: everything the surface can answer without changing anything. It is also the gate: until it has
-// answered, no setter is admitted (rule 2 at the head of this file).
-static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full)
+// answered, no setter is admitted (rule 2 at the head of this file), and the Full form is what records the
+// baseline. GapMs is BC250_CPU_MESSAGE_GAP_MS for the first stage of a start, so that the first traffic this
+// project has ever sent on queue 3 keeps the documented one-message-per-100-ms rate, and the getter gap after
+// that. Every message here is a getter, so all of them pass the hot gate: a read changes nothing.
+static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full, ULONG GapMs)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     ULONG mv = 0, gpuMv = 0, cap = 0, features = 0, i;
@@ -197,23 +233,26 @@ static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full)
     RtlZeroMemory(coreMHz, sizeof(coreMHz));
     RtlZeroMemory(pstate, sizeof(pstate));
     if (!SmuCpuBegin(&Device->Smu)) return STATUS_DEVICE_BUSY;
-    status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, &mv);
+    status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, &mv);
     if (NT_SUCCESS(status)) {
-        CpuWait(BC250_CPU_GETTER_GAP_MS);
-        (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_GPU_MV, 0, FALSE, &gpuMv);
-        CpuWait(BC250_CPU_GETTER_GAP_MS);
-        (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CAP_C, 0, FALSE, &cap);
+        CpuWait(GapMs);
+        (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_GPU_MV, 0, FALSE, TRUE, &gpuMv);
+        CpuWait(GapMs);
+        (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CAP_C, 0, FALSE, TRUE, &cap);
         for (i = 0; i < BC250_CPU_CORES; i++) {
-            CpuWait(BC250_CPU_GETTER_GAP_MS);
-            (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CORE_MHZ, i, FALSE, &coreMHz[i]);
+            CpuWait(GapMs);
+            (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CORE_MHZ, i, FALSE, TRUE,
+                             &coreMHz[i]);
         }
         if (Full) {
             for (i = 0; i < BC250_CPU_PSTATES; i++) {
-                CpuWait(BC250_CPU_GETTER_GAP_MS);
-                (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_PSTATE_MHZ, i, FALSE, &pstate[i]);
+                CpuWait(GapMs);
+                (void)CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_PSTATE_MHZ, i, FALSE, TRUE,
+                                 &pstate[i]);
             }
-            CpuWait(BC250_CPU_GETTER_GAP_MS);
-            (void)CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_GET_ENABLED_FEATURES, 0, FALSE, &features);
+            CpuWait(GapMs);
+            (void)CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_GET_ENABLED_FEATURES, 0, FALSE, TRUE,
+                             &features);
         }
     }
     SmuCpuEnd(&Device->Smu);
@@ -228,13 +267,19 @@ static NTSTATUS CpuReadStage(BC250_DEVICE* Device, BOOLEAN Full)
         s->Snap.Features = features;
     }
     KeReleaseSpinLock(&s->SnapLock, irql);
+    // The caller holds Lock, so this is the one place the baseline can be recorded from a complete answer.
+    if (Full) CpuRecordBaseline(s, cap, pstate);
     return STATUS_SUCCESS;
 }
 
 // What the shim judges a trial by. WHEA events and the load's own wrong answers are not visible from here: the
-// tool that drives the load counts them and stops the trial itself (the kernel's deadline is the backstop), so
-// both stay 0 in this sample and the three signs this file can see are voltage, clock stretching and temperature.
-static void CpuSample(BC250_DEVICE* Device, const struct bc250_cpu_settings* Target, struct bc250_cpu_sample* Sample)
+// caller that drives the load counts them and passes them in on the escape (0.7.211), and it also says whether
+// it was loading the part at all, because an idle core sits a gigahertz under any limit and clock stretching is
+// judged over a loaded sample alone. Target names the clock the cores should reach: the applied limit, or, with
+// no limit applied, the baseline the read stage recorded - the firmware's own ceiling is what stretching is
+// measured against, and 0.7.210 passed 0 there, which turned the sign off in every undervolt-only search.
+static void CpuSample(BC250_DEVICE* Device, const struct bc250_cpu_settings* Target, BOOLEAN Loaded,
+                      ULONG Whea, ULONG Checksum, struct bc250_cpu_sample* Sample)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     ULONG i;
@@ -244,17 +289,28 @@ static void CpuSample(BC250_DEVICE* Device, const struct bc250_cpu_settings* Tar
     Sample->voltage_mv = s->Snap.VoltageMv;
     for (i = 0; i < BC250_CPU_CORES; i++) Sample->core_mhz[i] = s->Snap.CoreMHz[i];
     Sample->temperature_mc = s->Snap.TemperatureMc;
+    Sample->temperature_valid = s->Snap.TemperatureValid ? 1 : 0;
     KeReleaseSpinLock(&s->SnapLock, irql);
     Sample->cores = BC250_CPU_CORES;
-    Sample->temperature_valid = 1;
-    Sample->target_mhz = Target->max_given ? Target->max_mhz : 0u;
+    Sample->target_mhz = Target->max_given ? Target->max_mhz
+                       : (s->BaselineValid && s->Baseline.max_given ? s->Baseline.max_mhz : 0u);
+    Sample->loaded = Loaded ? 1 : 0;
+    Sample->whea_events = Whea;
+    Sample->checksum_errors = Checksum;
 }
 
 // The one place a change reaches the chip: the shim's plan, in the shim's order, one message per gap, with the
 // voltage read back after it. A refusal in the middle leaves what the earlier steps did in place and says so;
 // Applied then names exactly the steps that went through, because that is what the chip has.
+//
+// Restore (0.7.211) marks the way back: every step then passes the hot gate, and the owner sends it even when
+// the part's temperature cannot be read, because a trial left in the chip with nothing watching it is the worse
+// of the two states. An ordinary request passes the gate only for the steps bc250_cpu_plan marked cools.
+//
+// The voltage is also read between the steps whenever a step that lowers it is followed by one that raises it
+// (the undervolt before a lab clock): the reading that matters there is the one taken BEFORE the clock goes up.
 static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* To, const char* Why,
-                         enum bc250_cpu_error* Error)
+                         enum bc250_cpu_error* Error, BOOLEAN Restore)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
     struct bc250_cpu_plan plan;
@@ -267,21 +323,44 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
     applied = s->Applied;
     error = bc250_cpu_plan(&applied, To, s->Lab ? 1 : 0, &plan);
     if (Error != NULL) *Error = error;
-    if (error == BC250_CPU_ERROR_NOTHING) return STATUS_SUCCESS;     // nothing to send is not a failure
+    if (error == BC250_CPU_ERROR_NOTHING) {
+        // Nothing to send is not a failure, and it is never silent: a revert whose target is already in force
+        // must say so, or a receipt records a change that did not happen (0.7.210 reverted this way on the
+        // first trial of every start, and the undervolt stayed in the chip).
+        GuardLog("cpu: %s sends nothing: the chip already has what it asks for", Why);
+        return STATUS_SUCCESS;
+    }
     if (error != BC250_CPU_OK) return STATUS_INVALID_PARAMETER;
     if (!SmuCpuBegin(&Device->Smu)) return STATUS_DEVICE_BUSY;
     for (i = 0; i < plan.count; i++) {
         if (i) CpuWait(BC250_CPU_MESSAGE_GAP_MS);
-        status = CpuMessage(Device, plan.step[i].queue, plan.step[i].message, plan.step[i].parameter, TRUE, NULL);
+        status = CpuMessage(Device, plan.step[i].queue, plan.step[i].message, plan.step[i].parameter, TRUE,
+                            Restore || plan.step[i].cools ? TRUE : FALSE, NULL);
         if (!NT_SUCCESS(status)) break;
         // The chip has this step now, whatever happens to the next one.
         if (plan.step[i].kind == BC250_CPU_STEP_CLOCK) { applied.max_given = 1; applied.max_mhz = To->max_mhz; }
         else if (plan.step[i].kind == BC250_CPU_STEP_UV) { applied.uv_given = 1; applied.uv_steps = To->uv_steps; }
         else if (plan.step[i].kind == BC250_CPU_STEP_TEMP) { applied.temp_given = 1; applied.temp_c = To->temp_c; }
+        // The undervolt is in place and another step follows: read the voltage now and stop here if it is not a
+        // voltage this driver understands, so that a raise never goes out over an operating point nobody knows.
+        // The plan puts the undervolt step before a clock raise exactly so that this reading comes first.
+        if (plan.step[i].kind == BC250_CPU_STEP_UV && i + 1 < plan.count) {
+            CpuWait(BC250_CPU_MESSAGE_GAP_MS);
+            status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, &mv);
+            if (!NT_SUCCESS(status)) break;
+            if (mv > BC250_CPU_REFUSE_MV || mv < BC250_CPU_PLAUSIBLE_MIN_MV || mv > BC250_CPU_PLAUSIBLE_MAX_MV) {
+                GuardLog("cpu: %s read %lu mV back after the undervolt, outside %lu..%lu with the refusal line "
+                         "at %lu: the steps that raise the voltage are NOT sent", Why, mv,
+                         (ULONG)BC250_CPU_PLAUSIBLE_MIN_MV, (ULONG)BC250_CPU_PLAUSIBLE_MAX_MV,
+                         (ULONG)BC250_CPU_REFUSE_MV);
+                status = STATUS_DEVICE_CONFIGURATION_ERROR;
+                break;
+            }
+        }
     }
     if (NT_SUCCESS(status)) {
         CpuWait(BC250_CPU_MESSAGE_GAP_MS);
-        status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, &mv);
+        status = CpuMessage(Device, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_READ_CPU_MV, 0, FALSE, TRUE, &mv);
     }
     SmuCpuEnd(&Device->Smu);
     s->Applied = applied;
@@ -291,11 +370,15 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
         s->Snap.VoltageMv = mv;
         KeReleaseSpinLock(&s->SnapLock, irql);
         // The hard rule of this surface: a voltage above the refusal line, or one that is not a voltage at all,
-        // undoes the change at once. The reported bricking ceiling is 1325 mV and nothing here goes near it.
+        // fails the change, and the caller's own way back undoes it (every caller of a setter has one). The
+        // reported bricking ceiling is 1325 mV and nothing here goes near it. A restore has no further way back,
+        // so it says that instead of claiming an undo it cannot do.
         if (mv > BC250_CPU_REFUSE_MV || mv < BC250_CPU_PLAUSIBLE_MIN_MV || mv > BC250_CPU_PLAUSIBLE_MAX_MV) {
-            GuardLog("cpu: %s read %lu mV back, outside %lu..%lu with the refusal line at %lu: undone", Why, mv,
+            GuardLog("cpu: %s read %lu mV back, outside %lu..%lu with the refusal line at %lu: %s", Why, mv,
                      (ULONG)BC250_CPU_PLAUSIBLE_MIN_MV, (ULONG)BC250_CPU_PLAUSIBLE_MAX_MV,
-                     (ULONG)BC250_CPU_REFUSE_MV);
+                     (ULONG)BC250_CPU_REFUSE_MV,
+                     Restore ? "this WAS the way back, and the next cold boot is the last one"
+                             : "the settings before it come back now");
             status = STATUS_DEVICE_CONFIGURATION_ERROR;
         }
     }
@@ -304,23 +387,67 @@ static NTSTATUS CpuApply(BC250_DEVICE* Device, const struct bc250_cpu_settings* 
     return status;
 }
 
-// A revert does not fail halfway: it sends the plan back to *To and, if a step is refused, says so loudly. There is
-// nothing else it could do, and the next cold boot is the last backstop (the chip keeps none of this).
+// The way back to a named state (0.7.211). *Before is what the caller wants back - the state before a trial, or
+// nothing given at all for a reset - and bc250_cpu_restore_target names every control this driver has sent, out
+// of *Before, the recorded baseline or the firmware's own default. Without that step a target that gives nothing
+// inherits what is applied (bc250_cpu_plan), the plan is empty, and the chip keeps the trial while the log says
+// it came back: that was the defect of 0.7.210, and it is the reason this function exists.
+static NTSTATUS CpuRestoreTo(BC250_DEVICE* Device, const struct bc250_cpu_settings* Before, const char* Why)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    struct bc250_cpu_settings back;
+    RtlZeroMemory(&back, sizeof(back));
+    if (!bc250_cpu_restore_target(&s->Applied, Before, s->BaselineValid ? &s->Baseline : NULL, &back))
+        GuardLog("cpu: %s cannot name the clock limit to go back to - no P-state answered this start - so the "
+                 "applied limit of %lu MHz STAYS in the chip until a restart", Why, s->Applied.max_mhz);
+    return CpuApply(Device, &back, Why, NULL, TRUE);
+}
+
+// A revert does not fail halfway: it sends the plan back to the state before the trial and, when a step is
+// refused, says so loudly and stays owed. RevertOwed keeps the worker trying every BC250_CPU_REVERT_RETRY_MS,
+// because the one thing that must not happen is a trial nobody takes back: a hot part, a busy GPU and a mailbox
+// timeout are all states that pass by themselves, and 0.7.210 cleared the trial at the first refusal and never
+// looked again.
 static void CpuRevert(BC250_DEVICE* Device, const char* Why)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
-    struct bc250_cpu_settings back = s->TrialBefore;
     KIRQL irql;
-    NTSTATUS status = CpuApply(Device, &back, Why, NULL);
+    NTSTATUS status = CpuRestoreTo(Device, &s->TrialBefore, Why);
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->Snap.Reverts++;
     s->OnTrial = FALSE;
     s->TrialDeadline = 0;
     s->TrialSerial++;
+    s->RevertOwed = NT_SUCCESS(status) ? FALSE : TRUE;
+    if (!NT_SUCCESS(status)) s->Snap.RevertFailures++;
     KeReleaseSpinLock(&s->SnapLock, irql);
-    if (!NT_SUCCESS(status))
-        GuardLog("cpu: the revert (%s) did NOT go through 0x%08X; a restart puts the firmware's own values back",
-                 Why, status);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("cpu: the revert (%s) did NOT go through 0x%08X; it stays owed and runs again every %lu ms",
+                 Why, status, (ULONG)BC250_CPU_REVERT_RETRY_MS);
+        KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
+    }
+}
+
+// One attempt at an owed revert, from the worker alone and under Lock. The target cannot drift: Applied names
+// what the chip has and TrialBefore what it must go back to, both unchanged until a revert succeeds.
+static void CpuRevertRetry(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    KIRQL irql;
+    NTSTATUS status;
+    ULONG attempts;
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    attempts = ++s->Snap.RevertRetries;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    status = CpuRestoreTo(Device, &s->TrialBefore, "the owed revert");
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    s->RevertOwed = NT_SUCCESS(status) ? FALSE : TRUE;
+    if (!NT_SUCCESS(status)) s->Snap.RevertFailures++;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    // One line for the first attempt and then one in ten: a part that stays hot must not fill the log ring.
+    if (NT_SUCCESS(status)) GuardLog("cpu: the owed revert went through at attempt %lu", attempts);
+    else if (attempts == 1 || attempts % 10 == 0)
+        GuardLog("cpu: the owed revert is still refused 0x%08X at attempt %lu", status, attempts);
 }
 
 // ---- the worker thread ------------------------------------------------------------------------------------------
@@ -334,6 +461,7 @@ static void CpuThread(_In_ PVOID Context)
     BC250_CPU_STATE* s = &device->Cpu;
     PVOID objects[2];
     LARGE_INTEGER timeout;
+    ULONGLONG nextRetry = 0;        // when an owed revert may be tried again
 
     objects[0] = &s->StopEvent;
     objects[1] = &s->Wake;
@@ -343,7 +471,7 @@ static void CpuThread(_In_ PVOID Context)
         return;
     }
     for (;;) {
-        BOOLEAN work, onTrial, over = FALSE;
+        BOOLEAN work, onTrial, over = FALSE, owed;
         KIRQL irql;
         CpuLock(s);
         // While the adapter is paused or the owner is gone, the worker does nothing at all: the start work stays
@@ -351,8 +479,9 @@ static void CpuThread(_In_ PVOID Context)
         work = s->StartWork && !CpuAdapterDown(device);
         if (work) s->StartWork = FALSE;
         if (work) {
-            // The read stage first, always: it is what admits every setter of this start.
-            NTSTATUS status = CpuReadStage(device, TRUE);
+            // The read stage first, always: it is what admits every setter of this start, and it is also what
+            // records the baseline. The first queue 3 traffic of a start keeps the slow rate.
+            NTSTATUS status = CpuReadStage(device, TRUE, BC250_CPU_MESSAGE_GAP_MS);
             s->Proven = NT_SUCCESS(status) ? TRUE : FALSE;
             GuardLog("cpu: the read stage %s (0x%08X): %lu mV, GPU %lu mV, cap %lu C",
                      s->Proven ? "answered" : "did NOT answer", status, device->Cpu.Snap.VoltageMv,
@@ -360,23 +489,30 @@ static void CpuThread(_In_ PVOID Context)
             if (!s->Proven) {
                 CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_NOT_PROVEN);
             } else {
-                s->Baseline = s->Applied;       // nothing has been sent in this start, so this is the firmware's
-                s->BaselineValid = TRUE;
+                // CpuReadStage has recorded the baseline from what the firmware answered. Applied stays empty:
+                // this driver has sent nothing yet, and saying otherwise would report settings the chip has
+                // from its own firmware as ours.
                 if (s->Stored.max_given || s->Stored.uv_given || s->Stored.temp_given) {
                     enum bc250_cpu_error error = BC250_CPU_OK;
-                    status = CpuApply(device, &s->Stored, "the stored settings", &error);
+                    status = CpuApply(device, &s->Stored, "the stored settings", &error, FALSE);
                     if (NT_SUCCESS(status)) CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_OK);
                     else {
+                        struct bc250_cpu_settings none;
                         CpuStoreLogged(CPU_SETTING_REASON, CPU_REASON_HARDWARE);
-                        GuardLog("cpu: the stored settings did not go through 0x%08X (error %d); the firmware's "
-                                 "own values stand", status, (int)error);
+                        // CpuApply stops in the middle of its plan, so the steps before the refusal ARE in the
+                        // chip. Saying "the firmware's own values stand" was false; this undoes them instead,
+                        // and the log then names what is left if even that does not go through.
+                        GuardLog("cpu: the stored settings did not go through 0x%08X (error %d); the steps that "
+                                 "did are undone now", status, (int)error);
+                        RtlZeroMemory(&none, sizeof(none));
+                        (void)CpuRestoreTo(device, &none, "the stored settings failed");
                     }
                 }
                 // The core mask is the CU mode's shape: sent now, visible after the next restart.
                 if (s->CoreMask && s->CoreMask != BC250_CPU_MASK_STOCK) {
                     if (SmuCpuBegin(&device->Smu)) {
                         status = CpuMessage(device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK,
-                                            s->CoreMask, TRUE, NULL);
+                                            s->CoreMask, TRUE, FALSE, NULL);
                         SmuCpuEnd(&device->Smu);
                         GuardLog("cpu: core mask 0x%02X (%lu cores) sent: 0x%08X; the count changes at the next "
                                  "restart", s->CoreMask, bc250_cpu_mask_cores(s->CoreMask), status);
@@ -386,16 +522,26 @@ static void CpuThread(_In_ PVOID Context)
         }
         KeAcquireSpinLock(&s->SnapLock, &irql);
         onTrial = s->OnTrial;
+        owed = s->RevertOwed;
         if (onTrial && KeQueryInterruptTime() >= s->TrialDeadline) over = TRUE;
         KeReleaseSpinLock(&s->SnapLock, irql);
         if (over && !CpuAdapterDown(device)) {
             GuardLog("cpu: the trial window is over; the settings before it come back");
             CpuRevert(device, "trial over");
+            nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
+        } else if (owed && !CpuAdapterDown(device) && KeQueryInterruptTime() >= nextRetry) {
+            // The one state this surface must not settle in: a change in the chip that the driver has said it
+            // took back. The part cools, the GPU goes quiet, and then this goes through (0.7.211).
+            CpuRevertRetry(device);
+            nextRetry = KeQueryInterruptTime() + 10000ull * BC250_CPU_REVERT_RETRY_MS;
         }
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        owed = s->RevertOwed;
+        KeReleaseSpinLock(&s->SnapLock, irql);
         CpuUnlock(s);
         timeout.QuadPart = -10000ll * (LONGLONG)BC250_CPU_POLL_MS;
         if (KeWaitForMultipleObjects(2, objects, WaitAny, Executive, KernelMode, FALSE,
-                                     onTrial || over ? &timeout : NULL, NULL) == STATUS_WAIT_0)
+                                     onTrial || over || owed ? &timeout : NULL, NULL) == STATUS_WAIT_0)
             break;
     }
     PsTerminateSystemThread(STATUS_SUCCESS);
@@ -432,7 +578,7 @@ void CpuStart(BC250_DEVICE* Device)
     RtlZeroMemory(&s->Stored, sizeof(s->Stored));
     RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
     RtlZeroMemory(&s->Search, sizeof(s->Search));
-    s->BaselineValid = s->Proven = s->OnTrial = FALSE;
+    s->BaselineValid = s->Proven = s->OnTrial = s->RevertOwed = FALSE;
     s->Pending = s->Confirmed = s->CorePending = s->CoreConfirmed = FALSE;
     s->TrialDeadline = 0;
     s->Generation = Device->StartHealth.Generation;
@@ -547,7 +693,7 @@ void CpuStart(BC250_DEVICE* Device)
 void CpuStop(BC250_DEVICE* Device)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
-    BOOLEAN onTrial;
+    BOOLEAN onTrial, owed;
     KIRQL irql;
 
     CpuLock(s);
@@ -561,8 +707,16 @@ void CpuStop(BC250_DEVICE* Device)
     s->Created = FALSE;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     onTrial = s->OnTrial;
+    owed = s->RevertOwed;
     KeReleaseSpinLock(&s->SnapLock, irql);
     if (onTrial) CpuRevert(Device, "stop");
+    else if (owed) CpuRevertRetry(Device);          // the thread is gone: this is the last attempt there is
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    owed = s->RevertOwed;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    if (owed)
+        GuardLog("cpu: a revert is still owed at the stop; the applied settings stay in the chip until the "
+                 "next cold boot");
     s->Proven = FALSE;
     CpuUnlock(s);
     CpuLogSummary(Device);
@@ -574,19 +728,47 @@ void CpuStop(BC250_DEVICE* Device)
 void CpuPause(BC250_DEVICE* Device)
 {
     BC250_CPU_STATE* s = &Device->Cpu;
-    BOOLEAN onTrial;
+    BOOLEAN onTrial, owed;
     KIRQL irql;
     if (!s->Created) return;
     CpuLock(s);
     KeAcquireSpinLock(&s->SnapLock, &irql);
     onTrial = s->OnTrial;
+    owed = s->RevertOwed;
     RtlZeroMemory(&s->Search, sizeof(s->Search));
     KeReleaseSpinLock(&s->SnapLock, irql);
     if (onTrial) {
         GuardLog("cpu: the trial ends with the power transition; the settings before it come back");
         CpuRevert(Device, "power down");
-    }
+    } else if (owed) CpuRevertRetry(Device);        // the worker sends nothing in D3: try while the mailbox is ours
     CpuUnlock(s);
+}
+
+// After a successful return to D0 (pnp.c, beside DpmResume). Nothing of this surface survives the transition in
+// the chip: the firmware is back at its own values, so the cached Applied, the proven mark and the recorded
+// baseline all describe a state that is gone (0.7.211; without this the driver reported an undervolt the chip
+// did not have, and re-applying it was refused as "this setting is in use already"). The worker therefore owes
+// the whole start sequence again: the read stage, the new baseline and the stored settings. PASSIVE_LEVEL.
+void CpuResume(BC250_DEVICE* Device)
+{
+    BC250_CPU_STATE* s = &Device->Cpu;
+    KIRQL irql;
+    if (!s->Created) return;
+    CpuLock(s);
+    RtlZeroMemory(&s->Applied, sizeof(s->Applied));
+    RtlZeroMemory(&s->Baseline, sizeof(s->Baseline));
+    s->BaselineValid = s->Proven = FALSE;
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    s->OnTrial = FALSE;
+    s->TrialDeadline = 0;
+    s->RevertOwed = FALSE;          // what it would have put back is gone from the chip with the power
+    RtlZeroMemory(&s->TrialBefore, sizeof(s->TrialBefore));
+    RtlZeroMemory(&s->Search, sizeof(s->Search));
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    s->StartWork = TRUE;
+    CpuUnlock(s);
+    KeSetEvent(&s->Wake, IO_NO_INCREMENT, FALSE);
+    GuardLog("cpu: the power transition is over; the read stage and the stored settings run again");
 }
 
 // A durably confirmed start confirms this surface's two guards, in the guard's order: the pending mark away first,
@@ -655,13 +837,16 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     const ULONG op = Data->Op;
     const BOOLEAN write = op != BC250_CPU_OP_READ;
     const ULONG given = Data->Given;
+    // Read once: the buffer belongs to the caller, so nothing here reads an input twice.
+    const BOOLEAN loaded = Data->Loaded ? TRUE : FALSE;
+    const ULONG whea = Data->WheaEvents, checksum = Data->ChecksumErrors;
     const ULONGLONG expected = Data->ExpectedGeneration;
     struct bc250_cpu_settings request, applied, stored, baseline;
     struct bc250_cpu_sample sample;
     enum bc250_cpu_error error = BC250_CPU_OK;
     BC250_CPU_SNAP snap;
     ULONG trialMs = 0, remaining = 0, serial, i, searchStep = 0, searchBest = 0, searchFail = 0, searchTested = 0;
-    BOOLEAN onTrial, searching = FALSE;
+    BOOLEAN onTrial, searching = FALSE, revertOwed = FALSE;
     KIRQL irql;
 
     RtlZeroMemory(&request, sizeof(request));
@@ -680,10 +865,12 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     if (Data->AbiVersion != BC250_CPU_ABI || Size != sizeof(BC250_ESCAPE_CPU) || op > BC250_CPU_OP_SEARCH_STEP ||
         Data->Reserved[0] || Data->Reserved[1] ||
         EscapeFlags != (write ? expectedWrite.Value : expectedRead.Value)) return;
-    if (op == BC250_CPU_OP_READBACK) {
-        // A getter sequence changes nothing, but it does touch the mailbox, so it is a HardwareAccess operation
-        // like every other one that does. It is open to every caller: reading a voltage is not a privilege.
-    } else if (write && !Admin) {
+    // Every operation that sends a mailbox message needs an administrator, READBACK included (0.7.211). Reading
+    // a voltage is not a privilege, but holding CpuLock and the SMU owner lock for 19 messages is: an
+    // unprivileged loop of readbacks would delay the worker's revert and put mailbox traffic under a compute
+    // load, against ADR 0014's single privileged owner. The cached values stay open to every caller through
+    // READ, which sends nothing.
+    if (write && !Admin) {
         Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
         Data->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
         return;
@@ -700,7 +887,10 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
         else if (CpuAdapterDown(Device)) status = STATUS_DEVICE_NOT_READY;
         else if (op != BC250_CPU_OP_READBACK && !s->Proven) status = STATUS_DEVICE_NOT_READY;
         else if (op == BC250_CPU_OP_READBACK) {
-            status = CpuReadStage(Device, TRUE);
+            // The first full stage of a start keeps the slow rate, whether the worker's own stage answered or
+            // not: it is what records the baseline, and it is the first queue 3 traffic this part ever sees.
+            status = CpuReadStage(Device, TRUE, s->BaselineValid ? BC250_CPU_GETTER_GAP_MS
+                                                                : BC250_CPU_MESSAGE_GAP_MS);
             if (NT_SUCCESS(status)) s->Proven = TRUE;
         } else if (op == BC250_CPU_OP_SET) {
             ULONG window = Data->TrialMs ? Data->TrialMs : s->TrialMs;
@@ -714,7 +904,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 KeAcquireSpinLock(&s->SnapLock, &irql);
                 if (!s->OnTrial) s->TrialBefore = s->Applied;
                 KeReleaseSpinLock(&s->SnapLock, irql);
-                status = CpuApply(Device, &request, "on trial", &error);
+                status = CpuApply(Device, &request, "on trial", &error, FALSE);
                 if (!NT_SUCCESS(status)) CpuRevert(Device, "the trial did not go through");
                 else {
                     KeAcquireSpinLock(&s->SnapLock, &irql);
@@ -763,16 +953,13 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             if (!onTrial) status = STATUS_INVALID_DEVICE_STATE;
             else CpuRevert(Device, "cancelled");
         } else if (op == BC250_CPU_OP_RESET) {
-            // The recorded baseline back into the chip, and the stored values off the disk. The firmware's own
-            // temperature cap is BC250_CPU_TEMP_MAX_C, which is what a baseline without a cap means.
-            struct bc250_cpu_settings back;
-            RtlZeroMemory(&back, sizeof(back));
-            back = s->BaselineValid ? s->Baseline : back;
-            back.temp_given = 1;
-            back.temp_c = BC250_CPU_TEMP_MAX_C;
-            if (s->Applied.max_given) { back.max_given = 1; if (!back.max_mhz) back.max_mhz = BC250_CPU_MAX_MHZ; }
-            if (s->Applied.uv_given) { back.uv_given = 1; back.uv_steps = 0; }
-            status = CpuApply(Device, &back, "reset", &error);
+            // The recorded baseline back into the chip, and the stored values off the disk. Every control this
+            // driver has sent is named by bc250_cpu_restore_target out of the baseline or the firmware's own
+            // default, and a clock limit the baseline cannot name is reported and left: 0.7.210 substituted
+            // BC250_CPU_MAX_MHZ here, which raised the ceiling to 3600 MHz and called it a restore.
+            struct bc250_cpu_settings none;
+            RtlZeroMemory(&none, sizeof(none));
+            status = CpuRestoreTo(Device, &none, "reset");
             CpuDeleteLogged(CPU_SETTING_MAX);
             CpuDeleteLogged(CPU_SETTING_UV);
             CpuDeleteLogged(CPU_SETTING_TEMP);
@@ -805,7 +992,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 }
                 if (SmuCpuBegin(&Device->Smu)) {
                     status = CpuMessage(Device, BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, mask,
-                                        TRUE, NULL);
+                                        TRUE, FALSE, NULL);
                     SmuCpuEnd(&Device->Smu);
                 } else status = STATUS_DEVICE_BUSY;
                 if (NT_SUCCESS(status)) s->CoreMask = mask;
@@ -820,15 +1007,18 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                 if (window < BC250_CPU_TRIAL_MIN_MS) window = BC250_CPU_TRIAL_MIN_MS;
                 if (window > BC250_CPU_TRIAL_MAX_MS) window = BC250_CPU_TRIAL_MAX_MS;
                 KeAcquireSpinLock(&s->SnapLock, &irql);
+                // The baseline clock is what a stretched core is judged against, so with no limit applied it is
+                // the firmware's own ceiling from the read stage and not 0 (0.7.210 passed 0 and the sign died).
                 bc250_cpu_search_begin(&s->Search, steps, BC250_CPU_SEARCH_LOAD_MS, s->Snap.VoltageMv,
-                                       s->Applied.max_given ? s->Applied.max_mhz : 0u);
+                                       s->Applied.max_given ? s->Applied.max_mhz
+                                       : (s->BaselineValid && s->Baseline.max_given ? s->Baseline.max_mhz : 0u));
                 if (!s->OnTrial) s->TrialBefore = s->Applied;
                 KeReleaseSpinLock(&s->SnapLock, irql);
                 (void)bc250_cpu_search_next(&s->Search, NULL);       // asks for step 1
                 request = s->Applied;
                 request.uv_given = 1;
                 request.uv_steps = s->Search.step;
-                status = CpuApply(Device, &request, "search step", &error);
+                status = CpuApply(Device, &request, "search step", &error, FALSE);
                 if (!NT_SUCCESS(status)) CpuRevert(Device, "the search step did not go through");
                 else {
                     KeAcquireSpinLock(&s->SnapLock, &irql);
@@ -845,16 +1035,16 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             // SEARCH_STEP: judge the step the caller has just loaded, then the next one or the baseline back.
             if (!s->Search.running) status = STATUS_INVALID_DEVICE_STATE;
             else {
-                status = CpuReadStage(Device, FALSE);
+                status = CpuReadStage(Device, FALSE, BC250_CPU_GETTER_GAP_MS);
                 if (NT_SUCCESS(status)) {
                     enum bc250_cpu_search_action action;
-                    CpuSample(Device, &s->Applied, &sample);
+                    CpuSample(Device, &s->Applied, loaded, whea, checksum, &sample);
                     action = bc250_cpu_search_next(&s->Search, &sample);
                     if (action == BC250_CPU_SEARCH_APPLY) {
                         request = s->Applied;
                         request.uv_given = 1;
                         request.uv_steps = s->Search.step;
-                        status = CpuApply(Device, &request, "search step", &error);
+                        status = CpuApply(Device, &request, "search step", &error, FALSE);
                         if (!NT_SUCCESS(status)) CpuRevert(Device, "the search step did not go through");
                     } else {
                         CpuRevert(Device, "search done");
@@ -879,6 +1069,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     onTrial = s->OnTrial;
     serial = s->TrialSerial;
     searching = s->Search.running ? TRUE : FALSE;
+    revertOwed = s->RevertOwed;
     searchStep = s->Search.step;
     searchBest = s->Search.best;
     searchFail = s->Search.fail;
@@ -931,6 +1122,8 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
     Data->Writes = snap.Writes;
     Data->Refusals = snap.Refusals;
     Data->Reverts = snap.Reverts;
+    Data->RevertRetries = snap.RevertRetries;
+    Data->RevertFailures = snap.RevertFailures;
     Data->Generation = s->Generation;
     Data->Error = (ULONG)error;
     Data->Flags = (Device->FullWddm ? BC250_CPU_FLAG_VALID : 0) |
@@ -943,7 +1136,9 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
                   (searching ? BC250_CPU_FLAG_SEARCHING : 0) |
                   (s->CorePending ? BC250_CPU_FLAG_CORE_PENDING : 0) |
                   (s->CoreConfirmed ? BC250_CPU_FLAG_CORE_CONFIRMED : 0) |
-                  (status == STATUS_DEVICE_BUSY ? BC250_CPU_FLAG_BUSY : 0);
+                  (status == STATUS_DEVICE_BUSY ? BC250_CPU_FLAG_BUSY : 0) |
+                  (revertOwed ? BC250_CPU_FLAG_REVERT_OWED : 0) |
+                  (snap.TemperatureValid ? BC250_CPU_FLAG_TEMP_VALID : 0);
     Data->NtStatus = (ULONG)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }

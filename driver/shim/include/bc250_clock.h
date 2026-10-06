@@ -86,6 +86,7 @@ enum bc250_clock_curve_error {
 	BC250_CLOCK_CURVE_ORDER = 3,	/* the voltage falls as the clock rises (mv or its encoded VID) */
 	BC250_CLOCK_CURVE_FLOOR = 4,	/* level BC250_CURVE_FIRST_LEVEL is not exactly BC250_CLOCK_FLOOR_MV */
 	BC250_CLOCK_CURVE_NULL = 5,	/* no candidate */
+	BC250_CLOCK_CURVE_UNTRIED = 6,	/* a KEEP of a candidate the governor has not applied yet (0.7.211) */
 	BC250_CLOCK_CURVE_ERROR_COUNT
 };
 /* AMD's SVI2 encoding, as the imported commit computes it. Truncation: the VID's voltage is never

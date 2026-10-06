@@ -767,6 +767,7 @@ namespace AmdgpuWddmControl
                 if (!Apply(plan.Writes, backup)) { Log("result: failed: a write did not read back; the old values were restored"); return Failed; }
                 if (!ApplyGames(plan.GameWrites, backup)) { Log("result: failed: a game setting did not read back; the old game settings were restored"); return Failed; }
                 if (plan.Cu != null && !RunCu(plan.Cu)) return Failed;
+                if (plan.TuneSteps.Count > 0 && !RunTuneSteps(plan)) return Failed;
                 // A change that applies at the next restart is written, not done: the active route stays until then.
                 Log(plan.OfferRestart ? "result: written, pending until the next restart of Windows: " + plan.Change
                     : "result: done: " + plan.Change + " Takes effect " + plan.Effect + ".");
@@ -959,6 +960,24 @@ namespace AmdgpuWddmControl
         static int RunTune(ActionPlan plan)
         {
             return plan.Tune.Kind.StartsWith("curve-", StringComparison.Ordinal) ? RunCurve(plan) : RunCpu(plan);
+        }
+
+        // The tuning steps of an action that is not itself a tuning action (reset-defaults, WU-042). Each step is
+        // one escape, in the planned order, and the first refusal stops the rest: a half-reset is a state nobody
+        // chose, and what already went back stays back.
+        static bool RunTuneSteps(ActionPlan plan)
+        {
+            foreach (var t in plan.TuneSteps)
+            {
+                var step = new ActionPlan
+                {
+                    Action = plan.Action, Tune = t, Effect = plan.Effect,
+                    Change = "the " + (t.Kind == "curve-reset" ? "voltage curve" : t.Kind == "core-mask" ? "core mask"
+                        : "processor settings") + " step of " + plan.Action + " (" + t.Kind + ")",
+                };
+                if (RunTune(step) != Done) return false;
+            }
+            return true;
         }
 
         static string CurveLine(CurveState c)

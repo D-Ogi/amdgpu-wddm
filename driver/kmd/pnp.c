@@ -363,6 +363,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
         if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
             DpmResume(device);
+            CpuResume(device);  // nothing of the CPU surface survives D3 in the chip: read it again (0.7.211)
             HangDetectorResume();
             InteropAdapterPower(device,DevicePowerState,ActionType);
         }

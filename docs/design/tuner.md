@@ -1,7 +1,8 @@
 # The Tuner: a GPU voltage curve, a CPU undervolt and the core mask
 
-KMD 0.7.210. Decision: [ADR 0020](../adr/0020-operator-tuning-in-the-smu-owner.md). Limits:
-[`../hardware.md`](../hardware.md). The clock governor this page builds on: [`dpm.md`](dpm.md).
+KMD 0.7.210, with the review fixes of 0.7.211. Decision:
+[ADR 0020](../adr/0020-operator-tuning-in-the-smu-owner.md). Limits: [`../hardware.md`](../hardware.md). The
+clock governor this page builds on: [`dpm.md`](dpm.md).
 
 This page tells an operator and a reader of the code what the driver offers, what it refuses, and which parts of
 it nobody has measured yet. Two controls are new:
@@ -50,6 +51,8 @@ accepts part of one.
 | `DEPTH` | A value more than 25 mV under the table's line at that clock, or under 820 mV. |
 | `ORDER` | The voltage falls while the clock rises, or the encoded identifier inverts. |
 | `NULL` | No curve was given. |
+| `UNTRIED` | A keep of a candidate the governor has not applied. Not a property of the curve: a property of the moment. |
+
 
 The depth bound is why a curve cannot ask for a large undervolt in one step. 25 mV is about four voltage
 identifier steps of 6.25 mV. The same bound is in `bc250_clock_point_allowed`, so the administrator's direct
@@ -72,6 +75,8 @@ shipped table.
 | Set | The candidate becomes active at the next tick. The window starts. |
 | Set again inside a window | The new candidate replaces the old one and the window restarts. The revert target stays the stored curve. |
 | Keep inside the window | The candidate becomes the stored curve, the eleven values reach the registry, and the guard's marks follow. |
+| Keep before the governor's tick | Refused with `UNTRIED`, because the candidate has run on nothing. The governor applies it within 25 ms; the application offers Keep only once the reply says it did. |
+
 | Cancel | The stored curve comes back at the next tick. |
 | The window ends | The same as a cancel, without anybody asking. |
 | A stop, or a power transition | The trial ends first, before the driver puts the floor back. |
@@ -109,13 +114,27 @@ identifier scaled freely, and its own ceiling is 1.325 V. The driver's answer:
 - No absolute CPU voltage is ever forced. The undervolt scales the firmware's own curve.
 - The applied voltage is read back after every change. Above 1300 mV, or outside 700 to 1600 mV, the driver
   undoes the change at once.
-- One setter per 100 ms, the owner lock released between messages, the temperature re-read before each one, and
-  nothing at all while the GPU is 50 % busy or busier or the part is at 87 C or hotter.
+- One setter per 100 ms (`BC250_CPU_MESSAGE_GAP_MS`), the owner lock released between messages, the temperature
+  re-read before each one, and no setter at all while the GPU is 50 % busy or busier.
+- A getter changes nothing, so it waits only for the firmware's mailbox turnaround
+  (`BC250_CPU_GETTER_GAP_MS`, 10 ms) and is not refused by the temperature. The first read stage of a start
+  still uses the setter's gap, because nothing has spoken to queue 3 yet. 0.7.210 sent the whole 19-message
+  read stage at the setter's rate, which held the surface for 1.9 s and was the reason a readback could be
+  mistaken for a hang.
+- The 87 C gate has two exceptions, both of them the rule the GPU clock path already carries: a getter, and a
+  step that lowers the dissipation. The way back from a trial must not be refused because the part is hot,
+  since nothing else would ever take the trial out of the chip (`AllowHot` in `SmuCpuMessage`).
 
 ### The allowlist
 
 A getter sent as a setter and a setter sent as a getter are both refused, so a caller cannot mislabel a message.
 `driver/shim/test/cpu_test.c` holds the positives, the negatives and the argument ranges.
+
+**What the host tests do not reach.** No host suite compiles `driver/kmd/cpu.c`. The policy it obeys is in the
+shim, and the shim suites test it there, which is why 0.7.211 moved the revert target into `bc250_cpu_restore_target`: a rule
+in the shim gets a test, a rule in the miniport does not. The miniport keeps the parts that need a kernel: the
+locks, the worker thread, the registry and the message gaps. A harness for them, like `smu_native_test.c` for
+`driver/kmd/smu.c`, is separate work and is not in this version.
 
 | Queue | Message | Direction | Argument |
 |---|---|---|---|
@@ -131,19 +150,21 @@ A getter sent as a setter and a setter sent as a getter are both refused, so a c
 | 0 | `0x0C` QueryCorePstate | get | core 0..7 |
 | 0 | `0x3D` GetEnabledSmuFeatures | get | 0 |
 | 0 | `0x2C` SetCoreEnableMask | set | 0x77 or 0xFF |
-| 0 | `0x35`, `0x36` soft CCLK limits | set | 2800..4000 MHz, core 0 |
 
 ### The ranges, and why the top one needs an undervolt
 
 | Control | Release | Lab (`CpuLab` 1) |
 |---|---|---|
-| Maximum boost clock | 2800 to 3600 MHz | up to 4000 MHz, and only with an undervolt in the same request |
+| Maximum boost clock | 2800 to 3500 MHz | up to 4000 MHz, and only with at least four undervolt steps in the same request |
 | Undervolt | 0 to 16 curve-scale steps | the same |
 | Temperature cap | 85 to 100 C | the same |
 
 The release range is a **limit** before it is ever a raise: lowering the firmware's ceiling lowers the voltage the
-firmware chooses, so it cannot reach the hazard. The lab range is the owner's hardware pre-approval of
-2026-10-05, and `bc250_cpu_settings_check` refuses it without an undervolt.
+firmware chooses, so it cannot reach the hazard. 3500 MHz is the highest limit the release build takes. It is also
+the stock boost clock the community's two tools report; nothing on unit A has measured it. The 3600 MHz this
+document carried until 0.7.211 had no source at all. The lab range is the owner's hardware pre-approval of
+2026-10-05, and `bc250_cpu_settings_check` refuses it without at least `BC250_CPU_LAB_MIN_UV_STEPS` undervolt
+steps in the same request.
 
 One undervolt step is not a fixed number of millivolts. The community's own fitted model is about
 `0.004325 x f - 10` mV per step, which is 3 mV at 3000 MHz and 7 mV at 4000 MHz. The driver therefore never
@@ -165,8 +186,10 @@ A tightening temperature cap goes first of all, a loosening one last of all.
 
 ### The failure signs
 
-A trial stops at the first of these. The first two are the tool's to count, because the kernel cannot see them;
-the rest are the driver's.
+A trial stops at the first of these. The first two are the caller's to count, because the kernel cannot see them:
+they travel in `WheaEvents` and `ChecksumErrors` of the SET and SEARCH_STEP escape. Clock stretching is judged
+only over a sample the caller marks `Loaded`, since an idle core is under its limit for no bad reason. The rest
+are the driver's.
 
 | Sign | Where it comes from |
 |---|---|
@@ -174,7 +197,7 @@ the rest are the driver's.
 | A wrong answer from the load | the load client's own checksum |
 | Clock stretching | a core 200 MHz or more under the applied limit (`0x43`, and the Windows counters) |
 | The voltage readback | above 1300 mV, or outside 700 to 1600 mV |
-| 87 C | the same limit the GPU governor uses |
+| 87 C | the same limit the GPU governor uses. A step that lowers the dissipation, and the way back, go out anyway |
 
 ### The guided undervolt search
 
@@ -214,10 +237,13 @@ no-op on a harvested die, and either answer closes an open question.
 | Escape | Size | Flags | Who |
 |---|---|---|---|
 | `BC250_ESCAPE_RUN_DPM_CURVE` (28) | 360 bytes | `NoAdapterSynchronization` for every operation | read: anybody; set, keep, cancel, reset: an administrator |
-| `BC250_ESCAPE_RUN_CPU` (29) | 272 bytes | read: `NoAdapterSynchronization`; everything else: `HardwareAccess` | read: anybody; everything else: an administrator |
+| `BC250_ESCAPE_RUN_CPU` (29) | 296 bytes | read: `NoAdapterSynchronization`; everything else: `HardwareAccess` | read: anybody; everything else, the readback included, an administrator |
 
 The curve escape touches no hardware: a curve reaches the SMU through the governor's next tick. The CPU escape
 does send mailbox messages, which is why its write operations take the adapter, exactly as a clock set does.
+
+The readback asks for an administrator although it changes nothing: it holds the surface for 19 messages, which
+is not something an unprivileged loop may do to a shared mailbox.
 
 Both refuse a request whose `ExpectedGeneration` is not this start's, so a tool cannot change a setting across a
 driver restart without noticing.
@@ -233,10 +259,11 @@ bc250kmd_cli dpm curve keep | cancel | reset
 
 bc250kmd_cli cpu                                         what is applied, stored, recorded and last answered
 bc250kmd_cli cpu readback                                the getters of both queues; this is what admits a setter
-bc250kmd_cli cpu set [clock <MHz>] [uv <steps>] [temp <C>] [window <ms>]
+bc250kmd_cli cpu set [clock <MHz>] [uv <steps>] [temp <C>] [window <ms>] [whea <n>] [checksum <n>] [loaded 0|1]
 bc250kmd_cli cpu keep | cancel | reset
 bc250kmd_cli cpu cores 6|8                               the mask; the count follows a Windows restart
-bc250kmd_cli cpu search [steps] | cpu step               the guided search, with the load between the steps
+bc250kmd_cli cpu search [steps]                          the guided search, with the load between the steps
+bc250kmd_cli cpu search step [whea <n>] [checksum <n>] [loaded 1]    one step, with what the load client saw
 ```
 
 ## The application
@@ -248,6 +275,17 @@ trial with a countdown and a Stop button, a Keep button that is enabled only whi
 with the three CPU controls, and a processor-cores card. Driver internals, firmware status codes and message
 numbers appear only in the support report.
 
+Two states of the driver reach the page as a sentence and not as a number. A trial whose candidate the governor
+has not applied yet leaves Keep off and says so. An owed way back (`BC250_CPU_FLAG_REVERT_OWED`: a revert the
+firmware refused, which the driver repeats every second) is said at the top of the processor card, because the
+part is then running a setting nobody chose to keep.
+
+"Reset driver settings to the release defaults" takes these settings back as well: the stored curve, the stored
+processor values, the core mask and `CpuTune` itself. They are not in the release's `manifest.json`, because the
+driver stores them, so the action sends the same escapes this page sends (WU-042: one control puts the standard
+settings back). A start that cannot send them says which ones stay stored instead of claiming a reset it did not
+do.
+
 ## What the lab must answer first
 
 Nothing below is measured on unit A. Until a row is answered, the driver refuses the writes that depend on it.
@@ -255,6 +293,7 @@ Nothing below is measured on unit A. Until a row is answered, the driver refuses
 | Question | What answers it | What it blocks |
 |---|---|---|
 | Does queue 3 answer a getter at all? | `cpu readback`: the CPU voltage, the GPU voltage and the firmware cap | every CPU setter of that start |
+| Does a revert ever come back refused? | the plug watts and `cpu` after a trial at 87 C | nothing; it says whether the retry loop is theory or practice |
 | Is the GPU voltage of `0x37` the one our own `GetGfxVid` reports? | the two readings side by side | nothing; it is the cross-check that the queue means what we think |
 | What is this part's effective CPU clock? | the eight core clocks and the eight P-state clocks | the words the application uses about the clock range |
 | Does a curve-scale step remove the millivolts the model predicts? | the voltage readback at one, two and four steps | the guided search's own arithmetic |

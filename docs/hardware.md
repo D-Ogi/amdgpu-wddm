@@ -52,12 +52,11 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 
   | Message | Queue | Direction | Admitted argument |
   |---|---|---|---|
-  | `0x8F` SetMaxBoostMHz | 3 | write | 2800 to 4000 MHz (`BC250_CPU_MIN_MHZ`, `_MAX_MHZ_LAB`; 3600 is stock) |
+  | `0x8F` SetMaxBoostMHz | 3 | write | 2800 to 4000 MHz (`BC250_CPU_MIN_MHZ`, `_MAX_MHZ_LAB`; the release build stops at 3500, `_MAX_MHZ`) |
   | `0x50` SetCurveScale | 3 | write | 0, or a negative 16-bit value of at most 16 steps (`BC250_CPU_UV_MAX_STEPS`). A positive scale raises the voltage and is refused here, not in the firmware |
   | `0x8B` SetTemperatureCapC | 3 | write | 85 to 100 C (`BC250_CPU_TEMP_MIN_C`, `_MAX_C`; 100 is the firmware default) |
   | `0x36` `0x37` `0x3B` `0x40` `0x42` `0x43` | 3 | read | the voltages, a P-state clock (0 to 7), the cap in force, a SoC DPM clock (0 to 19) and a core clock (0 to 7) |
   | `0x2C` SetCoreEnableMask | 0 | write | `0x77` (stock, 6 cores) or `0xFF` (8 cores) and nothing else: another pattern suggests a real harvest of defective cores |
-  | `0x35` `0x36` soft CCLK | 0 | write | core 0, 2800 to 4000 MHz |
   | `0x0C` `0x3D` | 0 | read | a core's P-state (core 0 to 7) and the enabled feature bits |
 
   The two lists refuse each other's numbers, because queue 3's `0x37` and `0x3B` are queue 0's `GetGfxFrequency`
@@ -68,13 +67,20 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   The driver lowers before it raises, reads `0x36` back after every change, and undoes the change at once above
   1300 mV. A readback outside 700 to 1600 mV is not a voltage we understand, and the driver treats it as a failed
   read and not as a safe value. There is no absolute CPU VID write on the allowlist and there will not be one.
-- CPU gates: no CPU message while the GPU is 50 % busy or more (`BC250_CPU_GPU_BUSY_PERMILLE`), none at 87 C or
-  more (the GPU rule, read before **every** message and not once per sequence), one setter per 100 ms with the
-  owner lock released between them, and one CPU sequence at a time. A change runs as a trial: the kernel owns the
-  deadline and reverts by itself, and nothing reaches the registry before a Keep. A core-mask change needs a
-  Windows restart and carries the two-mark boot guard, so a mask the machine does not survive costs the mask.
+- CPU gates: no CPU setter while the GPU is 50 % busy or more (`BC250_CPU_GPU_BUSY_PERMILLE`), no setter at 87 C or
+  more (the GPU rule, read before **every** message and not once per sequence), one setter per 100 ms
+  (`BC250_CPU_MESSAGE_GAP_MS`) with the owner lock released between them, and one CPU sequence at a time. A getter
+  changes nothing: it waits `BC250_CPU_GETTER_GAP_MS` (10 ms) and the temperature does not refuse it, so a whole
+  read stage of 19 messages takes a fifth of a second and not 1.9 s. The hot gate has one exception on the write
+  side as well, the same one the GPU clock path carries: a step that lowers the dissipation, and the way back from
+  a trial, go out at any temperature, because nothing else would take a trial out of the chip. A change runs as a
+  trial: the kernel owns the deadline and reverts by itself, and nothing reaches the registry before a Keep. A
+  revert the firmware refuses is owed, not forgotten: the driver repeats it every second
+  (`BC250_CPU_REVERT_RETRY_MS`) and reports it as `BC250_CPU_FLAG_REVERT_OWED`. A core-mask change needs a Windows
+  restart and carries the two-mark boot guard, so a mask the machine does not survive costs the mask.
 - Clock stretching: an unstable CPU undervolt shows first as the effective core clock (`0x43`) falling about
-  200 MHz or more under the clock asked for (`BC250_CPU_STRETCH_MHZ`), before it shows as a hang. That is a
+  200 MHz or more under the clock asked for (`BC250_CPU_STRETCH_MHZ`), before it shows as a hang. It counts only
+  over a sample the caller marks as loaded, because an idle core sits under its limit for no bad reason. That is a
   failure sign of the guided search and not a measurement of this part yet.
 - Design options that were examined and rejected, with the reason for each:
   [`design/rejected-options.md`](design/rejected-options.md). Read it before you propose

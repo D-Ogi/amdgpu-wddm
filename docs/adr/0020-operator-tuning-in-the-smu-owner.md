@@ -132,11 +132,32 @@ No CPU message has ever been sent on unit A.
   the clock test, a new CPU test with its allowlist negatives and its guided-search state machine, the new
   structures in the GUI's offset test, and the load client's own logic test.
 - The lab plan is seven steps of at most three minutes each, one change per step, the first of them read-only and
-  a precondition of the rest, with the plug sampled, the 87 C rules in force and a cropped camera frame before and
-  after every hot run (`scratch/tuner/lab-tuner.ps1`, local).
+  a precondition of the rest, with the plug sampled and the 87 C rules in force (`scratch/tuner/lab-tuner.ps1`,
+  local). The safety signals are Tctl, the 87 and 89 C rules and the plug watts; camera checks are suspended by
+  the owner's instruction of 2026-10-06.
 - Two things stay open until the lab answers them, and the GUI's words depend on both: whether this part's
   effective CPU clock is near 2.75 GHz or near 3.5 GHz, and whether `SetCoreEnableMask` does anything at all on
   a harvested part.
+
+### What the review of 0.7.211 changed
+
+The decision above stands. Seven points of it were implemented in a way that did not hold, and the fixes are
+part of the same decision, not a new one.
+
+| Point | What 0.7.210 did | 0.7.211 |
+|---|---|---|
+| 2, a trial reverts by itself | The revert asked the chip for the settings the escape named, and a value the trial did not carry was left where the trial put it | `bc250_cpu_restore_target` (pure, host-tested) names a value for every control the trial touched, from the start's recorded baseline when the caller gave none, and says when it cannot name one |
+| 2, the kernel owns the deadline | A revert refused by the firmware was logged and forgotten | The revert is owed: the worker repeats it every second and the surface reports `BC250_CPU_FLAG_REVERT_OWED` until it lands |
+| 2, the way back must not be refused | The 87 C gate refused the revert as well, so a hot part kept the trial | `AllowHot`: the way back, and every step that lowers the dissipation, go out at any temperature. The temperature is still read and still reported |
+| 4, a kept value faces the boot guard | A Keep stored a curve the governor had not applied yet, so a candidate that ran on nothing could reach every later start | A Keep needs `Applied == Serial` and 100 ms of the window; the driver answers `UNTRIED` and the window offers Keep only when the reply says the governor applied it |
+| 9, a getter is not a write | The whole read stage went at the setter's rate (100 ms), so a readback held the surface for 1.9 s and looked like a hang | A getter waits 10 ms and is not refused by the temperature. The first read stage of a start keeps the setter's rate |
+| 9, least privilege | The readback was open to anybody, because reading a voltage is not a privilege | It holds the surface for 19 messages on a shared mailbox, so it asks for an administrator like every other operation |
+| 11, one "Restore standard settings" | "Reset driver settings to the release defaults" left the curve, the processor values, the core mask and `CpuTune` as they were | The reset carries those steps as well, and names what a start cannot take back instead of claiming a reset it did not do |
+
+Two numbers were wrong in the documentation rather than in the code: 3600 MHz was never this part's stock clock
+and had no source (the community's two tools report 3500 MHz, which is what the release build now takes as its
+highest limit), and the two soft CCLK messages `0x35`/`0x36` of queue 0 were in the allowlist tables although no
+code path sends them. They are named in the header and refused by the allowlist.
 
 ## References
 

@@ -277,6 +277,12 @@ enum bc250_clock_curve_error bc250_dpm_curve_set(struct bc250_dpm_curve_state *s
 int bc250_dpm_curve_keep(struct bc250_dpm_curve_state *s)
 {
 	if (!s->trial) return 0;
+	/* A curve is kept because it ran, not because it was asked for. Two states look like a running trial and
+	 * are not one: a KEEP in the same governor tick as the SET, where the level has not been re-applied yet,
+	 * and a SET whose apply the clock gate refused as too hot, where the resync drops the level to the floor.
+	 * Both stored a candidate the hardware never carried, and a start that merely resyncs to the floor is a
+	 * healthy start, so no boot guard caught it either (0.7.211). */
+	if (s->applied != s->serial || s->elapsed_ms < BC250_DPM_CURVE_KEEP_MIN_MS) return -1;
 	s->stored = s->candidate;
 	s->trial = 0;
 	s->elapsed_ms = 0;
@@ -336,8 +342,12 @@ int bc250_dpm_curve_take(struct bc250_dpm_curve_state *s)
 {
 	if (!s->apply) return 0;
 	s->apply = 0;
-	s->applied = s->serial;
 	return 1;
+}
+
+void bc250_dpm_curve_applied(struct bc250_dpm_curve_state *s, unsigned int serial)
+{
+	if (serial == s->serial) s->applied = serial;
 }
 
 unsigned int bc250_dpm_curve_level_mv(const struct bc250_dpm_curve_state *s, unsigned int level)

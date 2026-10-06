@@ -13,7 +13,10 @@ using System.Linq;
 namespace AmdgpuWddmControl
 {
     // enum bc250_clock_curve_error, in its own numbering.
-    public enum CurveError { Ok = 0, Range = 1, Depth = 2, Order = 3, Floor = 4, None = 5 }
+    // BC250_CLOCK_CURVE_* of driver/shim/include/bc250_clock.h. Untried is the driver's alone: this app never
+    // returns it from Check, and the driver answers it to a Keep of a candidate the governor has not applied.
+    public enum CurveError { Ok = 0, Range = 1, Depth = 2, Order = 3, Floor = 4, None = 5, Untried = 6 }
+
 
     public static class Tuner
     {
@@ -173,6 +176,7 @@ namespace AmdgpuWddmControl
                 case CurveError.Order: return Strings.T("tuner.curve.error.order", mhz);
                 case CurveError.Floor: return Strings.T("tuner.curve.error.floor");
                 case CurveError.None: return Strings.T("tuner.curve.error.none");
+                case CurveError.Untried: return Strings.T("tuner.curve.error.untried");
                 default: return "";
             }
         }
@@ -191,12 +195,16 @@ namespace AmdgpuWddmControl
     // community report and measured by nobody on this part, which is why the window says so and offers a trial.
     public static class CpuTuning
     {
-        public const uint MinMHz = 2800, StockMHz = 3600, MaxSteps = 16, MinTempC = 85, MaxTempC = 100;
+        // BC250_CPU_MIN_MHZ, BC250_CPU_MAX_MHZ, BC250_CPU_UV_MAX_STEPS, BC250_CPU_TEMP_MIN_C and
+        // BC250_CPU_TEMP_MAX_C of driver/shim/include/bc250_cpu.h. MaxMHz is the highest limit the release build
+        // of the driver takes, not a stock clock: nobody has measured this part's own boost ceiling.
+        public const uint MinMHz = 2800, MaxMHz = 3500, MaxSteps = 16, MinTempC = 85, MaxTempC = 100;
+
         public const uint MaskStock = 0x77, MaskFull = 0xFF;
         public const uint StockCores = 6, FullCores = 8;
         public const uint RefuseMv = 1300;
 
-        public static bool ValidClock(uint mhz) { return mhz >= MinMHz && mhz <= StockMHz && mhz % 100 == 0; }
+        public static bool ValidClock(uint mhz) { return mhz >= MinMHz && mhz <= MaxMHz && mhz % 100 == 0; }
         public static bool ValidSteps(uint steps) { return steps <= MaxSteps; }
         public static bool ValidTemp(uint c) { return c >= MinTempC && c <= MaxTempC; }
         public static bool ValidMask(uint mask) { return mask == MaskStock || mask == MaskFull; }
@@ -208,9 +216,9 @@ namespace AmdgpuWddmControl
         // The clock choices the window offers: the whole admitted band on the 100 MHz grid, highest first.
         public static uint[] ClockChoices()
         {
-            int count = (int)((StockMHz - MinMHz) / 100) + 1;
+            int count = (int)((MaxMHz - MinMHz) / 100) + 1;
             var v = new uint[count];
-            for (int i = 0; i < count; i++) v[i] = StockMHz - (uint)i * 100;
+            for (int i = 0; i < count; i++) v[i] = MaxMHz - (uint)i * 100;
             return v;
         }
 

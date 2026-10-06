@@ -53,15 +53,22 @@ void SmuClockRequest(BC250_SMU_OWNER* Owner, BC250_ESCAPE_CLOCK* Data,
 // SmuCpuBegin/SmuCpuEnd bracket the sequence instead. Refused when:
 //   - the message is not on bc250_cpu_message_allowed() for that queue and that direction, or its argument is not
 //     on bc250_cpu_argument_allowed(): STATUS_INVALID_PARAMETER, and nothing is written;
-//   - the part is at or above BC250_CLOCK_HOT_MC: STATUS_DEVICE_POWER_FAILURE (the temperature is read before
-//     every message, not once per sequence);
+//   - the part is at or above BC250_CLOCK_HOT_MC and this is a setter that AllowHot does not cover:
+//     STATUS_DEVICE_POWER_FAILURE (the temperature is read before every message, not once per sequence);
 //   - the governor reports the GPU at or above BC250_CPU_GPU_BUSY_PERMILLE busy (the caller passes it):
 //     STATUS_DEVICE_BUSY.
+// AllowHot (0.7.211) is the CPU rail's reading of the rule the GPU clock path already carries: the part must
+// always be returnable to the settings it is known to run at. A getter changes nothing, a step that lowers the
+// dissipation lowers it at any temperature, and the way back from a trial must run even on a hot part, because
+// the alternative is an unvalidated operating point with nothing watching it. driver/kmd/cpu.c passes it for
+// every getter, for every step bc250_cpu_plan marked cools, and for every restore. A restore also runs when the
+// temperature cannot be read at all; TemperatureValid then says so, and nothing judges the part as cold.
 // FirmwareStatus, when given, carries the firmware's own response word for the support report. A timeout is an
 // abort and never a retry; the transport's deadline is the queue 0 one.
 NTSTATUS SmuCpuMessage(BC250_SMU_OWNER* Owner, ULONG Queue, ULONG Message, ULONG Parameter, BOOLEAN Write,
-                       ULONG BusyPermille, _Out_opt_ ULONG* Value, _Out_opt_ LONG* TemperatureMc,
-                       _Out_opt_ ULONG* FirmwareStatus);
+                       BOOLEAN AllowHot, ULONG BusyPermille, _Out_opt_ ULONG* Value,
+                       _Out_opt_ LONG* TemperatureMc, _Out_opt_ ULONG* FirmwareStatus,
+                       _Out_opt_ BOOLEAN* TemperatureValid);
 // TRUE when this caller took the CPU sequence flag; SmuCpuEnd releases it. FALSE means another sequence runs.
 BOOLEAN SmuCpuBegin(BC250_SMU_OWNER* Owner);
 void SmuCpuEnd(BC250_SMU_OWNER* Owner);

@@ -85,6 +85,8 @@ namespace AmdgpuWddmControl
                 var left = Ui.Label(Strings.T("graphics.tuning.unsaved"), null, Theme.Warn, card.Inner);
                 _live["tuner.curve.countdown"] = left;
                 card.Add(left);
+                if (!c.Has(CurveState.FlagApplied))
+                    card.Add(Ui.Label(Strings.T("graphics.tuning.not-applied"), null, Theme.Dim, card.Inner));
             }
 
             // The presets: four legal curves by construction, so a person never has to read a chart to use this card.
@@ -132,7 +134,9 @@ namespace AmdgpuWddmControl
             apply.Enabled = error == CurveError.Ok && changed;
             row.Controls.Add(apply);
             var keep = Ui.Button(Strings.T("graphics.tuning.keep"), (s, e) => RunAction("tune-keep", null, null, null, false, ok => ClearCurveEdit()));
-            keep.Enabled = onTrial;
+            // Keeping a curve nobody has run is how a bad curve reaches every later start: the driver stores what
+            // the governor applied, so the button waits for the governor to apply it (it does so on its next tick).
+            keep.Enabled = onTrial && c.Has(CurveState.FlagApplied);
             row.Controls.Add(keep);
             var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("tune-stop", null, null, null, false, ok => ClearCurveEdit()));
             stop.Enabled = onTrial;
@@ -184,6 +188,10 @@ namespace AmdgpuWddmControl
                 return card;
             }
             bool onTrial = u.Has(CpuState.FlagOnTrial);
+            // The driver could not put the settings back and keeps trying. The person has to know, because the
+            // processor is running a setting nobody chose to keep (0.7.211).
+            if (u.Has(CpuState.FlagRevertOwed))
+                card.Add(Ui.Label(Strings.T("graphics.cpu.revert-owed"), Theme.Bold, Theme.Warn, card.Inner));
             card.Pair(Strings.T("graphics.cpu.voltage.label"), CpuTuning.VoltageText(u.VoltageMv), u.VoltageMv >= CpuTuning.RefuseMv ? Theme.Warn : (Color?)null);
             card.Pair(Strings.T("graphics.cpu.count.label"), u.Cores == 0 ? Strings.T("perf.no-reading") : u.Cores + " / " + u.Threads);
             card.Pair(Strings.T("graphics.cpu.cap.label"), u.CapC == 0 ? Strings.T("perf.no-reading") : u.CapC + " C");
@@ -205,7 +213,7 @@ namespace AmdgpuWddmControl
 
             // The three numbers, each inside the driver's own list, so a step can never leave the admitted band.
             var clock = new ValuePicker(CpuTuning.ClockChoices(), " MHz", Strings.T("graphics.cpu.clock.label"));
-            clock.Value = _cpuClockEdit ?? (u.AppliedMaxMHz != 0 ? u.AppliedMaxMHz : CpuTuning.StockMHz);
+            clock.Value = _cpuClockEdit ?? (u.AppliedMaxMHz != 0 ? u.AppliedMaxMHz : CpuTuning.MaxMHz);
             clock.Stepped += (s, e) => _cpuClockEdit = clock.Value;
             card.Add(Ui.WrapRow(card.Inner, Ui.Label(Strings.T("graphics.cpu.clock.label"), null, Theme.Dim, card.Inner / 2), clock));
 
@@ -232,7 +240,7 @@ namespace AmdgpuWddmControl
             var stop = Ui.Button(Strings.T("graphics.tuning.stop"), (s, e) => RunAction("cpu-stop", null, null, null, false, ok => ClearCpuEdit()));
             stop.Enabled = onTrial;
             row.Controls.Add(stop);
-            var reset = Ui.Button(Strings.T("graphics.tuning.reset"), (s, e) => RunAction("cpu-reset", null, null, null, false, ok => ClearCpuEdit()));
+            var reset = Ui.Button(Strings.T("graphics.cpu.reset"), (s, e) => RunAction("cpu-reset", null, null, null, false, ok => ClearCpuEdit()));
             reset.Enabled = proven && (u.Has(CpuState.FlagStored) || onTrial || u.AppliedMaxMHz != 0 || u.AppliedUvSteps != 0 || u.AppliedTempC != 0);
             row.Controls.Add(reset);
             row.Controls.Add(Ui.Button(Strings.T("graphics.cpu.disable"), (s, e) => RunAction("cpu-disable")));

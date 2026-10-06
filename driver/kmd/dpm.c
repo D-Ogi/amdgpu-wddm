@@ -92,7 +92,7 @@ C_ASSERT(sizeof(BC250_ESCAPE_DPM_CURVE) == 360);  // ABI 1 (0.7.210); one size, 
 C_ASSERT(BC250_DPM_CURVE_POINTS == BC250_CURVE_POINTS);
 C_ASSERT(BC250_CURVE_FIRST_LEVEL == BC250_DPM_FLOOR_LEVEL);
 C_ASSERT(BC250_CURVE_FIRST_LEVEL + BC250_CURVE_POINTS == BC250_CLOCK_LEVELS);
-C_ASSERT(BC250_CLOCK_CURVE_ERROR_COUNT == 6);
+C_ASSERT(BC250_CLOCK_CURVE_ERROR_COUNT == 7);     // 0.7.211 added UNTRIED: a KEEP of a candidate nobody applied
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_CURVE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_DPM_CURVE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 
@@ -573,10 +573,32 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
     return FALSE;
 }
 
+// The candidate has reached the hardware: record its serial (0.7.211). Only a transaction that went through
+// calls this, which is what makes BC250_DPM_CURVE_FLAG_APPLIED and the KEEP gate mean anything.
+static void DpmCurveApplied(BC250_DPM_STATE* S, ULONG Serial)
+{
+    KIRQL irql;
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    bc250_dpm_curve_applied(&S->Curve, Serial);
+    S->Snap.CurveApplied = S->Curve.applied;
+    KeReleaseSpinLock(&S->SnapLock, irql);
+}
+
 // Repeated SMU failures: the floor if it can still be had, the escape's SET back, fixed-lab next start.
 static void DpmGiveUp(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
 {
+    BOOLEAN curveCancelled;
+    KIRQL irql;
     S->ErrorsInRow = 0;
+    // A curve trial ends here (0.7.211). After GaveUp the governor stops ticking, so bc250_dpm_curve_tick
+    // never runs again and the window would never end: the window said "the stored curve comes back by
+    // itself", and only RESET could escape, which also deletes the stored curve. The floor apply below carries
+    // the stored curve's own voltage, and at the floor every curve is pinned to BC250_CLOCK_FLOOR_MV anyway.
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    curveCancelled = bc250_dpm_curve_cancel(&S->Curve) ? TRUE : FALSE;
+    (void)bc250_dpm_curve_take(&S->Curve);
+    KeReleaseSpinLock(&S->SnapLock, irql);
+    if (curveCancelled) GuardLog("dpm: the curve trial ends with the give-up; the stored curve is back");
     (void)DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "giving up");
     S->GaveUp = TRUE;
     InterlockedExchange(&Device->Smu.GovernorActive, 0);
@@ -677,11 +699,13 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // the same state: the tick is where a trial's deadline is noticed and where a changed curve reaches the
         // hardware. The revert is therefore the kernel's own act and survives a killed or hung tool.
         BOOLEAN curveReverted, curveTake;
+        ULONG curveSerial;
         struct bc250_clock_curve curveNow;
         KIRQL curveIrql;
         KeAcquireSpinLock(&S->SnapLock, &curveIrql);
         curveReverted = bc250_dpm_curve_tick(&S->Curve, dtMs) ? TRUE : FALSE;
         curveTake = bc250_dpm_curve_take(&S->Curve) ? TRUE : FALSE;
+        curveSerial = S->Curve.serial;
         curveNow = S->Curve.active;
         KeReleaseSpinLock(&S->SnapLock, curveIrql);
         if (curveReverted) DpmLogCurve("trial over, stored curve back", &curveNow);
@@ -726,15 +750,16 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->Target = target;
         if (target != S->Gov.level) {
             // The level changes, so the transaction carries the new curve's voltage anyway.
-            if (!DpmApply(Device, S, T, target, curveTake ? "load, curve" : "load") &&
-                S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
-                DpmGiveUp(Device, S, T);
+            if (!DpmApply(Device, S, T, target, curveTake ? "load, curve" : "load")) {
+                if (S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT) DpmGiveUp(Device, S, T);
+            } else if (curveTake) DpmCurveApplied(S, curveSerial);
         } else if (curveTake) {
             // The level does not change, so without this the new voltage would reach the hardware at the next
             // level change, which can be minutes away. One re-apply of the same clock: the settle loop does not
             // run, and only the forced voltage identifier moves.
-            if (!DpmApply(Device, S, T, target, "curve") && S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
-                DpmGiveUp(Device, S, T);
+            if (!DpmApply(Device, S, T, target, "curve")) {
+                if (S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT) DpmGiveUp(Device, S, T);
+            } else DpmCurveApplied(S, curveSerial);
         }
     } else {
         // Fixed-lab: the same average, for the telemetry, and nothing else.
@@ -1042,6 +1067,7 @@ void DpmStop(BC250_DEVICE* Device)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
     DPM_TICK tick;
+    ULONG serial = 0;
 
     DpmLock(s);
     if (!s->Created) { DpmUnlock(s); return; }
@@ -1064,14 +1090,16 @@ void DpmStop(BC250_DEVICE* Device)
         KeAcquireSpinLock(&s->SnapLock, &irql);
         reverted = bc250_dpm_curve_cancel(&s->Curve) ? TRUE : FALSE;
         (void)bc250_dpm_curve_take(&s->Curve);
+        serial = s->Curve.serial;
         KeReleaseSpinLock(&s->SnapLock, irql);
         if (reverted) GuardLog("dpm: the curve trial ended with the stop; the stored curve is back");
     }
     // The lab floor, from above or from a point below it (a thermal-only one since 0.7.205, the idle point
     // since 0.7.207): the clock gate admits a request up to the floor that does not raise the voltage however
     // hot the part is, so the hardware does not keep an untested clock after the driver has given up ownership.
-    if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL)
-        (void)DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "stop");
+    if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL &&
+        DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "stop"))
+        DpmCurveApplied(s, serial);      // the floor apply carried the stored curve's own voltage
     bc250_dpm_idle_leave(&s->Gov);      // the thread is joined; the clock is not at the idle point any more
     // "Not above the floor" ends a start cleanly, the same reading the session marker itself uses
     // (bc250_dpm_session_step): since 0.7.205 the thermal cap can leave the governor at 800 or 900 MHz, and a
@@ -1111,6 +1139,7 @@ void DpmPause(BC250_DEVICE* Device)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
     DPM_TICK tick;
+    ULONG serial = 0;
     if (!s->Created) return;
     InterlockedExchange(&s->Paused, 1);
     KeFlushQueuedDpcs();                // a sampler callback that read Paused as 0 has finished its reads
@@ -1124,13 +1153,15 @@ void DpmPause(BC250_DEVICE* Device)
         KeAcquireSpinLock(&s->SnapLock, &irql);
         reverted = bc250_dpm_curve_cancel(&s->Curve) ? TRUE : FALSE;
         (void)bc250_dpm_curve_take(&s->Curve);
+        serial = s->Curve.serial;
         KeReleaseSpinLock(&s->SnapLock, irql);
         if (reverted) GuardLog("dpm: the curve trial ended with the power transition; the stored curve is back");
     }
     // As in DpmStop: the floor is reachable from every point below it at any temperature, so D3 is entered at
     // the lab point and the resume transaction (power.c, SmuPrepareClock) finds the clock it expects.
-    if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL)
-        (void)DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "power down");
+    if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL &&
+        DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "power down"))
+        DpmCurveApplied(s, serial);      // the floor apply carried the stored curve's own voltage
     // The thread holds TickLock, so Gov is ours here. Leaving the idle state means the governor after the resume
     // measures a whole quiet window again instead of asking for the point at its first tick.
     bc250_dpm_idle_leave(&s->Gov);
@@ -1534,8 +1565,11 @@ void DpmCurveRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_CURVE* Data, ULONG S
         // RESET is also the way out of a curve that a start refused, so it does not need a governing start: it
         // deletes the registry values and leaves the table's own line behind. Every other write acts on a trial,
         // which only a running governor can carry.
+        // CANCEL is admitted after a give-up as well (0.7.211): the governor has stopped ticking, so the
+        // window cannot end by itself, and RESET - the only other way out - also deletes the stored curve.
         else if (op != BC250_DPM_CURVE_OP_RESET &&
-                 (!s->Created || s->Decision.mode != BC250_DPM_MODE_DPM || s->GaveUp))
+                 (!s->Created || s->Decision.mode != BC250_DPM_MODE_DPM ||
+                  (s->GaveUp && op != BC250_DPM_CURVE_OP_CANCEL)))
             status = STATUS_INVALID_DEVICE_STATE;
         else if (op == BC250_DPM_CURVE_OP_SET) {
             ULONG asked = trialIn ? trialIn : s->CurveTrialMs;
@@ -1549,11 +1583,19 @@ void DpmCurveRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_CURVE* Data, ULONG S
                 GuardLog("dpm: the curve trial runs for %lu ms; the stored curve comes back by itself", asked);
             }
         } else if (op == BC250_DPM_CURVE_OP_KEEP) {
+            int answer;
             KeAcquireSpinLock(&s->SnapLock, &irql);
-            kept = bc250_dpm_curve_keep(&s->Curve) ? TRUE : FALSE;
+            answer = bc250_dpm_curve_keep(&s->Curve);
+            kept = answer == 1 ? TRUE : FALSE;
             stored = s->Curve.stored;
             KeReleaseSpinLock(&s->SnapLock, irql);
-            if (!kept) status = STATUS_INVALID_DEVICE_STATE;     // nothing was on trial
+            // A candidate the governor has not carried yet is its own answer, and not "nothing was on trial":
+            // the caller shows it and asks again a tick later (0.7.211).
+            if (answer < 0) {
+                error = BC250_CLOCK_CURVE_UNTRIED;
+                status = STATUS_DEVICE_NOT_READY;
+                GuardLog("dpm: the curve KEEP is refused: the governor has not applied the candidate yet");
+            } else if (!kept) status = STATUS_INVALID_DEVICE_STATE;     // nothing was on trial
             else {
                 // The disk now, in the guard's order: the values, then the pending mark away, then the new mark.
                 // A crash between the values and the marks leaves a curve whose mark is the old one, and the next

@@ -46,12 +46,12 @@ int bc250_cpu_message_allowed(unsigned int queue, unsigned int message, int writ
 				return 0;
 			}
 		switch (message) {
-		/* The core-enable mask, and the two soft CCLK limits measured for their own sake at core id 0.
-		 * RequestCorePstate 0x0B is deliberately absent: a per-core P-state request on a part whose core
-		 * topology Windows cannot even report is a control nothing asks for. */
+		/* The core-enable mask alone. RequestCorePstate 0x0B is deliberately absent: a per-core P-state
+		 * request on a part whose core topology Windows cannot even report is a control nothing asks for.
+		 * SetSoftMinCclk 0x35 and SetSoftMaxCclk 0x36 are absent as well (0.7.211): no code path sends
+		 * either, and an entry with no caller that admits a CPU minimum of 4000 MHz under no undervolt
+		 * rule is the bricking shape through the one message bc250_cpu_settings_check does not cover. */
 		case BC250_CPU_MSG_SET_CORE_ENABLE_MASK:
-		case BC250_CPU_MSG_SET_SOFT_MIN_CCLK:
-		case BC250_CPU_MSG_SET_SOFT_MAX_CCLK:
 			return 1;
 		default:
 			return 0;
@@ -106,11 +106,6 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 			return parameter < BC250_CPU_CORES;
 		case BC250_CPU_MSG_SET_CORE_ENABLE_MASK:
 			return bc250_cpu_mask_allowed(parameter);
-		case BC250_CPU_MSG_SET_SOFT_MIN_CCLK:
-		case BC250_CPU_MSG_SET_SOFT_MAX_CCLK:
-			/* Core id 0 only, where the two argument layouts the sources disagree about are the same
-			 * value, and a clock inside the admitted band. */
-			return parameter >= BC250_CPU_MIN_MHZ && parameter <= BC250_CPU_MAX_MHZ_LAB;
 		default:
 			return 0;
 		}
@@ -152,9 +147,11 @@ enum bc250_cpu_error bc250_cpu_settings_check(const struct bc250_cpu_settings *s
 	if (s->uv_given && s->uv_steps > BC250_CPU_UV_MAX_STEPS) return BC250_CPU_ERROR_UV;
 	if (s->max_given) {
 		if (s->max_mhz < BC250_CPU_MIN_MHZ || s->max_mhz > ceiling) return BC250_CPU_ERROR_CLOCK;
-		/* A clock above the release bound is a lab experiment, and it never runs without an undervolt
-		 * already asked for: that is the one rule between us and the reported bricking path. */
-		if (s->max_mhz > BC250_CPU_MAX_MHZ && !(s->uv_given && s->uv_steps >= 1u)) return BC250_CPU_ERROR_CLOCK;
+		/* A clock above the release bound is a lab experiment, and it never runs without a real undervolt
+		 * in the same request: that is the one rule between us and the reported bricking path. One step is
+		 * about 5 mV at 3500 MHz, which is not an undervolt, so the bar is BC250_CPU_LAB_MIN_UV_STEPS. */
+		if (s->max_mhz > BC250_CPU_MAX_MHZ &&
+		    !(s->uv_given && s->uv_steps >= BC250_CPU_LAB_MIN_UV_STEPS)) return BC250_CPU_ERROR_CLOCK;
 	}
 	if (s->temp_given && (s->temp_c < BC250_CPU_TEMP_MIN_C || s->temp_c > BC250_CPU_TEMP_MAX_C))
 		return BC250_CPU_ERROR_TEMP;
@@ -163,25 +160,26 @@ enum bc250_cpu_error bc250_cpu_settings_check(const struct bc250_cpu_settings *s
 }
 
 static void add_step(struct bc250_cpu_plan *p, unsigned int queue, unsigned int message, unsigned int parameter,
-		     unsigned int kind)
+		     unsigned int kind, unsigned int cools)
 {
 	if (p->count >= BC250_CPU_PLAN_MAX) return;
 	p->step[p->count].queue = queue;
 	p->step[p->count].message = message;
 	p->step[p->count].parameter = parameter;
 	p->step[p->count].kind = kind;
+	p->step[p->count].cools = cools;
 	p->count++;
 }
 
-static void add_uv(struct bc250_cpu_plan *p, unsigned int steps)
+static void add_uv(struct bc250_cpu_plan *p, unsigned int steps, unsigned int cools)
 {
 	add_step(p, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CURVE_SCALE, bc250_cpu_scale_argument(steps),
-		 BC250_CPU_STEP_UV);
+		 BC250_CPU_STEP_UV, cools);
 }
 
-static void add_clock(struct bc250_cpu_plan *p, unsigned int mhz)
+static void add_clock(struct bc250_cpu_plan *p, unsigned int mhz, unsigned int cools)
 {
-	add_step(p, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, mhz, BC250_CPU_STEP_CLOCK);
+	add_step(p, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, mhz, BC250_CPU_STEP_CLOCK, cools);
 }
 
 enum bc250_cpu_error bc250_cpu_plan(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *to,
@@ -207,23 +205,57 @@ enum bc250_cpu_error bc250_cpu_plan(const struct bc250_cpu_settings *from, const
 
 	/* The cap first when it tightens (more protection before anything that makes heat), last when it loosens. */
 	if (tempChange && (!from->temp_given || want.temp_c <= from->temp_c))
-		add_step(plan, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, want.temp_c, BC250_CPU_STEP_TEMP);
+		add_step(plan, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, want.temp_c, BC250_CPU_STEP_TEMP, 1u);
 	/* The direction rule: the predicted voltage must never transiently exceed the ceiling, so every step that
 	 * lowers the voltage goes before every step that raises it. A deeper undervolt lowers it; so does a lower
 	 * clock limit, including the first limit of all, which is a lowering of the firmware's own ceiling. A
 	 * shallower undervolt and a higher limit raise it. Each of the two controls is judged on its own, because one
 	 * request can lower one and raise the other (a lower clock with less undervolt is the usual way back), and a
-	 * single flag for both would then send the raising step first. */
+	 * single flag for both would then send the raising step first. Of the two raising steps the undervolt's
+	 * goes first: a higher clock over a deeper undervolt is the combination that stretches. */
 	deeper = uvChange && want.uv_steps > (from->uv_given ? from->uv_steps : 0u);
 	lower = clockChange && (!from->max_given || want.max_mhz < from->max_mhz);
-	if (deeper) add_uv(plan, want.uv_steps);
-	if (lower) add_clock(plan, want.max_mhz);
-	if (clockChange && !lower) add_clock(plan, want.max_mhz);
-	if (uvChange && !deeper) add_uv(plan, want.uv_steps);
+	/* A clock limit that comes down goes first of the two: it lowers the voltage the firmware chooses, and
+	 * after it the undervolt may go either way. Otherwise the undervolt goes first, deeper or shallower, so
+	 * that a higher clock never goes out over an undervolt deeper than the one in force at the lower clock
+	 * (0.7.211; up to 0.7.210 the way back from a lab clock raised it before shallowing the undervolt). */
+	if (lower) {
+		add_clock(plan, want.max_mhz, 1u);
+		if (uvChange) add_uv(plan, want.uv_steps, deeper ? 1u : 0u);
+	} else {
+		if (uvChange) add_uv(plan, want.uv_steps, deeper ? 1u : 0u);
+		if (clockChange) add_clock(plan, want.max_mhz, 0u);
+	}
 	if (tempChange && from->temp_given && want.temp_c > from->temp_c)
-		add_step(plan, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, want.temp_c, BC250_CPU_STEP_TEMP);
+		add_step(plan, BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, want.temp_c, BC250_CPU_STEP_TEMP, 0u);
 	if (plan->count != (unsigned int)(uvChange + clockChange + tempChange)) return BC250_CPU_ERROR_PLAN;
 	return BC250_CPU_OK;
+}
+
+int bc250_cpu_restore_target(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *before,
+			     const struct bc250_cpu_settings *baseline, struct bc250_cpu_settings *out)
+{
+	int complete = 1;
+	*out = *before;
+	/* The cap: the state before the trial, then what the read stage answered, then the firmware's own. */
+	if (from->temp_given && !out->temp_given) {
+		out->temp_given = 1;
+		out->temp_c = (baseline != NULL && baseline->temp_given) ? baseline->temp_c : BC250_CPU_TEMP_MAX_C;
+	}
+	/* The undervolt: zero is the firmware's own curve and a valid argument, so this is always nameable. */
+	if (from->uv_given && !out->uv_given) {
+		out->uv_given = 1;
+		out->uv_steps = 0u;
+	}
+	/* The clock limit: only the recorded baseline can name it. Inventing a constant here would turn a
+	 * restore into a raise, which is what 0.7.210 did with BC250_CPU_MAX_MHZ as "the baseline". */
+	if (from->max_given && !out->max_given) {
+		if (baseline != NULL && baseline->max_given) {
+			out->max_given = 1;
+			out->max_mhz = baseline->max_mhz;
+		} else complete = 0;
+	}
+	return complete;
 }
 
 /* ---- the failure signs -------------------------------------------------------------------------- */
@@ -241,9 +273,10 @@ enum bc250_cpu_fail bc250_cpu_check_sample(const struct bc250_cpu_sample *s)
 			return BC250_CPU_FAIL_VOLTAGE;
 	}
 	if (s->temperature_valid && s->temperature_mc >= BC250_CLOCK_HOT_MC) return BC250_CPU_FAIL_HOT;
-	/* Clock stretching, against the limit that is actually applied. A core that did not answer reads 0 and is
-	 * not evidence either way. */
-	if (s->target_mhz >= BC250_CPU_STRETCH_MHZ)
+	/* Clock stretching, against the clock the cores should reach. A core that did not answer reads 0 and is
+	 * not evidence either way, and neither is any core of a sample nobody loaded: an idle core sits a whole
+	 * gigahertz under the limit, so an unloaded sample would fail every step of the search. */
+	if (s->loaded && s->target_mhz >= BC250_CPU_STRETCH_MHZ)
 		for (i = 0; i < s->cores && i < BC250_CPU_CORES; i++)
 			if (s->core_mhz[i] && s->core_mhz[i] + BC250_CPU_STRETCH_MHZ <= s->target_mhz)
 				return BC250_CPU_FAIL_STRETCH;

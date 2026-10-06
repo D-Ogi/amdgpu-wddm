@@ -584,14 +584,19 @@ typedef struct _BC250_VIDEO_MEMORY {
 // and a newer DLL recognize each other instead of reading past the buffer. tools/win/amdgpu_wddm_control mirrors
 // it in src/Native.cs and its unit tests check the offsets against this text.
 typedef struct _BC250_CPU_REQUEST {
-    ULONG Size;                             // sizeof(BC250_CPU_REQUEST), 40
+    ULONG Size;                             // sizeof(BC250_CPU_REQUEST), 56
     ULONG Op;                               // BC250_CPU_OP_*
     ULONG Given;                            // SET: BC250_CPU_GIVEN_* bits
     ULONG MaxMHz, UvSteps, TempC;           // SET; UvSteps also carries SEARCH_BEGIN's depth
     ULONG TrialMs;                          // SET and SEARCH_BEGIN; 0 is the driver's own window
     ULONG CoreMask;                         // CORES: 119 or 255
+    // What the caller knows about the load it runs and the driver cannot see (0.7.211). The driver judges
+    // clock stretching only over a sample the caller marks Loaded, and a machine check or a memory checksum
+    // error is a sign no kernel reading of this surface carries.
+    ULONG WheaEvents, ChecksumErrors;       // SET and SEARCH_STEP: the caller's counts since the trial began
+    ULONG Loaded;                           // SET and SEARCH_STEP: 1 while the caller loads the processor
     ULONGLONG ExpectedGeneration;           // every operation but READ
-} BC250_CPU_REQUEST; // 40 bytes on Windows
+} BC250_CPU_REQUEST; // 56 bytes on Windows
 
 static NTSTATUS TelemetryEscape(void *data, unsigned size);
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
@@ -707,14 +712,15 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
 
 // The CPU surface (0.7.210). One request structure instead of seven arguments, so that a new field is a version of
 // this DLL and not a new export. READ is software state; every other operation sends mailbox messages on the
-// firmware's queue 3 and therefore goes with HardwareAccess, administrator (READBACK excepted: reading a voltage is
-// not a privilege) and the Generation of a READ of the same start. The driver owns the trial deadline and the
-// revert, so a window that stops calling loses the trial and nothing else.
+// firmware's queue 3 and therefore goes with HardwareAccess, an administrator and the Generation of a READ of the
+// same start. READBACK asks for the administrator as well since 0.7.211: it holds the surface for some twenty
+// messages on the shared mailbox, which an unprivileged loop must not be able to do. The driver owns the trial
+// deadline and the revert, so a window that stops calling loses the trial and nothing else.
 BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_ESCAPE_CPU *data, ULONG bytes)
 {
     NTSTATUS status;
     ULONG op;
-    typedef char CpuAbiSizeCheck[(sizeof(BC250_ESCAPE_CPU) == 272 && sizeof(BC250_CPU_REQUEST) == 40) ? 1 : -1];
+    typedef char CpuAbiSizeCheck[(sizeof(BC250_ESCAPE_CPU) == 296 && sizeof(BC250_CPU_REQUEST) == 56) ? 1 : -1];
     (void)sizeof(CpuAbiSizeCheck);
     if (!request || !data || bytes != sizeof(*data) || request->Size != sizeof(*request)) return (LONG)0xC000000D;
     op = request->Op;
@@ -733,6 +739,11 @@ BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_E
         data->TempC = request->TempC;
     }
     if (op == BC250_CPU_OP_SEARCH_BEGIN) data->UvSteps = request->UvSteps;
+    if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_STEP) {
+        data->WheaEvents = request->WheaEvents;
+        data->ChecksumErrors = request->ChecksumErrors;
+        data->Loaded = request->Loaded;
+    }
     if (op == BC250_CPU_OP_CORES) data->CoreMask = request->CoreMask;
     if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_BEGIN) data->TrialMs = request->TrialMs;
     status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ);
@@ -2399,10 +2410,11 @@ static int DpmFloor(int argc, WCHAR **argv)
 //
 // The window and the revert belong to the driver: this tool can be killed at any moment and the curve still goes
 // back. Nothing reaches the registry before a keep.
-#define CURVE_ERRORS 6
+#define CURVE_ERRORS 7
 static const char *const g_CurveError[CURVE_ERRORS] = {
     "none", "a value outside 820..1000 mV", "deeper than the band allows at that clock",
-    "the voltage falls as the clock rises", "1000 MHz must stay at 820 mV", "no curve given"
+    "the voltage falls as the clock rises", "1000 MHz must stay at 820 mV", "no curve given",
+    "the governor has not put the candidate into the chip yet"
 };
 
 static int CurveQuery(BC250_ESCAPE_DPM_CURVE *c, unsigned long op, unsigned long long generation, int quiet)
@@ -2641,9 +2653,38 @@ static void CpuPrint(const BC250_ESCAPE_CPU *c)
     if (c->SearchStep || c->SearchTested)
         printf("cpu: search step %lu, best %lu, tested %lu, stopped by %s\n", c->SearchStep, c->SearchBest,
                c->SearchTested, c->SearchFail < CPU_FAILS ? g_CpuFail[c->SearchFail] : "?");
-    printf("cpu: reads %lu writes %lu refusals %lu reverts %lu; last queue %lu message 0x%02lX argument 0x%08lX "
-           "status 0x%08lX\n", c->Reads, c->Writes, c->Refusals, c->Reverts, c->LastQueue, c->LastMessage,
-           c->LastParameter, c->LastStatus);
+    printf("cpu: reads %lu writes %lu refusals %lu reverts %lu (retries %lu, refused %lu); last queue %lu "
+           "message 0x%02lX argument 0x%08lX status 0x%08lX\n", c->Reads, c->Writes, c->Refusals,
+           c->Reverts, c->RevertRetries, c->RevertFailures, c->LastQueue, c->LastMessage, c->LastParameter,
+           c->LastStatus);
+    if (c->Flags & BC250_CPU_FLAG_REVERT_OWED)
+        printf("cpu: A WAY BACK IS OWED: a revert was refused, so the trial settings are still in the chip. The "
+               "driver repeats it every second; a cold start is the last backstop\n");
+    if (!(c->Flags & BC250_CPU_FLAG_TEMP_VALID))
+        printf("cpu: the temperature above was NOT read on the last message, so it is older than the rest\n");
+}
+
+// What the caller knows about the load it ran over this sample (0.7.211). The driver judges clock stretching
+// only over a sample marked loaded, and a machine check is a sign no kernel reading of this surface carries, so
+// a search driven from a script says both: `cpu search step loaded 1 whea 0`.
+static int CpuSample(int argc, WCHAR **argv, int first, BC250_ESCAPE_CPU *c)
+{
+    int i;
+    unsigned long value = 0;
+    for (i = first; i < argc; i += 2) {
+        if (i + 1 >= argc || ParseNumber(argv[i + 1], &value)) {
+            fprintf(stderr, "usage: ... [whea <events>] [checksum <errors>] [loaded 0|1]\n");
+            return 1;
+        }
+        if (!_wcsicmp(argv[i], L"whea")) c->WheaEvents = value;
+        else if (!_wcsicmp(argv[i], L"checksum")) c->ChecksumErrors = value;
+        else if (!_wcsicmp(argv[i], L"loaded")) c->Loaded = value;
+        else {
+            fprintf(stderr, "cpu search step: whea, checksum or loaded\n");
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *name)
@@ -2661,6 +2702,9 @@ static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *na
         if (c.NtStatus == 0xC00000A3ul)
             printf("# STATUS_DEVICE_NOT_READY: the read stage has not answered yet. Run `bc250kmd_cli cpu readback` "
                    "first; it is what admits every setter of this start\n");
+        if (c.NtStatus == 0xC0000022ul)
+            printf("# STATUS_ACCESS_DENIED: every operation of this surface, the readback included, needs an "
+                   "elevated shell\n");
         CpuPrint(&before);
         return 1;
     }
@@ -2694,28 +2738,40 @@ static int Cpu(int argc, WCHAR **argv)
         return CpuWrite(BC250_CPU_OP_CORES, &c, "cpu cores");
     }
     if (!_wcsicmp(argv[2], L"search")) {
+        if (argc >= 4 && !_wcsicmp(argv[3], L"step")) {        // `cpu search step` reads as the hint prints it
+            if (CpuSample(argc, argv, 4, &c)) return 2;
+            return CpuWrite(BC250_CPU_OP_SEARCH_STEP, &c, "cpu search step");
+        }
         if (argc >= 4 && (ParseNumber(argv[3], &value) || value > BC250_CPU_REQUEST_SEARCH_STEPS)) {
             fprintf(stderr, "usage: bc250kmd_cli cpu search [steps]   (at most %lu)\n",
                     (unsigned long)BC250_CPU_REQUEST_SEARCH_STEPS);
             return 2;
         }
         c.UvSteps = argc >= 4 ? value : 0;
-        printf("# the load between the steps is the caller's: run `cpu search step` after each load window\n");
+        printf("# the load between the steps is the caller's: run `cpu search step loaded 1` after each load "
+               "window\n");
         return CpuWrite(BC250_CPU_OP_SEARCH_BEGIN, &c, "cpu search");
     }
-    if (!_wcsicmp(argv[2], L"step")) return CpuWrite(BC250_CPU_OP_SEARCH_STEP, &c, "cpu search step");
+    if (!_wcsicmp(argv[2], L"step")) {
+        if (CpuSample(argc, argv, 3, &c)) return 2;
+        return CpuWrite(BC250_CPU_OP_SEARCH_STEP, &c, "cpu search step");
+    }
     if (!_wcsicmp(argv[2], L"set")) {
         for (i = 3; i < argc; i += 2) {
             if (i + 1 >= argc || ParseNumber(argv[i + 1], &value)) {
-                fprintf(stderr, "usage: bc250kmd_cli cpu set [clock <MHz>] [uv <steps>] [temp <C>] [window <ms>]\n");
+                fprintf(stderr, "usage: bc250kmd_cli cpu set [clock <MHz>] [uv <steps>] [temp <C>] "
+                                "[window <ms>] [whea <events>] [checksum <errors>] [loaded 0|1]\n");
                 return 2;
             }
             if (!_wcsicmp(argv[i], L"clock")) { c.Given |= BC250_CPU_GIVEN_MAX; c.MaxMHz = value; }
             else if (!_wcsicmp(argv[i], L"uv")) { c.Given |= BC250_CPU_GIVEN_UV; c.UvSteps = value; }
             else if (!_wcsicmp(argv[i], L"temp")) { c.Given |= BC250_CPU_GIVEN_TEMP; c.TempC = value; }
             else if (!_wcsicmp(argv[i], L"window")) c.TrialMs = value;
+            else if (!_wcsicmp(argv[i], L"whea")) c.WheaEvents = value;
+            else if (!_wcsicmp(argv[i], L"checksum")) c.ChecksumErrors = value;
+            else if (!_wcsicmp(argv[i], L"loaded")) c.Loaded = value;
             else {
-                fprintf(stderr, "cpu set: clock, uv, temp or window\n");
+                fprintf(stderr, "cpu set: clock, uv, temp, window, whea, checksum or loaded\n");
                 return 2;
             }
         }
@@ -2726,7 +2782,7 @@ static int Cpu(int argc, WCHAR **argv)
         return CpuWrite(BC250_CPU_OP_SET, &c, "cpu set");
     }
     fprintf(stderr, "usage: bc250kmd_cli cpu [readback | set ... | keep | cancel | reset | cores 6|8 | search "
-                    "[steps] | step]\n");
+                    "[steps] | search step [whea N] [checksum N] [loaded 1]]\n");
     return 2;
 }
 

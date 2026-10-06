@@ -507,12 +507,20 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 // Three rules the driver enforces, and a caller should expect:
 //   - No setter runs until this start's READBACK has answered once (FLAG_QUEUE3_PROVEN). Queue 3 has never been
 //     spoken to on this part, so an inferred fact is measured before a write depends on it.
-//   - No CPU message while the GPU is at or above BC250_CPU_GPU_BUSY_PERMILLE busy, or at or above the lab's
-//     87 C. One message per BC250_CPU_MESSAGE_GAP_MS, and the owner lock is released between them so the
+//   - No CPU message while the GPU is at or above BC250_CPU_GPU_BUSY_PERMILLE busy. At or above the lab's 87 C
+//     no setter runs either, with two exceptions the driver names itself: a step that lowers the dissipation,
+//     and the way back from a trial. The part must always be returnable to the settings it is known to run at,
+//     and a trial left in the chip because the part was hot is the worse of the two states (0.7.211).
+//     One message per BC250_CPU_MESSAGE_GAP_MS, and the owner lock is released between them so the
 //     governor's 25 ms tick is never held for a whole sequence.
 //   - A SET is a trial. The driver reverts it when TrialMs passes without a KEEP, and nothing reaches the
-//     registry before a KEEP. Nothing on the CPU side persists in the chip either, so a cold boot is the last
-//     backstop.
+//     registry before a KEEP. A revert that the firmware refuses stays owed (FLAG_REVERT_OWED) and the driver
+//     keeps trying; only then is a cold boot the last backstop, because nothing of this surface persists in
+//     the chip.
+//   - SEARCH_STEP and SET judge the sample the caller describes: WheaEvents, ChecksumErrors and Loaded come
+//     from the caller, which is the only side that can count a machine check or know that it was loading the
+//     part. Without Loaded the driver does not judge clock stretching at all, because an idle core sits a
+//     gigahertz under any limit.
 // CpuTune 0 (the release default) refuses every write with STATUS_INVALID_DEVICE_STATE: the CPU surface is opt-in
 // per machine. Error is enum bc250_cpu_error; SearchFail is enum bc250_cpu_fail (driver/shim/include/bc250_cpu.h).
 #define BC250_CPU_ABI 1u
@@ -551,6 +559,8 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 #define BC250_CPU_FLAG_CORE_PENDING 256u     // CoreMaskPending: a restart now puts the stock mask back
 #define BC250_CPU_FLAG_CORE_CONFIRMED 512u
 #define BC250_CPU_FLAG_BUSY 1024u            // another CPU sequence runs: this request was refused, nothing changed
+#define BC250_CPU_FLAG_REVERT_OWED 2048u     // a revert was refused and is retried: the chip still has the trial
+#define BC250_CPU_FLAG_TEMP_VALID 4096u      // TemperatureMc was read; without this nothing judges the part cold
 typedef struct _BC250_ESCAPE_CPU {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -569,10 +579,13 @@ typedef struct _BC250_ESCAPE_CPU {
     long TemperatureMc;                     // out
     unsigned long SearchStep, SearchBest, SearchFail, SearchTested;     // out
     unsigned long Reads, Writes, Refusals, Reverts;                    // out
+    unsigned long RevertRetries, RevertFailures;     // out: an owed revert's attempts, and the refused ones
+    unsigned long WheaEvents, ChecksumErrors;       // in: SET and SEARCH_STEP, from the caller's own counters
+    unsigned long Loaded;                   // in: 1 while the caller loads the CPU over this sample
     unsigned long long Generation;          // out: start-health generation of the start this describes
     unsigned long long ExpectedGeneration;  // in: every write
     unsigned long Reserved[2];              // zero in, zero out
-} BC250_ESCAPE_CPU; // 272 bytes on Windows, ABI 1
+} BC250_ESCAPE_CPU; // 296 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

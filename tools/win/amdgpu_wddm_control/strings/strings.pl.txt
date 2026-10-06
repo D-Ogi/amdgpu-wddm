@@ -320,8 +320,6 @@ search.later.power|mt-safe|fba85679|Limit mocy
 search.later.power.terms|mt|db72d2b0|limit mocy|pobór mocy|moc|waty|TDP
 search.later.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
 search.later.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
-search.later.voltage|mt-safe|4e40d79f|Napięcie
-search.later.voltage.terms|mt|5cc069f4|napięcie|undervolt|undervolting|obniżenie napięcia|mV
 search.later.fps-counter|mt-safe|8e4f7029|Wyświetlanie liczby klatek
 search.later.fps-counter.terms|mt|40353cf6|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę
 search.later.cache-clear|mt-safe|6b923412|Wyczyść pamięć podręczną shaderów
@@ -625,7 +623,6 @@ help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i wi
 help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Dostępne później.
 help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Dostępne później.
 help.setting.fan|mt|bfae721d|Wentylatorem steruje oprogramowanie układowe płyty. Sterowanie z tej aplikacji pojawi się później.
-help.setting.voltage|mt|9c28b6e1|Napięcie układu. Dostępne później.
 help.setting.fps-counter|mt|929ada50|Pokazuje liczbę klatek na sekundę. Dostępne później.
 help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Dostępne później.
 # ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
@@ -738,3 +735,13 @@ plan.line.cpu-tune-on|mt|c3793e19|Dostrajanie procesora: włączone.
 plan.line.cpu-tune-off|mt|14ef42b2|Dostrajanie procesora: wyłączone.
 tuner.cpu.preview.stop|mt|f3995948|procesor wraca do ustawień z przed testu
 tuner.cpu.preview.reset|mt|c3cf92af|procesor wraca do swoich standardowych ustawień
+# ---- 0.7.211 ----
+graphics.cpu.reset|mt|4bd614fa|Standardowe ustawienia procesora
+graphics.cpu.revert-owed|mt|7214cad3|Sterownik nie mógł przywrócić poprzednich ustawień procesora i próbuje dalej. Jeśli to nie znika, uruchom ponownie Windows.
+graphics.tuning.not-applied|mt|24166ef8|Sterownik jeszcze nie użył tego ustawienia. Odczekaj chwilę i zachowaj je.
+tuner.curve.error.untried|mt|6ae732ce|Sterownik jeszcze nie użył tego ustawienia. Odczekaj chwilę i spróbuj ponownie.
+tuner.refuse.curve-not-applied|mt|28020c45|Sterownik jeszcze nie użył testowanego ustawienia. Odczekaj chwilę i spróbuj ponownie.
+tuner.curve.preview.standard|mt|0c38511f|przy każdej prędkości wraca standardowe napięcie
+tuner.note.curve-risk|mt|28bb65b2|Mniejsze napięcie sprawia, że układ graficzny jest przy tej samej prędkości chłodniejszy i cichszy. Zbyt niskie objawia się zawieszeniem gry lub obrazu, a nie komunikatem; po zakończeniu testu ustawienie wraca samo.
+tuner.note.cpu-risk|mt|0e0c4e70|Te wartości procesora pochodzą z płyt innych osób. Zbyt wysoka prędkość lub zbyt niskie napięcie objawia się zawieszeniem komputera. Aplikacja tylko obniża napięcie i po każdej zmianie odczytuje je ponownie.
+tuner.note.cores-risk|mt|8be50b28|Osiem rdzeni daje więcej ciepła i pobiera więcej mocy niż sześć. Nikt nie przetestował dwóch dodatkowych rdzeni na tej płycie.
