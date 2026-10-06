@@ -136,6 +136,7 @@ HRESULT Encoder::Initialize(ID3D11Device* device, const EncoderConfig& cfg)
         const int32_t q = 51 - static_cast<int32_t>(m_cfg.quality * 37u / 100u) - 7;
         m_qp = ClampQp(q);
     }
+    m_pending.clear();
     m_frameIndex = 0;
     m_framesSinceIdr = 0;
     m_frameNum = 0;
@@ -145,8 +146,26 @@ HRESULT Encoder::Initialize(ID3D11Device* device, const EncoderConfig& cfg)
     return S_OK;
 }
 
+void Encoder::DiscardPending()
+{
+    while (!m_pending.empty()) {
+        const HRESULT hr = m_gpu.Collect(m_levels, m_info);
+        m_pending.erase(m_pending.begin());
+        if (FAILED(hr)) {
+            // The device is in no state to be drained picture by picture. The pending list is cleared
+            // anyway, so that nothing later waits for a picture that will never arrive.
+            m_pending.clear();
+            break;
+        }
+    }
+}
+
 void Encoder::Shutdown()
 {
+    if (m_initialized) {
+        DiscardPending();
+    }
+    m_pending.clear();
     m_gpu.Shutdown();
     m_initialized = false;
 }
@@ -177,8 +196,7 @@ void Encoder::UpdateRateControl(uint32_t frameBytes, bool wasKeyFrame)
     m_qp = ClampQp(static_cast<int32_t>(m_qp) + step);
 }
 
-HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
-                             std::vector<uint8_t>& out, FrameStats* stats)
+HRESULT Encoder::SubmitFrame(const GpuFrameInput& in, bool forceKeyFrame)
 {
     if (!m_initialized) {
         return E_UNEXPECTED;
@@ -200,7 +218,49 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
     gp.deblockIdc = m_cfg.deblocking ? 0u : 1u;
 
     const double t0 = NowMs();
-    HRESULT hr = m_gpu.EncodeFrame(in, gp, m_levels, m_info);
+    HRESULT hr = m_gpu.Submit(in, gp);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    Submitted s;
+    s.idr = idr;
+    s.qp = qp;
+    s.deblockIdc = gp.deblockIdc;
+    s.frameNum = idr ? 0u : m_frameNum;
+    s.idrPicId = m_idrPicId & 1u;
+    s.submitMs = NowMs() - t0;
+    m_pending.push_back(s);
+
+    // The bitstream order counters move on now, not when the picture is retired: the next picture's
+    // frame_num follows this one's in bitstream order whether or not this one has been coded yet.
+    if (idr) {
+        m_framesSinceIdr = 1;
+        m_frameNum = 1;
+        ++m_idrPicId;
+    } else {
+        ++m_framesSinceIdr;
+        m_frameNum = (m_frameNum + 1u) & 0xFFu;   // MaxFrameNum is 256 (log2_max_frame_num_minus4 4)
+    }
+    ++m_frameIndex;
+    return S_OK;
+}
+
+HRESULT Encoder::RetireFrame(std::vector<uint8_t>& out, FrameStats* stats)
+{
+    if (!m_initialized) {
+        return E_UNEXPECTED;
+    }
+    if (m_pending.empty()) {
+        return E_NOT_VALID_STATE;
+    }
+    const Submitted s = m_pending.front();
+    m_pending.erase(m_pending.begin());
+    const bool idr = s.idr;
+    const uint32_t qp = s.qp;
+
+    const double t0 = NowMs();
+    HRESULT hr = m_gpu.Collect(m_levels, m_info);
     if (FAILED(hr)) {
         return hr;
     }
@@ -209,10 +269,10 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
     SliceParams slice;
     slice.idr = idr;
     slice.pSlice = !idr;
-    slice.frameNum = idr ? 0u : m_frameNum;
-    slice.idrPicId = m_idrPicId & 1u;
+    slice.frameNum = s.frameNum;
+    slice.idrPicId = s.idrPicId;
     slice.sliceQp = static_cast<int32_t>(qp);
-    slice.disableDeblockingFilterIdc = gp.deblockIdc;
+    slice.disableDeblockingFilterIdc = s.deblockIdc;
 
     BitWriter bw;
     bw.Clear();
@@ -238,7 +298,6 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
     EmitNal(out, idr ? 3u : 2u, idr ? kNalSliceIdr : kNalSliceNonIdr, bw.Rbsp());
     const double tNal = NowMs();
 
-    m_gpu.SwapReference();
     if (stats != nullptr) {
         stats->keyFrame = idr;
         stats->qp = qp;
@@ -246,7 +305,9 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
         stats->skippedMbs = sw.SkippedMbs();
         stats->gpuMs = m_gpu.LastGpuMilliseconds();
         stats->gpuTimingValid = m_gpu.LastGpuTimingValid();
-        stats->gpuWallMs = tGpu - t0;
+        // Both halves of the GPU stage of this picture: the recording, which happened in SubmitFrame
+        // and at a depth above one overlapped the GPU work of the picture before it, and the collect.
+        stats->gpuWallMs = s.submitMs + (tGpu - t0);
         stats->readbackMs = m_gpu.LastReadbackMilliseconds();
         stats->recordMs = m_gpu.LastRecordMilliseconds();
         stats->mapWaitMs = m_gpu.LastMapWaitMilliseconds();
@@ -258,17 +319,21 @@ HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
         stats->cpuMs = tNal - tGpu;
     }
 
+    // The one decision that belongs to the retired picture rather than to the submitted one, because
+    // it is the only one that needs the byte count. At a pipeline depth above one the pictures already
+    // in flight were quantised before this, so the loop's feedback is that many pictures older.
     UpdateRateControl(static_cast<uint32_t>(out.size()), idr);
-    if (idr) {
-        m_framesSinceIdr = 1;
-        m_frameNum = 1;
-        ++m_idrPicId;
-    } else {
-        ++m_framesSinceIdr;
-        m_frameNum = (m_frameNum + 1u) & 0xFFu;   // MaxFrameNum is 256 (log2_max_frame_num_minus4 4)
-    }
-    ++m_frameIndex;
     return S_OK;
+}
+
+HRESULT Encoder::EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
+                             std::vector<uint8_t>& out, FrameStats* stats)
+{
+    HRESULT hr = SubmitFrame(in, forceKeyFrame);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    return RetireFrame(out, stats);
 }
 
 } // namespace bc250h264

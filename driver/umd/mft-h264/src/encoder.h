@@ -93,9 +93,35 @@ public:
     // SPS and PPS as an Annex B byte sequence, for MF_MT_MPEG_SEQUENCE_HEADER.
     const std::vector<uint8_t>& ParameterSets() const { return m_parameterSets; }
 
-    // Encodes one picture. The output is an Annex B access unit; a key frame carries SPS and PPS.
+    // How many pictures the GPU may hold at once; see GpuEncoder::SetPipelineDepth. One is the serial
+    // shape. Above one, SubmitFrame returns before the picture is coded and RetireFrame produces the
+    // access unit of an earlier one, so the entropy coding of a picture runs while the GPU works on the
+    // next. The quantiser of a picture is then chosen before the byte count of the picture before it is
+    // known, so the rate control feedback is one picture older at depth 2 than at depth 1 and the two
+    // depths produce different bytes at a rate controlled setting. At a fixed quantiser - RateControl
+    // ::Quality, which is what the host test's --qp uses - the bytes are identical, and that identity
+    // is the pipeline's correctness gate.
+    HRESULT SetPipelineDepth(uint32_t depth) { return m_gpu.SetPipelineDepth(depth); }
+    uint32_t PipelineDepth() const { return m_gpu.PipelineDepth(); }
+    // Pictures submitted and not yet retired.
+    uint32_t Pending() const { return static_cast<uint32_t>(m_pending.size()); }
+
+    // Records one picture's GPU work and returns without waiting for it. Refuses with
+    // E_NOT_VALID_STATE when PipelineDepth() pictures are already in flight.
+    HRESULT SubmitFrame(const GpuFrameInput& in, bool forceKeyFrame);
+
+    // Waits for the oldest submitted picture and writes its access unit. The output is Annex B; a key
+    // frame carries SPS and PPS. Refuses with E_NOT_VALID_STATE when nothing is in flight.
+    HRESULT RetireFrame(std::vector<uint8_t>& out, FrameStats* stats);
+
+    // Encodes one picture, waiting for it: SubmitFrame followed by RetireFrame.
     HRESULT EncodeFrame(const GpuFrameInput& in, bool forceKeyFrame,
                         std::vector<uint8_t>& out, FrameStats* stats);
+
+    // Collects every submitted picture and throws its result away, without writing a slice or touching
+    // the rate control. What a flush does: the GPU work is already recorded and its results have to
+    // come off the pipeline before anything else is submitted, but the pictures themselves are gone.
+    void DiscardPending();
 
     GpuEncoder& Gpu() { return m_gpu; }
     const EncoderConfig& Config() const { return m_cfg; }
@@ -121,6 +147,18 @@ public:
     static uint32_t ChromaQpFromLuma(int32_t qpY, int32_t chromaQpIndexOffset);
 
 private:
+    // What SubmitFrame decided about a picture and RetireFrame needs to write its slice. Everything
+    // here is a bitstream order property, settled when the picture's GPU work was recorded; the only
+    // thing RetireFrame decides for itself is what the rate control does with the byte count.
+    struct Submitted {
+        bool idr = false;
+        uint32_t qp = 0;
+        uint32_t deblockIdc = 1;
+        uint32_t frameNum = 0;
+        uint32_t idrPicId = 0;
+        double submitMs = 0.0;   // wall clock SubmitFrame spent recording it
+    };
+
     uint32_t ClampQp(int32_t qp) const;
     void UpdateRateControl(uint32_t frameBytes, bool wasKeyFrame);
 
@@ -131,6 +169,9 @@ private:
     std::vector<uint8_t> m_parameterSets;
     std::vector<uint32_t> m_levels;
     std::vector<MbInfo> m_info;
+    // Submitted and not yet retired, oldest first. At most kMaxPipelineDepth entries, so the front
+    // erase of a vector costs nothing worth a deque.
+    std::vector<Submitted> m_pending;
     uint64_t m_frameIndex = 0;
     uint32_t m_framesSinceIdr = 0;
     uint32_t m_frameNum = 0;

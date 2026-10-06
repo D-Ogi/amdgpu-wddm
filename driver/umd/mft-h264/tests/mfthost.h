@@ -36,6 +36,12 @@ struct Options {
     // longer one. The count stays in the output next to the averages, so a reader sees what was left
     // out rather than having to trust a round number.
     uint32_t timingSkip = 0;
+    // --depth N: how many pictures the GPU may hold at once. One is the serial shape and the one every
+    // correctness check runs at. Above one, --encode runs the case twice: first serially with the whole
+    // oracle, then again with N pictures in flight, and the pipelined stream has to be byte identical
+    // to the serial one. That identity is what carries the oracle's verdict over to the pipeline, and it
+    // holds only at a fixed quantiser, so the pipelined pass refuses a rate controlled setting.
+    uint32_t depth = 1;
     int32_t probeX = -1;            // --probe X Y: print this Cb column of every picture
     int32_t probeY = -1;
     RateControl rc = RateControl::Quality;

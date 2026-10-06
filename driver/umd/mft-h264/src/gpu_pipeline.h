@@ -137,11 +137,33 @@ struct GpuStageProfile {
     std::vector<GpuStageStep> steps;
 };
 
+// The most pictures that may be in the GPU's hands at once. Two is enough to cover the entropy coding
+// of one picture with the GPU work of the next, which is the whole of the serialisation this removes;
+// a deeper pipeline only adds latency, and every slot costs one levels and one macroblock-info staging
+// buffer (3.4 MB together at 1080p).
+enum : uint32_t { kMaxPipelineDepth = 4 };
+
 class GpuEncoder {
 public:
     // device may be null, in which case a device is created on the preferred adapter.
     HRESULT Initialize(ID3D11Device* device, uint32_t visibleWidth, uint32_t visibleHeight);
     void Shutdown();
+
+    // How many pictures may be submitted before one is collected. One is the serial shape: Submit
+    // records a picture's commands and Collect immediately waits for it, so the GPU is idle while the
+    // CPU codes the slice and the CPU is idle while the GPU works. The pipeline is correct at any
+    // depth because the device executes the command stream in order: the reconstruction a P picture
+    // reads is written by the dispatches before it, and the copy that captures a picture's levels is
+    // recorded before the next picture's dispatches overwrite them, so only the staging buffers and
+    // the timestamp queries need one copy per slot.
+    //
+    // Must be called with nothing in flight, which in practice means right after Initialize. It
+    // refuses nothing: a depth above kMaxPipelineDepth is clamped, and a depth above 1 is clamped to 1
+    // while BC250_MFT_STAGE_TIMING is on, because the per-dispatch marks of two pictures would share
+    // one query array and the profile would mix them.
+    HRESULT SetPipelineDepth(uint32_t depth);
+    uint32_t PipelineDepth() const { return m_depth; }
+    uint32_t InFlight() const { return m_inFlight; }
 
     uint32_t WidthMb() const { return m_widthMb; }
     uint32_t HeightMb() const { return m_heightMb; }
@@ -150,19 +172,38 @@ public:
     uint32_t MbCount() const { return m_widthMb * m_heightMb; }
     ID3D11Device* Device() const { return m_device.Get(); }
 
-    // Runs one picture through the GPU and reads back the levels and the per-macroblock info.
+    // Records one picture's GPU work and the copy that captures its result, and returns without
+    // waiting for any of it. The input is read, uploaded or referenced before this returns, so the
+    // caller may release a system memory picture afterwards; a texture the client still owns is read
+    // by the import dispatch later, which is why the transform holds the input sample until the
+    // picture is collected (MFT_INPUT_STREAM_HOLDS_BUFFERS).
+    //
+    // Refuses with E_NOT_VALID_STATE when PipelineDepth() pictures are already in flight.
+    HRESULT Submit(const GpuFrameInput& in, const GpuFrameParams& p);
+
+    // Waits for the oldest submitted picture and moves its levels and per-macroblock info to the
+    // caller. Refuses with E_NOT_VALID_STATE when nothing is in flight. The Last*Milliseconds figures
+    // and the stage profile describe the picture this collected, and ReadReconstruction returns its
+    // reconstruction.
+    HRESULT Collect(std::vector<uint32_t>& levels, std::vector<MbInfo>& info);
+
+    // Submit followed by Collect: one picture through the GPU, with the thread waiting for it. The
+    // serial shape, and what every caller that does not pipeline uses.
     HRESULT EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p,
                         std::vector<uint32_t>& levels, std::vector<MbInfo>& info);
 
-    // The reconstruction of the picture just encoded, in coded (padded) dimensions. Test and
-    // diagnostic use only; the encoder itself never moves the reconstruction to the CPU.
+    // The reconstruction of the picture just collected, in coded (padded) dimensions. Test and
+    // diagnostic use only; the encoder itself never moves the reconstruction to the CPU. At a pipeline
+    // depth above one it still returns the collected picture's reconstruction, which is sound as long
+    // as the depth is 2: picture k wrote one of the two reconstruction buffers and picture k+2 is the
+    // next to overwrite it, and k is collected before k+2 is submitted. Reading it does wait for every
+    // picture submitted so far, so it costs the pipeline.
     HRESULT ReadReconstruction(std::vector<uint8_t>& y, std::vector<uint8_t>& cb,
                                std::vector<uint8_t>& cr);
-    // The source picture as the import pass produced it, in coded dimensions. Used for PSNR.
+    // The source picture as the import pass produced it, in coded dimensions. Used for PSNR. The
+    // import writes one set of source planes, so this is the most recently submitted picture, not the
+    // most recently collected one: at a depth above one it is only meaningful right after a Submit.
     HRESULT ReadSource(std::vector<uint8_t>& y, std::vector<uint8_t>& cb, std::vector<uint8_t>& cr);
-
-    // Marks the reconstruction just produced as the reference for the next picture.
-    void SwapReference();
 
     // The GPU time between the first and the last dispatch of the last picture, from the device's own
     // timestamps. Zero, and LastGpuTimingValid false, when the device did not deliver a usable pair:
@@ -176,10 +217,10 @@ public:
     // How long the last picture's timestamp queries took to retire after the readback. Part of the
     // GPU stage, and the price of a per-picture GPU measurement.
     double LastQueryWaitMilliseconds() const { return m_lastQueryWaitMs; }
-    // Wall clock the calling thread spent recording the last picture's commands: the input upload,
-    // every constant buffer Map and every Dispatch call, up to the closing timestamp. A 1080p I
-    // picture records 443 dispatches, so this is a cost of its own, and in the present
-    // one-picture-at-a-time shape it is serial with the GPU rather than overlapped with it.
+    // Wall clock the calling thread spent recording the collected picture's commands: the input
+    // upload, every constant buffer Map, every Dispatch call and the two copies that capture the
+    // result. A cost of its own, and at a pipeline depth above one it is the part of a picture that
+    // overlaps the GPU work of the picture before it.
     double LastRecordMilliseconds() const { return m_lastRecordMs; }
     // The blocking Map on the levels staging buffer, which is where the CPU waits for the whole
     // picture to finish. The rest of the readback stage is the two copies and the two memcpy calls,
@@ -196,6 +237,23 @@ private:
         ComPtr<ID3D11UnorderedAccessView> uav;
         uint32_t bytes = 0;
     };
+
+    // One picture in flight. Everything a picture needs after its commands are recorded: the two
+    // staging buffers its result was copied into, its own timestamp queries, and what Submit already
+    // knows about it. The shaders, the reconstruction buffers, the levels and the macroblock info are
+    // shared, because the device executes in order and each picture's copy into these buffers is
+    // recorded before the next picture's dispatches.
+    struct Slot {
+        ComPtr<ID3D11Buffer> levelsStaging;
+        ComPtr<ID3D11Buffer> mbinfoStaging;
+        ComPtr<ID3D11Query> tsDisjoint;
+        ComPtr<ID3D11Query> tsBegin;
+        ComPtr<ID3D11Query> tsEnd;
+        double recordMs = 0.0;
+        uint32_t written = 0;   // the m_rec index this picture's reconstruction went to
+    };
+
+    HRESULT CreateSlot(Slot* out);
 
     HRESULT CreateRawBuffer(uint32_t bytes, bool uav, Plane* out);
     HRESULT CreateUploadBuffer(uint32_t bytes, Plane* out);
@@ -246,14 +304,16 @@ private:
     // wavefront. Reset from m_progressReset before every deblocking pass.
     Plane m_progress;
     std::vector<uint32_t> m_progressReset;
-    ComPtr<ID3D11Buffer> m_levelsStaging;
-    ComPtr<ID3D11Buffer> m_mbinfoStaging;
+    // The pictures in flight, as a ring of m_depth slots: m_slotWrite is the next Submit's, m_slotRead
+    // the next Collect's, and m_inFlight how many lie between them.
+    std::vector<Slot> m_slots;
+    uint32_t m_depth = 1;
+    uint32_t m_slotWrite = 0;
+    uint32_t m_slotRead = 0;
+    uint32_t m_inFlight = 0;
     ComPtr<ID3D11Buffer> m_planeStaging;
     ComPtr<ID3D11Texture2D> m_ownNv12;
     ComPtr<ID3D11Texture2D> m_ownBgra;
-    ComPtr<ID3D11Query> m_tsDisjoint;
-    ComPtr<ID3D11Query> m_tsBegin;
-    ComPtr<ID3D11Query> m_tsEnd;
     // The stage marks: one timestamp query per mark, grown once and reused for every picture after.
     std::vector<ComPtr<ID3D11Query>> m_marks;
     std::vector<uint32_t> m_markStage;    // which stage the dispatch before mark i belongs to
@@ -267,7 +327,7 @@ private:
     uint32_t m_padW = 0, m_padH = 0;
     uint32_t m_widthMb = 0, m_heightMb = 0;
     uint32_t m_cur = 0;
-    uint32_t m_lastWritten = 0;   // the m_rec index EncodeFrame wrote last, for ReadReconstruction
+    uint32_t m_lastWritten = 0;   // the m_rec index of the collected picture, for ReadReconstruction
     double m_lastGpuMs = 0.0;
     double m_lastReadbackMs = 0.0;
     double m_lastQueryWaitMs = 0.0;

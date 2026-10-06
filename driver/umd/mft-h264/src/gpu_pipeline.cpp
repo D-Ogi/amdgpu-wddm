@@ -427,10 +427,6 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     if (FAILED(hr)) { return hr; }
     m_progressReset.assign(m_progress.bytes / 4u, 0u);
     m_progressReset[0] = m_widthMb;
-    hr = CreateStaging(m_levels.bytes, &m_levelsStaging);
-    if (FAILED(hr)) { return hr; }
-    hr = CreateStaging(m_mbinfo.bytes, &m_mbinfoStaging);
-    if (FAILED(hr)) { return hr; }
     hr = CreateStaging(lumaBytes, &m_planeStaging);
     if (FAILED(hr)) { return hr; }
 
@@ -441,13 +437,6 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     hr = m_device->CreateBuffer(&cbd, nullptr, &m_cb);
     if (FAILED(hr)) { return hr; }
-
-    D3D11_QUERY_DESC qd = {};
-    qd.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
-    m_device->CreateQuery(&qd, &m_tsDisjoint);
-    qd.Query = D3D11_QUERY_TIMESTAMP;
-    m_device->CreateQuery(&qd, &m_tsBegin);
-    m_device->CreateQuery(&qd, &m_tsEnd);
 
     // Per-stage GPU timing, read once here so that the encode path only tests an integer.
     m_stageLevel = 0;
@@ -477,6 +466,72 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
     // start of stream and after every flush), an IDR is intra coded throughout, and it writes every
     // macroblock of the reconstruction before the first P picture reads any of it.
     m_cur = 0;
+    // One slot: the serial shape, which is what every caller gets until it asks for more.
+    m_slots.clear();
+    m_depth = 0;
+    m_slotWrite = 0;
+    m_slotRead = 0;
+    m_inFlight = 0;
+    return SetPipelineDepth(1);
+}
+
+HRESULT GpuEncoder::CreateSlot(Slot* out)
+{
+    HRESULT hr = CreateStaging(m_levels.bytes, &out->levelsStaging);
+    if (FAILED(hr)) { return hr; }
+    hr = CreateStaging(m_mbinfo.bytes, &out->mbinfoStaging);
+    if (FAILED(hr)) { return hr; }
+    D3D11_QUERY_DESC qd = {};
+    qd.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+    hr = m_device->CreateQuery(&qd, &out->tsDisjoint);
+    if (FAILED(hr)) { return hr; }
+    qd.Query = D3D11_QUERY_TIMESTAMP;
+    hr = m_device->CreateQuery(&qd, &out->tsBegin);
+    if (FAILED(hr)) { return hr; }
+    hr = m_device->CreateQuery(&qd, &out->tsEnd);
+    return hr;
+}
+
+HRESULT GpuEncoder::SetPipelineDepth(uint32_t depth)
+{
+    if (!m_device) {
+        return E_UNEXPECTED;
+    }
+    if (m_inFlight != 0) {
+        return E_NOT_VALID_STATE;
+    }
+    if (depth == 0) {
+        depth = 1;
+    }
+    if (depth > kMaxPipelineDepth) {
+        depth = kMaxPipelineDepth;
+    }
+    // The per-dispatch and per-stage marks are one array of queries, recorded by Submit and read by
+    // Collect, so two pictures in flight would interleave their marks and the profile would be of
+    // neither of them. A measurement run is serial by construction; it says what one picture costs,
+    // not what the pipeline delivers.
+    if (depth > 1 && m_stageLevel != 0) {
+        MftTrace("pipeline depth %u refused: BC250_MFT_STAGE_TIMING times one picture at a time\n",
+                 depth);
+        depth = 1;
+    }
+    if (depth == m_depth) {
+        return S_OK;
+    }
+    // Grown, never shrunk: a slot's staging buffers are 3.4 MB at 1080p and a client that walks the
+    // depth up and down would otherwise free and reallocate them. The ring uses the first m_depth.
+    while (m_slots.size() < depth) {
+        Slot s;
+        HRESULT hr = CreateSlot(&s);
+        if (FAILED(hr)) {
+            return hr;
+        }
+        m_slots.push_back(std::move(s));
+    }
+    m_depth = depth;
+    m_slotWrite = 0;
+    m_slotRead = 0;
+    MftTrace("pipeline depth %u\n", m_depth);
     return S_OK;
 }
 
@@ -502,15 +557,15 @@ void GpuEncoder::Shutdown()
     m_mbinfo = Plane();
     m_progress = Plane();
     m_progressReset.clear();
-    m_levelsStaging.Reset();
-    m_mbinfoStaging.Reset();
+    m_slots.clear();
+    m_depth = 0;
+    m_slotWrite = 0;
+    m_slotRead = 0;
+    m_inFlight = 0;
     m_planeStaging.Reset();
     m_ownNv12.Reset();
     m_ownBgra.Reset();
     m_cb.Reset();
-    m_tsDisjoint.Reset();
-    m_tsBegin.Reset();
-    m_tsEnd.Reset();
     m_marks.clear();
     m_markStage.clear();
     m_markGroups.clear();
@@ -659,18 +714,22 @@ HRESULT GpuEncoder::UploadBgraSystem(const uint8_t* rgb, uint32_t pitch, ID3D11T
     return S_OK;
 }
 
-HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p,
-                                std::vector<uint32_t>& levels, std::vector<MbInfo>& info)
+HRESULT GpuEncoder::Submit(const GpuFrameInput& in, const GpuFrameParams& p)
 {
+    if (m_inFlight >= m_depth) {
+        return E_NOT_VALID_STATE;
+    }
+    Slot& slot = m_slots[m_slotWrite];
+
     // Six slots: u0..u2 reconstruction, u3 levels, u4 macroblock info, u5 the deblocking row counters.
     ID3D11UnorderedAccessView* nullUavs[6] = {};
     ID3D11ShaderResourceView* nullSrvs[13] = {};
 
     const double record0 = NowMs();
-    m_ctx->Begin(m_tsDisjoint.Get());
-    m_ctx->End(m_tsBegin.Get());
+    m_ctx->Begin(slot.tsDisjoint.Get());
+    m_ctx->End(slot.tsBegin.Get());
     BeginStageTiming();
-    m_lastWritten = m_cur;
+    slot.written = m_cur;
 
     // ---- import --------------------------------------------------------------------------------
     UpdateConstants(p, 0, 0);
@@ -844,41 +903,78 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
         m_ctx->CSSetShaderResources(0, 13, nullSrvs);
     }
 
-    m_ctx->End(m_tsEnd.Get());
-    m_ctx->End(m_tsDisjoint.Get());
-    m_lastRecordMs = NowMs() - record0;
+    m_ctx->End(slot.tsEnd.Get());
+    m_ctx->End(slot.tsDisjoint.Get());
+
+    // ---- capture the result ----------------------------------------------------------------------
+    //
+    // Recorded here rather than waited for here, and that is the whole of the pipelining: the two
+    // copies take this picture's levels and macroblock info into this slot's staging buffers, and
+    // because the device executes the stream in order they run before the next picture's dispatches
+    // overwrite the shared buffers. Collect maps the staging copy, so the next picture can be recorded
+    // and started while the CPU still holds this one's levels.
+    m_ctx->CopyResource(slot.levelsStaging.Get(), m_levels.buffer.Get());
+    m_ctx->CopyResource(slot.mbinfoStaging.Get(), m_mbinfo.buffer.Get());
+
+    // One picture, one submission. Without this the runtime keeps recording into the same command
+    // buffer until something forces it out, which is the Map in Collect, and this driver's Map waits
+    // for the whole buffer that holds the copy rather than for the copy itself: at depth 2 the first
+    // measured pipeline was slower than the serial shape (6.37 against 4.88 ms per 1080p picture) with
+    // the map wait unchanged at 2.3 ms, because every wait covered two pictures of GPU work. Flushing
+    // here also starts this picture at once instead of when the next Collect asks for the one before
+    // it, which is the point of recording ahead. At depth 1 the Map is the flush and this would only
+    // add a kernel transition, so the serial path is left exactly as it was.
+    if (m_depth > 1) {
+        m_ctx->Flush();
+    }
+    slot.recordMs = NowMs() - record0;
+    // The reconstruction this picture wrote is the next picture's reference. It was GpuEncoder's
+    // caller that used to do this after the entropy coding; it belongs here, because at a depth above
+    // one the next picture is recorded before the entropy coding of this one has even started.
+    m_cur = 1u - m_cur;
+    m_slotWrite = (m_slotWrite + 1u) % m_depth;
+    ++m_inFlight;
+    return S_OK;
+}
+
+HRESULT GpuEncoder::Collect(std::vector<uint32_t>& levels, std::vector<MbInfo>& info)
+{
+    if (m_inFlight == 0) {
+        return E_NOT_VALID_STATE;
+    }
+    Slot& slot = m_slots[m_slotRead];
+    m_lastWritten = slot.written;
+    m_lastRecordMs = slot.recordMs;
 
     // ---- read back the levels and the macroblock info -------------------------------------------
     //
-    // Its own timed stage. The two CopyResource calls queue the copies, the first Map blocks until
-    // everything queued for this picture has executed on the GPU, and the two memcpy calls move the
-    // result into the caller's storage. So this block holds the whole wait for the GPU plus the cost
-    // of the transfer, and none of the entropy coding that follows it: without it the frame level
-    // code could only report "GPU" and "CPU" and the wait would hide inside the GPU number.
+    // Its own timed stage. The copies were recorded by Submit; the first Map blocks until they have
+    // executed on the GPU, and the two memcpy calls move the result into the caller's storage. So this
+    // block holds the whole wait for the GPU plus the cost of the transfer, and none of the entropy
+    // coding that follows it: without it the frame level code could only report "GPU" and "CPU" and
+    // the wait would hide inside the GPU number.
     const double readback0 = NowMs();
-    m_ctx->CopyResource(m_levelsStaging.Get(), m_levels.buffer.Get());
-    m_ctx->CopyResource(m_mbinfoStaging.Get(), m_mbinfo.buffer.Get());
-
     levels.resize(static_cast<size_t>(MbCount()) * kLevelsWordsPerMb);
     info.resize(MbCount());
     D3D11_MAPPED_SUBRESOURCE m = {};
-    // The one blocking call of the picture: everything queued above has to have executed before the
+    // The one blocking call of the picture: the copy into this slot has to have executed before the
     // levels are readable, so this is the CPU's wait for the GPU and the rest of the stage is
-    // transfer. Timed on its own because the two are what an overlapped pipeline would separate.
+    // transfer. Timed on its own because the two are what the pipeline separates: at a depth above one
+    // this wait is what the entropy coding of the picture before it was hiding.
     const double map0 = NowMs();
-    HRESULT hr = m_ctx->Map(m_levelsStaging.Get(), 0, D3D11_MAP_READ, 0, &m);
+    HRESULT hr = m_ctx->Map(slot.levelsStaging.Get(), 0, D3D11_MAP_READ, 0, &m);
     m_lastMapWaitMs = NowMs() - map0;
     if (FAILED(hr)) {
         return hr;
     }
     memcpy(levels.data(), m.pData, levels.size() * 4u);
-    m_ctx->Unmap(m_levelsStaging.Get(), 0);
-    hr = m_ctx->Map(m_mbinfoStaging.Get(), 0, D3D11_MAP_READ, 0, &m);
+    m_ctx->Unmap(slot.levelsStaging.Get(), 0);
+    hr = m_ctx->Map(slot.mbinfoStaging.Get(), 0, D3D11_MAP_READ, 0, &m);
     if (FAILED(hr)) {
         return hr;
     }
     memcpy(info.data(), m.pData, info.size() * sizeof(MbInfo));
-    m_ctx->Unmap(m_mbinfoStaging.Get(), 0);
+    m_ctx->Unmap(slot.mbinfoStaging.Get(), 0);
     m_lastReadbackMs = NowMs() - readback0;
 
     // ---- the GPU timing of this picture ---------------------------------------------------------
@@ -893,10 +989,10 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
     const double query0 = NowMs();
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj = {};
     UINT64 gpu0 = 0, gpu1 = 0;
-    const bool haveDisjoint = (WaitForQuery(m_tsDisjoint.Get(), &dj, sizeof(dj)) == S_OK);
+    const bool haveDisjoint = (WaitForQuery(slot.tsDisjoint.Get(), &dj, sizeof(dj)) == S_OK);
     if (haveDisjoint &&
-        WaitForQuery(m_tsBegin.Get(), &gpu0, sizeof(gpu0)) == S_OK &&
-        WaitForQuery(m_tsEnd.Get(), &gpu1, sizeof(gpu1)) == S_OK &&
+        WaitForQuery(slot.tsBegin.Get(), &gpu0, sizeof(gpu0)) == S_OK &&
+        WaitForQuery(slot.tsEnd.Get(), &gpu1, sizeof(gpu1)) == S_OK &&
         !dj.Disjoint && dj.Frequency != 0 && gpu1 >= gpu0) {
         m_lastGpuMs = 1000.0 * static_cast<double>(gpu1 - gpu0) / static_cast<double>(dj.Frequency);
         m_lastGpuMsValid = true;
@@ -905,10 +1001,22 @@ HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p
         CollectStageTiming(dj);
     }
     m_lastQueryWaitMs = NowMs() - query0;
+    m_slotRead = (m_slotRead + 1u) % m_depth;
+    --m_inFlight;
     MftTrace("gpu picture: record %.3f ms, readback %.3f ms (map wait %.3f), query wait %.3f ms, "
-             "gpu %.3f ms (valid %d)\n", m_lastRecordMs, m_lastReadbackMs, m_lastMapWaitMs,
-             m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0);
+             "gpu %.3f ms (valid %d), %u still in flight\n", m_lastRecordMs, m_lastReadbackMs,
+             m_lastMapWaitMs, m_lastQueryWaitMs, m_lastGpuMs, m_lastGpuMsValid ? 1 : 0, m_inFlight);
     return S_OK;
+}
+
+HRESULT GpuEncoder::EncodeFrame(const GpuFrameInput& in, const GpuFrameParams& p,
+                                std::vector<uint32_t>& levels, std::vector<MbInfo>& info)
+{
+    HRESULT hr = Submit(in, p);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    return Collect(levels, info);
 }
 
 HRESULT GpuEncoder::ReadPlanes(Plane* y, Plane* cb, Plane* cr, std::vector<uint8_t>& oy,
@@ -939,8 +1047,8 @@ HRESULT GpuEncoder::ReadPlanes(Plane* y, Plane* cb, Plane* cr, std::vector<uint8
 HRESULT GpuEncoder::ReadReconstruction(std::vector<uint8_t>& y, std::vector<uint8_t>& cb,
                                        std::vector<uint8_t>& cr)
 {
-    // m_lastWritten, not m_cur: a caller reads the reconstruction after EncodeFrame, and the frame
-    // level code calls SwapReference in between, which moves m_cur to the other buffer.
+    // m_lastWritten, not m_cur: a caller reads the reconstruction after a picture was collected, and
+    // Submit has already moved m_cur on to the buffer the next picture writes.
     Plane* p = m_rec[m_lastWritten];
     return ReadPlanes(&p[0], &p[1], &p[2], y, cb, cr);
 }
@@ -949,11 +1057,6 @@ HRESULT GpuEncoder::ReadSource(std::vector<uint8_t>& y, std::vector<uint8_t>& cb
                                std::vector<uint8_t>& cr)
 {
     return ReadPlanes(&m_src[0], &m_src[1], &m_src[2], y, cb, cr);
-}
-
-void GpuEncoder::SwapReference()
-{
-    m_cur = 1u - m_cur;
 }
 
 } // namespace bc250h264
