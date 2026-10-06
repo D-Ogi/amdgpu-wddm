@@ -159,7 +159,10 @@ perf.memory.value|mt-safe|eaf124e2|{1} GB 中 {0} GB
 perf.power|mt-safe|848e9656|電力
 perf.power.explain|mt|2fb99c60|ドライバーはまだ消費電力を読み取れません。これは今後対応予定です。
 perf.fan|mt-safe|e27be641|ファン
-perf.fan.explain|mt|a79a4ea7|ファンはボードが自動的に制御しています (BIOS のファン設定)。ドライバーはまだファンを読み取れません。
+perf.fan.explain|mt|18194645|ファンはボードが自動的に回します (BIOS のファン設定)。ドライバーは回転数を読み取ってここに表示します。
+perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)
+perf.fan.rpm-only|mt-safe|c140fb3e|{0} rpm
+perf.fan.stopped|mt|95e3cf4e|回転していません
 # ---- shader caches (F-CACHE) ----
 cache.d3d12|mt-safe|f4642299|DirectX 12 シェーダー キャッシュ
 cache.d3d12.present|mt|15118fb9|使用中：{1} 個のプログラムで {0}。2 回目以降のゲームの起動が速くなります。
@@ -267,7 +270,7 @@ search.display.identify.terms|mt|6a71b05e|識別|どの画面|モニター番号
 search.display.scale|mt|1cf201de|拡大縮小、レイアウト、向き
 search.display.scale.terms|mt|f73bb0e2|DPI|拡大縮小|ズーム|文字サイズ|テキストのサイズ|向き|回転|レイアウト|スケール
 search.perf.sensors|mt-safe|a8451874|温度と負荷
-search.perf.sensors.terms|mt|d3085e12|温度|使用率|負荷|センサー|VRAM|メモリ|電力|消費電力|ファン|ワット|W
+search.perf.sensors.terms|mt|b467ff5a|温度|使用率|負荷|センサー|VRAM|メモリ|電力|消費電力|ファン|回転数|rpm|ワット|W
 search.perf.cache|mt-safe|d7b57389|シェーダー キャッシュ
 search.perf.cache.terms|mt|6c23151c|キャッシュ|シェーダー|シェーダ|カクつき|スタッター|コンパイル
 search.driver.version|mt-safe|04cb4284|ドライバーのバージョン
@@ -624,7 +627,7 @@ help.setting.mode|mt|16a81243|このアプリから解像度とリフレッシ�
 help.setting.hdr|mt|af54494e|ハイ ダイナミック レンジ：明るい部分がより明るく、色がより豊かになります。今後対応予定です。
 help.setting.vrr|mt|4662d04f|モニターがゲームのフレーム レートに合わせて動作し、動きが滑らかになります。今後対応予定です。
 help.setting.power|mt|3659317e|チップが使用できる最大電力です。今後対応予定です。
-help.setting.fan|mt|bfae721d|ファンはボードのファームウェアが制御しています。このアプリからの制御は今後対応予定です。
+help.setting.fan|mt|0fda8087|ファンはボードのファームウェアが回します。このアプリは回転数を表示します。このアプリからの制御は今後対応予定です。
 help.setting.voltage|mt|9c28b6e1|チップの電圧です。今後対応予定です。
 help.setting.fps-counter|mt|929ada50|フレーム レートを表示します。今後対応予定です。
 help.setting.cache-clear|mt|c75227ac|シェーダー キャッシュを削除します。今後対応予定です。

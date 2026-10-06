@@ -40,6 +40,7 @@ namespace Bc250Mon
                 p.Rows.Add(new Row("Tctl", t.ToString("0.0") + " C", lvl));
                 p.Rows.Add(new Row("GFX clock", mhz + " MHz"));
                 p.Rows.Add(new Row("GFX voltage", Driver.MillivoltsFromVid(vid).ToString("0") + " mV (vid " + vid + ")"));
+                AddFanRow(p);
                 if (lvl != _lastTempLevel && (lvl > Level.Good || _lastTempLevel > Level.Good))
                     state.Log(Name, lvl, "temperature " + t.ToString("0.0") + " C");
                 _lastTempLevel = lvl;
@@ -52,6 +53,35 @@ namespace Bc250Mon
                 _lastError = e.Message;
             }
             state.SetPanel(p);
+        }
+
+        // The case fan, from the board's own hardware monitor (docs/design/fan.md). Its own try/catch: the fan is
+        // information, and an old control DLL or a closed gate must not cost the panel its temperature row. The
+        // driver still does not turn the fan - the BIOS curve does, and the owner keeps that setting as it is.
+        void AddFanRow(Panel p)
+        {
+            try
+            {
+                HwmonSnapshot f = _driver.ReadHwmon();
+                if (Hwmon.Has(f, HwmonSnapshot.FlagGated)) { p.Rows.Add(new Row("Fan", "not read (gate closed)")); return; }
+                if (!Hwmon.Reading(f))
+                {
+                    p.Rows.Add(new Row("Fan", "no reading (reason " + f.Reason + ", age " + f.AgeMs + " ms)", Level.Warn));
+                    return;
+                }
+                if (Hwmon.Has(f, HwmonSnapshot.FlagStopped))
+                {
+                    p.Rows.Add(new Row("Fan", "not turning, duty " + Hwmon.DutyPercent(f) + " %", Level.Error));
+                    return;
+                }
+                string duty = Hwmon.Has(f, HwmonSnapshot.FlagDutyProven) ? " (" + Hwmon.DutyPercent(f) + " %)" : "";
+                p.Rows.Add(new Row("Fan", Hwmon.Rpm(f) + " rpm" + duty));
+                double? apu = Hwmon.ApuC(f);
+                // The chip reads the APU die over SB-TSI, independently of the SMU. Two readings that disagree
+                // are worth seeing side by side, which is why this row says where its number came from.
+                if (apu.HasValue) p.Rows.Add(new Row("Tctl (board EC)", apu.Value.ToString("0.0") + " C"));
+            }
+            catch (Exception e) { p.Rows.Add(new Row("Fan", e.Message, Level.Warn)); }
         }
     }
 

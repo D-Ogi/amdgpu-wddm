@@ -159,7 +159,10 @@ perf.memory.value|mt|eaf124e2|{1} GB 중 {0} GB
 perf.power|mt-safe|848e9656|전력
 perf.power.explain|mt|2fb99c60|드라이버가 아직 전력 사용량을 읽을 수 없습니다. 이 기능은 나중에 추가됩니다.
 perf.fan|mt-safe|e27be641|팬
-perf.fan.explain|mt|a79a4ea7|팬은 보드가 직접 제어합니다(BIOS 팬 설정). 드라이버는 아직 팬 정보를 읽을 수 없습니다.
+perf.fan.explain|mt|18194645|보드가 팬을 직접 돌립니다(BIOS 팬 설정). 드라이버가 회전 수를 읽어 여기에 표시합니다.
+perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)
+perf.fan.rpm-only|mt-safe|c140fb3e|{0} rpm
+perf.fan.stopped|mt|95e3cf4e|회전하지 않음
 # ---- shader caches (F-CACHE) ----
 cache.d3d12|mt-safe|f4642299|DirectX 12 셰이더 캐시
 cache.d3d12.present|mt|15118fb9|사용 중: 프로그램 {1}개에 {0}. 다음부터 게임을 더 빠르게 시작할 수 있습니다.
@@ -267,7 +270,7 @@ search.display.identify.terms|mt|6a71b05e|식별|어느 화면|모니터 번호
 search.display.scale|mt|1cf201de|배율, 레이아웃 및 방향
 search.display.scale.terms|mt|f73bb0e2|DPI|확대|배율|텍스트 크기|방향|회전|레이아웃
 search.perf.sensors|mt-safe|a8451874|온도 및 사용률
-search.perf.sensors.terms|mt|d3085e12|온도|사용량|사용률|부하|센서|VRAM|메모리|전력|팬|와트
+search.perf.sensors.terms|mt|b467ff5a|온도|사용량|사용률|부하|센서|VRAM|메모리|전력|팬|회전 수|rpm|와트
 search.perf.cache|mt-safe|d7b57389|셰이더 캐시
 search.perf.cache.terms|mt|6c23151c|캐시|셰이더|끊김|버벅임|컴파일
 search.driver.version|mt-safe|04cb4284|드라이버 버전
@@ -624,7 +627,7 @@ help.setting.mode|mt|16a81243|이 앱에서 해상도와 새로 고침 빈도를
 help.setting.hdr|mt|af54494e|하이 다이내믹 레인지: 더 밝은 하이라이트와 더 많은 색상을 표시합니다. 나중에 제공됩니다.
 help.setting.vrr|mt|4662d04f|모니터가 게임의 프레임 속도에 맞춰 더 부드러운 움직임을 보여 줍니다. 나중에 제공됩니다.
 help.setting.power|mt|3659317e|칩이 사용할 수 있는 최대 전력입니다. 나중에 제공됩니다.
-help.setting.fan|mt|bfae721d|팬은 보드의 펌웨어가 제어합니다. 이 앱에서 제어하는 기능은 나중에 제공됩니다.
+help.setting.fan|mt|0fda8087|보드 펌웨어가 팬을 돌립니다. 이 앱은 회전 수를 표시합니다. 앱에서 제어하는 기능은 나중에 제공됩니다.
 help.setting.voltage|mt|9c28b6e1|칩의 전압입니다. 나중에 제공됩니다.
 help.setting.fps-counter|mt|929ada50|프레임 속도를 표시합니다. 나중에 제공됩니다.
 help.setting.cache-clear|mt|c75227ac|셰이더 캐시를 삭제합니다. 나중에 제공됩니다.

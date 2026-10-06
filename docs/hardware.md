@@ -37,6 +37,20 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   the byte offsets `regcalc` computes for `C2PMSG_66`, `C2PMSG_82` and `C2PMSG_90`, in the
   same three roles. All five of our messages have a handler there
   ([M791](facts/hardware.md#m791)).
+- The case fan: the board turns it, our driver reads it. A Nuvoton NCT6686D hardware monitor holds the fan
+  curve, and the BIOS "Fan Setting" option selects which curve it uses. The owner keeps that option as it is
+  (2026-10-05). The chip sits on the I/O window `0x0A20-0x0A2F` and publishes five tachometer channels, five
+  duty outputs and three temperature channels, one of which reads the APU die over SB-TSI independently of
+  the SMU ([M796](facts/hardware.md#m796)). KMD 0.7.208.1 reads it, and only reads it: the driver issues no
+  write to any register of that chip, and it never touches the Super I/O configuration ports `0x2E`/`0x2F`,
+  which the DSDT drives under an ACPI mutex a kernel driver cannot take. The window has no arbiter, so the
+  reader is off unless `EnableHwmon` is 1, and a measured session needs the preflight check of
+  [`design/fan.md`](design/fan.md). `HwmonBasePort` admits exactly three values: `0x0A20` (the default, also
+  selected by 0), `0x0A00` and `0x0A10`, the three windows the DSDT declares on this board. Every other value
+  is refused before a port is touched, because this reader writes three latch bytes to read one register, and
+  a mistyped base such as `0x0CF8` (the PCI configuration address port) or `0x0CD0` (the FCH power-management
+  index pair) would take those writes. Setting the fan duty from the driver is **not implemented** and waits
+  for the owner's decision. The same page says what it would need.
 - Design options that were examined and rejected, with the reason for each:
   [`design/rejected-options.md`](design/rejected-options.md). Read it before you propose
   an SMU message, an SMN path or a CU mask that is not in the list above.

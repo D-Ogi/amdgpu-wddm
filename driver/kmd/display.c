@@ -354,6 +354,13 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
+    // The board's hardware monitor: the sampler's published snapshot, software state as well (hwmon.c). No port
+    // is read here, so it belongs with the other software snapshots, ahead of the power-phase check below.
+    if (data->Command == BC250_ESCAPE_RUN_HWMON) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_HWMON)) return STATUS_INVALID_PARAMETER;
+        HwmonRequest(device,(BC250_ESCAPE_HWMON*)data,Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
     // Interop switches: the start's decision and the session marker, software state as well (interop.c).
     if (data->Command == BC250_ESCAPE_RUN_INTEROP) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_INTEROP)) return STATUS_INVALID_PARAMETER;

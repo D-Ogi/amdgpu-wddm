@@ -73,6 +73,10 @@ namespace AmdgpuWddmControl
         static extern int Bc250LogRead(uint from, [Out] byte[] data, uint bytes);
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250CuMode(uint op, ulong expectedGeneration, [Out] byte[] data, uint bytes);
+        // Added to bc250control.dll with KMD 0.7.208.1. A deployed DLL without it throws
+        // EntryPointNotFoundException, which Call() turns into "bc250control.dll is too old for this application".
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Hwmon([Out] byte[] data, uint bytes);
 
         // AMDGPU_WDDM_CONTROL_NO_DLL=1: every driver read answers as if bc250control.dll were missing (the build's
         // check of the recovery view and of the pages without the DLL).
@@ -117,6 +121,13 @@ namespace AmdgpuWddmControl
         public static KmdResult<StartHealthState> ConfirmStart(ulong generation, ulong epoch)
         {
             return Call(KmdReply.StartHealthBytes, b => Bc250StartHealth(1, generation, epoch, b, (uint)b.Length), KmdReply.ParseStartHealth);
+        }
+
+        // The board's hardware monitor: the fan speed and the chip's own temperatures (READ, any caller). The
+        // reading needs EnableHwmon open on the lab machine; with the gate closed the reply says so in its flags.
+        public static KmdResult<HwmonState> Hwmon()
+        {
+            return Call(KmdReply.HwmonBytes, b => Bc250Hwmon(b, (uint)b.Length), KmdReply.ParseHwmon);
         }
 
         // The CU mode snapshot of this start (READ, any caller).

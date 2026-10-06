@@ -91,6 +91,29 @@ namespace Bc250Mon
             }
             catch (Exception e) { notes.Add("VRAM n/a: " + e.Message); }
 
+            // Once per publishing window, not once per sample: the fan changes over seconds, and the lesson of
+            // the summary poll (trial 41, 300 ms of game stall) is that an escape four times a second is never
+            // free, software snapshot or not.
+            try
+            {
+                HwmonSnapshot f = source.ReadHwmon();
+                if (Hwmon.Reading(f))
+                {
+                    t.FanStopped = Hwmon.Has(f, HwmonSnapshot.FlagStopped);
+                    t.FanRpm = Hwmon.Rpm(f);
+                    if (Hwmon.Has(f, HwmonSnapshot.FlagDutyProven)) t.FanDutyPercent = Hwmon.DutyPercent(f);
+                    t.FanApuC = Hwmon.ApuC(f);
+                }
+                // A closed gate is the configured state of every install, not a fault, so it says nothing. The two
+                // other ways to have no reading are worth one note each, and they are not the same thing: a stale
+                // sample means the sampler stopped, a refusal means the reader never got going or gave up.
+                else if (!Hwmon.Has(f, HwmonSnapshot.FlagGated))
+                    notes.Add(Hwmon.Has(f, HwmonSnapshot.FlagValid)
+                        ? "fan n/a: last reading " + f.AgeMs + " ms old"
+                        : "fan n/a: reader offline, reason " + f.Reason);
+            }
+            catch (Exception e) { notes.Add("fan n/a: " + e.Message); }
+
             t.TemperatureLevel = !t.TemperatureC.HasValue ? Level.Info : t.TemperatureC >= GpuProvider.ErrorC ? Level.Error :
                                  t.TemperatureC >= GpuProvider.WarnC ? Level.Warn : Level.Good;
             t.Note = notes.Count > 0 ? string.Join("; ", notes) : null;
@@ -160,6 +183,8 @@ namespace Bc250Mon
                 { "vramUsedMB", Telemetry.Megabytes(t.VramUsedBytes) }, { "vramTotalMB", Telemetry.Megabytes(t.VramTotalBytes) },
                 { "vramUsedBytes", t.VramUsedBytes }, { "vramTotalBytes", t.VramTotalBytes }, { "vramTotalSource", t.VramTotalSource },
                 { "apertureUsedMB", Telemetry.Megabytes(t.ApertureUsedBytes) }, { "apertureTotalMB", Telemetry.Megabytes(t.ApertureTotalBytes) },
+                { "fanRpm", t.FanRpm }, { "fanDutyPercent", t.FanDutyPercent }, { "fanStopped", t.FanStopped },
+                { "fanApuC", t.FanApuC.HasValue ? (object)Math.Round(t.FanApuC.Value, 1) : null },
                 { "kmdVersion", t.KmdVersion != 0 ? "0x" + t.KmdVersion.ToString("X8") : null }, { "note", t.Note },
             };
         }
@@ -181,6 +206,11 @@ namespace Bc250Mon
             s.Add(new KeyValuePair<string, Color>("load " + t.Load, t.LoadPercent.HasValue ? color(Level.Info) : dim));
             s.Add(new KeyValuePair<string, Color>(t.Clock, t.GfxMHz.HasValue ? color(Level.Info) : dim));
             s.Add(new KeyValuePair<string, Color>("VRAM " + t.Vram, t.VramUsedBytes.HasValue ? color(Level.Info) : dim));
+            // The fan is NOT a segment here, deliberately. This strip is clipped to a 460-unit panel, and the
+            // widest line the lab can produce (105.5 C, 100 % load, 2000 MHz, 16384/16384 MB) already fills it;
+            // "fan 1589 rpm (96 %)" would push the right-hand end past the clip and silently cut the VRAM figure
+            // off. The fan lives in the SoC / GPU panel row, in Telemetry.Text, in GET /telemetry and in the
+            // support report. Before adding it back, widen the panel - do not quietly make the line longer.
             return s;
         }
 

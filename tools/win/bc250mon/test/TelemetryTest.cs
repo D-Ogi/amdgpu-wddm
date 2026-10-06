@@ -16,8 +16,8 @@ sealed class FakeSource : ITelemetrySource
 {
     public Queue<object> Dpm = new Queue<object>();
     public DpmSnapshot Default;
-    public object Clock, Vram;
-    public int DpmCalls, ClockCalls, VramCalls;
+    public object Clock, Vram, Fan;
+    public int DpmCalls, ClockCalls, VramCalls, FanCalls;
     public DpmSnapshot ReadDpm()
     {
         DpmCalls++;
@@ -37,6 +37,12 @@ sealed class FakeSource : ITelemetrySource
         if (Vram is Exception) throw (Exception)Vram;
         return (VideoMemorySnapshot)Vram;
     }
+    public HwmonSnapshot ReadHwmon()
+    {
+        FanCalls++;
+        if (Fan is Exception) throw (Exception)Fan;
+        return (HwmonSnapshot)Fan;
+    }
 }
 
 static class TelemetryTest
@@ -54,11 +60,31 @@ static class TelemetryTest
         return new VideoMemorySnapshot { Size = 264, Segments = 3, LocalResident = resident, LocalLimit = limit, DedicatedVideoMemory = dedicated,
                                          ApertureResident = 64ul << 20, ApertureLimit = 256ul << 20 };
     }
+    // Unit A's hardware monitor as E01 read it: five channels, one fan at 1589 rpm, duty read-back 961 permille,
+    // the APU at 83.0 C over the chip's own SB-TSI link.
+    const uint FanValid = HwmonSnapshot.FlagValid, FanFresh = HwmonSnapshot.FlagFresh,
+               FanProven = HwmonSnapshot.FlagDutyProven, FanGated = HwmonSnapshot.FlagGated,
+               FanStopped = HwmonSnapshot.FlagStopped;
+    static HwmonSnapshot FanSnap(uint flags, uint rpm, uint dutyPermille, uint reason)
+    {
+        var h = new HwmonSnapshot
+        {
+            Magic = 0x30353242, Command = 27, AbiVersion = 1, Op = 0, Flags = flags, Reason = reason,
+            BasePort = 0x0A20, CustomerId = 0x0E2C, EcVersion = 0x0100, FanPresentMask = 0x1F, DutyPresentMask = 0x1F,
+            Rpm = new uint[8], DutyPermille = new uint[8], TemperatureMc = new int[4], TemperatureSource = new uint[4],
+        };
+        h.Rpm[1] = rpm;
+        for (int i = 0; i < 5; i++) h.DutyPermille[i] = dutyPermille;
+        h.TemperatureSource[0] = HwmonSnapshot.SourceApu; h.TemperatureMc[0] = 83000;
+        h.TemperatureSource[1] = 8; h.TemperatureMc[1] = 59500;
+        return h;
+    }
     static FakeSource Source()
     {
         return new FakeSource { Default = Dpm(0x000700B1, Running | Temp | Clk | Hw, 67500, 1000, 250),
                                 Clock = new ClockSnapshot { TemperatureMc = 70250, ObservedMHz = 1200, AbiVersion = 1, Ready = 1 },
-                                Vram = Vram(1234ul << 20, 2048ul << 20, 2080ul << 20) };
+                                Vram = Vram(1234ul << 20, 2048ul << 20, 2080ul << 20),
+                                Fan = FanSnap(FanValid | FanFresh | FanProven, 1589, 961, 0) };
     }
     static Telemetry Window(FakeSource s, int samples)
     {
@@ -85,7 +111,9 @@ static class TelemetryTest
         Check(t.VramUsedBytes == 1234ul << 20 && t.VramTotalBytes == 2048ul << 20 && t.VramTotalSource == "commit-limit", "VRAM from the memory segments");
         Check(t.ApertureUsedBytes == 64ul << 20 && t.ApertureTotalBytes == 256ul << 20, "aperture kept apart");
         Check(t.Note == null && t.TemperatureLevel == Level.Good && t.KmdVersion == 0x000700B1, "clean sample has no note");
-        Check(t.Text == "Tctl 67.5 C  load 45 %  GFX 1000 MHz  VRAM 1234/2048 MB", "text: " + t.Text);
+        Check(t.FanRpm == 1589 && t.FanDutyPercent == 96 && !t.FanStopped && t.FanApuC == 83.0, "fan from the hardware monitor");
+        Check(s.FanCalls == 1, "the fan is read once per publication, not once per sample");
+        Check(t.Text == "Tctl 67.5 C  load 45 %  GFX 1000 MHz  VRAM 1234/2048 MB  fan 1589 rpm (96 %)", "text: " + t.Text);
 
         // 0.7.176 (deployed on 2026-09-30): only the submit share exists, so load is n/a, the rest still comes.
         s = Source(); s.Default = Dpm(0x000700B0, Running | Temp | Clk, 66000, 1000, 74);
@@ -132,11 +160,40 @@ static class TelemetryTest
 
         // Nothing answers: every value n/a, each with its reason, level neutral.
         s = Source(); s.Clock = new InvalidOperationException("KMD clock unavailable (0xC000000E)"); s.Vram = new InvalidOperationException("segment statistics unavailable (0xC000000E)");
+        s.Fan = new EntryPointNotFoundException("no Bc250Hwmon");
         for (int i = 0; i < 8; i++) s.Dpm.Enqueue(new EntryPointNotFoundException("no Bc250Dpm"));
         t = Window(s, 8);
         Check(t.TemperatureC == null && t.GfxMHz == null && t.LoadPercent == null && t.VramUsedBytes == null && t.TemperatureLevel == Level.Info, "all n/a");
-        Check(t.Note.Contains("no Bc250Dpm") && t.Note.Contains("0xC000000E") && t.Note.Contains("VRAM n/a"), "all reasons: " + t.Note);
-        Check(t.Text == "Tctl n/a  load n/a  GFX n/a MHz  VRAM n/a", "n/a text: " + t.Text);
+        Check(t.FanRpm == null && t.FanDutyPercent == null && !t.FanStopped, "fan n/a when the export is missing");
+        Check(t.Note.Contains("no Bc250Dpm") && t.Note.Contains("0xC000000E") && t.Note.Contains("VRAM n/a")
+              && t.Note.Contains("fan n/a: no Bc250Hwmon"), "all reasons: " + t.Note);
+        Check(t.Text == "Tctl n/a  load n/a  GFX n/a MHz  VRAM n/a  fan n/a", "n/a text: " + t.Text);
+
+        // The fan, state by state. The gate is closed by every install, and that is not worth a note every two
+        // seconds: it is the configured state of the machine, not a fault.
+        s = Source(); s.Fan = FanSnap(FanGated, 0, 0, 1);
+        t = Window(s, 1);
+        Check(t.FanRpm == null && t.Fan == "n/a" && t.Note == null, "closed gate is silent: " + t.Note);
+        // The reader gave up on the window (reason 7, "port"). That one IS a note.
+        s = Source(); s.Fan = FanSnap(0, 0, 0, 7);
+        t = Window(s, 1);
+        Check(t.FanRpm == null && t.Note == "fan n/a: reader offline, reason 7", "offline note: " + t.Note);
+        // Online but the last sample is older than three periods: a stale reading is not a reading, and it says
+        // something different from a refusal, because the operator fixes the two in different ways.
+        s = Source();
+        HwmonSnapshot old = FanSnap(FanValid | FanProven, 1589, 961, 0);
+        old.AgeMs = 7200;
+        s.Fan = old;
+        t = Window(s, 1);
+        Check(t.FanRpm == null && t.Note == "fan n/a: last reading 7200 ms old", "stale is not fresh: " + t.Note);
+        // No lab trial has proved the duty read-back yet: the speed is shown, the percentage is not.
+        s = Source(); s.Fan = FanSnap(FanValid | FanFresh, 1589, 961, 0);
+        t = Window(s, 1);
+        Check(t.FanRpm == 1589 && t.FanDutyPercent == null && t.Fan == "1589 rpm", "unproven duty is withheld: " + t.Fan);
+        // A duty output runs and nothing turns.
+        s = Source(); s.Fan = FanSnap(FanValid | FanFresh | FanProven | FanStopped, 0, 961, 0);
+        t = Window(s, 1);
+        Check(t.FanStopped && t.Fan == "stopped" && t.FanRpm == 0, "stopped fan: " + t.Fan);
 
         // VRAM totals: a missing or unbounded commit limit falls back to the dedicated size, then to none.
         s = Source(); s.Vram = Vram(300ul << 20, 0, 2080ul << 20);
@@ -171,7 +228,7 @@ static class TelemetryTest
         for (int i = 1; i < 8; i++) { clock = TimeSpan.FromMilliseconds(250 * i); provider.Poll(state); }
         Check(s.DpmCalls == 8 && s.VramCalls == 1 && telemetryEvents == 1, "no publication inside the window");
         clock = TimeSpan.FromSeconds(2); provider.Poll(state);
-        Check(s.VramCalls == 2 && state.Telemetry.LoadSamples == 8, "second publication after 2 s with 8 samples");
+        Check(s.VramCalls == 2 && s.FanCalls == 2 && state.Telemetry.LoadSamples == 8, "second publication after 2 s with 8 samples");
         Check(telemetryEvents == 1, "same text: the screen is not told");
         s.Default = Dpm(0x000700B1, Running | Temp | Clk | Hw, 68500, 1000, 250);
         clock = TimeSpan.FromSeconds(4); provider.Poll(state);
@@ -190,6 +247,8 @@ static class TelemetryTest
         Check((bool)d["available"] && Convert.ToDouble(d["temperatureC"], CultureInfo.InvariantCulture) == 66.0 && d["loadPercent"] == null, "json values");
         Check(Convert.ToInt32(d["vramUsedMB"]) == 1234 && Convert.ToInt32(d["vramTotalMB"]) == 2048 && (string)d["kmdVersion"] == "0x000700B0", "json vram and version");
         Check(Convert.ToDouble(d["ageSeconds"], CultureInfo.InvariantCulture) == 1.3 && ((string)d["note"]).Contains("0.7.177"), "json age and note");
+        Check(Convert.ToInt32(d["fanRpm"]) == 1589 && Convert.ToInt32(d["fanDutyPercent"]) == 96
+              && !(bool)d["fanStopped"] && Convert.ToDouble(d["fanApuC"], CultureInfo.InvariantCulture) == 83.0, "json fan");
         var none = json.Deserialize<Dictionary<string, object>>(json.Serialize(TelemetryProvider.Describe(null, DateTime.Now)));
         Check(none.Count == 1 && !(bool)none["available"], "json before the first sample");
 

@@ -29,6 +29,7 @@ namespace AmdgpuWddmControl
         List<RecentLaunch> _recent = new List<RecentLaunch>();
         RecentListState _recentState = RecentListState.Missing;
         VideoMemoryState _vram;
+        HwmonState _fan;            // the board's hardware monitor, read on the same 2 s poll
         StatusCard _status;
         GuideVerdict _verdict;
         GuideCause? _work;                      // the user-started work that runs (rank 4), null: none
@@ -414,6 +415,7 @@ namespace AmdgpuWddmControl
             try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
             var vram = Kmd.VideoMemory();
             _vram = vram.Value;
+            _fan = Kmd.Hwmon().Value;
             _upd = UpdateCheck.LoadCache();
             ReadRecent();
             ReadDriverCard(!_smoke && !ReadOnlyProbe);
@@ -487,6 +489,7 @@ namespace AmdgpuWddmControl
             var health = Kmd.StartHealth(); if (health.Value != null) _snap.Health = health.Value;
             var cu = Kmd.CuMode(); if (cu.Value != null) _snap.Cu = cu.Value;
             _vram = Kmd.VideoMemory().Value;
+            _fan = Kmd.Hwmon().Value;
             var before = _status == null ? "" : string.Join("|", _status.Items.Select(i => i.Text));
             ComputeStatus();
             var after = string.Join("|", _status.Items.Select(i => i.Text));

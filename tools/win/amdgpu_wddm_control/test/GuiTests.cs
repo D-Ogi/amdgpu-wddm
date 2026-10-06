@@ -300,23 +300,52 @@ static partial class UnitTests
     }
 
     // WU-038: values only with their flag; power and fan honestly "No reading".
+    // Unit A's hardware monitor as E01 read it: one fan on channel 1 at 1589 rpm, duty read-back 961 permille.
+    static HwmonState Fan(uint flags, uint rpm, uint dutyPermille)
+    {
+        var h = new HwmonState { Flags = flags, BasePort = 0x0A20, FanPresentMask = 0x1F, DutyPresentMask = 0x1F };
+        h.Rpm[1] = rpm;
+        for (int i = 0; i < 5; i++) h.DutyPermille[i] = dutyPermille;
+        h.TemperatureSource[0] = HwmonState.SourceApu; h.TemperatureMc[0] = 83000;
+        return h;
+    }
+    const uint FanLive = HwmonState.FlagValid | HwmonState.FlagFresh;
+
     static void SensorRows()
     {
-        var none = Sensors.Rows(null, null);
+        var none = Sensors.Rows(null, null, null);
         Check(none.All(r => r.NoReading && r.Value == Strings.T("perf.no-reading")), "sensors: no driver, no readings");
         Equal(string.Join(",", Sensors.Ids), string.Join(",", none.Select(r => r.Id)), "sensors: fixed rows");
         var d = new DpmState { Flags = DpmState.FlagTemperature | DpmState.FlagHwBusy | DpmState.FlagClock, TemperatureMc = 88000, BusyAvgPermille = 734, ObservedMHz = 1500, CurrentMHz = 1400 };
-        var rows = Sensors.Rows(d, new VideoMemoryState { LocalResident = 3L << 30, Dedicated = 8L << 30 });
+        var rows = Sensors.Rows(d, new VideoMemoryState { LocalResident = 3L << 30, Dedicated = 8L << 30 },
+            Fan(FanLive | HwmonState.FlagDutyProven, 1589, 961));
         Equal("73 %", rows.First(r => r.Id == "load").Value, "sensors: load from the average");
         Equal("hot", rows.First(r => r.Id == "temperature").Level, "sensors: 88 C is hot");
         Equal("1500 MHz", rows.First(r => r.Id == "clock").Value, "sensors: the observed clock when flagged");
         Check(rows.First(r => r.Id == "memory").Value.Contains("3.0") && rows.First(r => r.Id == "memory").Value.Contains("8.0"), "sensors: memory in GB");
-        Check(rows.First(r => r.Id == "power").NoReading && rows.First(r => r.Id == "fan").NoReading, "sensors: power and fan have no reading");
+        Check(rows.First(r => r.Id == "power").NoReading, "sensors: power has no reading");
+        Equal(Strings.T("perf.fan.value", 1589u, 96u), rows.First(r => r.Id == "fan").Value, "sensors: fan speed and proved duty");
+        Check(!rows.First(r => r.Id == "fan").NoReading && rows.First(r => r.Id == "fan").Level == null, "sensors: a turning fan is plain");
         d.Flags = DpmState.FlagTemperature; d.TemperatureMc = 81000;
-        rows = Sensors.Rows(d, null);
+        rows = Sensors.Rows(d, null, null);
         Equal("warn", rows.First(r => r.Id == "temperature").Level, "sensors: 81 C warns");
         Check(rows.First(r => r.Id == "load").NoReading, "sensors: no busy flag, no load");
         Equal("1400 MHz", rows.First(r => r.Id == "clock").Value, "sensors: the current clock without the observed flag");
+
+        // The fan row, state by state. Anything short of "online and fresh" is "No reading", never a last-known
+        // number: the owner reads this row to decide whether the fan turns right now.
+        Func<HwmonState, SensorRow> fanRow = f => Sensors.Rows(d, null, f).First(r => r.Id == "fan");
+        Check(fanRow(Fan(HwmonState.FlagGated, 0, 0)).NoReading, "sensors: the gate is closed by every install");
+        Check(fanRow(Fan(HwmonState.FlagValid | HwmonState.FlagDutyProven, 1589, 961)).NoReading, "sensors: stale is not a reading");
+        Check(fanRow(Fan(0, 0, 0)).NoReading, "sensors: an offline reader has no reading");
+        // No lab trial has proved the duty read-back yet, so the speed is shown alone. At E01 the chip said 96 %
+        // while the fan turned at about half of this board's measured full speed, which is why it is withheld.
+        Equal(Strings.T("perf.fan.rpm-only", 1589u), fanRow(Fan(FanLive, 1589, 961)).Value, "sensors: unproven duty is withheld");
+        // A duty output runs and nothing turns.
+        SensorRow stopped = fanRow(Fan(FanLive | HwmonState.FlagDutyProven | HwmonState.FlagStopped, 0, 961));
+        Equal(Strings.T("perf.fan.stopped"), stopped.Value, "sensors: a stopped fan says so");
+        Equal("hot", stopped.Level, "sensors: a stopped fan is hot");
+        Check(!stopped.NoReading, "sensors: a stopped fan is a reading, and a bad one");
     }
 
     // G-PROF: partial groups and unknown names survive an edit; an edit that changes nothing writes nothing.
@@ -492,7 +521,9 @@ static partial class UnitTests
         {
             var text = Regex.Replace(files[f], @"//[^\n]*", "");
             foreach (Match m in Regex.Matches(text, @"\bKmd\.(\w+)\(([^)]*)\)"))
-                Check(new[] { "Dpm", "Interop", "StartHealth", "CuMode", "VideoMemory" }.Contains(m.Groups[1].Value) && m.Groups[2].Value.Trim().Length == 0,
+                // Hwmon joined the list with KMD 0.7.208.1: the fan reply is a published snapshot, answered with
+                // NoAdapterSynchronization alone, so it idles no GPU scheduling and touches no port of its own.
+                Check(new[] { "Dpm", "Interop", "StartHealth", "CuMode", "VideoMemory", "Hwmon" }.Contains(m.Groups[1].Value) && m.Groups[2].Value.Trim().Length == 0,
                     "G-SRC: " + f + " calls only Level-One reads: " + m.Value);
             Check(!Regex.IsMatch(text, @"Registry\.LocalMachine[^;]*(SetValue|DeleteValue|CreateSubKey|DeleteSubKey)|OpenSubKey\([^)]*,\s*true\)"), "G-SRC: " + f + " writes no HKLM value itself");
             Check(!text.Contains("Process.GetProcessesByName(\"dwm\")") && !Regex.IsMatch(text, @"(?i)""dwm(\.exe)?""\s*\)\s*\.\s*Kill"), "G-SRC: " + f + " does not touch DWM");
