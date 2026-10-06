@@ -40,7 +40,15 @@
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
 #define BC250_ESCAPE_RUN_FAN 30u                // case fan control: read, board, curve, fixed duty under a lease, renew
 #define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation and step 1 state (BC250_ESCAPE_DPAUDIO below)
-#define BC250_KMD_VERSION 0x000700D6u       // revision 214 (INF 0.7.214.1, on 213.1): the VMID pool
+#define BC250_KMD_VERSION 0x000700D7u       // revision 215 (INF 0.7.215.1, on 214.1): the b21 train driver.
+                                            // Two escapes are new, and that is why this word moves:
+                                            // BC250_ESCAPE_RUN_FAN (30, fan.c, docs/design/fan.md Part B)
+                                            // and BC250_ESCAPE_RUN_DPAUDIO (31, dpaudio.c, steps 0 and 1).
+                                            // No older escape changes its layout. EnableFanControl,
+                                            // EnableDpAudio and EnableDpAudioEndpoint are 1 by default; 0
+                                            // is each one's bisect switch and gives the 214.1 behaviour.
+                                            //
+                                            // Revision 214 (INF 0.7.214.1, on 213.1): the VMID pool
                                             // (kmd/vmid-pool, gfx.c, vmid_pool.h,
                                             // docs/design/gfx-submit-root-serialization.md). Each page-table
                                             // root gets a VMID of its own from VMIDs 1 and 3..15, so a job of
