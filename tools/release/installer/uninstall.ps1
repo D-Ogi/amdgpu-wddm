@@ -201,6 +201,13 @@ Invoke-Change "remove the installer state $($script:StateDir) (with the kept rep
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
 } | Out-Null
+Write-Step 'Per-user data'
+$userData = @(Get-OurUserDataDirs)
+if ($userData.Count) {
+    Invoke-Change "remove the per-user data of this release (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
+        foreach ($d in $userData) { Remove-PathOrSchedule $d }
+    } | Out-Null
+} else { Write-Info 'no per-user data of ours' }
 if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the control application's setting backups and action log; delete it by hand if you do not need them)" }
 
 # What of this release is still on the computer. The tester's clean-slate check, and the one place a host test or a

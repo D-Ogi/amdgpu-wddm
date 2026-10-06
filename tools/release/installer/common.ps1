@@ -19,6 +19,7 @@ $script:TaskName         = 'amdgpu-wddm start confirm'
 $script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
+$script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
 $script:DryRunMode       = $false
 $script:LogPath          = $null
 $script:CurrentStep      = '(before the first change)'
@@ -939,6 +940,7 @@ function Get-ReleaseFootprint {
         @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
+    & $probe 'per-user data' { $u = @(Get-OurUserDataDirs); @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no %LOCALAPPDATA%\amdgpu-wddm in any profile' }) } }
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
     # application's own files (the tester's setting backups and action log).
@@ -956,7 +958,24 @@ function Remove-FileAtReboot([string]$Path) {
 public static extern bool MoveFileEx(string existing, string replacement, int flags);
 '@
     }
-    return [AmdgpuWddmInstaller.Native]::MoveFileEx($Path, $null, 4)
+    # [NullString]::Value, not $null: PowerShell passes $null to a string parameter as "", and MoveFileEx then
+    # fails with ERROR_PATH_NOT_FOUND (3) instead of scheduling the delete (lab, 2026-10-06: six DLLs that DWM
+    # held survived the restart after an uninstall).
+    return [AmdgpuWddmInstaller.Native]::MoveFileEx($Path, [NullString]::Value, 4)
+}
+
+# Per-user data of the release: the D3D12 engine's disk shader cache, the recent-launch list and the DWM
+# observations live in %LOCALAPPDATA%\amdgpu-wddm of every user who ran a program on the GPU. One folder per
+# profile in the ProfileList; $script:ProfileListKey lets a host test point it at a fixture.
+function Get-OurUserDataDirs {
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($k in @(Get-ChildItem -LiteralPath $script:ProfileListKey -ErrorAction SilentlyContinue)) {
+        $p = (Get-ItemProperty -LiteralPath $k.PSPath -Name ProfileImagePath -ErrorAction SilentlyContinue).ProfileImagePath
+        if (-not $p) { continue }
+        $d = Join-Path ([Environment]::ExpandEnvironmentVariables($p)) 'AppData\Local\amdgpu-wddm'
+        if ((Test-Path -LiteralPath $d -PathType Container) -and -not $out.Contains($d)) { $out.Add($d) }
+    }
+    return $out.ToArray()
 }
 # Installs one file so that a re-run with the same package always finishes:
 #  - target with the same SHA256: nothing to do ("already current");
