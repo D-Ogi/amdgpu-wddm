@@ -202,13 +202,22 @@ void test_shared_open(Env& env) {
                static_cast<unsigned long long>(m.last_adopt_byte_size),
                static_cast<unsigned long long>(m.last_adopt_alignment));
         if (hr == S_OK) {
-            // An opened resource is not a primary and names nothing to a present: only the creator's own destroy
-            // may release the allocation, and this process is not the creator.
+            // An opened resource is not a primary: present_allocation refuses it, because the destroy slot asks
+            // that question to find out whose allocation it is to release, and this process is not the creator.
             D3DKMT_HANDLE presented = 1;
             const HRESULT named = engine_ddi::present_allocation(device.context, opened.hres(), &presented);
             checkf(named == E_INVALIDARG && !presented,
                    "shared open: present_allocation refuses an opened resource (hr %08lx)",
                    static_cast<unsigned long>(named));
+            // The destination of a blt-model Present is the other question, and an opened surface is a legal
+            // answer to it: the runtime named it and owns it for the call. Before this was split, naming an
+            // opened resource as the destination failed Present at stage 4 and removed the device.
+            D3DKMT_HANDLE destination = 0;
+            const HRESULT target_named =
+                engine_ddi::present_destination_allocation(device.context, opened.hres(), &destination);
+            checkf(target_named == S_OK && destination,
+                   "shared open: present_destination_allocation names an opened resource (hr %08lx)",
+                   static_cast<unsigned long>(target_named));
             // Nothing is placed beside it, as on any linear surface.
             Buffer beside;
             const Buffer base = opened.as_buffer();
@@ -306,11 +315,12 @@ void test_shared_open(Env& env) {
         }
     }
 
-    // Two opens, each adopting its own import, as two resources over one allocation do. engine-ddi keeps no index
-    // of allocation handles, so it asks the shell once per open and nothing here is shared between the two. The
-    // production shell does keep such an index and refuses a second adopt of a handle it already holds
-    // (heap-import.cpp, "the allocation is already imported"), which is why the handle below is the same one: this
-    // pins the boundary's own behaviour, and the shell's rule is heap-import-test's.
+    // Two opens of the same handle, each adopting its own import, as two resources over one allocation do.
+    // engine-ddi keeps no index of allocation handles, so it asks the shell once per open and nothing here is
+    // shared between the two. The production shell agrees since the BD-075 review of 2026-10-06: it keeps several
+    // records for one borrowed handle and tells their imports apart by the cookie each one carries. It used to
+    // refuse the second adopt, so an application that called OpenSharedHandle twice on one device got
+    // E_OUTOFMEMORY from production while this check passed. The shell's half is heap-import-test's.
     {
         Opened a, b;
         const HRESULT hr_a = open_surface(env, device, handle, allocation, resource, resource_bytes, allocation_bytes, a);
@@ -320,6 +330,123 @@ void test_shared_open(Env& env) {
                static_cast<unsigned long>(hr_a), static_cast<unsigned long>(hr_b), m.adoptions);
         if (hr_b == S_OK) destroy_opened(env, device, b);
         if (hr_a == S_OK) destroy_opened(env, device, a);
+    }
+
+    // The sRGB views of the two 8-bit rows, opened like any other surface. The wire has always admitted them
+    // (Bc250SharedSurfaceFormat matches a storage format or its sRGB sibling), the D3D11 shell creates them, and
+    // until the BD-075 review of 2026-10-06 this module looked the storage column up alone: the record decoded,
+    // then query_linear_surface found no row and the open failed with E_OUTOFMEMORY and no adopt. A D3D11-created
+    // sRGB shared texture was therefore unopenable here, which no test and no lab cell could see.
+    for (const DXGI_FORMAT view : {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB}) {
+        Surface srgb = s;
+        srgb.format = view;
+        UINT srgb_pitch = 0;
+        UINT64 srgb_backing = 0;
+        if (!engine_layout(device, srgb, srgb_pitch, srgb_backing)) {
+            checkf(false, "shared open: the engine has a linear image of an sRGB view (format %d)",
+                   static_cast<int>(view));
+            continue;
+        }
+        srgb.pitch = srgb_pitch;
+        srgb.size = srgb_backing;
+        BC250_WDDM_ALLOCATION_PRIVATE srgb_allocation{};
+        BC250_SURFACE_RESOURCE_PRIVATE srgb_resource{};
+        if (!records(srgb, srgb_allocation, srgb_resource)) {
+            checkf(false, "shared open: the records of an sRGB view are written (format %d)",
+                   static_cast<int>(view));
+            continue;
+        }
+        const uint32_t adoptions = m.adoptions, allocations = m.allocations;
+        Opened opened;
+        const HRESULT srgb_hr = open_surface(env, device, handle, srgb_allocation, srgb_resource, resource_bytes,
+                                             allocation_bytes, opened);
+        D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 existing{};
+        if (srgb_hr == S_OK) env.core.pfnCheckExistingResourceAllocationInfo(device.h(), opened.hres(), &existing);
+        checkf(srgb_hr == S_OK && m.adoptions == adoptions + 1 && m.allocations == allocations &&
+                   existing.ResourceDataSize == srgb_backing,
+               "shared open: an sRGB view opens with one adopt and the record's backing (format %d, hr %08lx, %u "
+               "adopts, %u allocations, %llu bytes)",
+               static_cast<int>(view), static_cast<unsigned long>(srgb_hr), m.adoptions - adoptions,
+               m.allocations - allocations, static_cast<unsigned long long>(existing.ResourceDataSize));
+        // The record's own storage bytes, read back through the sRGB view: the open must not have changed the
+        // layout the creator published.
+        checkf(srgb_hr != S_OK || srgb_pitch == static_cast<UINT>(linear.RowPitch),
+               "shared open: an sRGB view has the storage format's pitch (format %d, %u against %llu)",
+               static_cast<int>(view), srgb_pitch, static_cast<unsigned long long>(linear.RowPitch));
+        if (srgb_hr == S_OK) destroy_opened(env, device, opened);
+    }
+
+    // More than one allocation in the open: the design admits exactly one, and nothing is adopted for the others.
+    // The refused() helper always passes one, so this shape is built here.
+    {
+        D3DDDI_OPENALLOCATIONINFO info[2]{};
+        for (auto& one : info) {
+            one.hAllocation = handle;
+            one.pPrivateDriverData = &allocation;
+            one.PrivateDriverDataSize = allocation_bytes;
+        }
+        D3D12DDIARG_OPENHEAP_0003 args{};
+        args.NumAllocations = 2;
+        args.pOpenAllocationInfo = info;
+        args.pPrivateDriverData = const_cast<BC250_SURFACE_RESOURCE_PRIVATE*>(&resource);
+        args.PrivateDriverDataSize = resource_bytes;
+        args.InitialResourceState = D3D12DDI_RESOURCE_STATE_COMMON;
+        const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes = env.core.pfnCalcPrivateOpenedHeapAndResourceSizes(
+            device.h(), &args, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+        void* heap_storage = sizes.Heap ? env.storage.alloc(sizes.Heap) : nullptr;
+        void* resource_storage = sizes.Resource ? env.storage.alloc(sizes.Resource) : nullptr;
+        const uint32_t adoptions = m.adoptions;
+        int rt = 0;
+        const HRESULT many =
+            heap_storage && resource_storage
+                ? env.core.pfnOpenHeapAndResource(device.h(), &args, D3D12DDI_HHEAP{heap_storage},
+                                                  D3D12DDI_HRTRESOURCE{&rt},
+                                                  D3D12DDI_HPROTECTEDRESOURCESESSION_0030{},
+                                                  D3D12DDI_HRESOURCE{resource_storage})
+                : E_OUTOFMEMORY;
+        checkf(many == E_OUTOFMEMORY && m.adoptions == adoptions,
+               "shared open: an open of two allocations is refused with nothing adopted (hr %08lx, %u adopts)",
+               static_cast<unsigned long>(many), m.adoptions - adoptions);
+        if (many == S_OK)
+            env.core.pfnDestroyHeapAndResource(device.h(), D3D12DDI_HHEAP{heap_storage},
+                                               D3D12DDI_HRESOURCE{resource_storage});
+    }
+
+    // A protected resource session: no session of ours exists, so the slot declines the open rather than ignoring
+    // the argument, and the device lives.
+    {
+        D3DDDI_OPENALLOCATIONINFO info{};
+        info.hAllocation = handle;
+        info.pPrivateDriverData = &allocation;
+        info.PrivateDriverDataSize = allocation_bytes;
+        D3D12DDIARG_OPENHEAP_0003 args{};
+        args.NumAllocations = 1;
+        args.pOpenAllocationInfo = &info;
+        args.pPrivateDriverData = const_cast<BC250_SURFACE_RESOURCE_PRIVATE*>(&resource);
+        args.PrivateDriverDataSize = resource_bytes;
+        args.InitialResourceState = D3D12DDI_RESOURCE_STATE_COMMON;
+        const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes = env.core.pfnCalcPrivateOpenedHeapAndResourceSizes(
+            device.h(), &args, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+        void* heap_storage = sizes.Heap ? env.storage.alloc(sizes.Heap) : nullptr;
+        void* resource_storage = sizes.Resource ? env.storage.alloc(sizes.Resource) : nullptr;
+        const uint32_t adoptions = m.adoptions, errors = device.shell.device_errors;
+        int rt = 0, session = 0;
+        const HRESULT protected_open =
+            heap_storage && resource_storage
+                ? env.core.pfnOpenHeapAndResource(device.h(), &args, D3D12DDI_HHEAP{heap_storage},
+                                                  D3D12DDI_HRTRESOURCE{&rt},
+                                                  D3D12DDI_HPROTECTEDRESOURCESESSION_0030{&session},
+                                                  D3D12DDI_HRESOURCE{resource_storage})
+                : E_OUTOFMEMORY;
+        checkf(protected_open == E_OUTOFMEMORY && m.adoptions == adoptions &&
+                   device.shell.device_errors == errors,
+               "shared open: an open naming a protected resource session is refused and keeps the device (hr "
+               "%08lx, %u adopts, %u errors)",
+               static_cast<unsigned long>(protected_open), m.adoptions - adoptions,
+               device.shell.device_errors - errors);
+        if (protected_open == S_OK)
+            env.core.pfnDestroyHeapAndResource(device.h(), D3D12DDI_HHEAP{heap_storage},
+                                               D3D12DDI_HRESOURCE{resource_storage});
     }
 
     // Every malformed record, each refused before anything is adopted.

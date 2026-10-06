@@ -20,8 +20,10 @@
 namespace {
 
 unsigned failures = 0;
+unsigned checks = 0;
 
 void check(bool ok, const char* what) {
+    ++checks;
     if (!ok) {
         std::printf("FAIL  %s\n", what);
         ++failures;
@@ -277,6 +279,9 @@ int main() {
         check(composed >= 5 && round_trips >= composed, "every composed row encodes and decodes, with its sRGB view");
     }
 
+    // The count the records quote, printed by the thing that knows it. Three documents disagreed about it before
+    // this line existed (44, 48 and 49), because each one was counted by hand (BD-075 review, 2026-10-06).
+    std::printf("%u checks, %u failures\n", checks, failures);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }

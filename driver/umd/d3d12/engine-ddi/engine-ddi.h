@@ -190,7 +190,11 @@ struct AdoptRequest {
     uint32_t size;                              // sizeof(AdoptRequest)
     uint32_t flags;                             // MemoryRequestFlags
     // The runtime owner as the open DDI supplied it: the fourth argument of pfnOpenHeapAndResource. It names the
-    // resource, not an allocation to release; the shell records it and makes no callback with it.
+    // resource, not an allocation to release, so the shell deliberately keeps no owner for it: the record's
+    // authority stays 0 and RuntimeAllocation::adopt names no resource, which is what makes the owner release form
+    // impossible for a borrowed allocation. The field is here because the request carries the whole shape of the
+    // open for the shell's refusal lines and traces, not because anything is recorded from it. The sentence this
+    // replaces said "the shell records it", which it never did (BD-075 review, 2026-10-06).
     D3D12DDI_HRTRESOURCE rt_owner;
     D3DKMT_HANDLE allocation;                   // pOpenAllocationInfo[0].hAllocation; never ours to destroy
     uint32_t memory_type_bits;                  // the engine's memoryTypeBits for the image, as above
@@ -490,11 +494,24 @@ HRESULT copy_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE dst, const D3D
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.
 HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource, D3DKMT_HANDLE* allocation,
                             uint64_t* offset) noexcept;
-// Present: the runtime allocation of a surface that can be presented, which is a linear primary of this
-// device: one image from the first byte of its allocation. E_INVALIDARG for any other resource, and
-// *allocation is 0 unless S_OK.
+// Present, and the destroy's owner scope: the runtime allocation of a surface this device created as a linear
+// surface of its own - a linear primary or a shared create - one image from the first byte of its allocation.
+// E_INVALIDARG for any other resource, and *allocation is 0 unless S_OK. An opened shared surface is refused
+// here on purpose: it is nobody's primary and only its creator's own destroy may release that allocation, which
+// is what the destroy slot uses this answer for.
 HRESULT present_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
                            D3DKMT_HANDLE* allocation) noexcept;
+// The same answer for the destination of a blt-model Present, which may also be a surface this device opened
+// (ResourceKind::Opened). The runtime named it and owns it for the call; nothing of its lifetime is ours, so this
+// form must never be used for the destroy's owner scope. Before BD-075 no opened resource could exist and the two
+// questions had one answer; giving the destination the stricter answer turned a legal Present into a removed
+// device at stage 4 (BD-075 review, 2026-10-06).
+HRESULT present_destination_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
+                                       D3DKMT_HANDLE* allocation) noexcept;
+// BD-075: how many creates this process has turned into a shared linear surface after the runtime refused the
+// ordinary allocation shape. The named risk of that retry is that it fires on an ordinary committed texture, so
+// the count is kept whatever the trace switches say and every retry also names itself through log_refusal.
+uint64_t shared_surface_retries() noexcept;
 // MakeResident and Evict (the slots are the shell's): the kernel allocation behind one object of the
 // D3D12DDI_HANDLE_AND_TYPE list, whose Handle is the object's pDrvPrivate (INFERENCE: no runtime list has been
 // logged). *allocation is 0 unless S_OK.

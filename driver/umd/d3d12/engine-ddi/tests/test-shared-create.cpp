@@ -211,11 +211,23 @@ void test_shared_create(Env& env) {
         UINT64 expected;
     };
     // B8G8R8A8 in memory is blue first, R8G8B8A8 red first: the same word for both clears.
+    // The sRGB rows are here because the wire has always admitted them and this module used to refuse them, so an
+    // sRGB shared create never reached its retry at all (BD-075 review, 2026-10-06). Their clear colour is 0 and 1
+    // in each channel on purpose: the sRGB transfer function maps both exactly, so the expected word needs no
+    // assumption about how the hardware rounds the encoding of a value in between.
     const Case cases[] = {
         {Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM}, {0.2f, 0.4f, 0.6f, 1.0f}, 0xff336699u},
         {Shape{127, 79, DXGI_FORMAT_R8G8B8A8_UNORM}, {0.6f, 0.4f, 0.2f, 1.0f}, 0xff336699u},
         {Shape{200, 120, DXGI_FORMAT_R10G10B10A2_UNORM}, {0.2f, 0.4f, 0.6f, 1.0f}, 0xe66664cdu},
+        {Shape{64, 48, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB}, {1.0f, 0.0f, 0.0f, 1.0f}, 0xffff0000u},
+        {Shape{96, 32, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB}, {0.0f, 1.0f, 0.0f, 1.0f}, 0xff00ff00u},
     };
+    // Every retry of this section, counted two ways: the always-on counter and the always-on line each retry
+    // writes. The named risk of the whole design is a retry on an ordinary committed texture, and a trial or a game
+    // can only see that if the signal does not depend on a trace build.
+    const char* const retry_prefix = "shared surface: the runtime refused the ordinary allocation shape";
+    const uint64_t retries_before = engine_ddi::shared_surface_retries();
+    const size_t retry_lines_before = refusal_lines(retry_prefix).size();
     for (const Case& c : cases) {
         const Shape& s = c.shape;
         const UINT bpp = texel_bytes(s.format);
@@ -249,6 +261,15 @@ void test_shared_create(Env& env) {
                s.height, static_cast<unsigned long>(placed));
         round_trip(env, device, queue, s, target, c.colour, c.expected);
         destroy_buffer(env, device, target);
+    }
+    {
+        const size_t expected = sizeof(cases) / sizeof(cases[0]);
+        const uint64_t retries = engine_ddi::shared_surface_retries() - retries_before;
+        const size_t lines = refusal_lines(retry_prefix).size() - retry_lines_before;
+        checkf(retries == expected && lines == expected,
+               "shared create: every retry is counted once and names itself once, with no trace build (%llu "
+               "retries, %zu lines, %zu creates)",
+               static_cast<unsigned long long>(retries), lines, expected);
     }
 
     // The envelope's edges, each asking once for ordinary memory: a mip chain, an array, MSAA, a format the surface

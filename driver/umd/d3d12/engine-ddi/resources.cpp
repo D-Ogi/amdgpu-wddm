@@ -215,6 +215,11 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
 //     the runtime's refusal of the ordinary allocation shape is what says so, after the fact. See the retry in
 //     create_heap_and_resource and engine-ddi.h, kMemoryShareable.
 // No description becomes linear by its shape alone, which is what keeps every ordinary committed texture tiled.
+
+// Every create this process turned into a shared linear surface. Relaxed: it is read for a report, never for a
+// decision, and one retry per shared create is not a hot path.
+std::atomic<uint64_t> shared_retries{0};
+
 struct LinearSurface {
     BC250_VKD3D_LINEAR_IMAGE_INFO info;
     uint64_t backing_size;
@@ -223,18 +228,26 @@ struct LinearSurface {
 inline constexpr uint32_t kLinearMaxEdge = 8192;
 inline constexpr uint64_t kLinearPage = 4096;
 
-// The storage formats a linear surface may have: the rows of the surface format table the compositor and the other
-// shell may open (driver/contract/amdgpu_wddm_surface_format.h), which every component admits by the same table.
+// The formats a linear surface may have: a COMPOSED row of the surface format table by its storage format, or by
+// the sRGB view that shares that storage and that LB7A format. This is the one lookup the whole stack uses -
+// Bc250SharedSurfaceFormat (driver/contract/bc250_shared_surface.h), which the wire's encoder and the D3D11
+// shell's runtime_surface_format call as well. It used to be amdgpu_wddm_surface_format_by_dxgi, the storage
+// column alone, and that one column narrower than the wire was a gap, not a policy: a D3D11-created
+// B8G8R8A8_UNORM_SRGB shared surface decoded here and then died in query_linear_surface with E_NOTIMPL, and an
+// sRGB shared create never reached its retry because shared_surface_shape refused the description (BD-075
+// review, 2026-10-06). A format the wire admits and this module refuses is unopenable and uncreatable, and
+// nothing in either shell said so.
 const AMDGPU_WDDM_SURFACE_FORMAT* composed_format(DXGI_FORMAT f) noexcept {
-    return amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(f)),
-                                     AMDGPU_WDDM_SURFACE_COMPOSED);
+    return Bc250SharedSurfaceFormat(static_cast<unsigned long>(f));
 }
 
 // The descriptions a linear surface exists for. The engine's image has the format's own compatibility list, so
-// castable formats beyond the format and its sRGB sibling, where the format has one, are not these.
+// castable formats beyond the row's storage format and its sRGB view, where the row has one, are not these. The
+// description's own format is one of those two, so both are admitted whichever of them it is.
 bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
     const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || !row) return false;
+    const auto stored = static_cast<DXGI_FORMAT>(row->dxgi);
     const auto sibling = static_cast<DXGI_FORMAT>(row->dxgi_srgb);
     if (!desc.Width || desc.Width > kLinearMaxEdge || !desc.Height || desc.Height > kLinearMaxEdge) return false;
     if (desc.DepthOrArraySize != 1 || desc.MipLevels != 1 || desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality)
@@ -244,17 +257,25 @@ bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CR
                       D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY | D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY |
                       D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE))
         return false;
-    for (UINT i = 0; i < in.NumCastableFormats; ++i)
-        if (in.pCastableFormats[i] != desc.Format &&
-            (sibling == DXGI_FORMAT_UNKNOWN || in.pCastableFormats[i] != sibling))
-            return false;
+    for (UINT i = 0; i < in.NumCastableFormats; ++i) {
+        const DXGI_FORMAT castable = in.pCastableFormats[i];
+        if (castable != stored && (sibling == DXGI_FORMAT_UNKNOWN || castable != sibling)) return false;
+    }
     return true;
 }
 
 // The shareable envelope (BD-075): the descriptions whose create may be retried as a shared surface, and nothing
 // wider. Being inside it is permission to retry after the runtime has refused the ordinary shape; it never makes a
-// create linear by itself, and attempt 2 is strictly more constrained than attempt 1, so a request that failed the
-// first for a size or an alignment reason fails the second as well.
+// create linear by itself.
+// What keeps the retry from masking a real refusal is not any ordering of the two attempts. Attempt 2 asks for a
+// different thing: a different segment (the aperture, which the LB7A + E26R blob selects through
+// Bc250SurfaceResourcePolicy), a different size (surface.backing_size) and a different alignment. The guard is the
+// narrow discriminator instead - E_INVALIDARG alone, from the allocate callback of a first attempt inside this
+// envelope that carried no resource-level private data (heap-import.cpp, share_required) - plus this envelope
+// itself. An earlier comment here claimed attempt 2 was strictly more constrained; it is not, and saying so hid
+// which check was load-bearing (BD-075 review, 2026-10-06). Every retry is therefore counted and named on the
+// debugger channel whatever the trace switches say, and the shell's experiment switch shared-create-retry-off
+// turns the whole behaviour off for a bisect.
 //   - the heap is a GPU-only L1 heap without PRIMARY and without COHERENT_SYSTEMWIDE: a shared surface is nobody's
 //     primary, and a CPU-visible or system-wide coherent shared heap needs its own contract;
 //   - the resource is one of the shapes a linear surface exists for (linear_surface_shape), so a 3D texture, a mip
@@ -603,11 +624,18 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             align = surface.info.MemoryAlignment;
             // The runtime sized the heap from the tiled answer, so its ByteSize is not compared with the linear
             // need: the heap becomes the surface, exactly as a linear primary's does.
-            log_line("shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear "
-                     "surface (heap of %llu bytes aligned to %llu becomes %llu bytes, default alignment, pitch %llu)",
-                     static_cast<unsigned long long>(sized.ByteSize),
-                     static_cast<unsigned long long>(sized.Alignment), static_cast<unsigned long long>(need),
-                     static_cast<unsigned long long>(surface.info.RowPitch));
+            // log_refusal, not log_line: this is the one line that says an ordinary committed texture became a
+            // linear shared surface, and the named risk of the whole design is that it fires where it should not.
+            // It goes to the debugger channel with no trace build, under the refusal budget, and it is counted
+            // here so that a trial and a game can both be asked how many retries happened (BD-075 review).
+            shared_retries.fetch_add(1, std::memory_order_relaxed);
+            log_refusal("shared surface: the runtime refused the ordinary allocation shape; retrying as a shared "
+                        "linear surface (format %d, %llux%u, heap of %llu bytes aligned to %llu becomes %llu bytes, "
+                        "default alignment, pitch %llu)",
+                        static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,
+                        static_cast<unsigned long long>(sized.ByteSize),
+                        static_cast<unsigned long long>(sized.Alignment), static_cast<unsigned long long>(need),
+                        static_cast<unsigned long long>(surface.info.RowPitch));
             sized.ByteSize = need;
             sized.Alignment = 0;
             hd = D3D12_HEAP_DESC{};
@@ -812,6 +840,12 @@ HRESULT open_shared_surface(DeviceContext* c, const D3D12DDIARG_OPENHEAP_0003* a
         return E_INVALIDARG;
     }
 
+    // The open's envelope is the decoder's, not linear_surface_shape's, and it is one rule wider on purpose: the
+    // decoder bounds an edge at BC250_SHARED_MAX_EDGE (16384), which is what the D3D11 shell creates up to, while
+    // a D3D12 shared create stops at kLinearMaxEdge (8192). An opener that refused the larger surface would refuse
+    // a surface the other shell legitimately created; the engine's image answers for the rest, and the pitch and
+    // size agreement below still has to hold. Every other rule is the same, because the decoder admits one mip,
+    // one slice, one sample and a COMPOSED format row only (BD-075 review, 2026-10-06: documented, not changed).
     *why = "engine image";
     const D3D12_RESOURCE_DESC1 desc = opened_desc(shared);
     LinearSurface surface{};
@@ -1819,18 +1853,31 @@ HRESULT resource_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HA
     return S_OK;
 }
 
-HRESULT present_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HANDLE* allocation) noexcept {
+// One rule, two admitted kinds. `opened` is the destination form: see engine-ddi.h for why the two questions
+// must not share an answer.
+HRESULT linear_surface_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, bool opened,
+                                 D3DKMT_HANDLE* allocation) noexcept {
     if (!allocation) return E_INVALIDARG;
     *allocation = 0;
     if (!c) return E_INVALIDARG;
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
-    if (!r || c->mode != MemoryMode::RuntimeBacked || r->kind != ResourceKind::Committed || !r->backing ||
-        !r->backing->imported || !r->backing->linear || r->offset || !r->linear_row_pitch ||
-        !r->backing->memory.allocation)
+    const bool kind = r && (r->kind == ResourceKind::Committed || (opened && r->kind == ResourceKind::Opened));
+    if (!r || !kind || c->mode != MemoryMode::RuntimeBacked || !r->backing || !r->backing->imported ||
+        !r->backing->linear || r->offset || !r->linear_row_pitch || !r->backing->memory.allocation)
         return E_INVALIDARG;
     *allocation = r->backing->memory.allocation;
     return S_OK;
 }
+
+HRESULT present_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HANDLE* allocation) noexcept {
+    return linear_surface_allocation(c, hres, false, allocation);
+}
+
+HRESULT present_destination_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HANDLE* allocation) noexcept {
+    return linear_surface_allocation(c, hres, true, allocation);
+}
+
+uint64_t shared_surface_retries() noexcept { return shared_retries.load(std::memory_order_relaxed); }
 
 HRESULT object_allocation(DeviceContext* c, D3D12DDI_HANDLE_AND_TYPE object, D3DKMT_HANDLE* allocation) noexcept {
     if (!allocation) return E_INVALIDARG;
@@ -1871,9 +1918,9 @@ void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCalcPrivateHeapAndResourceSizes = calc_heap_and_resource;
     t->pfnCreateHeapAndResource = create_heap_and_resource_slot;
     t->pfnDestroyHeapAndResource = destroy_heap_and_resource;
-    // D64 and D65 refuse every shared open, but they are this module's slots, not fail-safes: a fail-safe
-    // answers E_NOTIMPL, which the runtime takes as a critical driver failure and pays for with the
-    // application's device (BD-075).
+    // D64 and D65 are this module's slots, not fail-safes: a fail-safe answers E_NOTIMPL, which the runtime takes
+    // as a critical driver failure and pays for with the application's device (BD-075). D65 opens a shared surface
+    // now; what it declines, it declines in a code the runtime survives.
     t->pfnCalcPrivateOpenedHeapAndResourceSizes = calc_opened_heap_and_resource;
     t->pfnOpenHeapAndResource = open_heap_and_resource;
     t->pfnMapHeap = map_heap;
