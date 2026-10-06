@@ -1,10 +1,12 @@
 # F2: removing the root serialization of the gfx submit path
 
-Status: design only. **Not implemented in KMD 0.7.196.1**, and the registry value named below does not exist
-yet. The reasons are in "Why not in 196" at the end. KMD 196 implements F1 (the event wake) alone, so that the
-lab session that prices F1 measures one change.
+Status: design only, open. **Not implemented up to KMD 0.7.213.1**: the check quoted in section 1 is still in
+`SubmitIbLocked` (`driver/kmd/gfx.c`), and the registry value named below does not exist. The reasons it was
+held back are in "Why not in 196" at the end. KMD 196 implemented F1 (the event wake) alone, so that the lab
+session that priced F1 measured one change.
 
-Written against `kmd196-submit-wake` at the tree of KMD 0.7.196.1. Line references are that tree.
+Written against `kmd196-submit-wake` at the tree of KMD 0.7.196.1. Line references are that tree; they have
+moved since.
 
 ## 1. What serializes today
 
