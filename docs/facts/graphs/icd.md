@@ -8,14 +8,17 @@ Table, with each fact's status: [`../icd.md`](../icd.md). Edge types: `supersede
 
 ```mermaid
 flowchart LR
+  M166["M166"]
   M251["M251<br/>kmd"]
   M253["M253"]
   M509["M509"]
   M510["M510<br/>linux"]
+  M816["M816<br/>games"]
   M253 ==>|supersedes| M251
+  M816 ==>|supersedes| M166
   M510 ==>|supports| M509
   classDef other stroke-dasharray:4 3
-  class M251,M510 other
+  class M251,M510,M816 other
 ```
 
 ## References

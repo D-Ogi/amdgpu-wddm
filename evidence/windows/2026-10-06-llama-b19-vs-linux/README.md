@@ -4,7 +4,7 @@ Date: 2026-10-06, unit A. Four `llama-bench` runs between 18:32Z and 18:45Z on t
 two at the release default clock ceiling and two with the ceiling set to 1000 MHz, which is the clock of
 the Linux reference. The question is the old one of M9 and M12: at the same shader clock, how does the
 Windows stack compare with `amdgpu` plus RADV on this unit. The answer here is that the Windows stack is
-faster, by 62 % on prompt processing and 31 % on generation at 1000 MHz.
+faster, by 62 % on prompt processing and 30 to 31 % on generation at 1000 MHz.
 
 Every run stayed far inside the three-minute bound. The whole set took 13 minutes, including one restart
 for the clock change and one to put the ceiling back.
@@ -64,13 +64,18 @@ The runs sampled the governor once a second with `bc250kmd_cli.exe dpm 25 1000`,
 |---|---|---|---|---|---|
 | 183202Z | 1500 | 0 | not sampled | - | not sampled |
 | 183310Z | 1500 | 25 | 1500 MHz 919 mV at 100.0 % and 86.7 % busy, 1000 MHz 820 mV at the 46.7 % ramp sample | 500 MHz 820 mV | 70.6 C |
-| 184354Z | 1000 | 25 | 1000 MHz 820 mV at 100.0, 100.0, 90.3 and 86.7 % busy | 500 MHz 820 mV | 68.1 C |
-| 184432Z | 1000 | 25 | 1000 MHz 820 mV at 100.0, 86.7 and 83.9 % busy | 500 MHz 820 mV | 68.5 C |
+| 184354Z | 1000 | 25 | 1000 MHz 820 mV at 100.0, 100.0, 90.3, 86.7 and 40.0 % busy | 500 MHz 820 mV, also at 10.0 % busy | 68.1 C |
+| 184432Z | 1000 | 25 | 1000 MHz 820 mV at 100.0, 86.7, 83.9 and 63.3 % busy | 500 MHz 820 mV, also at 3.3 % busy | 68.5 C |
 
-The 1000 MHz leg is the clean comparison. The ceiling holds the clock there, and every busy sample reads
-1000 MHz. The 1500 MHz leg is not clean: the governor ramps 500 to 1000 to 1500 MHz, and one busy sample
-of run 2 still sat at 1000 MHz. The 1500 MHz figures are therefore a lower bound for a run held at
-1500 MHz.
+The 1000 MHz leg is the clean comparison. The ceiling holds the clock at `cap 1000 max 1000`, and every
+sample at 40 % busy or more reads 1000 MHz. The governor still drops to its 500 MHz idle state while busy
+reads 3 to 10 %: that happens at the `stories15M` tests, whose GPU work is a few milliseconds each
+(samples 20:43:57, 20:44:33 and 20:44:34 local), and twice in the tail of run 4 (20:44:51 and 20:44:52).
+Every
+TinyLlama test of this leg (`test_time` 18:44:00Z, 18:44:02Z, 18:44:36Z and 18:44:38Z) sits inside samples
+that read 1000 MHz, so the headline numbers carry the clock they state. The 1500 MHz leg is not clean: the
+governor ramps 500 to 1000 to 1500 MHz, and one busy sample of run 2 still sat at 1000 MHz. The 1500 MHz
+figures are therefore a lower bound for a run held at 1500 MHz.
 
 Temperature stayed between 65 and 70.6 C, far under the 87 C rule.
 
@@ -90,13 +95,14 @@ and `bench-default.txt`):
 
 | Clock | Windows b19 pp512 | Linux pp512 | Windows lead | Windows tg128 | Linux tg128 | Windows lead |
 |---|---|---|---|---|---|---|
-| 1000 MHz | 1813.08 and 1812.60 | 1119.59 | +62 % | 202.99 and 202.09 | 154.92 | +31 % |
-| 1500 MHz | 2659.69 and 2651.31 | 1657.11 | +60 % | 260.02 and 270.82 | 219.38 | +19 % and +24 % |
+| 1000 MHz | 1813.08 and 1812.60 | 1119.59 | +62 % and +62 % | 202.99 and 202.09 | 154.92 | +31 % and +30 % |
+| 1500 MHz | 2659.69 and 2651.31 | 1657.11 | +61 % and +60 % | 260.02 and 270.82 | 219.38 | +19 % and +23 % |
 
 Against the Windows numbers of 2026-09-24 (M415: KMD 127, a fixed 1000 MHz, a per-process RADV ICD):
-1115.94 prompt and 114.56 generation. At the same 1000 MHz the release is 62 % faster on prompt and 77 %
-faster on generation. The generation gap of the M164 to M415 era, where Windows ran 26 to 37 % under the
-Linux generation rate, is gone on this stack.
+1115.94 prompt and 114.56 generation. At the same 1000 MHz the release is 62 % faster on prompt and 76 to
+77 % faster on generation. The generation gap of the M164 to M415 era is gone on this stack. In that era
+Windows ran 25 to 37 % under the Linux generation rate of 154.92 t/s: M164 98.24, M166 103.06, M255 113.88,
+M274 116.79, M321 115.06 and M415 114.56 t/s.
 
 `stories15M` is in the files for completeness only:
 
@@ -147,8 +153,13 @@ anything. They are a load witness, nothing more.
 | `runs/<stamp>/run.cmd` | the command file the scheduled task ran |
 | `SHA256SUMS.txt` | hashes of every file here |
 
-No file here is edited. A reader went through the `.err` files in full before the commit. They hold no device UUID, no
-serial number, no address and no secret, so this directory redacts nothing.
+No measurement file here is edited. A reader went through the `.err` files in full before the commit. They hold no
+device UUID, no serial number, no address and no secret, so this directory redacts nothing.
+
+This write-up itself changed once, before its first commit reached the public remote. A review found two errors in
+it: the clock section claimed 1000 MHz for every busy sample, and two percentages rounded away from the measurement.
+That change touched only this `README.md` and its line in `SHA256SUMS.txt`. The measurement files stay as the lab
+wrote them.
 
 ## How to repeat
 

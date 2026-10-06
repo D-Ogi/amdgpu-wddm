@@ -8,10 +8,19 @@ Table, with each fact's status: [`../games.md`](../games.md). Edge types: `super
 
 ```mermaid
 flowchart LR
+  M164["M164"]
+  M166["M166<br/>icd"]
+  M255["M255"]
   M274["M274"]
+  M321["M321"]
   M816["M816"]
+  M816 ==>|supersedes| M164
+  M816 ==>|supersedes| M166
+  M816 ==>|supersedes| M255
   M816 ==>|supersedes| M274
+  M816 ==>|supersedes| M321
   classDef other stroke-dasharray:4 3
+  class M166 other
 ```
 
 ## References
