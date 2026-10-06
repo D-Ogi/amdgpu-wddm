@@ -17,7 +17,7 @@ if($LASTEXITCODE -ne 0){throw 'AMD mailbox source/register drift'}
 if($LASTEXITCODE -ne 0){throw 'AMD source drift'}
 $native=(Get-Content -LiteralPath $Source -Raw).Replace('#include "bc250kmd.h"','#include "smu_native_mock.h"').Replace('../shim/generated/','generated/')
 [IO.File]::WriteAllText("$Out\smu-native.inc",$native,[Text.UTF8Encoding]::new($false))
-& $cl /nologo /TC /W4 /WX /O2 /MT @inc "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\smu_test.exe" "$repo\driver\shim\bc250_smu.c" "$repo\driver\shim\bc250_clock.c" "$PSScriptRoot\smu_native_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+& $cl /nologo /TC /W4 /WX /O2 /MT @inc "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\smu_test.exe" "$repo\driver\shim\bc250_smu.c" "$repo\driver\shim\bc250_clock.c" "$repo\driver\shim\bc250_cpu.c" "$PSScriptRoot\smu_native_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}
 & "$Out\smu_test.exe"
 exit $LASTEXITCODE

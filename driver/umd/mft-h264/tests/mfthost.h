@@ -28,6 +28,35 @@ struct Options {
     bool noHwTransforms = false;    // --no-hw-transforms: clear MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS
     bool still = false;             // repeat picture 0 so that P_Skip and mb_skip_run are exercised
     bool verbose = false;
+    // --timing-skip N: the first N pictures stay in the stream, in the decoder oracle and in every
+    // correctness check, and leave the timing averages. Two reasons, both measured: the first picture
+    // of a run is an I picture and runs other shaders than the P pictures after it, and a GPU whose
+    // clock is at its idle point ramps during the first pictures of a short run. On unit A the DPM
+    // idles at 500 MHz of 1500, so a six-picture case can report twice the cost of the same work in a
+    // longer one. The count stays in the output next to the averages, so a reader sees what was left
+    // out rather than having to trust a round number.
+    uint32_t timingSkip = 0;
+    // --depth N: how many pictures the GPU may hold at once. One is the serial shape and the one every
+    // correctness check runs at. Above one, --encode runs the case twice: first serially with the whole
+    // oracle, then again with N pictures in flight, and the pipelined stream has to be byte identical
+    // to the serial one. That identity is what carries the oracle's verdict over to the pipeline, and it
+    // holds only at a fixed quantiser, so the pipelined pass refuses a rate controlled setting.
+    uint32_t depth = 1;
+    // --ours-qp N: in --compare, run our column at a fixed quantiser instead of the constant bit rate
+    // the inbox column runs at. The two columns then no longer meet at the same rate, which is the
+    // point: sweeping N until our byte count matches the inbox's reads the coding efficiency gap on its
+    // own, with our rate control taken out of the measurement. Zero leaves the comparison as it was.
+    uint32_t oursQp = 0;
+    // The four encoder dials a quality sweep turns, at their shipped values by default:
+    // --chroma-qp-offset N (PPS chroma_qp_index_offset), --lambda-scale N and --skip-bias-scale N (per
+    // cent of the quantiser-derived motion weights) and --rc-gain N (the constant bit rate controller's
+    // gain). Every one of them changes the bitstream, so a case that moves one is a measurement and not
+    // one of the pinned gates. The selftest checks these four against EncoderConfig's own defaults, so
+    // that a default changed in the encoder cannot leave the test measuring the previous setting.
+    int32_t chromaQpOffset = 0;
+    uint32_t lambdaScale = 300;
+    uint32_t skipBiasScale = 0;
+    uint32_t rcGainScale = 100;   // --rc-gain N: the CBR controller's gain, per cent
     int32_t probeX = -1;            // --probe X Y: print this Cb column of every picture
     int32_t probeY = -1;
     RateControl rc = RateControl::Quality;
@@ -43,6 +72,11 @@ double NowMs();
 // bring its own device, exactly as a Media Foundation client does through IMFDXGIDeviceManager.
 // Prefers 1002:13FE and takes the first hardware adapter when the BC-250 is not in the computer.
 HRESULT CreateTestDevice(ID3D11Device** device);
+
+// True when the BC-250 (1002:13FE) is one of this machine's DXGI adapters. Several cases turn on it,
+// because the shipped transform creates a device on that adapter and on no other: without it no Media
+// Foundation chain can reach our encoder, and a case that needs one says so instead of failing.
+bool HaveBc250Adapter();
 
 // A picture in I420, visible size, tightly packed. The deterministic CPU twin of testpattern.hlsl:
 // not pixel identical to it (the shader works in float and in BGR), but the same kind of content.

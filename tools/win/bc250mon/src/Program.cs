@@ -30,14 +30,17 @@ namespace Bc250Mon
                 // --kmd-key (or BC250MON_KMD_KEY) points the KMD provider at another registry key: a debug switch
                 // that lets the "installed" paths be exercised where no such service exists (see KmdProvider).
                 var kmd = new KmdRegistry(kmdKey);
-                var actions = new Actions(state, driver, kmd);
+                // The pipeline provider is built before the action table, because "graphics.summary" asks it for
+                // one KMD log summary (nothing asks for one on a schedule any more, C55).
+                var pipeline = new GraphicsPipelineProvider(dataDir);
+                var actions = new Actions(state, driver, kmd, pipeline);
                 try { new Api(state, actions).Start(); state.Log("api", Level.Info, "listening on " + Api.Prefix); }
                 catch (Exception e) { state.Log("api", Level.Error, "API not started: " + e.Message); }
                 // One DPM snapshot serves two panels: TelemetryProvider takes it anyway, the operating-point
                 // and measurement-guard panels read the last one instead of sending escapes of their own.
                 var dpmFeed = new DpmFeed();
                 ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider(), new KmdProvider(kmd, dataDir),
-                                   new KmdInfoProvider(driver), new GraphicsPipelineProvider(dataDir), new GraphicsApiProvider(dataDir),
+                                   new KmdInfoProvider(driver), pipeline, new GraphicsApiProvider(dataDir),
                                    new VulkanInventoryProvider(dataDir), new TelemetryProvider(driver, dpmFeed),
                                    new OperatingPointProvider(driver, dpmFeed, dataDir),
                                    new MeasurementGuardProvider(dataDir, dpmFeed));

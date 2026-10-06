@@ -8,6 +8,7 @@ every call goes through SSH; the JSON body travels base64-encoded to stay clear 
     mon.py panel e02 "E02 control read" "registers=5542" "identical=5074:good" "hangs=0:good"
     mon.py unpanel e02
     mon.py action clock.cool            mon.py action clock.set '{"mhz": 1200, "mv": 850}'
+    mon.py action graphics.summary      one KMD log summary for the graphics panel's counters (a Level Two escape)
     mon.py stop?                        exit code 1 if the owner asked to stop
     mon.py telemetry [--format text|json]   the overlay's GPU line: Tctl, load, GFX clock, VRAM (for scripts)
     mon.py windows                      visible top-level windows: handle, process, geometry, title
@@ -166,8 +167,12 @@ def format_telemetry(t):
     def value(key):
         v = t.get(key)
         return "n/a" if v is None else v
+    # fan_rpm is the fastest tachometer that turns, fan_duty_pct the duty read-back where a lab trial has proved
+    # it, and fan_stopped the one state that needs an eye on it: a duty output runs and nothing turns.
     line = (f"tctl_c={value('temperatureC')} load_pct={value('loadPercent')} gfx_mhz={value('gfxMHz')} "
-            f"vram_used_mb={value('vramUsedMB')} vram_total_mb={value('vramTotalMB')} age_s={value('ageSeconds')}")
+            f"vram_used_mb={value('vramUsedMB')} vram_total_mb={value('vramTotalMB')} "
+            f"fan_rpm={value('fanRpm')} fan_duty_pct={value('fanDutyPercent')} "
+            f"fan_stopped={1 if t.get('fanStopped') else 0} age_s={value('ageSeconds')}")
     return line + (f"\n# {t['note']}" if t.get("note") else "")
 
 

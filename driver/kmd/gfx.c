@@ -128,6 +128,13 @@ typedef struct _BC250_GFX {
     ULONG CpStepDone;               // completed startup CP checkpoint, under GartLock
     // ---- stage C: one indirect buffer at a time on the gfx ring (ADR 0008) ----
     BOOLEAN SubmitGate;             // EnableGpuSubmit, read once at GfxStart
+    // D5 (C48 review of the log ring): three uncapped guard-log calls per node-0 submit, inside GartLock, wrote
+    // 3871 lines a second on the lab, of which 75 % was overwritten before anything read it - the cost of
+    // DbgPrintEx and a global lock paid in the hot path, and the evidence lost anyway. HotSubmitLog brings them
+    // back for a run that wants them (a fault hunt reads exactly these three lines), and the summary counts what
+    // was left out, so a quiet log is never mistaken for a quiet ring.
+    BOOLEAN HotSubmitLog;           // HotSubmitLog, read once at GfxStart; default off
+    volatile LONG HotSubmitLinesSkipped;
     BOOLEAN IbPage;                 // bc250_gfx_ib_page_alloc has allocated
     volatile LONG SubmitFailed;     // sticky: nothing goes to the ring through GfxSubmitIb again this device start
     volatile LONG PipelineSamples;     // first 16 submissions only; no hot-path printf after that
@@ -974,6 +981,19 @@ static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
     GfxRetireSignal(Device);
 }
 
+// D5: the count of per-submit lines HotSubmitLog left out. Read through the same access gate as every other
+// answer about gfx state, so a stop in flight gives 0 rather than touching freed state.
+ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx = GfxAccessAcquire(Device);
+    ULONG skipped;
+
+    if (gfx == NULL) return 0;
+    skipped = (ULONG)InterlockedCompareExchange(&gfx->HotSubmitLinesSkipped, 0, 0);
+    GfxAccessRelease(Device);
+    return skipped;
+}
+
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
 {
     StartHealthFault(Device);
@@ -1083,7 +1103,11 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         ProgressEnter(ProgressSiteVmFlush);
         result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
         ProgressExit(ProgressSiteVmFlush, (LONG)result);
-        GuardLog("gfx: VMID %lu root 0x%llX flush -> %d", Vmid, RootPhysical, result);
+        // D5: the flush of a submit that worked is the third hot line. A flush that did not work keeps its line
+        // whatever the gate says - that one is not noise, it is the fault.
+        if (Gfx->HotSubmitLog || result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
+            GuardLog("gfx: VMID %lu root 0x%llX flush -> %d", Vmid, RootPhysical, result);
+        else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
         if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
             return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
         Gfx->VmidRoot[Vmid] = RootPhysical;
@@ -1105,13 +1129,23 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         result = bc250_gfx_submit_ib(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
     else
     {
-        GuardLog("gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000");
-        // KMD193: the one line that names the submitter of the job frame above. 245 found the faulting job in
-        // the ring with nothing anywhere to say whose context it was on.
-        if (Identity != NULL)
-            GuardLog("gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX",
-                     seq, Identity->Fence, Identity->Node, GpuAddress, SizeBytes / 4, Identity->Context,
-                     Identity->ProcessId, Identity->ContextFlags);
+        // D5: the two per-submit lines are behind HotSubmitLog. They say nothing that changes between
+        // submissions except the identity, and at 1268 submissions a second they spend the whole log ring on
+        // themselves. A fault hunt turns the gate on for its run and gets them back unchanged.
+        if (Gfx->HotSubmitLog)
+        {
+            GuardLog("gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000");
+            // KMD193: the one line that names the submitter of the job frame above. 245 found the faulting job in
+            // the ring with nothing anywhere to say whose context it was on.
+            if (Identity != NULL)
+                GuardLog("gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX",
+                         seq, Identity->Fence, Identity->Node, GpuAddress, SizeBytes / 4, Identity->Context,
+                         Identity->ProcessId, Identity->ContextFlags);
+        }
+        // Two lines, not one, whenever there is an identity to name: the summary says "lines left out", and a
+        // count of skip events would understate it by up to a factor of two, which is exactly the kind of quiet
+        // number BD-070 taught us not to publish.
+        else InterlockedExchangeAdd(&Gfx->HotSubmitLinesSkipped, (Identity != NULL) ? 2 : 1);
         result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
@@ -3525,11 +3559,15 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                                 Needs EnableGpuSubmit's own preconditions (EnableGfx, EnableIh at stage 8).
     gfx->PagingCpuBootstrap = TRUE;
     gfx->PagingGate = (GuardReadSetting(L"EnablePagingNode", 0) == 1);
+    //   HotSubmitLog  REG_DWORD  1 = the three per-submit lines of SubmitIbLocked reach the log ring. Default 0:
+    //                            they wrote 3871 lines a second and 75 % of the ring was overwritten unread (D5).
+    gfx->HotSubmitLog = (GuardReadSetting(L"HotSubmitLog", 0) == 1);
+    gfx->HotSubmitLinesSkipped = 0;
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
     Device->Gfx = gfx;
     GfxAccessOpen(Device);
-    GuardLog("gfx: ready, GPU submission %s, paging node %s", gfx->SubmitGate ? "allowed" : "off",
-             gfx->PagingGate ? "allowed" : "off");
+    GuardLog("gfx: ready, GPU submission %s, paging node %s, hot submit log %s", gfx->SubmitGate ? "allowed" : "off",
+             gfx->PagingGate ? "allowed" : "off", gfx->HotSubmitLog ? "on" : "off");
     return STATUS_SUCCESS;
 }
 

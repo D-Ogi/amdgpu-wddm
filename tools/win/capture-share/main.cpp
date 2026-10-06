@@ -18,11 +18,14 @@
 // different UMDs) is the opener or the producer. Both write into the --out file (lines "A ..." and "B ...").
 //
 // Output: the --out text file, one record per line, ending with exactly one line
-//   VERDICT cell=.. result=pass|mismatch|fail|timeout side=A|B|- stage=.. call=.. hr=.. at=x,y got=rgba:.. want=rgba:..
-//           diff=n/total max_delta=.. content=.. gate=held|violated:..|- route=A:..,B:.. fl=A:..,B:.. checks=..
-//           elapsed_ms=.. note=.. [extra key=value ...]
+//   VERDICT cell=.. result=pass|mismatch|fail|timeout|skip side=A|B|- stage=.. call=.. hr=.. at=x,y got=rgba:..
+//           want=rgba:.. diff=n/total max_delta=.. content=.. gate=held|violated:..|- route=A:..,B:.. fl=A:..,B:..
+//           checks=.. elapsed_ms=.. note=.. [extra key=value ...]
 // and the same fields in --json (result.json, which app-run.ps1 reads). Exit code 0 pass, 1 mismatch, 2 fail,
-// 3 timeout, 4 usage. Every run ends within --bound seconds (at most 170): a watchdog reports the stage it hung in.
+// 3 timeout, 4 usage, 5 skip. result=skip means this pair of routes cannot measure this cell at all and nothing
+// was attempted: today only a --sync fence shared cell whose D3D11 side runs on the CPU UMD, which copies inside
+// Flush and can never order that copy behind a GPU wait (BD-075 round 2). A skip is not a pass.
+// Every run ends within --bound seconds (at most 170): a watchdog reports the stage it hung in.
 // --stderr relaunches the program with that file as its standard output and error from the start, so the C runtime
 // of every DLL (the UMDs' "engine-ddi: ..." lines, Mesa and RADV messages) writes there, the peer included.
 #include "capshare.h"
@@ -39,7 +42,7 @@ static const char *Usage =
     "  --json <file>          verdict as JSON (default result.json)\n"
     "  --stderr <file>        relaunch with stdout/stderr redirected to <file> (UMD diagnostics)\n"
     "  --size <W>x<H>         texture/window size (default 256x256)\n"
-    "  --format bgra8|rgba8   (default bgra8)\n"
+    "  --format <name>        bgra8 (default), rgba8, bgra8-srgb, rgba8-srgb\n"
     "  --adapter auto|<index> (default: the first hardware adapter)\n"
     "  --peer-exe <path>      executable of the peer (default: this one; relative to this one's folder)\n"
     "  --sync cpu|fence       s-cells: CPU waits (default) or a shared fence\n"
@@ -48,6 +51,8 @@ static const char *Usage =
     "  --delay-size <n>       their square size (default 2048)\n"
     "  --gate-ms <ms>         how long a gate is held before it is checked (default 300)\n"
     "  --simultaneous         D3D12 shared textures with ALLOW_SIMULTANEOUS_ACCESS\n"
+    "  --creator-finish       keyed-mutex cells: the creator waits for its own GPU work before it releases a key\n"
+    "                         (BD-075 km12to11 discriminator; a pass with it is a measurement, not a fix)\n"
     "  --inject skip-wait     negative control (f-cells, s-cells with --sync fence): the opener leaves out its first\n"
     "                         GPU wait, so the run must end in mismatch with gate=violated\n"
     "  --producer d3d12|gdi   capture cells: how the producer draws (default d3d12)\n"
@@ -96,6 +101,8 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             g_opt.interactiveOk = true;
         } else if (a == L"--simultaneous") {
             g_opt.simultaneous = true;
+        } else if (a == L"--creator-finish") {
+            g_opt.creatorFinish = true;
         } else if (a == L"--inject") {
             if (!next(v)) return false;
             if (wcscmp(v, L"skip-wait")) return error = "--inject must be skip-wait", false;
@@ -121,9 +128,14 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             g_opt.w = w;
             g_opt.h = h;
         } else if (a == L"--format") {
+            // The sRGB views share the storage row of their format on the shared-surface wire, so a shared
+            // cell may ask for one. Every image here is compared as raw storage bytes, which an sRGB view does
+            // not change: both sides write and read the same bytes through the same format.
             if (!wcscmp(v, L"bgra8")) g_opt.format = DXGI_FORMAT_B8G8R8A8_UNORM;
             else if (!wcscmp(v, L"rgba8")) g_opt.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            else return error = "--format must be bgra8 or rgba8", false;
+            else if (!wcscmp(v, L"bgra8-srgb")) g_opt.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            else if (!wcscmp(v, L"rgba8-srgb")) g_opt.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            else return error = "--format must be bgra8, rgba8, bgra8-srgb or rgba8-srgb", false;
         } else if (a == L"--adapter") {
             g_opt.adapter = v;
         } else if (a == L"--peer-exe") {
@@ -200,6 +212,10 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
         return error = "--handle kmt applies to km11 and s11to11 only (D3D12 opens NT handles only)", false;
     if (g_opt.skipWait && cell->kind != Kind::Fence && !(cell->kind == Kind::Shared && g_opt.syncFence))
         return error = "--inject skip-wait applies to the f-cells and to the s-cells with --sync fence", false;
+    // Only KeyedParent honours it, so every other cell would accept the flag and measure nothing while its name
+    // in a trial's log said otherwise (BD-075 review, 2026-10-06).
+    if (g_opt.creatorFinish && cell->kind != Kind::Keyed)
+        return error = "--creator-finish applies to the keyed-mutex cells only (km11, km12to11, km11to12)", false;
     if ((cell->kind == Kind::Dda || cell->kind == Kind::Wgc) && !g_opt.interactiveOk)
         return error = "cell " + g_opt.cell + " shows a window and reads the screen: run it only in the lab's interactive "
                                               "session, with --interactive-ok",
@@ -308,6 +324,7 @@ static int Run()
         case Kind::Wgc: RunCaptureParent(*cell); break;
         }
     }
+    VerdictCellEnded();
     if (g_peerProcess.process) {
         SetStage("end-peer");
         g_ipc.Send("DONE");

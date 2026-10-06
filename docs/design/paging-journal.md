@@ -116,7 +116,18 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
   sends them that way and falls back to `HardwareAccess` against an older driver; `journal follow` counts the
   escapes of each kind in its final line. `log summary` keeps `HardwareAccess` for its first page, because the
   summary walks state a stop frees and reads display registers. `tools/win/bc250kmd_cli/test_escape_flags.py`
-  keeps the driver's and the CLI's lists equal.
+  keeps the driver's and the CLI's lists equal. Because the summary is a Level Two escape, nothing may ask for it
+  on a repeating schedule: `tools/win/lab-runner/kmdlog-stream.ps1` sends `log summary` once, at the start of a
+  session, and reads the header line afterwards with `log 0`, which prints the same line from a `GET_LOG` page (it
+  polled `log summary` every 500 ms until 0.7.213; `tools/win/lab-runner/test_lab_runner.py` now fails if a summary
+  returns to the loop). The overlay's graphics panel
+  (`tools/win/bc250mon/src/GraphicsPipelineProvider.cs`) was the last shipped exception: it polled `log summary only`
+  every 5 s while that panel was open, at a measured 300 ms stall each time, and from 0.7.213 it reads the ring with
+  `log 0` and asks for a summary only when an operator does, through its `graphics.summary` action. Its `KMD counters`
+  row then says how old the counter block in the ring is, so a stale block cannot read as a sample of that poll. A
+  read that fails wrote no summary, so the request survives it and the poll that succeeds is the one that consumes it.
+  The pause file `C:\BC250\mon\graphics-summary.pause` still stops the read altogether, and the action then refuses
+  the request instead of promising a summary. No shipped component asks for `LOG_SUMMARY` on a schedule any more.
 - From a dump: `scratch\m15\game-recon\bsod-analysis\pagingjournal.py` (local) reads `g_PagingJournal` through the
   build's map, checks `Magic`/`Version`/`EntryBytes`, and lists the records around a fault VA. From journal
   version 2 it also decodes the identity fields above, and `bc250kmd_cli journal` prints them at the end of the

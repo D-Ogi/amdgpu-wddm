@@ -66,6 +66,10 @@ namespace AmdgpuWddmControl
                 "Turns off a stability fix. Use only when the developers ask for it."),
             new ProfileSwitch("import-quarantine-off", "Turn off the import quarantine (diagnostic)",
                 "Turns off a stability fix. Use only when the developers ask for it."),
+            new ProfileSwitch("shared-create-retry-off", "Turn off shared textures (diagnostic)",
+                "The driver refuses a texture that two programs share, as it did before this release. Use only when the developers ask for it."),
+            new ProfileSwitch("fence-wait-accept-off", "Turn off the queue wait answer (diagnostic)",
+                "The driver stops answering when the system asks a command queue to wait, which ends the game. Use only when the developers ask for it."),
             new ProfileSwitch("replay-log", "Write a replay log (diagnostic)",
                 "The replay lines also go to a file of their own. This changes no behaviour; it costs the writes."),
         };

@@ -38,6 +38,14 @@ uint32_t pick_type(const StubMemory& m, uint32_t buffer_types, D3D12DDI_CPU_PAGE
 // virtual address mapping of a runtime allocation.
 HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* request, engine_ddi::ImportedMemory* out) {
     StubMemory& m = stub_of(shell);
+    // BD-075: the shell's answer when the runtime refused the ordinary allocation shape of a shared resource.
+    // Nothing is allocated and the request is not counted: the create retries with the surface shape.
+    if (m.refuse_shareable && (request->flags & engine_ddi::kMemoryShareable) &&
+        !(request->flags & engine_ddi::kMemoryLinearSurface)) {
+        m.last_flags = request->flags;
+        ++m.share_required;
+        return engine_ddi::kShareRequired;
+    }
     ++m.allocations;
     m.last_byte_size = request->byte_size;
     m.last_flags = request->flags;
@@ -87,6 +95,66 @@ HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* req
     out->allocation = m.next_allocation++;
     out->gpu_va = va;
     out->cookie = &m;
+    m.last_allocation = out->allocation;
+    return S_OK;
+}
+
+// BD-075: adopt_memory. The real shell maps the handle the runtime opened and imports those pages; a stub with no
+// kernel allocation cannot, so it allocates a stand-in of the size and type the request names and reports the
+// request's own handle. What this exercises is the open path's arithmetic and its release: no allocate callback, the
+// handle the runtime gave, one free at the destroy.
+HRESULT APIENTRY stub_adopt(void* shell, const engine_ddi::AdoptRequest* request, engine_ddi::ImportedMemory* out) {
+    StubMemory& m = stub_of(shell);
+    m.last_adopt_handle = request->allocation;
+    m.last_adopt_flags = request->flags;
+    m.last_adopt_byte_size = request->byte_size;
+    m.last_adopt_alignment = request->alignment;
+    m.last_adopt_type_bits = request->memory_type_bits;
+    if (m.refuse_adopt) {
+        ++m.adopt_refusals;
+        return E_OUTOFMEMORY;
+    }
+    ++m.adoptions;
+    VkBufferCreateInfo probe_info{};
+    probe_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    probe_info.size = request->byte_size;
+    probe_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    probe_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VkBuffer probe = VK_NULL_HANDLE;
+    if (m.create_buffer(m.device, &probe_info, nullptr, &probe) != VK_SUCCESS) return E_OUTOFMEMORY;
+    VkMemoryRequirements needs{};
+    m.requirements(m.device, probe, &needs);
+    const uint32_t type = pick_type(m, needs.memoryTypeBits & request->memory_type_bits,
+                                   D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE);
+    VkMemoryAllocateFlagsInfo flags{};
+    flags.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    flags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    VkMemoryAllocateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    info.pNext = &flags;
+    info.allocationSize = std::max<VkDeviceSize>(request->byte_size, needs.size);
+    info.memoryTypeIndex = type;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkDeviceAddress va = 0;
+    if (type != UINT32_MAX && m.allocate(m.device, &info, nullptr, &memory) == VK_SUCCESS &&
+        m.bind(m.device, probe, memory, 0) == VK_SUCCESS) {
+        VkBufferDeviceAddressInfo address{};
+        address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        address.buffer = probe;
+        va = m.address(m.device, &address);
+    }
+    m.destroy_buffer(m.device, probe, nullptr);
+    if (memory == VK_NULL_HANDLE) return E_OUTOFMEMORY;
+    *out = engine_ddi::ImportedMemory{};
+    out->size = sizeof(*out);
+    out->memory_type_index = type;
+    out->memory = memory;
+    out->byte_size = info.allocationSize;
+    out->allocation = request->allocation;      // borrowed: never a handle of the shell's own
+    out->gpu_va = va;
+    out->cookie = &m;
+    m.last_allocation = out->allocation;
     return S_OK;
 }
 
@@ -165,8 +233,9 @@ void test_runtime_backed(Env& env) {
     if (hr_pool != S_OK || hr_src != S_OK || hr_gpu != S_OK || hr_dst != S_OK) return;
 
     // A heap ByteSize of UINT64_MAX with a resource: the heap gets the size the resource needs, and neither the
-    // memory request nor the engine sees UINT64_MAX. Without a resource, and for a heap too small, E_INVALIDARG
-    // before any memory request.
+    // memory request nor the engine sees UINT64_MAX. Without a resource, and for a heap too small, the create is
+    // refused before any memory request - as E_OUTOFMEMORY, the one code a creation function may report for a
+    // refusal of its own (BD-075, engine-ddi.h admitted_create_failure); the real E_INVALIDARG stays in the log.
     {
         Buffer sized, alone, tight;
         const uint32_t before = m.allocations;
@@ -184,9 +253,9 @@ void test_runtime_backed(Env& env) {
         if (hr_sized == S_OK) destroy_buffer(env, device, sized);
         const HRESULT hr_alone = create_heap_alone(env, device, HeapKind::Upload, UINT64_MAX, alone);
         const HRESULT hr_small = create_buffer_in_heap_of(env, device, HeapKind::Upload, 4 * kBytes, kBytes, tight);
-        checkf(hr_alone == E_INVALIDARG && hr_small == E_INVALIDARG && m.allocations == after,
+        checkf(hr_alone == E_OUTOFMEMORY && hr_small == E_OUTOFMEMORY && m.allocations == after,
                "runtime-backed: a heap alone with ByteSize UINT64_MAX and a heap smaller than its resource: "
-               "E_INVALIDARG, no memory request (hr %08lx %08lx)",
+               "refused with no memory request (hr %08lx %08lx)",
                static_cast<unsigned long>(hr_alone), static_cast<unsigned long>(hr_small));
     }
     const D3D12DDI_GPU_VIRTUAL_ADDRESS pool_va = env.core.pfnCheckResourceVirtualAddress(device.h(), pool.hres());

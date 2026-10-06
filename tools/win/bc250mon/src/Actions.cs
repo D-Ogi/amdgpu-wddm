@@ -18,7 +18,7 @@ namespace Bc250Mon
         readonly State _state;
         public event Action<string> UiRequest;     // "show", "hide", "interactive", "passive"
 
-        public Actions(State state, Driver driver, KmdRegistry kmd)
+        public Actions(State state, Driver driver, KmdRegistry kmd, GraphicsPipelineProvider pipeline)
         {
             _state = state;
             Add("stop.set", "STOP tests", true, a => { state.StopRequested = true; return null; });
@@ -29,6 +29,15 @@ namespace Bc250Mon
             // has been up long enough; these two are for driving it by hand from mon.py during an install.
             Add("kmd.confirm", "Confirm KMD start", false, a => { kmd.Confirm(); return "bc250kmd start confirmed by hand: UnconfirmedStarts = 0"; });
             Add("kmd.budget", "KMD start budget", false, a => kmd.Summary());
+            // The graphics panel's counter block, refreshed on request only. LOG_SUMMARY is a Level Two escape,
+            // so nothing asks for it on a schedule (C55): the panel reads the ring with "log 0" and this action is
+            // the one way to write a new summary into it. Costs the GPU scheduler up to one VSync, once.
+            // While the pause marker exists the panel reads nothing, so the request would be dropped with it: say
+            // that instead of confirming a summary that will not be written.
+            Add("graphics.summary", "KMD summary", false, a =>
+                pipeline.RequestSummary() ?
+                "KMD log summary requested: the graphics panel writes one at its next poll (up to 5 s)" :
+                "no summary: " + GraphicsPipelineProvider.SummaryPauseFileName + " exists, the graphics panel is paused");
             Add("overlay.hide", "Hide", true, a => { Ui("hide"); return null; });
             Add("overlay.show", "Show", false, a => { Ui("show"); return null; });
             Add("overlay.interactive", "Controls", false, a => { Ui("interactive"); return null; });

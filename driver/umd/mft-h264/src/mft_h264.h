@@ -184,6 +184,61 @@ private:
     HRESULT SampleToFrame(IMFSample* sample, GpuFrameInput* frame, FrameLock* lock);
     HRESULT QueueNeedInput();
 
+    // A picture the GPU still holds. The input sample is kept until the picture is retired, which is
+    // what MFT_INPUT_STREAM_HOLDS_BUFFERS declares to the client: a texture sample read in place is
+    // read by a dispatch that runs after ProcessInput has returned, so the client's allocator must not
+    // recycle it yet. The timestamps travel with it because the output sample carries them and by then
+    // the input sample of the picture being retired is no longer the one ProcessInput was given.
+    struct InFlight {
+        ComPtr<IMFSample> input;
+        LONGLONG time = 0;
+        bool haveTime = false;
+        LONGLONG duration = 0;
+    };
+
+    // The client's Direct3D device lock, for as long as our dispatches run on its device. The
+    // documented contract for a D3D11-aware MFT, and the outer lock of the two: taken before the
+    // object's own critical section on every path, never the other way round.
+    struct DeviceLease {
+        ComPtr<IMFDXGIDeviceManager> manager;
+        HANDLE handle = nullptr;
+        bool locked = false;
+        DeviceLease() = default;
+        // Not copyable: the destructor unlocks the device and closes the handle, so a copy would do
+        // both twice and the second unlock would be against a lock this object no longer holds.
+        DeviceLease(const DeviceLease&) = delete;
+        DeviceLease& operator=(const DeviceLease&) = delete;
+        ~DeviceLease();
+        void Take(IMFDXGIDeviceManager* m);
+    };
+
+    // The client's device manager, read under the critical section and handed back for a lease the
+    // caller then takes before it enters the critical section itself.
+    void CaptureDeviceManager(ComPtr<IMFDXGIDeviceManager>& out);
+
+    // Turns one retired picture into the output sample the client collects, and queues its
+    // METransformHaveOutput. m_bitstream holds the access unit; `held` is the picture's input record.
+    HRESULT EmitRetired(const InFlight& held, const FrameStats& stats);
+
+    // Retires every picture the GPU still holds. `emit` turns each one into an output sample, which is
+    // what a drain does; without it the results are thrown away, which is what a flush does. Caller
+    // holds the device lease and the critical section.
+    HRESULT FinishPending(bool emit);
+
+    // Takes the encoder down and lets go of the pictures it still held: the input samples of those
+    // pictures with them, because MFT_INPUT_STREAM_HOLDS_BUFFERS says the transform holds a client
+    // buffer only while the GPU still has it. Every path that restarts or destroys the encoder goes
+    // through this one, and all of them hold the client's device lease while they do, because
+    // Encoder::Shutdown collects what the GPU still has and collecting one picture maps a staging
+    // buffer on the client's device. Caller holds the device lease and the critical section.
+    void ResetEncoderLocked();
+
+    // How many pictures the GPU may hold at once, from the configuration and the environment. One for a
+    // client that asked for low latency, two otherwise, and BC250_MFT_DEPTH overrides both.
+    uint32_t WantedPipelineDepth();
+    // Puts the wanted pipeline depth into force, if the pipeline is empty.
+    void ApplyPipelineDepth();
+
     LONG m_refCount = 1;
     mutable CRITICAL_SECTION m_lock = {};
     bool m_lockInit = false;
@@ -195,6 +250,14 @@ private:
     // this stops a second credit being issued; a drain or a flush makes the client drop whatever
     // request it still holds, so it is cleared there and the next start of stream re-issues it.
     bool m_inputRequested = false;
+    // True between MFT_MESSAGE_COMMAND_DRAIN and whatever restarts the flow of input: a start of
+    // stream, a begin streaming, a flush, an end of streaming, or a ProcessInput the client sends
+    // anyway. A drain at a pipeline depth above one always leaves an access unit behind, and collecting
+    // it in ProcessOutput would otherwise queue a METransformNeedInput after the
+    // METransformDrainComplete - the transform asking for a picture of a segment that has ended. A
+    // client that drops events on a drain then finds the credit taken at the next start of stream and
+    // waits for a request that is never re-issued.
+    bool m_drained = false;
     // The work queue and base priority the real time client contract handed us,
     // MFASYNC_CALLBACK_QUEUE_UNDEFINED while none was set. Recorded, not used: every stage of the
     // encode runs on the thread that calls ProcessInput, so this transform queues no work item of
@@ -208,7 +271,12 @@ private:
     ComPtr<IMFMediaType> m_inputType;
     ComPtr<IMFMediaType> m_outputType;
     ComPtr<IMFDXGIDeviceManager> m_deviceManager;
-    ComPtr<IMFSample> m_pendingOutput;
+    // Access units coded and not yet collected by ProcessOutput, oldest first, one queued
+    // METransformHaveOutput each. In the ordinary flow there is at most one; a drain can leave as many
+    // as the pipeline was deep.
+    std::vector<ComPtr<IMFSample>> m_outputs;
+    // Pictures submitted to the GPU and not yet retired, oldest first.
+    std::vector<InFlight> m_inFlight;
 
     GUID m_inputSubtype = GUID_NULL;
     EncoderConfig m_cfg;
@@ -218,6 +286,8 @@ private:
     std::vector<uint8_t> m_bitstream;
     std::vector<uint8_t> m_repack;   // only used for bottom-up (negative pitch) system memory input
     LONGLONG m_lastDuration = 0;
+    // BC250_MFT_DEPTH: -1 not read yet, 0 not set, else the depth it names.
+    int m_depthOverride = -1;
 };
 
 } // namespace bc250h264

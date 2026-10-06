@@ -22,6 +22,9 @@
       "EnableGpuPresentBlit": 1,
       "EnableCddDwmInterop": 1,
       "EnableScanoutAdmit": 1,
+      "EnableDirectFlipHandshake": 1,
+      "EnableHwmon": 1,
+      "NotifyDpcInReport": 1,
       "DpmMode": 1,
       "DpmMaxMHz": 1500,
       "DpmIdleMHz": 500,
@@ -29,18 +32,15 @@
     },
     "desktop_router": {
       "DwmForceCpu": 0,
-      "RequireKmdSwitches": 1
+      "RequireKmdSwitches": 1,
+      "DirectFlipFront": 1
     },
     "app_router": {
       "Mode": "gpu-default",
-      "Allow": ["dxdiag.exe"],
-      "Deny": ["witcher3.exe"]
+      "Allow": [],
+      "Deny": []
     },
-    "d3d12_applications": {
-      "witcher3.exe": {
-        "Experiment": "present-noprimary,present-cached"
-      }
-    }
+    "d3d12_applications": {}
   },
   "legacy_applied": {
     "parameters": {

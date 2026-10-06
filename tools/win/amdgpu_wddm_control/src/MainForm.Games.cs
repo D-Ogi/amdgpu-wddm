@@ -343,6 +343,10 @@ namespace AmdgpuWddmControl
             if (result != null) save.Add(result);
             p.Controls.Add(save);
 
+            // The tuning cards (docs/design/tuner.md): their own Apply, because they write no setting that a restart
+            // would keep - the driver holds each trial and takes it back by itself.
+            AddTuning(p, width, installed);
+
             var reset = new CardPanel(Strings.T("search.graphics.reset"), width);
             Mark("graphics.reset", reset);
             reset.Add(Ui.Dim(Strings.T("graphics.reset.text"), reset.Inner));

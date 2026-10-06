@@ -2,8 +2,18 @@
 #pragma once
 #include "runtime-bridge.h"
 #include "../../contract/amdgpu_wddm_surface_format.h"
+#include "../../contract/bc250_shared_surface.h"
 #include "../../kmd/gdi_private.h"
 namespace bc250::umd {
+// The D3D11 numbers the shared-surface wire format carries are the SDK's. D3D11_TEXTURE_LAYOUT is
+// declared by d3d11_3.h, which this header does not need; ddi-resource.cpp checks that one where it
+// builds the texture description.
+static_assert(BC250_SHARED_BIND_SHADER_RESOURCE==D3D11_BIND_SHADER_RESOURCE &&
+              BC250_SHARED_BIND_RENDER_TARGET==D3D11_BIND_RENDER_TARGET &&
+              BC250_SHARED_BIND_UNORDERED_ACCESS==D3D11_BIND_UNORDERED_ACCESS &&
+              BC250_SHARED_MISC_GENERATE_MIPS==D3D11_RESOURCE_MISC_GENERATE_MIPS &&
+              BC250_SHARED_MISC_RESOURCE_CLAMP==D3D11_RESOURCE_MISC_RESOURCE_CLAMP &&
+              BC250_SHARED_USAGE_DEFAULT==D3D11_USAGE_DEFAULT);
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
               AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
@@ -49,10 +59,9 @@ inline const AMDGPU_WDDM_SURFACE_FORMAT *runtime_scanout_format(DXGI_FORMAT form
 inline UINT runtime_surface_pitch(UINT width,UINT bytesPerPixel) { return (width*bytesPerPixel+255)&~255u; }
 // A received LB7A v1 description at the row's bytes a pixel, bounded as the kernel driver's type-0
 // admission bounds it: whole pixels a row, the row fits the pitch, the size covers every row. A
-// producer may pad the pitch and the size. At 4 bytes this is WddmSurfaceGeometry(s,0,4).
+// producer may pad the pitch and the size. At 4 bytes this is WddmSurfaceGeometry(s,0,4). The rule
+// itself lives in driver/contract/bc250_shared_surface.h, so the D3D12 shell applies the same one.
 inline bool runtime_surface_geometry(const BC250_WDDM_ALLOCATION_PRIVATE &s,UINT bytesPerPixel) {
-    return s.Magic==BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && s.Version==1 && bytesPerPixel &&
-        s.Width && s.Height && s.Pitch && !(s.Pitch%bytesPerPixel) &&
-        UINT64(s.Width)*bytesPerPixel<=s.Pitch && s.Size<=~0ull-4095ull && s.Size>=UINT64(s.Pitch)*s.Height;
+    return Bc250SharedSurfaceGeometry(&s,bytesPerPixel)!=0;
 }
 }

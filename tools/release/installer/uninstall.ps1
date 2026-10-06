@@ -2,8 +2,10 @@
 # install root). Removes everything install.ps1 added and puts the GPU back on Microsoft Basic Display Adapter.
 # -DryRun prints every change without making it. -DisableTestSigning turns test signing off (asked otherwise when
 # the installer turned it on). A restart finishes the removal of files that DWM still has loaded.
+# -Force removes the release also from a development-lab machine (as install.ps1 -Force installs on one); the lab's
+# own folders (C:\BC250\m10, m14, m15) are not ours to remove and stay.
 [CmdletBinding()]
-param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot)
+param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
@@ -31,17 +33,34 @@ if (-not $root) { $root = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)
 if (-not $root) { $root = Join-Path $env:ProgramFiles 'amdgpu-wddm' }
 Write-Info "install root: $root"
 $lab = @(Get-LabInstallPaths)
-if ($lab.Count) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine"; exit 2 }
-if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) { Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0 }
+if ($lab.Count -and -not $Force) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine (-Force removes the release anyway)"; exit 2 }
+if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', ')) is present; -Force given: the release is removed, those folders stay" }
+if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) {
+    # No installation, but an earlier release (or an uninstaller older than this one) can have left per-user data.
+    $userData = @(Get-OurUserDataDirs)
+    if ($userData.Count) {
+        Write-Step 'Per-user data'
+        Invoke-Change "remove the per-user data an earlier release left (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
+            foreach ($d in $userData) { Remove-PathOrSchedule $d }
+        } | Out-Null
+        Write-Host 'No amdgpu-wddm installation found; the per-user data of an earlier release is removed.' -ForegroundColor Green; exit 0
+    }
+    Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0
+}
 if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
 
 Write-Step 'Scheduled task, RunOnce entry, shortcut'
-Invoke-Change "unregister the scheduled task '$($script:TaskName)'" {
+# Every task of ours, not only the one this release registers: a task that an older release named differently would
+# otherwise stay and run a script that is gone.
+$tasks = @(Get-OurScheduledTasks)
+Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -join ', ' } else { "none on this computer (this release registers '$($script:TaskName)')" })" {
     # Safe Mode runs no Task Scheduler service: then the task stays, and running uninstall.cmd again later removes it.
-    try {
-        $t = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
-        if ($t) { if ($t.State -eq 'Running') { Stop-ScheduledTask -TaskName $script:TaskName }; Unregister-ScheduledTask -TaskName $script:TaskName -Confirm:$false }
-    } catch { Write-Warn2 "scheduled task not removed ($($_.Exception.Message)); run uninstall.cmd again after a normal start" }
+    foreach ($name in $tasks) {
+        try {
+            $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+            if ($t) { if ($t.State -eq 'Running') { Stop-ScheduledTask -TaskName $name }; Unregister-ScheduledTask -TaskName $name -Confirm:$false }
+        } catch { Write-Warn2 "scheduled task '$name' not removed ($($_.Exception.Message)); run uninstall.cmd again after a normal start" }
+    }
 } | Out-Null
 Invoke-Change "remove the RunOnce entry '$($script:RunOnceName)'" { Remove-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue } | Out-Null
 foreach ($name in 'amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') {
@@ -64,7 +83,22 @@ $icdJson = Join-Path $root 'vulkan\radeon_icd.json'
 Invoke-Change "remove '$icdJson' from $($script:KhronosKey)" { Remove-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -ErrorAction SilentlyContinue } | Out-Null
 $icdJsonWow = Join-Path $root 'wow64\vulkan\radeon_icd.json'
 Invoke-Change "remove '$icdJsonWow' from $($script:KhronosKeyWow)" { Remove-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -ErrorAction SilentlyContinue } | Out-Null
-Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile, release record)" { Remove-Item -LiteralPath $script:SoftwareKey -Recurse -Force -ErrorAction SilentlyContinue } | Out-Null
+# An entry of an older release of ours, whose install root was another folder, would keep the Vulkan loader looking
+# for a file that is gone. Only a name that carries our release name and ends with radeon_icd.json is ours.
+$icdLeft = @(Get-OurVulkanIcdValues | Where-Object { $_.name -ne $icdJson -and $_.name -ne $icdJsonWow })
+if ($icdLeft.Count) {
+    Invoke-Change "remove the Vulkan entries of older releases of ours: $(@($icdLeft | ForEach-Object { "$($_.key) '$($_.name)'" }) -join ', ')" {
+        foreach ($v in $icdLeft) { Remove-ItemProperty -LiteralPath $v.key -Name $v.name -ErrorAction SilentlyContinue }
+    } | Out-Null
+}
+# The policy keys: the 64-bit view that everything of ours writes (the router opens it with KEY_WOW64_64KEY), the
+# 32-bit view in case an older release wrote one, and the control application's own preferences of the account that
+# runs this uninstaller. Another account keeps its preferences, which are window state only.
+$softwareKeyWow = "HKLM:\SOFTWARE\WOW6432Node\$($script:ReleaseName)"
+$userKey = "HKCU:\Software\$($script:ReleaseName)"
+Invoke-Change "remove $($script:SoftwareKey) (router policy, application profile, release record), $softwareKeyWow and $userKey" {
+    foreach ($k in @($script:SoftwareKey, $softwareKeyWow, $userKey)) { Remove-Item -LiteralPath $k -Recurse -Force -ErrorAction SilentlyContinue }
+} | Out-Null
 # The H.264 encoder MFT (driver/umd/mft-h264/INSTALL.md): the class id key with its InprocServer32, the transform key
 # and our membership in the video encoder category. The keys go before the files below, so that no COM registration
 # is left pointing at a DLL that is gone. The category key itself stays while another encoder of the machine is in it,
@@ -91,8 +125,17 @@ foreach ($p in $pkgs) {
     } | Out-Null
 }
 Invoke-Change 'pnputil /scan-devices (bind the GPU to its inbox driver now)' { [void](Invoke-Native pnputil.exe @('/scan-devices')) } | Out-Null
-Invoke-Change 'remove the bc250kmd service entry (sc.exe delete; finished at the restart if the driver is still loaded)' {
+$serviceKey = Split-Path $script:ParametersKey
+Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey (sc.exe delete; finished at the restart if the driver is still loaded)" {
     if (Get-Service -Name $script:ServiceName -ErrorAction SilentlyContinue) { [void](Invoke-Native sc.exe @('delete', $script:ServiceName)) }
+    # The settings of the driver live under this key (Parameters: the gates, the DPM values, CuMode, the tuning the
+    # control application wrote). sc.exe delete takes the whole key, but a key without the values that make it a
+    # service is not a service to sc.exe, and a value left there would become the "tester's own setting" that the next
+    # install keeps (Get-RegistryDefaultPlan). So the key goes here whatever sc.exe did.
+    if (Test-Path -LiteralPath $serviceKey) {
+        Remove-Item -LiteralPath $serviceKey -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $serviceKey) { Write-Warn2 "$serviceKey is still there: Windows removes it at the restart that ends this uninstall. Run uninstall.cmd again after the restart if a new install reports settings of this one." }
+    }
 } | Out-Null
 
 Write-Step 'Files'
@@ -132,7 +175,16 @@ if ($thumb) {
     Invoke-Change "remove certificate $thumb from LocalMachine Root and TrustedPublisher" {
         foreach ($store in 'Root', 'TrustedPublisher') { Get-ChildItem "Cert:\LocalMachine\$store" | Where-Object { $_.Thumbprint -eq $thumb } | Remove-Item -Force }
     } | Out-Null
-} else { Write-Warn2 'release certificate thumbprint unknown: certificate not removed' }
+} else { Write-Warn2 'release certificate thumbprint unknown: the certificate of this release is removed by its subject below' }
+# Every test certificate of ours, by subject: the one of this release when its thumbprint was not known, and the one of
+# every older release that another install left in the stores. Only a certificate whose subject carries our release
+# name is ours, and we sign nothing else with it.
+$certsLeft = @(Get-OurCertificates | Where-Object { $_.thumbprint -ne $thumb })
+if ($certsLeft.Count) {
+    Invoke-Change "remove $($certsLeft.Count) more test certificate(s) of ours: $(@($certsLeft | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ')" {
+        foreach ($c in $certsLeft) { Get-ChildItem "Cert:\LocalMachine\$($c.store)" | Where-Object { $_.Thumbprint -eq $c.thumbprint } | Remove-Item -Force -ErrorAction SilentlyContinue }
+    } | Out-Null
+} else { Write-Info 'no other test certificate of ours in Root or TrustedPublisher' }
 
 Write-Step 'Test signing'
 $setByUs = ($state -and $state.testsigning_set_by_installer)
@@ -148,6 +200,7 @@ if ($off) {
     if ($state -and $state.bitlocker -eq 'Suspend') { Write-Info 'BitLocker: changing the boot options again; if BitLocker is on, have the recovery key ready or suspend it first.' }
 } else { Write-Info 'test signing left as it is' }
 
+Write-Step 'Installer state'
 # The control application's backups and action log (%ProgramData%\amdgpu-wddm\control) belong to the tester: kept.
 $dataRoot = Split-Path $script:StateDir
 $controlData = Join-Path $dataRoot 'control'
@@ -159,8 +212,33 @@ Invoke-Change "remove the installer state $($script:StateDir) (with the kept rep
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
 } | Out-Null
+Write-Step 'Per-user data'
+$userData = @(Get-OurUserDataDirs)
+if ($userData.Count) {
+    Invoke-Change "remove the per-user data of this release (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
+        foreach ($d in $userData) { Remove-PathOrSchedule $d }
+    } | Out-Null
+} else { Write-Info 'no per-user data of ours' }
 if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the control application's setting backups and action log; delete it by hand if you do not need them)" }
-if ($DryRun) { Write-Host ''; Write-Host 'Dry run complete: nothing was changed.' -ForegroundColor Green; exit 0 }
+
+# What of this release is still on the computer. The tester's clean-slate check, and the one place a host test or a
+# support report reads it from. Reads only, and a probe that cannot read says so instead of claiming the item is gone.
+Write-Step 'What is left of this release'
+$footprint = @(Get-ReleaseFootprint -InstallRoot $root -State $state -MftKeys @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey))
+foreach ($f in $footprint) {
+    $mark = 'gone'
+    if ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }
+    Write-Host ('   [{0,-4}] {1,-24} {2}' -f $mark, $f.item, $f.detail) -ForegroundColor $(if ($mark -eq 'LEFT') { 'Yellow' } else { 'Gray' })
+    Write-Log ('   footprint {0}: {1} {2}' -f $f.item, $mark, $f.detail)
+}
+$left = @($footprint | Where-Object { $_.present -and -not $_.kept })
+if ($DryRun) {
+    Write-Host ''
+    Write-Host "Dry run complete: nothing was changed, so the list above is this computer as it is now ($($left.Count) item(s) of this release)." -ForegroundColor Green
+    exit 0
+}
+if ($left.Count) { Write-Warn2 "$($left.Count) item(s) above are marked LEFT. A file or a registry key that Windows still holds goes at the restart below; run uninstall.cmd again afterwards if one of them stays." }
+else { Write-Info 'nothing of this release is left, apart from the items marked kept' }
 Write-Host ''
 Write-Host "Uninstall complete. Restart the computer to finish. Log: $($script:LogPath)" -ForegroundColor Green
 Write-Host 'Until the restart, some Windows 11 apps (the command bar of File Explorer, Task Manager) can ignore mouse clicks: the GPU changed to Microsoft Basic Display Adapter under the running desktop.' -ForegroundColor Yellow

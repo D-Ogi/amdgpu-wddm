@@ -25,6 +25,10 @@ class RuntimeAllocation final {
     D3DKMT_HANDLE allocation_{};
     HANDLE resource_{};                         // the runtime owner the allocation was created with
     D3DGPU_VIRTUAL_ADDRESS address_{};
+    // BD-075: the allocation came from the runtime already made (pfnOpenHeapAndResource), so no allocate
+    // callback created it and no deallocate callback may destroy it. The runtime destroys it itself when the
+    // open's resource goes.
+    bool borrowed_{};
 public:
     RuntimeAllocation(D3D12DDI_HRTDEVICE runtime,
                       const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& callbacks) noexcept
@@ -63,8 +67,25 @@ public:
         allocation_=info.hAllocation;address_=info.GpuVirtualAddress;resource_=request.hResource;
         return S_OK;
     }
+    // BD-075: adopts an allocation the runtime opened for this device. There is no callback and nothing to
+    // release later; the record exists so that the mapping and the Vulkan import have the same owner as a
+    // created allocation's. A borrowed allocation never names a runtime resource as its release owner.
+    HRESULT adopt(D3DKMT_HANDLE allocation) noexcept {
+        if(allocation_) return E_UNEXPECTED;
+        if(!allocation) return E_INVALIDARG;
+        allocation_=allocation;address_=0;resource_=nullptr;borrowed_=true;
+        return S_OK;
+    }
     HRESULT close(ReleaseForm form=ReleaseForm::Handle,Retirement retirement=Retirement::Unknown) noexcept {
         if(!allocation_) return S_OK;
+        // A borrowed allocation is forgotten, not deallocated: this driver never created it. The owner form
+        // would name a runtime resource for a destruction that is not ours to ask for, so it is refused
+        // rather than silently turned into the handle form.
+        if(borrowed_){
+            if(form==ReleaseForm::Owner) return E_UNEXPECTED;
+            allocation_=0;address_=0;resource_=nullptr;
+            return S_OK;
+        }
         if(!deallocate_) return E_UNEXPECTED;
         const bool by_resource=form==ReleaseForm::Owner;
         if(by_resource && (!resource_ || retirement!=Retirement::Retired)) return E_UNEXPECTED;

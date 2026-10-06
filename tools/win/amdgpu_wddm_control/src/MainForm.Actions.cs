@@ -35,6 +35,7 @@ namespace AmdgpuWddmControl
                 if (more.Games != null) { verb.Add("--games"); verb.Add(more.Games); }
                 if (more.Image != null) { verb.Add("--image"); verb.Add(more.Image); }
                 if (more.Value != null) { verb.Add("--value"); verb.Add(more.Value); }
+                verb.AddRange(TunerPlan.Arguments(more));
             }
             _work = GuideCause.Repairing;       // a change by the recovery helper: rank 4's repair (section 6)
             ComputeStatus();

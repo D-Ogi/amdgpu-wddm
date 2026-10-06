@@ -13,6 +13,8 @@
 //   bc250kmd_cli telemetry | vram     what the monitor's GPU line shows (bc250control.dll exports the same reads)
 //   bc250kmd_cli dpm [n [ms]]       the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
+//   bc250kmd_cli dpm curve ...        the operator's V/F curve and its trial (0.7.213, docs/design/tuner.md)
+//   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.213)
 //                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
@@ -446,10 +448,18 @@ BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
     return 0;
 }
 
-// READ is an adapter-owned software snapshot, never a hardware-idling diagnostic.
+// READ is an adapter-owned software snapshot, never a hardware-idling diagnostic, and from 0.7.213 CONFIRM is one
+// too: it touches that snapshot and the registry, so both go with NoAdapterSynchronization alone. Up to 0.7.212
+// CONFIRM carried HardwareAccess, which suspends the GPU scheduler for up to one VSync while the driver flushes a
+// registry key - and the installer's logon task retries it every 5.5 s for two minutes. A driver of 0.7.212 or
+// older still insists on HardwareAccess, which happens whenever a release defers the device restart, so a refused
+// CONFIRM is sent again with the old word (see the retry below) instead of leaving the start unconfirmed.
 BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULONGLONG epoch,
     BC250_ESCAPE_START_HEALTH* data,ULONG bytes)
 {
+    static int confirmLegacy;       // a CONFIRM was refused without HardwareAccess: this driver is 0.7.212 or older
+    BC250_ESCAPE_START_HEALTH request;
+    const int confirm=op==BC250_START_HEALTH_CONFIRM;
     NTSTATUS status=(NTSTATUS)0xC000000E;
     typedef char HealthAbiSizeCheck[(sizeof(BC250_ESCAPE_START_HEALTH)==96)?1:-1];
     (void)sizeof(HealthAbiSizeCheck);
@@ -461,7 +471,28 @@ BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULO
     data->Status=BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
     data->AbiVersion=BC250_START_HEALTH_ABI;data->Op=op;
     data->ExpectedGeneration=generation;data->ExpectedEpoch=epoch;
-    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),op!=BC250_START_HEALTH_CONFIRM,&status))return status;
+    request=*data;                  // the request as built, for the retry below
+    // A driver up to 0.7.212 demands HardwareAccess for CONFIRM and refuses this word at its gate: Status REFUSED
+    // with NtStatus STATUS_INVALID_PARAMETER, and Version written before the refusal (start_health.c). A
+    // well-formed request of this release gets that answer from nothing else, so it is the signal to send the same
+    // request once more with the old word and to keep sending it that way for the rest of the process - the mirror
+    // image of ReadEscapeOn's fallback, which carries a pre-0.7.184.1 driver the other way.
+    // The pair is not hypothetical: the installer copies the tools and defers the device restart, so this
+    // release's logon task, the overlay's automatic confirmation and the control application's Recovery action all
+    // run against the loaded old driver until the next start. Without the retry every one of them is refused for
+    // 120 s and start-confirm.ps1 falls back to `bc250kmd_cli confirm`, which writes the boot-loop guard alone:
+    // the CU-mode and DPM requests stay unconfirmed and the next start comes up at 24 CU and the floor clock.
+    if(confirm && confirmLegacy) {
+        if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),0,&status))return status;
+    } else {
+        if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),1,&status))return status;
+        if(confirm && NT_SUCCESS(status) &&
+           data->Status==BC250_ESCAPE_STATUS_REFUSED && data->NtStatus==0xC000000Dul) {
+            confirmLegacy=1;
+            *data=request;
+            if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),0,&status))return status;
+        }
+    }
     if(!NT_SUCCESS(status))return status;
     if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
     if(data->Status!=BC250_ESCAPE_STATUS_DONE || data->NtStatus!=0)
@@ -584,7 +615,26 @@ typedef struct _BC250_VIDEO_MEMORY {
     ULONGLONG Limit[BC250_VIDEO_MEMORY_SEGMENTS];
 } BC250_VIDEO_MEMORY; // 264 bytes
 
+// What a caller asks the CPU surface for (Bc250Cpu). Size is sizeof(BC250_CPU_REQUEST), so that an older caller
+// and a newer DLL recognize each other instead of reading past the buffer. tools/win/amdgpu_wddm_control mirrors
+// it in src/Native.cs and its unit tests check the offsets against this text.
+typedef struct _BC250_CPU_REQUEST {
+    ULONG Size;                             // sizeof(BC250_CPU_REQUEST), 56
+    ULONG Op;                               // BC250_CPU_OP_*
+    ULONG Given;                            // SET: BC250_CPU_GIVEN_* bits
+    ULONG MaxMHz, UvSteps, TempC;           // SET; UvSteps also carries SEARCH_BEGIN's depth
+    ULONG TrialMs;                          // SET and SEARCH_BEGIN; 0 is the driver's own window
+    ULONG CoreMask;                         // CORES: 119 or 255
+    // What the caller knows about the load it runs and the driver cannot see (0.7.211). The driver judges
+    // clock stretching only over a sample the caller marks Loaded, and a machine check or a memory checksum
+    // error is a sign no kernel reading of this surface carries.
+    ULONG WheaEvents, ChecksumErrors;       // SET and SEARCH_STEP: the caller's counts since the trial began
+    ULONG Loaded;                           // SET and SEARCH_STEP: 1 while the caller loads the processor
+    ULONGLONG ExpectedGeneration;           // every operation but READ
+} BC250_CPU_REQUEST; // 56 bytes on Windows
+
 static NTSTATUS TelemetryEscape(void *data, unsigned size);
+static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
 
@@ -628,6 +678,40 @@ BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
     return 0;
 }
 
+// The board's hardware monitor (BC250_ESCAPE_RUN_HWMON, KMD 0.7.213.1 and later): the fan speed, the duty
+// read-back, the fan mode mask and the chip's own temperature channels, as the governor thread published them a
+// second ago at most. Adapter-owned software snapshot, so NoAdapterSynchronization alone, like the DPM read: no
+// port access on this path, no BAR access, no scheduler idle, so a sampler may call it while a game runs.
+//
+// No ABI fallback loop and no size negotiation: the escape was born at ABI 1 with one size. A driver older than
+// 0.7.213.1 does not know command 27 and answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which the check below maps
+// to 0xC00000BB (STATUS_NOT_SUPPORTED), the same answer the other snapshots give for a driver that is too old.
+// The deployed 0.7.208.1 is such a driver: it stops at command 26, so 0xC00000BB from here is its correct
+// answer and not a defect of the fan path. The reader was written as revision 208 on fan/read-nct6686 and
+// reached a release in 0.7.213.1, which is why no 0.7.208.1 knows it.
+BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char HwmonAbiSizeCheck[(sizeof(BC250_ESCAPE_HWMON) == 216) ? 1 : -1];
+    (void)sizeof(HwmonAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_HWMON;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_HWMON_ABI;
+    data->Op = BC250_HWMON_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_HWMON ||
+        data->AbiVersion != BC250_HWMON_ABI || data->Op != BC250_HWMON_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
 // The CU mode snapshot (READ, any caller) and the boot-guard confirmation of a pending 40 CU start (CONFIRM, an
 // administrator with the Generation of a READ of this start). Both are adapter-owned software state answered with
 // NoAdapterSynchronization alone (bc250kmd_escape.h), like the DPM read: no BAR access, no scheduler idle.
@@ -652,6 +736,111 @@ BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_CU_MODE ||
         data->AbiVersion != BC250_CU_MODE_ABI || data->Op != op)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// The operator's V/F curve (0.7.213): READ for the window's chart, and the trial operations behind one elevated
+// action. Every operation is adapter-owned software state answered with NoAdapterSynchronization alone, like the
+// DPM read above: the governor thread applies the curve at its next tick, so no escape of this surface touches a
+// mailbox. A write needs an administrator (the KMD checks the caller's token itself) and the Generation of a READ
+// of the same start, which is how a stale window cannot change a curve it has not seen.
+//
+// mv/points carry the candidate of a SET, so a caller never has to know where CandidateMv lies in the structure;
+// every other operation ignores them. windowMs is the trial window of a SET (0: the driver's own 25 s).
+BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGeneration, const ULONG *mv, ULONG points,
+                                            ULONG windowMs, BC250_ESCAPE_DPM_CURVE *data, ULONG bytes)
+{
+    NTSTATUS status;
+    ULONG i;
+    typedef char CurveAbiSizeCheck[(sizeof(BC250_ESCAPE_DPM_CURVE) == 360) ? 1 : -1];
+    (void)sizeof(CurveAbiSizeCheck);
+    if (!data || bytes != sizeof(*data) || op > BC250_DPM_CURVE_OP_RESET) return (LONG)0xC000000D;
+    if (op == BC250_DPM_CURVE_OP_SET && (!mv || points != BC250_DPM_CURVE_POINTS)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_DPM_CURVE;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_DPM_CURVE_ABI;
+    data->Op = op;
+    data->ExpectedGeneration = op == BC250_DPM_CURVE_OP_READ ? 0 : expectedGeneration;
+    if (op == BC250_DPM_CURVE_OP_SET) {
+        for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) data->CandidateMv[i] = mv[i];
+        data->TrialMs = windowMs;
+    }
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.213 refuses the command: DEVICE_NOT_READY
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_DPM_CURVE ||
+        data->AbiVersion != BC250_DPM_CURVE_ABI || data->Op != op)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// The CPU surface (0.7.213). One request structure instead of seven arguments, so that a new field is a version of
+// this DLL and not a new export. READ is software state, and so is KEEP from 0.7.213 (it writes the registry and
+// ends the trial, and sends nothing); every other operation sends mailbox messages on the firmware's queue 3 and
+// therefore goes with HardwareAccess, an administrator and the Generation of a READ of the
+// same start. READBACK asks for the administrator as well since 0.7.211: it holds the surface for some twenty
+// messages on the shared mailbox, which an unprivileged loop must not be able to do. The driver owns the trial
+// deadline and the revert, so a window that stops calling loses the trial and nothing else.
+BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_ESCAPE_CPU *data, ULONG bytes)
+{
+    static int keepLegacy;          // a KEEP was refused without HardwareAccess: this driver is 0.7.212 or older
+    BC250_ESCAPE_CPU sent;
+    NTSTATUS status;
+    ULONG op;
+    typedef char CpuAbiSizeCheck[(sizeof(BC250_ESCAPE_CPU) == 296 && sizeof(BC250_CPU_REQUEST) == 56) ? 1 : -1];
+    (void)sizeof(CpuAbiSizeCheck);
+    if (!request || !data || bytes != sizeof(*data) || request->Size != sizeof(*request)) return (LONG)0xC000000D;
+    op = request->Op;
+    if (op > BC250_CPU_OP_SEARCH_STEP) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_CPU;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_CPU_ABI;
+    data->Op = op;
+    data->ExpectedGeneration = op == BC250_CPU_OP_READ ? 0 : request->ExpectedGeneration;
+    if (op == BC250_CPU_OP_SET) {
+        data->Given = request->Given;
+        data->MaxMHz = request->MaxMHz;
+        data->UvSteps = request->UvSteps;
+        data->TempC = request->TempC;
+    }
+    if (op == BC250_CPU_OP_SEARCH_BEGIN) data->UvSteps = request->UvSteps;
+    if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_STEP) {
+        data->WheaEvents = request->WheaEvents;
+        data->ChecksumErrors = request->ChecksumErrors;
+        data->Loaded = request->Loaded;
+    }
+    if (op == BC250_CPU_OP_CORES) data->CoreMask = request->CoreMask;
+    if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_BEGIN) data->TrialMs = request->TrialMs;
+    sent = *data;                                   // the request as built, for the retry below
+    // KEEP sends no mailbox message, so it goes with the software flag word. A driver up to 0.7.212 refuses that
+    // word at its gate (cpu.c: Status REFUSED, NtStatus STATUS_INVALID_PARAMETER, Version written first), so the
+    // same request goes once more with the old word and this process keeps sending it that way, as
+    // Bc250StartHealth does for CONFIRM. Without it a tester who installs this release and defers the device
+    // restart loses the trial: the new DLL next to the still-loaded old driver would get nothing but refusals.
+    if (op == BC250_CPU_OP_KEEP && keepLegacy) {
+        status = TelemetryEscapeFlags(data, sizeof(*data), 1);
+    } else {
+        status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ && op != BC250_CPU_OP_KEEP);
+        if (op == BC250_CPU_OP_KEEP && NT_SUCCESS(status) &&
+            data->Status == BC250_ESCAPE_STATUS_REFUSED && data->NtStatus == 0xC000000Dul) {
+            keepLegacy = 1;
+            *data = sent;
+            status = TelemetryEscapeFlags(data, sizeof(*data), 1);
+        }
+    }
+    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.213 refuses the command: DEVICE_NOT_READY
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_CPU ||
+        data->AbiVersion != BC250_CPU_ABI || data->Op != op)
         return (LONG)0xC000000D;
     return 0;
 }
@@ -746,7 +935,12 @@ static NTSTATUS TelemetryOpenLocked(const WCHAR *wantedId, D3DKMT_OPENADAPTERFRO
     return status;
 }
 
-static NTSTATUS TelemetryEscape(void *data, unsigned size)
+// hardware = 0: NoAdapterSynchronization alone, a software snapshot, which is what every read of this DLL sends
+// and what the KMD demands of them. hardware = 1: HardwareAccess alone (the Level Two exclusion), for the one
+// surface whose writes reach a mailbox, the CPU surface of 0.7.213 - its KEEP excepted, which reaches no mailbox
+// and goes with hardware = 0 from 0.7.213. The KMD refuses any other combination, per
+// operation, so a mistake here is a refusal and never a half-privileged escape.
+static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
 {
     D3DKMT_OPENADAPTERFROMDEVICENAME open;
     D3DKMT_CLOSEADAPTER close = { 0 };
@@ -758,7 +952,8 @@ static NTSTATUS TelemetryEscape(void *data, unsigned size)
     if (NT_SUCCESS(status)) {
         escape.hAdapter = open.hAdapter;
         escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
-        escape.Flags.NoAdapterSynchronization = 1;  // a software snapshot: the KMD refuses every other flag
+        if (hardware) escape.Flags.HardwareAccess = 1;
+        else escape.Flags.NoAdapterSynchronization = 1;
         escape.pPrivateDriverData = data;
         escape.PrivateDriverDataSize = size;
         status = D3DKMTEscape(&escape);
@@ -767,6 +962,11 @@ static NTSTATUS TelemetryEscape(void *data, unsigned size)
     }
     ReleaseSRWLockExclusive(&g_TelemetryLock);
     return status;
+}
+
+static NTSTATUS TelemetryEscape(void *data, unsigned size)
+{
+    return TelemetryEscapeFlags(data, size, 0);
 }
 
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated)
@@ -850,6 +1050,84 @@ BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, U
     return 0;
 }
 
+// ---- fan: the board's hardware monitor (BC250_ESCAPE_RUN_HWMON, docs/design/fan.md) ----------------------------
+//
+// One line per sample, in the same key=value shape the lab samplers already parse. The fan speed is the fastest
+// tachometer that turns, because the chip exposes five channels on this board and only one of them has a fan on
+// it; fan= names which one, counted from 1 as the Linux labels count. duty_pct is the duty READ-BACK, and
+// duty_proven=0 says that no lab trial has yet shown that duty follow the fan that turns. tsi_c is the chip's own
+// reading of the APU over SB-TSI, an independent second measurement of the temperature the SMU reports as Tctl;
+// board_c is the first board thermistor.
+//
+// turning= and answered= are not the same question. answered= counts the present tachometers whose value THIS
+// sample accepted, turning= those that report a speed above zero. "answered 4/5" means one channel was refused,
+// which is what a second reader on this unarbitrated window looks like; a stopped fan reads 0 and answers.
+// mode= and engine= are the two UNPROVEN registers as the START read them, not per sample, so they do not move
+// inside a run. refusals= counts every refused value since the start.
+static const char *HwmonReasonName(unsigned long reason)
+{
+    static const char *const names[] = { "ok", "gated", "base", "identity", "monitoring", "customer",
+                                         "no-thread", "port" };
+    return reason < ARRAYSIZE(names) ? names[reason] : "?";
+}
+
+static void HwmonLine(const BC250_ESCAPE_HWMON *h)
+{
+    unsigned long i, fan = 0, rpm = 0, duty = 0, turning = 0, present = 0, answered = 0;
+    long tsi = 0, board = 0;
+    int haveTsi = 0, haveBoard = 0;
+
+    for (i = 0; i < BC250_HWMON_FAN_SLOTS; i++) {
+        if (h->FanPresentMask & (1u << i)) present++;
+        if (h->RpmValidMask & (1u << i)) answered++;
+        if (h->Rpm[i] > rpm) { rpm = h->Rpm[i]; fan = i; }
+        if (h->Rpm[i] != 0) turning++;
+        if (h->DutyPermille[i] > duty) duty = h->DutyPermille[i];
+    }
+    for (i = 0; i < BC250_HWMON_TEMP_SLOTS; i++) {
+        if (h->TemperatureSource[i] == 0) continue;
+        if (h->TemperatureSource[i] == BC250_HWMON_SOURCE_APU) { tsi = h->TemperatureMc[i]; haveTsi = 1; }
+        else if (!haveBoard) { board = h->TemperatureMc[i]; haveBoard = 1; }
+    }
+    printf("fan fan=%lu rpm=%lu turning=%lu/%lu answered=%lu/%lu duty_pct=%lu duty_proven=%d mode=0x%02lX "
+           "engine=0x%02lX ", fan + 1, rpm, turning, present, answered, present, (duty + 5) / 10,
+           (h->Flags & BC250_HWMON_FLAG_DUTY_PROVEN) ? 1 : 0, h->ModeMask, h->Engine);
+    if (haveTsi) printf("tsi_c=%.1f ", tsi / 1000.0); else printf("tsi_c=n/a ");
+    if (haveBoard) printf("board_c=%.1f ", board / 1000.0); else printf("board_c=n/a ");
+    printf("age_ms=%lu fresh=%d valid=%d stopped=%d reason=%s samples=%llu errors=%llu retries=%llu "
+           "refusals=%llu\n",
+           h->AgeMs, (h->Flags & BC250_HWMON_FLAG_FRESH) ? 1 : 0, (h->Flags & BC250_HWMON_FLAG_VALID) ? 1 : 0,
+           (h->Flags & BC250_HWMON_FLAG_STOPPED) ? 1 : 0, HwmonReasonName(h->Reason),
+           h->Samples, h->Errors, h->Retries, h->Refusals);
+}
+
+// "fan [count [interval ms]]". The interval has a floor of one second, because the chip caches its registers for
+// about that long and the driver samples at exactly that rate: a faster poll returns the same snapshot and only
+// spends escapes.
+static int Fan(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_HWMON h;
+    unsigned long count = 1, interval = 1000, i;
+    LONG status;
+
+    if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
+    if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
+    if (count == 0) count = 1;
+    if (interval < 1000) interval = 1000;
+    for (i = 0; i < count; i++) {
+        if (i) Sleep(interval);
+        status = Bc250Hwmon(&h, sizeof(h));
+        if (status < 0) { PrintStatus("fan", status); return 1; }
+        if (i == 0)
+            printf("driver 0x%08lX, base 0x%04lX, ec %lu.%lu build %02lu/%02lu/%02lu, customer 0x%04lX, "
+                   "fans 0x%02lX duties 0x%02lX, generation %llu\n", h.Version, h.BasePort, h.EcVersion >> 8,
+                   h.EcVersion & 0xFF, (h.EcBuild >> 8) & 0xFF, h.EcBuild & 0xFF, (h.EcBuild >> 16) & 0xFF,
+                   h.CustomerId, h.FanPresentMask, h.DutyPresentMask, h.Generation);
+        HwmonLine(&h);
+    }
+    return 0;
+}
+
 // "telemetry [count [interval ms]]": what the monitor's GPU line is made of, one line per sample.
 // "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
 static int Telemetry(int argc, wchar_t **argv)
@@ -871,6 +1149,16 @@ static int Telemetry(int argc, wchar_t **argv)
                    (d.Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "(stale)", d.ObservedMHz,
                    (d.Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d.BusyPermille / 10.0, d.BusyAvgPermille / 10.0,
                    (d.Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d.SubmitBusyPermille / 10.0);
+        {
+            // The board's hardware monitor, one line per sample, so the lab samplers pick the fan up with no new
+            // process and no new session. A driver before 0.7.208.1 answers 0xC00000BB; that is reported once and
+            // does not fail the sampler, because the fan reading is information and not the measurement this
+            // command exists for.
+            BC250_ESCAPE_HWMON h;
+            LONG fanStatus = Bc250Hwmon(&h, sizeof(h));
+            if (fanStatus < 0) { if (i == 0) PrintStatus("fan", fanStatus); }
+            else HwmonLine(&h);
+        }
         status = Bc250VideoMemory(NULL, &m, sizeof(m));
         failed |= status < 0;
         if (status < 0) PrintStatus("vram", status);
@@ -1989,7 +2277,8 @@ static int Journal(const WCHAR *fromText)
 static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
                                            "registry", "no-smu", "not-run", "smu-error" };
 static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-hard", "sensor", "max-setting",
-                                             "stable", "smu", "fixed", "thermal-warm", "thermal-ramp", "idle" };
+                                             "stable", "smu", "fixed", "thermal-warm", "thermal-ramp", "idle",
+                                             "thermal-zone" };
 
 static unsigned long g_DpmAbi = BC250_DPM_ABI;   // BC250_DPM_ABI_1 after a driver refused ABI 2 (0.7.207)
 
@@ -2069,14 +2358,26 @@ static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
 //
 // "dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms>" (0.7.197.1, ABI 2) sets the thermal cap's
 // timing: at most one step down per hot step, and with a delta, one level back after the soft step held below
-// 87 C - delta. The tool asks with ABI 2 and falls back to ABI 1 (120 bytes) once a driver before 0.7.197 fails the
-// 152-byte escape with STATUS_INVALID_PARAMETER; everything but `thermal` then works as before.
+// 87 C - delta. Three more arguments (0.7.213, ABI 3) set the soft thermal zone on the same operation:
+// "dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms> [<zone delta mC|off> <zone step ms>
+// <zone lead ms>]". The zone steps the cap down from 87 C - zone delta, judged on the reading plus its own slope
+// extrapolated over the lead, and "off" there leaves the hot cap at 87 C as the only thermal rule. Omitting the three
+// keeps the zone as it is. The tool asks with the newest ABI and steps down to 2 and then 1 as a driver fails the size
+// with STATUS_INVALID_PARAMETER; everything the older ABI has then works as before.
 
 static const char *const g_TuneError[] = { "none", "range", "order", "lowering-invariant", "raise-invariant", "hold",
-                                           "floor", "thermal" };
+                                           "floor", "thermal", "zone" };
 #define TUNE_ERRORS (sizeof(g_TuneError) / sizeof(g_TuneError[0]))
 
-static unsigned long g_TuneAbi = BC250_DPM_TUNE_ABI;   // BC250_DPM_TUNE_ABI_1 after a driver refused ABI 2
+// The ABI the driver answered, stepped down 3 -> 2 -> 1 as it refuses a size. The numbers are consecutive by
+// construction, so one decrement is the next-older layout.
+static unsigned long g_TuneAbi = BC250_DPM_TUNE_ABI;
+
+static unsigned TuneAbiSize(unsigned long abi)
+{
+    if (abi == BC250_DPM_TUNE_ABI) return (unsigned)sizeof(BC250_ESCAPE_DPM_TUNE);
+    return abi == BC250_DPM_TUNE_ABI_2 ? BC250_DPM_TUNE_ABI2_SIZE : BC250_DPM_TUNE_ABI1_SIZE;
+}
 
 // One RUN_DPM_TUNE round trip. 0 when the driver answered (whatever Status says), 1 after reporting why not.
 static int TuneQuery(BC250_ESCAPE_DPM_TUNE *t, unsigned long op, unsigned long long generation, int quiet)
@@ -2084,22 +2385,22 @@ static int TuneQuery(BC250_ESCAPE_DPM_TUNE *t, unsigned long op, unsigned long l
     NTSTATUS status;
     unsigned size;
     for (;;) {
-        if (g_TuneAbi != BC250_DPM_TUNE_ABI && op == BC250_DPM_TUNE_OP_THERMAL) {
+        if (g_TuneAbi == BC250_DPM_TUNE_ABI_1 && op == BC250_DPM_TUNE_OP_THERMAL) {
             if (!quiet) printf("# this driver predates 0.7.197.1 (RUN_DPM_TUNE ABI 1): no thermal timing to set\n");
             return 1;
         }
-        size = g_TuneAbi == BC250_DPM_TUNE_ABI ? (unsigned)sizeof(*t) : BC250_DPM_TUNE_ABI1_SIZE;
-        if (g_TuneAbi != BC250_DPM_TUNE_ABI)
-            memset((unsigned char *)t + BC250_DPM_TUNE_ABI1_SIZE, 0, sizeof(*t) - BC250_DPM_TUNE_ABI1_SIZE);
+        size = TuneAbiSize(g_TuneAbi);
+        if (size < sizeof(*t)) memset((unsigned char *)t + size, 0, sizeof(*t) - size);
         t->Magic = BC250_ESCAPE_MAGIC;
         t->Command = BC250_ESCAPE_RUN_DPM_TUNE;
         t->AbiVersion = g_TuneAbi;
         t->Op = op;
         t->ExpectedGeneration = generation;
         if (SendEscapeFlags(BC250_DEFAULT_HWID, t, size, 1, &status)) return 1;
-        if (status != (NTSTATUS)0xC000000Dl || g_TuneAbi != BC250_DPM_TUNE_ABI) break;
-        // STATUS_INVALID_PARAMETER for 152 bytes: a driver before 0.7.197.1, which takes ABI 1 alone.
-        g_TuneAbi = BC250_DPM_TUNE_ABI_1;
+        if (status != (NTSTATUS)0xC000000Dl || g_TuneAbi == BC250_DPM_TUNE_ABI_1) break;
+        // STATUS_INVALID_PARAMETER for this size: a driver older than this ABI. 184 bytes predates 0.7.213, 152 bytes
+        // predates 0.7.197.1, and 120 bytes is where the command itself began (0.7.185.1).
+        g_TuneAbi--;
     }
     if (!NT_SUCCESS(status)) {
         // A driver before 0.7.185.1 has no such command and refuses NoAdapterSynchronization for it.
@@ -2129,12 +2430,24 @@ static void TuneFloorText(char *text, size_t size, unsigned long mhz)
     else _snprintf_s(text, size, _TRUNCATE, "off");
 }
 
-// "below 85.5 C for 3000 ms" or "off". 87 C is BC250_DPM_HOT_MC (driver/shim/include/bc250_dpm.h), fixed since 0.7.195.
+// "below 85.5 C for 3000 ms" or "off". The reference is BC250_DPM_TUNE_HOT_MC (bc250kmd_escape.h), which the driver
+// asserts equal to BC250_DPM_HOT_MC, 87 C, fixed since 0.7.195.
 static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs)
 {
     if (deltaMc) {
-        long below = 87000l - (long)deltaMc;
+        long below = BC250_DPM_TUNE_HOT_MC - (long)deltaMc;
         _snprintf_s(text, size, _TRUNCATE, "below %ld.%ld C for %lu ms", below / 1000l, (below % 1000l) / 100l, stepMs);
+    } else _snprintf_s(text, size, _TRUNCATE, "off");
+}
+
+// "from 86.0 C per 3000 ms, lead 15000 ms" or "off" (0.7.213). The same 87 C reference as the soft release, because the
+// escape carries both as a delta below it.
+static void TuneZoneText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs, unsigned long leadMs)
+{
+    if (deltaMc) {
+        long from = BC250_DPM_TUNE_HOT_MC - (long)deltaMc;
+        _snprintf_s(text, size, _TRUNCATE, "from %ld.%ld C per %lu ms, lead %lu ms", from / 1000l,
+                    (from % 1000l) / 100l, stepMs, leadMs);
     } else _snprintf_s(text, size, _TRUNCATE, "off");
 }
 
@@ -2147,10 +2460,15 @@ static void TunePrintState(const BC250_ESCAPE_DPM_TUNE *t)
     printf("up %lu target %lu down %lu permille, hold %lu ms (%s), floor %s (%s)", t->UpPermille, t->TargetPermille,
            t->DownPermille, t->DownHoldMs, (t->Flags & BC250_DPM_TUNE_FLAG_THRESHOLDS) ? "runtime" : "default", floor,
            (t->Flags & BC250_DPM_TUNE_FLAG_FLOOR) ? "runtime" : "default");
-    if (t->AbiVersion == BC250_DPM_TUNE_ABI) {
+    if (t->AbiVersion >= BC250_DPM_TUNE_ABI_2) {
         TuneSoftText(floor, sizeof(floor), t->SoftReleaseDeltaMc, t->SoftReleaseStepMs);
         printf(", hot step %lu ms, soft release %s (%s)", t->HotStepMs, floor,
                (t->Flags & BC250_DPM_TUNE_FLAG_THERMAL) ? "runtime" : "default");
+    }
+    if (t->AbiVersion >= BC250_DPM_TUNE_ABI) {
+        char zone[64];
+        TuneZoneText(zone, sizeof(zone), t->ZoneDeltaMc, t->ZoneStepMs, t->ZoneLeadMs);
+        printf(", soft zone %s (%s)", zone, (t->Flags & BC250_DPM_TUNE_FLAG_ZONE) ? "runtime" : "default");
     }
 }
 
@@ -2172,6 +2490,10 @@ static void TuneExplain(const BC250_ESCAPE_DPM_TUNE *t, unsigned long up)
     case 6: printf("  the floor is a clock of the table (1000..2000 in 100 MHz steps) at or below this start's ceiling, %lu MHz\n",
                    t->MaxMHz); break;
     case 7: printf("  hot step 250..10000 ms, soft delta off or 500..4500 mC (between 82 and 87 C), soft step 2000..30000 ms\n");
+            break;
+    case 8: printf("  zone delta off or 500..4000 mC and at least 500 mC above the soft delta (so the zone steps the cap "
+                   "down above where it raises it again), zone step 250..30000 ms, zone lead at most 60000 ms; a zone "
+                   "needs a soft release above it\n");
             break;
     default: break;
     }
@@ -2197,6 +2519,16 @@ static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const ch
     if (TuneRead(&before, 0)) return 1;
     t = *in;
     if (op == BC250_DPM_TUNE_OP_THRESHOLDS && t.DownHoldMs == 0) t.DownHoldMs = before.DownHoldMs;
+    // A THERMAL write with no zone arguments keeps the zone as it is (0.7.213). ZoneStepMs is the marker because no
+    // admissible zone step is 0, while ZoneDeltaMc 0 is the zone off and has to reach the driver.
+    if (op == BC250_DPM_TUNE_OP_THERMAL && t.ZoneStepMs == 0) {
+        t.ZoneDeltaMc = before.ZoneDeltaMc;
+        t.ZoneStepMs = before.ZoneStepMs;
+        t.ZoneLeadMs = before.ZoneLeadMs;
+    } else if (op == BC250_DPM_TUNE_OP_THERMAL && before.AbiVersion < BC250_DPM_TUNE_ABI) {
+        printf("# this driver predates 0.7.213 (RUN_DPM_TUNE ABI %lu): no soft zone to set\n", before.AbiVersion);
+        return 1;
+    }
     if (TuneQuery(&t, op, before.Generation, 0)) return 1;
     if (t.Status != BC250_ESCAPE_STATUS_DONE) {
         printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s; in force: ", name, t.Status, t.NtStatus,
@@ -2211,11 +2543,17 @@ static int TuneWrite(unsigned long op, const BC250_ESCAPE_DPM_TUNE *in, const ch
     printf("%s: up %lu -> %lu, target %lu -> %lu, down %lu -> %lu permille, hold %lu -> %lu ms, floor %s -> %s "
            "(ceiling %lu MHz, serial %lu)\n", name, before.UpPermille, t.UpPermille, before.TargetPermille, t.TargetPermille,
            before.DownPermille, t.DownPermille, before.DownHoldMs, t.DownHoldMs, floorBefore, floorAfter, t.MaxMHz, t.Serial);
-    if (t.AbiVersion == BC250_DPM_TUNE_ABI) {
+    if (t.AbiVersion >= BC250_DPM_TUNE_ABI_2) {
         TuneSoftText(floorBefore, sizeof(floorBefore), before.SoftReleaseDeltaMc, before.SoftReleaseStepMs);
         TuneSoftText(floorAfter, sizeof(floorAfter), t.SoftReleaseDeltaMc, t.SoftReleaseStepMs);
         printf("%s: hot step %lu -> %lu ms, soft release %s -> %s\n", name, before.HotStepMs, t.HotStepMs, floorBefore,
                floorAfter);
+    }
+    if (t.AbiVersion >= BC250_DPM_TUNE_ABI) {
+        char zoneBefore[64], zoneAfter[64];
+        TuneZoneText(zoneBefore, sizeof(zoneBefore), before.ZoneDeltaMc, before.ZoneStepMs, before.ZoneLeadMs);
+        TuneZoneText(zoneAfter, sizeof(zoneAfter), t.ZoneDeltaMc, t.ZoneStepMs, t.ZoneLeadMs);
+        printf("%s: soft zone %s -> %s\n", name, zoneBefore, zoneAfter);
     }
     printf("in force: ");
     TunePrintState(&t);
@@ -2244,23 +2582,35 @@ static int DpmTune(int argc, WCHAR **argv)
         printf("; defaults up %lu target %lu down %lu hold %lu ms; serial %lu, governor at %lu%s, floor ticks %llu\n",
                t.DefaultUpPermille, t.DefaultTargetPermille, t.DefaultDownPermille, t.DefaultDownHoldMs, t.Serial,
                t.Applied, (t.Flags & BC250_DPM_TUNE_FLAG_GOVERNING) ? "" : " (not governing)", t.FloorTicks);
-        if (t.AbiVersion == BC250_DPM_TUNE_ABI) {
+        if (t.AbiVersion >= BC250_DPM_TUNE_ABI_2) {
             char soft[32];
             TuneSoftText(soft, sizeof(soft), t.DefaultSoftReleaseDeltaMc, t.DefaultSoftReleaseStepMs);
             printf("thermal defaults: hot step %lu ms, soft release %s (soft step %lu ms)\n", t.DefaultHotStepMs, soft,
                    t.DefaultSoftReleaseStepMs);
         } else printf("# RUN_DPM_TUNE ABI 1 (a driver before 0.7.197.1): no thermal timing\n");
+        if (t.AbiVersion >= BC250_DPM_TUNE_ABI) {
+            char zone[64];
+            TuneZoneText(zone, sizeof(zone), t.DefaultZoneDeltaMc, t.DefaultZoneStepMs, t.DefaultZoneLeadMs);
+            printf("soft zone defaults: %s, slope window %lu ms%s\n", zone, t.ZoneSlopeMs,
+                   (t.Flags & BC250_DPM_TUNE_FLAG_ZONE_OFF) ? "; the zone is OFF for this start (DpmThermalZone 0)" : "");
+        } else if (t.AbiVersion >= BC250_DPM_TUNE_ABI_2)
+            printf("# RUN_DPM_TUNE ABI 2 (a driver before 0.7.213): no soft thermal zone\n");
         return 0;
     }
     if (argc == 4 && !_wcsicmp(argv[3], L"reset")) return TuneWrite(BC250_DPM_TUNE_OP_RESET, &t, "dpm tune reset");
     if (argc >= 4 && !_wcsicmp(argv[3], L"thermal")) {
-        if (argc != 7 || ParseNumber(argv[4], &t.HotStepMs) ||
+        if ((argc != 7 && argc != 10) || ParseNumber(argv[4], &t.HotStepMs) ||
             (_wcsicmp(argv[5], L"off") && (ParseNumber(argv[5], &t.SoftReleaseDeltaMc) || !t.SoftReleaseDeltaMc)) ||
-            ParseNumber(argv[6], &t.SoftReleaseStepMs)) {
-            fprintf(stderr, "usage: bc250kmd_cli dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms>\n");
+            ParseNumber(argv[6], &t.SoftReleaseStepMs) ||
+            (argc == 10 &&
+             ((_wcsicmp(argv[7], L"off") && (ParseNumber(argv[7], &t.ZoneDeltaMc) || !t.ZoneDeltaMc)) ||
+              ParseNumber(argv[8], &t.ZoneStepMs) || !t.ZoneStepMs || ParseNumber(argv[9], &t.ZoneLeadMs)))) {
+            fprintf(stderr, "usage: bc250kmd_cli dpm tune thermal <hot step ms> <soft delta mC|off> <soft step ms> "
+                            "[<zone delta mC|off> <zone step ms> <zone lead ms>]\n");
             return 2;
         }
         if (!_wcsicmp(argv[5], L"off")) t.SoftReleaseDeltaMc = 0;
+        if (argc == 10 && !_wcsicmp(argv[7], L"off")) t.ZoneDeltaMc = 0;
         return TuneWrite(BC250_DPM_TUNE_OP_THERMAL, &t, "dpm tune thermal");
     }
     if (argc == 6 || argc == 7) {
@@ -2272,7 +2622,7 @@ static int DpmTune(int argc, WCHAR **argv)
         return TuneWrite(BC250_DPM_TUNE_OP_THRESHOLDS, &t, "dpm tune");
     }
     fprintf(stderr, "usage: bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | thermal <hot ms> <soft mC|off> "
-                    "<soft ms> | reset]\n");
+                    "<soft ms> [<zone mC|off> <zone step ms> <zone lead ms>] | reset]\n");
     return 2;
 }
 
@@ -2288,6 +2638,410 @@ static int DpmFloor(int argc, WCHAR **argv)
     return TuneWrite(BC250_DPM_TUNE_OP_FLOOR, &t, "dpm floor");
 }
 
+// ---- dpm curve: the operator's V/F curve and its trial (BC250_ESCAPE_RUN_DPM_CURVE, 0.7.213) ---------------------
+//
+// "dpm curve" prints the three curves side by side (the table's own line, what is stored, what runs now) with the
+// lowest voltage each level admits. "dpm curve set <mV> ..." puts a whole curve on trial, one value per level from
+// 1000 MHz up; "dpm curve offset <mV>" takes that many millivolts off every level the band allows, which is the
+// usual first experiment; "dpm curve preset mild|medium|deep" uses the GUI's own three steps. A trial reverts by
+// itself after its window unless "dpm curve keep" lands inside it; "dpm curve cancel" ends it now and
+// "dpm curve reset" deletes the stored curve and goes back to the table's line.
+//
+// The window and the revert belong to the driver: this tool can be killed at any moment and the curve still goes
+// back. Nothing reaches the registry before a keep.
+#define CURVE_ERRORS 7
+static const char *const g_CurveError[CURVE_ERRORS] = {
+    "none", "a value outside 820..1000 mV", "deeper than the band allows at that clock",
+    "the voltage falls as the clock rises", "1000 MHz must stay at 820 mV", "no curve given",
+    "the governor has not put the candidate into the chip yet"
+};
+
+static int CurveQuery(BC250_ESCAPE_DPM_CURVE *c, unsigned long op, unsigned long long generation, int quiet)
+{
+    NTSTATUS status;
+    c->Magic = BC250_ESCAPE_MAGIC;
+    c->Command = BC250_ESCAPE_RUN_DPM_CURVE;
+    c->AbiVersion = BC250_DPM_CURVE_ABI;
+    c->Op = op;
+    c->ExpectedGeneration = generation;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) {
+        if (!quiet) {
+            PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM_CURVE)", status);
+            printf("# a driver before 0.7.213 (0x000700D5) has no V/F curve\n");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int CurveRead(BC250_ESCAPE_DPM_CURVE *c, int quiet)
+{
+    memset(c, 0, sizeof(*c));
+    if (CurveQuery(c, BC250_DPM_CURVE_OP_READ, 0, quiet)) return 1;
+    if (c->Status != BC250_ESCAPE_STATUS_DONE) {
+        if (!quiet) printf("dpm curve: read refused, status %lu NTSTATUS 0x%08lX\n", c->Status, c->NtStatus);
+        return 1;
+    }
+    return 0;
+}
+
+static void CurvePrint(const BC250_ESCAPE_DPM_CURVE *c)
+{
+    unsigned long i;
+    printf("dpm curve: driver 0x%08lX, mode %s, ceiling %lu MHz, serial %lu applied %lu%s%s%s%s\n", c->Version,
+           c->Mode == 1 ? "dpm" : "fixed", c->CeilingMHz, c->Serial, c->Applied,
+           (c->Flags & BC250_DPM_CURVE_FLAG_GOVERNING) ? ", governing" : ", not governing",
+           (c->Flags & BC250_DPM_CURVE_FLAG_STORED) ? ", a curve is stored" : "",
+           (c->Flags & BC250_DPM_CURVE_FLAG_PENDING) ? ", PENDING (unconfirmed start)" : "",
+           (c->Flags & BC250_DPM_CURVE_FLAG_CONFIRMED) ? ", confirmed" : "");
+    if (c->Flags & BC250_DPM_CURVE_FLAG_ON_TRIAL)
+        printf("dpm curve: ON TRIAL, %lu ms of %lu left; without a keep the stored curve comes back by itself\n",
+               c->TrialRemainingMs, c->TrialMs);
+    else
+        printf("dpm curve: no trial runs; a set would get a %lu ms window\n", c->TrialMs);
+    printf("   MHz   line  stored  active  trial   floor\n");
+    for (i = 0; i < c->Points && i < BC250_DPM_CURVE_POINTS; i++) {
+        unsigned long mhz = c->FirstMHz + i * c->StepMHz;
+        printf("  %4lu  %5lu  %6lu  %6lu  %5lu  %6lu%s\n", mhz, c->DefaultMv[i], c->StoredMv[i], c->ActiveMv[i],
+               c->CandidateMv[i], c->FloorMv[i], mhz == c->LevelMHz ? "   <- the governor is here" : "");
+    }
+    printf("dpm curve: now %lu MHz at %lu mV (SMU %lu MHz VID %lu), %ld.%01ld C; sets %lu keeps %lu cancels %lu "
+           "reverts %lu\n", c->LevelMHz, c->LevelMv, c->ObservedMHz, c->ObservedVid, c->TemperatureMc / 1000,
+           (c->TemperatureMc < 0 ? -c->TemperatureMc : c->TemperatureMc) % 1000 / 100, c->Sets, c->Keeps,
+           c->Cancels, c->Reverts);
+}
+
+static int CurveWrite(unsigned long op, const unsigned long *mv, unsigned long windowMs, const char *name)
+{
+    BC250_ESCAPE_DPM_CURVE before, c;
+    unsigned long i;
+    if (CurveRead(&before, 0)) return 1;
+    memset(&c, 0, sizeof(c));
+    if (mv != NULL) for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) c.CandidateMv[i] = mv[i];
+    c.TrialMs = windowMs;
+    if (CurveQuery(&c, op, before.Generation, 0)) return 1;
+    if (c.Status != BC250_ESCAPE_STATUS_DONE) {
+        printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s", name, c.Status, c.NtStatus,
+               c.Error < CURVE_ERRORS ? g_CurveError[c.Error] : "?");
+        if (c.Error) printf(" at %lu MHz", c.ErrorLevel ? c.FirstMHz + (c.ErrorLevel - 5) * 100 : c.FirstMHz);
+        printf("\n");
+        if (c.NtStatus == 0xC0000184ul)
+            printf("# STATUS_INVALID_DEVICE_STATE: a curve needs a DPM start whose governor runs, and a keep or a "
+                   "cancel needs a trial in flight (bc250kmd_cli dpm)\n");
+        CurvePrint(&before);
+        return 1;
+    }
+    printf("%s: done, serial %lu\n", name, c.Serial);
+    CurvePrint(&c);
+    return 0;
+}
+
+// The GUI's three steps, as millivolts off the table's line. The driver bounds the depth per level, so a preset
+// that asks for more than a level allows is clamped to that level's floor here and not refused there.
+static void CurveOffset(const BC250_ESCAPE_DPM_CURVE *c, unsigned long off, unsigned long *mv)
+{
+    unsigned long i;
+    for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) {
+        unsigned long line = c->DefaultMv[i], floor = c->FloorMv[i];
+        mv[i] = line > floor + off ? line - off : floor;
+    }
+}
+
+static int DpmCurve(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM_CURVE c;
+    unsigned long mv[BC250_DPM_CURVE_POINTS], window = 0, value, i;
+    if (argc == 3) {
+        if (CurveRead(&c, 0)) return 1;
+        CurvePrint(&c);
+        return 0;
+    }
+    if (!_wcsicmp(argv[3], L"keep")) return CurveWrite(BC250_DPM_CURVE_OP_KEEP, NULL, 0, "dpm curve keep");
+    if (!_wcsicmp(argv[3], L"cancel")) return CurveWrite(BC250_DPM_CURVE_OP_CANCEL, NULL, 0, "dpm curve cancel");
+    if (!_wcsicmp(argv[3], L"reset")) return CurveWrite(BC250_DPM_CURVE_OP_RESET, NULL, 0, "dpm curve reset");
+    if (!_wcsicmp(argv[3], L"offset") || !_wcsicmp(argv[3], L"preset")) {
+        unsigned long off = 0;
+        if (argc < 5) {
+            fprintf(stderr, "usage: bc250kmd_cli dpm curve offset <mV> [window ms] | preset mild|medium|deep "
+                            "[window ms]\n");
+            return 2;
+        }
+        if (!_wcsicmp(argv[3], L"preset")) {
+            if (!_wcsicmp(argv[4], L"mild")) off = 10;
+            else if (!_wcsicmp(argv[4], L"medium")) off = 20;
+            else if (!_wcsicmp(argv[4], L"deep")) off = 25;
+            else { fprintf(stderr, "dpm curve preset: mild, medium or deep\n"); return 2; }
+        } else if (ParseNumber(argv[4], &off)) {
+            fprintf(stderr, "dpm curve offset: <mV> is a decimal number\n");
+            return 2;
+        }
+        if (argc >= 6 && ParseNumber(argv[5], &window)) {
+            fprintf(stderr, "dpm curve: [window ms] is a decimal number\n");
+            return 2;
+        }
+        if (CurveRead(&c, 0)) return 1;
+        CurveOffset(&c, off, mv);
+        printf("dpm curve: %lu mV off the line where the band allows it\n", off);
+        return CurveWrite(BC250_DPM_CURVE_OP_SET, mv, window, "dpm curve set");
+    }
+    if (!_wcsicmp(argv[3], L"set")) {
+        if (argc != 4 + (int)BC250_DPM_CURVE_POINTS && argc != 5 + (int)BC250_DPM_CURVE_POINTS) {
+            fprintf(stderr, "usage: bc250kmd_cli dpm curve set <mV at 1000> ... <mV at 2000> [window ms]   "
+                            "(%lu values)\n", (unsigned long)BC250_DPM_CURVE_POINTS);
+            return 2;
+        }
+        for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) {
+            if (ParseNumber(argv[4 + i], &value)) {
+                fprintf(stderr, "dpm curve set: every value is a decimal number of millivolts\n");
+                return 2;
+            }
+            mv[i] = value;
+        }
+        if (argc == 5 + (int)BC250_DPM_CURVE_POINTS && ParseNumber(argv[4 + BC250_DPM_CURVE_POINTS], &window)) {
+            fprintf(stderr, "dpm curve set: [window ms] is a decimal number\n");
+            return 2;
+        }
+        return CurveWrite(BC250_DPM_CURVE_OP_SET, mv, window, "dpm curve set");
+    }
+    fprintf(stderr, "usage: bc250kmd_cli dpm curve [set <mV>... | offset <mV> | preset mild|medium|deep | keep | "
+                    "cancel | reset] [window ms]\n");
+    return 2;
+}
+
+// ---- cpu: the clock limit, the undervolt, the temperature cap and the core mask (BC250_ESCAPE_RUN_CPU, 0.7.213) --
+//
+// "cpu" prints what is applied, stored and recorded and what the chip last answered; "cpu readback" sends the
+// getters of both queues, which is also what admits every setter of this start. "cpu set [clock <MHz>]
+// [uv <steps>] [temp <C>] [window <ms>]" puts a change on trial, "cpu keep" keeps it, "cpu cancel" ends it now and
+// "cpu reset" puts the recorded baseline back and deletes the stored values. "cpu cores 6|8" writes the core mask,
+// which the processor count follows after the next Windows restart. "cpu search [steps]" walks the undervolt one
+// step at a time; the load between the steps is the caller's business, so the wrapper script runs it.
+//
+// The whole surface is off until CpuTune is 1 in the driver's Parameters key. Every write needs an administrator.
+#define CPU_ERRORS 6
+static const char *const g_CpuError[CPU_ERRORS] = {
+    "none", "the clock is outside the admitted range", "the undervolt is deeper than the maximum",
+    "the temperature cap is outside its band", "nothing to change", "the plan needs too many steps"
+};
+#define CPU_FAILS 6
+static const char *const g_CpuFail[CPU_FAILS] = {
+    "none", "a machine check (WHEA)", "a wrong answer from the load", "clock stretching",
+    "the voltage readback", "87 C"
+};
+
+static int CpuQuery(BC250_ESCAPE_CPU *c, unsigned long op, unsigned long long generation, int quiet)
+{
+    static int keepLegacy;          // a KEEP was refused without HardwareAccess: this driver is 0.7.212 or older
+    BC250_ESCAPE_CPU sent;
+    NTSTATUS status;
+    c->Magic = BC250_ESCAPE_MAGIC;
+    c->Command = BC250_ESCAPE_RUN_CPU;
+    c->AbiVersion = BC250_CPU_ABI;
+    c->Op = op;
+    c->ExpectedGeneration = generation;
+    sent = *c;                      // the request as built, for the retry below
+    // READ is software state (NoAdapterSynchronization), and so is KEEP from 0.7.213: it writes the registry and
+    // ends the trial without a mailbox message. Every other operation sends messages and takes the adapter,
+    // exactly as a clock set does. A driver up to 0.7.212 refuses KEEP without HardwareAccess (Status REFUSED,
+    // NtStatus STATUS_INVALID_PARAMETER): the request goes again with the old word, as in Bc250StartHealth, so that
+    // a client of this release still keeps a trial against a driver that has not been restarted yet.
+    if (op == BC250_CPU_OP_KEEP && keepLegacy) {
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), 0, &status)) return 1;
+    } else {
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c),
+                            op == BC250_CPU_OP_READ || op == BC250_CPU_OP_KEEP, &status)) return 1;
+        if (op == BC250_CPU_OP_KEEP && NT_SUCCESS(status) &&
+            c->Status == BC250_ESCAPE_STATUS_REFUSED && c->NtStatus == 0xC000000Dul) {
+            keepLegacy = 1;
+            *c = sent;
+            if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), 0, &status)) return 1;
+        }
+    }
+    if (!NT_SUCCESS(status)) {
+        if (!quiet) {
+            PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_CPU)", status);
+            printf("# a driver before 0.7.213 (0x000700D5) has no CPU surface\n");
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static int CpuRead(BC250_ESCAPE_CPU *c, int quiet)
+{
+    memset(c, 0, sizeof(*c));
+    if (CpuQuery(c, BC250_CPU_OP_READ, 0, quiet)) return 1;
+    if (c->Status != BC250_ESCAPE_STATUS_DONE) {
+        if (!quiet) printf("cpu: read refused, status %lu NTSTATUS 0x%08lX\n", c->Status, c->NtStatus);
+        return 1;
+    }
+    return 0;
+}
+
+static void CpuPrint(const BC250_ESCAPE_CPU *c)
+{
+    unsigned long i;
+    printf("cpu: driver 0x%08lX, %s%s%s%s%s%s\n", c->Version,
+           (c->Flags & BC250_CPU_FLAG_TUNE_ON) ? "on (CpuTune 1)" : "OFF (CpuTune is not 1: read-only)",
+           (c->Flags & BC250_CPU_FLAG_QUEUE3_PROVEN) ? ", queue 3 answered" : ", queue 3 has not answered yet",
+           (c->Flags & BC250_CPU_FLAG_STORED) ? ", values stored" : "",
+           (c->Flags & BC250_CPU_FLAG_PENDING) ? ", PENDING (unconfirmed start)" : "",
+           (c->Flags & BC250_CPU_FLAG_CONFIRMED) ? ", confirmed" : "",
+           (c->Flags & BC250_CPU_FLAG_SEARCHING) ? ", a search runs" : "");
+    if (c->Flags & BC250_CPU_FLAG_ON_TRIAL)
+        printf("cpu: ON TRIAL, %lu ms of %lu left; without a keep the settings before it come back\n",
+               c->TrialRemainingMs, c->TrialMs);
+    printf("cpu: applied clock %lu MHz, undervolt %lu steps, cap %lu C (stored %lu / %lu / %lu, baseline %lu / %lu "
+           "/ %lu)\n", c->AppliedMaxMHz, c->AppliedUvSteps, c->AppliedTempC, c->StoredMaxMHz, c->StoredUvSteps,
+           c->StoredTempC, c->BaselineMaxMHz, c->BaselineUvSteps, c->BaselineTempC);
+    printf("cpu: %lu mV (GPU %lu mV), firmware cap %lu C, features 0x%08lX, %ld.%01ld C\n", c->VoltageMv,
+           c->GpuVoltageMv, c->CapC, c->Features, c->TemperatureMc / 1000,
+           (c->TemperatureMc < 0 ? -c->TemperatureMc : c->TemperatureMc) % 1000 / 100);
+    printf("cpu: cores");
+    for (i = 0; i < BC250_CPU_CORE_SLOTS; i++) printf(" %lu", c->CoreMHz[i]);
+    printf(" MHz; P-states");
+    for (i = 0; i < BC250_CPU_CORE_SLOTS; i++) printf(" %lu", c->PstateMHz[i]);
+    printf(" MHz\n");
+    printf("cpu: mask 0x%02lX in force, 0x%02lX stored%s%s, %lu processors to Windows\n", c->CoreMask,
+           c->CoreMaskStored, (c->Flags & BC250_CPU_FLAG_CORE_PENDING) ? ", PENDING" : "",
+           (c->Flags & BC250_CPU_FLAG_CORE_CONFIRMED) ? ", confirmed" : "", c->Cores);
+    if (c->SearchStep || c->SearchTested)
+        printf("cpu: search step %lu, best %lu, tested %lu, stopped by %s\n", c->SearchStep, c->SearchBest,
+               c->SearchTested, c->SearchFail < CPU_FAILS ? g_CpuFail[c->SearchFail] : "?");
+    printf("cpu: reads %lu writes %lu refusals %lu reverts %lu (retries %lu, refused %lu); last queue %lu "
+           "message 0x%02lX argument 0x%08lX status 0x%08lX\n", c->Reads, c->Writes, c->Refusals,
+           c->Reverts, c->RevertRetries, c->RevertFailures, c->LastQueue, c->LastMessage, c->LastParameter,
+           c->LastStatus);
+    if (c->Flags & BC250_CPU_FLAG_REVERT_OWED)
+        printf("cpu: A WAY BACK IS OWED: a revert was refused, so the trial settings are still in the chip. The "
+               "driver repeats it every second; a cold start is the last backstop\n");
+    if (!(c->Flags & BC250_CPU_FLAG_TEMP_VALID))
+        printf("cpu: the temperature above was NOT read on the last message, so it is older than the rest\n");
+}
+
+// What the caller knows about the load it ran over this sample (0.7.211). The driver judges clock stretching
+// only over a sample marked loaded, and a machine check is a sign no kernel reading of this surface carries, so
+// a search driven from a script says both: `cpu search step loaded 1 whea 0`.
+static int CpuSample(int argc, WCHAR **argv, int first, BC250_ESCAPE_CPU *c)
+{
+    int i;
+    unsigned long value = 0;
+    for (i = first; i < argc; i += 2) {
+        if (i + 1 >= argc || ParseNumber(argv[i + 1], &value)) {
+            fprintf(stderr, "usage: ... [whea <events>] [checksum <errors>] [loaded 0|1]\n");
+            return 1;
+        }
+        if (!_wcsicmp(argv[i], L"whea")) c->WheaEvents = value;
+        else if (!_wcsicmp(argv[i], L"checksum")) c->ChecksumErrors = value;
+        else if (!_wcsicmp(argv[i], L"loaded")) c->Loaded = value;
+        else {
+            fprintf(stderr, "cpu search step: whea, checksum or loaded\n");
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *name)
+{
+    BC250_ESCAPE_CPU before, c;
+    if (CpuRead(&before, 0)) return 1;
+    c = *in;
+    if (CpuQuery(&c, op, before.Generation, 0)) return 1;
+    if (c.Status != BC250_ESCAPE_STATUS_DONE) {
+        printf("%s: refused, status %lu NTSTATUS 0x%08lX, error %s\n", name, c.Status, c.NtStatus,
+               c.Error < CPU_ERRORS ? g_CpuError[c.Error] : "?");
+        if (c.NtStatus == 0xC0000184ul)
+            printf("# STATUS_INVALID_DEVICE_STATE: CpuTune must be 1 in the driver's Parameters key, and a keep or "
+                   "a cancel needs a trial in flight\n");
+        if (c.NtStatus == 0xC00000A3ul)
+            printf("# STATUS_DEVICE_NOT_READY: the read stage has not answered yet. Run `bc250kmd_cli cpu readback` "
+                   "first; it is what admits every setter of this start\n");
+        if (c.NtStatus == 0xC0000022ul)
+            printf("# STATUS_ACCESS_DENIED: every operation of this surface, the readback included, needs an "
+                   "elevated shell\n");
+        CpuPrint(&before);
+        return 1;
+    }
+    printf("%s: done, serial %lu\n", name, c.Serial);
+    CpuPrint(&c);
+    return 0;
+}
+
+static int Cpu(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_CPU c;
+    unsigned long value = 0;
+    int i;
+    if (argc == 2) {
+        if (CpuRead(&c, 0)) return 1;
+        CpuPrint(&c);
+        return 0;
+    }
+    memset(&c, 0, sizeof(c));
+    if (!_wcsicmp(argv[2], L"readback")) return CpuWrite(BC250_CPU_OP_READBACK, &c, "cpu readback");
+    if (!_wcsicmp(argv[2], L"keep")) return CpuWrite(BC250_CPU_OP_KEEP, &c, "cpu keep");
+    if (!_wcsicmp(argv[2], L"cancel")) return CpuWrite(BC250_CPU_OP_CANCEL, &c, "cpu cancel");
+    if (!_wcsicmp(argv[2], L"reset")) return CpuWrite(BC250_CPU_OP_RESET, &c, "cpu reset");
+    if (!_wcsicmp(argv[2], L"cores")) {
+        if (argc != 4 || ParseNumber(argv[3], &value) || (value != 6 && value != 8)) {
+            fprintf(stderr, "usage: bc250kmd_cli cpu cores 6|8   (6 is the mask this part ships with)\n");
+            return 2;
+        }
+        c.CoreMask = value == 8 ? BC250_CPU_REQUEST_MASK_FULL : BC250_CPU_REQUEST_MASK_STOCK;
+        printf("cpu cores: mask 0x%02lX; the processor count follows after the next Windows restart\n", c.CoreMask);
+        return CpuWrite(BC250_CPU_OP_CORES, &c, "cpu cores");
+    }
+    if (!_wcsicmp(argv[2], L"search")) {
+        if (argc >= 4 && !_wcsicmp(argv[3], L"step")) {        // `cpu search step` reads as the hint prints it
+            if (CpuSample(argc, argv, 4, &c)) return 2;
+            return CpuWrite(BC250_CPU_OP_SEARCH_STEP, &c, "cpu search step");
+        }
+        if (argc >= 4 && (ParseNumber(argv[3], &value) || value > BC250_CPU_REQUEST_SEARCH_STEPS)) {
+            fprintf(stderr, "usage: bc250kmd_cli cpu search [steps]   (at most %lu)\n",
+                    (unsigned long)BC250_CPU_REQUEST_SEARCH_STEPS);
+            return 2;
+        }
+        c.UvSteps = argc >= 4 ? value : 0;
+        printf("# the load between the steps is the caller's: run `cpu search step loaded 1` after each load "
+               "window\n");
+        return CpuWrite(BC250_CPU_OP_SEARCH_BEGIN, &c, "cpu search");
+    }
+    if (!_wcsicmp(argv[2], L"step")) {
+        if (CpuSample(argc, argv, 3, &c)) return 2;
+        return CpuWrite(BC250_CPU_OP_SEARCH_STEP, &c, "cpu search step");
+    }
+    if (!_wcsicmp(argv[2], L"set")) {
+        for (i = 3; i < argc; i += 2) {
+            if (i + 1 >= argc || ParseNumber(argv[i + 1], &value)) {
+                fprintf(stderr, "usage: bc250kmd_cli cpu set [clock <MHz>] [uv <steps>] [temp <C>] "
+                                "[window <ms>] [whea <events>] [checksum <errors>] [loaded 0|1]\n");
+                return 2;
+            }
+            if (!_wcsicmp(argv[i], L"clock")) { c.Given |= BC250_CPU_GIVEN_MAX; c.MaxMHz = value; }
+            else if (!_wcsicmp(argv[i], L"uv")) { c.Given |= BC250_CPU_GIVEN_UV; c.UvSteps = value; }
+            else if (!_wcsicmp(argv[i], L"temp")) { c.Given |= BC250_CPU_GIVEN_TEMP; c.TempC = value; }
+            else if (!_wcsicmp(argv[i], L"window")) c.TrialMs = value;
+            else if (!_wcsicmp(argv[i], L"whea")) c.WheaEvents = value;
+            else if (!_wcsicmp(argv[i], L"checksum")) c.ChecksumErrors = value;
+            else if (!_wcsicmp(argv[i], L"loaded")) c.Loaded = value;
+            else {
+                fprintf(stderr, "cpu set: clock, uv, temp, window, whea, checksum or loaded\n");
+                return 2;
+            }
+        }
+        if (!c.Given) {
+            fprintf(stderr, "cpu set: give at least one of clock, uv and temp\n");
+            return 2;
+        }
+        return CpuWrite(BC250_CPU_OP_SET, &c, "cpu set");
+    }
+    fprintf(stderr, "usage: bc250kmd_cli cpu [readback | set ... | keep | cancel | reset | cores 6|8 | search "
+                    "[steps] | search step [whea N] [checksum N] [loaded 1]]\n");
+    return 2;
+}
+
 static int Dpm(int argc, WCHAR **argv)
 {
     BC250_ESCAPE_DPM d;
@@ -2295,7 +3049,9 @@ static int Dpm(int argc, WCHAR **argv)
     unsigned long count = 1, interval = 1000, i;
     if (argc >= 3 && !_wcsicmp(argv[2], L"tune")) return DpmTune(argc, argv);
     if (argc >= 3 && !_wcsicmp(argv[2], L"floor")) return DpmFloor(argc, argv);
-    if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | confirm | tune ... | floor ...\n"); return 2; }
+    if (argc >= 3 && !_wcsicmp(argv[2], L"curve")) return DpmCurve(argc, argv);
+    if (argc > 4) { fprintf(stderr, "usage: bc250kmd_cli dpm [count [interval ms]] | confirm | tune ... | floor ... "
+                                    "| curve ...\n"); return 2; }
     if (argc >= 3 && !_wcsicmp(argv[2], L"confirm")) {
         if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
         if (DpmQuery(&d, BC250_DPM_OP_CONFIRM, d.Generation)) return 1;
@@ -2421,12 +3177,17 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli log [from] | log summary [from | only]   (only: the summary's own lines, for a poller)\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
+                        "       bc250kmd_cli fan [count [interval ms]]    (the board's hardware monitor, docs/design/fan.md)\n"
+                        "       bc250kmd_cli dpm curve [set <mV>... | offset <mV> | preset mild|medium|deep | keep | cancel | reset]\n"
+                        "       bc250kmd_cli cpu [readback | set [clock <MHz>] [uv <steps>] [temp <C>] [window <ms>] | keep | cancel | reset]\n"
+                        "       bc250kmd_cli cpu cores 6|8 | cpu search [steps] | cpu step   (docs/design/tuner.md)\n"
                         "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
                         "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
                         "       bc250kmd_cli journal follow SECONDS [MS]  (one process printing new records every MS, default 1000)\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
+    if (!_wcsicmp(argv[1], L"cpu")) return Cpu(argc,argv);
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
@@ -2456,6 +3217,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
+    if (!_wcsicmp(argv[1], L"fan") && argc <= 4) return Fan(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
     if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
         return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);

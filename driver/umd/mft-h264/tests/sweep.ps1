@@ -45,7 +45,24 @@ $cases = @(
     @(638, 478, 3, 60, 26, @('--deblock')),
     @(1280, 720, 4, 60, 26, @('--deblock')),
     @(1280, 720, 4, 60, 26, @('--deblock', '--gpu-source')),
-    @(1920, 1080, 3, 60, 30, @('--deblock'))
+    @(1920, 1080, 3, 60, 30, @('--deblock')),
+    # The pipeline, which the transform now runs by default: --depth 2 encodes each of these twice, once
+    # serially against the decoder oracle and once with two pictures in the GPU, and requires the two
+    # byte sequences to be equal. Without a case here the only thing holding the shipped shape was the
+    # two 60-picture cases of the batch's own gate script, which is not part of the repository.
+    @(320, 240, 6, 60, 26, @('--deblock', '--depth', '2')),
+    @(352, 288, 5, 60, 26, @('--deblock', '--nv12-sys', '--depth', '2')),
+    @(352, 288, 5, 60, 26, @('--deblock', '--gpu-source', '--depth', '2')),
+    @(640, 480, 4, 60, 26, @('--deblock', '--still', '--depth', '2')),
+    # Fewer pictures than the pipeline is deep: the loop has to prime and drain without asking for a
+    # picture that was never submitted.
+    @(176, 144, 1, 60, 26, @('--deblock', '--depth', '2')),
+    @(1280, 720, 4, 60, 26, @('--deblock', '--depth', '2')),
+    # The schedule of the deblocking filter, not the filter: the single-dispatch wavefront is the default
+    # and these two pin the other two shapes to the same bytes, so a mismatch on a machine where the
+    # single dispatch misbehaves can be told from a filter defect inside one sweep.
+    @(320, 240, 4, 60, 26, @('--deblock', '--deblock-mode', 'waves')),
+    @(176, 144, 3, 60, 26, @('--deblock', '--deblock-mode', 'serial'))
 )
 
 # Every quantiser the encoder admits, with I and P pictures and deblocking on. This is what guards the three

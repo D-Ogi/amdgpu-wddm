@@ -45,6 +45,10 @@ static void CuModeRequest(BC250_DEVICE*d,BC250_ESCAPE_CU_MODE*p,BOOLEAN a,ULONG 
 static void DpmRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void DpmTuneRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_TUNE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void InteropRequest(BC250_DEVICE*d,BC250_ESCAPE_INTEROP*p,ULONG f){(void)d;(void)p;(void)f;others++;}
+static void HwmonRequest(BC250_DEVICE*d,BC250_ESCAPE_HWMON*p,ULONG f){(void)d;(void)p;(void)f;others++;}
+/* The two surfaces of 0.7.210: the V/F curve answers with the software snapshots, the CPU surface past the gate. */
+static void DpmCurveRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_CURVE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
+static void CpuRequest(BC250_DEVICE*d,BC250_ESCAPE_CPU*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
 static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)
@@ -114,5 +118,16 @@ int main(void)
     Prepare(&o);fail_reg=BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT;
     CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.ValidMask==((1u<<11)-1u) && o.TimingPhase==0);
     CHECK(others==0);
+    /* The fan reading (0.7.213.1): a published snapshot, so the dispatcher answers it with
+       NoAdapterSynchronization alone and ahead of the power-phase check, and only at its exact size. */
+    {
+        BC250_ESCAPE_HWMON h;DXGKARG_ESCAPE he={&h,sizeof(h),{8}};
+        memset(&h,0xCC,sizeof(h));h.Magic=BC250_ESCAPE_MAGIC;h.Command=BC250_ESCAPE_RUN_HWMON;
+        reads=0;d.RetainedPowerPhase=2;
+        CHECK(Bc250Escape(&d,&he)==STATUS_SUCCESS);CHECK(others==1 && reads==0);
+        he.PrivateDriverDataSize--;
+        CHECK(Bc250Escape(&d,&he)==STATUS_INVALID_PARAMETER);CHECK(others==1);
+        d.RetainedPowerPhase=0;
+    }
     printf("DCN observer: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

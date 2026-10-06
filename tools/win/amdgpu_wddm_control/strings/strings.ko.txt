@@ -159,7 +159,10 @@ perf.memory.value|mt|eaf124e2|{1} GB 중 {0} GB
 perf.power|mt-safe|848e9656|전력
 perf.power.explain|mt|2fb99c60|드라이버가 아직 전력 사용량을 읽을 수 없습니다. 이 기능은 나중에 추가됩니다.
 perf.fan|mt-safe|e27be641|팬
-perf.fan.explain|mt|a79a4ea7|팬은 보드가 직접 제어합니다(BIOS 팬 설정). 드라이버는 아직 팬 정보를 읽을 수 없습니다.
+perf.fan.explain|mt|18194645|보드가 팬을 직접 돌립니다(BIOS 팬 설정). 드라이버가 회전 수를 읽어 여기에 표시합니다.
+perf.fan.value|mt-safe|863e80e6|{0} rpm ({1} %)
+perf.fan.rpm-only|mt-safe|c140fb3e|{0} rpm
+perf.fan.stopped|mt|95e3cf4e|회전하지 않음
 # ---- shader caches (F-CACHE) ----
 cache.d3d12|mt-safe|f4642299|DirectX 12 셰이더 캐시
 cache.d3d12.present|mt|15118fb9|사용 중: 프로그램 {1}개에 {0}. 다음부터 게임을 더 빠르게 시작할 수 있습니다.
@@ -267,7 +270,7 @@ search.display.identify.terms|mt|6a71b05e|식별|어느 화면|모니터 번호
 search.display.scale|mt|1cf201de|배율, 레이아웃 및 방향
 search.display.scale.terms|mt|f73bb0e2|DPI|확대|배율|텍스트 크기|방향|회전|레이아웃
 search.perf.sensors|mt-safe|a8451874|온도 및 사용률
-search.perf.sensors.terms|mt|d3085e12|온도|사용량|사용률|부하|센서|VRAM|메모리|전력|팬|와트
+search.perf.sensors.terms|mt|b467ff5a|온도|사용량|사용률|부하|센서|VRAM|메모리|전력|팬|회전 수|rpm|와트
 search.perf.cache|mt-safe|d7b57389|셰이더 캐시
 search.perf.cache.terms|mt|6c23151c|캐시|셰이더|끊김|버벅임|컴파일
 search.driver.version|mt-safe|04cb4284|드라이버 버전
@@ -320,8 +323,6 @@ search.later.power|mt-safe|fba85679|전력 제한
 search.later.power.terms|mt|db72d2b0|전력 제한|와트|TDP|파워 리밋
 search.later.fan|mt-safe|8c9a2877|팬 제어
 search.later.fan.terms|mt|f8a14c23|팬|팬 커브|소음|냉각
-search.later.voltage|mt-safe|4e40d79f|전압
-search.later.voltage.terms|mt|5cc069f4|전압|언더볼트|언더볼팅|mV
 search.later.fps-counter|mt-safe|8e4f7029|프레임 속도 표시
 search.later.fps-counter.terms|mt|40353cf6|FPS 카운터|FPS 표시|프레임 타임|오버레이|초당 프레임
 search.later.cache-clear|mt-safe|6b923412|셰이더 캐시 지우기
@@ -624,7 +625,126 @@ help.setting.mode|mt|16a81243|이 앱에서 해상도와 새로 고침 빈도를
 help.setting.hdr|mt|af54494e|하이 다이내믹 레인지: 더 밝은 하이라이트와 더 많은 색상을 표시합니다. 나중에 제공됩니다.
 help.setting.vrr|mt|4662d04f|모니터가 게임의 프레임 속도에 맞춰 더 부드러운 움직임을 보여 줍니다. 나중에 제공됩니다.
 help.setting.power|mt|3659317e|칩이 사용할 수 있는 최대 전력입니다. 나중에 제공됩니다.
-help.setting.fan|mt|bfae721d|팬은 보드의 펌웨어가 제어합니다. 이 앱에서 제어하는 기능은 나중에 제공됩니다.
-help.setting.voltage|mt|9c28b6e1|칩의 전압입니다. 나중에 제공됩니다.
+help.setting.fan|mt|0fda8087|보드 펌웨어가 팬을 돌립니다. 이 앱은 회전 수를 표시합니다. 앱에서 제어하는 기능은 나중에 제공됩니다.
 help.setting.fps-counter|mt|929ada50|프레임 속도를 표시합니다. 나중에 제공됩니다.
 help.setting.cache-clear|mt|c75227ac|셰이더 캐시를 삭제합니다. 나중에 제공됩니다.
+# ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
+graphics.tuning.title|mt|e6d2df01|고급 조정
+graphics.tuning.show|mt|ad38683b|고급 조정 표시
+graphics.tuning.intro|mt|783ada66|그래픽 전압을 약간 낮추면 더 시원하고 조용하게 동작합니다. 모든 변경은 먼저 테스트로 실행되며, 유지하지 않으면 스스로 되돌아갑니다.
+graphics.tuning.preset|mt|5691a71e|미리 준비된 설정
+graphics.tuning.preset.standard|mt|ef669154|표준
+graphics.tuning.preset.mild|mt|96124817|약하게
+graphics.tuning.preset.medium|mt|8e588cd1|중간
+graphics.tuning.preset.deep|mt|7038852d|허용되는 최저값
+graphics.tuning.point|mt|65d8ea4f|{0} MHz
+graphics.tuning.lower|mt|635c004b|전압 낮추기
+graphics.tuning.raise|mt|d6d822c0|전압 높이기
+graphics.tuning.apply|mt|238cd174|이 설정 테스트
+graphics.tuning.keep|mt|fdce5da2|유지하기
+graphics.tuning.stop|mt|e8c445ee|이전 설정으로 돌아가기
+graphics.tuning.reset|mt|71803214|표준 전압
+graphics.tuning.running|mt|020767b3|테스트가 진행 중입니다. {0}
+graphics.tuning.saved|mt|ff1402a2|이 설정은 저장되어 시작할 때마다 사용됩니다.
+graphics.tuning.unsaved|mt|d55611e8|테스트가 끝나기 전에 유지하세요. 그러지 않으면 스스로 되돌아갑니다.
+graphics.tuning.chart|mt|1cab2722|속도별 전압
+graphics.tuning.chart.help|mt|ec985b16|점을 클릭한 다음 전압 낮추기 또는 전압 높이기를 사용하세요. 회색 선이 표준이고, 아래 선이 드라이버가 허용하는 최저 전압입니다.
+graphics.tuning.need-auto|mt|ca6c9300|자동 클럭을 켜고 Windows를 다시 시작한 다음 여기로 돌아오세요.
+graphics.tuning.table|mt|510c2545|속도, 전압, 표준과의 차이
+graphics.cpu.title|mt|54aac653|프로세서
+graphics.cpu.intro|mt|a63ab108|이 프로세서 설정은 다른 사람의 보드에서 온 것이며 이 보드에서 측정한 사람은 없습니다. 그래서 모든 변경은 먼저 테스트로 실행됩니다.
+graphics.cpu.off|mt|f1b24044|프로세서 조정이 꺼져 있습니다.
+graphics.cpu.enable|mt|0bb17eb3|프로세서 조정 켜기
+graphics.cpu.disable|mt|3cfe43a7|프로세서 조정 끄기
+graphics.cpu.readback|mt|82efaa57|지금 프로세서 읽기
+graphics.cpu.need-readback|mt|0cc411d5|무엇이든 바꾸기 전에 프로세서를 한 번 읽으세요.
+graphics.cpu.voltage.label|mt|76e2487b|현재 전압
+graphics.cpu.count.label|mt|36912b92|Windows가 보는 프로세서 수
+graphics.cpu.cap.label|mt|17954fca|적용 중인 온도 제한
+graphics.cpu.clock.label|mt|f57ec9fb|최고 속도
+graphics.cpu.uv.label|mt|c6848a6c|전압을 낮추는 단계
+graphics.cpu.temp.label|mt|caaccd53|설정할 온도 제한
+graphics.cpu.apply|mt|4b907b31|이 설정 테스트
+graphics.cpu.cores.title|mt|22777135|프로세서 코어
+graphics.cpu.cores.6|mt|00842292|6 코어(표준)
+graphics.cpu.cores.8|mt|b977c4a8|8 코어
+graphics.cpu.cores.apply|mt|1797bc97|이 코어 수 사용
+graphics.cpu.cores.note|mt|39ab5add|이 보드는 8개 코어 중 6개가 켜진 상태로 출하됩니다. 8개 코어는 Windows를 다시 시작해야 하며, 나머지 두 개를 이 보드에서 시험한 사람은 없습니다.
+tuner.curve.delta.line|mt|fe6d3468|표준
+tuner.curve.delta.under|mt|513a58af|{0} mV 낮음
+tuner.curve.delta.over|mt|90207f8b|{0} mV 높음
+tuner.curve.error.range|mt|38116870|{0} MHz의 전압이 드라이버가 받는 범위를 벗어납니다.
+tuner.curve.error.depth|mt|9fbad56a|{0} MHz의 전압이 드라이버가 허용하는 값보다 낮습니다.
+tuner.curve.error.order|mt|3e359e98|{0} MHz의 전압이 그 아래 속도보다 낮습니다.
+tuner.curve.error.floor|mt|89adac7a|가장 낮은 속도는 표준 전압을 유지합니다.
+tuner.curve.error.none|mt|d7c2b02e|전압 설정이 주어지지 않았습니다.
+tuner.trial.left|mt|eb5d98aa|{0}초 남음
+tuner.cpu.voltage|mt|0c0a06a5|{0} mV
+tuner.cpu.voltage.high|mt|14f68a9d|{0} mV, 이 앱이 허용하는 값보다 높음
+tuner.cpu.uv.none|mt|fe6d3468|표준
+tuner.cpu.uv.steps|mt|0f215681|{0}단계 낮음
+tuner.curve.summary|mt|497bd2e7|{0}개의 속도가 바뀌고, 가장 큰 차이는 {2} MHz에서 {1} mV 낮습니다
+tuner.curve.summary.line|mt|a850a56c|모든 속도에서 표준 전압
+tuner.curve.preview.revert|mt|dd7a9c60|유지하지 않으면 {0}초 후에 이전 설정이 스스로 돌아옵니다
+tuner.curve.preview.keep|mt|3632b9d0|테스트 중인 설정이 저장되어 시작할 때마다 사용됩니다
+tuner.cpu.preview.clock|mt|4888e4e0|프로세서 최고 속도 {0} MHz
+tuner.cpu.preview.uv|mt|b1e8e5b2|프로세서 전압 {0}단계 낮춤
+tuner.cpu.preview.temp|mt|f4c256f3|프로세서 온도 제한 {0} C
+tuner.cpu.preview.keep|mt|9ac1dfb1|테스트 중인 프로세서 설정이 저장됩니다
+tuner.cpu.preview.readback|mt|7dd25675|프로세서의 전압, 속도, 온도 제한 읽기
+tuner.refuse.not-running|mt|a8b8ef18|드라이버가 실행되지 않아 조정할 것이 없습니다.
+tuner.refuse.no-read|mt|a2f4958b|드라이버가 응답하지 않았습니다. 잠시 후 다시 시도하세요.
+tuner.refuse.not-valid|mt|402bcee3|이번 드라이버 시작에서는 조정할 수 없습니다. Windows를 다시 시작한 뒤 시도하세요.
+tuner.refuse.not-governing|mt|9a470d35|먼저 자동 클럭을 켜고 Windows를 다시 시작하세요.
+tuner.refuse.bad-values|mt|a416480c|이 전압들은 드라이버가 받는 설정이 아닙니다.
+tuner.refuse.same|mt|ff58de1c|이 설정은 이미 사용 중입니다.
+tuner.refuse.bad-window|mt|5eb5edb4|테스트 길이가 드라이버가 받는 범위를 벗어납니다.
+tuner.refuse.no-trial|mt|0a23efc0|진행 중인 테스트가 없어 유지하거나 멈출 것이 없습니다.
+tuner.refuse.already-default|mt|9f0d673e|표준 전압이 이미 사용 중입니다.
+tuner.refuse.cpu-off|mt|b88471b0|프로세서 조정이 꺼져 있습니다. 켜고 Windows를 다시 시작하세요.
+tuner.refuse.cpu-busy|mt|9f5b8dd2|프로세서가 다른 변경으로 바쁩니다. 잠시 후 다시 시도하세요.
+tuner.refuse.cpu-not-proven|mt|0cc411d5|무엇이든 바꾸기 전에 프로세서를 한 번 읽으세요.
+tuner.refuse.cpu-nothing|mt|ed6c4b52|바꿀 항목이 선택되지 않았습니다.
+tuner.refuse.cpu-bad-clock|mt|effa04de|속도는 {0}에서 {1} MHz 사이여야 합니다.
+tuner.refuse.cpu-bad-uv|mt|d56317ef|전압 단계 수는 {0} 이하여야 합니다.
+tuner.refuse.cpu-bad-temp|mt|d14fa1e3|온도 제한은 {0}에서 {1} C 사이여야 합니다.
+tuner.refuse.cpu-bad-cores|mt|52c699a3|그 코어 수는 이 보드가 받지 않습니다.
+tuner.refuse.cpu-cores-already|mt|dc4921d6|그 코어 수가 이미 선택되어 있습니다.
+tuner.refuse.cpu-already-standard|mt|3160dc03|프로세서가 이미 표준 설정입니다.
+tuner.refuse.cpu-enable-already|mt|53af5ab8|프로세서 조정이 이미 켜져 있습니다.
+tuner.refuse.cpu-disable-already|mt|68d82f85|프로세서 조정이 이미 꺼져 있습니다.
+plan.title.tune-trial|mt|5fa23224|전압 설정 테스트
+plan.title.tune-keep|mt|a3b10e8e|전압 설정 유지
+plan.title.tune-stop|mt|2933136c|이전 전압으로 돌아가기
+plan.title.tune-reset|mt|71803214|표준 전압
+plan.title.cpu-enable|mt|0bb17eb3|프로세서 조정 켜기
+plan.title.cpu-disable|mt|3cfe43a7|프로세서 조정 끄기
+plan.title.cpu-readback|mt|615fdee1|프로세서 읽기
+plan.title.cpu-trial|mt|15a8535d|프로세서 설정 테스트
+plan.title.cpu-keep|mt|14e57d83|프로세서 설정 유지
+plan.title.cpu-stop|mt|d7e78a7b|이전 프로세서 설정으로 돌아가기
+plan.title.cpu-reset|mt|4bd614fa|표준 프로세서 설정
+plan.title.core-mask|mt|39d71947|코어 수 변경
+search.graphics.tuning|mt|e6d2df01|고급 조정
+search.graphics.tuning.terms|mt|2b970752|전압|언더볼트|커브|냉각|저소음
+search.graphics.cpu-tuning|mt|447b1d50|프로세서 조정
+search.graphics.cpu-tuning.terms|mt|7f92368b|프로세서|속도|부스트|언더볼트
+search.graphics.cpu-cores|mt|22777135|프로세서 코어
+search.graphics.cpu-cores.terms|mt|71b97e69|코어|8 코어|해제
+help.setting.tuning|mt|c9f195b3|각 속도에서 그래픽 전압을 몇 밀리볼트 낮춥니다. 같은 속도에서 전력과 열이 줄어듭니다. 전압이 너무 낮으면 게임이나 화면이 멈추는 형태로 나타나므로, 모든 변경은 스스로 되돌아오는 테스트로 실행됩니다.
+help.setting.cpu-cores|mt|5510f0aa|이 보드는 8개 코어 중 6개가 켜진 상태로 출하됩니다. 8개 코어는 Windows를 다시 시작해야 합니다. 그 뒤 Windows가 제대로 시작되지 않으면 드라이버가 스스로 6개로 되돌립니다.
+help.setting.cpu-tuning|mt|30000aff|프로세서의 최고 속도, 약간의 전압 감소, 온도 제한입니다. 이 수치는 다른 사람의 보드에서 온 것입니다. 전압을 자유롭게 둔 채 프로세서 속도를 올려 손상된 보드가 있어, 이 앱은 낮추기만 하고 항상 전압을 다시 읽습니다.
+plan.line.cpu-tune-on|mt|c3793e19|프로세서 조정: 켜짐.
+plan.line.cpu-tune-off|mt|14ef42b2|프로세서 조정: 꺼짐.
+tuner.cpu.preview.stop|mt|f3995948|프로세서가 테스트 전 설정으로 돌아갑니다
+tuner.cpu.preview.reset|mt|c3cf92af|프로세서가 표준 설정으로 돌아갑니다
+# ---- 0.7.211 ----
+graphics.cpu.reset|mt|4bd614fa|프로세서 표주 설정
+graphics.cpu.revert-owed|mt|7214cad3|드라이버가 이전 프로세서 설정으로 되돌리지 못하여 계속 시도하고 있습니다. 이 상황이 계속되면 Windows를 다시 시작하십시오.
+graphics.tuning.not-applied|mt|24166ef8|드라이버가 아직 이 설정을 사용하지 않았습니다. 잠시 기다린 후 저장하십시오.
+tuner.curve.error.untried|mt|6ae732ce|드라이버가 아직 이 설정을 사용하지 않았습니다. 잠시 기다린 후 다시 시도하십시오.
+tuner.refuse.curve-not-applied|mt|28020c45|드라이버가 아직 테스트 중인 설정을 사용하지 않았습니다. 잠시 기다린 후 다시 시도하십시오.
+tuner.curve.preview.standard|mt|0c38511f|모든 속도에서 표주 전입으로 돌아갑니다
+tuner.note.curve-risk|mt|28bb65b2|전입을 낮추면 같은 속도에서도 그래픽 칩이 더 시원하고 조용해집니다. 너무 낮으면 메시지가 아니라 게임이나 화면이 멈추는 형태로 나타나며, 테스트가 끝나면 설정은 저절로 돌아갑니다.
+tuner.note.cpu-risk|mt|0e0c4e70|이 프로세서 값은 다른 사람의 부드에서 나왔습니다. 속도가 너무 높거나 전입이 너무 낮으면 코퓨터가 멈추는 형태로 나타납니다. 이 앱은 전입을 낮추기만 하고 변경할 때마다 다시 읽습니다.
+tuner.note.cores-risk|mt|8be50b28|8코어는 6코어보다 열이 많고 전력을 더 많이 사용합니다. 이 부드에서 나머지 두 코어를 시험한 사람은 없습니다.

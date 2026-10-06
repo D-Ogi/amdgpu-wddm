@@ -660,6 +660,13 @@ facts:
     detail: "Sources, facts only, nothing copied. `bc250-collective/bc250_smu_oc` at `327014d` (MIT) gives the descriptor-table offsets. `bc250-collective/amd_smu_reverse_engineering` at `3f47768` (no LICENSE file, all rights reserved, read only) gives the handler addresses. Their message names are applied by index from AMD's own header. Their table therefore shows that a slot exists and has a handler, never what it does. Our rule stands: presence in a header does not authorize use (`hardware.md`). Our side of the match is `regcalc` over `mp_11_0_8_offset.h` and `driver/shim/bc250_smu.c`. The firmware images that the second repository ships stay outside our tree"
     edges:
       - {"type": "uses", "to": "M22"}
+  - id: M796
+    status: MEASURED
+    date: "2026-09-21"
+    claim: "Unit A carries a Nuvoton NCT6686D hardware monitor, and Linux reads the case fan through it. Its EC window is the I/O range `0x0A20-0x0A2F`, which the firmware gives to a PnP motherboard-resources node that drives nothing. The chip publishes five tachometer channels and five duty outputs. One fan turns: `fan2` at 1589 RPM, with `fan1` and `fan3` to `fan5` at 0. Every duty read-back is 245 of 255 (96 %). Three monitor channels are temperatures: `AMD TSI Addr 98h` 83.0 C, `Thermistor 14` 59.5 C and `Thermistor 15` 59.5 C. At the same moment `k10temp` read Tctl 83.5 C and amdgpu read edge 82.0 C, so the chip's own TSI channel is a second, independent reading of the APU die"
+    detail: "`evidence/linux/2026-09-21-E01-recon/sensors-all.txt` (the `nct6686` block) and `ioports.txt` (`0a20-0a2f : pnp 00:04`), one sample about four minutes after boot with the board idle. The driver that bound is Linux mainline `drivers/hwmon/nct6683.c`, which matches this chip. The duty read-back is NOT proved to be the duty this fan runs at: the chip reported 96 % while the fan turned at about half of the 3100 RPM the community reports for full duty. A reading of the fan under a known load has not been taken on Windows yet. The two UNPROVEN registers of `driver/shim/include/bc250_hwmon.h` (the mode mask at `0x0A00`, the engine status at `0x0CF8`) are named by the out-of-tree `nct6687d` alone and were not read here"
+    edges:
+      - {"type": "uses", "to": "M11"}
   - id: M803
     status: MEASURED
     date: "2026-10-06"

@@ -1,0 +1,50 @@
+{
+  "_comment": "A recorded reading for the dry runs of the tuning page (build.ps1): a running driver that governs the clock, the default voltage curve in force with nothing stored, and the processor surface on with one readback behind it. No PC is named here; every value is made up to exercise one plan each.",
+  "DriverInstalled": true,
+  "RouterInstalled": true,
+  "Parameters": {
+    "EnableGpuPresentBlit": 1, "EnableCddDwmInterop": 1, "DpmMode": 1, "DpmMaxMHz": 1500, "CpuTune": 1
+  },
+  "DwmForceCpu": 0,
+  "RequireKmdSwitches": 1,
+  "DriverError": null,
+  "Interop": { "Version": 458949, "Flags": 21, "Requested": 3, "Effective": 3, "Reason": 0, "ClosedReason": 0, "Users": 1, "LastEnd": 0 },
+  "Health": { "Version": 458949, "Flags": 7, "Generation": 5, "Epoch": 2, "Completed": 40, "LastCompletionAgeMs": 800, "ReadyAgeMs": 70000 },
+  "Dpm": { "Version": 458949, "Mode": 1, "Reason": 0, "MaxMHz": 1500 },
+  "Curve": {
+    "Version": 458949, "Flags": 97, "TrialMs": 0, "TrialRemainingMs": 0, "Serial": 0, "Applied": 1,
+    "Error": 0, "ErrorLevel": 0, "FirstMHz": 1000, "StepMHz": 100, "Points": 11,
+    "Candidate": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "Active":    [820, 840, 860, 880, 899, 919, 935, 952, 968, 984, 1000],
+    "Stored":    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "Default":   [820, 840, 860, 880, 899, 919, 935, 952, 968, 984, 1000],
+    "Floor":     [820, 820, 835, 855, 874, 894, 910, 927, 943, 959, 975],
+    "Level": 5, "LevelMHz": 1500, "LevelMv": 919, "ObservedMHz": 1500, "ObservedVid": 101,
+    "CeilingMHz": 1500, "Mode": 1, "TemperatureMc": 62000,
+    "Sets": 0, "Keeps": 0, "Cancels": 0, "Reverts": 0, "Generation": 5
+  },
+  "Cpu": {
+    "Version": 458949, "Flags": 97, "TrialMs": 0, "TrialRemainingMs": 0, "Serial": 0, "Error": 0, "Given": 0,
+    "AppliedMaxMHz": 0, "AppliedUvSteps": 0, "AppliedTempC": 0,
+    "StoredMaxMHz": 0, "StoredUvSteps": 0, "StoredTempC": 0,
+    "BaselineMaxMHz": 3600, "BaselineUvSteps": 0, "BaselineTempC": 95,
+    "VoltageMv": 1050, "GpuVoltageMv": 820, "CapC": 95, "Features": 0,
+    "CoreMHz": [3600, 3600, 3600, 0, 3600, 3600, 3600, 0],
+    "PstateMHz": [3600, 3200, 2800, 0, 0, 0, 0, 0],
+    "Cores": 6, "Threads": 12, "CoreMask": 119, "CoreMaskStored": 0,
+    "LastQueue": 3, "LastMessage": 54, "LastStatus": 0, "LastParameter": 1050,
+    "TemperatureMc": 62000,
+    "SearchStep": 0, "SearchBest": 0, "SearchFail": 0, "SearchTested": 0,
+    "Reads": 2, "Writes": 0, "Refusals": 0, "Reverts": 0, "Generation": 5
+  },
+  "DwmRoute": "gpu",
+  "DwmRouteDetail": "bc250d3d_router.dll, amdgpu_wddm_radv.dll",
+  "GpuDesktopModules": true,
+  "TaskFound": true,
+  "TaskResult": 0,
+  "TaskLastRun": "2026-10-05 10:00",
+  "ConfirmLogLast": null,
+  "DefaultParameters": { "EnableGpuPresentBlit": 1, "EnableCddDwmInterop": 1, "DpmMode": 1, "DpmMaxMHz": 1500 },
+  "DefaultRouter": { "DwmForceCpu": 0 },
+  "DefaultsError": null
+}

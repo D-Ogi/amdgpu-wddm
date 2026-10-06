@@ -126,11 +126,37 @@ class TelemetryAbiTest(unittest.TestCase):
         self.assertEqual(fields, cs_fields('VideoMemorySnapshot'))
         self.assertEqual(size_of(fields), 264)
 
+    def test_monitor_hwmon_layout(self):
+        """The fan reply, word for word. A drift here shows a wrong fan speed instead of failing."""
+        fields = c_fields(HEADER.read_text(), 'BC250_ESCAPE_HWMON')
+        self.assertEqual(fields, cs_fields('HwmonSnapshot'))
+        self.assertEqual(size_of(fields), 216)
+
+    def test_hwmon_constants(self):
+        header = HEADER.read_text()
+        for name, value in {'BC250_ESCAPE_RUN_HWMON': 27, 'BC250_HWMON_ABI': 1, 'BC250_HWMON_OP_READ': 0,
+                            'BC250_HWMON_FAN_SLOTS': 8, 'BC250_HWMON_TEMP_SLOTS': 4,
+                            'BC250_HWMON_FLAG_VALID': 1, 'BC250_HWMON_FLAG_MONITORING': 2,
+                            'BC250_HWMON_FLAG_FRESH': 4, 'BC250_HWMON_FLAG_GATED': 8,
+                            'BC250_HWMON_FLAG_ID_PINNED': 16, 'BC250_HWMON_FLAG_DUTY_PROVEN': 32,
+                            'BC250_HWMON_FLAG_STOPPED': 64}.items():
+            found = re.search(r'#define %s\s+(\d+)u' % name, header)
+            self.assertIsNotNone(found, name)
+            self.assertEqual(int(found.group(1)), value, name)
+        managed = DRIVER_CS.read_text()
+        for name, value in {'FlagValid': 1, 'FlagMonitoring': 2, 'FlagFresh': 4, 'FlagGated': 8,
+                            'FlagIdPinned': 16, 'FlagDutyProven': 32, 'FlagStopped': 64}.items():
+            self.assertRegex(managed, r'\b%s = %d\b' % (name, value))
+        self.assertRegex(managed, r'data\.Command != 27')
+
     def test_sizes_passed_by_the_monitor(self):
         source = DRIVER_CS.read_text()
         self.assertIn('Bc250Dpm(out data, 192)', source)         # ABI 2 first
         self.assertIn('Bc250Dpm(out data, 160)', source)         # the ABI 1 prefix when a caller refuses 192
         self.assertIn('Bc250VideoMemory(null, out data, 264)', source)
+        # The fan reply's size is passed by Marshal.SizeOf, so the literal here is the thing that would
+        # not move with the struct. 216 is the size test_monitor_hwmon_layout checks above.
+        self.assertIn('bytes != 216', source)
 
 
 class MonTelemetryTest(unittest.TestCase):
@@ -139,13 +165,23 @@ class MonTelemetryTest(unittest.TestCase):
         import mon
         line = mon.format_telemetry({'available': True, 'temperatureC': 67.5, 'loadPercent': None, 'gfxMHz': 1000,
                                      'vramUsedMB': 1234, 'vramTotalMB': 2048, 'ageSeconds': 0.4,
+                                     'fanRpm': 1589, 'fanDutyPercent': 96, 'fanStopped': False,
                                      'note': 'load n/a: KMD 0x000700B0 has no GRBM busy share (0.7.177)'})
-        self.assertEqual(line, 'tctl_c=67.5 load_pct=n/a gfx_mhz=1000 vram_used_mb=1234 vram_total_mb=2048 age_s=0.4\n'
+        self.assertEqual(line, 'tctl_c=67.5 load_pct=n/a gfx_mhz=1000 vram_used_mb=1234 vram_total_mb=2048 '
+                               'fan_rpm=1589 fan_duty_pct=96 fan_stopped=0 age_s=0.4\n'
                                '# load n/a: KMD 0x000700B0 has no GRBM busy share (0.7.177)')
         self.assertEqual(mon.format_telemetry({'available': False}), 'telemetry=n/a')
         pairs = dict(p.split('=') for p in mon.format_telemetry({'available': True, 'loadPercent': 12.3}).split())
         self.assertEqual(pairs['load_pct'], '12.3')
         self.assertEqual(pairs['tctl_c'], 'n/a')
+        # A driver older than 0.7.208.1, a closed gate and a stale sample all look the same to a sampler: n/a.
+        self.assertEqual(pairs['fan_rpm'], 'n/a')
+        self.assertEqual(pairs['fan_duty_pct'], 'n/a')
+        self.assertEqual(pairs['fan_stopped'], '0')
+        stopped = dict(p.split('=') for p in mon.format_telemetry(
+            {'available': True, 'fanRpm': 0, 'fanStopped': True}).split())
+        self.assertEqual(stopped['fan_stopped'], '1')
+        self.assertEqual(stopped['fan_rpm'], '0')
 
 
 if __name__ == '__main__':

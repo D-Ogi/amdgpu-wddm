@@ -3,6 +3,7 @@
 #include "allocation.h"
 #include "../../contract/bc250_umd_submit.h"
 #include "../../contract/amdgpu_wddm_surface_format.h"
+#include "../../contract/bc250_shared_surface.h"
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -19,10 +20,28 @@ static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offs
 // The E26R resource record, as the kernel driver defines it (driver/kmd/surface_resource_private.h):
 // v1 is the first 12 bytes (magic, version, shared), v2 adds the CPU access intent word (16 bytes:
 // PRIMARY=1, CPU_READ=2). The runtime's allocation call accepts the primary with v1 and shared 1.
+// v3 is the 64-byte texture record (BC250_SURFACE_RESOURCE_PRIVATE), which a shared surface carries and
+// bc250_shared_surface.h is the only writer of.
 struct E26rResource { uint32_t magic,version,shared,access; };
 inline constexpr uint32_t kE26rMagic=0x52363245u;
 inline constexpr uint32_t kE26rV1Bytes=12,kE26rPrimary=1,kE26rCpuRead=2,kE26rScanout=4;
 static_assert(sizeof(E26rResource)==16 && offsetof(E26rResource,access)==kE26rV1Bytes);
+static_assert(uint32_t(BC250_SURFACE_RESOURCE_MAGIC)==kE26rMagic &&
+              uint32_t(BC250_SURFACE_RESOURCE_PRIMARY)==kE26rPrimary &&
+              uint32_t(BC250_SURFACE_RESOURCE_CPU_READ)==kE26rCpuRead &&
+              uint32_t(BC250_SURFACE_RESOURCE_SCANOUT)==kE26rScanout);
+static_assert(sizeof(BC250_SURFACE_RESOURCE_PRIVATE)==64 && sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
+// Bytes an E26R record of a given version occupies on the wire. v3 is the full texture description and
+// is 64 bytes (driver/contract/bc250_scanout_record.h); the compositor's opener takes exactly that many
+// and refuses anything else, so a v3 header on this 16-byte body would be refused with nothing to show
+// for it but a flip that never happens. kE26rWritten is the only place the version is chosen, and raising
+// it past what this struct can describe does not compile.
+inline constexpr uint32_t e26r_bytes(uint32_t version) noexcept {
+    return version>=3?64u:version==2?16u:kE26rV1Bytes;
+}
+inline constexpr uint32_t kE26rWritten=2; // raise this and E26rResource together, never alone
+static_assert(e26r_bytes(kE26rWritten)==sizeof(E26rResource),
+              "E26rResource cannot describe the record version this shell writes");
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
               AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
@@ -40,6 +59,9 @@ struct AllocationRequest final {
     bc250_umd_alloc_private blob{};
     Lb7aSurface surface{};
     E26rResource resource{};
+    // The shared surface's own resource record (E26R v3, 64 bytes). It replaces resource on the wire for
+    // prepare_shared_surface alone; the primary and the raw forms leave it zero.
+    BC250_SURFACE_RESOURCE_PRIVATE texture{};
     uint64_t held{};                            // what the allocation holds: mapped and imported
     D3D12DDI_ALLOCATION_INFO_0022 info{};
     D3D12DDICB_ALLOCATE_0022 args{};
@@ -48,7 +70,7 @@ struct AllocationRequest final {
     AllocationRequest& operator=(const AllocationRequest&)=delete;
     HRESULT prepare(uint64_t bytes,uint64_t alignment,AllocationAccess access,
                     HANDLE runtimeOwner=nullptr) noexcept {
-        blob={};surface={};resource={};info={};args={};held=0;
+        blob={};surface={};resource={};texture={};info={};args={};held=0;
         constexpr uint64_t page=4096;
         // Do not silently shrink an engine requirement or overflow rounding.
         if(!bytes || alignment<page || (alignment&(alignment-1)) ||
@@ -100,7 +122,7 @@ struct AllocationRequest final {
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
                             uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,
                             bool primary=true,bool scanout=false) noexcept {
-        blob={};surface={};resource={};info={};args={};held=0;
+        blob={};surface={};resource={};texture={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         // Scan-out needs the SCANOUT_PRIMARY policy bit, which only the 8-bit rows carry, and it needs
         // the surface to be a primary of video present source 0: a scanned-out buffer with no source is
@@ -123,13 +145,58 @@ struct AllocationRequest final {
         // SetVidPnSourceAddress. A scan-out primary is exactly that argument, so it names source 0 -
         // the one source this adapter has - and the kernel driver can match the flip to the surface.
         info.VidPnSourceId=primary&&!scanout?D3DDDI_ID_UNINITIALIZED:0;
-        resource.magic=kE26rMagic;resource.version=cpuRead||scanout?2:1;resource.shared=1;
+        resource.magic=kE26rMagic;resource.version=cpuRead||scanout?kE26rWritten:1u;resource.shared=1;
         // shared stays 1 for a scan-out surface as well: the OS composes this buffer again whenever a
         // window overlaps the output, and the compositor can only open what the record shares. What the
         // SCANOUT bit changes is the placement - the local segment, the only one the display core reads -
         // and not who may open it (M15.14).
         resource.access=(cpuRead?kE26rCpuRead:0u)|(scanout?kE26rPrimary|kE26rScanout:0u);
-        args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=cpuRead||scanout?sizeof(resource):kE26rV1Bytes;
+        args.pPrivateDriverData=&resource;
+        args.PrivateDriverDataSize=cpuRead||scanout?e26r_bytes(kE26rWritten):kE26rV1Bytes;
+        args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
+        held=size;
+        return S_OK;
+    }
+    // BD-075, the shared surface: the same LB7A v1 description as a primary's, under the 64-byte E26R v3
+    // resource record that carries the D3D11 texture description a D3D11 or a D3D12 opener rebuilds its own
+    // resource from. The pair is written by bc250_shared_surface.h, so a record this driver creates is a
+    // record this driver opens, and a field neither side checks cannot exist.
+    //   - no primary: the allocation is of no video present source (VidPnSourceId 0) and the information
+    //     flags are NONE. A shared surface is not scanned out and is not the compositor's primary; the
+    //     measurement BD-075 rests on is a runtime refusal of an ordinary allocation shape, not of a primary.
+    //   - Shared 1 and Access 0: it is shared and asks for no CPU mapping and no display placement, so the
+    //     kernel driver's own parser places it in the shared aperture as any type-0 surface.
+    //   - the bind flags are the resource's, in D3D11 numbers: a render target, a shader resource, an
+    //     unordered access view. They say what the opener may build over the memory, and nothing else.
+    // pitch and size are the engine's linear image's, exactly as for a primary, never chosen here.
+    HRESULT prepare_shared_surface(uint32_t width,uint32_t height,uint32_t pitch,uint32_t dxgiFormat,
+                                   uint64_t size,uint32_t bindFlags,HANDLE runtimeOwner=nullptr) noexcept {
+        blob={};surface={};resource={};texture={};info={};args={};held=0;
+        constexpr uint32_t edge=8192;
+        const auto* row=Bc250SharedSurfaceFormat(dxgiFormat);
+        if(!row)return E_NOTIMPL;
+        if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
+        const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
+        if(pitch<width4*row->bytes_per_pixel || !size || (size&4095) || size>0xfffff000ull ||
+           size<uint64_t(pitch)*height4)return E_INVALIDARG;
+        if(bindFlags&~uint32_t(BC250_SHARED_BIND_MASK))return E_INVALIDARG;
+        BC250_SHARED_SURFACE shared{};
+        shared.Width=width;shared.Height=height;shared.Pitch=pitch;
+        shared.DxgiFormat=dxgiFormat;shared.D3dDdiFormat=row->d3dddi;shared.BindFlags=bindFlags;
+        shared.BytesPerPixel=row->bytes_per_pixel;shared.Size=size;
+        shared.MiscFlags=0;shared.Shared=1;shared.Access=0;
+        BC250_WDDM_ALLOCATION_PRIVATE a{};
+        switch(Bc250SharedSurfaceEncode(&shared,&a,&texture)){
+        case BC250_SHARED_SURFACE_OK:break;
+        case BC250_SHARED_SURFACE_FORMAT:texture={};return E_NOTIMPL;
+        default:texture={};return E_INVALIDARG;
+        }
+        surface.magic=a.Magic;surface.version=a.Version;surface.width=a.Width;surface.height=a.Height;
+        surface.pitch=a.Pitch;surface.format=a.Format;surface.size=a.Size;
+        info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
+        info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE;
+        info.VidPnSourceId=0;
+        args.pPrivateDriverData=&texture;args.PrivateDriverDataSize=sizeof(texture);
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;

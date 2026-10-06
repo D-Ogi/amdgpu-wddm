@@ -159,7 +159,10 @@ perf.memory.value|mt|eaf124e2|{0} GB z {1} GB
 perf.power|mt-safe|848e9656|Pobór mocy
 perf.power.explain|mt|2fb99c60|Sterownik nie potrafi jeszcze odczytać poboru mocy. Ta funkcja pojawi się później.
 perf.fan|mt-safe|e27be641|Wentylator
-perf.fan.explain|mt|a79a4ea7|Płyta sama steruje wentylatorem (ustawienie wentylatora w BIOS). Sterownik nie potrafi go jeszcze odczytać.
+perf.fan.explain|mt|18194645|Płyta sama kręci wentylatorem (ustawienie wentylatora w BIOS). Sterownik odczytuje obroty i pokazuje je tutaj.
+perf.fan.value|mt-safe|863e80e6|{0} obr./min ({1} %)
+perf.fan.rpm-only|mt-safe|c140fb3e|{0} obr./min
+perf.fan.stopped|mt|95e3cf4e|Nie kręci się
 # ---- shader caches (F-CACHE) ----
 cache.d3d12|mt-safe|f4642299|Pamięć podręczna shaderów DirectX 12
 cache.d3d12.present|mt|15118fb9|Zajęte: {0}, liczba programów: {1}. Dzięki temu kolejne uruchomienia gier są szybsze.
@@ -267,7 +270,7 @@ search.display.identify.terms|mt|6a71b05e|identyfikuj|który ekran|który monito
 search.display.scale|mt-safe|1cf201de|Skala, układ i orientacja
 search.display.scale.terms|mt|f73bb0e2|DPI|skala|skalowanie|powiększenie|rozmiar tekstu|orientacja|obrót|układ
 search.perf.sensors|mt-safe|a8451874|Temperatura i obciążenie
-search.perf.sensors.terms|mt|d3085e12|temperatura|temp|użycie|obciążenie|czujniki|VRAM|pamięć|moc|pobór mocy|wentylator|waty
+search.perf.sensors.terms|mt|b467ff5a|temperatura|temp|użycie|obciążenie|czujniki|VRAM|pamięć|moc|pobór mocy|wentylator|obroty|rpm|waty
 search.perf.cache|mt-safe|d7b57389|Pamięć podręczna shaderów
 search.perf.cache.terms|mt|6c23151c|cache|pamięć podręczna|shader|shadery|przycinanie|zacinanie|stutter|kompilacja
 search.driver.version|mt-safe|04cb4284|Wersja sterownika
@@ -320,8 +323,6 @@ search.later.power|mt-safe|fba85679|Limit mocy
 search.later.power.terms|mt|db72d2b0|limit mocy|pobór mocy|moc|waty|TDP
 search.later.fan|mt-safe|8c9a2877|Sterowanie wentylatorem
 search.later.fan.terms|mt|f8a14c23|wentylator|krzywa wentylatora|hałas|głośność|chłodzenie
-search.later.voltage|mt-safe|4e40d79f|Napięcie
-search.later.voltage.terms|mt|5cc069f4|napięcie|undervolt|undervolting|obniżenie napięcia|mV
 search.later.fps-counter|mt-safe|8e4f7029|Wyświetlanie liczby klatek
 search.later.fps-counter.terms|mt|40353cf6|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę
 search.later.cache-clear|mt-safe|6b923412|Wyczyść pamięć podręczną shaderów
@@ -624,7 +625,126 @@ help.setting.mode|mt|16a81243|Wybór rozdzielczości i częstotliwości odświe�
 help.setting.hdr|mt|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Dostępne później.
 help.setting.vrr|mt|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Dostępne później.
 help.setting.power|mt|3659317e|Największa moc, jaką może pobierać układ. Dostępne później.
-help.setting.fan|mt|bfae721d|Wentylatorem steruje oprogramowanie układowe płyty. Sterowanie z tej aplikacji pojawi się później.
-help.setting.voltage|mt|9c28b6e1|Napięcie układu. Dostępne później.
+help.setting.fan|mt|0fda8087|Wentylatorem kręci oprogramowanie układowe płyty. Ta aplikacja pokazuje obroty. Sterowanie z tej aplikacji pojawi się później.
 help.setting.fps-counter|mt|929ada50|Pokazuje liczbę klatek na sekundę. Dostępne później.
 help.setting.cache-clear|mt|c75227ac|Usuwa pamięć podręczną shaderów. Dostępne później.
+# ---- advanced tuning: the voltage curve and the processor (0.7.210) ----
+graphics.tuning.title|mt|e6d2df01|Zaawansowane dostrajanie
+graphics.tuning.show|mt|ad38683b|Pokaż zaawansowane dostrajanie
+graphics.tuning.intro|mt|783ada66|Obniż trochę napięcie grafiki, aby pracowała chłodniej i ciszej. Każda zmiana działa najpierw jako test i sama wraca do poprzedniej, jeśli jej nie zachowasz.
+graphics.tuning.preset|mt|5691a71e|Gotowe ustawienia
+graphics.tuning.preset.standard|mt|ef669154|Standardowe
+graphics.tuning.preset.mild|mt|96124817|Łagodne
+graphics.tuning.preset.medium|mt|8e588cd1|Średnie
+graphics.tuning.preset.deep|mt|7038852d|Najniższe dozwolone
+graphics.tuning.point|mt|65d8ea4f|{0} MHz
+graphics.tuning.lower|mt|635c004b|Mniej napięcia
+graphics.tuning.raise|mt|d6d822c0|Więcej napięcia
+graphics.tuning.apply|mt|238cd174|Przetestuj to ustawienie
+graphics.tuning.keep|mt|fdce5da2|Zachowaj
+graphics.tuning.stop|mt|e8c445ee|Wróć do poprzedniego
+graphics.tuning.reset|mt|71803214|Standardowe napięcie
+graphics.tuning.running|mt|020767b3|Trwa test. {0}
+graphics.tuning.saved|mt|ff1402a2|To ustawienie jest zapisane i używane przy każdym starcie.
+graphics.tuning.unsaved|mt|d55611e8|Zachowaj to ustawienie przed końcem testu, inaczej samo wróci do poprzedniego.
+graphics.tuning.chart|mt|1cab2722|Napięcie przy każdej częstotliwości
+graphics.tuning.chart.help|mt|ec985b16|Kliknij punkt, a potem użyj przycisków Mniej napięcia lub Więcej napięcia. Szara linia to standard, dolna linia to najniższe napięcie dozwolone przez sterownik.
+graphics.tuning.need-auto|mt|ca6c9300|Włącz automatyczne taktowanie, uruchom ponownie Windows i wróć tutaj.
+graphics.tuning.table|mt|510c2545|Częstotliwość, napięcie i różnica względem standardu
+graphics.cpu.title|mt|54aac653|Procesor
+graphics.cpu.intro|mt|a63ab108|Te ustawienia procesora pochodzą z płyt innych osób i nikt nie zmierzył ich na tej, dlatego każda zmiana działa najpierw jako test.
+graphics.cpu.off|mt|f1b24044|Dostrajanie procesora jest wyłączone.
+graphics.cpu.enable|mt|0bb17eb3|Włącz dostrajanie procesora
+graphics.cpu.disable|mt|3cfe43a7|Wyłącz dostrajanie procesora
+graphics.cpu.readback|mt|82efaa57|Odczytaj procesor teraz
+graphics.cpu.need-readback|mt|0cc411d5|Odczytaj procesor raz, zanim cokolwiek zmienisz.
+graphics.cpu.voltage.label|mt|76e2487b|Napięcie teraz
+graphics.cpu.count.label|mt|36912b92|Procesory widziane przez Windows
+graphics.cpu.cap.label|mt|17954fca|Obowiązujący limit temperatury
+graphics.cpu.clock.label|mt|f57ec9fb|Najwyższa częstotliwość
+graphics.cpu.uv.label|mt|c6848a6c|Stopnie obniżenia napięcia
+graphics.cpu.temp.label|mt|caaccd53|Limit temperatury do ustawienia
+graphics.cpu.apply|mt|4b907b31|Przetestuj te ustawienia
+graphics.cpu.cores.title|mt|22777135|Rdzenie procesora
+graphics.cpu.cores.6|mt|00842292|6 rdzeni (standard)
+graphics.cpu.cores.8|mt|b977c4a8|8 rdzeni
+graphics.cpu.cores.apply|mt|1797bc97|Użyj tej liczby rdzeni
+graphics.cpu.cores.note|mt|39ab5add|Płyta jest dostarczana z sześcioma z ośmiu rdzeni. Osiem rdzeni wymaga ponownego uruchomienia Windows, a nikt nie przetestował pozostałych dwóch na tej płycie.
+tuner.curve.delta.line|mt|fe6d3468|standard
+tuner.curve.delta.under|mt|513a58af|{0} mV mniej
+tuner.curve.delta.over|mt|90207f8b|{0} mV więcej
+tuner.curve.error.range|mt|38116870|Napięcie przy {0} MHz jest poza zakresem, który przyjmuje sterownik.
+tuner.curve.error.depth|mt|9fbad56a|Napięcie przy {0} MHz jest niższe, niż pozwala sterownik.
+tuner.curve.error.order|mt|3e359e98|Napięcie przy {0} MHz jest niższe niż przy niższej częstotliwości.
+tuner.curve.error.floor|mt|89adac7a|Najniższa częstotliwość zachowuje swoje standardowe napięcie.
+tuner.curve.error.none|mt|d7c2b02e|Nie podano ustawienia napięcia.
+tuner.trial.left|mt|eb5d98aa|pozostało {0} s
+tuner.cpu.voltage|mt|0c0a06a5|{0} mV
+tuner.cpu.voltage.high|mt|14f68a9d|{0} mV, wyżej niż pozwala ta aplikacja
+tuner.cpu.uv.none|mt|fe6d3468|standard
+tuner.cpu.uv.steps|mt|0f215681|{0} stopni niżej
+tuner.curve.summary|mt|497bd2e7|zmienia się {0} częstotliwości, największy krok to {1} mV mniej przy {2} MHz
+tuner.curve.summary.line|mt|a850a56c|standardowe napięcie przy każdej częstotliwości
+tuner.curve.preview.revert|mt|dd7a9c60|poprzednie ustawienie samo wróci po {0} s, jeśli go nie zachowasz
+tuner.curve.preview.keep|mt|3632b9d0|testowane ustawienie zostaje zapisane i używane przy każdym starcie
+tuner.cpu.preview.clock|mt|4888e4e0|najwyższa częstotliwość procesora {0} MHz
+tuner.cpu.preview.uv|mt|b1e8e5b2|napięcie procesora o {0} stopni niżej
+tuner.cpu.preview.temp|mt|f4c256f3|limit temperatury procesora {0} C
+tuner.cpu.preview.keep|mt|9ac1dfb1|testowane ustawienia procesora zostają zapisane
+tuner.cpu.preview.readback|mt|7dd25675|odczyt napięcia, częstotliwości i limitu temperatury procesora
+tuner.refuse.not-running|mt|a8b8ef18|Sterownik nie działa, więc nie ma czego dostrajać.
+tuner.refuse.no-read|mt|a2f4958b|Sterownik nie odpowiedział. Spróbuj ponownie za chwilę.
+tuner.refuse.not-valid|mt|402bcee3|To uruchomienie sterownika nie może dostrajać. Uruchom ponownie Windows i spróbuj jeszcze raz.
+tuner.refuse.not-governing|mt|9a470d35|Najpierw włącz automatyczne taktowanie, potem uruchom ponownie Windows.
+tuner.refuse.bad-values|mt|a416480c|Te napięcia nie są ustawieniem, które przyjmuje sterownik.
+tuner.refuse.same|mt|ff58de1c|To ustawienie jest już używane.
+tuner.refuse.bad-window|mt|5eb5edb4|Długość testu jest poza zakresem, który przyjmuje sterownik.
+tuner.refuse.no-trial|mt|0a23efc0|Żaden test nie trwa, więc nie ma czego zachować ani zatrzymać.
+tuner.refuse.already-default|mt|9f0d673e|Standardowe napięcie jest już używane.
+tuner.refuse.cpu-off|mt|b88471b0|Dostrajanie procesora jest wyłączone. Włącz je i uruchom ponownie Windows.
+tuner.refuse.cpu-busy|mt|9f5b8dd2|Procesor jest zajęty inną zmianą. Spróbuj ponownie za chwilę.
+tuner.refuse.cpu-not-proven|mt|0cc411d5|Odczytaj procesor raz, zanim cokolwiek zmienisz.
+tuner.refuse.cpu-nothing|mt|ed6c4b52|Nie wybrano nic do zmiany.
+tuner.refuse.cpu-bad-clock|mt|effa04de|Częstotliwość musi być między {0} a {1} MHz.
+tuner.refuse.cpu-bad-uv|mt|d56317ef|Liczba stopni napięcia musi wynosić {0} lub mniej.
+tuner.refuse.cpu-bad-temp|mt|d14fa1e3|Limit temperatury musi być między {0} a {1} C.
+tuner.refuse.cpu-bad-cores|mt|52c699a3|Ta liczba rdzeni nie jest przyjmowana przez tę płytę.
+tuner.refuse.cpu-cores-already|mt|dc4921d6|Ta liczba rdzeni jest już wybrana.
+tuner.refuse.cpu-already-standard|mt|3160dc03|Procesor ma już standardowe ustawienia.
+tuner.refuse.cpu-enable-already|mt|53af5ab8|Dostrajanie procesora jest już włączone.
+tuner.refuse.cpu-disable-already|mt|68d82f85|Dostrajanie procesora jest już wyłączone.
+plan.title.tune-trial|mt|5fa23224|Przetestuj ustawienie napięcia
+plan.title.tune-keep|mt|a3b10e8e|Zachowaj ustawienie napięcia
+plan.title.tune-stop|mt|2933136c|Wróć do poprzedniego napięcia
+plan.title.tune-reset|mt|71803214|Standardowe napięcie
+plan.title.cpu-enable|mt|0bb17eb3|Włącz dostrajanie procesora
+plan.title.cpu-disable|mt|3cfe43a7|Wyłącz dostrajanie procesora
+plan.title.cpu-readback|mt|615fdee1|Odczytaj procesor
+plan.title.cpu-trial|mt|15a8535d|Przetestuj ustawienia procesora
+plan.title.cpu-keep|mt|14e57d83|Zachowaj ustawienia procesora
+plan.title.cpu-stop|mt|d7e78a7b|Wróć do poprzednich ustawień procesora
+plan.title.cpu-reset|mt|4bd614fa|Standardowe ustawienia procesora
+plan.title.core-mask|mt|39d71947|Zmień liczbę rdzeni
+search.graphics.tuning|mt|e6d2df01|Zaawansowane dostrajanie
+search.graphics.tuning.terms|mt|2b970752|napięcie|undervolt|krzywa|chłodniej|ciszej
+search.graphics.cpu-tuning|mt|447b1d50|Dostrajanie procesora
+search.graphics.cpu-tuning.terms|mt|7f92368b|procesor|częstotliwość|boost|undervolt
+search.graphics.cpu-cores|mt|22777135|Rdzenie procesora
+search.graphics.cpu-cores.terms|mt|71b97e69|rdzenie|osiem rdzeni|odblokowanie
+help.setting.tuning|mt|c9f195b3|Obniża napięcie grafiki o kilka miliwoltów przy każdej częstotliwości. Ta sama częstotliwość potrzebuje wtedy mniej energii i wytwarza mniej ciepła. Zbyt niskie napięcie objawia się zawieszeniem gry lub ekranu, dlatego każda zmiana działa jako test, który sam się wycofuje.
+help.setting.cpu-cores|mt|5510f0aa|Płyta jest dostarczana z sześcioma z ośmiu rdzeni. Osiem rdzeni wymaga ponownego uruchomienia Windows. Jeśli Windows nie uruchomi się wtedy poprawnie, sterownik sam przywraca sześć.
+help.setting.cpu-tuning|mt|30000aff|Najwyższa częstotliwość procesora, niewielkie obniżenie napięcia i limit temperatury. Te liczby pochodzą z płyt innych osób. Jedna płyta została uszkodzona przez podniesienie częstotliwości procesora ze swobodnym napięciem, dlatego ta aplikacja tylko obniża i zawsze odczytuje napięcie z powrotem.
+plan.line.cpu-tune-on|mt|c3793e19|Dostrajanie procesora: włączone.
+plan.line.cpu-tune-off|mt|14ef42b2|Dostrajanie procesora: wyłączone.
+tuner.cpu.preview.stop|mt|f3995948|procesor wraca do ustawień z przed testu
+tuner.cpu.preview.reset|mt|c3cf92af|procesor wraca do swoich standardowych ustawień
+# ---- 0.7.211 ----
+graphics.cpu.reset|mt|4bd614fa|Standardowe ustawienia procesora
+graphics.cpu.revert-owed|mt|7214cad3|Sterownik nie mógł przywrócić poprzednich ustawień procesora i próbuje dalej. Jeśli to nie znika, uruchom ponownie Windows.
+graphics.tuning.not-applied|mt|24166ef8|Sterownik jeszcze nie użył tego ustawienia. Odczekaj chwilę i zachowaj je.
+tuner.curve.error.untried|mt|6ae732ce|Sterownik jeszcze nie użył tego ustawienia. Odczekaj chwilę i spróbuj ponownie.
+tuner.refuse.curve-not-applied|mt|28020c45|Sterownik jeszcze nie użył testowanego ustawienia. Odczekaj chwilę i spróbuj ponownie.
+tuner.curve.preview.standard|mt|0c38511f|przy każdej prędkości wraca standardowe napięcie
+tuner.note.curve-risk|mt|28bb65b2|Mniejsze napięcie sprawia, że układ graficzny jest przy tej samej prędkości chłodniejszy i cichszy. Zbyt niskie objawia się zawieszeniem gry lub obrazu, a nie komunikatem; po zakończeniu testu ustawienie wraca samo.
+tuner.note.cpu-risk|mt|0e0c4e70|Te wartości procesora pochodzą z płyt innych osób. Zbyt wysoka prędkość lub zbyt niskie napięcie objawia się zawieszeniem komputera. Aplikacja tylko obniża napięcie i po każdej zmianie odczytuje je ponownie.
+tuner.note.cores-risk|mt|8be50b28|Osiem rdzeni daje więcej ciepła i pobiera więcej mocy niż sześć. Nikt nie przetestował dwóch dodatkowych rdzeni na tej płycie.

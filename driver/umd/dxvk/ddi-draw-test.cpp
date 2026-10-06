@@ -69,9 +69,11 @@ namespace {
 int createIdentity,createContext; unsigned createCount=0,destroyCount=0;
 unsigned adapterMode=0;
 HRESULT APIENTRY adapter_query(HANDLE h,const D3DDDICB_QUERYADAPTERINFO *q) {
-    if(h!=&createIdentity || q->PrivateDriverDataSize!=BC250_ADAPTER_CAPS_BYTES) fail(__LINE__);
+    if(h!=&createIdentity || q->PrivateDriverDataSize!=BC250_SCANOUT_CAPS_TOTAL) fail(__LINE__);
     auto *bytes=static_cast<unsigned char *>(q->pPrivateDriverData);
-    for(unsigned i=0;i<BC250_ADAPTER_CAPS_BYTES;++i) if(bytes[i]) fail(__LINE__);
+    // Every byte the driver may write must arrive zeroed, including the room for trailers this caller
+    // does not read: an older driver leaves them untouched and the reader must see zeros, not stack dirt.
+    for(unsigned i=0;i<BC250_SCANOUT_CAPS_TOTAL;++i) if(bytes[i]) fail(__LINE__);
     if(adapterMode==1) return E_OUTOFMEMORY;
     if(adapterMode==2) return S_OK; // Old KMD leaves trailer unwritten.
     bc250_adapter_identity identity{BC250_ADAPTER_IDENTITY_MAGIC,1,24,0x12345678u,0xffffff85u,0};

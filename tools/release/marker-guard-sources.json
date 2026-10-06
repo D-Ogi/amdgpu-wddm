@@ -1,0 +1,27 @@
+{
+  "comment": [
+    "Every revision whose anchored comments must still be in the release head, for tools/release/test-marker-guard.ps1.",
+    "A revision is named by its commit, not by its branch: a branch another workflow deletes would take the gate",
+    "with it, and the commit is what was actually merged. Add a row in the commit that merges a wagon into the train.",
+    "A release built from a tree that does not have one of these commits cannot run the gate, so it fails: fetch the",
+    "commits or state in the release's own record why a source is unreachable."
+  ],
+  "paths": ["driver", "tools"],
+  "baseline": 0,
+  "sources": [
+    { "name": "main", "commit": "af76883c8c2f6cf51dba426d83f0b6326cf64517" },
+    { "name": "train/b19-repro-kmd", "commit": "edae69878800b090d88386fac8b05b39bdc031b4" },
+    { "name": "kmd209-iflip2", "commit": "b03da3a75b7152a9f3f56756a8210400d5d04f85" },
+    { "name": "fan/read-nct6686", "commit": "9d1aff7c2fece37d4e5b2ecb1334d75e055f31f8" },
+    { "name": "c48/notifydpc-in-report", "commit": "677709c274a453d3510ca709806d0634c5089150" },
+    { "name": "tuner/vf-cpu", "commit": "dabdd949221b74fb62abfdf2425a393d39234851" },
+    { "name": "m15/router-iflip-front", "commit": "99ba8cd8d4e3d9ae27db6e26ed9c4b670bab4a3b" },
+    { "name": "bd075/d3d12-shared-real", "commit": "1fa1cfb6a4615a88d4ab379f803b15f55dc95ebb" },
+    { "name": "bd075/capshare-trace", "commit": "3325c555e53959ce8164e2a3ed8beaa1c5fa0ffd" },
+    { "name": "e52/encoder-perf", "commit": "e4d1f630e11d74809ff22bb7c1327f5369527967" },
+    { "name": "dpm/thermal-soft-zone", "commit": "846ad91925f2c159dc4d8ff401b648b74f8560c1" },
+    { "name": "kmd/confirm-soft", "commit": "01cee34ceac56f2a991b99828c53e52d07577eec" },
+    { "name": "m14/d3d11-iflip2", "commit": "0b325308bfa56f7d3d7d8687438040a6f7000d4c" },
+    { "name": "m15/d3d12-iflip2", "commit": "ef63bab313268d28b7fa214d79b8e8eb72931239" }
+  ]
+}

@@ -47,6 +47,89 @@ namespace AmdgpuWddmControl
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
+    // BC250_ESCAPE_HWMON (driver/kmd/hwmon.c, docs/design/fan.md): what the board's own hardware monitor says
+    // about the case fan. Read only, and only the chip's own numbers: the fan still follows the BIOS curve.
+    // Reading means the reader is online AND the sample is fresh; everything else is "No reading", never a guess.
+    public sealed class HwmonState
+    {
+        public uint Version, Flags, Reason, BasePort, CustomerId, EcVersion, EcBuild;
+        public uint FanPresentMask, DutyPresentMask, ModeMask, AgeMs;
+        public uint Engine, RpmValidMask, DutyValidMask;
+        public uint[] Rpm = new uint[8];
+        public uint[] DutyPermille = new uint[8];
+        public int[] TemperatureMc = new int[4];
+        public uint[] TemperatureSource = new uint[4];
+        public ulong Samples, Errors, Retries, Refusals, Generation;
+
+        public const uint FlagValid = 1, FlagMonitoring = 2, FlagFresh = 4, FlagGated = 8,
+            FlagIdPinned = 16, FlagDutyProven = 32, FlagStopped = 64;
+        public const uint SourceApu = 0x46;         // AMD TSI at SMBus 0x98: the APU die
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+        public bool Reading { get { return Has(FlagValid) && Has(FlagFresh); } }
+
+        // The board has five tachometer channels and one fan, so the reading is the fastest channel that turns.
+        public uint FastestRpm
+        {
+            get { uint best = 0; foreach (var r in Rpm) if (r > best) best = r; return best; }
+        }
+        // The duty READ-BACK, highest channel, as a percentage. Shown only with FlagDutyProven.
+        public uint DutyPercent
+        {
+            get { uint best = 0; foreach (var d in DutyPermille) if (d > best) best = d; return (best + 5) / 10; }
+        }
+        // The chip's own reading of the APU, which is an independent second measurement of Tctl. Support report only.
+        public int? ApuMc
+        {
+            get
+            {
+                for (int i = 0; i < TemperatureSource.Length; i++)
+                    if (TemperatureSource[i] == SourceApu) return TemperatureMc[i];
+                return null;
+            }
+        }
+    }
+
+    // BC250_ESCAPE_DPM_CURVE (360 bytes, driver/kmd/dpm.c, docs/design/tuner.md): the operator's V/F curve, its
+    // trial and the four vectors the chart draws. Candidate is the curve on trial, empty outside one.
+    public sealed class CurveState
+    {
+        public uint Version, Flags, TrialMs, TrialRemainingMs, Serial, Applied, Error, ErrorLevel;
+        public uint FirstMHz, StepMHz, Points;
+        public uint[] Candidate, Active, Stored, Default, Floor;
+        public uint Level, LevelMHz, LevelMv, ObservedMHz, ObservedVid, CeilingMHz, Mode;
+        public int TemperatureMc;
+        public uint Sets, Keeps, Cancels, Reverts;
+        public ulong Generation;
+        public const uint FlagValid = 1, FlagOnTrial = 2, FlagStored = 4, FlagPending = 8, FlagConfirmed = 16,
+            FlagDefault = 32, FlagGoverning = 64, FlagApplied = 128;
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+    }
+
+    // BC250_ESCAPE_CPU (296 bytes, driver/kmd/cpu.c): the processor's clock limit, undervolt, temperature cap,
+    // readbacks and core mask. Applied is what the driver last sent, Stored what a Keep wrote, Baseline what the
+    // first read of this start recorded.
+    public sealed class CpuState
+    {
+        public uint Version, Flags, TrialMs, TrialRemainingMs, Serial, Error, Given;
+        public uint AppliedMaxMHz, AppliedUvSteps, AppliedTempC;
+        public uint StoredMaxMHz, StoredUvSteps, StoredTempC;
+        public uint BaselineMaxMHz, BaselineUvSteps, BaselineTempC;
+        public uint VoltageMv, GpuVoltageMv, CapC, Features;
+        public uint[] CoreMHz, PstateMHz;
+        public uint Cores, Threads, CoreMask, CoreMaskStored;
+        public uint LastQueue, LastMessage, LastStatus, LastParameter;
+        public int TemperatureMc;
+        public uint SearchStep, SearchBest, SearchFail, SearchTested, Reads, Writes, Refusals, Reverts;
+        // An owed way back: a revert was refused and the driver repeats it. RevertFailures counts the refusals.
+        public uint RevertRetries, RevertFailures;
+        public ulong Generation;
+        public const uint FlagValid = 1, FlagOnTrial = 2, FlagStored = 4, FlagPending = 8, FlagConfirmed = 16,
+            FlagQueue3Proven = 32, FlagTuneOn = 64, FlagSearching = 128, FlagCorePending = 256,
+            FlagCoreConfirmed = 512, FlagBusy = 1024, FlagRevertOwed = 2048, FlagTempValid = 4096;
+        public const uint GivenMax = 1, GivenUv = 2, GivenTemp = 4;
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+    }
+
     public sealed class VideoMemoryState
     {
         public uint Segments;
@@ -69,7 +152,9 @@ namespace AmdgpuWddmControl
     {
         public const uint Magic = 0x30353242;   // "B250"
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
-        public const uint CmdCuMode = 22;
+        public const int HwmonBytes = 216;
+        public const int CurveBytes = 360, CpuBytes = 296, CurvePoints = 11, CpuCoreSlots = 8;
+        public const uint CmdCuMode = 22, CmdHwmon = 27, CmdCurve = 28, CmdCpu = 29;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
         public const uint CmdStartHealth = 21, CmdDpm = 23, CmdInterop = 25, CmdGetLog = 12;
@@ -129,6 +214,75 @@ namespace AmdgpuWddmControl
             {
                 Version = U(b, 3), Flags = U(b, 7), Requested = U(b, 8), Applied = U(b, 9), Reason = U(b, 10),
                 ActiveCus = U(b, 11), DisableMask = U(b, 12), PciId = U(b, 13), Generation = Q(b, 160),
+            };
+        }
+
+        public static HwmonState ParseHwmon(byte[] b)
+        {
+            Head(b, HwmonBytes, CmdHwmon);
+            if (U(b, 5) != 1) throw new FormatException("hardware monitor ABI " + U(b, 5) + ", 1 expected");
+            var h = new HwmonState
+            {
+                Version = U(b, 3), Flags = U(b, 7), BasePort = U(b, 8), CustomerId = U(b, 9),
+                EcVersion = U(b, 10), EcBuild = U(b, 11), FanPresentMask = U(b, 12), DutyPresentMask = U(b, 13),
+                ModeMask = U(b, 14), AgeMs = U(b, 39),
+                Samples = Q(b, 160), Errors = Q(b, 168), Retries = Q(b, 176), Generation = Q(b, 184),
+                Reason = U(b, 48), Engine = U(b, 49), RpmValidMask = U(b, 50), DutyValidMask = U(b, 51),
+                Refusals = Q(b, 208),
+            };
+            for (int i = 0; i < 8; i++) { h.Rpm[i] = U(b, 15 + i); h.DutyPermille[i] = U(b, 23 + i); }
+            for (int i = 0; i < 4; i++) { h.TemperatureMc[i] = (int)U(b, 31 + i); h.TemperatureSource[i] = U(b, 35 + i); }
+            return h;
+        }
+
+        static uint[] Vector(byte[] b, int first, int count)
+        {
+            var v = new uint[count];
+            for (int i = 0; i < count; i++) v[i] = U(b, first + i);
+            return v;
+        }
+
+        public static CurveState ParseCurve(byte[] b)
+        {
+            Head(b, CurveBytes, CmdCurve);
+            if (U(b, 5) != 1) throw new FormatException("curve ABI " + U(b, 5) + ", 1 expected");
+            if (U(b, 16) != CurvePoints) throw new FormatException("curve has " + U(b, 16) + " points, " + CurvePoints + " expected");
+            return new CurveState
+            {
+                Version = U(b, 3), Flags = U(b, 7), TrialMs = U(b, 8), TrialRemainingMs = U(b, 9),
+                Serial = U(b, 10), Applied = U(b, 11), Error = U(b, 12), ErrorLevel = U(b, 13),
+                FirstMHz = U(b, 14), StepMHz = U(b, 15), Points = U(b, 16),
+                Candidate = Vector(b, 17, CurvePoints), Active = Vector(b, 28, CurvePoints),
+                Stored = Vector(b, 39, CurvePoints), Default = Vector(b, 50, CurvePoints),
+                Floor = Vector(b, 61, CurvePoints),
+                Level = U(b, 72), LevelMHz = U(b, 73), LevelMv = U(b, 74),
+                ObservedMHz = U(b, 75), ObservedVid = U(b, 76), TemperatureMc = (int)U(b, 77),
+                CeilingMHz = U(b, 78), Mode = U(b, 79),
+                Sets = U(b, 80), Keeps = U(b, 81), Cancels = U(b, 82), Reverts = U(b, 83),
+                Generation = Q(b, 336),
+            };
+        }
+
+        public static CpuState ParseCpu(byte[] b)
+        {
+            Head(b, CpuBytes, CmdCpu);
+            if (U(b, 5) != 1) throw new FormatException("CPU ABI " + U(b, 5) + ", 1 expected");
+            return new CpuState
+            {
+                Version = U(b, 3), Flags = U(b, 7), TrialMs = U(b, 8), TrialRemainingMs = U(b, 9),
+                Serial = U(b, 10), Error = U(b, 11), Given = U(b, 12),
+                AppliedMaxMHz = U(b, 16), AppliedUvSteps = U(b, 17), AppliedTempC = U(b, 18),
+                StoredMaxMHz = U(b, 19), StoredUvSteps = U(b, 20), StoredTempC = U(b, 21),
+                BaselineMaxMHz = U(b, 22), BaselineUvSteps = U(b, 23), BaselineTempC = U(b, 24),
+                VoltageMv = U(b, 25), GpuVoltageMv = U(b, 26), CapC = U(b, 27), Features = U(b, 28),
+                CoreMHz = Vector(b, 29, CpuCoreSlots), PstateMHz = Vector(b, 37, CpuCoreSlots),
+                Cores = U(b, 45), Threads = U(b, 46), CoreMask = U(b, 47), CoreMaskStored = U(b, 48),
+                LastQueue = U(b, 49), LastMessage = U(b, 50), LastStatus = U(b, 51), LastParameter = U(b, 52),
+                TemperatureMc = (int)U(b, 53),
+                SearchStep = U(b, 54), SearchBest = U(b, 55), SearchFail = U(b, 56), SearchTested = U(b, 57),
+                Reads = U(b, 58), Writes = U(b, 59), Refusals = U(b, 60), Reverts = U(b, 61),
+                RevertRetries = U(b, 62), RevertFailures = U(b, 63),
+                Generation = Q(b, 272),
             };
         }
 

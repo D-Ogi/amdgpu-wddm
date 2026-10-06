@@ -8,6 +8,8 @@
 #include <cstring>
 #include <cstdio>
 #include <string>
+#include <tuple>
+#include <utility>
 using namespace native12;
 template<class T> T handle(uintptr_t n){return reinterpret_cast<T>(n);}
 static std::string events;
@@ -21,6 +23,11 @@ static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
 static unsigned long surface_format=0;
 static uint32_t surface_width=256;            // LB7A.Width the next primary must carry
+// BD-075, what the next shared create must publish: the LB7A geometry and the E26R v3 texture beside it.
+static unsigned shared_created=0;
+static bool refuse_shareable_create=false;    // the runtime's E_INVALIDARG for a shared resource's first attempt
+static uint32_t shared_width=256,shared_height=64,shared_pitch=1024,shared_dxgi=0,shared_bind=0;
+static uint64_t shared_size=65536;
 static unsigned creates=0,makes_resident=0,evictions=0,waits=0,probes=0;
 static uint32_t expected_type=0;
 static void* identity=handle<void*>(0x5432);
@@ -39,6 +46,22 @@ static char mapped[65536];
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
  assert(a->NumAllocations==1);
+ if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==64){
+  // BD-075, the shared surface: the same 32-byte LB7A v1 description, but an ordinary allocation (no
+  // PRIMARY intent, video present source 0) under the 64-byte E26R v3 record. Read as the words on the
+  // wire: Shared 1, Access 0, then the serialized D3D11_TEXTURE2D_DESC1 an opener rebuilds from.
+  assert(a->pPrivateDriverData);
+  assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE);
+  assert(!a->pAllocationInfo->VidPnSourceId);
+  uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
+  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==shared_width && w[3]==shared_height && w[4]==shared_pitch);
+  assert(w[5]==surface_format && w[6]==uint32_t(shared_size) && !w[7]);
+  uint32_t r[16];std::memcpy(r,a->pPrivateDriverData,sizeof(r));
+  assert(r[0]==0x52363245u && r[1]==3 && r[2]==1 && !r[3]);
+  assert(r[4]==shared_width && r[5]==shared_height && r[6]==1 && r[7]==1 && r[8]==shared_dxgi);
+  assert(r[9]==1 && !r[10] && !r[11] && r[12]==shared_bind && !r[13] && !r[14] && !r[15]);
+  ++shared_created;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
+ }
  if(a->pAllocationInfo->PrivateDriverDataSize==32){
   // The primary: the 32-byte LB7A v1 description, PRIMARY, no video present source, under the
   // 12-byte E26R v1 record with shared 1. Read as the words on the wire, not through the
@@ -62,7 +85,11 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
  assert(blob->gem_flags==(expected_type==0?uint64_t(AMDGPU_GEM_CREATE_NO_CPU_ACCESS):
      expected_type==1?uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED|AMDGPU_GEM_CREATE_CPU_GTT_USWC):
      uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)));
- events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
+ events+='A';
+ // BD-075: the runtime's measured answer to the allocate callback of a shared resource whose allocation
+ // carries no resource-level private data (lab-20261005T172552Z, ddi.log line 50860).
+ if(refuse_shareable_create)return E_INVALIDARG;
+ a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
 }
 // D: by handle list. R: by the runtime resource. Both with the resident object's two flags.
 static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLOCATE_0022* a){
@@ -338,6 +365,11 @@ int main(){
    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
   target.Width=256;surface_width=256;surface_format=D3DDDIFMT_A8B8G8R8;
   target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  // A primary keeps the storage column: there is no D3DDDIFORMAT for an sRGB view, so a primary asked for in one
+  // is refused here and not quietly given the UNORM row (BD-075 round 2, where the shared surface moved to
+  // Bc250SharedSurfaceFormat and the primary did not).
+  target.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;refused(E_NOTIMPL);
+  target.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
   target.MipLevels=2;refused(E_NOTIMPL);target.MipLevels=1;
   target.SampleDesc.Count=4;refused(E_NOTIMPL);target.SampleDesc.Count=1;
   target.DepthOrArraySize=2;refused(E_NOTIMPL);target.DepthOrArraySize=1;
@@ -357,6 +389,215 @@ int main(){
   s.reserved2=1;refused(E_INVALIDARG);s.reserved2=0;
   // Raw memory carries no surface fields.
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;s=req;s.surface_row_pitch=1024;refused(E_INVALIDARG);
+  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ }
+ // BD-075, the shell half of a shared resource. Three requests, in the order one create makes them:
+ // the shareable envelope (an ordinary dedicated request that says the resource may have to be shared),
+ // the linear surface the runtime's refusal of that request asks for, and - on the opening side - an
+ // allocation the runtime made itself, adopted without any allocate callback.
+ {
+  constexpr uint32_t shareable_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable;
+  constexpr uint32_t shared_flags=shareable_flags|engine_ddi::kMemoryLinearSurface;
+  D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
+  target.DepthOrArraySize=1;target.MipLevels=1;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.SampleDesc={1,0};
+  target.Flags=static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(unsigned(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET)|
+      unsigned(D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE));
+  heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+  heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;expected_type=0;
+  engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=shareable_flags;
+  // 1. The envelope changes nothing about the allocation: a committed texture on a GPU-only heap is raw
+  // memory, as it was before the flag existed, and the engine places its image in it.
+  events.clear();assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.byte_size==65536);
+  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+  // 2. The runtime refuses that allocation for a shared resource. The refusal is read as "this resource
+  // needs a surface record" only here: a shareable request that has asked the engine for nothing yet.
+  {
+   const auto before=next_allocation;refuse_shareable_create=true;events.clear();
+   assert(owner.allocate(&s,&memory)==engine_ddi::kShareRequired && !memory.memory && events=="A" &&
+          next_allocation==before);
+   const auto& report=owner.last_report();
+   assert(report.stage==ImportStage::AllocateCallback && report.refusal &&
+          !std::strcmp(report.refusal,"shared resource needs a surface record"));
+   // The same answer to a request that never said the resource may be shared stays the runtime's status,
+   // and so does any other failure of a shareable request.
+   s.flags=engine_ddi::kMemoryDedicated;events.clear();
+   assert(owner.allocate(&s,&memory)==E_INVALIDARG && !memory.memory && events=="A");
+   s.flags=shareable_flags;refuse_shareable_create=false;
+  }
+  // 3. The surface itself: the pitch and the backing engine-ddi measured for the image, published as the
+  // LB7A description with the E26R v3 texture beside it. No buffer is probed, the address needs the
+  // image's alignment only, and the record is the one the opener decodes.
+  s.flags=shared_flags;s.byte_size=65536;s.alignment=128;s.memory_type_bits=1;
+  s.surface_row_pitch=1024;s.surface_layout_size=65536;
+  surface_format=D3DDDIFMT_A8R8G8B8;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;shared_bind=0x28;
+  {
+   const auto old_probes=probes,old_surfaces=surfaces,old_shared=shared_created;
+   events.clear();
+   {OwnerScope create(&owner,0);
+    assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.byte_size==65536 &&
+           memory.memory_type_index==0);}
+   assert(shared_created==old_shared+1 && probes==old_probes && surfaces==old_surfaces);
+   // One image owns this memory, so nothing is placed beside it; the allocation is this driver's.
+   assert(owner.owns_allocation(memory.allocation) && !owner.borrow_backing(memory.allocation));
+   {OwnerScope destroy(&owner,memory.allocation);
+    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");
+    assert(owner.last_free_report().surface && !owner.last_free_report().adopted &&
+           !owner.last_free_report().owner_expired);}
+  }
+  // The three view flags the DDI states positively are the three the record carries, and no others.
+  for(const auto pair:{std::pair<unsigned,uint32_t>{unsigned(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET),0x20u},
+                       {unsigned(D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE),0x8u},
+                       {unsigned(D3D12DDI_RESOURCE_FLAG_0022_UNORDERED_ACCESS),0x80u},
+                       {unsigned(D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS),0u},
+                       {0u,0u}}){
+   target.Flags=static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(pair.first);shared_bind=pair.second;
+   events.clear();{OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+  }
+  target.Flags=static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(unsigned(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET)|
+      unsigned(D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE));shared_bind=0x28;
+  // Every refusal of the shared surface names its own check, before any callback, and allocates nothing.
+  auto refused=[&](HRESULT expected,const char* why){
+   const auto before=next_allocation;events.clear();
+   assert(owner.allocate(&s,&memory)==expected && !memory.memory && events.empty() && next_allocation==before);
+   const auto& report=owner.last_report();
+   assert(report.refusal && !std::strcmp(report.refusal,why));
+  };
+  // A shared surface is nobody's primary, and it lives in the one video memory pool this part has. The
+  // PRIMARY heap flag is admitted for a primary request alone, so a shared request on such a heap is
+  // declined one check earlier, by the heap flags, with the bit in the report.
+  heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY);
+  refused(E_NOTIMPL,"heap flags");
+  assert(owner.last_report().unimplemented_heap_flags==unsigned(D3D12DDI_HEAP_FLAG_PRIMARY));
+  heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+  heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;refused(E_NOTIMPL,"shared surface shape");
+  heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;
+  // The two flag combinations that are two contracts at once, and the one that is a heap to place shared
+  // resources in later: each declined by name, not reduced to something this shell knows.
+  s.flags=shared_flags|engine_ddi::kMemoryPrimary;refused(E_NOTIMPL,"request flags");
+  s.flags=engine_ddi::kMemoryShareable;refused(E_NOTIMPL,"shareable heap without a resource");
+  s.flags=shared_flags;
+  // The geometry and the format are the surface rules, under the shared names.
+  target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL,"shared surface format");
+  target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  // BD-075 round 2: a shared surface's format is Bc250SharedSurfaceFormat's, so the sRGB view of either 8-bit row
+  // is admitted and publishes its storage row - the LB7A format and the record's own DXGI number, which is the
+  // view the creator asked for. This gate was the storage column alone, and s12to11-srgb died here with
+  // "shared surface format" after engine-ddi had already admitted the description and retried (lab 03:06Z).
+  // The other COMPOSED rows have no sRGB sibling, so there is nothing more to admit.
+  for(const auto row:{std::tuple<DXGI_FORMAT,DXGI_FORMAT,unsigned long>
+                      {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8},
+                      {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8}}){
+   target.Format=std::get<0>(row);shared_dxgi=std::get<1>(row);surface_format=std::get<2>(row);
+   const auto before=shared_created;events.clear();
+   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   assert(shared_created==before+1);
+   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+  }
+  target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;
+  surface_format=D3DDDIFMT_A8R8G8B8;
+  s.surface_layout_size=65537;refused(E_INVALIDARG,"shared surface layout");s.surface_layout_size=65536;
+  s.surface_row_pitch=0;refused(E_INVALIDARG,"shared surface layout");s.surface_row_pitch=1024;
+  target.MipLevels=2;refused(E_NOTIMPL,"shared surface shape");target.MipLevels=1;
+  target.SampleDesc.Count=4;refused(E_NOTIMPL,"shared surface shape");target.SampleDesc.Count=1;
+  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;refused(E_NOTIMPL,"shared surface shape");
+  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+  // A pitch the record's own rules refuse never reaches a callback either: prepare_shared_surface takes it.
+  {
+   const auto before=next_allocation;s.surface_row_pitch=1020;events.clear();
+   assert(owner.allocate(&s,&memory)==E_INVALIDARG && events.empty() && next_allocation==before);
+   s.surface_row_pitch=1024;
+  }
+  // 4. The open path. The allocation exists, the runtime opened it for this device and destroys it itself:
+  // no allocate callback runs, and the record that holds the mapping and the import is borrowed.
+  engine_ddi::AdoptRequest adopt{};adopt.size=sizeof(adopt);adopt.flags=shared_flags;
+  adopt.rt_owner={handle<void*>(2)};adopt.byte_size=65536;adopt.alignment=128;adopt.memory_type_bits=1;
+  {
+   engine_ddi::ImportedMemory borrowed{};
+   adopt.allocation=++next_allocation;                  // the handle pOpenAllocationInfo[0] carried
+   events.clear();
+   assert(owner.adopt(&adopt,&borrowed)==S_OK && events=="MZI" && borrowed.allocation==adopt.allocation &&
+          borrowed.byte_size==65536 && borrowed.memory_type_index==0 && borrowed.gpu_va==gpu_address);
+   // In the store like any other allocation, so the ICD's Lock2/Unlock2 reach this record and its own state
+   // checks (owns_allocation). No view is ever placed beside the opened image.
+   assert(owner.owns_allocation(borrowed.allocation) && !owner.borrow_backing(borrowed.allocation));
+   // The same handle adopted twice: two records, two imports, two independent releases. An application may call
+   // OpenSharedHandle twice on one device, and nothing promises that dxgkrnl answers with two handles. The store
+   // tells the two imports apart by the cookie each one carries, not by the handle.
+   {
+    engine_ddi::ImportedMemory again{};events.clear();
+    // The stub's vkAllocateMemory answers with a handle derived from the allocation, so the two imports share
+    // their VkDeviceMemory value here; the cookie is the field that tells the two records apart, and it is the
+    // field free() now looks at.
+    assert(owner.adopt(&adopt,&again)==S_OK && events=="MZI" && again.allocation==adopt.allocation &&
+           again.cookie && again.cookie!=borrowed.cookie);
+    assert(owner.owns_allocation(again.allocation));
+    // Each import is released on its own, and neither release touches the other's record.
+    events.clear();assert(owner.free(&again)==S_OK && events=="VU");
+    assert(owner.last_free_report().adopted && owner.last_free_report().stage==FreeStage::Done);
+    assert(owner.free(&again)==E_INVALIDARG && owner.owns_allocation(borrowed.allocation));
+   }
+   // The release returns the mapping and the import and makes no deallocate callback in either form. No Evict
+   // either ('E' is absent): the runtime destroys a borrowed allocation as soon as its destroy returns, so a
+   // callback naming that handle could evict an allocation dxgkrnl has since recycled.
+   const unsigned evicted_before=evictions;
+   events.clear();assert(owner.free(&borrowed)==S_OK && events=="VU" && evictions==evicted_before);
+   assert(owner.last_free_report().adopted && owner.last_free_report().surface &&
+          owner.last_free_report().stage==FreeStage::Done && !owner.last_free_report().owner_expired);
+   assert(!owner.owns_allocation(borrowed.allocation) && owner.free(&borrowed)==E_INVALIDARG);
+  }
+  // A handle this driver created itself is never adopted over: that is the store corruption the refusal exists
+  // for, and the only shape adopt still declines on a known handle.
+  {
+   engine_ddi::MemoryRequest plain=req;plain.resource=&target;plain.flags=shareable_flags;
+   engine_ddi::ImportedMemory created{},stolen{};
+   events.clear();assert(owner.allocate(&plain,&created)==S_OK && events=="AMZI");
+   engine_ddi::AdoptRequest over=adopt;over.allocation=created.allocation;events.clear();
+   assert(owner.adopt(&over,&stolen)==E_INVALIDARG && !stolen.memory && events.empty());
+   assert(owner.last_report().refusal &&
+          !std::strcmp(owner.last_report().refusal,"the allocation is one this driver created"));
+   events.clear();assert(owner.free(&created)==S_OK && events=="VEUD");
+  }
+  // Every malformed adopt request is refused before the paging queue is touched, by one name.
+  {
+   auto bad=[&](const engine_ddi::AdoptRequest& request){
+    engine_ddi::ImportedMemory out{};events.clear();
+    assert(owner.adopt(&request,&out)==E_INVALIDARG && !out.memory && events.empty());
+    const auto& report=owner.last_report();
+    assert(report.stage==ImportStage::Request && report.refusal &&
+           !std::strcmp(report.refusal,"malformed adopt request"));
+   };
+   engine_ddi::ImportedMemory out{};
+   assert(owner.adopt(nullptr,&out)==E_INVALIDARG && owner.adopt(&adopt,nullptr)==E_INVALIDARG);
+   auto bad_request=[&](auto change){engine_ddi::AdoptRequest r=adopt;r.allocation=next_allocation+1;change(r);bad(r);};
+   bad_request([](engine_ddi::AdoptRequest& r){r.size=sizeof(r)-4;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.flags=shareable_flags;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.flags=shared_flags|engine_ddi::kMemoryPrimary;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.allocation=0;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.memory_type_bits=0;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.byte_size=0;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.byte_size=65535;});     // not page rounded
+   bad_request([](engine_ddi::AdoptRequest& r){r.alignment=0;});
+   bad_request([](engine_ddi::AdoptRequest& r){r.alignment=96;});        // not a power of two
+   // A type mask without video memory in it: the opened surface is GPU-only, as the created one is.
+   engine_ddi::AdoptRequest host=adopt;host.allocation=next_allocation+1;host.memory_type_bits=1u<<1;
+   events.clear();assert(owner.adopt(&host,&out)==E_INVALIDARG && events.empty());
+   assert(owner.last_report().refusal && !std::strcmp(owner.last_report().refusal,"no device-local memory type"));
+  }
+  // A borrowed allocation is never quarantined, whatever the release policy holds: the runtime destroys it
+  // with the opened resource, so holding its address back would hold an address that is no longer ours.
+  {
+   ImportReleasePolicy policy{};policy.quarantine_depth=3;policy.quarantine_count_cap=64;
+   RuntimeHeapImports held(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,
+                           policy);
+   assert(held.initialize()==S_OK && policy.holds());
+   engine_ddi::AdoptRequest open=adopt;open.allocation=++next_allocation;
+   engine_ddi::ImportedMemory borrowed{};
+   events.clear();assert(held.adopt(&open,&borrowed)==S_OK && events=="MZI");
+   events.clear();assert(held.free(&borrowed)==S_OK && events=="VU" && !held.held_count() && !held.held_bytes());
+   assert(held.last_free_report().adopted && held.last_free_report().stage==FreeStage::Done);
+   assert(held.close_after_engine_retirement()==S_OK && held.discard_metadata()==0);
+  }
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  }
  // Pending paging: the VA reaches the engine only after one CPU wait for the largest value, the
@@ -383,8 +624,11 @@ int main(){
  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");fail_evict=false;
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- // Every reference taken was released: all calls but the refused one and the failed eviction.
- assert(makes_resident==evictions+2);assert(surfaces==5);
+ // Every reference taken was released by an Evict callback except five: the refused reference, the failed
+ // eviction, and the three borrowed allocations of the BD-075 section (two opens of one handle and the
+ // quarantine instance's one), whose residency is dropped without a callback because the runtime destroys the
+ // allocation itself and the handle may already be gone.
+ assert(makes_resident==evictions+5);assert(surfaces==5);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.
@@ -622,5 +866,8 @@ int main(){
  }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
-  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release)");
+  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release), "
+  "BD-075 shared resources (the shareable envelope unchanged, kShareRequired only from the runtime's refusal of a shareable create, the shared surface's "
+  "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
+  "callback, no quarantine, no backing to lend, one record per allocation handle)");
 }

@@ -3,6 +3,7 @@
 #include "device-engine.h"
 #include "fence-ddi.h"
 #include "ddi-trace.h"
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <new>
@@ -62,8 +63,20 @@ void APIENTRY native_execute(D3D12DDI_HCOMMANDQUEUE h, UINT count, const D3D12DD
     const HRESULT hr = engine_queues(*device)->execute(*slot_of(h), count, lists);
     if (hr != S_OK) device->remove();
 }
+// The two fence slots are the only DDI entry points of this shell that no measurement has ever reached, so each
+// records its first call per process on the always-on channel (ddi_refusal: the AMDGPU_WDDM_LOG sink when the
+// process names one, and the debugger channel always, which capture-share copies into a cell's own log). Once a
+// process, never per frame: a queue wait happens per submission. Until a lab row prints one of these lines, every
+// statement about these slots is an argument from absence, which is what round 2 of BD-075 is here to stop.
+void fence_slot_seen(bool is_wait) noexcept {
+    static std::atomic<bool> seen[2]{};
+    if (seen[is_wait ? 1 : 0].exchange(true, std::memory_order_relaxed)) return;
+    ddi_refusal("fence slot entered: %s, the first in this process; the slot selects this single node and performs "
+                "no fence operation of its own", is_wait ? "WaitForFence" : "SignalFence");
+}
 void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATION* args) {
     if (args) args->PhysicalAdapterMask = 0;
+    fence_slot_seen(false);
     auto device = resolve_queue_device(h);
     if (!device || !args || !args->Fence.pDrvPrivate ||
         reinterpret_cast<uintptr_t>(args->Fence.pDrvPrivate) % alignof(FenceState)) {
@@ -71,8 +84,8 @@ void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATIO
     }
     const auto fence = static_cast<const FenceState*>(args->Fence.pDrvPrivate);
     if (device->lost.load() || fence->device != device) { device->remove(); return; }
-    // The system runtime queues its kernel fence signal on this queue's context.
-    // DDI0001 only chooses the broadcast adapters for this single-node slice.
+    // PhysicalAdapterMask is an out parameter only - "the set of adapters to broadcast the operation to"
+    // (d3d12umddi.h, D3D12DDIARG_FENCE_OPERATION) - and this adapter is a single node, so 1 is the answer.
     // INLINE Execute must already have submitted all work on that same context.
     // No separate engine fence, CPU fence write or extra GPU submission occurs.
     args->PhysicalAdapterMask = 1;
@@ -80,9 +93,41 @@ void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATIO
         amdgpu_wddm_log::print("d3d12-ddi SignalFence runtime-context mask=1 value=%llu\n",
             static_cast<unsigned long long>(args->Value));
 }
+// The wait is the signal's mirror and is answered the same way: PhysicalAdapterMask is an out parameter only -
+// "the set of adapters to broadcast the operation to" (d3d12umddi.h, D3D12DDIARG_FENCE_OPERATION) - so the slot
+// selects this single node and performs no fence operation. It used to call queue_failure unconditionally, so
+// the first pfnWaitForFence the runtime ever sent would have lost the device; a slot that cannot perform an
+// operation must not remove the device, while a record it cannot trust (a null, misaligned or foreign fence)
+// still does, which is why the two checks below stay (BD-075 round 2).
+//
+// What is measured, and what is not. The system runtime completes a single-adapter fence operation without this
+// slot: w12's w12-pending control queues an ID3D12CommandQueue::Wait on a value nobody has signalled yet and
+// shows the dependent signal still unreached 300 ms later (capture-share Side12::LocalWaits), so the ordering is
+// real and the driver was not asked for it. What that does NOT cover is a fence another process opened: the
+// eleven traced rows of 2026-10-06 contain no such wait (s11to12-fence died at open-shared and f12to12 ran
+// untraced), so the cross-process case is untested in either direction. Hence fence_slot_seen above: a row that
+// does reach a slot now says so in its own log, with no trace switch.
+//
+// fence-wait-accept-off is the bisect switch for the accept (the owner's release-train rule of 2026-10-05 is
+// "switches + bisect on failure"). The accept is the default because the alternative default is the device loss
+// 0.7.208.1's shell shipped, and a switch of this shell may only ever subtract from the behaviour the lab
+// validated (ddi_experiment_off, ddi-trace.h). With the switch named, this slot is byte for byte the older
+// shell: the same mask 0 and the same queue_failure, one log line per process later.
 void APIENTRY native_wait(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATION* args) {
     if (args) args->PhysicalAdapterMask = 0;
-    queue_failure(h); // Cross-queue/runtime wait transport has not been implemented.
+    fence_slot_seen(true);
+    if (ddi_experiment_off("fence-wait-accept")) { queue_failure(h); return; }
+    auto device = resolve_queue_device(h);
+    if (!device || !args || !args->Fence.pDrvPrivate ||
+        reinterpret_cast<uintptr_t>(args->Fence.pDrvPrivate) % alignof(FenceState)) {
+        queue_failure(h); return;
+    }
+    const auto fence = static_cast<const FenceState*>(args->Fence.pDrvPrivate);
+    if (device->lost.load() || fence->device != device) { device->remove(); return; }
+    args->PhysicalAdapterMask = 1;
+    if (ddi_trace_enabled())
+        amdgpu_wddm_log::print("d3d12-ddi WaitForFence runtime-context mask=1 value=%llu\n",
+            static_cast<unsigned long long>(args->Value));
 }
 // The tile mappings are one operation of the queue, admitted as an execute is. The engine checks
 // that the resources and the heap are the device's; a refusal or a failure removes the device.

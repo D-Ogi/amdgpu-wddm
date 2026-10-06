@@ -14,6 +14,9 @@
 #include "paging_private.h"
 #include "paging_drain.h"
 #include "progress.h"
+/* C48: the ring-gap accounting is plain integer arithmetic over a counter, so the harness can include it
+ * as the driver does. A tree whose wddm.c has no gap edges yet simply never calls into it. */
+#include "ring_gap.h"
 #define C_ASSERT(e) typedef char assert_job_fits[(e)?1:-1]
 #define RtlZeroMemory(p,n) memset(p,0,n)
 typedef unsigned char UCHAR;
@@ -40,6 +43,7 @@ typedef struct {
  UINT PagingHwFence;
  /* Timer and DPC stand-ins count arms; PagingDrainDpc keeps the drain timer's last due time. */
  int Lock,PagingSubmitTimer,PagingSubmitDpc,PagingDrainTimer,PagingDrainDpc;
+ /* RING_GAP_FIELD */
  LONG PagingQueueBorrowed,PagingHwSubmitted,PagingHwCompleted,PagingHwRefused,PagingHwTimeouts;
 } BC250_WDDM;
 typedef struct { void* Wddm; } BC250_DEVICE;
@@ -56,6 +60,16 @@ static int KeCancelTimer(int*t){(void)t;return 0;}
 static int KeSetTimer(int*t,LARGE_INTEGER d,int*p)
 {check(lockHeld,"timers armed under Lock");(*t)++;*p=(int)d.QuadPart;return 0;}
 static LONG InterlockedIncrement(LONG*p){return ++*p;}
+/* C48: the ring-gap edges of node 1 run inside the drain, under Lock. The stand-in counter is the same 100 ns
+ * clock KeQueryInterruptTime uses, and it reports its frequency through the optional argument - which the
+ * generator makes the extracted edge pass, because the driver reads that frequency once at a WddmStart this
+ * harness never runs. With the substitution a gap the harness drives is as long as the time it let pass; without
+ * it every gap would measure 0 us. What this harness proves is that both edges run under Lock on every drain
+ * path; the arithmetic itself is driven by test/ring_gap_test.c against the bucket edges. */
+static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*f)
+{LARGE_INTEGER q;q.QuadPart=(long long)now;if(f)f->QuadPart=10000000ll;return q;}
+static long long InterlockedCompareExchange64(volatile long long*p,long long x,long long c)
+{long long v=*p;if(v==c)*p=x;return v;}
 static void GuardLog(const char*f,...){(void)f;}
 /* KMD180 paging journal: the drain stamps each hardware submit's sequence; memory only, nothing to check here. */
 static void PagingJournalStampSeq(ULONG fence,ULONG seq){(void)fence;(void)seq;}

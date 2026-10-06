@@ -80,14 +80,24 @@ static u32 __smu_cmn_poll_stat(struct smu_context *smu)
 #include "smu_mailbox.inc"
 #pragma warning(pop)
 
-int bc250_smu_init(struct bc250_smu *smu,const struct bc250_smu_io *io,
-                   unsigned int timeout_us,int already_active)
+int bc250_smu_init_queue(struct bc250_smu *smu,const struct bc250_smu_io *io,
+                         unsigned int timeout_us,int already_active,
+                         unsigned int msg_reg,unsigned int param_reg,unsigned int resp_reg)
 {
     if(!smu || !io || !io->owned || !io->read || !io->write || !io->now_us ||
        !io->delay_us || !timeout_us || timeout_us>2000000u)return BC250_SMU_INVALID;
+    if(msg_reg==param_reg || msg_reg==resp_reg || param_reg==resp_reg)return BC250_SMU_INVALID;
     memset(smu,0,sizeof(*smu));smu->io=*io;smu->timeout_us=timeout_us;
     smu->firmware_state=already_active?SMU_FW_RUNTIME:SMU_FW_INIT;
+    smu->msg_reg=msg_reg;smu->param_reg=param_reg;smu->resp_reg=resp_reg;
     return 0;
+}
+int bc250_smu_init(struct bc250_smu *smu,const struct bc250_smu_io *io,
+                   unsigned int timeout_us,int already_active)
+{
+    return bc250_smu_init_queue(smu,io,timeout_us,already_active,
+                                BC250_SMU_mmMP1_SMN_C2PMSG_66,BC250_SMU_mmMP1_SMN_C2PMSG_82,
+                                BC250_SMU_mmMP1_SMN_C2PMSG_90);
 }
 int bc250_smu_message_locked(struct bc250_smu *owner,unsigned int message,
                              unsigned int parameter,struct bc250_smu_report *report)
@@ -97,11 +107,13 @@ int bc250_smu_message_locked(struct bc250_smu *owner,unsigned int message,
     memset(report,0,sizeof(*report));report->message=message;report->parameter=parameter;
     report->status=BC250_SMU_INVALID;
     if(!owner || !owner->io.owned || !owner->timeout_us || message>0xffffu)return report->status;
+    if(!owner->msg_reg && !owner->param_reg && !owner->resp_reg)return report->status; // not initialized
     if(!owner->io.owned(owner->io.context)){report->status=BC250_SMU_NOT_OWNER;return report->status;}
     smu.adev=&adev;smu.owner=owner;smu.report=report;smu.smc_fw_state=owner->firmware_state;
-    smu.msg_reg=BC250_SMU_mmMP1_SMN_C2PMSG_66;
-    smu.param_reg=BC250_SMU_mmMP1_SMN_C2PMSG_82;
-    smu.resp_reg=BC250_SMU_mmMP1_SMN_C2PMSG_90;
+    // The queue this instance drives (bc250_smu_init: the firmware's queue 0; bc250_smu_init_queue: any other).
+    smu.msg_reg=owner->msg_reg;
+    smu.param_reg=owner->param_reg;
+    smu.resp_reg=owner->resp_reg;
     status=smu_cmn_send_msg_without_waiting(&smu,(uint16_t)message,parameter);
     if(!status && !report->io_status)status=smu_cmn_wait_for_response(&smu);
     if(!status && !report->io_status)smu_cmn_read_arg(&smu,&report->value);

@@ -161,13 +161,15 @@ bool find_adapter(const wchar_t* filter, LUID& luid) {
 } // namespace
 
 HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory,
-                    decltype(engine_ddi::ShellHooks::free_memory) free_memory, ID3D12Device* engine) {
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory, ID3D12Device* engine,
+                    decltype(engine_ddi::ShellHooks::adopt_memory) adopt_memory) {
     engine_ddi::ContextCreateInfo info{};
     info.size = sizeof(info);
     info.boundary_revision = engine_ddi::kBoundaryRevision;
     info.memory_mode = allocate_memory ? engine_ddi::MemoryMode::RuntimeBacked : engine_ddi::MemoryMode::EnginePrivateTest;
     info.hooks.allocate_memory = allocate_memory;
     info.hooks.free_memory = free_memory;
+    info.hooks.adopt_memory = adopt_memory;     // r5: null means no shared open is served
     info.ddi_interface = D3D12DDI_INTERFACE_VERSION_R8;
     info.ddi_version = D3D12DDI_BUILD_VERSION_0092;
     info.engine_device = engine ? engine : env.engine;
@@ -583,6 +585,8 @@ int wmain(int argc, wchar_t** argv) {
     test_tiled(env);
     test_small_placement(env);
     test_linear_primary(env);
+    test_shared_create(env);
+    test_shared_open(env);
     test_raytracing(env);
     test_raytracing_pipeline(env);
     test_memory_policy(env, create);

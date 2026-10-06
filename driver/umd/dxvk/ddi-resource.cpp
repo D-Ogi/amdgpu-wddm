@@ -156,29 +156,34 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
         result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
     request=r; desc=result; return S_OK;
 }
+// The shared-surface wire format has one reader (driver/contract/bc250_shared_surface.h); this is the
+// D3D11 half of it, which maps the neutral record to a D3D11_TEXTURE2D_DESC1 and nothing more.
+// BD-075: the D3D12 shell maps the same neutral record to a D3D12_RESOURCE_DESC1, so a surface either
+// shell creates is one either shell opens, and the admission rules exist once.
+// The admission policy here is this shell's own and is wider than the D3D12 one on purpose: a D3D11
+// opener is handed the compositor's own buffers, which are primaries (E26R Access PRIMARY) and may ask
+// for a cached CPU mapping (CPU_READ), and refusing those would close the desktop route. Which access
+// bits are coherent at all is still the kernel driver's parser's answer, inside the decode.
+static_assert(BC250_SHARED_LAYOUT_UNDEFINED==D3D11_TEXTURE_LAYOUT_UNDEFINED);
 HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_ALLOCATION_PRIVATE &metadata,
     D3D11_TEXTURE2D_DESC1 &desc) {
     if (input.NumAllocations!=1 || !input.pOpenAllocationInfo2) return E_NOTIMPL;
     const auto &a=input.pOpenAllocationInfo2[0];
-    if (!a.hAllocation || !a.pPrivateDriverData || a.PrivateDriverDataSize!=sizeof(metadata) ||
-        !input.pPrivateDriverData || input.PrivateDriverDataSize!=sizeof(BC250_SURFACE_RESOURCE_PRIVATE)) return E_INVALIDARG;
-    BC250_WDDM_ALLOCATION_PRIVATE m{}; BC250_SURFACE_RESOURCE_PRIVATE p{};
-    std::memcpy(&m,a.pPrivateDriverData,sizeof(m)); std::memcpy(&p,input.pPrivateDriverData,sizeof(p));
-    int shared=0,cached=0;
-    if (p.Magic!=BC250_SURFACE_RESOURCE_MAGIC || p.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION ||
-        !Bc250SurfaceResourcePolicy(&p,sizeof(p),&shared,&cached) ||
-        m.Magic!=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || m.Version!=1 ||
-        p.Width!=m.Width || p.Height!=m.Height || p.Width>16384 || p.Height>16384 ||
-        p.MipLevels!=1 || p.ArraySize!=1 || p.SampleCount!=1 || p.SampleQuality ||
-        p.Usage!=D3D11_USAGE_DEFAULT || p.CpuAccessFlags || p.TextureLayout!=D3D11_TEXTURE_LAYOUT_UNDEFINED ||
-        (p.BindFlags&~UINT(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS)) ||
-        (p.MiscFlags&~UINT(D3D11_RESOURCE_MISC_GENERATE_MIPS|D3D11_RESOURCE_MISC_RESOURCE_CLAMP))) return E_INVALIDARG;
-    // The row the creator took the LB7A format and pitch from; its pixel size bounds the geometry.
-    const auto *row=runtime_surface_format(DXGI_FORMAT(p.Format));
-    if (!row) return E_NOTIMPL;
-    if (row->d3dddi!=m.Format || !runtime_surface_geometry(m,row->bytes_per_pixel)) return E_INVALIDARG;
-    D3D11_TEXTURE2D_DESC1 d{p.Width,p.Height,p.MipLevels,p.ArraySize,DXGI_FORMAT(p.Format),
-        {p.SampleCount,p.SampleQuality},D3D11_USAGE(p.Usage),p.BindFlags,p.CpuAccessFlags,p.MiscFlags,D3D11_TEXTURE_LAYOUT(p.TextureLayout)};
+    if (!a.hAllocation) return E_INVALIDARG;
+    BC250_SHARED_SURFACE_ADMIT admit{};
+    admit.RequireShared=0;
+    admit.AccessMask=BC250_SURFACE_RESOURCE_ACCESS_MASK;
+    BC250_SHARED_SURFACE surface{};
+    switch (Bc250SharedSurfaceDecodeAdmitted(input.pPrivateDriverData,input.PrivateDriverDataSize,
+                                             a.pPrivateDriverData,a.PrivateDriverDataSize,&admit,&surface)) {
+    case BC250_SHARED_SURFACE_OK: break;
+    case BC250_SHARED_SURFACE_FORMAT: return E_NOTIMPL;
+    default: return E_INVALIDARG;
+    }
+    BC250_WDDM_ALLOCATION_PRIVATE m{BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,surface.Width,surface.Height,
+        surface.Pitch,surface.D3dDdiFormat,surface.Size};
+    D3D11_TEXTURE2D_DESC1 d{surface.Width,surface.Height,1,1,DXGI_FORMAT(surface.DxgiFormat),{1,0},
+        D3D11_USAGE_DEFAULT,surface.BindFlags,0,surface.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
     metadata=m; desc=d; return S_OK;
 }
 namespace {

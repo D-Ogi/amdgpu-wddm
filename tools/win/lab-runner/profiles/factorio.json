@@ -50,12 +50,12 @@
     "proposal": "not applicable: a D3D11 game never loads the D3D12 shell, so HKLM\\SOFTWARE\\amdgpu-wddm\\D3D12\\Applications has no effect on it."
   },
   "app_router": {
-    "required": "Factorio.exe on the Allow list in Mode allowlist (HKLM\\SOFTWARE\\amdgpu-wddm\\AppRouter); otherwise the router keeps it on the CPU UMD and the session refuses before the launch",
+    "required": "Factorio.exe has to reach the application GPU UMD. The release default AppRouter Mode gpu-default (since b19) does that with no Allow entry; the runtime refuses the session otherwise",
     "check": "python scratch/m15/app-route/approute.py status --no-mappers",
-    "add": "python scratch/m15/app-route/approute.py policy allowlist --allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe,Factorio.exe",
-    "remove": "python scratch/m15/app-route/approute.py policy allowlist --allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe",
+    "add": "",
+    "remove": "",
     "kill_switch": "python scratch/m15/app-route/approute.py policy cpu",
-    "rules": "--allow replaces the whole list: name every current entry (the four of STATE.md since 04:47Z; check first). The router decides at the process's OpenAdapter, so the policy is set before the session and removed after the game has ended."
+    "rules": "Under gpu-default nothing is set before or after a session. Only a lab left in Mode allowlist needs the game in Allow; check first, and put the release default back with the installer's values, not with an old root."
   },
   "session": {"default_seconds": 900, "entry": "run-game.sh N factorio [SECONDS]"},
   "notes": [

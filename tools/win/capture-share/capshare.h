@@ -44,6 +44,10 @@ struct Options {
     DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM;
     std::wstring adapter = L"auto", peerExe;
     bool syncFence = false, kmt = false, simultaneous = false, skipWait = false;
+    // BD-075 round 2, the keyed-mutex handover discriminator: the creator waits for its own GPU work on the CPU
+    // before it releases a key. km12to11 reads poison where the CPU-synchronised s12to11 passes, and that wait is
+    // the one difference between the two protocols. A pass with this flag is a measurement, not a fix.
+    bool creatorFinish = false;
     unsigned delayCopies = 128, delaySize = 2048, gateMs = 300;
     bool producerGdi = false;
     int x = INT_MIN, y = INT_MIN, tolerance = 0;
@@ -115,7 +119,12 @@ void VerdictFail(char side, const std::string &stage, const std::string &call, H
 void VerdictTimeout(char side, const std::string &stage, const std::string &note = "-");
 void VerdictCheck(char side, const Check &c);
 void VerdictGate(const std::string &what, bool held, const std::string &detail);
+// A cell this pair of routes cannot measure at all: result=skip, exit code 5, and the reason on the line. Not a
+// pass and not a failure. BD-075 round 2: a --sync fence shared cell whose D3D11 side runs on the CPU UMD scored
+// three content mismatches that were the harness asking for an ordering no CPU copy can have.
+void VerdictSkip(const std::string &stage, const std::string &reason);
 void VerdictRoute(char side, const std::string &route, const std::string &fl);
+void VerdictCellEnded();                         // the cell's own work is over; fixes decided_ms for a pass
 void VerdictNote(const std::string &key, const std::string &value);
 void VerdictRemoved(char side, HRESULT removed); // note removed_A or removed_B, unless removed == S_OK
 bool VerdictFailed();

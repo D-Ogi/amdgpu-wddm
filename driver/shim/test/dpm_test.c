@@ -9,6 +9,7 @@
 #include <string.h>
 #include "bc250_dpm.h"
 #include "smu_v11_8_ppsmc.h"
+#include "dpm_test_traces.h"
 
 static int checks, failures;
 #define CHECK(x) do { checks++; if (!(x)) { failures++; printf("FAIL line %d: %s\n", __LINE__, #x); } } while (0)
@@ -19,6 +20,21 @@ static int checks, failures;
  * BC250_DPM_IDLE_LEVEL). Up to 0.7.204 the lab floor was index 0 and these tests wrote the index
  * itself; L() keeps every expectation below written in the same numbers. */
 #define L(n) ((unsigned int)((int)BC250_DPM_FLOOR_LEVEL + (n)))
+
+/* A governor with the thermal rules of 0.7.212: the hot cap at 87 C alone, no soft zone, no lead, no soft release.
+ * Every case written before 0.7.213 asserts that governor and starts from here, so that the hot cap, the release, the
+ * warm zone, the ramp and the sub-floor keep being tested on their own; test_zone covers the new default, which is the
+ * zone on (bc250_dpm_tune_default). The 3000 ms soft step is the 0.7.212 default of that field: the release is off, so
+ * it only has to stay inside its range, but a case that turns the release on by hand gets the old timing. */
+static void init_old(struct bc250_dpm_governor *g, unsigned int max_level)
+{
+	struct bc250_dpm_tune t;
+	bc250_dpm_init(g, max_level);
+	t = g->tune;
+	bc250_dpm_tune_zone_off(&t);
+	t.soft_step_ms = 3000u;
+	CHECK(bc250_dpm_set_tune(g, &t) == BC250_DPM_TUNE_OK);
+}
 
 /* ---- the table ---------------------------------------------------------------------------------- */
 
@@ -69,8 +85,18 @@ static void test_table(void)
 		CHECK(bc250_clock_min_mv(p->mhz) == p->mv);
 		CHECK(bc250_clock_point_allowed(p->mhz, p->mv));
 		CHECK(bc250_clock_point_allowed(p->mhz, BC250_CLOCK_CEILING_MV));
-		CHECK(!bc250_clock_point_allowed(p->mhz, p->mv - 1u));
 		CHECK(!bc250_clock_point_allowed(p->mhz, BC250_CLOCK_CEILING_MV + 1u));
+		/* The undervolt band of 0.7.210: from the lab floor up, a point may stand BC250_CURVE_UNDERVOLT_MV
+		 * under the table's line but never under BC250_CLOCK_FLOOR_MV, and the floor itself and every point
+		 * below it have nothing left to give. */
+		CHECK(bc250_clock_floor_mv(p->mhz) ==
+		      (i <= BC250_DPM_FLOOR_LEVEL ? BC250_CLOCK_FLOOR_MV
+						  : (p->mv > BC250_CLOCK_FLOOR_MV + BC250_CURVE_UNDERVOLT_MV
+						     ? p->mv - BC250_CURVE_UNDERVOLT_MV : BC250_CLOCK_FLOOR_MV)));
+		CHECK(bc250_clock_point_allowed(p->mhz, bc250_clock_floor_mv(p->mhz)));
+		CHECK(!bc250_clock_point_allowed(p->mhz, bc250_clock_floor_mv(p->mhz) - 1u));
+		if (i <= BC250_DPM_FLOOR_LEVEL) CHECK(!bc250_clock_point_allowed(p->mhz, p->mv - 1u));
+		else CHECK(bc250_clock_point_allowed(p->mhz, p->mv - 1u));
 	}
 	/* The shape of the table is checked at compile time (dpm_table_is_16_levels below). */
 	CHECK(bc250_dpm_level_mhz(BC250_DPM_THERMAL_FLOOR_LEVEL) == 800u);
@@ -429,7 +455,7 @@ static void test_thermal(void)
 	/* The limits themselves are checked at compile time (dpm_hot_is_87c and the two after it). */
 
 	/* Under full load at the top, 85 C (the old limit) and 86.999 C do nothing thermal. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
 	CHECK(run(&g, 1000, 85, 25) == L(10));
 	CHECK(run_mc(&g, 1000, 86999, 25) == L(10));
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.thermal_events == 0 && g.thermal_cap == L(10) && g.warm_holds == 0);
@@ -460,7 +486,7 @@ static void test_thermal(void)
 
 	/* 90 C: the thermal floor at once (800 MHz since 0.7.205), whatever the load; recovery goes through
 	 * release, step by step. 89.999 C is hot, not critical. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
 	CHECK(run_mc(&g, 1000, 89999, 25) == L(9) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	CHECK(run(&g, 1000, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD && g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
@@ -472,7 +498,7 @@ static void test_thermal(void)
 
 	/* 87 C at the lab floor: the hot step goes under it, one level per hot step, down to 800 MHz and no
 	 * further (0.7.205; before it the cap stopped at 1000 MHz). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 87000, 25) == L(-1) && g.thermal_cap == L(-1));
 	CHECK(bc250_dpm_level_mhz(L(-1)) == 900u && bc250_dpm_level_mv(L(-1)) == 820u);
 	for (i = 1; i < BC250_DPM_HOT_STEP_MS / 25u; i++) CHECK(run(&g, 1000, 89, 25) == L(-1));
@@ -482,13 +508,13 @@ static void test_thermal(void)
 	CHECK(g.want == L(0));		/* the load never asks below the lab floor */
 
 	/* No reading is treated as critical. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(7);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(7);
 	in = tick(1000, 60, 25); in.temperature_valid = 0;
 	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
 	CHECK(level == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 
 	/* Thermal wins over a max setting, the max setting over the load. */
-	bc250_dpm_init(&g, L(6));
+	init_old(&g, L(6));
 	for (i = 0; i < 10; i++) level = run(&g, 1000, 60, 25);
 	CHECK(level == L(6) && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
 	CHECK(run(&g, 1000, 87, 25) == L(5) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
@@ -566,7 +592,10 @@ static struct bc250_dpm_tune tune(unsigned int up, unsigned int target, unsigned
 				  unsigned int floor_level)
 {
 	struct bc250_dpm_tune t;
-	bc250_dpm_tune_default(&t);	/* the thermal timing at its defaults */
+	bc250_dpm_tune_default(&t);
+	/* The thermal timing at its defaults, with the soft zone of 0.7.213 off: every case that builds a tune this way
+	 * was written for the 0.7.212 thermal rules and asserts the clock they give. test_zone builds its own. */
+	bc250_dpm_tune_zone_off(&t);
 	t.up_permille = up;
 	t.target_permille = target;
 	t.down_permille = down;
@@ -607,6 +636,185 @@ static int ref_raise(const struct bc250_dpm_tune *t)
 	return 1;
 }
 
+/* ---- the operator's V/F curve and its trial (0.7.210) ------------------------------------------- */
+
+/* The default curve is the table's own line, so a start that nobody tuned behaves exactly as 0.7.207 did; a
+ * candidate is checked whole, and a trial ends by itself. */
+static void test_curve(void)
+{
+	struct bc250_clock_curve line, c;
+	struct bc250_dpm_curve_state s;
+	unsigned int i, level = 99u;
+
+	bc250_clock_curve_default(&line);
+	for (i = 0; i < BC250_CURVE_POINTS; i++)
+		CHECK(line.mv[i] == bc250_clock_points[BC250_CURVE_FIRST_LEVEL + i].mv);
+	CHECK(bc250_clock_curve_is_default(&line));
+	CHECK(bc250_clock_curve_check(&line, &level) == BC250_CLOCK_CURVE_OK);
+	/* Below the first level the curve has no say: the table's own voltage, as every point under the lab floor
+	 * is the floor's 820 mV. Above the table the last point answers, as bc250_dpm_level_mhz does. */
+	for (i = 0; i < BC250_CLOCK_LEVELS; i++)
+		CHECK(bc250_clock_curve_mv(&line, i) == bc250_clock_points[i].mv);
+	CHECK(bc250_clock_curve_mv(&line, 99u) == bc250_clock_points[BC250_CLOCK_LEVELS - 1].mv);
+	CHECK(bc250_clock_curve_checksum(&line) == bc250_clock_curve_checksum(&line));
+
+	/* A real undervolt: every editable point at its own floor. It passes, and it is not the default. */
+	c = line;
+	for (i = 0; i < BC250_CURVE_POINTS; i++)
+		c.mv[i] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + i));
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(!bc250_clock_curve_is_default(&c));
+	CHECK(bc250_clock_curve_checksum(&c) != bc250_clock_curve_checksum(&line));
+	CHECK(c.mv[0] == BC250_CLOCK_FLOOR_MV);
+
+	/* Every refusal, one at a time, with the level it happened at. */
+	c = line; c.mv[0] = BC250_CLOCK_FLOOR_MV + 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_FLOOR && level == BC250_CURVE_FIRST_LEVEL);
+	c = line; c.mv[0] = BC250_CLOCK_FLOOR_MV - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) != BC250_CLOCK_CURVE_OK);
+	c = line; c.mv[BC250_CURVE_POINTS - 1] = BC250_CLOCK_CEILING_MV + 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_RANGE &&
+	      level == BC250_CLOCK_LEVELS - 1u);
+	c = line; c.mv[BC250_CURVE_POINTS - 1] = BC250_CLOCK_FLOOR_MV - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_RANGE);
+	/* Deeper than the band admits at that clock. */
+	c = line; c.mv[5] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + 5u)) - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_DEPTH &&
+	      level == BC250_CURVE_FIRST_LEVEL + 5u);
+	/* A falling voltage with a rising clock: the one shape the governor's own transitions could not carry. */
+	c = line; c.mv[3] = c.mv[2] - 1u;
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_ORDER &&
+	      level == BC250_CURVE_FIRST_LEVEL + 3u);
+	CHECK(bc250_clock_curve_check(NULL, &level) == BC250_CLOCK_CURVE_NULL);
+	/* A flat step is legal: two neighbours at the same voltage is what the table itself does below the floor,
+	 * and an operator who flattens the top of the line is not asking for anything new. */
+	c = line; c.mv[BC250_CURVE_POINTS - 2] = c.mv[BC250_CURVE_POINTS - 1];
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_OK);
+	/* The whole line at the lab point is not a curve, it is a 155 mV undervolt at 2000 MHz: the band refuses it
+	 * at the first level where the line is further away than BC250_CURVE_UNDERVOLT_MV. */
+	c = line;
+	for (i = 1; i < BC250_CURVE_POINTS; i++) c.mv[i] = c.mv[0];
+	CHECK(bc250_clock_curve_check(&c, &level) == BC250_CLOCK_CURVE_DEPTH);
+	CHECK(level > BC250_CURVE_FIRST_LEVEL && level <= BC250_DPM_TOP_LEVEL);
+
+	/* The trial's whole life. Nothing here writes to disk: that is the caller's, and only on a keep. */
+	bc250_dpm_curve_init(&s, NULL);
+	CHECK(bc250_clock_curve_is_default(&s.stored) && bc250_clock_curve_is_default(&s.active));
+	CHECK(!s.trial && !s.apply && s.serial == 0 && bc250_dpm_curve_remaining_ms(&s) == 0);
+	CHECK(bc250_dpm_curve_level_mv(&s, BC250_CURVE_FIRST_LEVEL) == BC250_CLOCK_FLOOR_MV);
+	CHECK(bc250_dpm_curve_level_vid(&s, BC250_CURVE_FIRST_LEVEL) == bc250_clock_vid(BC250_CLOCK_FLOOR_MV));
+	/* Nothing on trial: a keep and a cancel both have nothing to do, and neither invents a change. 0 means
+	 * "no trial", which the caller shows differently from -1, "not applied yet" (0.7.211). */
+	CHECK(bc250_dpm_curve_keep(&s) == 0 && !bc250_dpm_curve_cancel(&s) && s.serial == 0);
+	CHECK(!bc250_dpm_curve_reset(&s) && s.serial == 0);
+
+	/* A candidate: active at once, a window of its own, and one forced re-apply owed to the governor. */
+	c = line;
+	for (i = 0; i < BC250_CURVE_POINTS; i++)
+		c.mv[i] = bc250_clock_floor_mv(bc250_dpm_level_mhz(BC250_CURVE_FIRST_LEVEL + i));
+	CHECK(bc250_dpm_curve_set(&s, &c, 20000u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial && s.serial == 1 && s.sets == 1 && s.trial_ms == 20000u);
+	CHECK(bc250_dpm_curve_remaining_ms(&s) == 20000u);
+	CHECK(bc250_dpm_curve_level_mv(&s, BC250_DPM_TOP_LEVEL) == c.mv[BC250_CURVE_POINTS - 1]);
+	/* Under the lab floor the candidate changes nothing at all. */
+	CHECK(bc250_dpm_curve_level_mv(&s, BC250_DPM_IDLE_LEVEL) == BC250_CLOCK_FLOOR_MV);
+	/* take() says the governor owes a re-apply; it does NOT say the hardware has the curve. Only a
+	 * transaction that went through records that, which is what a KEEP is then allowed to rely on. */
+	CHECK(bc250_dpm_curve_take(&s) && s.applied != s.serial);
+	CHECK(!bc250_dpm_curve_take(&s));               /* once per change, not once per tick */
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(s.applied == s.serial);
+	/* A serial that is not the current one is ignored, so a candidate nobody applied cannot count as
+	 * applied because a later apply of an older one happened to land. */
+	bc250_dpm_curve_applied(&s, s.serial + 7u);
+	CHECK(s.applied == s.serial);
+	/* The window runs out and the stored curve comes back by itself, with a re-apply owed again. */
+	for (i = 0; i < 19u; i++) CHECK(!bc250_dpm_curve_tick(&s, 1000u));
+	CHECK(bc250_dpm_curve_remaining_ms(&s) == 1000u);
+	CHECK(bc250_dpm_curve_tick(&s, 1000u));
+	CHECK(!s.trial && s.reverts == 1 && s.serial == 2 && bc250_clock_curve_is_default(&s.active));
+	CHECK(bc250_dpm_curve_take(&s));
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(s.applied == 2u);
+	CHECK(!bc250_dpm_curve_tick(&s, 100000u));      /* no window, no revert, no serial */
+	CHECK(s.serial == 2u);
+
+	/* A keep inside the window: the candidate becomes the stored curve and the hardware needs nothing. The
+	 * candidate must have run first (0.7.211): a KEEP in the same governor tick as the SET, and a KEEP after
+	 * an apply the clock gate refused, both answer -1 and store nothing. */
+	CHECK(bc250_dpm_curve_set(&s, &c, 0u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MIN_MS);      /* 0 is clamped up, not taken literally */
+	CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial && s.keeps == 0);   /* nothing applied, no time passed */
+	CHECK(bc250_dpm_curve_take(&s));
+	CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial);        /* the apply has not gone through yet */
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial);        /* applied, but inside one governor tick */
+	CHECK(!bc250_dpm_curve_tick(&s, BC250_DPM_CURVE_KEEP_MIN_MS));
+	CHECK(bc250_dpm_curve_keep(&s) == 1 && !s.trial && s.keeps == 1);
+	CHECK(!bc250_dpm_curve_take(&s));               /* a keep changes no voltage: nothing to re-apply */
+	for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.stored.mv[i] == c.mv[i] && s.active.mv[i] == c.mv[i]);
+	CHECK(!bc250_clock_curve_is_default(&s.stored));
+	CHECK(!bc250_dpm_curve_tick(&s, 1000000u));     /* a kept curve has no deadline */
+
+	/* A second trial on top of a kept curve, then a cancel: the revert target is the kept curve and never
+	 * the first candidate. */
+	{
+		struct bc250_clock_curve deeper = line;
+		unsigned int serial = s.serial;
+		deeper.mv[BC250_CURVE_POINTS - 1] = BC250_CLOCK_CEILING_MV - 1u;
+		CHECK(bc250_dpm_curve_set(&s, &line, 30000u, &level) == BC250_CLOCK_CURVE_OK);
+		CHECK(s.serial == serial + 1u && s.trial);
+		CHECK(bc250_dpm_curve_set(&s, &deeper, 30000u, &level) == BC250_CLOCK_CURVE_OK);
+		CHECK(s.serial == serial + 2u && s.trial_ms == 30000u && bc250_dpm_curve_remaining_ms(&s) == 30000u);
+		/* The second candidate was never applied, so a KEEP here would store a curve the hardware never
+		 * carried: that is refused, and the cancel is the way out. */
+		CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial);
+		CHECK(bc250_dpm_curve_cancel(&s) && s.cancels == 1);
+		for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.active.mv[i] == c.mv[i]);
+		CHECK(bc250_dpm_curve_take(&s));
+		bc250_dpm_curve_applied(&s, s.serial);
+	}
+	/* The apply the clock gate refused: the governor takes the re-apply, the transaction fails, so nothing
+	 * records the serial and the KEEP stays refused however long the window runs (0.7.211). */
+	{
+		unsigned int serial;
+		CHECK(bc250_dpm_curve_set(&s, &line, 30000u, &level) == BC250_CLOCK_CURVE_OK);
+		serial = s.serial;
+		CHECK(bc250_dpm_curve_take(&s));        /* the caller tried and the hardware refused */
+		CHECK(!bc250_dpm_curve_tick(&s, 5000u));
+		CHECK(bc250_dpm_curve_keep(&s) == -1 && s.trial && s.applied != serial);
+		CHECK(bc250_dpm_curve_cancel(&s));
+		CHECK(bc250_dpm_curve_take(&s));
+		bc250_dpm_curve_applied(&s, s.serial);
+	}
+	/* A candidate the checks refuse never becomes active and never moves the serial. */
+	{
+		struct bc250_clock_curve bad = c;
+		unsigned int serial = s.serial;
+		bad.mv[0] = BC250_CLOCK_FLOOR_MV + 10u;
+		CHECK(bc250_dpm_curve_set(&s, &bad, 20000u, &level) == BC250_CLOCK_CURVE_FLOOR);
+		CHECK(s.serial == serial && !s.trial && s.active.mv[0] == c.mv[0]);
+	}
+	/* The window is bounded at both ends, whatever a caller asks for. */
+	CHECK(bc250_dpm_curve_set(&s, &line, 1u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MIN_MS);
+	CHECK(bc250_dpm_curve_set(&s, &line, 10u * 60u * 1000u, &level) == BC250_CLOCK_CURVE_OK);
+	CHECK(s.trial_ms == BC250_DPM_CURVE_TRIAL_MAX_MS);
+	/* The reset ends a trial too, and leaves the table's own line stored. */
+	CHECK(bc250_dpm_curve_reset(&s));
+	CHECK(!s.trial && bc250_clock_curve_is_default(&s.stored) && bc250_clock_curve_is_default(&s.active));
+	CHECK(bc250_dpm_curve_take(&s));
+	bc250_dpm_curve_applied(&s, s.serial);
+	CHECK(!bc250_dpm_curve_reset(&s));              /* already the line: nothing to change, nothing to apply */
+
+	/* A start that reads a stored curve runs it from its first level change, with nothing owed. */
+	bc250_dpm_curve_init(&s, &c);
+	for (i = 0; i < BC250_CURVE_POINTS; i++) CHECK(s.active.mv[i] == c.mv[i] && s.stored.mv[i] == c.mv[i]);
+	CHECK(!s.apply && !s.trial && s.serial == 0);
+	CHECK(bc250_dpm_curve_level_vid(&s, BC250_DPM_TOP_LEVEL) ==
+	      bc250_clock_vid(c.mv[BC250_CURVE_POINTS - 1]));
+}
+
 static void test_tune_check(void)
 {
 	struct bc250_dpm_tune t, d;
@@ -616,7 +824,11 @@ static void test_tune_check(void)
 	bc250_dpm_tune_default(&d);
 	CHECK(d.up_permille == 900u && d.target_permille == 800u && d.down_permille == 650u && d.down_hold_ms == 200u &&
 	      d.floor_level == L(0));
-	CHECK(d.hot_step_ms == 500u && d.soft_delta_mc == 0u && d.soft_step_ms == 3000u);
+	/* 0.7.213: the soft release is on by default, 4.0 C under HOT_MC (83.0 C) with a 4 s step, and it is the up side
+	 * of the soft zone, whose threshold is 1.0 C under HOT_MC (86.0 C) with a 1.5 s step and a 15 s lead. */
+	CHECK(d.hot_step_ms == 500u && d.soft_delta_mc == 4000u && d.soft_step_ms == 4000u);
+	CHECK(d.zone_delta_mc == 1000u && d.zone_step_ms == 1500u && d.zone_lead_ms == 15000u);
+	CHECK(bc250_dpm_zone_mc(&d) == 86000 && bc250_dpm_warm_mc(&d) == 83000);
 	CHECK(bc250_dpm_tune_check(&d, BC250_DPM_TOP_LEVEL) == BC250_DPM_TUNE_OK);
 	CHECK(bc250_dpm_tune_check(&d, L(0)) == BC250_DPM_TUNE_OK);        /* a fixed-lab ceiling: no runtime floor is fine */
 	CHECK(ref_lowering(&d) == 1 && ref_raise(&d) == 1);
@@ -661,10 +873,12 @@ static void test_tune_check(void)
 	t = d; t.hot_step_ms = 10000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	t = d; t.hot_step_ms = 10001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	t = d; t.hot_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	/* The soft delta's own range, with the zone off so that the deadband rule is not what answers (it has its own
+	 * cases below): 0 is the release off, then 500..4500 mC. */
+	t = d; bc250_dpm_tune_zone_off(&t); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	t = d; t.soft_delta_mc = 1; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	t = d; t.soft_delta_mc = 499; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
-	t = d; t.soft_delta_mc = 500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.soft_delta_mc = 500; t.zone_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	t = d; t.soft_delta_mc = 4500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	t = d; t.soft_delta_mc = 4501; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	t = d; t.soft_delta_mc = 0x80000000u; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
@@ -673,8 +887,36 @@ static void test_tune_check(void)
 	t = d; t.soft_step_ms = 30000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	t = d; t.soft_step_ms = 30001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	/* The soft step is checked while the release is off, so that turning it on later is the delta alone. */
-	t = d; t.soft_delta_mc = 0; t.soft_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
+	t = d; bc250_dpm_tune_zone_off(&t); t.soft_step_ms = 0;
+	CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
 	/* The soft threshold stays strictly inside RELEASE..HOT at both edges of the delta (compile time below). */
+
+	/* The soft zone (0.7.213), each field at both edges and one past each, and the deadband. */
+	t = d; t.zone_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);   /* the zone off */
+	t = d; t.zone_delta_mc = 499; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	t = d; t.zone_delta_mc = 500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.zone_delta_mc = 3500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.zone_delta_mc = 4000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE); /* no deadband */
+	t = d; t.zone_delta_mc = 4001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE); /* past the max */
+	t = d; t.zone_delta_mc = 0x80000000u; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	t = d; t.zone_step_ms = 249; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	t = d; t.zone_step_ms = 250; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.zone_step_ms = 30000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.zone_step_ms = 30001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	/* The zone's step and lead are checked while the zone is off, so that turning it on is the delta alone. */
+	t = d; t.zone_delta_mc = 0; t.zone_step_ms = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	t = d; t.zone_lead_ms = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);     /* the lead off */
+	t = d; t.zone_lead_ms = 60000; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	t = d; t.zone_lead_ms = 60001; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	/* A zone with no soft release above it would have a way down and no way back up until RELEASE_MC: refused by the
+	 * same inequality, and the deadband at its exact edge. */
+	t = d; t.soft_delta_mc = 0; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	t = d; t.zone_delta_mc = 1000; t.soft_delta_mc = 1499; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_ZONE);
+	t = d; t.zone_delta_mc = 1000; t.soft_delta_mc = 1500; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
+	/* bc250_dpm_tune_zone_off is the 0.7.212 rules and must be admitted whatever else a tune holds. */
+	t = d; bc250_dpm_tune_zone_off(&t);
+	CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK && bc250_dpm_zone_mc(&t) == 0 &&
+	      bc250_dpm_warm_mc(&t) == BC250_DPM_WARM_MC && t.soft_delta_mc == 0u);
 
 	/* set_tune: a refused tune leaves the governor's as it was, an admitted one replaces it. */
 	bc250_dpm_init(&g, L(6));
@@ -783,7 +1025,7 @@ static void test_floor(void)
 	unsigned int i, level;
 
 	/* Floor 2000 at idle: the first tick goes there, want stays the load's (the floor). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	t = tune(900, 800, 650, 200, L(10));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	CHECK(run(&g, 0, 60, 25) == L(10));
@@ -827,7 +1069,7 @@ static void test_floor(void)
 	CHECK(level == L(0));
 
 	/* A floor in the middle: the load still raises above it, lowerings stop at it. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	t = tune(900, 800, 650, 200, L(5));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	CHECK(run(&g, 0, 60, 25) == L(5));
@@ -836,7 +1078,7 @@ static void test_floor(void)
 	CHECK(level == L(5) && g.want <= L(5));
 
 	/* The max setting: a floor above it is refused; one written past the check is clamped, never above the ceiling. */
-	bc250_dpm_init(&g, L(6));
+	init_old(&g, L(6));
 	t = tune(900, 800, 650, 200, L(10));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == L(0));
 	t.floor_level = L(6);
@@ -850,7 +1092,7 @@ static void test_floor(void)
 	CHECK(run(&g, 0, 87, 25) == L(5) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 
 	/* Tuned thresholds act: up 750 raises where 900 would not; down 500 holds where 650 would lower. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run(&g, 800, 60, 25) == L(0));
 	t = tune(750, 650, 500, 200, L(0));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
@@ -875,17 +1117,17 @@ static void test_warm(void)
 	unsigned int i, level;
 
 	/* Full load at 1500 MHz at 85.0 C and 86.999 C: the raise goes, one level (the ramp), no warm hold, no hot entry. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
 	CHECK(run_mc(&g, 1000, 85000, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 0);
 	CHECK(g.want == L(9) && g.raises == 1);		/* want stays the load's own answer */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
 	CHECK(run_mc(&g, 1000, 86999, 25) == L(6) && g.warm_holds == 0 && g.thermal_events == 0);
 	/* Held at 86 C, the clock climbs one level per ramp interval (3.82 s at 86 C) up to the top, no thermal event. */
 	for (i = 0; i < 20000u / 25u; i++) level = run_mc(&g, 1000, 86000, 25);
 	CHECK(level == L(10) && g.warm_holds == 0 && g.thermal_events == 0 && g.raises == 5);
 
 	/* 87 C is HOT: one step down at once, as before; the warm rule counts nothing, the cap holds the level. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
 	CHECK(run_mc(&g, 1000, 87000, 25) == L(9) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	CHECK(g.thermal_events == 1 && g.thermal_cap == L(9) && g.warm_holds == 0);
 	/* Still at 87 C or more: one more level per hot step, never a raise. */
@@ -903,7 +1145,7 @@ static void test_warm(void)
 	/* The backstop: the load lowered the clock under the hot cap inside a hot episode, then asks again at 87.5 C. The cap
 	 * would allow it; the warm rule holds the level (before 0.7.204 the step asked for it and the clock gate refused it,
 	 * "refused by the clock gate" in the driver log). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
 	CHECK(run_mc(&g, 1000, 87000, 25) == L(9) && g.thermal_cap == L(9));
 	g.avg_permille = 0;
 	for (i = 1; i < BC250_DPM_DOWN_HOLD_MS / 25u; i++) CHECK(run_mc(&g, 0, 87500, 25) == L(9));
@@ -911,13 +1153,13 @@ static void test_warm(void)
 	CHECK(run_mc(&g, 1000, 87500, 25) == L(8) && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
 
 	/* A lowering still happens at 85-86.999 C, after the same hold as at 60 C, one step at a time. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(8);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(8);
 	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 85000, 25) == L(8));
 	CHECK(run_mc(&g, 0, 86999, 25) == L(7) && g.lowers == 1 && g.warm_holds == 0);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* The runtime floor is a raise too: one level at 86.5 C, none at 87 C (the hot cap). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(3);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(3);
 	t = tune(900, 800, 650, 200, L(10));
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	CHECK(run_mc(&g, 0, 86500, 25) == L(4) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.warm_holds == 0);
@@ -925,25 +1167,28 @@ static void test_warm(void)
 	CHECK(run_mc(&g, 0, 60000, 25) == L(3));	/* one tick under 82 C releases nothing */
 
 	/* At the max setting there is nothing to refuse: the setting names the reason. */
-	bc250_dpm_init(&g, L(6)); g.level = L(6);
+	init_old(&g, L(6)); g.level = L(6);
 	CHECK(run_mc(&g, 1000, 86000, 25) == L(6) && g.throttle == BC250_DPM_THROTTLE_MAX_SETTING && g.warm_holds == 0);
 
 	/* SetStablePowerState and a missing sensor go to the floor, never a hold. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.stable = 1;
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.stable = 1;
 	CHECK(run_mc(&g, 1000, 87000, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_STABLE && g.warm_holds == 0);
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
 	in = tick(1000, 0, 25); in.temperature_mc = 87000; in.temperature_valid = 0;
 	CHECK(bc250_dpm_step(&g, &in) == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR && g.warm_holds == 0);
 }
 
 /* ---- the thermal timing (0.7.197, BD-055) ------------------------------------------------------- */
 
-/* A governor at the top under full load with a thermal tune; the tune must be admitted. */
+/* A governor at the top under full load with a thermal tune; the tune must be admitted. The soft zone of 0.7.213 is off
+ * here: these cases are about the hot cap's timing and the soft release on their own, and a zone at 86 C would take the
+ * cap down before either of them acted. */
 static void init_thermal(struct bc250_dpm_governor *g, unsigned int hot_step, unsigned int soft_delta, unsigned int soft_step)
 {
 	struct bc250_dpm_tune t;
-	bc250_dpm_init(g, BC250_DPM_TOP_LEVEL);
+	init_old(g, BC250_DPM_TOP_LEVEL);
 	bc250_dpm_tune_default(&t);
+	bc250_dpm_tune_zone_off(&t);
 	t.hot_step_ms = hot_step;
 	t.soft_delta_mc = soft_delta;
 	t.soft_step_ms = soft_step;
@@ -1070,10 +1315,10 @@ static void test_soft_release(void)
 	CHECK(level == L(9) && g.thermal_cap == L(9) && g.soft_releases == 1 && g.warm_holds == 0);
 	/* Critical goes to the floor; the soft release brings it back, a level per step, never past the setting. The clock
 	 * follows each raised cap within a ramp interval (3.65 s at 85 C). */
-	bc250_dpm_init(&g, L(6));
+	init_old(&g, L(6));
 	{
 		struct bc250_dpm_tune t;
-		bc250_dpm_tune_default(&t); t.soft_delta_mc = 1500;
+		bc250_dpm_tune_default(&t); bc250_dpm_tune_zone_off(&t); t.soft_delta_mc = 1500;
 		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 	}
 	CHECK(run(&g, 1000, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
@@ -1166,6 +1411,688 @@ static void test_plant(void)
 	CHECK(slow.min_cap_gap_ms >= 2000u);
 }
 
+/* ---- the soft thermal zone (0.7.213, BD-087, GRAPH.md C56) --------------------------------------- */
+
+/* The rules, one at a time, on the defaults of bc250_dpm_tune_default: the zone's threshold and step, the hold band
+ * between the zone and the soft release, the release, the lead, and the two backstops that keep reading the raw
+ * sensor. The plant below then runs the whole thing against session 436. */
+static void test_zone(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, level, first;
+	int mc;
+
+	/* The thresholds the defaults put in force: 86.0 C for the zone, 83.0 C for the cap's and the clock's up side. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_zone_mc(&g.tune) == BC250_DPM_HOT_MC - 1000 && bc250_dpm_zone_mc(&g.tune) == 86000);
+	CHECK(bc250_dpm_warm_mc(&g.tune) == BC250_DPM_HOT_MC - 4000 && bc250_dpm_warm_mc(&g.tune) == 83000);
+
+	/* A steady 85.999 C is under the zone, and a steady reading has no slope, so there is no lead either: nothing
+	 * thermal happens at all, three degrees under the hot cap's own limit. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	for (i = 0; i < 400u; i++) CHECK(run_mc(&g, 1000, 85999, 25) == BC250_DPM_TOP_LEVEL);
+	CHECK(g.thermal_cap == BC250_DPM_TOP_LEVEL && g.zone_steps == 0 && g.zone_ticks == 0);
+	CHECK(g.zone_lead_mc == 0 && !g.hot && g.thermal_events == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* 86.0 C: the cap comes down to the clock the GPU is running at in that tick (which lowers nothing yet), then one
+	 * level per zone step. The governor is not hot: the hot cap has not been reached. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	CHECK(run_mc(&g, 1000, 86000, 25) == BC250_DPM_TOP_LEVEL && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+	CHECK(g.zone_ticks == 1 && g.zone_steps == 0 && !g.hot && g.thermal_events == 0);
+	for (i = 2; i <= BC250_DPM_ZONE_STEP_MS / 25u; i++) CHECK(run_mc(&g, 1000, 86000, 25) == BC250_DPM_TOP_LEVEL);
+	CHECK(run_mc(&g, 1000, 86000, 25) == BC250_DPM_TOP_LEVEL - 1u && g.zone_steps == 1);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_ZONE && g.thermal_cap == BC250_DPM_TOP_LEVEL - 1u);
+	/* Down to the thermal floor (800 MHz) and no further, one level per zone step, still without going hot. */
+	for (i = 0; i < 20u * BC250_DPM_ZONE_STEP_MS / 25u; i++) level = run_mc(&g, 1000, 86000, 25);
+	CHECK(level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(g.zone_steps == BC250_DPM_TOP_LEVEL - BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(!g.hot && g.thermal_events == 0 && g.throttle == BC250_DPM_THROTTLE_THERMAL_ZONE);
+
+	/* The band between the two thresholds, 83.0 to 85.999 C: the cap holds. No step down (the zone is above it) and
+	 * no raise (the soft release is below it), however long the die stays there. */
+	for (i = 0; i < 10u * BC250_DPM_SOFT_STEP_MS / 25u; i++)
+		CHECK(run_mc(&g, 1000, 85999, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	for (i = 0; i < 10u * BC250_DPM_SOFT_STEP_MS / 25u; i++)
+		CHECK(run_mc(&g, 1000, 83000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL && g.soft_releases == 0 && g.zone_steps ==
+	      BC250_DPM_TOP_LEVEL - BC250_DPM_THERMAL_FLOOR_LEVEL);
+
+	/* 82.999 C: the soft release, one level per soft step. The clock follows the cap at the ramp's pace. */
+	for (i = 1; i < BC250_DPM_SOFT_STEP_MS / 25u; i++)
+		CHECK(run_mc(&g, 1000, 82999, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
+	CHECK(run_mc(&g, 1000, 82999, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL + 1u && g.soft_releases == 1);
+	/* Below RELEASE_MC the cap rises per release step instead; under the ramp's knee the clock follows at once, and
+	 * the cap goes back to the ceiling. */
+	for (i = 0; i < 20u * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run_mc(&g, 1000, 65000, 25);
+	CHECK(level == BC250_DPM_TOP_LEVEL && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* No raise of the clock from the soft-release threshold up (bc250_dpm_warm_mc): the clock's up side and the cap's
+	 * are the same temperature, so a released cap is never followed into the zone. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(0);
+	CHECK(run_mc(&g, 1000, 83000, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM && g.warm_holds == 1);
+	CHECK(run_mc(&g, 1000, 82999, 25) == L(1) && g.warm_holds == 1);
+
+	/* The lead, which is where the whole gain of the search sits (BC250_DPM_ZONE_LEAD_MS and the comment there).
+	 * A whole slope window has to pass before there is a slope at all. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	mc = 60000;
+	for (i = 0; i < (BC250_DPM_ZONE_SLOPE_SLOTS - 1u) * BC250_DPM_ZONE_SLOPE_SLOT_MS / 25u; i++, mc += 5) {
+		run_mc(&g, 1000, mc, 25);
+		CHECK(g.zone_lead_mc == 0 && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+	}
+	/* Then it is the fitted rise of that window scaled to BC250_DPM_ZONE_LEAD_MS, and never more than
+	 * BC250_DPM_ZONE_LEAD_MAX_MC. 5 mC a 25 ms tick is 0.2 C/s, which extrapolates to 0.2 x 15 = 3.0 C, so what this
+	 * ramp reports is the cap (0.7.213 safety review, finding 4: the recorded sessions' own noise reached 7.8 C of
+	 * lead on a die that was going nowhere, and no estimator over a 5 s window can tell the two apart). */
+	for (i = 0; i < 400u; i++, mc += 5) run_mc(&g, 1000, mc, 25);
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.zone_lead_ok);
+
+	/* So on that ramp the zone acts while the sensor still reads two degrees under its threshold, and the cap is what
+	 * makes that bound provable: the zone can never engage below zone_mc minus the cap, a raw 84.0 C by default. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	mc = 80000;
+	first = 0;
+	for (i = 0; i < 1000u; i++, mc += 5) {
+		run_mc(&g, 1000, mc, 25);
+		if (!first && g.zone_ticks) first = (unsigned int)mc;
+	}
+	CHECK(first >= 83950u && first <= 84100u);
+	CHECK(first >= (unsigned int)(BC250_DPM_HOT_MC - (int)BC250_DPM_ZONE_DELTA_MC - BC250_DPM_ZONE_LEAD_MAX_MC));
+	CHECK(!g.hot && g.thermal_events == 0 && g.zone_steps > 0 && g.thermal_cap < BC250_DPM_TOP_LEVEL);
+
+	/* The two backstops keep reading the raw sensor, so a lead can never invent a hot or a critical episode. A die
+	 * rising 2.68 C/s would extrapolate to some 40 C of lead and reports the cap; at 86.8 C the governor is still only
+	 * in the zone. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	mc = 60000;
+	for (i = 0; i < 400u; i++, mc += 67) run_mc(&g, 1000, mc, 25);
+	CHECK(mc - 67 == 86733 && g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC);
+	CHECK(!g.hot && g.thermal_events == 0 && g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL);
+	/* 87.0 C on the sensor itself is the hot cap, as it always was. */
+	CHECK(run_mc(&g, 1000, 87000, 25) <= g.thermal_cap && g.hot && g.thermal_events == 1);
+
+	/* A falling die is read at its present temperature: no lead, so nothing the zone does depends on a guess about a
+	 * die that is already on its way down. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	mc = 86500;
+	for (i = 0; i < 400u; i++, mc -= 20) {
+		run_mc(&g, 1000, mc, 25);
+		CHECK(g.zone_lead_mc == 0);
+	}
+
+	/* A tick whose dt_ms had to be clamped empties the ring: the governor's own clock advanced by the clamp and not by
+	 * the time that really passed, so every age in it is wrong (test_zone_stall has the case the review found). A tick
+	 * that only brings no reading keeps the window and skips its slot (test_zone_sensor_gap). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	mc = 60000;
+	for (i = 0; i < 400u; i++, mc += 5) run_mc(&g, 1000, mc, 25);
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.slope_count == BC250_DPM_ZONE_SLOPE_SLOTS);
+	{
+		struct bc250_dpm_input in = tick(1000, 0, 25 + BC250_DPM_MAX_DT_MS);
+		in.temperature_mc = mc;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		CHECK(g.slope_count == 0);
+	}
+	for (i = 0; i < (BC250_DPM_ZONE_SLOPE_SLOTS - 1u) * BC250_DPM_ZONE_SLOPE_SLOT_MS / 25u; i++, mc += 5) {
+		run_mc(&g, 1000, mc, 25);
+		CHECK(g.zone_lead_mc == 0);
+	}
+	for (i = 0; i < 40u; i++, mc += 5) run_mc(&g, 1000, mc, 25);
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC);
+
+	/* The off switch (DpmThermalZone 0, bc250_dpm_tune_zone_off) is 0.7.212 exactly: a die climbing from 80 C to
+	 * 86 C moves nothing at all, which is the behaviour BD-087 is about. */
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = BC250_DPM_TOP_LEVEL;
+	mc = 80000;
+	for (i = 0; i < 1200u; i++, mc += 5) run_mc(&g, 1000, mc, 25);
+	CHECK(mc == 86000 && g.zone_ticks == 0 && g.zone_steps == 0 && g.zone_lead_mc == 0);
+	CHECK(g.thermal_cap == BC250_DPM_TOP_LEVEL && g.soft_releases == 0 && g.thermal_events == 0);
+}
+
+/* The die model fitted to the recorded lab sessions (P:\BC-250\scratch\thermal-zone\model, fit.json "primary"):
+ *
+ *	dTj/dt = P - B (Tj - Tamb),   P = kdyn busy (f/1000) (mv/820)^2 + kf (f/1000) + dist
+ *
+ *	P += kcpu	while a game runs
+ *
+ * B = 0.0394934 (a 25.3 s time constant), kdyn = 0.37745, kf = 0.0240122, kcpu = 0.16834, Tamb pinned at 40 C, and
+ * dist everything else unmeasured, 1.3256 tu at the median of the recorded game sessions. Power is in thermal units:
+ * 1 tu raises the die 1 C/s with no heat leaving it, and the smart plug puts 1 tu at about 130 W at the wall. Replaying
+ * each session's own clock reproduces its Tctl to 0.13-0.23 C rms. The model's steady points under a running game are
+ * the whole problem in three numbers: 1500 MHz at 95 % busy settles at 95.8 C, 1000 MHz at 87.5 C, and 800 MHz - the
+ * cap's own bottom - at 85.6 C. So the clock that holds this part is 800 MHz, and the only question is whether the die
+ * passes 87 C on the way there.
+ *
+ * Session 436 is the case of BD-087: RotTR's benchmark at a 1500 MHz ceiling read 80.2 C at the start, 84.0 C at
+ * 1200 MHz 32 s later and 88.8 C at 800 MHz 31 s after that, and the lab runner ended the game (Tctl >= 87 C held
+ * 10 s). The governor was stepping the clock down the whole time; the die was one time constant behind it. Busy is
+ * flat at 95 % whatever the clock, which is what the recorded sessions show (median busy 0.93-0.97 at every clock from
+ * 800 to 1500 MHz): these games are GPU bound and render more frames at a higher clock instead of idling more.
+ */
+#define ZONE_PLANT_B		0.0394934
+#define ZONE_PLANT_KDYN		0.37745
+#define ZONE_PLANT_KF		0.0240122
+#define ZONE_PLANT_KCPU		0.16834
+#define ZONE_PLANT_DIST		1.3256		/* the median of the recorded game sessions */
+/* The arm calibrated to 436's own outcome. The sessions' disturbance spreads from 1.173 tu (p10) to 1.443 (p90), and
+ * 436 ran at the hot end of it: this value puts the steady point at the cap's own bottom, 800 MHz, at 86.4 C, which is
+ * what the session showed - it was at 800 MHz and still over 87 C. It is the one arm on which the 0.7.212 rules meet the
+ * lab runner's stop, so it is the one that reproduces the defect. */
+#define ZONE_PLANT_DIST_436	1.3581
+#define ZONE_PLANT_TAMB		40.0
+
+struct zone_result {
+	unsigned int peak_mc, hold87_ms, sec87_ms, mean_mhz, final_mhz, changes, zone_steps, hot_entries;
+	int stop;			/* the lab runner's rule: 87 C held 10 s, or 89 C at once */
+};
+
+/* 436's shape under one set of rules: the governor at a 1500 MHz ceiling, 95 % busy, for three minutes of 25 ms ticks.
+ * Two starts matter and they say different things.
+ *   at_ceiling      the state 436 was in when the benchmark began: 80.2 C with the clock already at 1500 MHz, which is
+ *                   where the 0.7.212 rules leave a part, because nothing under 87 C refuses a raise. The die holds
+ *                   heat that has not arrived yet, so this arm asks what a governor can still save after the fact.
+ *   from the floor  where a game really starts, and the only fair A/B: both sets of rules see the same die and raise
+ *                   the clock under their own rules. */
+#define ZONE_RULES_OLD		0	/* 0.7.212: the hot cap at 87 C alone */
+#define ZONE_RULES_ZONE		1	/* 0.7.213 as shipped: the zone with its lead */
+#define ZONE_RULES_NO_LEAD	2	/* the same thresholds with the lead off: a plain 86 C threshold */
+
+static struct zone_result zone_plant(int rules, int start_mc, int at_ceiling, double dist, unsigned int seconds)
+{
+	struct bc250_dpm_governor g;
+	struct zone_result r;
+	double die = start_mc / 1000.0;
+	unsigned long long mhz_sum = 0;
+	unsigned int i, last, hot_run_ms = 0;
+	const unsigned int ticks = seconds * 1000u / 25u, ceiling = (unsigned int)bc250_dpm_level_of(1500);
+
+	memset(&r, 0, sizeof(r));
+	if (rules == ZONE_RULES_OLD) init_old(&g, ceiling);
+	else bc250_dpm_init(&g, ceiling);
+	if (rules == ZONE_RULES_NO_LEAD) {
+		struct bc250_dpm_tune t = g.tune;
+		t.zone_lead_ms = 0;
+		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	}
+	if (at_ceiling) g.level = ceiling;	/* 436's own state: the 0.7.212 rules had already raised the clock this far */
+	last = g.level;
+	for (i = 0; i < ticks; i++) {
+		unsigned int mhz = bc250_dpm_level_mhz(g.level);
+		double v = bc250_dpm_level_mv(g.level) / 820.0;
+		double p = ZONE_PLANT_KDYN * 0.95 * (mhz / 1000.0) * v * v + ZONE_PLANT_KF * (mhz / 1000.0) +
+			   ZONE_PLANT_KCPU + dist;
+		int sensor;
+		die += (p - ZONE_PLANT_B * (die - ZONE_PLANT_TAMB)) * 0.025;
+		sensor = (int)(die * 1000.0);
+		if (sensor > (int)r.peak_mc) r.peak_mc = (unsigned int)sensor;
+		if (sensor >= 87000) {
+			r.sec87_ms += 25u;
+			hot_run_ms += 25u;
+			if (hot_run_ms > r.hold87_ms) r.hold87_ms = hot_run_ms;
+		} else hot_run_ms = 0;
+		if (sensor >= 89000 || hot_run_ms >= 10000u) r.stop = 1;
+		run_mc(&g, 950, sensor, 25);
+		if (g.level != last) { r.changes++; last = g.level; }
+		mhz_sum += bc250_dpm_level_mhz(g.level);
+	}
+	r.mean_mhz = (unsigned int)(mhz_sum / ticks);
+	r.final_mhz = bc250_dpm_level_mhz(g.level);
+	r.zone_steps = g.zone_steps;
+	r.hot_entries = g.thermal_events;
+	return r;
+}
+
+static void zone_print(const char *name, const struct zone_result *r)
+{
+	printf("zone436 %-14s peak %u mC, %u ms >= 87 C (longest %u ms), runner %-4s mean %u MHz (final %u), "
+	       "%u level changes, %u zone steps, %u hot entries\n", name, r->peak_mc, r->sec87_ms, r->hold87_ms,
+	       r->stop ? "STOP" : "ok", r->mean_mhz, r->final_mhz, r->changes, r->zone_steps, r->hot_entries);
+}
+
+static void test_zone436(void)
+{
+	struct zone_result old = zone_plant(ZONE_RULES_OLD, 80200, 1, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result now = zone_plant(ZONE_RULES_ZONE, 80200, 1, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result cold_old = zone_plant(ZONE_RULES_OLD, 70000, 0, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result cold_now = zone_plant(ZONE_RULES_ZONE, 70000, 0, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result flat = zone_plant(ZONE_RULES_NO_LEAD, 70000, 0, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result med_old = zone_plant(ZONE_RULES_OLD, 70000, 0, ZONE_PLANT_DIST, 180u);
+	struct zone_result med_now = zone_plant(ZONE_RULES_ZONE, 70000, 0, ZONE_PLANT_DIST, 180u);
+	zone_print("436 state, 0.7.212", &old);
+	zone_print("436 state, zone", &now);
+	zone_print("from floor, 0.7.212", &cold_old);
+	zone_print("from floor, zone", &cold_now);
+	zone_print("from floor, lead off", &flat);
+	zone_print("median, 0.7.212", &med_old);
+	zone_print("median, zone", &med_now);
+
+	/* What BD-087 reported: with the hot cap as the only rule the die goes past 87 C and the runner ends the game. It
+	 * happens from either start, because the rule is the same in both - nothing under 87 C refuses a raise, so the clock
+	 * is already at the ceiling by the time the die is anywhere near the limit. */
+	CHECK(old.peak_mc >= 87000u && old.stop);
+	CHECK(cold_old.peak_mc >= 87000u && cold_old.stop);
+	/* With the zone, from the start a game really has: the cap comes down before the die arrives, so 87 C is never
+	 * reached at all and the hot cap behind it never fires once. */
+	CHECK(cold_now.peak_mc < 87000u && !cold_now.stop && cold_now.sec87_ms == 0u && cold_now.hold87_ms == 0u);
+	CHECK(cold_now.zone_steps > 0 && cold_now.hot_entries == 0);
+	/* From 436's own state the heat is already in the die and no governor can take it back out: the zone does not keep
+	 * the reading under 87 C there. What it does is keep the excursion short enough that the runner does not end the
+	 * game, which is the difference between a benchmark that finishes and one that does not. */
+	CHECK(!now.stop && now.hold87_ms < 10000u && now.peak_mc < old.peak_mc && now.sec87_ms * 2u < old.sec87_ms);
+	/* And it does not pay for it in clock: the cap stops where the die balances (800 MHz on this plant), which is where
+	 * the hot cap ends up anyway after the overshoot that costs the game. */
+	CHECK(now.mean_mhz >= 800u && now.final_mhz >= 800u && cold_now.mean_mhz >= 800u);
+	CHECK(cold_now.mean_mhz * 10u >= cold_old.mean_mhz * 9u);
+	/* At the sessions' median disturbance the 0.7.212 rules do not quite meet the stop rule, and they still park the die
+	 * above 87 C for seconds at a time - the state the shipped governor was measured in on every sustained load. The zone
+	 * keeps the same final clock and never reaches 87 C at all. */
+	CHECK(med_old.sec87_ms >= 5000u && med_now.sec87_ms == 0u && med_now.peak_mc < 87000u);
+	CHECK(med_now.final_mhz == med_old.final_mhz);
+	/* It is the lead that does this and not the threshold, which is the one finding of the search worth carrying: the
+	 * same thresholds with the lead off are a plain 86 C threshold, and a plain threshold on a die 25 s behind the clock
+	 * still reaches 87 C. Over the 21 recorded sessions the same comparison was peak 86.71 C and no second at or above
+	 * 87 C with the lead, against 87.58 C and 47.5 s without it. */
+	CHECK(flat.peak_mc > cold_now.peak_mc && flat.sec87_ms > cold_now.sec87_ms);
+}
+
+/* ---- the soft zone after the safety review (0.7.213) --------------------------------------------- */
+
+/* One tick with the GPU doing work: the zone's gate (zone_may_act) only acts while something is on the ring or the
+ * engines, so every case that is about the zone under load has to say so. tick() leaves the ring empty, which is an
+ * idle GPU. */
+static unsigned int run_busy_mc(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt)
+{
+	struct bc250_dpm_input in = tick(busy, 0, dt);
+	unsigned int level;
+	in.temperature_mc = temp_mc;
+	in.ring_busy = 1;
+	level = bc250_dpm_step(g, &in);
+	CHECK(level <= g->max_level && level <= g->thermal_cap);
+	CHECK(g->thermal_cap >= cap_bottom(g));
+	CHECK(g->zone_lead_mc <= BC250_DPM_ZONE_LEAD_MAX_MC);
+	bc250_dpm_commit(g, level);
+	return level;
+}
+
+/* A load lull inside the zone (0.7.213 safety review, finding 1). The GPU still has work outstanding, the die holds
+ * 86.2 C, and the load's own answer falls to the lab floor because the frames stopped: a loading screen. The cap has to
+ * follow the die at its own pace and never the load. The reviewed code wrote the clamp every tick, so cur took the cap
+ * from 1500 to 1000 MHz in one tick and the next three seconds took it to 800, where it stayed for the rest of the
+ * session - nothing between the soft-release threshold and the zone's own raises the cap again. */
+static void test_zone_dip(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, steps;
+
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(5);					/* 1500 MHz, a game start's ceiling on the lab */
+	g.thermal_cap = L(5);
+	for (i = 0; i < 40u; i++) CHECK(run_busy_mc(&g, 950, 85500, 25) == L(5));
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == L(5));
+
+	/* Ten seconds of the lull. The load takes the clock to the lab floor within a second, the zone takes the cap down
+	 * one level per zone step from the cap it had, and the two are independent. */
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 10, 86200, 25);
+	steps = 10000u / BC250_DPM_ZONE_STEP_MS;
+	CHECK(g.zone_steps == steps && g.thermal_cap == L(5) - steps);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_ZONE && !g.hot && g.thermal_events == 0);
+	/* The clamp of the entry is all cur ever gave the cap, and that clamp lowered nothing: the cap was at the clock. */
+	CHECK(g.want == BC250_DPM_FLOOR_LEVEL && g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL);
+
+	/* Full load returns and the die, at the lower clock, settles at 84.0 C: the hold band. The cap holds there - no
+	 * step down (the zone is above it) and no raise (the soft release is below it) - and the clock follows the cap. */
+	for (i = 0; i < 2400u; i++) run_busy_mc(&g, 950, 84000, 25);
+	CHECK(g.zone_steps == steps && g.thermal_cap == L(5) - steps && g.soft_releases == 0);
+	/* And the episode is still open at 84.0 C, so a return to 86.2 C steps the cap instead of clamping it to the
+	 * clock the lull left. */
+	CHECK(g.zone == 1);
+	for (i = 0; i < 60u; i++) run_busy_mc(&g, 950, 86200, 25);
+	CHECK(g.zone_steps == steps + 1u && g.thermal_cap == L(5) - steps - 1u);
+	/* Under the soft-release threshold the episode ends and the cap rises again, one level per soft step. */
+	for (i = 0; i < 4u * BC250_DPM_SOFT_STEP_MS / 25u; i++) run_busy_mc(&g, 950, 82900, 25);
+	CHECK(g.zone == 0 && g.soft_releases >= 3u && g.thermal_cap > L(5) - steps);
+}
+
+/* An idle GPU on a die the CPU is holding at 86.0 C (0.7.213 safety review, finding 2). The zone has nothing to take
+ * out of it: the clock is at the idle point, a cap stepped down to 800 MHz lowers nothing, and the cap would then stay
+ * there until the die fell under 83 C, so the first work of the next burst would run at 800 MHz. The reviewed code
+ * pinned the cap at the thermal floor here, in a steady state, with no GPU load at all. */
+static void test_zone_idle(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i;
+
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	g.level = L(5);
+	g.thermal_cap = L(5);
+	for (i = 0; i < 4000u; i++) run_mc(&g, 0, 86000, 25);		/* 100 s, the ring empty, 0 permille busy */
+	/* Not one step, and not one in the first three seconds either: the quiet timer starts saturated, so a governor
+	 * that has seen no work has no window at all (test_zone_quiet_gate has that case on its own). */
+	CHECK(g.idle == 1 && g.zone_steps == 0 && g.zone_ticks == 0 && g.thermal_cap == L(5));
+	CHECK(g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL && g.zone_idle_holds > 3000u);
+	CHECK(bc250_dpm_level_mhz(g.level) == 500u && g.throttle == BC250_DPM_THROTTLE_IDLE);
+	/* Work comes back while the die is still at 86 C. The clock leaves the idle point for the lab floor and no raise
+	 * above it is admitted anyway, which is why refusing to act above cost nothing. */
+	for (i = 0; i < 40u; i++) run_busy_mc(&g, 1000, 86000, 25);
+	CHECK(g.level == BC250_DPM_FLOOR_LEVEL && g.thermal_cap >= L(0));
+
+	/* The same with the idle state off for this start (DpmIdleMHz 0): the gate is the quiet window itself, not the
+	 * state, so a start that never configured the idle point is covered too. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(5);
+	g.thermal_cap = L(5);
+	for (i = 0; i < 4000u; i++) run_mc(&g, 0, 86000, 25);
+	CHECK(g.idle == 0 && g.zone_steps == 0 && g.zone_ticks == 0 && g.thermal_cap == L(5));
+	CHECK(g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL);
+}
+
+/* The same idle GPU on a die the CPU is warming at 0.5 C/s, the shape the recorded sessions show while a game loads.
+ * The lead is real here, so the reviewed code entered the zone early, collapsed the cap to 800 MHz and reported a
+ * throttle at a raw reading in the seventies. */
+static void test_zone_idle_rise(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i;
+	int mc = 60000;
+
+	/* The ceiling of a game start on the lab, so that the cool half of the ramp has no cap to raise: what this case
+	 * watches is the cap coming down, and the release rule's way up is test_zone's business. */
+	bc250_dpm_init(&g, L(5));
+	(void)bc250_dpm_idle_config(&g, 500, 3000, 2);
+	g.level = L(5);
+	g.thermal_cap = L(5);
+	for (i = 0; i < 2000u; i++, mc += 13) {				/* 50 s, 60.0 to 86.0 C */
+		run_mc(&g, 0, mc, 25);
+		CHECK(g.thermal_cap > BC250_DPM_THERMAL_FLOOR_LEVEL);
+	}
+	CHECK(g.idle == 1 && bc250_dpm_level_mhz(g.level) == 500u);
+	CHECK(g.zone_steps == 0 && g.thermal_cap == L(5));
+	/* And the zone did meet its threshold on the way: 86.0 C with the lead at its cap is 84.0 C of sensor, so the
+	 * last two degrees of the ramp are ticks the zone would have acted on. */
+	CHECK(g.zone_idle_holds > 0u && g.zone_ticks == 0u);
+}
+
+/* The two edges of the zone's work gate: the governor's first ticks, and the far side of a tick whose dt_ms had to be
+ * clamped (0.7.213 safety review, second round). A quiet timer counted from zero read "work just now" in both
+ * places, so the zone acted on a GPU that nobody had given work to - the symptom of finding 2 by another path. On a die
+ * the CPU holds at 86 C the start window took a level off the cap, and with the clock DpmResyncLevel reads from an idle
+ * SMU (500 MHz, under the thermal floor) the entry clamp took the cap straight to 800 MHz and held it there through the
+ * whole 83 to 86 C band. A 60 s stall with no work bought the same credit again. */
+static void test_zone_quiet_gate(void)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int ceiling = (unsigned int)bc250_dpm_level_of(1500);
+	unsigned int i, cap0;
+
+	/* A hot die at the first tick this governor ever takes, with no work on either engine. */
+	bc250_dpm_init(&g, ceiling);
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	CHECK(g.zone_quiet_ms >= BC250_DPM_ZONE_QUIET_MS);	/* no tick yet, so no work yet */
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);	/* 5 s at 86.0 C: twice the quiet window */
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == ceiling && g.zone_idle_holds > 0u);
+	for (i = 0; i < 2400u; i++) run_mc(&g, 0, 84000, 25);	/* and a minute in the hold band changes nothing */
+	CHECK(g.thermal_cap == ceiling);
+	/* So the first burst of work runs at the lab floor, which is what the die at 86 C admits, and not under it. */
+	for (i = 0; i < 40u; i++) run_busy_mc(&g, 1000, 84000, 25);
+	CHECK(g.level == BC250_DPM_FLOOR_LEVEL && g.thermal_cap == ceiling && g.zone_quiet_ms == 0);
+
+	/* The worst case of the same window: DpmResyncLevel read 500 MHz from the SMU, so cur is under the thermal floor
+	 * and an entry clamp to the running clock would take the cap to the thermal floor in one tick. */
+	bc250_dpm_init(&g, ceiling);
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	g.level = 0u;						/* what DpmResyncLevel writes after reading 500 MHz */
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == ceiling);
+	for (i = 0; i < 2400u; i++) run_mc(&g, 0, 84000, 25);
+	for (i = 0; i < 40u; i++) run_busy_mc(&g, 1000, 84000, 25);
+	CHECK(g.level == BC250_DPM_FLOOR_LEVEL && g.thermal_cap == ceiling);
+
+	/* A stall of a minute in which the GPU had no work: the clamped tick counts as a whole quiet window, not as the
+	 * clamp, so the far side of it is no window for the zone either. */
+	bc250_dpm_init(&g, ceiling);
+	g.level = ceiling;
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 70000, 25);
+	CHECK(g.zone_quiet_ms == 0);
+	cap0 = g.thermal_cap;
+	{
+		struct bc250_dpm_input in = tick(0, 0, 60000);	/* one clamped tick, 60 s, nothing on either engine */
+		in.temperature_mc = 86000;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+	}
+	CHECK(g.zone_quiet_ms >= BC250_DPM_ZONE_QUIET_MS && g.zone_ticks == 0);
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == cap0);
+
+	/* Work in the stalled tick itself still says the GPU is busy: the gate is about work, not about the stall. */
+	bc250_dpm_init(&g, ceiling);
+	g.level = ceiling;
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 70000, 25);
+	{
+		struct bc250_dpm_input in = tick(1000, 0, 60000);
+		in.temperature_mc = 86000;
+		in.ring_busy = 1;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+	}
+	CHECK(g.zone_quiet_ms == 0 && g.zone_ticks == 1u && g.zone == 1);
+}
+
+/* A tick whose dt_ms had to be clamped (0.7.213 safety review, finding 3). The governor's own clock advances by
+ * BC250_DPM_MAX_DT_MS while the die moved on for 30 s, so every age in the ring is short and a slope taken from it is
+ * several times the real one: the reviewed code reported a lead of 48 C and put a 78 C die in the zone. */
+static void test_zone_stall(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i;
+	int mc = 60000;
+
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	for (i = 0; i < 400u; i++, mc += 5) run_busy_mc(&g, 1000, mc, 25);	/* a full, honest window at 0.2 C/s */
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.slope_count == BC250_DPM_ZONE_SLOPE_SLOTS);
+	{
+		/* The stalled tick itself reads the window it has, which is the pre-stall slope and nothing to do with the
+		 * 30 s: the fit takes the ring's own readings and times, never this tick's reading against a stale slot. */
+		struct bc250_dpm_input in = tick(1000, 0, 30000);
+		in.temperature_mc = 78000;
+		in.ring_busy = 1;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		CHECK(g.zone_lead_mc <= BC250_DPM_ZONE_LEAD_MAX_MC && g.zone_ticks == 0 && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+		CHECK(g.slope_count == 0 && !g.zone);			/* and the ring is empty afterwards */
+	}
+	/* No lead at all until a whole fresh window has been measured, so the stall cannot leave an inflated one behind. */
+	for (i = 0; i < (BC250_DPM_ZONE_SLOPE_SLOTS - 1u) * BC250_DPM_ZONE_SLOPE_SLOT_MS / 25u; i++) {
+		run_busy_mc(&g, 1000, 78000, 25);
+		CHECK(g.zone_lead_mc == 0 && g.zone_ticks == 0 && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+	}
+	CHECK(g.zone_lead_gaps > 0u);
+
+	/* The same stall with the GPU quiet and the cap under the ceiling, which is where the review found it: a quiet,
+	 * slowly warming machine, one 30 s stall, and a 78 C die must not be throttled by either rule. */
+	bc250_dpm_init(&g, (unsigned int)bc250_dpm_level_of(1500));
+	(void)bc250_dpm_idle_config(&g, 500, 3000, 2);
+	g.level = (unsigned int)bc250_dpm_level_of(1500);
+	g.thermal_cap = (unsigned int)bc250_dpm_level_of(1500);
+	mc = 60000;
+	for (i = 0; i < 600u; i++, mc += 5) run_mc(&g, 0, mc, 25);
+	{
+		struct bc250_dpm_input in = tick(0, 0, 30000);
+		in.temperature_mc = 78000;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+	}
+	for (i = 0; i < 400u; i++) run_mc(&g, 0, 78000, 25);
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == (unsigned int)bc250_dpm_level_of(1500));
+}
+
+/* The lead's deadband and its cap (0.7.213 safety review, finding 4), and the noise they exist for. */
+static void test_zone_lead_bound(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i;
+	int mc, dir = 1;
+
+	/* A die rising at 2.68 C/s would extrapolate to some 40 C of lead. The cap holds it at 2.0 C, so the zone's
+	 * threshold can never come down by more than that from a raw reading. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	mc = 60000;
+	for (i = 0; i < 300u; i++, mc += 67) run_busy_mc(&g, 1000, mc, 25);
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.zone_lead_ok);
+
+	/* A die rising under the deadband (0.04 C/s over the window) carries no lead at all: a trend that small is the
+	 * sensor's own 0.1 C grid, not a die on its way to 87 C. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	mc = 80000;
+	for (i = 0; i < 2000u; i++) {
+		if (i % 50u == 0u) mc += 1;				/* 0.8 mC/s: far under the deadband */
+		run_busy_mc(&g, 1000, mc, 25);
+		CHECK(g.zone_lead_mc == 0);
+	}
+	CHECK(g.zone_lead_ok && g.zone_ticks == 0 && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+
+	/* A flat die whose reading jitters by the sensor's own grid, slot by slot: no lead, so no zone two degrees under
+	 * the threshold. The two-point estimator the review measured reported up to 7.8 C here. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	for (i = 0; i < 4000u; i++) {
+		if (i % 10u == 0u) dir = -dir;
+		run_busy_mc(&g, 1000, 84000 + (dir > 0 ? 100 : -100), 25);
+		CHECK(g.zone_lead_mc == 0);
+	}
+	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == BC250_DPM_TOP_LEVEL);
+}
+
+/* A reading that fails now and then (0.7.213 safety review, finding 6). The reviewed code emptied the ring on every
+ * failed SmuReadTemperature, so one failure disabled the lead for a whole 5 s window and a failure every 5 s disabled
+ * it for good, with nothing in the log but a lead of 0 - which the header itself says means 47.5 s at or above 87 C. */
+static void test_zone_sensor_gap(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, gaps;
+	int mc = 60000;
+
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	for (i = 0; i < 400u; i++, mc += 5) run_busy_mc(&g, 1000, mc, 25);
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.slope_count == BC250_DPM_ZONE_SLOPE_SLOTS);
+	gaps = g.zone_lead_gaps;
+	{
+		/* One failed reading: the slot is skipped, the window stays, and the tick itself reads the raw sensor
+		 * (which is the floor rule's own business, not the lead's). */
+		struct bc250_dpm_input in = tick(1000, 0, 25);
+		in.temperature_valid = 0;
+		in.ring_busy = 1;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		CHECK(g.slope_count == BC250_DPM_ZONE_SLOPE_SLOTS && g.throttle == BC250_DPM_THROTTLE_SENSOR);
+	}
+	mc += 5;
+	run_busy_mc(&g, 1000, mc, 25);
+	/* The failed tick itself counts as a gap - it had no reading, so it had no lead - and the next one has the window
+	 * back, which is the whole difference from the reviewed code. */
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.zone_lead_ok && g.zone_lead_gaps == gaps + 1u);
+
+	/* A reading that fails for longer than the ring may span: the lead reports unavailable instead of quietly
+	 * extrapolating from readings nobody has refreshed, and the log can count those ticks. */
+	for (i = 0; i < BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS / 25u + 40u; i++) {
+		struct bc250_dpm_input in = tick(1000, 0, 25);
+		in.temperature_valid = 0;
+		in.ring_busy = 1;
+		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+	}
+	mc += 5;
+	run_busy_mc(&g, 1000, mc, 25);
+	CHECK(!g.zone_lead_ok && g.zone_lead_mc == 0 && g.zone_lead_gaps > gaps + 1u);
+	/* And a fresh window brings it back. */
+	for (i = 0; i < 400u; i++, mc += 5) run_busy_mc(&g, 1000, mc, 25);
+	CHECK(g.zone_lead_mc == BC250_DPM_ZONE_LEAD_MAX_MC && g.zone_lead_ok);
+}
+
+/* The 87 C backstop is never delayed by a zone step (0.7.213 safety review, finding 7). The zone used to reset cap_ms,
+ * which is what the hot entry measures its own first step from, so a zone step 100 ms before the die crossed 87 C
+ * deferred that step by a whole hot step. */
+static void test_zone_backstop_timing(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, cap_after_zone;
+
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	/* In the zone long enough for a step, with the step as recent as a tick. */
+	for (i = 0; i < BC250_DPM_ZONE_STEP_MS / 25u + 1u; i++) run_busy_mc(&g, 1000, 86000, 25);
+	CHECK(g.zone_steps == 1 && g.zone == 1);
+	cap_after_zone = g.thermal_cap;
+	CHECK(g.cap_ms >= BC250_DPM_HOT_STEP_MS);	/* the zone left the hot step's own timer alone */
+	/* 87.0 C on the sensor: the hot entry steps at once, in the same tick, not a hot step later. */
+	run_busy_mc(&g, 1000, 87000, 25);
+	CHECK(g.hot && g.thermal_events == 1 && g.thermal_cap == cap_after_zone - 1u);
+}
+
+/* The recorded sessions themselves, replayed through the governor (0.7.213 safety review, finding 4). Each sample is
+ * held for 40 ticks of 25 ms, which is how the driver sees a 1 s telemetry sample, so the ring carries the sensor's own
+ * noise. Open loop: the clock is pinned, because what these cases check is where the zone engages and not where the
+ * clock ends up - the closed loop is test_zone436 and the harness in scratch/thermal-zone/review-dpm.
+ *
+ * The requirement of the review: on the recorded readings the zone never engages below a raw 84.0 C. The reviewed code
+ * engaged at 74.8 to 82.9 C on these same traces, on noise alone. */
+static void zone_replay(const char *name, const short *deci, unsigned int n, unsigned int *ticks, int *lowest)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int ceiling = (unsigned int)bc250_dpm_level_of(1500);
+	unsigned int i, j;
+
+	*lowest = 1000000;
+	bc250_dpm_init(&g, ceiling);
+	g.level = ceiling;
+	g.thermal_cap = ceiling;
+	for (i = 0; i < n; i++) {
+		int mc = deci[i] * 100;
+		for (j = 0; j < 40u; j++) {
+			struct bc250_dpm_input in = tick(950, 0, 25);
+			unsigned int before = g.zone_ticks;
+			in.temperature_mc = mc;
+			in.ring_busy = 1;
+			(void)bc250_dpm_step(&g, &in);
+			bc250_dpm_commit(&g, ceiling);		/* open loop: hold the clock at the ceiling */
+			CHECK(g.zone_lead_mc <= BC250_DPM_ZONE_LEAD_MAX_MC);
+			if (g.zone_ticks > before && mc < *lowest) *lowest = mc;
+		}
+	}
+	*ticks = g.zone_ticks;
+	printf("zone replay %-16s %4u samples, %6u zone ticks, %u steps, lowest raw reading in the zone %d mC\n",
+	       name, n, g.zone_ticks, g.zone_steps, g.zone_ticks ? *lowest : 0);
+}
+
+static void test_zone_traces(void)
+{
+	unsigned int ticks;
+	int lowest;
+	const int bound = BC250_DPM_HOT_MC - (int)BC250_DPM_ZONE_DELTA_MC - BC250_DPM_ZONE_LEAD_MAX_MC;
+
+	CHECK(bound == 84000);		/* the review's requirement, as the three constants put it */
+
+	/* 436, the session of BD-087: the zone does engage, and not one tick of it under the bound. */
+	zone_replay("436", zone_trace_436, (unsigned int)(sizeof(zone_trace_436) / sizeof(zone_trace_436[0])),
+		    &ticks, &lowest);
+	CHECK(ticks > 0u && lowest >= bound);
+
+	/* The four longest segments of recorded readings that go nowhere, from the sessions whose two-point lead was the
+	 * largest. The warm, noisy ones must not engage under the bound; the cool one must not engage at all. */
+	zone_replay("430 flat", zone_flat_430, (unsigned int)(sizeof(zone_flat_430) / sizeof(zone_flat_430[0])),
+		    &ticks, &lowest);
+	CHECK(!ticks || lowest >= bound);
+	zone_replay("418 flat", zone_flat_418, (unsigned int)(sizeof(zone_flat_418) / sizeof(zone_flat_418[0])),
+		    &ticks, &lowest);
+	CHECK(!ticks || lowest >= bound);
+	zone_replay("412 flat", zone_flat_412, (unsigned int)(sizeof(zone_flat_412) / sizeof(zone_flat_412[0])),
+		    &ticks, &lowest);
+	CHECK(!ticks || lowest >= bound);
+	zone_replay("436 cool", zone_flat_436, (unsigned int)(sizeof(zone_flat_436) / sizeof(zone_flat_436[0])),
+		    &ticks, &lowest);
+	CHECK(ticks == 0u);
+}
+
 /* ---- the thermal ramp (0.7.203, session 367) ----------------------------------------------------- */
 
 /* One step of the governor before 0.7.203, for the A/B below. The ramp is the step's last transform, it only lowers the
@@ -1198,12 +2125,12 @@ static void test_ramp(void)
 	for (i = 70000; i < 87000; i += 7) CHECK(bc250_dpm_ramp_interval_ms((int)i) <= bc250_dpm_ramp_interval_ms((int)i + 7));
 
 	/* Below the knee the load raises as before: 1000 -> 1300 -> 1700 -> 2000 in three ticks at 69.999 C. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 69999, 25) == L(3) && run_mc(&g, 1000, 69999, 25) == L(7) && run_mc(&g, 1000, 69999, 25) == L(10));
 	CHECK(g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* At the knee: the first raise (none before) goes one level, the next waits a full interval. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 70000, 25) == L(1) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP && g.ramp_holds == 1);
 	CHECK(g.want == L(3));					/* want stays the load's own answer */
 	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == L(1));
@@ -1214,36 +2141,36 @@ static void test_ramp(void)
 	CHECK(run_mc(&g, 1000, 84900, 25) == L(2));
 	CHECK(run_mc(&g, 1000, 84900, 25) == L(3) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
 	/* A raise of one level is no hold: the load asks 2000 at 1900 MHz, the ramp lets it through. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(9);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(9);
 	CHECK(run_mc(&g, 915, 80000, 25) == L(10) && g.ramp_holds == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
 
 	/* A raise below the knee starts the interval too: a reading at 70 C 25 ms later waits for the rest of it. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 69000, 25) == L(3));
 	for (i = 1; i < BC250_DPM_RAMP_MIN_MS / 25u; i++) CHECK(run_mc(&g, 1000, 70000, 25) == L(3));
 	CHECK(run_mc(&g, 1000, 70000, 25) == L(4));
 
 	/* Lowering is never held: idle at 80 C steps down after the usual hold. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(8); g.raise_ms = 0;
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(8); g.raise_ms = 0;
 	for (i = 0; i < 7; i++) CHECK(run_mc(&g, 0, 80000, 25) == L(8));
 	CHECK(run_mc(&g, 0, 80000, 25) == L(7) && g.ramp_holds == 0);
 
 	/* The hot band (and the warm zone with it, 87 C from 0.7.204) names its own reason; the ramp adds no hold there. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5);
 	CHECK(run_mc(&g, 1000, 87000, 25) == L(4) && g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT && g.ramp_holds == 0);
 	CHECK(run_mc(&g, 1000, 87000, 25) == L(4) && g.ramp_holds == 0 && g.warm_holds == 0);
 
 	/* The runtime floor is a raise too: one level per interval above the knee. */
 	{
 		struct bc250_dpm_tune t = tune(900, 800, 650, 200, L(10));
-		bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+		init_old(&g, BC250_DPM_TOP_LEVEL);
 		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
 		CHECK(run_mc(&g, 0, 78000, 25) == L(1) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
 		CHECK(run_mc(&g, 0, 60000, 25) == L(10));	/* below the knee: at once */
 	}
 
 	/* A stalled tick counts as MAX_DT_MS, so one stall does not open a raise. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 84000, 25) == L(1));
 	CHECK(run_mc(&g, 1000, 84000, 3600000u) == L(1));
 	for (i = 0; i < 400; i++) level = run_mc(&g, 1000, 84000, 25);
@@ -1276,7 +2203,7 @@ static struct ramp_result plant367_run(int ramp, int start_mc)
 
 	memset(&r, 0, sizeof(r));
 	r.first_hot_ms = ~0u;
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);	/* session 367 is the ramp against the 0.7.212 thermal rules */
 	last = g.level;
 	for (i = 0; i < ticks; i++) {
 		unsigned int mhz = bc250_dpm_level_mhz(g.level), busy = demand >= mhz ? 1000u : demand * 1000u / mhz, level;
@@ -1410,7 +2337,7 @@ static void test_subfloor(void)
 
 	/* A sustained 88 C at the lab floor under full load: the hot entry steps to 900 MHz at once, the next hot
 	 * step to 800 MHz, and there it stays (no underflow, however long it lasts). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(g.level == L(0) && g.subfloor_ok);
 	CHECK(run_mc(&g, 1000, 88000, 25) == L(-1) && g.thermal_cap == L(-1) && g.thermal_events == 1);
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
@@ -1433,7 +2360,7 @@ static void test_subfloor(void)
 	CHECK(level == L(0) && g.thermal_cap == BC250_DPM_TOP_LEVEL);	/* idle: the cap is free, the load is not */
 
 	/* 90 C: 800 MHz at once, from anywhere. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
 	CHECK(run(&g, 1000, 90, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL && g.throttle == BC250_DPM_THROTTLE_THERMAL_HARD);
 	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
 
@@ -1441,7 +2368,7 @@ static void test_subfloor(void)
 	 * what the step returns is below the floor only while the cap is. */
 	for (temp = 40000; temp <= 95000; temp += 500)
 		for (busy = 0; busy <= 1000u; busy += 100u) {
-			bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+			init_old(&g, BC250_DPM_TOP_LEVEL);
 			for (i = 0; i < 400u; i++) {
 				level = run_mc(&g, busy, (int)temp, 25);
 				CHECK(g.want >= L(0));
@@ -1457,7 +2384,7 @@ static void test_subfloor(void)
 	 * floor stays where it is. The reading the KMD leaves in the tick when SmuReadTemperature fails is the last
 	 * good one, so a bare "go to the floor" would let one blind tick discard both hot steps and walk the clock
 	 * back up through the warm zone (the release below RELEASE_MC is the only way up). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 90000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	in = tick(1000, 60, 25); in.temperature_valid = 0;
 	for (i = 0; i < 400u; i++) {
@@ -1466,17 +2393,17 @@ static void test_subfloor(void)
 		CHECK(g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	}
 	/* From the floor or above it the rule is the lowering it has always been (0.7.204 behaviour). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.thermal_cap = L(5);
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.thermal_cap = L(5);
 	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
 	CHECK(level == L(0) && g.thermal_cap == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	/* Only the release brings a sub-floor cap back up, and it does so one level at a time. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 90000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	for (i = 0; i < 4u; i++) { level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level); }
 	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++)
 		CHECK(run_mc(&g, 1000, 60000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	CHECK(run_mc(&g, 1000, 60000, 25) == L(-1) && g.thermal_cap == L(-1));
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.stable = 1;
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.stable = 1;
 	CHECK(run_mc(&g, 1000, 88000, 25) == L(-1));		/* the cap is lower than the floor it asks for */
 	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT);
 	g.stable = 0;
@@ -1485,7 +2412,7 @@ static void test_subfloor(void)
 	CHECK(run_mc(&g, 1000, 60000, 25) == L(0) && g.throttle == BC250_DPM_THROTTLE_STABLE);
 
 	/* A runtime floor is never admitted below the lab floor (the points below it are the cap's). */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	t = tune(900, 800, 650, 200, L(-1));
 	CHECK(bc250_dpm_tune_check(&t, BC250_DPM_TOP_LEVEL) == BC250_DPM_TUNE_FLOOR);
 	CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_FLOOR && g.tune.floor_level == L(0));
@@ -1496,7 +2423,7 @@ static void test_subfloor(void)
 
 	/* The refusal: the KMD could not put the hardware at a sub-floor point. From then on the cap stops at the
 	 * lab floor for the rest of the start, whatever the temperature, and a cap already below it is raised. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 88000, 25) == L(-1) && g.thermal_cap == L(-1));
 	bc250_dpm_subfloor_refused(&g);
 	CHECK(!g.subfloor_ok && g.subfloor_refusals == 1 && g.thermal_cap == L(0));
@@ -1506,7 +2433,7 @@ static void test_subfloor(void)
 		CHECK(level == L(0) && g.thermal_cap == L(0));
 	}
 	/* And a refusal before any hot tick keeps the whole start at or above the lab floor. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	bc250_dpm_subfloor_refused(&g);
 	CHECK(g.thermal_cap == BC250_DPM_TOP_LEVEL);		/* nothing to raise: the cap was not below the floor */
 	for (i = 0; i < 4000u; i++) CHECK(run_mc(&g, 1000, 89000, 25) >= L(0));
@@ -1583,7 +2510,7 @@ static unsigned int run_blind(struct bc250_dpm_governor *g, unsigned int busy, u
 /* A governor with the idle state on, as the KMD configures it from the registry defaults. */
 static void idle_init(struct bc250_dpm_governor *g, unsigned int max_level)
 {
-	bc250_dpm_init(g, max_level);
+	init_old(g, max_level);		/* the idle state against the 0.7.212 thermal rules; test_zone has the zone */
 	CHECK(bc250_dpm_idle_config(g, BC250_DPM_IDLE_MHZ, BC250_DPM_IDLE_HOLD_MS,
 				    BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);
 	CHECK(g->idle_on && !g->idle && bc250_dpm_idle_mhz(g) == 500u);
@@ -1611,7 +2538,7 @@ static void test_idle(void)
 
 	/* The setting itself. 0 is "off" and not an error; anything that is not a table clock under the lab
 	 * floor, and any hold or share out of range, is refused and leaves the state off. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(bc250_dpm_idle_config(&g, 0, 0, 0) == BC250_DPM_IDLE_OK && !g.idle_on);
 	CHECK(bc250_dpm_idle_mhz(&g) == 0u);
 	CHECK(bc250_dpm_idle_config(&g, 1000, 3000, 2) == BC250_DPM_IDLE_CLOCK && !g.idle_on);
@@ -1628,7 +2555,7 @@ static void test_idle(void)
 
 	/* The state off (DpmIdleMHz 0) is 0.7.205 behaviour exactly: ten seconds of a quiet GPU stay at the
 	 * lab floor, and nothing of the state moves. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	for (i = 0; i < 400u; i++) CHECK(run_ring(&g, 0, 60000, 25, 0) == L(0));
 	CHECK(!g.idle && g.idle_entries == 0 && g.idle_exits == 0 && g.idle_total_ms == 0 && g.lowers == 0);
 
@@ -1768,7 +2695,7 @@ static void test_idle(void)
 	 * the 800 MHz the fallback picks after the firmware refuses 500 MHz, both return to the lab floor in one
 	 * tick at 80 C, where the ramp interval is 2.8 s and would otherwise give 900 MHz. */
 	for (i = 0; i < 2u; i++) {
-		bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+		init_old(&g, BC250_DPM_TOP_LEVEL);
 		if (i == 0) {
 			CHECK(bc250_dpm_idle_config(&g, 800, BC250_DPM_IDLE_HOLD_MS,
 						    BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);
@@ -1813,7 +2740,7 @@ static void test_idle(void)
 
 	/* The idle point is never above the limits (0.7.207, review): a cap holding a part at 800 MHz wins over a
 	 * configured 900 MHz point, so the state lowers the clock and never raises it. */
-	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(bc250_dpm_idle_config(&g, 900, BC250_DPM_IDLE_HOLD_MS, BC250_DPM_IDLE_BUSY_PERMILLE) == BC250_DPM_IDLE_OK);
 	for (i = 0; i < 400u; i++) run_ring(&g, 1000, 88000, 25, 1);	/* the cap walks down to 800 MHz */
 	CHECK(g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
@@ -1860,7 +2787,7 @@ static void test_idle(void)
 
 	/* A ceiling below the default changes nothing: the idle point is below every ceiling. The hold and the
 	 * admitted share are the setting's, so a 500 ms hold enters after 500 ms. */
-	bc250_dpm_init(&g, L(5));
+	init_old(&g, L(5));
 	CHECK(bc250_dpm_idle_config(&g, 500, 500, 2) == BC250_DPM_IDLE_OK);
 	for (i = 0; i < 500u / 25u - 1u; i++) CHECK(run_ring(&g, 0, 60000, 25, 0) == L(0));
 	CHECK(run_ring(&g, 0, 60000, 25, 0) == BC250_DPM_IDLE_LEVEL && g.max_level == L(5));
@@ -1901,6 +2828,7 @@ int main(void)
 	test_session();
 	test_busy_source();
 	test_idle();
+	test_curve();
 	test_tune_check();
 	test_tune_no_oscillation();
 	test_floor();
@@ -1908,6 +2836,17 @@ int main(void)
 	test_reentry();
 	test_soft_release();
 	test_plant();
+	test_zone();
+	test_zone436();
+	test_zone_dip();
+	test_zone_idle();
+	test_zone_idle_rise();
+	test_zone_quiet_gate();
+	test_zone_stall();
+	test_zone_lead_bound();
+	test_zone_sensor_gap();
+	test_zone_backstop_timing();
+	test_zone_traces();
 	test_ramp();
 	test_plant367();
 	test_subfloor();

@@ -217,6 +217,57 @@ int main(void)
     // 14. The pitch the firmware itself left is the one a POST-geometry surface is expected to carry.
     CHECK(DcnPrimaryPitch(POST_WIDTH) == POST_PITCH);
 
+    // 15. The create-time alignment and the flip-time clause are one number (0.7.209.1). A surface that
+    //     asked for scan-out is created on the granularity its own clause demands, so the clause cannot
+    //     refuse the transition flip of a correctly described surface - a refusal there blanks the output
+    //     instead of falling back to composition. Everything else keeps the 64 bytes it had.
+    CHECK(Bc250ScanoutCreateAlignment(1) == BC250_SCANOUT_ADDRESS_ALIGNMENT);
+    CHECK(Bc250ScanoutCreateAlignment(1) == 4096ul);
+    CHECK(Bc250ScanoutCreateAlignment(0) == 64ul);
+    for (i = 0; i < 2; i++) {
+        /* Every base the create alignment can produce is a base the clause admits, and the one below it
+           is not: the two are the same rule read from both ends. */
+        const unsigned long long base = 4ull * 1024ull * 1024ull * 1024ull;
+        Shell(&c);
+        c.Address = base + (unsigned long long)Bc250ScanoutCreateAlignment(1) * (i + 1u);
+        CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+        Shell(&c);
+        c.Address = base + (unsigned long long)Bc250ScanoutCreateAlignment(0) * (i + 1u);
+        CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ALIGNMENT);
+    }
+
+    // 16. The BC2A create path (0.7.209.1). An application blob brings its own granularity, and the one
+    //     thing it may not bring is less than the flip clause's page once it asked for scan-out.
+    CHECK(Bc250ScanoutBlobAlignment(0, 0ull) == 4096ul);            // no request: the old default
+    CHECK(Bc250ScanoutBlobAlignment(1, 0ull) == 4096ul);
+    CHECK(Bc250ScanoutBlobAlignment(0, 64ull) == 64ul);             // honoured when nothing scans out
+    CHECK(Bc250ScanoutBlobAlignment(1, 64ull) == 4096ul);           // the defect: 64 would be refused at flip
+    CHECK(Bc250ScanoutBlobAlignment(1, 256ull) == 4096ul);
+    CHECK(Bc250ScanoutBlobAlignment(1, 4096ull) == 4096ul);
+    CHECK(Bc250ScanoutBlobAlignment(1, 65536ull) == 65536ul);       // a bigger ask is still honoured
+    CHECK(Bc250ScanoutBlobAlignment(0, 65536ull) == 65536ul);
+    CHECK(Bc250ScanoutBlobAlignment(1, 0x100000ull) == 0x100000ul); // the top of the honoured range
+    CHECK(Bc250ScanoutBlobAlignment(0, 0x200000ull) == 4096ul);     // outside it: the default, not the ask
+    CHECK(Bc250ScanoutBlobAlignment(0, 96ull) == 4096ul);           // not a power of two: the default
+    CHECK(Bc250ScanoutBlobAlignment(0, 32ull) == 4096ul);           // below the range: the default
+    CHECK(Bc250ScanoutBlobAlignment(1, 32ull) == 4096ul);
+    for (i = 0; i < 2; i++) {
+        /* Both create paths are the same number for the same intent, and no blob alignment the rule
+           returns for a scan-out surface can land on a base the clause refuses. */
+        const unsigned long long base = 4ull * 1024ull * 1024ull * 1024ull;
+        const unsigned long long asked[] = { 0ull, 64ull, 96ull, 4096ull, 65536ull, 0x100000ull, 0x200000ull };
+        unsigned n;
+        CHECK(Bc250ScanoutBlobAlignment(1, (unsigned long long)Bc250ScanoutCreateAlignment(1)) ==
+              Bc250ScanoutCreateAlignment(1));
+        for (n = 0; n < sizeof(asked) / sizeof(asked[0]); n++) {
+            const unsigned long align = Bc250ScanoutBlobAlignment(1, asked[n]);
+            CHECK(align >= Bc250ScanoutCreateAlignment(1));
+            Shell(&c);
+            c.Address = base + (unsigned long long)align * (i + 1u);
+            CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
+        }
+    }
+
     printf("scanout admission: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

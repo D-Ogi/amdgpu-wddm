@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 #include "adapter-config.h"
 #include "../../contract/bc250_adapter_identity.h"
+#include "../../contract/bc250_scanout_caps.h"
 #include <string>
 #include <cstdio>
 #include <cstdlib>
 using namespace bc250::umd;
 #define CHECK(x) do{if(!(x)){std::printf("FAIL line %d\n",__LINE__);std::abort();}}while(0)
 HRESULT APIENTRY query(HANDLE,const D3DDDICB_QUERYADAPTERINFO *args) {
-    CHECK(args && args->PrivateDriverDataSize==BC250_ADAPTER_CAPS_BYTES);
+    CHECK(args && args->PrivateDriverDataSize==BC250_SCANOUT_CAPS_TOTAL);
     bc250_adapter_identity identity{BC250_ADAPTER_IDENTITY_MAGIC,1,24,123,0,0};
     std::memcpy(static_cast<unsigned char *>(args->pPrivateDriverData)+BC250_ADAPTER_IDENTITY_OFFSET,&identity,sizeof(identity));
     return S_OK;

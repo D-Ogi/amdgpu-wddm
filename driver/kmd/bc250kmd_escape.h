@@ -35,7 +35,188 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700D0u       // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
+#define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
+#define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
+#define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
+#define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
+                                            // the respin. Seven revisions were written apart on seven branches,
+                                            // each taking the next free number for itself: 209 (the DirectFlip
+                                            // handshake), 208 again (the fan reader), 210 twice (the ring-gap
+                                            // instrument with the notify-DPC pairing, and the Tuner), and two
+                                            // more for the soft thermal zone and the softened flag words. None
+                                            // of them was deployed. The train carries all of them in one driver
+                                            // and takes 213, above every number any of them claimed, so that no
+                                            // claimed revision is reused and Windows cannot tie this driver with
+                                            // one of them. The first build of this train (0.7.212.1, escape ABI
+                                            // 0x000700D4) was never installed either.
+                                            //
+                                            // Three new escape numbers against 0.7.208.1: 27 RUN_HWMON (reply
+                                            // 216 bytes, ABI 1), 28 RUN_DPM_CURVE (360 bytes, ABI 1) and 29
+                                            // RUN_CPU (296 bytes, ABI 1).
+                                            //
+                                            // Two changes to an older escape, both of them additive, and both
+                                            // the reason this constant is 0x000700D5 and not 0x000700D4:
+                                            //
+                                            //   - RUN_DPM_TUNE grows to ABI 3, 184 bytes (the soft thermal
+                                            //     zone). ABI 1 (120 bytes) and ABI 2 (152 bytes) keep their
+                                            //     layout and their meaning, so every reader of 0.7.208.1 still
+                                            //     parses what it read, and a THERMAL at ABI 1 or ABI 2 leaves
+                                            //     the zone's own values alone. A driver before 0.7.213 refuses
+                                            //     the 184-byte escape, which is how a tool finds the step down.
+                                            //   - START_HEALTH CONFIRM and RUN_CPU KEEP admit
+                                            //     NoAdapterSynchronization: neither sends a mailbox message or
+                                            //     reads a BAR, and CONFIRM is retried every 5.5 s at an
+                                            //     administrator logon, where idling the GPU scheduler is the
+                                            //     wrong price. For one release both also admit the
+                                            //     HardwareAccess word they asked for up to 0.7.212, so an older
+                                            //     CLI, DLL or overlay still works against this driver.
+                                            //
+                                            // Every finished addition is ON in the release, with one switch each
+                                            // to bisect a regression (the release-train policy, owner
+                                            // 2026-10-05): EnableDirectFlipHandshake 1, EnableHwmon 1,
+                                            // NotifyDpcInReport 1 and the soft thermal zone on when
+                                            // DpmThermalZone is absent. What stays absent is what an operator
+                                            // sets, not a feature: HwmonBasePort, HwmonExpectId,
+                                            // HwmonDutyProven, HotSubmitLog, CpuTune and the rest of the Tuner's
+                                            // own values. A start with the whole switch set closed behaves as
+                                            // 0.7.208.1 did.
+                                            //
+                                            // The revisions as they were written, newest first:
+                                            //
+                                            // the soft thermal zone (written on dpm/thermal-soft-zone and merged
+                                            // into this lineage by train b20, BD-087 and C56): the governor steps
+                                            // the clock cap down inside a zone below the 87 C hot cap instead of
+                                            // waiting for the cap itself, holds a step at a start and across a
+                                            // stall, and judges its thresholds with a lead measured over a fixed
+                                            // slope window. RUN_DPM_TUNE ABI 3 carries the zone's threshold, its
+                                            // step and its lead, each with its default, and the slope window out.
+                                            // The zone is on when DpmThermalZone is absent; DpmThermalZone 0 runs
+                                            // the 0.7.212 thermal rules for a whole start, which is this wagon's
+                                            // bisect switch. BC250_DPM_TUNE_HOT_MC publishes the 87 C both deltas
+                                            // count down from, and driver/kmd/dpm.c holds a C_ASSERT against the
+                                            // shim's own BC250_DPM_HOT_MC, so moving the hot limit breaks the
+                                            // build instead of a printed threshold.
+                                            //
+                                            // the softened flag words (written on kmd/confirm-soft and merged
+                                            // into this lineage by train b20, C57 and K195): START_HEALTH CONFIRM
+                                            // and RUN_CPU KEEP take NoAdapterSynchronization, as described above.
+                                            // Nothing else about either operation changed: both still need an
+                                            // administrator, KEEP still writes the Parameters key and ends the
+                                            // trial, and CONFIRM still names the generation and the visibility
+                                            // epoch its client observed.
+                                            //
+                                            // revision 209 (INF 0.7.209.1, on 208.1): M15.14 increment 2, the
+                                            // DirectFlip handshake's kernel half. One derivation of the type-0
+                                            // placement (WddmGdiRecordPolicy) that CreateAllocation uses and the
+                                            // compositor's user-mode driver asks, with WddmGdiRecordScannable as
+                                            // the user-mode question - that one refuses every record it could not
+                                            // read, because the placement derivation is fail-safe for the kernel
+                                            // driver and fail-open for the shell. A second optional
+                                            // UMDRIVERPRIVATE trailer (bc250_scanout_caps.h, offset 1496, 24
+                                            // bytes) publishes whether this start will admit a client scan-out
+                                            // flip and at what geometry; it is written only when the new REG_DWORD
+                                            // EnableDirectFlipHandshake is 1 AND every start-latched fact the flip
+                                            // path needs is true, so a start with it off is byte for byte 208 at
+                                            // every buffer size and a closed kernel path can never leave the shell
+                                            // agreeing to a flip this driver would refuse. Three new witnesses in
+                                            // the summary: type-0 creates by the resource record they arrived with
+                                            // (a standard primary carries none), the OS's own
+                                            // DXGK_SETVIDPNSOURCEADDRESS_FLAGS per bit, and the Presents carrying
+                                            // RedirectedFlip. No escape struct, no journal record layout and no
+                                            // counter of the escape interface changed; the constant moves because
+                                            // packagecheck VRS010 matches it against the INF revision and because
+                                            // Windows keeps the driver it has when the version ties.
+                                            //
+                                            // the fan reader (written as revision 208 on fan/read-nct6686 and
+                                            // merged into this lineage by train b20): the board's own hardware
+                                            // monitor becomes readable. The ASRock BC-250 carries a Nuvoton
+                                            // NCT6686D Super I/O. Its embedded controller turns the case fan
+                                            // from the BIOS "Fan Setting" curve, and until this revision
+                                            // nothing in Windows could read it, so the control application
+                                            // said "The driver cannot read it yet".
+                                            //
+                                            // The reader is read-only and gated. EnableHwmon 1 is the INF
+                                            // default from 0.7.213; EnableHwmon 0 means no port access
+                                            // happens at all and is the bisect switch of this wagon. With
+                                            // the gate open the start proves the chip from the EC window alone
+                                            // (firmware version, build date, customer ID, the monitor's own
+                                            // run bit and the two present masks) and refuses to read a
+                                            // window that does not answer like this chip. The governor
+                                            // thread then samples once a second, publishes one snapshot
+                                            // under a spin lock, and RUN_HWMON hands that snapshot out.
+                                            // The escape reads no port, so it keeps
+                                            // NoAdapterSynchronization alone and never stalls a frame.
+                                            //
+                                            // What is read: every present tachometer (raw RPM), every
+                                            // present duty output (read-back only), the fan mode mask, the
+                                            // fan engine status and the monitor's own temperature channels,
+                                            // which on unit A are the APU over SB-TSI and two board
+                                            // thermistors. Nothing is ever written: there is no duty write,
+                                            // no mode write, no limit write and no HWM_CFG write, and the
+                                            // allowlist in driver/shim/bc250_hwmon.c refuses every write by
+                                            // rule with a host test behind it. The Super I/O configuration
+                                            // ports 0x2E/0x2F are never touched either, because the DSDT
+                                            // drives that pair under an ACPI mutex this driver cannot take.
+                                            //
+                                            // The reading changes no decision in the driver: DPM thresholds,
+                                            // the thermal cap, the ramp and the idle point are unchanged,
+                                            // and bc250_dpm_step gains no fan input. The BIOS still owns
+                                            // the fan. No other escape structure and no other ABI changed.
+                                            //
+                                            // the ring-gap histogram and the paired notify DPC (written as
+                                            // revision 210 on c48/notifydpc-in-report and merged into this
+                                            // lineage by train b20): the ring's own idle-gap histogram, and
+                                            // the completion report pairs its own DPC-level notification.
+                                            //
+                                            // Offline analysis of RotTR sessions 418-420 found the 3D ring idle
+                                            // a median 8 ms, 418 to 605 times per 105 s, with a dispatchable
+                                            // packet already queued, the gap ending within 300 us of a display
+                                            // VSync: 0.45 to 0.67 ms of every frame, 59 to 64 % of all ring
+                                            // idle. Reading it took a 3 GB event-trace dump per session. This
+                                            // revision measures a near relative of that quantity in the driver
+                                            // that owns the ring (ring_gap.h, two counter reads per packet
+                                            // boundary, four summary lines per node) - a superset, because the
+                                            // driver cannot see a packet dxgkrnl holds queued, so only the
+                                            // VSync-ended filter separates the class from ordinary starved
+                                            // idle. "The GPU must not wait" now has a number in every
+                                            // workload, game or client, from the log summary alone.
+                                            //
+                                            // It also changes one thing, behind NotifyDpcInReport (default 1,
+                                            // as it was written on c48/notifydpc-in-report):
+                                            // the report pass calls DxgkCbNotifyDpc itself, and the
+                                            // DxgkCbQueueDpc whose only job was to bring that call about is
+                                            // then not made - one dxgkrnl device DPC per completion fewer.
+                                            // Until now the DPC-level notification a completion report owes
+                                            // arrived only with that next dxgkrnl DPC: a 12 to 20 us hop at the
+                                            // 187 completions a second session 418 retired, about 0.03 ms of a
+                                            // 70 Hz frame. It is NOT what holds the ring for 8 ms; C48 died on
+                                            // its own clause 1 and notify_pairing.h carries the evidence. The
+                                            // DDI asks for the pairing (d3dkmddi.md:2392); notify_pairing.h is
+                                            // the model of both shapes and the host test drives it. The value 0
+                                            // restores 0.7.208.1 exactly, which is how the lab prices it.
+                                            //
+                                            // Third, HotSubmitLog (default 0) takes the three per-submit guard
+                                            // log lines of SubmitIbLocked out of the hot path: they wrote 3871
+                                            // lines a second inside GartLock and 75 % of the ring was
+                                            // overwritten before anything read it. The count of what was left
+                                            // out is in the summary, so a quiet log is not read as a quiet
+                                            // ring. No escape struct, no journal record layout and no counter
+                                            // of the escape ABI changed, so bc250kmd_cli stays compatible; the
+                                            // constant moves because packagecheck VRS010 matches it against
+                                            // the INF revision, and because Windows keeps the driver it has
+                                            // when the version ties. 209 is taken by the independent-flip
+                                            // candidate, so this one is 210.
+                                            //
+                                            // the Tuner (written as revision 210 on tuner/vf-cpu and merged into
+                                            // this lineage by train b20): the GPU V/F curve with a kernel-owned
+                                            // trial that reverts, the CPU surface on the firmware's queue 3 (a
+                                            // clock limit, an undervolt and a temperature cap, read-gated and
+                                            // staged), and the 8-core unlock through the AMD-named queue 0
+                                            // message. docs/design/tuner.md and ADR 0020 are the design. Two new
+                                            // escapes, 28 RUN_DPM_CURVE (360 bytes) and 29 RUN_CPU (296 bytes);
+                                            // 27 is the fan reader's, which is in this driver as well.
+                                            //
+                                            // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
                                             // guard log that did not fit a log line are two lines each.
                                             // BC250_LOG_TEXT is 160 bytes and RtlStringCchVPrintfA truncates
                                             // without a word, so 0.7.207.1 printed "wddm summary: scan-out ...
@@ -271,6 +452,11 @@ typedef struct _BC250_ESCAPE_CLOCK {
 
 // Adapter-owned software snapshot; READ must not idle GPU scheduling or read BARs.
 // CONFIRM names the exact generation and visibility epoch observed by the client.
+// Both operations take NoAdapterSynchronization=1 and every other flag zero (0.7.213):
+// CONFIRM touches only this snapshot and the registry, and an administrator logon
+// retries it every 5.5 s, which must never suspend the GPU scheduler. For one release
+// CONFIRM also admits the HardwareAccess=1 word it asked for up to 0.7.212, so an
+// older CLI, DLL or overlay still confirms a start.
 #define BC250_START_HEALTH_ABI 1u
 #define BC250_START_HEALTH_READ 0u
 #define BC250_START_HEALTH_CONFIRM 1u
@@ -362,6 +548,8 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
 #define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
 #define BC250_DPM_FLAG_IDLE 1024u            // the governor holds the idle point now (0.7.207)
+#define BC250_DPM_FLAG_CURVE 2048u           // CurrentMv comes from an operator's V/F curve, not the table (0.7.210)
+#define BC250_DPM_FLAG_CURVE_TRIAL 4096u     // a curve trial runs; RUN_DPM_CURVE says for how much longer (0.7.210)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -407,19 +595,39 @@ typedef struct _BC250_ESCAPE_DPM {
 // A size that does not match its AbiVersion is refused in the reply (NtStatus STATUS_INVALID_PARAMETER) before any
 // state is read. A driver before 0.7.197 fails the 152-byte escape itself with STATUS_INVALID_PARAMETER: a tool asks
 // with ABI 2 and repeats with ABI 1 on that answer.
-#define BC250_DPM_TUNE_ABI 2u
+// ABI 3 (0.7.213, BD-087) appends the soft thermal zone to the same THERMAL operation: the zone's threshold below HOT
+// (0: the zone off), its step down and the lead its thresholds are judged with, each with its default, plus the fixed
+// slope window the lead measures the die's rise over. The zone is ON by default, so a READ of a healthy start shows it;
+// the one switch that turns it off for a whole start is the registry value DpmThermalZone (driver/kmd/dpm.c), and a
+// RESET here goes back to the shim's defaults and therefore turns it on again. The driver takes all three sizes:
+// AbiVersion 1 with the first 120 bytes, AbiVersion 2 with the first 152 (both layouts unchanged), AbiVersion 3 with all
+// 184. An ABI 1 or ABI 2 THERMAL keeps the stored zone values, so an older tool cannot switch the zone off by writing
+// fields it does not know; a RESET resets everything, as it always did. A driver before 0.7.213 fails the 184-byte
+// escape itself with STATUS_INVALID_PARAMETER: a tool asks with ABI 3 and steps down to 2 and then to 1 on that answer.
+#define BC250_DPM_TUNE_ABI 3u
+#define BC250_DPM_TUNE_ABI_2 2u
 #define BC250_DPM_TUNE_ABI_1 1u
+// The reading the two deltas of this escape are counted down from: BC250_DPM_HOT_MC of
+// driver/shim/include/bc250_dpm.h, 87 C, fixed since 0.7.195. Both the soft release and the soft zone travel as a
+// delta below it, so a tool has to know it to print the threshold in force, and a user-mode tool does not include the
+// shim's kernel header. The driver's own C_ASSERT (driver/kmd/dpm.c) keeps the two equal, so moving the hot limit
+// breaks the driver build instead of a printed threshold (0.7.213 safety review, finding 8).
+#define BC250_DPM_TUNE_HOT_MC 87000l
 #define BC250_DPM_TUNE_ABI1_SIZE 120u        // the ABI 1 prefix of BC250_ESCAPE_DPM_TUNE
+#define BC250_DPM_TUNE_ABI2_SIZE 152u        // the ABI 2 prefix
 #define BC250_DPM_TUNE_OP_READ 0u
 #define BC250_DPM_TUNE_OP_THRESHOLDS 1u      // in: UpPermille, TargetPermille, DownPermille, DownHoldMs
 #define BC250_DPM_TUNE_OP_FLOOR 2u           // in: FloorMHz
-#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds, floor and (ABI 2 and ABI 1 alike) thermal timing to defaults
-#define BC250_DPM_TUNE_OP_THERMAL 4u         // ABI 2 only; in: HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs
+#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds, floor and (every ABI alike) thermal timing and zone to defaults
+#define BC250_DPM_TUNE_OP_THERMAL 4u         // ABI 2: in HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs; ABI 3 also in
+                                             // ZoneDeltaMc, ZoneStepMs, ZoneLeadMs
 #define BC250_DPM_TUNE_FLAG_GOVERNING 1u     // a DPM start's governor thread runs and has not given up: writes are taken
 #define BC250_DPM_TUNE_FLAG_THRESHOLDS 2u    // the thresholds were set at run time (else the defaults)
 #define BC250_DPM_TUNE_FLAG_FLOOR 4u         // a runtime floor is set (else none)
 #define BC250_DPM_TUNE_FLAG_APPLIED 8u       // the governor thread runs with the values below (Applied == Serial)
 #define BC250_DPM_TUNE_FLAG_THERMAL 16u      // ABI 2: the thermal timing was set at run time (else the defaults)
+#define BC250_DPM_TUNE_FLAG_ZONE 32u         // ABI 3: the soft zone's values are not the defaults
+#define BC250_DPM_TUNE_FLAG_ZONE_OFF 64u     // ABI 3: the soft zone is off for this start (ZoneDeltaMc 0)
 typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -438,7 +646,245 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs;                  // in: THERMAL; out: in force
     unsigned long DefaultHotStepMs, DefaultSoftReleaseDeltaMc, DefaultSoftReleaseStepMs;    // out
     unsigned long Reserved2[2];             // zero in, zero out
-} BC250_ESCAPE_DPM_TUNE; // 152 bytes on Windows, ABI 2 (the first 120 are ABI 1)
+    // ABI 3 from here (BC250_DPM_TUNE_ABI2_SIZE bytes above).
+    unsigned long ZoneDeltaMc, ZoneStepMs, ZoneLeadMs;                               // in: THERMAL; out: in force
+    unsigned long DefaultZoneDeltaMc, DefaultZoneStepMs, DefaultZoneLeadMs;          // out
+    unsigned long ZoneSlopeMs;              // out: the window the lead's slope is measured over (fixed, not tunable)
+    unsigned long Reserved3;                // zero in, zero out
+} BC250_ESCAPE_DPM_TUNE; // 184 bytes on Windows, ABI 3 (the first 152 are ABI 2, the first 120 ABI 1)
+
+// The board's hardware monitor (driver/kmd/hwmon.c, driver/shim/bc250_hwmon.c, docs/design/fan.md). The
+// ASRock BC-250 carries a Nuvoton NCT6686D Super I/O. Its embedded controller turns the case fan from the
+// BIOS "Fan Setting" curve; this escape only reports what the chip says. Adapter-owned software snapshot,
+// published by the governor thread once a second: the escape reads no port and sends no message, so it takes
+// NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, exactly as RUN_DPM. READ is the
+// only operation and is open to every caller; there is no write operation at all, here or anywhere else in
+// the driver.
+//
+// Rpm[i] is raw RPM of tachometer i; 0 means either a channel that does not turn or a value this driver
+// refused. The two are told apart by RpmValidMask, which carries one bit per tachometer whose value THIS
+// sample accepted: a channel that is present (FanPresentMask) with its valid bit clear was refused, and
+// Refusals counts every refused value of the start. DutyPermille[i] is the duty
+// READ-BACK of output i, 0..1000. Until DUTY_PROVEN is set the duty is a number the chip reports and not a
+// proven description of the fan that turns: at E01 all five duty channels read 245 of 255 (96 %) while the
+// fan turned at 1589 RPM, which is about half of this board's measured full-duty speed, and those two do not
+// belong to the same fan. One lab trial settles it, and HwmonDutyProven then opens the flag.
+// TemperatureMc[i] is the monitor's own channel i with its source code in TemperatureSource[i]: 0x46 is the
+// APU over SB-TSI (an independent second reading of the temperature the SMU reports as Tctl), 0x08 and 0x09
+// are board thermistors. A source of 0 means the channel carries nothing in this sample, which covers a
+// channel the map does not hold and a value the driver refused: a reader must then show "no reading" for it
+// and never a temperature. ModeMask is 0xA00 and Engine is 0xCF8, both AS THE START READ THEM and not per
+// sample; both are documented by the out-of-tree nct6687d alone, so both are UNPROVEN on this board and no
+// decision reads either. AgeMs counts from the last accepted sample at the time of the escape, so a stopped
+// sampler shows its age growing. Reason is enum bc250_hwmon_reason (driver/shim/include/bc250_hwmon.h) and
+// says why VALID is clear.
+#define BC250_HWMON_ABI 1u
+#define BC250_HWMON_OP_READ 0u
+#define BC250_HWMON_FAN_SLOTS 8u             // tachometer and duty slots on the wire
+#define BC250_HWMON_TEMP_SLOTS 4u            // temperature channels on the wire
+#define BC250_HWMON_FLAG_VALID 1u            // the identity passed and the reader is online
+#define BC250_HWMON_FLAG_MONITORING 2u        // HWM_CFG bit 7 was set at start: the firmware monitors
+#define BC250_HWMON_FLAG_FRESH 4u            // AgeMs is inside the freshness window (three missed samples)
+#define BC250_HWMON_FLAG_GATED 8u            // EnableHwmon is 0: no port access ever happened
+#define BC250_HWMON_FLAG_ID_PINNED 16u       // HwmonExpectId was set and matched
+#define BC250_HWMON_FLAG_DUTY_PROVEN 32u     // HwmonDutyProven is 1: a lab trial proved the duty read-back
+// STOPPED: every present tachometer answered, every one of them reads 0, and a duty output is not 0, in
+// BC250_HWMON_STOPPED_SAMPLES samples in a row (driver/kmd/hwmon.h). Three conditions and a repeat, because this flag is shown in
+// red and is what the owner reacts to: one refused tachometer reading is not a stopped fan, and the driver
+// must not send anybody to the case over a collision on a window that has no arbiter.
+#define BC250_HWMON_FLAG_STOPPED 64u         // the duty is not 0 and no present tachometer turns (see above)
+// Monitor source codes, so that a tool can name a channel without the shim header. Identical definitions live in
+// driver/shim/include/bc250_hwmon.h, which the driver includes beside this file; the guard keeps that legal and
+// the values are the ones measured on unit A through the Linux labels (E01 sensors-all.txt).
+#ifndef BC250_HWMON_SOURCE_APU
+#define BC250_HWMON_SOURCE_APU 0x46u         // AMD TSI at SMBus 0x98: the APU die, 83.0 C at E01
+#endif
+#ifndef BC250_HWMON_SOURCE_THERMISTOR14
+#define BC250_HWMON_SOURCE_THERMISTOR14 0x08u
+#endif
+#ifndef BC250_HWMON_SOURCE_THERMISTOR15
+#define BC250_HWMON_SOURCE_THERMISTOR15 0x09u
+#endif
+typedef struct _BC250_ESCAPE_HWMON {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long BasePort;                 // the EC window in use, 0 when the reader is offline
+    unsigned long CustomerId;               // EC 0x602
+    unsigned long EcVersion;                // high << 8 | low
+    unsigned long EcBuild;                  // year << 16 | month << 8 | day
+    unsigned long FanPresentMask;           // bit i: tachometer i exists
+    unsigned long DutyPresentMask;          // bit i: duty output i exists
+    unsigned long ModeMask;                 // 0xA00 as read; UNPROVEN on this board
+    unsigned long Rpm[BC250_HWMON_FAN_SLOTS];
+    unsigned long DutyPermille[BC250_HWMON_FAN_SLOTS];
+    long TemperatureMc[BC250_HWMON_TEMP_SLOTS];
+    unsigned long TemperatureSource[BC250_HWMON_TEMP_SLOTS];
+    unsigned long AgeMs;                    // since the last accepted sample
+    unsigned long long Samples, Errors, Retries;
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long Reason;                   // enum bc250_hwmon_reason when VALID is clear
+    unsigned long Engine;                   // 0xCF8 as the start read it; UNPROVEN, reported and logged only
+    unsigned long RpmValidMask;             // bit i: Rpm[i] is a value this sample accepted, not a refusal
+    unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
+    unsigned long long Refusals;            // values refused since the start, over every register
+} BC250_ESCAPE_HWMON; // 216 bytes on Windows, ABI 1
+// The operator's GPU V/F curve and its trial (0.7.213.1; driver/kmd/dpm.c, driver/shim/bc250_dpm.c,
+// docs/design/tuner.md, ADR 0020). The clock grid cannot move, so a curve is BC250_DPM_CURVE_POINTS voltages, one
+// per level from FirstMHz (1000) up in StepMHz (100) steps to the table's ceiling (2000). Software state only: the
+// escape stores a candidate under the DPM state's locks and the governor thread applies it at its next tick
+// (25 ms) through the same checked transaction every other level change uses. So every operation takes
+// NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, as RUN_DPM_TUNE, and no operation
+// idles the GPU or stalls a running game (BD-054).
+//
+// READ is open to every caller. SET, KEEP, CANCEL and RESET need an administrator and ExpectedGeneration equal to
+// the Generation a READ of this start returned (STATUS_RETRY otherwise). SET, KEEP and CANCEL also need a running
+// DPM start (STATUS_INVALID_DEVICE_STATE: a fixed-lab start has no governor tick, so nothing could revert a
+// candidate; such a start sits at 1000 MHz, where the curve is the floor's 820 mV anyway).
+//
+// SET is a trial, not a setting: the candidate becomes active, nothing is written to disk, and the governor
+// thread puts the stored curve back when TrialMs passes without a KEEP. The revert is the kernel's own act, so a
+// killed tool, a hung tool, a lost remote session and a bugcheck all end at the stored curve. KEEP inside the
+// window persists the candidate (11 named REG_DWORDs plus the boot guard's two marks) and clears the trial.
+// CANCEL reverts at once. RESET puts the table's own line back and deletes the stored values.
+//
+// A refused candidate leaves everything as it was and names the rule in Error (enum bc250_clock_curve_error,
+// driver/shim/include/bc250_clock.h) and the level in ErrorLevel: a value outside 820..1000 mV, more than
+// BC250_CURVE_UNDERVOLT_MV under the table's line, a voltage that falls as the clock rises, or a first point that
+// is not the lab floor's 820 mV. FloorMv carries the lowest voltage admitted at each level, so a window can draw
+// the band it may not enter without knowing the rule.
+#define BC250_DPM_CURVE_ABI 1u
+#define BC250_DPM_CURVE_POINTS 11u           // levels 5..15 of the clock table: 1000..2000 MHz
+#define BC250_DPM_CURVE_OP_READ 0u
+#define BC250_DPM_CURVE_OP_SET 1u            // in: CandidateMv, TrialMs
+#define BC250_DPM_CURVE_OP_KEEP 2u           // the candidate on trial becomes the stored curve
+#define BC250_DPM_CURVE_OP_CANCEL 3u         // the stored curve comes back now
+#define BC250_DPM_CURVE_OP_RESET 4u          // the table's own line, stored
+#define BC250_DPM_CURVE_FLAG_VALID 1u        // the governor state was read (a full WDDM start)
+#define BC250_DPM_CURVE_FLAG_ON_TRIAL 2u     // a candidate runs; TrialRemainingMs says for how much longer
+#define BC250_DPM_CURVE_FLAG_STORED 4u       // the stored curve is not the table's line (registry values exist)
+#define BC250_DPM_CURVE_FLAG_PENDING 8u      // DpmCurvePending is on disk: a start with this curve was not confirmed
+#define BC250_DPM_CURVE_FLAG_CONFIRMED 16u   // DpmCurveConfirmed matches the stored curve
+#define BC250_DPM_CURVE_FLAG_DEFAULT 32u     // the active curve is the table's own line
+#define BC250_DPM_CURVE_FLAG_GOVERNING 64u   // a DPM start's governor runs and has not given up: writes are taken
+#define BC250_DPM_CURVE_FLAG_APPLIED 128u    // the governor has applied the active curve (Applied == Serial)
+typedef struct _BC250_ESCAPE_DPM_CURVE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long TrialMs;                  // in: SET (10000..180000, 0 = the driver's 25000); out: in force
+    unsigned long TrialRemainingMs;         // out: 0 outside a trial
+    unsigned long Serial, Applied;          // out: changes of the active curve, and what the governor runs
+    unsigned long Error, ErrorLevel;        // out: why a candidate was refused, and at which table level
+    unsigned long FirstMHz, StepMHz, Points;    // out: the grid the five vectors below describe
+    unsigned long CandidateMv[BC250_DPM_CURVE_POINTS];  // in: SET; out: the candidate on trial, else zeros
+    unsigned long ActiveMv[BC250_DPM_CURVE_POINTS];     // out: what the governor applies now
+    unsigned long StoredMv[BC250_DPM_CURVE_POINTS];     // out: what the registry holds (the revert target)
+    unsigned long DefaultMv[BC250_DPM_CURVE_POINTS];    // out: the table's own line
+    unsigned long FloorMv[BC250_DPM_CURVE_POINTS];      // out: the lowest voltage admitted at each level
+    unsigned long Level, LevelMHz, LevelMv;     // out: where the governor is now, and the curve's voltage there
+    unsigned long ObservedMHz, ObservedVid;     // out: the SMU's last readback
+    long TemperatureMc;                         // out
+    unsigned long CeilingMHz, Mode;             // out: this start's DpmMaxMHz and BC250_DPM_MODE_*
+    unsigned long Sets, Keeps, Cancels, Reverts;    // out: the trial's own counters
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: SET, KEEP, CANCEL, RESET
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_DPM_CURVE; // 360 bytes on Windows, ABI 1
+
+// The CPU surface (0.7.213.1; driver/kmd/cpu.c, driver/shim/bc250_cpu.c, docs/design/tuner.md, ADR 0020): a clock
+// limit, an undervolt in firmware curve-scale steps, the firmware's own temperature cap, the readbacks of all
+// three, and the core-enable mask. The transport is the firmware's queue 3, whose three mailbox registers are in
+// the BAR5 aperture the driver already maps; the KMD is still the single SMU owner, with a second allowlist so
+// that a GFX clock transaction can never send a CPU message and a CPU transaction can never send a clock message.
+//
+// Unlike every other escape here, most write operations DO send mailbox messages, so SET, CANCEL, RESET, CORES and
+// SEARCH_* need HardwareAccess=1 (the Level Two exclusion) and an administrator, exactly as RUN_CLOCK's SET does.
+// READ is adapter-owned software state and takes NoAdapterSynchronization alone; READBACK sends only getters and
+// is a HardwareAccess operation as well. KEEP sends nothing - it writes the Parameters key and ends the trial - so
+// from 0.7.213 it takes NoAdapterSynchronization as well, and still an administrator. For one release KEEP also
+// admits the HardwareAccess word it asked for up to 0.7.212, so an older CLI or DLL keeps working.
+//
+// Three rules the driver enforces, and a caller should expect:
+//   - No setter runs until this start's READBACK has answered once (FLAG_QUEUE3_PROVEN). Queue 3 has never been
+//     spoken to on this part, so an inferred fact is measured before a write depends on it.
+//   - No CPU message while the GPU is at or above BC250_CPU_GPU_BUSY_PERMILLE busy. At or above the lab's 87 C
+//     no setter runs either, with two exceptions the driver names itself: a step that lowers the dissipation,
+//     and the way back from a trial. The part must always be returnable to the settings it is known to run at,
+//     and a trial left in the chip because the part was hot is the worse of the two states (0.7.211).
+//     One message per BC250_CPU_MESSAGE_GAP_MS, and the owner lock is released between them so the
+//     governor's 25 ms tick is never held for a whole sequence.
+//   - A SET is a trial. The driver reverts it when TrialMs passes without a KEEP, and nothing reaches the
+//     registry before a KEEP. A revert that the firmware refuses stays owed (FLAG_REVERT_OWED) and the driver
+//     keeps trying; only then is a cold boot the last backstop, because nothing of this surface persists in
+//     the chip.
+//   - SEARCH_STEP and SET judge the sample the caller describes: WheaEvents, ChecksumErrors and Loaded come
+//     from the caller, which is the only side that can count a machine check or know that it was loading the
+//     part. Without Loaded the driver does not judge clock stretching at all, because an idle core sits a
+//     gigahertz under any limit.
+// CpuTune 0 (the release default) refuses every write with STATUS_INVALID_DEVICE_STATE: the CPU surface is opt-in
+// per machine. Error is enum bc250_cpu_error; SearchFail is enum bc250_cpu_fail (driver/shim/include/bc250_cpu.h).
+#define BC250_CPU_ABI 1u
+#define BC250_CPU_CORE_SLOTS 8u
+// What a caller must know to form a request, under names of this header alone: the two core masks the driver
+// admits and the deepest step of the guided search. driver/shim/include/bc250_cpu.h is the authority for all
+// three, and driver/kmd/cpu.c asserts at compile time that these numbers still equal its own.
+#define BC250_CPU_REQUEST_MASK_STOCK 0x77u     // 6 of the 8 cores: the mask this part ships with
+#define BC250_CPU_REQUEST_MASK_FULL 0xFFu      // all eight
+#define BC250_CPU_REQUEST_SEARCH_STEPS 8u      // the deepest undervolt step the search tries
+#define BC250_CPU_OP_READ 0u                 // software state only: what is applied, stored, recorded
+#define BC250_CPU_OP_READBACK 1u             // send the getters of both queues; no setter
+#define BC250_CPU_OP_SET 2u                  // in: Given, MaxMHz, UvSteps, TempC, TrialMs
+#define BC250_CPU_OP_KEEP 3u
+#define BC250_CPU_OP_CANCEL 4u
+#define BC250_CPU_OP_RESET 5u                // the recorded baseline, and the stored values deleted
+#define BC250_CPU_OP_CORES 6u                // in: CoreMask (119 or 255); applies at the next Windows restart
+// The guided undervolt search ("find my setting"). The judgement is the shim's (bc250_cpu_search_next), the load is
+// the caller's: BEGIN records the baseline and applies step 1 as a trial; then the caller loads the CPU for
+// SearchLoadMs and calls STEP, which reads the chip, judges the step just loaded and either applies the next one or
+// stops and puts the baseline back. SearchBest is then the deepest step that passed, and a person presses KEEP.
+// A caller that stops calling loses nothing: the trial window of the step in force ends it.
+#define BC250_CPU_OP_SEARCH_BEGIN 7u         // in: UvSteps (0 = BC250_CPU_SEARCH_MAX_STEPS), TrialMs
+#define BC250_CPU_OP_SEARCH_STEP 8u          // out: SearchStep, SearchBest, SearchFail, SearchTested, Flags
+#define BC250_CPU_GIVEN_MAX 1u               // Given bits: which of the three values a SET carries
+#define BC250_CPU_GIVEN_UV 2u
+#define BC250_CPU_GIVEN_TEMP 4u
+#define BC250_CPU_FLAG_VALID 1u              // a full WDDM start with the SMU owner online
+#define BC250_CPU_FLAG_ON_TRIAL 2u
+#define BC250_CPU_FLAG_STORED 4u             // CpuMaxMHz, CpuUvSteps or CpuTempC exists
+#define BC250_CPU_FLAG_PENDING 8u            // CpuPending is on disk: the last start with these values was not healthy
+#define BC250_CPU_FLAG_CONFIRMED 16u
+#define BC250_CPU_FLAG_QUEUE3_PROVEN 32u     // queue 3 answered a getter in this start: setters are admitted
+#define BC250_CPU_FLAG_TUNE_ON 64u           // CpuTune 1
+#define BC250_CPU_FLAG_SEARCHING 128u
+#define BC250_CPU_FLAG_CORE_PENDING 256u     // CoreMaskPending: a restart now puts the stock mask back
+#define BC250_CPU_FLAG_CORE_CONFIRMED 512u
+#define BC250_CPU_FLAG_BUSY 1024u            // another CPU sequence runs: this request was refused, nothing changed
+#define BC250_CPU_FLAG_REVERT_OWED 2048u     // a revert was refused and is retried: the chip still has the trial
+#define BC250_CPU_FLAG_TEMP_VALID 4096u      // TemperatureMc was read; without this nothing judges the part cold
+typedef struct _BC250_ESCAPE_CPU {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long TrialMs, TrialRemainingMs, Serial, Error;
+    unsigned long Given;                    // in: SET, BC250_CPU_GIVEN_* bits
+    unsigned long MaxMHz, UvSteps, TempC;   // in: SET
+    unsigned long AppliedMaxMHz, AppliedUvSteps, AppliedTempC;      // out: what the driver last sent (cached)
+    unsigned long StoredMaxMHz, StoredUvSteps, StoredTempC;         // out: the registry's values, 0 when absent
+    unsigned long BaselineMaxMHz, BaselineUvSteps, BaselineTempC;   // out: recorded before the first write
+    unsigned long VoltageMv, GpuVoltageMv, CapC, Features;          // out: the queue 3 and queue 0 readbacks
+    unsigned long CoreMHz[BC250_CPU_CORE_SLOTS];        // out: the effective clock per core, 0 for no answer
+    unsigned long PstateMHz[BC250_CPU_CORE_SLOTS];      // out: the clock of each P-state
+    unsigned long Cores, Threads;           // out: what Windows reports, which is all the mask's effect we can see
+    unsigned long CoreMask, CoreMaskStored; // in: CORES; out: the setting in force and on disk
+    unsigned long LastQueue, LastMessage, LastStatus, LastParameter;    // out: the support report only
+    long TemperatureMc;                     // out
+    unsigned long SearchStep, SearchBest, SearchFail, SearchTested;     // out
+    unsigned long Reads, Writes, Refusals, Reverts;                    // out
+    unsigned long RevertRetries, RevertFailures;     // out: an owed revert's attempts, and the refused ones
+    unsigned long WheaEvents, ChecksumErrors;       // in: SET and SEARCH_STEP, from the caller's own counters
+    unsigned long Loaded;                   // in: 1 while the caller loads the CPU over this sample
+    unsigned long long Generation;          // out: start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in: every write
+    unsigned long Reserved[2];              // zero in, zero out
+} BC250_ESCAPE_CPU; // 296 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes
@@ -958,7 +1404,9 @@ typedef struct _BC250_ESCAPE_FENCE {
 // As `From` with BC250_ESCAPE_LOG_SUMMARY: start at the first line this summary itself wrote, so that asking for
 // a summary does not reprint the whole run. The driver answers the real number in SummaryFrom either way.
 // `bc250kmd_cli log summary` does not send it (it prints the whole ring, which is what an evidence file wants);
-// `log summary only` does, for a caller that polls (the overlay, BD-054).
+// `log summary only` does, for a caller that asks for one block on request. No shipped caller polls it: the
+// overlay's graphics panel reads the ring with GET_LOG pages and sends this one only for the "graphics.summary"
+// action of its table (BD-054, C55).
 //
 // BC250_ESCAPE_LOG_SUMMARY is refused (REFUSED, STATUS_INVALID_DEVICE_REQUEST) unless D3DKMT_ESCAPE.Flags has
 // HardwareAccess set and NoAdapterSynchronization clear: the summary reads state that a device stop frees, and

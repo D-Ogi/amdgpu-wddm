@@ -530,8 +530,11 @@ void test_small_placement(Env& env) {
            static_cast<unsigned long long>(granted.Alignment));
     // Placed where only the small alignment admits the offset or only its size fits: S_OK exactly when the engine
     // grants it and the granted size fits from the offset to the heap's end.
+    // BD-075: a refused create reports E_OUTOFMEMORY, whatever its real reason, because a creation function of a
+    // display driver may report only that and D3DDDIERR_DEVICEREMOVED (engine-ddi.h, admitted_create_failure). The
+    // real code stays on the slot's own log line.
     const auto expect = [&](UINT64 offset, UINT64 heap_bytes) {
-        return grants && granted.SizeInBytes <= heap_bytes - offset ? S_OK : E_INVALIDARG;
+        return grants && granted.SizeInBytes <= heap_bytes - offset ? S_OK : E_OUTOFMEMORY;
     };
 
     const uint32_t errors = device.shell.device_errors;
@@ -555,7 +558,7 @@ void test_small_placement(Env& env) {
                                                                          D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE);
     const HRESULT hr_target = place_at(describe(16, render_target), 4096, target);
     const HRESULT hr_large = place_at(describe(256, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), 4096, large);
-    checkf(hr_target == E_INVALIDARG && hr_large == E_INVALIDARG,
+    checkf(hr_target == E_OUTOFMEMORY && hr_large == E_OUTOFMEMORY,
            "small placement: a render target at 4096 and a 256x256 texture at 4096 are refused (hr %08lx %08lx)",
            static_cast<unsigned long>(hr_target), static_cast<unsigned long>(hr_large));
     for (Buffer* b : {&at4k, &last, &fitted, &target, &large, &heap, &tail}) destroy_buffer(env, device, *b);

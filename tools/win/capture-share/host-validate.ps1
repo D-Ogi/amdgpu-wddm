@@ -5,11 +5,22 @@
 # Output: <Out>\<stamp>\<run>.txt/.json and summary.txt.
 #
 #   pwsh -NoProfile -File tools\win\capture-share\host-validate.ps1 [-Exe <capshare.exe>] [-Out <dir>] [-Bound 30]
+#        [-Only <name,...>] [-SetEnv NAME=VALUE,...]
+#
+# -Only runs the named rows alone, in the order of the table below. -SetEnv passes --env to every run, which the
+# client applies before it creates any device and the peer inherits. Both sides of our own D3D12 driver read
+# AMDGPU_WDDM_LOG, so a trace of a failing cell is:
+#   -Only s12to12,s11to12 -SetEnv AMDGPU_WDDM_LOG=file:<dir>\ddi.log,AMDGPU_WDDM_DDI_TRACE=1
+# AMDGPU_WDDM_DDI_TRACE alone writes nothing: the sink is off until AMDGPU_WDDM_LOG names one (stdio-log.h).
+# A driver refusal needs neither switch, because the driver writes it to the debugger channel and this client
+# records that channel of both of its processes in the cell log, with the A or B prefix of the side that wrote it.
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
     [string]$Exe = (Join-Path $Root 'scratch\build\capture-share\capshare.exe'),
     [string]$Out = (Join-Path $Root 'scratch\build\capture-share\host'),
-    [int]$Bound = 30
+    [int]$Bound = 30,
+    [string[]]$Only = @(),
+    [string[]]$SetEnv = @()
 )
 $ErrorActionPreference = 'Stop'
 $Exe = (Resolve-Path $Exe).Path
@@ -43,7 +54,15 @@ $runs = @(
     @('f11to12', 'pass', '--cell f11to12'),
     @('f12to12', 'pass', '--cell f12to12'),
     @('s12to11-rgba8', 'pass', '--cell s12to11 --format rgba8 --sync fence'),
+    # The sRGB views of the two 8-bit rows, both directions. The shared-surface wire has always admitted them and
+    # the D3D12 shell used to refuse them, which no cell could reach while --format had two values (BD-075 review).
+    @('s12to11-srgb', 'pass', '--cell s12to11 --format bgra8-srgb --sync fence'),
+    @('s11to12-srgb', 'pass', '--cell s11to12 --format rgba8-srgb --sync fence'),
     @('s12to12-simultaneous', 'pass', '--cell s12to12 --simultaneous --sync fence'),
+    # The keyed-mutex handover discriminator (BD-075 round 2). On a driver that orders the release behind the
+    # creator's submitted write, the extra CPU wait changes nothing and the row passes exactly as km12to11 does;
+    # that is what makes a difference between the two rows on the lab a statement about our driver.
+    @('km12to11-finish', 'pass', '--cell km12to11 --creator-finish'),
     @('km12to11-stderr', 'pass', '--cell km12to11 --stderr {dir}\km12to11-stderr-err.txt'),
     @('ipc-stderr', 'pass', '--cell ipc --stderr {dir}\ipc-stderr-err.txt'),
     @('neg-f11to11', 'mismatch', '--cell f11to11 --inject skip-wait'),
@@ -54,13 +73,24 @@ $runs = @(
     @('interlock-wgc', 'fail', '--cell wgc')
 )
 
-$lines = @("capshare host validation $stamp", "exe $Exe sha256 $((Get-FileHash $Exe -Algorithm SHA256).Hash)", '')
+if ($Only.Count) {
+    $wanted = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+    $runs = @($runs | Where-Object { $wanted -contains $_[0] })
+    if (-not $runs.Count) { throw "no row of the table matches -Only $($wanted -join ',')" }
+}
+$envArgs = (@($SetEnv | ForEach-Object { $_ -split ',' } | Where-Object { $_ } |
+    ForEach-Object { "--env $($_ -replace '\{dir\}', $dir)" }) -join ' ')
+
+$lines = @("capshare host validation $stamp", "exe $Exe sha256 $((Get-FileHash $Exe -Algorithm SHA256).Hash)")
+if ($envArgs) { $lines += "env $envArgs" }
+$lines += ''
 $ok = 0
 foreach ($r in $runs) {
     $name, $expect, $cellArgs = $r
     $txt = Join-Path $dir "$name.txt"
     $json = Join-Path $dir "$name.json"
     $argLine = ($cellArgs -replace '\{dir\}', $dir) + " --bound $Bound --out $txt --json $json"
+    if ($envArgs) { $argLine += " $envArgs" }
     $p = Start-Process -FilePath $Exe -ArgumentList $argLine -Wait -PassThru -WindowStyle Hidden
     $verdict = if (Test-Path $txt) { (Select-String -Path $txt -Pattern '^(A\s+\d+\s+)?VERDICT ' | Select-Object -Last 1).Line } else { '' }
     $result = if ($verdict -match ' result=(\S+)') { $Matches[1] } else { 'none' }

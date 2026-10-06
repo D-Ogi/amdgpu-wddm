@@ -378,8 +378,9 @@ bool hooks_valid(const ShellHooks& h, MemoryMode mode) noexcept {
     if (h.size != sizeof(ShellHooks) || !h.report_device_error || !h.report_list_error || !h.is_device_lost ||
         !h.bind_list_table)
         return false;
+    // adopt_memory is optional even in RuntimeBacked: without it no shared open is served (BD-075).
     if (mode == MemoryMode::RuntimeBacked) return h.allocate_memory && h.free_memory;
-    return !h.allocate_memory && !h.free_memory;
+    return !h.allocate_memory && !h.free_memory && !h.adopt_memory;
 }
 } // namespace
 

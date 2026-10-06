@@ -14,6 +14,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROFILES = sorted((HERE / 'profiles').glob('*.json'))
 RUNTIME = (HERE / 'game-runtime.ps1').read_text(encoding='utf-8', errors='replace')
+STREAM = (HERE / 'kmdlog-stream.ps1').read_text(encoding='utf-8', errors='replace')
+# Where the stream's polling loop begins. Everything after it runs every interval of a game session.
+STREAM_LOOP = 'while($timer.Elapsed.TotalSeconds -lt $streamLimit'
 
 # What a profile may ask of the M14.1 application router, and how a session treats the game's own settings.
 ROUTERS = {'allow', 'not-allow', 'unchecked'}
@@ -85,6 +88,25 @@ class OwnerRules(unittest.TestCase):
             with self.subTest(script=name):
                 text = (HERE / name).read_text(encoding='utf-8', errors='replace')
                 self.assertIn('[Math]::Min([Math]::Max($Seconds, 10), 1200)', text)
+
+
+class LogStream(unittest.TestCase):
+    """How kmdlog-stream.ps1 reads the KMD log ring during a session. `log summary` is BC250_ESCAPE_LOG_SUMMARY,
+    which the driver answers only with HardwareAccess: a Level Two escape, so dxgkrnl suspends the GPU scheduler
+    for up to one VSync around it (measured cost of such a poll: a 300 ms stall every 5.4 s). It carries the WDDM,
+    DPM, interop and OTG tables, which are worth having once at the start of a session and never on a schedule."""
+
+    def test_the_loop_asks_for_no_summary(self):
+        at = STREAM.find(STREAM_LOOP)
+        self.assertGreater(at, 0, 'the polling loop of kmdlog-stream.ps1 was not found')
+        self.assertNotIn('log summary', STREAM[at:],
+                         'no LOG_SUMMARY escape from the stream loop: it runs every 500 ms of a game session')
+        self.assertIn("Run-Bounded $cli 'log 0' 'log header'", STREAM[at:])
+
+    def test_one_summary_before_the_loop(self):
+        at = STREAM.find(STREAM_LOOP)
+        self.assertEqual(STREAM[:at].count("'log summary'"), 1,
+                         'exactly one LOG_SUMMARY escape per session, before the loop')
 
 
 class Sources(unittest.TestCase):

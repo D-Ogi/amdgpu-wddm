@@ -18,7 +18,7 @@ the verdict:
 ```
 VERDICT cell=s12to11 result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0
         content=- gate=held route=A:...,B:... fl=A:12_2,B:12_1 checks=B:P0=pass,B:A=pass,A:B=pass
-        elapsed_ms=1031 note=-
+        elapsed_ms=1031 decided_ms=1031 note=-
 ```
 
 | Field | Meaning |
@@ -31,9 +31,16 @@ VERDICT cell=s12to11 result=pass side=- stage=- call=- hr=- at=- got=- want=- di
 | `gate` | `held` when no side got ahead of its synchronisation, or `violated:<step>` |
 | `route`, `fl` | the loaded user-mode drivers and the feature level of each side |
 | `checks` | every oracle result of the run |
+| `elapsed_ms` | the whole run, read when the verdict is written out, after both processes have ended |
+| `decided_ms` | when the verdict was decided, or when the cell's own work ended for a pass |
 
 Exit codes are 0 for pass, 1 for mismatch, 2 for fail, 3 for timeout and 4 for a bad argument. A watchdog ends
 every run inside `--bound` seconds and reports the stage that hung. `--bound` accepts 1 to 170 seconds.
+
+Read `decided_ms`, not `elapsed_ms`, for how long a call took. The two differ when the peer outlives the
+decision. The parent sends `DONE` when its own side of the cell is over, which also ends any wait of the peer,
+so the two are close now. Before that, a side A which failed before it sent `HANDLES` left the peer waiting
+until `PeerExit` timed out, and `elapsed_ms` carried three extra seconds. BD-075 reports those numbers.
 
 ## The cells
 
@@ -69,6 +76,14 @@ milliseconds, and a side that got ahead of its synchronisation makes the run a m
 `mismatch` with `gate=violated`. A run of the `f` cells or of the `s` cells with `--sync fence` that passes with
 this switch proves that the gate measures nothing.
 
+### The format of the shared texture
+
+`--format` names it: `bgra8` (the default), `rgba8`, `bgra8-srgb` or `rgba8-srgb`. The two sRGB values ask for a
+view of the same storage, which the shared-surface wire format admits as its sibling format. BD-075 added them,
+because the D3D12 driver matched the storage format alone and refused the view. No cell could reach that refusal
+while `--format` had two values. The image oracles compare the bytes, so an sRGB run compares the same
+numbers as its linear twin.
+
 ## Build
 
 ```powershell
@@ -86,13 +101,14 @@ projection that the `wgc` cell needs. The compiler comes from the installed Visu
 pwsh -NoProfile -File tools\win\capture-share\host-validate.ps1
 ```
 
-The script runs the 32 headless checks and compares each verdict with the expected one. It runs the self-test, the
-harness cell, both controls, the oracle check, every keyed-mutex, shared-texture and fence cell, four negative
-controls with `--inject skip-wait`, and the interlock check that `dda` and `wgc` refuse to start without
-`--interactive-ok`. It opens no window. It writes `<Out>\<stamp>\summary.txt` with one line for each run.
+The script runs the 34 headless checks and compares each verdict with the expected one. It runs the self-test, the
+harness cell, both controls, the oracle check, every keyed-mutex, shared-texture and fence cell, the two sRGB
+cells, four negative controls with `--inject skip-wait`, and the interlock check that `dda` and `wgc` refuse to
+start without `--interactive-ok`. It opens no window. It writes `<Out>\<stamp>\summary.txt` with one line for
+each run.
 
-A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01. That result proves
-the client and the oracles. It says nothing about unit A.
+A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01, and all 34 on
+2026-10-06. That result proves the client and the oracles. It says nothing about unit A.
 
 ## Run it on the lab
 
@@ -120,8 +136,36 @@ Rules for a lab run:
   diagnostics of every user-mode driver in both processes land there. Collect that file together with the log and
   the JSON after a failure.
 - `--dbwin dwm.exe` also records the debug lines of the compositor during the run.
+- `--env NAME=VALUE` sets a variable before any device is created, and the peer inherits it.
 - A failure report needs four files: the `--out` log, the `--json` verdict, the `--stderr` file and the kernel
   driver log around the run.
+
+### Tracing a failing cell
+
+A refusal of our own D3D12 driver needs no switch. The driver writes it to the debugger channel, and this
+client records that channel of both of its processes into the cell log, with the `A` or `B` prefix of the side
+that wrote it. So the `--out` log of a failing cell already holds lines like:
+
+```
+A   203 amdgpu_wddm_d3d12 heap import refused (heap flags): 80004001; request flags 0x1, heap flags 0x...
+A   203 amdgpu_wddm_d3d12 engine-ddi: CreateHeapAndResource: 80004001; heap description given (...)
+B   251 amdgpu_wddm_d3d12 engine-ddi: OpenHeapAndResource: 80004001 reported as 8007000e, no shared open ...
+```
+
+Read the cell log for those lines first. Do not read a `-err.txt` file: the client writes one only when
+`--stderr` names it.
+
+The full per-call DDI trace needs two variables, and one of them is easy to forget:
+
+```
+--env AMDGPU_WDDM_DDI_TRACE=1 --env AMDGPU_WDDM_LOG=file:C:\BC250\tmp\ddi.log
+```
+
+`AMDGPU_WDDM_DDI_TRACE=1` alone writes nothing, because the sink stays off until `AMDGPU_WDDM_LOG` names one
+(`driver/umd/d3d12/stdio-log.h`). Both processes may append to one file. `AMDGPU_WDDM_DDI_TRACE=2` writes
+failures only, to the debugger channel, with no sink needed, which this client records as above.
+
+`host-validate.ps1 -Only <names> -SetEnv <NAME=VALUE,...>` runs the same rows with those variables.
 
 Expect a cross-driver open to be the first wall. Desktop Duplication hands the consumer a surface that the
 compositor's user-mode driver owns. The verdict line names the failing call and the removed reason of the device,

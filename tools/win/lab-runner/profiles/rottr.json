@@ -51,12 +51,12 @@
   "saves": "",
   "events_filter": "ROTTR|amdgpu_wddm|d3d12|d3d11|dxgi",
   "app_router": {
-    "required": "Both APIs: ROTTR.exe on the Allow list in Mode allowlist (HKLM\\SOFTWARE\\amdgpu-wddm\\AppRouter) and GpuUmdPath at the d3d11 witness, the static-CRT root app-route-icdmt (for D3D12 the game's D3D11 probe device needs it: rottr5 and rottr6 of 2026-10-01); otherwise the session refuses before the launch",
+    "required": "ROTTR.exe has to reach the application GPU UMD, for the game's D3D11 probe device in DirectX 12 mode as well (rottr5 and rottr6 of 2026-10-01: on the CPU UMD the probe got FL 10_0 and the game died). The release default AppRouter Mode gpu-default (since b19) does that with no Allow entry; the runtime refuses the session otherwise, and also when the router's GPU UMD is not the profile's d3d11 witness",
     "check": "(cd bc250-win && python tools/win/target.py ps ../scratch/m15/icd-mt/lab/policy-read.ps1)",
-    "add": "(cd bc250-win && python tools/win/target.py ps ../scratch/m14/offer-hint/lab/hint-policy.ps1 -Allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe,ROTTR.exe -Root 'C:\\BC250\\m14\\app-route-icdmt')",
-    "remove": "python scratch/m15/app-route/approute.py policy allowlist --allow d3d11bench.exe,d3d11mt.exe,d3d11fl12.exe,dxdiag.exe",
+    "add": "",
+    "remove": "",
     "kill_switch": "python scratch/m15/app-route/approute.py policy cpu",
-    "rules": "--allow/-Allow replace the whole list: name every current entry (the four of STATE.md since 04:47Z, dxdiag.exe included; check first). The add is the lead's command of rottr6 (2026-10-01): hint-policy.ps1 admits the root with its own app-stage.ps1, then the root's app-policy.ps1 writes GpuUmdPath = <Root>\\gpu\\<shell> with the root's manifest hash checked. The remove (approute.py) returns to the deployed root app-route-001 (receipts app-policy-9 and app-policy-10). The router decides at the process's OpenAdapter, so the policy is set before the session and removed after the game has ended."
+    "rules": "Under gpu-default nothing is set before or after a session. Only a lab left in Mode allowlist needs the game in Allow; check first, and put the release default back with the installer's values, not with an old root."
   },
   "app_profile": {
     "image": "",

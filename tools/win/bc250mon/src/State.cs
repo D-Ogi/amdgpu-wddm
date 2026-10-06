@@ -43,6 +43,12 @@ namespace Bc250Mon
         public int LoadSamples;
         public uint? GfxMHz;
         public ulong? VramUsedBytes, VramTotalBytes, ApertureUsedBytes, ApertureTotalBytes;
+        // The case fan, from the board's own hardware monitor (docs/design/fan.md). Null means no reading: the
+        // gate is closed, the reader is offline, the sample is stale or the driver is older than 0.7.213.1.
+        // FanStopped is the one case worth a colour: a duty output runs and no tachometer turns.
+        public uint? FanRpm, FanDutyPercent;
+        public double? FanApuC;
+        public bool FanStopped;
         public string TemperatureSource, LoadSource, ClockSource, VramTotalSource, Note;
         public uint KmdVersion;
 
@@ -59,7 +65,20 @@ namespace Bc250Mon
                 return (VramTotalBytes.HasValue ? used + "/" + Megabytes(VramTotalBytes).Value.ToString(Inv) : used) + " MB";
             }
         }
-        public string Text { get { return "Tctl " + Temperature + "  load " + Load + "  GFX " + Clock + "  VRAM " + Vram; } }
+        public string Fan
+        {
+            get
+            {
+                if (FanStopped) return "stopped";
+                if (!FanRpm.HasValue) return "n/a";
+                return FanRpm.Value.ToString(Inv) + " rpm" +
+                       (FanDutyPercent.HasValue ? " (" + FanDutyPercent.Value.ToString(Inv) + " %)" : "");
+            }
+        }
+        public string Text
+        {
+            get { return "Tctl " + Temperature + "  load " + Load + "  GFX " + Clock + "  VRAM " + Vram + "  fan " + Fan; }
+        }
     }
 
     public sealed class State

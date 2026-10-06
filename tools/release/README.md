@@ -13,15 +13,17 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts; with `-SetupApp`, also the setup window `setup\amdgpu_wddm_setup.exe` (`tools/win/amdgpu_wddm_setup`). |
 | `test-parse51.ps1` | Gate: every script parses under Windows PowerShell 5.1. |
 | `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call), and it and both copies of `bc250control.dll` come from one control-app build folder. |
-| `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
+| `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase; an install over an older release names the files of that release that this package does not install and removes nothing else, and the uninstall takes every item of ours and ends with the list of what is left (BD-089). Never run the real install on a development PC. |
 | `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
 | `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the driver's own safety closures (BD-069: a repair reopens them and clears the record after the write, another install keeps them and reports them, a reason the table does not name still counts in a durable record, a value the tester set by hand stays kept), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
 | `test-session-checks.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-060): the INF `Reboot` directive (found through `[Manufacturer]` and its models, added once after each install section header, line endings kept, present in the packaged INF), the pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes; no installer function for the KMD's BD-059 session marker), the install inputs that the argument-free run after a restart takes from the state (an offline fresh install and an upgrade, both resume phases, the resumed run's own arguments, another package version, cleared at completion, a tester.10 state), the `resume` action, and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon (a record with a missing or malformed field is ignored and replaced by the next recording), a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. |
-| `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`, run for real from folders with spaces and cmd metacharacters), the kept repair set (each set against its own manifest's firmware), the running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record and the job object's child closure. |
+| `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`, run for real from folders with spaces and cmd metacharacters), the kept repair set (each set against its own manifest's firmware), the running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record, the job object's child closure, and the removal plans of BD-089 (where each file of a manifest lands, the files of the installed release that a new one does not install, and which of our driver-store packages an install deletes). |
 | `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the deadline and the child-process closure (section 10), the footprint unchanged. |
 | `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
 | `test-wow64.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-064): every image under `payload\wow64` and `payload\syswow64` is x86 and every other payload image x64, the x86 entry points are exported undecorated, the `manifest.json` install paths, and verify's 32-bit registration check (`Test-WowRegistration`) against the scratch key `HKCU:\Software\amdgpu-wddm-installer-test-wow` and files under `-WorkRoot`, both removed at the end. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
+| `test-marker-guard.ps1`, `marker_guard.py`, `marker-guard-sources.json` | Gate (build): no fix lost its comment on the way into this release. See "Marker guard" below. |
+| `test-kmd-compile.ps1` | Gate (build): `driver\kmd\build.ps1 -CompileOnly` against the WDK in `<BC250_ROOT>\toolchain\nuget`, so a release is never cut from kernel sources that do not compile. The same compile is the `kmd-compile` check of `tools\quality\quick.ps1`, which until 0.7.213 only exported the compile commands. |
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once
@@ -125,6 +127,26 @@ and the boot).
 
 `build-release.ps1` and `test-dryrun.ps1` need PowerShell 7 (`headless.ps1` starts every child process without a
 window, with stdin closed and a time bound). The installer itself is Windows PowerShell 5.1.
+
+## Marker guard
+
+A fix or an optimisation in this project leaves a comment with its id (`BD-075`, `C50`, `K184`, `M779`, `E52`, or a
+`TODO`/`FIXME`). A train merge or a rebase can drop such a comment together with the code it explains, and the host
+tests of the losing side go with it, so nothing else in the gate set notices. `marker_guard.py` takes every anchored
+comment of every revision in `marker-guard-sources.json`, together with the code that follows it, and looks for it in
+the release head:
+
+| Finding | Meaning | Effect |
+|---|---|---|
+| `GONE` | an id occurs fewer times in a file of the head than in that file of a source, and the file did not just move: a fix or its explanation was dropped (a merge took the other side, a rebase lost a hunk) | fails the gate and the release build |
+| `REWORDED` | the anchored comment line is not in the head verbatim, but the id is still in the file as often as before: usually a rewrap or a deliberate update | printed |
+| `CHANGED` | the comment is there, and the code right after it matches no source's version: a merge result nobody wrote | printed, and the release review reads it |
+
+`marker-guard-sources.json` names each source by its commit, never by a branch: another workflow deletes a branch and
+would take the gate with it, and the commit is what was merged. A wagon gets its row in the commit that merges it into
+the train. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
+(`<id> <path> <reason>`); without that file the gate runs with no exceptions. The fork repositories take the same run
+with `--paths src`. One run over `driver` and `tools` takes about 15 s.
 
 PROVENANCE: vulkaninfo.exe 1.4.335 from Khronos Vulkan-Tools (LunarG build), Apache-2.0.
 PROVENANCE: linux-firmware `amdgpu/cyan_skillfish2_*.bin` at 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, redistributable per `LICENSE.amdgpu`. Not in the package and never committed: the installer downloads the files (kernel.org, GitLab mirror) or takes them from `-FirmwareDir`, checked against `tools/firmware/cyan_skillfish2.json`.

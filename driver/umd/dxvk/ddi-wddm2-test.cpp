@@ -27,10 +27,16 @@ unsigned reported; HRESULT lastReported;
 void APIENTRY count_error(D3D10DDI_HRTCORELAYER,HRESULT hr) { ++reported; lastReported=hr; }
 int adapterIdentity;
 HRESULT APIENTRY adapter_query(HANDLE,const D3DDDICB_QUERYADAPTERINFO *args) {
-    CHECK(args && args->PrivateDriverDataSize==BC250_ADAPTER_CAPS_BYTES);
+    // The kernel driver writes an optional trailer only when all of it fits, so the asked-for size is the
+    // whole contract between the two halves. This stands in for a driver that writes the last trailer the
+    // contract defines: the check above refuses a buffer the write below would overrun.
+    CHECK(args && args->PrivateDriverDataSize==BC250_SCANOUT_CAPS_TOTAL);
     bc250_adapter_identity identity{BC250_ADAPTER_IDENTITY_MAGIC,BC250_ADAPTER_IDENTITY_VERSION,
         sizeof(bc250_adapter_identity),77,0,0};
     std::memcpy(static_cast<unsigned char *>(args->pPrivateDriverData)+BC250_ADAPTER_IDENTITY_OFFSET,&identity,sizeof(identity));
+    bc250_scanout_caps scanout{BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,
+        sizeof(bc250_scanout_caps),BC250_SCANOUT_CAPS_DIRECT_FLIP,1920,1200};
+    std::memcpy(static_cast<unsigned char *>(args->pPrivateDriverData)+BC250_SCANOUT_CAPS_OFFSET,&scanout,sizeof(scanout));
     return S_OK;
 }
 bool policySparse; HRESULT policyResult; UINT64 policyLuid;

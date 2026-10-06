@@ -13,8 +13,10 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     StartHealthInitialize(device);
     CuModeInitialize(device);
     DpmInitialize(device);
+    CpuInitialize(device);
     InteropInitialize(device);
     SmuOwnerInitialize(&device->Smu);
+    HwmonInitialize(&device->Hwmon);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
@@ -31,6 +33,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
+    CpuStop(device);        // before DpmStop: a trial's revert still needs the mailbox and the governor's busy share
     DpmStop(device);        // idempotent, like the detector: its thread runs this image's code
     StartHealthRemove(device);
     InteropRemove(device);  // the power callback must not find the device once its memory goes
@@ -96,6 +99,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
     NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
+    HwmonStart(device);     // the board's hardware monitor, read only; same rule, and gated to off
     // Set only after removing the legacy bc250rd mailbox writer. No implicit
     // fallback: full-WDDM startup requires this owner through SmuPrepareClock.
     if (GuardReadSetting(L"EnableNativeSmu",0)==1) {
@@ -139,6 +143,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     HangDetectorStart(device);
     // After it: the governor starts from the floor the start set, and never fails the start (dpm.c).
     DpmStart(device);
+    // After the governor: the CPU surface reads its settings and, if CpuTune is 1, starts its worker (cpu.c).
+    CpuStart(device);
     GuardStage(StageStartDone);
     return STATUS_SUCCESS;
 
@@ -157,7 +163,9 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     StartHealthClose(device);
     GuardStage(StageStopEnter);
     device->InheritedSignalValid=FALSE;
+    CpuStop(device);        // first: a trial's revert needs the mailbox, which SmuOwnerStop below takes away
     DpmStop(device);        // the floor while the owner is still online, then no governor tick
+    HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
     device->SystemDisplayReady=FALSE;
     device->PostDisplayStopAttempted=FALSE;
@@ -354,10 +362,11 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         NTSTATUS status;
         // The hang detector judges a started device in D0 only. A failed transition down leaves it paused:
         // silence is the safe side of a diagnostic that bugchecks.
-        if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); DpmPause(device); }
+        if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); CpuPause(device); DpmPause(device); }
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
         if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
             DpmResume(device);
+            CpuResume(device);  // nothing of the CPU surface survives D3 in the chip: read it again (0.7.211)
             HangDetectorResume();
             InteropAdapterPower(device,DevicePowerState,ActionType);
         }
@@ -366,6 +375,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
     // Display-only/initial PnP handling retains its existing ownership boundary.
     if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0) {
         StartHealthClose(device);
+        CpuStop(device);
         DpmStop(device);
         SmuOwnerStop(&device->Smu);
     }

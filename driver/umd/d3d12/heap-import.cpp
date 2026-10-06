@@ -33,6 +33,7 @@ struct RuntimeHeapImports::Record {
     bool retired{true},locked{},busy{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
     bool surface{};                             // the allocation of a linear primary
+    bool adopted{};                             // BD-075: opened by the runtime, borrowed, never deallocated here
     DWORD authority{};                          // the thread whose runtime resource DDI runs (0: none)
     bool destroyed{};                           // that DDI destroys the resource
     DWORD releasing{};                          // the thread inside release() (0: none)
@@ -102,18 +103,32 @@ RuntimeHeapImports::Record* RuntimeHeapImports::find(D3DKMT_HANDLE handle) const
     for(auto r=records_;r;r=r->next)if(r->handle==handle)return r;
     return nullptr;
 }
+RuntimeHeapImports::Record* RuntimeHeapImports::find_import(const engine_ddi::ImportedMemory* memory) const noexcept {
+    if(!memory || !memory->cookie)return nullptr;
+    for(auto r=records_;r;r=r->next)if(static_cast<const void*>(r)==memory->cookie)return r;
+    return nullptr;
+}
+// The one question this answers, and its only caller (device-engine.cpp, the BC250_HOST_Lock2/Unlock2 router):
+// is this allocation in our store, so that the ICD's lock goes to our record and its kernel callback instead of
+// to HostedDispatch? A borrowed allocation (BD-075) is in the store like any other: its mapping is ours and
+// dispatch()'s own state checks are the ones that must see the lock. Until the BD-075 review of 2026-10-06 this
+// answered false for an adopted record, with a comment about "the ICD's borrowed-allocation map"; that map has no
+// call here, and the false sent such a lock to HostedDispatch, which refuses an allocation it does not know. The
+// question of whose allocation it is to destroy is a different one and lives in release_owned.
 bool RuntimeHeapImports::owns_allocation(D3DKMT_HANDLE handle) const noexcept {
     if(!active_.load() || !domain_.entered())return false;
     AcquireSRWLockShared(&lock_);
-    const bool owned=find(handle)!=nullptr;
+    const bool known=find(handle)!=nullptr;
     ReleaseSRWLockShared(&lock_);
-    return owned;
+    return known;
 }
 bool RuntimeHeapImports::borrow_backing(D3DKMT_HANDLE handle) noexcept {
     if(!active_.load() || !domain_.entered())return false;
     Exclusive held(lock_);
     auto record=find(handle);
-    if(!record || record->retired || record->busy || record->surface || !record->imported.memory)return false;
+    // A linear surface's memory holds that one image, created or opened: nothing is placed beside it.
+    if(!record || record->retired || record->busy || record->surface || record->adopted ||
+       !record->imported.memory)return false;
     ++record->borrowed;return true;
 }
 void RuntimeHeapImports::return_backing(D3DKMT_HANDLE handle) noexcept {
@@ -219,7 +234,7 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
     VkDeviceMemory memory=VK_NULL_HANDLE;
     {
         Exclusive held(lock_);
-        free_report_.surface=record.surface;
+        free_report_.surface=record.surface;free_report_.adopted=record.adopted;
         if(!record.retired || record.busy || (record.releasing && record.releasing!=self))return E_UNEXPECTED;
         record.releasing=self;memory=record.imported.memory;record.imported.memory=VK_NULL_HANDLE;
     }
@@ -261,10 +276,16 @@ HRESULT RuntimeHeapImports::unlock_for_release(Record& record) noexcept {
 }
 HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
     free_report_.stage=FreeStage::Unmap;
-    HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping);
+    HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping,record.adopted);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;
-    if(record.surface){
+    if(record.adopted){
+        // BD-075: the memory of an opened shared surface. The mapping above was this driver's; the allocation
+        // never was, so there is no deallocate callback to make and no owner to prove. close() forgets the
+        // handle and calls nothing, and the runtime destroys the allocation when the opened resource goes.
+        free_report_.adopted=true;
+        hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
+    } else if(record.surface){
         // By the runtime resource, inside that resource's own DDI and on its thread, or not at all:
         // neither a saved owner in a later DDI nor the other form.
         bool authorized=false;
@@ -335,19 +356,31 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         report_.refusal="malformed request";return E_INVALIDARG;
     }
     const auto& heap=*request->heap;
-    // The linear primary is the one request with more than kMemoryDedicated: all three flags, on a
-    // heap that says PRIMARY. A primary that engine-ddi could not make linear has no surface here.
-    constexpr uint32_t surface_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
-    const bool surface=request->flags==surface_flags;
+    // A linear surface is the one request with the linear flag: the primary's three flags on a heap that says
+    // PRIMARY, or (BD-075) the shared surface's three on an ordinary GPU-only heap. A primary or a shared
+    // resource that engine-ddi could not make linear has no surface here.
+    constexpr uint32_t primary_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
+    constexpr uint32_t shared_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable|engine_ddi::kMemoryLinearSurface;
+    const bool primary=request->flags==primary_flags;
+    const bool shared_surface=request->flags==shared_flags;
+    const bool surface=primary||shared_surface;
+    // The first attempt of a shared create: an ordinary dedicated request that says the resource may have to be
+    // shared. Nothing about the allocation changes; the flag exists so that this call can tell the runtime's
+    // refusal of a shared resource from any other E_INVALIDARG and answer kShareRequired.
+    const bool shareable=(request->flags&engine_ddi::kMemoryShareable)!=0;
     unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
         D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
-    if(surface)allowed|=D3D12DDI_HEAP_FLAG_PRIMARY;
+    if(primary)allowed|=D3D12DDI_HEAP_FLAG_PRIMARY;
     // The three admission checks of the heap description are kept apart, because their names are the answer to
     // a question a lab run has to settle once: which heap flags the D3D12 runtime adds for a shared heap. The
     // DDI defines no SHARED bit (d3d12umddi.h, D3D12DDI_HEAP_FLAGS, where 0x1 is the one gap), so the shell
     // cannot name the bit in advance; it names the bits it has no use for and declines (BD-075).
-    if(!surface && (request->flags&~engine_ddi::kMemoryDedicated))
+    if(!surface && (request->flags&~(engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable)))
         return refuse("request flags",E_NOTIMPL,*request);
+    // A shared surface is one resource's memory: the shareable flag without a dedicated resource would be a
+    // heap to place shared resources in later, which needs its own contract (BD-075, S2).
+    if(shareable && !(request->flags&engine_ddi::kMemoryDedicated))
+        return refuse("shareable heap without a resource",E_NOTIMPL,*request);
     if(const unsigned unimplemented=unsigned(heap.Flags)&~allowed)
         return refuse("heap flags",E_NOTIMPL,*request,unimplemented);
     if(heap.CreationNodeMask>1 || heap.VisibleNodeMask>1)return refuse("node mask",E_NOTIMPL,*request);
@@ -355,21 +388,42 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         return refuse("surface fields without a surface",E_INVALIDARG,*request);
     D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
     bool surface_scanout=false;
+    uint32_t shared_bind=0;
     if(surface){
         const auto* r=request->resource;
-        if(!(heap.Flags&D3D12DDI_HEAP_FLAG_PRIMARY) || (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE) ||
+        // The shape both linear surfaces share: one 2D texture of one mip, one slice and one sample, on a
+        // GPU-only heap that is not system-wide coherent.
+        if((heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE) ||
            heap.CPUPageProperty!=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE || !r ||
            r->ResourceType!=D3D12DDI_RT_TEXTURE2D || r->DepthOrArraySize!=1 || r->MipLevels!=1 ||
            r->SampleDesc.Count!=1 || r->SampleDesc.Quality || r->Width>UINT32_MAX)
+            return refuse(primary?"primary shape":"shared surface shape",E_NOTIMPL,*request);
+        if(primary && !(heap.Flags&D3D12DDI_HEAP_FLAG_PRIMARY))
             return refuse("primary shape",E_NOTIMPL,*request);
+        // BD-075: a shared surface is nobody's primary, and it lives in the one video memory pool this part
+        // has. A primary heap with the shareable flag would be two contracts at once.
+        if(shared_surface && ((heap.Flags&D3D12DDI_HEAP_FLAG_PRIMARY) || heap.MemoryPool!=D3D12DDI_MEMORY_POOL_L1))
+            return refuse("shared surface shape",E_NOTIMPL,*request);
         // The storage formats the compositor may open, from the one table the kernel driver and the
         // compositor's UMD read as well. M15.14: when the scan-out mode is selected and this format is
         // also a SCANOUT_PRIMARY row - BGRA8 or X8, never the 10-bit or FP16 composed primaries - the
         // buffer is admitted as a scan-out primary instead, so the display pipeline can read it
         // directly. The mode is off by default; the kernel driver decides whether any flip of the
         // surface is admitted, against the POST geometry and the segment the allocation landed in.
-        const auto* composed=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
-                                                       AMDGPU_WDDM_SURFACE_COMPOSED);
+        // BD-075 round 2 (2026-10-06): a shared surface is looked up with Bc250SharedSurfaceFormat, which admits
+        // a storage format OR the sRGB view that shares that storage and that LB7A row - the same lookup the wire's
+        // encoder, the D3D11 shell and engine-ddi's composed_format use. This gate was the last caller of
+        // amdgpu_wddm_surface_format_by_dxgi for a shared surface, the storage column alone, and it is where
+        // s12to11-srgb died: engine-ddi admitted B8G8R8A8_UNORM_SRGB (91) and retried, the shell found no row and
+        // refused with "shared surface format" E_NOTIMPL, which the create slot reported as E_OUTOFMEMORY. A format
+        // the wire admits and this gate refuses is uncreatable with nothing saying why.
+        // A primary keeps the storage column: a primary's D3DDDIFORMAT cannot express an sRGB view, and the
+        // SCANOUT_PRIMARY X8 row has no DXGI format at all (dxgi == 0), so Bc250SharedSurfaceFormat would never
+        // return it.
+        const auto* composed=shared_surface
+            ?Bc250SharedSurfaceFormat(static_cast<unsigned long>(r->Format))
+            :amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
+                                       AMDGPU_WDDM_SURFACE_COMPOSED);
         const auto* row=composed;
         // present-cached and present-noprimary describe the opposite intent for the same buffer, so
         // scan-out stands down rather than failing the allocation when either is also listed. The mode
@@ -378,17 +432,28 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // request could only end in a refusal - after this buffer had been moved into VRAM with no CPU
         // mapping, which is a measured regression for a surface that was never eligible.
         unsigned mode_width=0,mode_height=0;
-        if(ddi_experiment_scanout(&mode_width,&mode_height) && !ddi_experiment("present-cached") &&
+        if(primary && ddi_experiment_scanout(&mode_width,&mode_height) && !ddi_experiment("present-cached") &&
            !ddi_experiment("present-noprimary") &&
            r->Width==mode_width && r->Height==mode_height){
             const auto* direct=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                                          AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
             if(direct){row=direct;surface_scanout=true;}
         }
-        if(!row)return refuse("primary format",E_NOTIMPL,*request);
+        if(!row)return refuse(primary?"primary format":"shared surface format",E_NOTIMPL,*request);
         surface_format=static_cast<D3DDDIFORMAT>(row->d3dddi);
+        // BD-075: what the opener may build over this surface, in the D3D11 numbers the record carries. The
+        // DDI's flags are positive, so an opener is told the three views the creator asked for and no more.
+        if(shared_surface){
+            if(r->Flags&D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE)
+                shared_bind|=uint32_t(BC250_SHARED_BIND_SHADER_RESOURCE);
+            if(r->Flags&D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET)
+                shared_bind|=uint32_t(BC250_SHARED_BIND_RENDER_TARGET);
+            if(r->Flags&D3D12DDI_RESOURCE_FLAG_0022_UNORDERED_ACCESS)
+                shared_bind|=uint32_t(BC250_SHARED_BIND_UNORDERED_ACCESS);
+        }
         if(!request->memory_type_bits || !request->surface_row_pitch || !request->surface_layout_size ||
-           request->surface_layout_size>request->byte_size)return refuse("primary layout",E_INVALIDARG,*request);
+           request->surface_layout_size>request->byte_size)
+            return refuse(primary?"primary layout":"shared surface layout",E_INVALIDARG,*request);
     }
     // The allocation is raw memory; the engine places the buffer or image in it. A texture is admitted
     // only as the one resource of a heap without CPU access: CPU-visible texture layouts, primaries and
@@ -427,9 +492,14 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // The image's own requirements, from engine-ddi: no buffer is ever bound to this memory, and
         // the address has to suit the image alone. The description is refused here, before any callback.
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
-        hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
-            request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
-            ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout);
+        if(shared_surface)
+            hr=allocation.prepare_shared_surface(static_cast<uint32_t>(request->resource->Width),
+                request->resource->Height,request->surface_row_pitch,unsigned(request->resource->Format),
+                request->byte_size,shared_bind,request->rt_owner.handle);
+        else
+            hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
+                request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
+                ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout);
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;
@@ -465,6 +535,17 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);
+    // BD-075, the measurement this whole path rests on (lab-20261005T172552Z, ddi.log line 50860): the runtime
+    // answers E_INVALIDARG to the allocate callback of a shared resource whose ordinary allocation shape carries
+    // no resource-level private data. The DDI has no field that says "this resource is shared", so the refusal
+    // is the only signal there is, and it is read only where it can mean that: the first attempt of a create
+    // inside the shareable envelope, which has not yet asked the engine for anything. Any other allocation
+    // keeps the runtime's status unchanged.
+    // shared-create-retry-off: the bisect switch for this whole behaviour (the owner's release-train rule of
+    // 2026-10-05 is "switches + bisect on failure"). With it the shell never answers kShareRequired, so no create
+    // is ever retried as a shared surface and a shared create fails as it did before BD-075 - without removing the
+    // device, which is the fail-fast part and has no switch.
+    const bool share_required=hr==E_INVALIDARG && shareable && !surface && !ddi_experiment("shared-create-retry-off");
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
     // The runtime makes a new heap resident only after this DDI returns, on its own paging queue,
@@ -502,6 +583,98 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // Failed construction transfers nothing to engine-ddi. Pending mapping and
     // cleanup failures remain owned for an explicit later close, never forgotten.
     if(release(*record)==S_OK)erase(record);
+    if(share_required){
+        report_.refusal="shared resource needs a surface record";
+        return engine_ddi::kShareRequired;
+    }
+    return hr;
+}
+// BD-075, the open half. No allocate callback runs here: the allocation exists, the runtime opened it for this
+// device and destroys it itself. Everything after the callback is the same work allocate() does, in the same
+// order and for the same reasons (trial 153: the VA must not leave before the allocation is resident).
+HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine_ddi::ImportedMemory* out) noexcept {
+    if(out)*out={};
+    report_={};report_.stage=ImportStage::Request;
+    if(!active_.load() || !domain_.entered() || !initialized_)return E_UNEXPECTED;
+    drain(false);
+    constexpr uint32_t adopt_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable|
+        engine_ddi::kMemoryLinearSurface;
+    if(!request || !out || request->size!=sizeof(*request) || request->flags!=adopt_flags ||
+       !request->allocation || !request->memory_type_bits || !request->byte_size || !request->alignment ||
+       (request->alignment&(request->alignment-1)) || (request->byte_size&4095)){
+        report_.refusal="malformed adopt request";return E_INVALIDARG;
+    }
+    const uint64_t alignment=std::max<uint64_t>(4096,request->alignment);
+    report_.stage=ImportStage::MemoryType;report_.bytes=request->byte_size;report_.alignment=alignment;
+    // The surface is GPU-only memory, as the create's is: the opener maps nothing on the CPU.
+    uint32_t type=UINT32_MAX;
+    for(uint32_t i=0;i<properties_.memoryTypeCount;++i)if((request->memory_type_bits&(1u<<i)) &&
+        (properties_.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+        {type=i;break;}
+    if(type==UINT32_MAX){report_.refusal="no device-local memory type";return E_INVALIDARG;}
+    report_.memory_type=type;report_.stage=ImportStage::PagingQueue;
+    if(!paging_open_.load(std::memory_order_acquire)){
+        HRESULT opened=S_OK;
+        AcquireSRWLockExclusive(&paging_open_lock_);
+        if(!paging_open_.load(std::memory_order_relaxed)){opened=paging_.open();paging_open_.store(true,std::memory_order_release);}
+        ReleaseSRWLockExclusive(&paging_open_lock_);
+        if(opened!=S_OK)return opened;
+    }
+    auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
+    record->busy=true;record->surface=true;record->adopted=true;
+    // A borrowed allocation names no release owner: its authority is the runtime's, not a resource of ours.
+    record->authority=0;
+    // Several records may hold one borrowed handle. An application may call OpenSharedHandle twice on one device
+    // for the same NT handle, and nothing we can read promises that dxgkrnl answers with two different allocation
+    // handles; engine-ddi asks the shell once per open either way, so the second open must get its own import, not
+    // a refusal (BD-075 review, 2026-10-06; before it, that second open failed with E_OUTOFMEMORY while the
+    // boundary's own test asserted it succeeds). What the store needed instead was to stop identifying an import
+    // by its handle: free() finds the record by the cookie the import carries (find_import), and every lookup left
+    // that is keyed by the handle gives the same answer for any adopted record of it - Lock2/Unlock2 reach a
+    // borrowed record's own state checks, borrow_backing refuses one, begin_owner_scope skips one because it names
+    // no runtime resource. A handle this driver created itself is a different matter and still refused: that would
+    // be the store corruption the first form of this check was written for.
+    // The check and the insert are one hold, so two threads adopting the same handle cannot both pass it.
+    bool ours=false;
+    {
+        Exclusive held(lock_);
+        if(const auto other=find(request->allocation);other && !other->adopted)ours=true;
+        else {record->next=records_;records_=record;}
+    }
+    if(ours){
+        delete record;
+        report_.refusal="the allocation is one this driver created";
+        return E_INVALIDARG;
+    }
+    HRESULT hr=record->allocation.adopt(request->allocation);
+    {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
+    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),request->byte_size,record->mapping);}
+    if(hr==S_OK){report_.stage=ImportStage::Resident;hr=paging_.make_resident(record->mapping);}
+    UINT64 address=0;
+    if(hr==S_OK){report_.stage=ImportStage::MapReady;hr=paging_.wait_ready(record->mapping,&address);}
+    else if(report_.stage==ImportStage::Resident){
+        UINT64 ignored=0;(void)paging_.wait_ready(record->mapping,&ignored);
+    }
+    if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
+    if(hr==S_OK){
+        report_.stage=ImportStage::Import;
+        bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
+        host.allocation=record->allocation.handle();host.va=address;host.size=request->byte_size;
+        VkMemoryAllocateFlagsInfo flags{};flags.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+        flags.flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;flags.pNext=&host;
+        VkMemoryAllocateInfo info{};info.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;info.pNext=&flags;
+        info.allocationSize=host.size;info.memoryTypeIndex=type;
+        VkDeviceMemory imported=VK_NULL_HANDLE;
+        hr=from_vk(allocate_(device_,&info,nullptr,&imported));
+        if(hr==S_OK && !imported)hr=E_UNEXPECTED;
+        if(hr==S_OK){
+            Exclusive held(lock_);
+            record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
+            record->retired=false;*out=record->imported;
+            report_.stage=ImportStage::Done;return S_OK;
+        }
+    }
+    if(release(*record)==S_OK)erase(record);
     return hr;
 }
 HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexcept {
@@ -513,18 +686,27 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
     Record* record=nullptr;VkDeviceMemory imported=VK_NULL_HANDLE;bool quarantine=false;
     {
         Exclusive held(lock_);
-        record=find(memory->allocation);
-        if(!record || record!=memory->cookie || record->retired || record->imported.memory!=memory->memory ||
+        // By the cookie, not by the handle: one borrowed handle may have several records (adopt), and the cookie
+        // is the only field that names exactly one of them. It is still validated against records_ before it is
+        // dereferenced, and every other field of the import must match that record.
+        record=find_import(memory);
+        if(!record || record->imported.allocation!=memory->allocation || record->retired ||
+           record->imported.memory!=memory->memory ||
            record->imported.byte_size!=memory->byte_size || record->imported.gpu_va!=memory->gpu_va)return E_INVALIDARG;
         // A runtime callback that names this import as backing, or its own Lock2/Unlock2 on another
         // thread, is in flight: retiring it now would leave it taken for a release that release() refuses.
         if(record->borrowed || record->busy)return E_PENDING;
         // Retired and taken for the release in one hold: no other thread's call starts on it in between.
         record->retired=true;record->releasing=GetCurrentThreadId();
-        free_report_.surface=record->surface;
+        free_report_.surface=record->surface;free_report_.adopted=record->adopted;
         // A linear primary is never quarantined: only its own runtime resource may release it, inside the
-        // destroy that ends it (release_owned), which a later drain is no longer inside.
-        quarantine=policy_.holds() && !record->surface;
+        // destroy that ends it (release_owned), which a later drain is no longer inside. Nor is an opened
+        // shared surface (BD-075): the runtime destroys its allocation as soon as the destroy returns, so a
+        // mapping of it held past that destroy would name memory that is no longer the opener's.
+        // The adopted term is redundant today (adopt sets surface as well) and is kept on purpose: the two reasons
+        // above are different reasons, and a later record that is adopted without being a surface must still never
+        // be quarantined. heap-import-test pins both.
+        quarantine=policy_.holds() && !record->surface && !record->adopted;
         if(quarantine){imported=record->imported.memory;record->imported.memory=VK_NULL_HANDLE;}
     }
     if(!quarantine){

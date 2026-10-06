@@ -18,6 +18,12 @@
 //                                    both of them
 //     HostedClients       REG_MULTI_SZ  further image base names routed like dwm.exe (test clients)
 //     RouteLogDirectory   REG_SZ     when set: one line per OpenAdapter call to route-<exe>-<pid>.log there
+//     DirectFlipFront     REG_DWORD  M15.14: non-zero puts the D3D11_1 front (front-adapter.h) in front of the
+//                                    hosted UMD on the desktop route, so that the operating system can ask
+//                                    pfnCheckDirectFlipSupport. Absent = on from this release, because the
+//                                    front is finished and rides the desktop; 0 = off, which is the router that
+//                                    shipped, byte for byte, and is this feature's bisect switch; any other
+//                                    value kind = invalid, which is also off
 //   HKLM\SOFTWARE\amdgpu-wddm\AppRouter       (applications only; never read for dwm.exe or a HostedClients entry)
 //     Mode                REG_SZ     cpu | allowlist | gpu-default. Absent = cpu (the application kill switch); any
 //                                    other string or value kind = invalid, which routes like cpu
@@ -62,6 +68,7 @@
 #include <cwchar>
 #include "router-policy.h"
 #include "router-identity.h"
+#include "front-adapter.h"
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -94,6 +101,13 @@ static const size_t PathChars = 1024;
 static const DWORD ClientsBytes = 4096;
 static const DWORD AppListBytes = 16384;
 
+// The DirectFlipFront request. An absent value means Requested from this release: the front is a finished
+// feature and rides the desktop on, with the value 0 as the one switch that puts the shipped router back (the
+// release-train rule, owner 2026-10-05). Off is the router that shipped: no front, no raised DDI, nothing to
+// roll back. A value of another kind is Invalid and is still treated as off, because a desktop that cannot read
+// its own switch must take the route that needs nothing of this release.
+enum class Front { Off, Requested, Invalid };
+
 struct Config {
     wchar_t cpu[PathChars];
     const char *cpu_source;
@@ -104,6 +118,7 @@ struct Config {
     DWORD force_cpu, require_switches;
     bool blit_on, interop_on;
     const char *switch_source; // "latched" (InteropLastState), "settings" (older KMD), "latched-invalid", "unreadable"
+    Front front;
 };
 
 // The application policy (AppRouter key), read only for processes the desktop decision does not route.
@@ -192,6 +207,11 @@ static void ReadConfig(Config *c)
         case Dword::Other: c->force_cpu = 1; break;
         }
         c->require_switches = ReadDword(key, L"RequireKmdSwitches", &v) == Dword::Value && v == 0 ? 0 : 1;
+        switch (ReadDword(key, L"DirectFlipFront", &v)) {
+        case Dword::Absent: c->front = Front::Requested; break;
+        case Dword::Value: c->front = v ? Front::Requested : Front::Off; break;
+        case Dword::Other: c->front = Front::Invalid; break;
+        }
         DWORD bytes = ClientsBytes;
         if (RegGetValueW(key, nullptr, L"HostedClients", RRF_RT_REG_MULTI_SZ, nullptr, c->clients, &bytes) != ERROR_SUCCESS)
             c->clients[0] = c->clients[1] = 0;
@@ -335,20 +355,39 @@ static void WriteRouteLine(const wchar_t *directory, const wchar_t *exe, const c
     CloseHandle(f);
 }
 
-// The desktop line, unchanged from router 5BBEB783.
+// The desktop line. Every field of router 5BBEB783 is in the same place with the same spelling, and M15.14
+// appends exactly one column at the end (front=), so the kit's parser keeps working and an older log and a
+// newer one differ by one field.
 static void Report(const Config &c, const wchar_t *exe, const char *entry, const Decision &d, HRESULT hostedHr,
-                   bool fellBack, const wchar_t *module, HRESULT hr)
+                   bool fellBack, const wchar_t *module, HRESULT hr, const char *front)
 {
     char line[2048];
     int n = _snprintf_s(line, _TRUNCATE,
         "bc250d3d_router pid=%lu exe=%ls entry=%s route=%s reason=%s fallback=%u hosted_hr=%08lx hr=%08lx module=%ls "
-        "cpu_source=%s hosted_source=%s force_cpu=%lu require_switches=%lu switch_source=%s blit=%u interop=%u\n",
+        "cpu_source=%s hosted_source=%s force_cpu=%lu require_switches=%lu switch_source=%s blit=%u interop=%u "
+        "front=%s\n",
         GetCurrentProcessId(), exe, entry, d.route == Route::Hosted && !fellBack ? "hosted" : "cpu",
         ReasonName(d.reason), fellBack ? 1u : 0u, (unsigned long)hostedHr, (unsigned long)hr, module,
         c.cpu_source, c.hosted_source, c.force_cpu, c.require_switches, c.switch_source, c.blit_on ? 1u : 0u,
-        c.interop_on ? 1u : 0u);
+        c.interop_on ? 1u : 0u, front);
     if (n < 0) n = (int)strlen(line);
     WriteRouteLine(c.log_directory, exe, line, n);
+}
+
+// What the front column says, and what the words mean:
+//   off          DirectFlipFront is zero. The hosted UMD's own D3D10.0 table reached the runtime.
+//   invalid      the value is of another kind. Treated as off; the word says the switch could not be read.
+//   on           the front is installed over the hosted adapter table and the runtime may offer D3D11_1.
+//   unavailable  the front was asked for and is NOT in the path: the D3D10.0 adapter entry (the front needs
+//                the 10_2 table), an incomplete or missing hosted adapter table, no free adapter slot, or a
+//                route that ended on the CPU UMD. The desktop then behaves as it did with front=off.
+static const char *InstallFront(const Config &c, const char *entry, D3D10DDIARG_OPENADAPTER *args,
+                                const wchar_t *exe)
+{
+    if (c.front == Front::Invalid) return "invalid";
+    if (c.front != Front::Requested) return "off";
+    if (strcmp(entry, "OpenAdapter10_2")) return "unavailable";
+    return bc250front::Install(args, c.log_directory, exe) ? "on" : "unavailable";
 }
 
 // The application line: the same leading fields, gpu_hr in place of hosted_hr, then the AppRouter state.
@@ -438,12 +477,15 @@ static HRESULT Forward(const char *entry, D3D10DDIARG_OPENADAPTER *args, size_t 
     if (d.route == Route::Hosted) {
         hostedHr = TryGpu(c.hosted, entry, args, tableBytes);
         if (SUCCEEDED(hostedHr)) {
-            Report(c, exe, entry, d, hostedHr, false, c.hosted, hostedHr);
+            // The front goes on only after the hosted open succeeded, so the hosted table it saves is the
+            // real one and a failed hosted open still restores the caller's table untouched (TryGpu).
+            Report(c, exe, entry, d, hostedHr, false, c.hosted, hostedHr, InstallFront(c, entry, args, exe));
             return hostedHr;
         }
     }
     const HRESULT hr = ForwardCpu(c, entry, args);
-    Report(c, exe, entry, d, hostedHr, d.route == Route::Hosted, c.cpu, hr);
+    Report(c, exe, entry, d, hostedHr, d.route == Route::Hosted, c.cpu, hr,
+           c.front == Front::Invalid ? "invalid" : c.front == Front::Requested ? "unavailable" : "off");
     return hr;
 }
 

@@ -24,6 +24,7 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [string]$CertSubject = 'CN=BC-250 lab test signing',
     [switch]$ExportCommandsOnly,
+    [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
     [string]$QualityWorkspace = ''
 )
 
@@ -37,6 +38,18 @@ $bin = Join-Path $msvc.FullName 'bin\Hostx64\x64'
 $pkg = Join-Path $Out 'package'
 $obj = Join-Path $Out 'obj'
 if ((-not $ExportCommandsOnly) -and (Test-Path $obj)) { Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue }
+# The debug information of an earlier build goes with the objects. /Brepro puts a hash of the debug
+# information in the image, and cl appends to an existing cl.pdb instead of writing a fresh one, so a
+# second build into the same directory lays that information out differently and the image changes
+# although no source did. Measured 2026-10-06 on one head: a clean directory gives
+# E440D4D7..., a second build into it 4A294E0D..., a third 698169EC... The package build of the respin
+# removes its whole output directory first, which is why its driver reproduces; a caller that does not
+# would get a different hash from the same sources, and the reproducibility claim of
+# docs/design/reproducible-builds.md would be about the directory instead of the source.
+if (-not $ExportCommandsOnly) {
+    Remove-Item "$obj\cl.pdb", "$obj\*.ilk", "$Out\bc250kmd.pdb", "$Out\bc250kmd.map" `
+        -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory -Force $pkg, $obj | Out-Null
 
 function Invoke-Tool([string]$exe, [string[]]$argv) {
@@ -92,11 +105,12 @@ $shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
 # imported nvd.h is a signed int with bit 31 set (driver\shim\README.md).
 # M6: bc250_ih.c, the interrupt ring (navi10_ih.c), is in this group for its include path.
-$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_copy.c', 'bc250_sdma_paging.c', 'bc250_sdma_virtual_ptes.c', 'bc250_nbio.c', 'bc250_irq.c', 'bc250_ih.c', 'bc250_dispatch.c', 'bc250_clock.c', 'bc250_smu.c', 'bc250_cu_mode.c', 'bc250_dpm.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_copy.c', 'bc250_sdma_paging.c', 'bc250_sdma_virtual_ptes.c', 'bc250_nbio.c', 'bc250_irq.c', 'bc250_ih.c', 'bc250_dispatch.c', 'bc250_clock.c', 'bc250_smu.c', 'bc250_cu_mode.c', 'bc250_dpm.c', 'bc250_hwmon.c', 'bc250_cpu.c') | ForEach-Object { "$repo\driver\shim\$_" }
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
 $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
+    '/Brepro',                      # no timestamp in the object files: the same sources must give the same bytes
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
@@ -116,10 +130,17 @@ foreach($group in $groups) {
 }
 $commands | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Out 'compile_commands.json') -Encoding utf8
 if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation or deployment'; return }
-& python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
-if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
-& (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
-if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
+# -CompileOnly is the compiler as a gate: the same three cl.exe calls and the same link as a real package build,
+# with no quality gates, no identity manifest, no catalog and no signature. It exists because the quality gate
+# itself only EXPORTED these commands (quick.ps1 'kmd-commands' -ExportCommandsOnly), so a C error in
+# driver/kmd or driver/shim reached nobody until somebody built a package. Running the gates here as well would
+# be a loop: quick.ps1 is what calls this switch.
+if(-not $CompileOnly) {
+    & python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
+    if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
+    & (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
+    if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
+}
 
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
@@ -127,8 +148,11 @@ Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244',
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
+    '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
     'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
-    "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") + (Get-ChildItem "$obj\*.obj").FullName)
+    "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
+    (Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName)   # fixed order: /OPT:ICF folds by input order
+Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 
 # What does the prologue of each function take off rsp? A kernel thread has 24 KB and dxgmms2 has already
 # spent some of it when it calls us (facts M104: a 0x5B00-byte local bugchecked 0x50 in nt!_chkstk).
@@ -136,9 +160,16 @@ Write-Host 'stack budget'
 & python (Join-Path $repo 'tools\win\stackbudget.py') "$pkg\bc250kmd.sys" '--map' "$Out\bc250kmd.map"
 if ($LASTEXITCODE -ne 0) { throw 'stack budget: a function allocates too much stack for a kernel thread (see above)' }
 
+if($CompileOnly) {
+    # The unsigned bytes, so that a gate run can be compared with the package build of the same tree by hand.
+    '  {0}  bc250kmd.unsigned.sys' -f (Get-FileHash (Join-Path $Out 'bc250kmd.unsigned.sys') -Algorithm SHA256).Hash
+    Write-Host 'compiled and linked; no catalog, no signature, no deployment'
+    return
+}
+
 Copy-Item (Join-Path $here 'bc250kmd.inf') $pkg -Force
 Write-Host 'catalog'
-Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64', '/uselocaltime')
+Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64')
 
 $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq $CertSubject -and $_.NotAfter -gt (Get-Date) } | Select-Object -First 1
 if (-not $cert) { throw "test certificate '$CertSubject' not found: run tools\win\bc250rd\build.ps1 once, it creates it" }
@@ -168,7 +199,7 @@ if ($UmdStub) {
     # Inf2Cat before the certificate is put there: the .cer is not a packaged file and Inf2Cat would object to it.
     # Signing the .sys does not disturb the catalog, which hashes the PE without its certificate table - which is
     # also why the plain package above catalogues before it signs.
-    Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkgUmd", '/os:10_X64', '/uselocaltime')
+    Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkgUmd", '/os:10_X64')
     Invoke-Tool $signtool @('sign', '/fd', 'SHA256', '/sha1', $cert.Thumbprint, "$pkgUmd\bc250kmd.cat")
     Copy-Item "$pkg\bc250-lab-test.cer" $pkgUmd -Force
     Write-Host "umd package: $pkgUmd"

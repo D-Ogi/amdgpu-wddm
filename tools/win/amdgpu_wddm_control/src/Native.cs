@@ -1,7 +1,11 @@
 // The KMD through bc250control.dll (tools/win/bc250kmd_cli/bc250kmd_cli.c built with BC250_CONTROL_DLL). Every read
 // here is a software-state escape with NoAdapterSynchronization alone: no HardwareAccess (Level Two) escape, which
 // would idle the GPU and stall a running game (BD-054). The one write is ConfirmStart, the start-health CONFIRM the
-// release's logon task sends as well: administrator only, HardwareAccess, once per Recovery action. Settings go to
+// release's logon task sends as well: administrator only, once per Recovery action, and from 0.7.213 with
+// NoAdapterSynchronization instead of HardwareAccess - it writes the registry and touches no register. A driver of
+// 0.7.212 or older refuses that word, which is what runs while a release defers the device restart, so the DLL sends
+// the same request once more with the old HardwareAccess word rather than leave the start unconfirmed: one Level Two
+// escape per Recovery action, never on a schedule. Settings go to
 // the registry and take effect at the next driver start.
 using System;
 using System.Runtime.InteropServices;
@@ -73,6 +77,30 @@ namespace AmdgpuWddmControl
         static extern int Bc250LogRead(uint from, [Out] byte[] data, uint bytes);
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250CuMode(uint op, ulong expectedGeneration, [Out] byte[] data, uint bytes);
+        // Added to bc250control.dll with KMD 0.7.213.1. A deployed DLL without it throws
+        // EntryPointNotFoundException, which Call() turns into "bc250control.dll is too old for this application".
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Hwmon([Out] byte[] data, uint bytes);
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250DpmCurve(uint op, ulong expectedGeneration, uint[] mv, uint points, uint windowMs, [Out] byte[] data, uint bytes);
+        [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Cpu(ref CpuRequest request, [Out] byte[] data, uint bytes);
+
+        // BC250_CPU_REQUEST of tools/win/bc250kmd_cli/bc250kmd_cli.c, 56 bytes. Size says which fields the DLL may
+        // read, so an older application and a newer DLL refuse each other instead of guessing.
+        // WheaEvents, ChecksumErrors and Loaded are what the caller knows and the driver cannot see: this app
+        // runs no load of its own, so it leaves all three at 0 and the driver judges no clock stretching.
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        public struct CpuRequest
+        {
+            public uint Size, Op, Given, MaxMHz, UvSteps, TempC, TrialMs, CoreMask;
+            public uint WheaEvents, ChecksumErrors, Loaded;
+            public ulong ExpectedGeneration;
+        }
+
+        public const uint CurveOpRead = 0, CurveOpSet = 1, CurveOpKeep = 2, CurveOpCancel = 3, CurveOpReset = 4;
+        public const uint CpuOpRead = 0, CpuOpReadback = 1, CpuOpSet = 2, CpuOpKeep = 3, CpuOpCancel = 4,
+            CpuOpReset = 5, CpuOpCores = 6, CpuOpSearchBegin = 7, CpuOpSearchStep = 8;
 
         // AMDGPU_WDDM_CONTROL_NO_DLL=1: every driver read answers as if bc250control.dll were missing (the build's
         // check of the recovery view and of the pages without the DLL).
@@ -119,6 +147,13 @@ namespace AmdgpuWddmControl
             return Call(KmdReply.StartHealthBytes, b => Bc250StartHealth(1, generation, epoch, b, (uint)b.Length), KmdReply.ParseStartHealth);
         }
 
+        // The board's hardware monitor: the fan speed and the chip's own temperatures (READ, any caller). The
+        // reading needs EnableHwmon open on the lab machine; with the gate closed the reply says so in its flags.
+        public static KmdResult<HwmonState> Hwmon()
+        {
+            return Call(KmdReply.HwmonBytes, b => Bc250Hwmon(b, (uint)b.Length), KmdReply.ParseHwmon);
+        }
+
         // The CU mode snapshot of this start (READ, any caller).
         public static KmdResult<CuModeState> CuMode()
         {
@@ -130,6 +165,42 @@ namespace AmdgpuWddmControl
         public static KmdResult<CuModeState> CuConfirm(ulong generation)
         {
             return Call(KmdReply.CuModeBytes, b => Bc250CuMode(1, generation, b, (uint)b.Length), KmdReply.ParseCuMode);
+        }
+
+        // The V/F curve. Every operation is a software escape; a write needs an administrator and the Generation of
+        // a read of the same start, so the window reads, then acts on what it read.
+        public static KmdResult<CurveState> Curve()
+        {
+            return Call(KmdReply.CurveBytes, b => Bc250DpmCurve(CurveOpRead, 0, null, 0, 0, b, (uint)b.Length), KmdReply.ParseCurve);
+        }
+
+        // A trial of one curve. The driver reverts it when the window passes without a Keep, so a window that
+        // closes, a crash and a power cut all end the same way: the stored curve comes back.
+        public static KmdResult<CurveState> CurveTrial(ulong generation, uint[] mv, uint windowMs)
+        {
+            var values = mv == null ? new uint[KmdReply.CurvePoints] : (uint[])mv.Clone();
+            return Call(KmdReply.CurveBytes, b => Bc250DpmCurve(CurveOpSet, generation, values, (uint)values.Length, windowMs, b, (uint)b.Length), KmdReply.ParseCurve);
+        }
+
+        public static KmdResult<CurveState> CurveOp(uint op, ulong generation)
+        {
+            return Call(KmdReply.CurveBytes, b => Bc250DpmCurve(op, generation, null, 0, 0, b, (uint)b.Length), KmdReply.ParseCurve);
+        }
+
+        // The processor surface. READ is a software snapshot, and so is KEEP from 0.7.213 (it writes the registry
+        // and ends the trial); READBACK and every other write send mailbox messages, so the DLL sends those with
+        // HardwareAccess and the driver takes the adapter for the sequence.
+        public static KmdResult<CpuState> Cpu()
+        {
+            var r = new CpuRequest { Size = (uint)Marshal.SizeOf(typeof(CpuRequest)), Op = CpuOpRead };
+            return Call(KmdReply.CpuBytes, b => Bc250Cpu(ref r, b, (uint)b.Length), KmdReply.ParseCpu);
+        }
+
+        public static KmdResult<CpuState> CpuRequestOp(CpuRequest request)
+        {
+            request.Size = (uint)Marshal.SizeOf(typeof(CpuRequest));
+            var r = request;
+            return Call(KmdReply.CpuBytes, b => Bc250Cpu(ref r, b, (uint)b.Length), KmdReply.ParseCpu);
         }
 
         public static KmdResult<VideoMemoryState> VideoMemory()
