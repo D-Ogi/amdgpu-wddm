@@ -11,18 +11,20 @@
 param(
     [Parameter(Mandatory)][string]$Kits,
     [Parameter(Mandatory)][string]$Out,
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    # x86: the 32-bit stub for UserModeDriverNameWow (WoW64 processes); needs microsoft.windows.sdk.cpp.x86 under -Kits.
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $wdk = Join-Path $Kits 'microsoft.windows.wdk.x64\c'
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
-$sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
+$sdkLib = Join-Path $Kits "microsoft.windows.sdk.cpp.$Arch\c"
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+$cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 New-Item -ItemType Directory -Force $Out | Out-Null
 
 $env:INCLUDE = ''; $env:LIB = ''
@@ -36,7 +38,7 @@ $env:INCLUDE = ''; $env:LIB = ''
     # initialize. DllMain is the entry point directly, which is legal because its signature is the DLL entry
     # point's signature.
     (Join-Path $here 'bc250umd.c'), '/link', '/NODEFAULTLIB', '/ENTRY:DllMain',
-    "/DEF:$(Join-Path $here 'bc250umd.def')", "/LIBPATH:$sdkLib\um\x64", 'kernel32.lib') |
+    "/DEF:$(Join-Path $here 'bc250umd.def')", "/LIBPATH:$sdkLib\um\$Arch", 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$|\.exp') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 

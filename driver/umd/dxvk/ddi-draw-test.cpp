@@ -144,7 +144,8 @@ int main() {
     if (!format_allows_not_supported(DXGI_FORMAT_Y410) || !format_allows_not_supported(DXGI_FORMAT_AYUV) ||
         format_allows_not_supported(DXGI_FORMAT_R1_UNORM) || format_allows_not_supported(DXGI_FORMAT_R8G8B8A8_UNORM) ||
         format_allows_not_supported(DXGI_FORMAT_FORCE_UINT)) std::abort();
-    static_assert(offsetof(D3D11_1DDI_DEVICEFUNCS,pfnCheckCounterInfo)==0x308);
+    // Slot 97 of the table: byte 0x308 on x64, 0x184 in the x86 (WoW64) build.
+    static_assert(offsetof(D3D11_1DDI_DEVICEFUNCS,pfnCheckCounterInfo)==97*sizeof(void *));
     if(classify_format_support2_result(E_FAIL,0)!=S_OK ||
         classify_format_support2_result(E_FAIL,1)!=E_FAIL ||
         classify_format_support2_result(S_OK,0)!=S_OK ||
@@ -822,19 +823,19 @@ int main() {
         backing[i].allocation={&rotateIdentity[i],31+i,51+i};
         backing[i].mapping={65536*(UINT64(i)+1),8192,9,true};
         backing[i].texture.texture=reinterpret_cast<ID3D11Texture2D *>(rotating[i].object);
-        backing[i].texture.image={reinterpret_cast<VkImage>(uintptr_t(21+i)),reinterpret_cast<VkDeviceMemory>(uintptr_t(41+i))};
+        backing[i].texture.image={VkImage(uintptr_t(21+i)),VkDeviceMemory(uintptr_t(41+i))};
         backing[i].pitch=256; backing[i].bytes=8192;
     }
     if (rotate_present_resources(rotatingHandles,3,failedRotate)!=E_FAIL || backing[0].allocation.allocation!=31 ||
-        backing[2].texture.image.image!=reinterpret_cast<VkImage>(uintptr_t(23))) std::abort();
+        backing[2].texture.image.image!=VkImage(uintptr_t(23))) std::abort();
     if (rotate_present_resources(rotatingHandles,3,successfulRotate)!=S_OK) std::abort();
     for (UINT i=0;i<3;++i) {
         UINT next=(i+1)%3;
         if (backing[i].allocation.runtime_resource!=&rotateIdentity[i] || backing[i].allocation.allocation!=31+next ||
             backing[i].allocation.kernel_resource!=51+next || rotating[i].present_allocation!=31+next ||
             backing[i].mapping.address!=65536*(UINT64(next)+1) ||
-            backing[i].texture.image.image!=reinterpret_cast<VkImage>(uintptr_t(21+next)) ||
-            backing[i].texture.image.memory!=reinterpret_cast<VkDeviceMemory>(uintptr_t(41+next)) ||
+            backing[i].texture.image.image!=VkImage(uintptr_t(21+next)) ||
+            backing[i].texture.image.memory!=VkDeviceMemory(uintptr_t(41+next)) ||
             backing[i].texture.texture!=rotating[i].object || rotating[i].runtime_surface!=&backing[i]) std::abort();
     }
     const unsigned beforeInvalidRotation=rotations;

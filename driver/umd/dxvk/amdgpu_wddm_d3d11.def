@@ -1,0 +1,6 @@
+; The one entry point the D3D10.1/D3D11 runtimes (and bc250d3d_router.dll) look up by name. x64 exports it
+; undecorated anyway; the x86 build for WoW64 processes would export the stdcall name _OpenAdapter10_2@4, which
+; GetProcAddress("OpenAdapter10_2") does not find.
+LIBRARY amdgpu_wddm_d3d11
+EXPORTS
+    OpenAdapter10_2

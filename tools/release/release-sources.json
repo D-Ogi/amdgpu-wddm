@@ -12,7 +12,7 @@
     "d3d11_shell": "bc250-win m14/dxgi-private-hints 7abf21de",
     "d3d11_engine": "dxvk fork amdgpu-wddm/ddi-engine-inline-throttle ebeadc49",
     "d3d11_icd": "mesa fork amdgpu-wddm/disk-cache-single-file 091ad563",
-    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm wow64/router-x86 (631d25da + x86 patch), CPU UMD mesa 43d0907c, D3D11 shell amdgpu-wddm 7ae6462f + x86 patch, engine dxvk ebeadc49, ICD mesa 091ad563 + x86 patch 9C645734; no x86 D3D12",
+    "wow64": "x86 builds for 32-bit processes (BD-064): router amdgpu-wddm train/b19-wow64-x86, CPU UMD mesa amdgpu-wddm/b19-desktop-umd, D3D11 shell amdgpu-wddm m14/d3d11-nv12-planes with the -Arch x86 recipes of train/b19-wow64-x86, engine dxvk ebeadc49, ICD mesa amdgpu-wddm/b19-icd. Every x86 artifact now comes from a commit: no patch is applied to any tree. No x86 D3D12",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer"
   },
   "public_commits": {
@@ -74,10 +74,10 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/approuter-fix/build-router-631d25da/bc250d3d_router.dll",
-      "sha256": "692D9060203763F1278DA68E395932E606FEA74574CCD1A5071D2F76AFB62E3B",
+      "source": "scratch/land-1006/build-router-x64/bc250d3d_router.dll",
+      "sha256": "11385954DF752A5C0C0C6851CF83F269E4F616314E66373234EEFA367EB05CC8",
       "size": 22528,
-      "role": "desktop/application router (amdgpu-wddm 631d25da, driver/umd/router: gpu-default keeps Windows components and unresolved images on the CPU UMD)"
+      "role": "desktop/application router (bc250-win train/b19-wow64-x86, driver/umd/router: gpu-default keeps Windows components and unresolved images on the CPU UMD; rebuilt with the 32-bit router in the same source, which the #ifdef leaves unchanged on x64; host gate 70 of 70)"
     },
     {
       "component": "desktop-umd",
@@ -154,42 +154,42 @@
     {
       "component": "d3d9-stub-wow64",
       "path": "payload/syswow64/bc250umd.dll",
-      "source": "scratch/wow64/artifact/stub/bc250umd.dll",
-      "sha256": "5114AE264CA2D3B6AA6762C9A69A160F7F5D1D8007A12C2B8AF78A39F9ED4123",
+      "source": "scratch/land-1006/build-stub-x86/bc250umd.dll",
+      "sha256": "318FA358EFD0A3F1796C4C3EF0EE63D11A8D1468C28EED615FD61522FC299B8E",
       "size": 3584,
-      "role": "x86 UMD stub, D3D9 slot of UserModeDriverNameWow (driver/umd-stub, BD-064)"
+      "role": "x86 UMD stub, D3D9 slot of UserModeDriverNameWow (driver/umd-stub/build.ps1 -Arch x86 on bc250-win train/b19-wow64-x86; BD-064)"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/wow64/artifact/router/bc250d3d_router.dll",
-      "sha256": "7D09B81ECD2B1BA976C10362FCD3638C9794E425EF35DC05A6E44C222B4FAD36",
+      "source": "scratch/land-1006/build-router-x86/bc250d3d_router.dll",
+      "sha256": "CD03C5EDB646352E35F510142062A99C59CD77332A16C3293714362D9F663CA2",
       "size": 130560,
-      "role": "x86 application router for 32-bit processes (amdgpu-wddm wow64/router-x86 on 631d25da: the Wow path values, the 64-bit policy keys read through KEY_WOW64_64KEY, plain export names; static CRT; BD-064)"
+      "role": "x86 application router for 32-bit processes (bc250-win train/b19-wow64-x86, tools/build/build-umd-router.ps1 -Arch x86: the Wow path values, the 64-bit policy keys read through KEY_WOW64_64KEY, plain export names, static CRT; host gate 71 of 71; BD-064)"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/wow64/artifact/cpu/bc250d3d.dll",
-      "sha256": "81DC610BC4DF876DFE119C7BF027F2D08E46333C1F26823F20017D0D80D2FEE2",
-      "size": 56194048,
-      "role": "x86 CPU D3D11 UMD for 32-bit processes (mesa fork amdgpu-wddm/desktop-umd-bd058 43d0907c, unmodified, LLVM 23.1.2 x86; the router's fallback route; BD-064)"
+      "source": "scratch/land-1006/art-umd-cpu-x86/bc250d3d.dll",
+      "sha256": "FF33F4B106249FDD42E6BF03D6777DD62A04D56ABB759058FDE49DD1DB3140D5",
+      "size": 56203264,
+      "role": "x86 CPU D3D11 UMD for 32-bit processes (mesa fork amdgpu-wddm/b19-desktop-umd, tools/build/build-mesa.ps1 -Config llvmpipe-umd -Arch x86, LLVM 23.1.2 x86; the router's fallback route; BD-037 and BD-064)"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/wow64/artifact/d3d11/amdgpu_wddm_d3d11.dll",
-      "sha256": "69AFE349D430E63029959DBE0D7C805F1D9AC5C7AB0C0A179DB91BF3F89430C6",
-      "size": 521728,
-      "role": "x86 GPU D3D11 shell for 32-bit processes (amdgpu-wddm 32b074a5 = 7ae6462f + BD-065 blt-model R8G8B8A8 Present through a GPU-converted B8G8R8A8 shadow, + the x86 export and test patch; BD-064)"
+      "source": "scratch/bd071/build/d3d11-x86/amdgpu_wddm_d3d11.dll",
+      "sha256": "8C8D79FAF5692F5B3C50A598BDB803D24E59D8E33CA135394ED8E7BC60D148C0",
+      "size": 550400,
+      "role": "x86 GPU D3D11 shell for 32-bit processes (bc250-win m14/d3d11-nv12-planes, built with the -Arch x86 recipes and the .def export of train/b19-wow64-x86: no patch; /Brepro, repeatable; BD-064 and BD-071)"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/m15/pso-cache/umd-config/config-x86-e03a79ca.bin",
-      "sha256": "388DA562248F5D4047B5EDC9EAD65CB321F50796280DB5CADDD4AC40F77B173B",
+      "source": "scratch/land-1006/umd-config/config-x86-f6392b51.bin",
+      "sha256": "D745A1D173857D4D40992B1CF59AD9CA4839DDD1F1428715933BCC41408E3E34",
       "size": 132,
-      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and ICD E03A79CA (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the ICD pin changes)"
+      "role": "x86 GPU D3D11 caps record for the x86 engine 0D4AE659 and the b19 x86 ICD F6392B51 (tools/build/write-umd-config.py; capabilities carried from 769C6962, the record of E1322557; only the ICD pin changes)"
     },
     {
       "component": "d3d11-umd-wow64",
@@ -202,17 +202,17 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
-      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
-      "size": 20133888,
-      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/disk-cache-single-file 091ad563 + the x86 host-import and fallback-stub patch 9C645734, static CRT; BD-064)"
+      "source": "scratch/land-1006/art-icd-x86/amdgpu_wddm_radv.dll",
+      "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+      "size": 20150784,
+      "role": "x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/b19-icd 31844893, tools/build/build-mesa.ps1 -Config radv-mt -Arch x86: no patch, static CRT checked by the recipe; BD-038, BD-039, BD-045 and BD-064)"
     },
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/m15/pso-cache/icd-artifact-x86/amdgpu_wddm_radv.dll",
-      "sha256": "E03A79CAE453F335AE2B7DFCB23ABA988008DDFCAC6AFA8AD68A621E323137F8",
-      "size": 20133888,
+      "source": "scratch/land-1006/art-icd-x86/amdgpu_wddm_radv.dll",
+      "sha256": "F6392B516C3DF80B3B684172A6501F956C723B45C81D30B8FE45DB6D05011A87",
+      "size": 20150784,
       "role": "x86 system Vulkan ICD for 32-bit processes (the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll; BD-064)"
     },
     {

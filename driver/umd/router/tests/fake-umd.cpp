@@ -42,7 +42,18 @@ static HRESULT Fill(D3D10DDIARG_OPENADAPTER *a, bool v2, UINT_PTR entry)
 #endif
 }
 
-extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10(D3D10DDIARG_OPENADAPTER *a) { return Fill(a, false, 10); }
+#ifdef _WIN64
+#define UMD_EXPORT __declspec(dllexport)
+#else
+// x86: __stdcall decorates an exported name (_OpenAdapter10@4), and the D3D runtime asks GetProcAddress for the
+// plain one. The linker exports the plain names instead (BD-064).
+#define UMD_EXPORT
+#pragma comment(linker, "/EXPORT:OpenAdapter10=_OpenAdapter10@4")
 #ifndef FAKE_NO_OA102
-extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *a) { return Fill(a, true, 102); }
+#pragma comment(linker, "/EXPORT:OpenAdapter10_2=_OpenAdapter10_2@4")
+#endif
+#endif
+extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10(D3D10DDIARG_OPENADAPTER *a) { return Fill(a, false, 10); }
+#ifndef FAKE_NO_OA102
+extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *a) { return Fill(a, true, 102); }
 #endif
