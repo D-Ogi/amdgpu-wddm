@@ -2,8 +2,10 @@
 # install root). Removes everything install.ps1 added and puts the GPU back on Microsoft Basic Display Adapter.
 # -DryRun prints every change without making it. -DisableTestSigning turns test signing off (asked otherwise when
 # the installer turned it on). A restart finishes the removal of files that DWM still has loaded.
+# -Force removes the release also from a development-lab machine (as install.ps1 -Force installs on one); the lab's
+# own folders (C:\BC250\m10, m14, m15) are not ours to remove and stay.
 [CmdletBinding()]
-param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot)
+param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
@@ -31,7 +33,8 @@ if (-not $root) { $root = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)
 if (-not $root) { $root = Join-Path $env:ProgramFiles 'amdgpu-wddm' }
 Write-Info "install root: $root"
 $lab = @(Get-LabInstallPaths)
-if ($lab.Count) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine"; exit 2 }
+if ($lab.Count -and -not $Force) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine (-Force removes the release anyway)"; exit 2 }
+if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', ')) is present; -Force given: the release is removed, those folders stay" }
 if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) { Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0 }
 if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
 
