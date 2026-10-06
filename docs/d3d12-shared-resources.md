@@ -11,8 +11,18 @@ object, its NT handle, `CreateSharedHandle` and `OpenSharedHandle` all belong to
 and a local fence look the same at the DDI, so the driver needs no code for the difference.
 
 Shared resources work for one shape: a 2D texture of one mip level, one array slice and one sample, on a
-GPU-only heap, in a format that has a COMPOSED row in `driver/contract/amdgpu_wddm_surface_format.h`. That is
-the shape a second driver can read, because both sides compute the same addresses from the same table.
+GPU-only heap, in a format that has a COMPOSED row in `driver/contract/amdgpu_wddm_surface_format.h`, or in the
+sRGB view that shares that row's storage. That is the shape a second driver can read, because both sides compute
+the same addresses from the same table.
+
+One lookup answers "is this format a shared surface's" for the whole stack: `Bc250SharedSurfaceFormat` in
+`driver/contract/bc250_shared_surface.h`, which the wire's encoder, the D3D11 shell's `runtime_surface_format`
+and the D3D12 shell's `composed_format` all call. Until 2026-10-06 the D3D12 half called
+`amdgpu_wddm_surface_format_by_dxgi` instead, which matches the storage column alone, so an sRGB surface was
+admitted by the wire and refused by this driver: a D3D11-created `B8G8R8A8_UNORM_SRGB` shared texture decoded and
+then failed in `query_linear_surface`, and an sRGB shared create never reached its retry at all. The review that
+found it also found why nothing caught it - the blob layer's tests round-trip both sRGB views, so the wire looked
+covered, and `capture-share` had no `--format` value that could ask for one.
 
 | Call | Slot | What happens |
 |---|---|---|
@@ -93,9 +103,28 @@ other `E_INVALIDARG`: when the allocate callback answers `E_INVALIDARG` for a sh
 no surface record, the shell answers `kShareRequired`.
 
 The shareable envelope is the shape attempt 2 can describe: `TEXTURE2D`, one mip, one slice, one sample, a
-GPU-only heap that is not system-wide coherent, a width and height within 8192, and a format with a COMPOSED
-row. A create outside it never carries `kMemoryShareable`, so it can never be retried, and its refusals are
-unchanged.
+GPU-only heap that is not system-wide coherent, a width and height within 8192, and a format with a COMPOSED row
+or the sRGB view of one. A create outside it never carries `kMemoryShareable`, so it can never be retried, and
+its refusals are unchanged.
+
+What keeps the retry from masking a real refusal is the narrow discriminator and the envelope, and nothing else.
+An earlier version of this document and of the comment in `resources.cpp` claimed that attempt 2 is strictly more
+constrained than attempt 1, so that a request failing the first for a size or an alignment reason fails the
+second as well. That is wrong: attempt 2 asks for a different segment (the aperture, which the LB7A and E26R
+blobs select through `Bc250SurfaceResourcePolicy`), a different size and a different alignment. The load-bearing
+check is `share_required` in `heap-import.cpp` - `E_INVALIDARG` alone, from the allocate callback of a first
+attempt inside the envelope that published no resource-level private data.
+
+Because the envelope holds every single-mip 2D BGRA8, RGBA8, RGB10A2, RGBA16F and A8 texture up to 8192 on a
+DEFAULT heap, a retry firing where it should not would turn an ordinary committed texture linear and move it to
+the GTT aperture with no error anywhere. Two things make that visible and reversible:
+
+- every retry is counted (`engine_ddi::shared_surface_retries`) and names itself through `log_refusal`, which
+  reaches the debugger channel with no trace build and under the refusal budget. The lab trial scores those
+  counts per cell, and its controls must show zero.
+- `AMDGPU_WDDM_D3D12_EXPERIMENT=shared-create-retry-off` turns the whole behaviour off: the shell answers the
+  runtime's own status instead of `kShareRequired`, so nothing is ever retried. The fail-fast part - a refusal
+  that does not remove the device - has no switch and is not meant to have one.
 
 Attempt 2 asks the engine for the image's linear layout (`QueryLinearImage`), replaces the request's `ByteSize`
 with the linear backing size and its `Alignment` with 0, and imports with
@@ -161,13 +190,33 @@ open is not the shape above.
 6. It creates a heap over that memory (`CreateHeapFromMemory`) and places the resource in it at offset 0, with
    the open's `InitialResourceState`. The resource is recorded as `ResourceKind::Opened`.
 
-An adopted allocation is borrowed, and the lifetime rules say so in four places. Its record never calls
+An adopted allocation is borrowed, and the lifetime rules say so in five places. Its record never calls
 `pfnDeallocateCb`, because this driver did not create it and the runtime destroys it with the opened resource.
 `RuntimeAllocation::adopt` sets `borrowed_`, and `close` with the owner form is refused rather than silently
-turned into the handle form. `owns_allocation` answers false, so the ICD's borrowed-allocation map does not
-take it for one of ours. `borrow_backing` refuses it, so no second view is placed beside the opened image. It
-is never quarantined: a mapping held past the destroy would name memory that is no longer the opener's.
-`FreeReport::adopted` says which release it was.
+turned into the handle form. `borrow_backing` refuses it, so no second view is placed beside the opened image. It
+is never quarantined: a mapping held past the destroy would name memory that is no longer the opener's. Its
+residency reference is dropped without an `Evict` callback, because the runtime's destroy can outrun our release
+and the callback would name a handle dxgkrnl may already recycle. Destroying an allocation drops its residency
+anyway. `FreeReport::adopted` says which release it was.
+
+`owns_allocation` is not one of those places, although it read as one until 2026-10-06. Its only caller is the
+`Lock2`/`Unlock2` router in `device-engine.cpp`, and the question it answers is "is this allocation in our store",
+so that the lock reaches our record and its own state checks instead of `HostedDispatch`, which refuses an
+allocation it does not know. A borrowed allocation is in the store like any other. The question of whose
+allocation it is to destroy lives in `release_owned`.
+
+The same handle may be adopted more than once. An application may call `OpenSharedHandle` twice on one device for
+the same NT handle, and nothing we can read promises that dxgkrnl answers with two different allocation handles.
+`engine-ddi` asks the shell once per open either way. The store therefore keeps one record per open and tells
+their imports apart by the cookie each `ImportedMemory` carries, not by the handle. A handle this driver created
+itself is still refused ("the allocation is one this driver created"), which is the store corruption the first
+form of that check was written for.
+
+An opened surface is a legal destination of a blt-model Present and is not a legal answer to the destroy slot's
+"whose allocation is this to release". Those are two questions, and `engine-ddi.h` has two entry points for them:
+`present_destination_allocation` admits `ResourceKind::Opened`, `present_allocation` does not. Before BD-075 no
+opened resource could exist, the two shared one answer, and naming an opened resource as the Present destination
+would have failed at stage 4 and removed the device.
 
 ## The keyed mutex
 
@@ -177,20 +226,41 @@ cells, so they are expected to work with the create and the open above and nothi
 
 ## What refuses
 
-Every refusal below reports `E_OUTOFMEMORY` to the runtime, names its own check in the driver log
-(`heap-import.h`, `ImportReport::refusal`) and leaves the device alive.
+Every refusal below reports `E_OUTOFMEMORY` to the runtime and leaves the device alive. A create's refusal names
+its check through `ImportReport::refusal` (`heap-import.h`). An open's writes one
+`OpenHeapAndResource: <hr> reported as <admitted>, declined at <step>` line with both blobs' magic and version
+beside it. Both go to the debugger channel with no trace build, so a lab log shows them.
 
-| Asked for | Refusal |
-|---|---|
-| a shared buffer, mip chain, array, MSAA or 3D texture | `shared surface shape` |
-| a format with no COMPOSED row, including block-compressed formats | `shared surface format` |
-| a shared texture on a CPU-visible or system-wide coherent heap | `shared surface shape` |
-| a shared texture on a `PRIMARY` heap | `heap flags`, with the bit in the report |
-| a shared heap with no resource, to place resources in later | `shareable heap without a resource` |
-| a placed resource on an opened or shared surface | `placed resource on a linear surface` |
-| an open of more than one allocation, or with a blob of the wrong size | `opened surface records` |
-| an open whose record and engine layout disagree | `opened surface layout` |
-| `SHARED_CROSS_ADAPTER` | the heap flags check: this driver has one adapter |
+The names below are the strings the driver actually writes, so an operator can grep a trial's log for them. The
+create's refusals are `ImportReport::refusal` values from `heap-import.cpp`. The open's are the `*why` values of
+`open_shared_surface` in `engine-ddi/resources.cpp`. Two rows are `log_line` text from `engine-ddi`, and say so.
+An earlier version of this table invented three names (`opened surface records`, `opened surface layout`,
+`placed resource on a linear surface`) that appear nowhere in the tree.
+
+| Asked for | Refused by | The name in the log |
+|---|---|---|
+| a shared buffer, mip chain, array, MSAA, 3D or typeless texture | the envelope, before any callback | the create is never retried. The runtime's own `E_INVALIDARG`, reported as `E_OUTOFMEMORY` |
+| a format with no COMPOSED row and no sRGB sibling, including block-compressed and NV12 | the envelope | as above |
+| `SHARED_CROSS_ADAPTER` (resource flag 0x4, and `D3D12DDI_HEAP_FLAGS` has no such bit) | `linear_surface_shape` | as above |
+| a shared texture on a CPU-visible or system-wide coherent heap, or in the L0 pool | `shared_surface_shape` | as above |
+| a shared texture on a `PRIMARY` heap | `shared_surface_shape` | as above |
+| a shared heap with no resource, to place resources in later | the shell's allocate | `shareable heap without a resource` |
+| a placed resource on an opened or created linear surface | the create, after the base is known | `log_line` "placed: the base is a linear surface, its memory holds that image alone" |
+| a retry whose description the engine has no linear image for | attempt 2 | `log_line` "shared surface: the runtime refused the ordinary shape and the engine has no linear image for this description" |
+| an open of more than one allocation, a zero handle, or a blob of the wrong size | `open_shared_surface` | `arguments`, or `record` for a blob the decoder cannot read |
+| an open whose record the decoder declines (not shared, an access intent, two mips, a width that is not the allocation's) | `open_shared_surface` | `record` |
+| an open of a format with no COMPOSED row | `open_shared_surface` | `record format` |
+| an open whose description the engine has no linear image for | `open_shared_surface` | `engine image` |
+| an open whose record and engine layout disagree (pitch, or a backing below what the image needs) | `open_shared_surface` | `layout agreement`, with both numbers |
+| an open the shell will not adopt, or whose engine heap or image placement fails | `open_shared_surface` | `adopt`, `engine heap`, `engine image placement` |
+| an open naming a protected resource session | `open_heap_and_resource` | `protected resource session` |
+
+The open's envelope is one rule wider than the create's, on purpose. The decoder bounds an edge at
+`BC250_SHARED_MAX_EDGE` (16384), which is what the D3D11 shell creates up to, while a D3D12 shared create stops
+at `kLinearMaxEdge` (8192). An opener that refused the larger surface would refuse a surface the other shell
+legitimately created. The engine's own image answers for the rest, and the pitch and size agreement still has to
+hold. Every other rule is the same, because the decoder admits one mip, one slice, one sample and a COMPOSED
+format row only.
 
 ## The reported compatibility tier
 
@@ -204,9 +274,11 @@ is WDDM 2.9.
 The arithmetic of what the reported tier 2 promises and what the driver now holds, from the same SDK page. Tier 0
 is eight formats: `R8G8B8A8_UNORM` and its sRGB form, `B8G8R8A8_UNORM` and its sRGB form, `B8G8R8X8_UNORM` and
 its sRGB form, `R10G10B10A2_UNORM` and `R16G16B16A16_FLOAT`. Tier 1 adds nine typeless formats, tier 2 adds
-`NV12`, tier 3 adds `R11G11B10_FLOAT`. The five COMPOSED rows of the surface format table cover six of tier 0's
-eight - the two `B8G8R8X8` forms have no DXGI entry in our table - and none of tier 1's or tier 2's. The driver
-also shares no buffer, and `A8_UNORM` is one row it shares that no tier asks for.
+`NV12`, tier 3 adds `R11G11B10_FLOAT`. The five COMPOSED rows of the surface format table, with the sRGB view of
+each 8-bit row, cover six of tier 0's eight - the two `B8G8R8X8` forms have no DXGI entry in our table - and none
+of tier 1's or tier 2's. The driver also shares no buffer, and `A8_UNORM` is one row it shares that no tier asks
+for. Four of the eight, not six, until the sRGB gap above was closed: this arithmetic became true on 2026-10-06
+and was wrong before it.
 
 Tier 2 is a format promise and nothing else. The earlier note here that it "adds keyed-mutex shapes" is not in
 the specification: the keyed mutex is the runtime's object at every tier (see "The keyed mutex" above). The
@@ -220,8 +292,11 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 3. Done: the create and the open, the shared wire format in one header, and the host tests below.
 4. Next: the lab trial. `scratch/train/b19-bd075/lab-bd075-real.ps1` (local) runs the shared cells of
    `tools/win/capture-share` in two passes, each inside the three-minute bound. Every shared cell must end in
-   `result=pass` with its three content oracles, and the injected negative control must still end in
-   `mismatch` with a violated gate.
+   `result=pass` with its three content oracles, and the injected negative control must still end in `mismatch`
+   with a violated gate and not all three oracles. Both passes take `-Trace`: each row gets its own trace file and
+   its own expected number of shared creates and shared opens, and a row whose counts are wrong scores 0 even when
+   its pixels are right. The controls `w12` and `f12to12` must show zero of each, which is what says the retry did
+   not fire on an ordinary committed texture.
 5. Later: the shapes the table does not hold (tiled and multi-mip sharing need a deterministic layout, which
    `check_resource_allocation_info` does not implement), cross-adapter sharing, and the reported tier.
 
@@ -229,12 +304,14 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 
 | Test | What it pins |
 |---|---|
-| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: 44 named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal, the last of which covers all 5 COMPOSED rows and their 7 format round trips |
+| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. The runner prints its own total ("48 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
 | `driver/umd/d3d12/allocation-request-test.cpp` | what the create publishes, field by field, and that `prepare_surface` still writes the primary's v1 record |
 | `driver/umd/d3d12/heap-import-test.cpp` | the shell half: the shareable envelope, `kShareRequired` only from the runtime's refusal, the shared surface's records and refusals, and the borrowed lifetime of an adopted allocation |
-| `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, the geometry the engine measured, a texel-exact render and read-back of the created surface |
-| `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, a texel-exact clear and read-back of the opened surface, and 12 malformed records. Also the two shells that serve no adopt |
+| `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, and the geometry the engine measured. A texel-exact render and read-back of the created surface, in five formats. Both sRGB views are two of the five. Each retry raises the counter once and writes its line once |
+| `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, and a texel-exact clear and read-back of the opened surface. Also both sRGB views, the same handle opened twice, and 12 malformed records. Also an open of two allocations, an open that names a protected resource session, the two Present questions, and the two shells that serve no adopt |
 | `engine-ddi/engine-ddi-header-test.cpp` | boundary revision 5, the `AdoptRequest` layout, and `kShareRequired` clamped to `E_OUTOFMEMORY` |
+| `tools/win/capture-share/host-validate.ps1` | the real client on a working driver: 34 cells. Among them the two sRGB cells `s12to11-srgb` and `s11to12-srgb`, and the four injected negative controls. It proves the oracles before the lab sees them |
+| `scratch/train/b19-bd075/lab-bd075-classify-test.ps1` (local) | the trial's own scoring: 18 classification cases, 8 restore cases and 9 trace cases on written trace files. Two of the trace cases are the control that shows a retry and the double counting the first rule did |
 
 ## Open questions for later work
 
