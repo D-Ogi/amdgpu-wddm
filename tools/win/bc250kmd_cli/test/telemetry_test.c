@@ -1,6 +1,9 @@
-// Host test of the monitor's telemetry exports (Bc250Dpm, Bc250VideoMemory). test-telemetry.ps1 pastes the real
-// block from bc250kmd_cli.c where ACTUAL_TELEMETRY stands; the three adapter-access helpers below replace the
-// D3DKMT calls, so nothing here opens an adapter or sends an escape.
+// Host test of the monitor's and the application's exports (Bc250Dpm, Bc250VideoMemory, and from 0.7.210
+// Bc250DpmCurve and Bc250Cpu). test-telemetry.ps1 pastes the real block from bc250kmd_cli.c where the marker
+// below stands; the adapter-access helpers below replace the D3DKMT calls, so nothing here opens an
+// adapter or sends an escape. What the two new exports must get right and this test holds them to: the escape
+// flag per operation (a software snapshot for the curve and for a CPU READ, HardwareAccess for a CPU write), the
+// generation a write carries, and the refusal of a malformed request before any escape is sent.
 #include <windows.h>
 #include <winternl.h>
 #include <d3dkmthk.h>
@@ -13,9 +16,12 @@
 #define BC250_CONTROL_API
 #define BC250_DEFAULT_HWID L"fixture"
 // ACTUAL_TELEMETRY
-static int escapeMode, escapeCalls, statsMode, statsCalls, adapterMode;
+static int escapeMode, escapeCalls, statsMode, statsCalls, adapterMode, curveMode, cpuMode;
+static int escapeHardware = -1;         // the flag the last escape asked for: 0 software, 1 HardwareAccess
 static unsigned escapeSize;
 static BC250_ESCAPE_DPM sent;
+static BC250_ESCAPE_DPM_CURVE sentCurve;
+static BC250_ESCAPE_CPU sentCpu;
 static WCHAR adapterId[64];
 static ULONG segmentCount = 3;
 // The lab layout (driver/kmd/wddm.c WddmQuerySegment4): application local, aperture, table local.
@@ -26,10 +32,52 @@ static const struct { ULONG Aperture; ULONGLONG Resident, Committed, Limit; } g_
     { 0, 1, 1, 1 }, { 0, 1, 1, 1 }, { 0, 1, 1, 1 }, { 0, 1, 1, 1 }, { 0, 1, 1, 1 },
     { 1, 5, 5, ~0ull }, { 0, 7, 7, 9 },
 };
-static NTSTATUS TelemetryEscape(void *data, unsigned size)
+// The curve and the CPU surface, answered like the firmware would: the request as it arrived is kept for the
+// assertions, and the reply carries the fields the window reads.
+static NTSTATUS TelemetryCurve(BC250_ESCAPE_DPM_CURVE *c)
 {
+    unsigned i;
+    sentCurve = *c;
+    if (curveMode == 1) return (NTSTATUS)0xC00000A3;            // a KMD before 0.7.210
+    if (curveMode == 2) return 0;                               // untouched: UNKNOWN_COMMAND
+    c->Status = BC250_ESCAPE_STATUS_DONE; c->Version = 0x000700D2u;
+    c->Flags = BC250_DPM_CURVE_FLAG_VALID | BC250_DPM_CURVE_FLAG_GOVERNING;
+    c->FirstMHz = 1000; c->StepMHz = 100; c->Points = BC250_DPM_CURVE_POINTS;
+    for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) {
+        c->ActiveMv[i] = 820 + i * 10; c->DefaultMv[i] = 820 + i * 18; c->FloorMv[i] = 820 + i * 8;
+    }
+    c->Serial = 3; c->Level = 5; c->LevelMHz = 1000; c->LevelMv = 820; c->TemperatureMc = 67500;
+    if (curveMode == 3) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0xC000000Du; }
+    if (curveMode == 4) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0; }
+    if (curveMode == 5) c->AbiVersion = 2;
+    if (curveMode == 6) c->Op = 9;
+    return 0;
+}
+static NTSTATUS TelemetryCpu(BC250_ESCAPE_CPU *c)
+{
+    sentCpu = *c;
+    if (cpuMode == 1) return (NTSTATUS)0xC00000A3;
+    if (cpuMode == 2) return 0;
+    c->Status = BC250_ESCAPE_STATUS_DONE; c->Version = 0x000700D2u;
+    c->Flags = BC250_CPU_FLAG_VALID | BC250_CPU_FLAG_TUNE_ON | BC250_CPU_FLAG_QUEUE3_PROVEN;
+    c->VoltageMv = 1050; c->CapC = 100; c->Cores = 6; c->Threads = 12; c->CoreMask = 0x77;
+    c->BaselineMaxMHz = 3600; c->TemperatureMc = 61000;
+    if (cpuMode == 3) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0xC0000061u; }
+    if (cpuMode == 4) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = 0; }
+    if (cpuMode == 5) c->Command = 21;
+    return 0;
+}
+// The same shape as the DLL: one function with the flag, and TelemetryEscape as its software-only wrapper, so
+// that the test sees exactly which flag each export asked for.
+static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
+{
+    BC250_ESCAPE *head = data;
     BC250_ESCAPE_DPM *d = data;
-    escapeCalls++; escapeSize = size; sent = *d;
+    escapeHardware = hardware;
+    escapeCalls++; escapeSize = size;
+    if (head->Command == BC250_ESCAPE_RUN_DPM_CURVE) return TelemetryCurve(data);
+    if (head->Command == BC250_ESCAPE_RUN_CPU) return TelemetryCpu(data);
+    sent = *d;
     if (escapeMode == 1) return (NTSTATUS)0xC00000A3;          // a KMD before the DPM escape
     if (escapeMode == 2) return 0;                             // untouched: UNKNOWN_COMMAND
     d->Status = BC250_ESCAPE_STATUS_DONE; d->Version = 0x000700B1u;
@@ -40,6 +88,10 @@ static NTSTATUS TelemetryEscape(void *data, unsigned size)
     if (escapeMode == 5) d->AbiVersion = 2;
     if (escapeMode == 6) d->Command = 21;
     return 0;
+}
+static NTSTATUS TelemetryEscape(void *data, unsigned size)
+{
+    return TelemetryEscapeFlags(data, size, 0);
 }
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated)
 {
@@ -116,6 +168,89 @@ int main(void)
     adapterMode = 1; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == (LONG)0xC000000E);
     adapterMode = 2; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == 0 && m.DedicatedVideoMemory == 0 && m.LocalLimit == (2080ull << 20));
     adapterMode = 0;
+    /* ---- the V/F curve and the CPU surface (0.7.210) ------------------------------------------------------ */
+    {
+        BC250_ESCAPE_DPM_CURVE c;
+        BC250_ESCAPE_CPU u;
+        BC250_CPU_REQUEST r;
+        ULONG mv[BC250_DPM_CURVE_POINTS];
+        unsigned i;
+        for (i = 0; i < BC250_DPM_CURVE_POINTS; i++) mv[i] = 820 + i * 12;
+        CHECK(sizeof(c) == 360 && sizeof(u) == 272 && sizeof(r) == 40 && BC250_DPM_CURVE_POINTS == 11);
+        escapeCalls = 0; escapeHardware = -1;
+        /* Refused in the DLL, before any escape: no buffer, a wrong size, an operation that does not exist, and a
+         * SET without the 11 values. */
+        CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, NULL, sizeof(c)) == (LONG)0xC000000D);
+        CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, 359) == (LONG)0xC000000D);
+        CHECK(Bc250DpmCurve(9, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC000000D);
+        CHECK(Bc250DpmCurve(BC250_DPM_CURVE_OP_SET, 7, NULL, BC250_DPM_CURVE_POINTS, 0, &c, sizeof(c)) == (LONG)0xC000000D);
+        CHECK(Bc250DpmCurve(BC250_DPM_CURVE_OP_SET, 7, mv, 10, 0, &c, sizeof(c)) == (LONG)0xC000000D);
+        CHECK(escapeCalls == 0 && escapeHardware == -1);
+        /* A READ: software state, no generation, and the reply's own fields. */
+        CHECK(Bc250DpmCurve(BC250_DPM_CURVE_OP_READ, 99, NULL, 0, 0, &c, sizeof(c)) == 0);
+        CHECK(escapeCalls == 1 && escapeHardware == 0 && escapeSize == sizeof(c));
+        CHECK(sentCurve.Magic == BC250_ESCAPE_MAGIC && sentCurve.Command == BC250_ESCAPE_RUN_DPM_CURVE);
+        CHECK(sentCurve.AbiVersion == BC250_DPM_CURVE_ABI && sentCurve.Op == BC250_DPM_CURVE_OP_READ);
+        CHECK(sentCurve.ExpectedGeneration == 0 && sentCurve.TrialMs == 0 && sentCurve.CandidateMv[0] == 0);
+        CHECK(sentCurve.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND && !sentCurve.Reserved[0] && !sentCurve.Reserved[1]);
+        CHECK(c.Points == BC250_DPM_CURVE_POINTS && c.ActiveMv[0] == 820 && c.ActiveMv[10] == 920 && c.Serial == 3);
+        /* A SET: the candidate and the window travel, and the generation of the read it is built on. */
+        CHECK(Bc250DpmCurve(BC250_DPM_CURVE_OP_SET, 4242, mv, BC250_DPM_CURVE_POINTS, 30000, &c, sizeof(c)) == 0);
+        CHECK(escapeCalls == 2 && escapeHardware == 0 && sentCurve.Op == BC250_DPM_CURVE_OP_SET);
+        CHECK(sentCurve.ExpectedGeneration == 4242 && sentCurve.TrialMs == 30000);
+        CHECK(sentCurve.CandidateMv[0] == 820 && sentCurve.CandidateMv[10] == 820 + 120);
+        /* KEEP, CANCEL and RESET carry the generation and no candidate. */
+        CHECK(Bc250DpmCurve(BC250_DPM_CURVE_OP_KEEP, 4242, mv, BC250_DPM_CURVE_POINTS, 30000, &c, sizeof(c)) == 0);
+        CHECK(sentCurve.Op == BC250_DPM_CURVE_OP_KEEP && sentCurve.ExpectedGeneration == 4242);
+        CHECK(sentCurve.CandidateMv[0] == 0 && sentCurve.TrialMs == 0);
+        curveMode = 1; CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC00000A3);
+        curveMode = 2; CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC00000BB);
+        curveMode = 3; CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC000000D);
+        curveMode = 4; CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC00000A3);
+        curveMode = 5; CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC000000D);
+        curveMode = 6; CHECK(Bc250DpmCurve(0, 0, NULL, 0, 0, &c, sizeof(c)) == (LONG)0xC000000D);
+        curveMode = 0;
+
+        memset(&r, 0, sizeof(r));
+        escapeCalls = 0; escapeHardware = -1;
+        /* The request structure names its own size, so an older caller and a newer DLL refuse each other. */
+        CHECK(Bc250Cpu(NULL, &u, sizeof(u)) == (LONG)0xC000000D);
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC000000D);     /* Size 0 */
+        r.Size = sizeof(r);
+        CHECK(Bc250Cpu(&r, NULL, sizeof(u)) == (LONG)0xC000000D);
+        CHECK(Bc250Cpu(&r, &u, 271) == (LONG)0xC000000D);
+        r.Op = 9; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC000000D);
+        CHECK(escapeCalls == 0 && escapeHardware == -1);
+        /* READ is the software snapshot: no HardwareAccess, no generation. */
+        r.Op = BC250_CPU_OP_READ; r.ExpectedGeneration = 77;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeCalls == 1 && escapeHardware == 0);
+        CHECK(sentCpu.Command == BC250_ESCAPE_RUN_CPU && sentCpu.AbiVersion == BC250_CPU_ABI);
+        CHECK(sentCpu.Op == BC250_CPU_OP_READ && sentCpu.ExpectedGeneration == 0 && sentCpu.Given == 0);
+        CHECK(u.VoltageMv == 1050 && u.Cores == 6 && u.CoreMask == 0x77);
+        /* READBACK and every write go with HardwareAccess and the generation. */
+        r.Op = BC250_CPU_OP_READBACK;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1 && sentCpu.ExpectedGeneration == 77);
+        r.Op = BC250_CPU_OP_SET; r.Given = BC250_CPU_GIVEN_MAX | BC250_CPU_GIVEN_UV;
+        r.MaxMHz = 3300; r.UvSteps = 6; r.TempC = 95; r.TrialMs = 40000;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && escapeHardware == 1);
+        CHECK(sentCpu.Given == (BC250_CPU_GIVEN_MAX | BC250_CPU_GIVEN_UV) && sentCpu.MaxMHz == 3300);
+        CHECK(sentCpu.UvSteps == 6 && sentCpu.TempC == 95 && sentCpu.TrialMs == 40000);
+        /* KEEP sends none of the three values: it keeps what the driver already applied. */
+        r.Op = BC250_CPU_OP_KEEP;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.Given == 0 && sentCpu.MaxMHz == 0 && sentCpu.TrialMs == 0);
+        r.Op = BC250_CPU_OP_SEARCH_BEGIN;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.UvSteps == 6 && sentCpu.TrialMs == 40000 && sentCpu.Given == 0);
+        r.Op = BC250_CPU_OP_CORES; r.CoreMask = 255;
+        CHECK(Bc250Cpu(&r, &u, sizeof(u)) == 0 && sentCpu.CoreMask == 255 && sentCpu.UvSteps == 0);
+        r.Op = BC250_CPU_OP_READ;
+        cpuMode = 1; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC00000A3);
+        cpuMode = 2; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC00000BB);
+        cpuMode = 3; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC0000061);
+        cpuMode = 4; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC00000A3);
+        cpuMode = 5; CHECK(Bc250Cpu(&r, &u, sizeof(u)) == (LONG)0xC000000D);
+        cpuMode = 0;
+    }
+    escapeCalls = 0;
     statsMode = 1; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == (LONG)0xC0000001);
     statsMode = 2; CHECK(Bc250VideoMemory(NULL, &m, sizeof(m)) == (LONG)0xC0000001);
     statsMode = 0;
