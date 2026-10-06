@@ -39,8 +39,9 @@ int main(void)
     CHECK(Bc250StartHealth(0,0,0,NULL,sizeof(d))<0 && calls==0);
     CHECK(Bc250StartHealth(0,0,0,&d,95)<0 && calls==0);
     CHECK(Bc250StartHealth(2,0,0,&d,sizeof(d))<0 && calls==0);
+    /* Neither operation idles the adapter (0.7.213): READ is a snapshot and CONFIRM writes the registry. */
     CHECK(Bc250StartHealth(0,0,0,&d,sizeof(d))==0 && accessFlag==0);
-    CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))==0 && accessFlag==1 && d.Generation==123 && d.Epoch==7);
+    CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))==0 && accessFlag==0 && d.Generation==123 && d.Epoch==7);
     for(mode=1;mode<=8;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);
     mode=9;CHECK(Bc250StartHealth(0,0,0,&d,sizeof(d))==0 && d.Flags==0);
     for(mode=10;mode<=11;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);

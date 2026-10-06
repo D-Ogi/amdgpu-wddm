@@ -62,10 +62,25 @@ an automatic-health result. Preserve the existing display-only policy.
 
 The read path should avoid HardwareAccess. NoAdapterSynchronization does not
 make shared data safe: prove adapter-owned snapshot synchronization explicitly.
-The one-time confirm path may use HardwareAccess=1 with all other escape flags
-zero, recheck the live identity/readiness and perform checked persistence at
-PASSIVE_LEVEL. Do not hold a spin lock across registry I/O. Review the exact
-lifecycle exclusion at implementation time, including ISR/DPC writers.
+The confirm path rechecks the live identity/readiness and performs checked
+persistence at PASSIVE_LEVEL. Do not hold a spin lock across registry I/O.
+Review the exact lifecycle exclusion at implementation time, including ISR/DPC
+writers.
+
+Confirmation flags (0.7.213): both operations take NoAdapterSynchronization=1
+with every other escape flag zero. The confirm path used HardwareAccess=1 up to
+0.7.212, which is a Level Two escape: dxgkrnl suspends the GPU scheduler for up
+to one VSync while the handler holds the lifecycle mutex across a registry
+flush, and the installer's logon task retries confirmation every 5.5 s for up
+to two minutes. The handler touches only the start-health snapshot under its own
+spin lock, mutex and rundown protection, then the registry - no register, no
+mailbox, no state a stop frees - and the CU mode and DPM confirmations it calls
+have always run from escapes that take NoAdapterSynchronization alone. For one
+release the confirm path also admits the old HardwareAccess word, so a CLI, DLL
+or overlay of 0.7.212 or older still confirms a start. Every other flag word is
+refused before anything is read or written; the table of admitted and refused
+words, per operation, is in driver/kmd/test/start_health_test.c and
+tools/win/bc250kmd_cli/test_escape_flags.py.
 
 Local Microsoft sources reviewed:
 

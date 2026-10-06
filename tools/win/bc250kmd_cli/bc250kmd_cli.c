@@ -448,7 +448,11 @@ BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
     return 0;
 }
 
-// READ is an adapter-owned software snapshot, never a hardware-idling diagnostic.
+// READ is an adapter-owned software snapshot, never a hardware-idling diagnostic, and from 0.7.213 CONFIRM is one
+// too: it touches that snapshot and the registry, so both go with NoAdapterSynchronization alone. Up to 0.7.212
+// CONFIRM carried HardwareAccess, which suspends the GPU scheduler for up to one VSync while the driver flushes a
+// registry key - and the installer's logon task retries it every 5.5 s for two minutes. An older driver still
+// insists on HardwareAccess and refuses this; a machine upgrades its driver and its tools together.
 BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULONGLONG epoch,
     BC250_ESCAPE_START_HEALTH* data,ULONG bytes)
 {
@@ -463,7 +467,7 @@ BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULO
     data->Status=BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
     data->AbiVersion=BC250_START_HEALTH_ABI;data->Op=op;
     data->ExpectedGeneration=generation;data->ExpectedEpoch=epoch;
-    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),op!=BC250_START_HEALTH_CONFIRM,&status))return status;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),1,&status))return status;
     if(!NT_SUCCESS(status))return status;
     if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
     if(data->Status!=BC250_ESCAPE_STATUS_DONE || data->NtStatus!=0)
@@ -745,8 +749,9 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
 }
 
 // The CPU surface (0.7.212). One request structure instead of seven arguments, so that a new field is a version of
-// this DLL and not a new export. READ is software state; every other operation sends mailbox messages on the
-// firmware's queue 3 and therefore goes with HardwareAccess, an administrator and the Generation of a READ of the
+// this DLL and not a new export. READ is software state, and so is KEEP from 0.7.213 (it writes the registry and
+// ends the trial, and sends nothing); every other operation sends mailbox messages on the firmware's queue 3 and
+// therefore goes with HardwareAccess, an administrator and the Generation of a READ of the
 // same start. READBACK asks for the administrator as well since 0.7.211: it holds the surface for some twenty
 // messages on the shared mailbox, which an unprivileged loop must not be able to do. The driver owns the trial
 // deadline and the revert, so a window that stops calling loses the trial and nothing else.
@@ -780,7 +785,7 @@ BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_E
     }
     if (op == BC250_CPU_OP_CORES) data->CoreMask = request->CoreMask;
     if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_BEGIN) data->TrialMs = request->TrialMs;
-    status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ);
+    status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ && op != BC250_CPU_OP_KEEP);
     if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.212 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
@@ -883,7 +888,8 @@ static NTSTATUS TelemetryOpenLocked(const WCHAR *wantedId, D3DKMT_OPENADAPTERFRO
 
 // hardware = 0: NoAdapterSynchronization alone, a software snapshot, which is what every read of this DLL sends
 // and what the KMD demands of them. hardware = 1: HardwareAccess alone (the Level Two exclusion), for the one
-// surface whose writes reach a mailbox, the CPU surface of 0.7.212. The KMD refuses any other combination, per
+// surface whose writes reach a mailbox, the CPU surface of 0.7.212 - its KEEP excepted, which reaches no mailbox
+// and goes with hardware = 0 from 0.7.213. The KMD refuses any other combination, per
 // operation, so a mistake here is a refusal and never a half-privileged escape.
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
 {
@@ -2721,9 +2727,11 @@ static int CpuQuery(BC250_ESCAPE_CPU *c, unsigned long op, unsigned long long ge
     c->AbiVersion = BC250_CPU_ABI;
     c->Op = op;
     c->ExpectedGeneration = generation;
-    // READ is software state (NoAdapterSynchronization); every other operation sends mailbox messages and takes
-    // the adapter, exactly as a clock set does.
-    if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), op == BC250_CPU_OP_READ, &status)) return 1;
+    // READ is software state (NoAdapterSynchronization), and so is KEEP from 0.7.213: it writes the registry and
+    // ends the trial without a mailbox message. Every other operation sends messages and takes the adapter,
+    // exactly as a clock set does.
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c),
+                        op == BC250_CPU_OP_READ || op == BC250_CPU_OP_KEEP, &status)) return 1;
     if (!NT_SUCCESS(status)) {
         if (!quiet) {
             PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_CPU)", status);

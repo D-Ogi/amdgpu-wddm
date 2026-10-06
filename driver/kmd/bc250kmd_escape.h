@@ -403,6 +403,11 @@ typedef struct _BC250_ESCAPE_CLOCK {
 
 // Adapter-owned software snapshot; READ must not idle GPU scheduling or read BARs.
 // CONFIRM names the exact generation and visibility epoch observed by the client.
+// Both operations take NoAdapterSynchronization=1 and every other flag zero (0.7.213):
+// CONFIRM touches only this snapshot and the registry, and an administrator logon
+// retries it every 5.5 s, which must never suspend the GPU scheduler. For one release
+// CONFIRM also admits the HardwareAccess=1 word it asked for up to 0.7.212, so an
+// older CLI, DLL or overlay still confirms a start.
 #define BC250_START_HEALTH_ABI 1u
 #define BC250_START_HEALTH_READ 0u
 #define BC250_START_HEALTH_CONFIRM 1u
@@ -717,10 +722,12 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
 // the BAR5 aperture the driver already maps; the KMD is still the single SMU owner, with a second allowlist so
 // that a GFX clock transaction can never send a CPU message and a CPU transaction can never send a clock message.
 //
-// Unlike every other escape here, the write operations DO send mailbox messages, so SET, KEEP, CANCEL, RESET and
+// Unlike every other escape here, most write operations DO send mailbox messages, so SET, CANCEL, RESET, CORES and
 // SEARCH_* need HardwareAccess=1 (the Level Two exclusion) and an administrator, exactly as RUN_CLOCK's SET does.
 // READ is adapter-owned software state and takes NoAdapterSynchronization alone; READBACK sends only getters and
-// is a HardwareAccess operation as well.
+// is a HardwareAccess operation as well. KEEP sends nothing - it writes the Parameters key and ends the trial - so
+// from 0.7.213 it takes NoAdapterSynchronization as well, and still an administrator. For one release KEEP also
+// admits the HardwareAccess word it asked for up to 0.7.212, so an older CLI or DLL keeps working.
 //
 // Three rules the driver enforces, and a caller should expect:
 //   - No setter runs until this start's READBACK has answered once (FLAG_QUEUE3_PROVEN). Queue 3 has never been

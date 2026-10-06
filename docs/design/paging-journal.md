@@ -116,7 +116,9 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
   sends them that way and falls back to `HardwareAccess` against an older driver; `journal follow` counts the
   escapes of each kind in its final line. `log summary` keeps `HardwareAccess` for its first page, because the
   summary walks state a stop frees and reads display registers. `tools/win/bc250kmd_cli/test_escape_flags.py`
-  keeps the driver's and the CLI's lists equal.
+  keeps the driver's and the CLI's lists equal. Because the summary is a Level Two escape, nothing may ask for it
+  on a repeating schedule: `tools/win/lab-runner/kmdlog-stream.ps1` reads the header line with `log 0`, which
+  prints the same line from a `GET_LOG` page (it polled `log summary` every 500 ms until 0.7.213).
 - From a dump: `scratch\m15\game-recon\bsod-analysis\pagingjournal.py` (local) reads `g_PagingJournal` through the
   build's map, checks `Magic`/`Version`/`EntryBytes`, and lists the records around a fault VA. From journal
   version 2 it also decodes the identity fields above, and `bc250kmd_cli journal` prints them at the end of the

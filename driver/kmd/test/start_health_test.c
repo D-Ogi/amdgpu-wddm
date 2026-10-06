@@ -66,7 +66,18 @@ static BC250_ESCAPE_START_HEALTH query(BC250_DEVICE*d,int confirm)
     BC250_ESCAPE_START_HEALTH r={0};
     r.Magic=BC250_ESCAPE_MAGIC;r.Command=BC250_ESCAPE_RUN_START_HEALTH;r.AbiVersion=1;r.Op=(ULONG)confirm;
     r.ExpectedGeneration=d->StartHealth.Generation;r.ExpectedEpoch=d->StartHealth.Epoch;
-    StartHealthRequest(d,&r,TRUE,confirm?1:8);return r;
+    // 8 = NoAdapterSynchronization, which both operations take from 0.7.213.
+    StartHealthRequest(d,&r,TRUE,8);return r;
+}
+// Was this flag word admitted at all, or refused at the gate before anything was touched? A gate refusal is the
+// only one that leaves REFUSED with STATUS_INVALID_PARAMETER on an otherwise well-formed request.
+static int admitted(BC250_DEVICE*d,ULONG op,ULONG flags)
+{
+    BC250_ESCAPE_START_HEALTH r={0};
+    r.Magic=BC250_ESCAPE_MAGIC;r.Command=BC250_ESCAPE_RUN_START_HEALTH;r.AbiVersion=1;r.Op=op;
+    r.ExpectedGeneration=d->StartHealth.Generation;r.ExpectedEpoch=d->StartHealth.Epoch;
+    StartHealthRequest(d,&r,TRUE,flags);
+    return !(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER);
 }
 static void ready(BC250_DEVICE*d)
 {
@@ -81,7 +92,10 @@ static void healthy(BC250_DEVICE*d)
 }
 int main(void)
 {
-    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count;unsigned old;
+    // Every flag word this gate is asked about: the two it admits, their union, the bits of the other escapes
+    // and nothing at all.
+    static const ULONG words[]={0,1,2,3,4,8,9,10,12,16,24};
+    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count;unsigned old,i;
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
@@ -121,6 +135,14 @@ int main(void)
     StartHealthEnter(&d);StartHealthVisibilityLocked(&d,TRUE);StartHealthLeave(&d);
     advance(60000);StartHealthCompleted(&d,2);r=query(&d,1);
     CHECK(r.Status==0 && r.Flags==15 && r.Generation==generation && writes==old+1);
+    // The flag contract of BC250_ESCAPE_RUN_START_HEALTH, both operations, admitted and refused (0.7.213): READ
+    // takes NoAdapterSynchronization=1 alone; CONFIRM takes that, and for one release the HardwareAccess=1 word
+    // the tools sent up to 0.7.212. No other word reaches the snapshot, the mutex or the registry.
+    for(i=0;i<sizeof(words)/sizeof(words[0]);i++){
+        healthy(&d);CHECK(admitted(&d,BC250_START_HEALTH_READ,words[i])==(words[i]==8));
+        healthy(&d);CHECK(admitted(&d,BC250_START_HEALTH_CONFIRM,words[i])==(words[i]==8||words[i]==1));
+    }
+    old=writes;healthy(&d);CHECK(!admitted(&d,BC250_START_HEALTH_CONFIRM,9) && writes==old);
     StartHealthRemove(&d);r=query(&d,0);CHECK(r.NtStatus==(ULONG)STATUS_DELETE_PENDING);
     CHECK(spins==0 && mutexes==0 && closes>0);
     printf("start health actual-source: %u checks, %u failures\n",checks,failures);return failures?1:0;

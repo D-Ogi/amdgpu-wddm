@@ -190,9 +190,19 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
     NTSTATUS status=STATUS_INVALID_PARAMETER;
     ULONGLONG generation=0, epoch=0;
     BOOLEAN confirm=Data->Op==BC250_START_HEALTH_CONFIRM;
-    D3DDDI_ESCAPEFLAGS expectedFlags={0};
-    if (confirm) expectedFlags.HardwareAccess=1;
-    else expectedFlags.NoAdapterSynchronization=1;
+    // Both operations take NoAdapterSynchronization=1 and every other flag zero (0.7.213). CONFIRM asked for
+    // HardwareAccess up to 0.7.212, which buys the Level Two exclusion: dxgkrnl suspends the GPU scheduler for
+    // up to one VSync while this handler holds Lifecycle across a registry flush (GuardConfirmStartDurable),
+    // and an administrator logon retries it every 5.5 s for two minutes (tools/release/installer/start-confirm.ps1).
+    // Nothing here is a register, a mailbox or state WddmStop frees: only StartHealth under its own spin lock,
+    // mutex and rundown, then the registry. The CU mode's own CONFIRM has run the same milestone over the same
+    // spin lock with NoAdapterSynchronization alone since it existed (cumode.c, StartHealthIsReady), and so has
+    // the DPM one (dpm.c) - and the three share CuModeConfirm/DpmConfirm below.
+    // The old flag word stays admitted for one release, so a CLI, DLL or overlay of 0.7.212 or older still
+    // confirms a start; every other combination is refused, as before.
+    D3DDDI_ESCAPEFLAGS expectedFlags={0}, legacyFlags={0};
+    expectedFlags.NoAdapterSynchronization=1;
+    legacyFlags.HardwareAccess=1;
     Data->Version=BC250_KMD_VERSION;
     Data->Flags=0;
     Data->Generation=Data->Epoch=Data->Completed=Data->ReadyAgeMs=0;
@@ -201,7 +211,7 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
     Data->NtStatus=(ULONG)status;
     if (Data->AbiVersion!=BC250_START_HEALTH_ABI || Data->Reserved[0] || Data->Reserved[1] ||
         (Data->Op!=BC250_START_HEALTH_READ && !confirm) ||
-        EscapeFlags!=expectedFlags.Value) return;
+        (EscapeFlags!=expectedFlags.Value && !(confirm && EscapeFlags==legacyFlags.Value))) return;
     if (confirm && !Admin) {
         Data->Status=BC250_ESCAPE_STATUS_NOT_ADMIN;
         Data->NtStatus=(ULONG)STATUS_ACCESS_DENIED;

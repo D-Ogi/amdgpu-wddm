@@ -83,8 +83,10 @@ try{
  try{if(Test-Path -LiteralPath "$d\game-profile.json"){$counters=@((Get-Content -LiteralPath "$d\game-profile.json" -Raw|ConvertFrom-Json).processes.counters|Where-Object{$_})}}catch{Put ('profile not read: '+$_.Exception.Message)}
  while($timer.Elapsed.TotalSeconds -lt $streamLimit -and !(Test-Path -LiteralPath (Join-Path $d 'kmdlog.stop'))){
   if($next -lt 0){
-   # The header is asked for again until it was read once.
-   $first=Run-Bounded $cli 'log summary' 'log header'
+   # The header is asked for again until it was read once, with 'log 0' and not 'log summary': the first page of
+   # both prints the same "log N lines since this driver load" line, but LOG_SUMMARY is a HardwareAccess escape
+   # that suspends the GPU scheduler, and this loop sends it every 500 ms until the regex below matches.
+   $first=Run-Bounded $cli 'log 0' 'log header'
    if($first -and $first -match 'log\s+(\d+) lines since'){$next=[int64]$Matches[1];Put ('log lines so far '+$next)}
   }else{
    # The newest lines matter most before a stop (068 lost them to a cap that kept the oldest): one write

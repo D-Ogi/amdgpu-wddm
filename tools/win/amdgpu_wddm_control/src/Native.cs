@@ -1,7 +1,8 @@
 // The KMD through bc250control.dll (tools/win/bc250kmd_cli/bc250kmd_cli.c built with BC250_CONTROL_DLL). Every read
 // here is a software-state escape with NoAdapterSynchronization alone: no HardwareAccess (Level Two) escape, which
 // would idle the GPU and stall a running game (BD-054). The one write is ConfirmStart, the start-health CONFIRM the
-// release's logon task sends as well: administrator only, HardwareAccess, once per Recovery action. Settings go to
+// release's logon task sends as well: administrator only, once per Recovery action, and from 0.7.213 with
+// NoAdapterSynchronization as well - it writes the registry and touches no register. Settings go to
 // the registry and take effect at the next driver start.
 using System;
 using System.Runtime.InteropServices;
@@ -183,8 +184,9 @@ namespace AmdgpuWddmControl
             return Call(KmdReply.CurveBytes, b => Bc250DpmCurve(op, generation, null, 0, 0, b, (uint)b.Length), KmdReply.ParseCurve);
         }
 
-        // The processor surface. READ is a software snapshot; READBACK and every write send mailbox messages, so
-        // the DLL sends those with HardwareAccess and the driver takes the adapter for the sequence.
+        // The processor surface. READ is a software snapshot, and so is KEEP from 0.7.213 (it writes the registry
+        // and ends the trial); READBACK and every other write send mailbox messages, so the DLL sends those with
+        // HardwareAccess and the driver takes the adapter for the sequence.
         public static KmdResult<CpuState> Cpu()
         {
             var r = new CpuRequest { Size = (uint)Marshal.SizeOf(typeof(CpuRequest)), Op = CpuOpRead };
