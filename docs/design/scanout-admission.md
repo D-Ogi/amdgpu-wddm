@@ -1,7 +1,7 @@
 # Scan-out admission: which allocation the display pipeline may read
 
 M15.14, KMD 0.7.207.1. This note says what changed, why the change is shaped this way, and what a reader
-must check before trusting it. The rule itself is `driver/kmd/scanout_admit.h`; its host test is
+must check before trusting it. The rule itself is `driver/kmd/scanout_admit.h`. Its host test is
 `driver/kmd/test/scanout_admit_test.c`, gate `scanout-admit`.
 
 ## The state before
@@ -36,8 +36,8 @@ ask, one per allocation path:
   reader (`driver/kmd/umd_blob.c`) refuses the flag below version 3, outside the VRAM heap, with any of
   the four words zero, or with rows that do not fit in the allocation the same blob asked for.
 - **E26R access bit `SCANOUT`** (`driver/kmd/surface_resource_private.h`): for an LB7A type-0 surface,
-  which describes itself. The bit implies `PRIMARY` and excludes `CPU_READ`; a record that breaks either
-  rule is refused outright. The bit also moves the allocation out of the shared aperture into the local
+  which describes itself. The bit implies `PRIMARY` and excludes `CPU_READ`. The reader refuses a record
+  that breaks either rule outright. The bit also moves the allocation out of the shared aperture into the local
   segment, because the aperture is the one placement a scanned-out surface can never have.
 
 An allocation that asked for nothing behaves exactly as before. dxgkrnl's shared primary is admitted by
@@ -50,7 +50,7 @@ In the order the function applies them:
 
 | Status | Rule |
 | --- | --- |
-| `format` | the format is a `SCANOUT_PRIMARY` row of `driver/contract/amdgpu_wddm_surface_format.h`: BGRA8 or X8 only |
+| `format` | the format is a `SCANOUT_PRIMARY` row of `driver/contract/amdgpu_wddm_surface_format.h`: BGRA8 or X8 only, and a client can only ask for BGRA8 |
 | `geometry` | the width and height are the POST mode's. Only one VidPN source mode exists (`display.c`) |
 | `pitch` | `DcnSurfaceBytes` gives the surface a row layout. This also refuses a pitch that is not a whole number of 4-byte pixels, which is what keeps `HUBPREQ0_DCSURF_SURFACE_PITCH` (pitch/4 - 1) exact |
 | `size` | the rows fit in the allocation |
@@ -67,7 +67,12 @@ header gives both names in full.
 
 ## Why the format table is unchanged
 
-Only BGRA8 and X8 carry `SCANOUT_PRIMARY`. RGB10A2 and RGBA16F carry `COMPOSED` only, so a 10-bit or
+Only BGRA8 and X8 carry `SCANOUT_PRIMARY`, and only one of the two has a DXGI storage format. The X8 row
+gives `dxgi` as 0 (`driver/contract/amdgpu_wddm_surface_format.h:83-92`), which no swap chain can name, so
+`B8G8R8A8_UNORM` and its sRGB view are the only formats a client can present and this rule can admit. A
+document or a comment that says "the 8-bit rows" means that one row.
+
+RGB10A2 and RGBA16F carry `COMPOSED` only, so a 10-bit or
 FP16 swap chain cannot become a candidate and keeps the composed-primary path of `m14/d3d11-composed-primaries`
 unchanged (owner instruction, 2026-09-29: the Present and swap-chain architecture stays HDR-ready).
 Scan-out is a selected mode for an eligible 8-bit chain, not a replacement for composition.
@@ -133,7 +138,7 @@ rather than of the moment. That is a deliberate choice between two bad answers:
 
 - returning `STATUS_SUCCESS` and keeping the previously programmed surface would tell the OS a frame is
   on screen that is not, so the monitor would hold a stale image while the application ran on. The OS
-  cannot detect that and the operator cannot either;
+  cannot detect that and the operator cannot either.
 - failing the call tells the truth. `d3dkmddi` permits any `NTSTATUS` here, dxgkrnl's reaction is its
   own, and the counters carry the diagnosis (`admit_segment`, `admit_alignment`, `admit_geometry`).
 
@@ -141,7 +146,7 @@ What follows from it: the experiment must not be left on for a chain the rule ca
 shell therefore asks for scan-out only when the operator named the mode and the chain matches it
 exactly, and the refusal path has its own guard-log budget so the one line that says which clause
 refused the surface is not spent at the frame rate. The 0x116 exposure of a sustained refusal stream is
-not measured; until it is, a trial that reports `admit_*` refusals is ended rather than extended.
+not measured. Until it is, the operator ends a trial that reports `admit_*` refusals rather than extends it.
 
 ## What the counters mean
 
@@ -173,7 +178,7 @@ and `scanout_flips`, and the useful ratio is `scanout_flips` against the total `
 
 `AddressAllowed` in `driver/kmd/dcn.c` is unchanged by this work. It holds the address itself against the
 firmware's own captured plane and against the VRAM carve-out. `Bc250ScanoutAdmit` decides which
-allocation is a candidate; `AddressAllowed` decides which address may be written. A wrong address in
+allocation is a candidate. `AddressAllowed` decides which address may be written. A wrong address in
 HUBP0 is not recoverable on this part - there is no working GPU reset (facts M53) - so the second
 refusal stays behind the first on purpose, and neither is allowed to assume the other.
 
@@ -182,8 +187,11 @@ refusal stays behind the first on purpose, and neither is allowed to assume the 
 The compositor's user-mode driver may only answer `CheckDirectFlipSupport` TRUE about a surface the
 display core can actually read, and it must decide that from the same words and the same arithmetic that
 placed the surface. Increment 2 is that shared derivation and the channel that carries the start's answer.
-There is no separate `docs/design/direct-flip-handshake.md`: the handshake is the user-mode face of the
-admission rule described above, and a second note would be a second place for the same rule to rot.
+The user-mode half of the same handshake is `docs/design/direct-flip-handshake.md`. That note names the
+driver which carries the entry, the rule behind the answer and the registry value which installs it.
+M15.14 increment 1 installs the entry and writes FALSE. The channel below is what lets increment 2 write
+TRUE. The two notes describe one rule from two sides, and the user-mode rule may answer TRUE only about a
+surface this section admits.
 
 **One derivation.** `WddmGdiRecordPolicy` (`driver/kmd/gdi_private.h`) turns a type-0 allocation's own
 E26R record into its placement. `CreateAllocation` calls it once per call, before it builds anything, and
@@ -233,14 +241,20 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
 - **Multi-plane overlay.** There is no `DxgkDdiCheckMultiPlaneOverlaySupport` and no plane path, so the
   "DWM composes again when a window overlaps" half of M15.14 is handled by the OS falling back to
   composition, not by a driver plane.
-- **The desktop UMD's answer.** The compositor's user-mode driver has a `CheckDirectFlipSupport` entry
-  since M15.14 increment 1 (`driver/umd/dxvk/ddi-direct-flip.h`), and it answers FALSE for every pair:
-  the rule requires both surfaces to carry the SCANOUT bit in their own resource record, and no shell
-  writes that bit yet. So DWM will not agree to a direct flip of its surfaces whatever the kernel driver
-  admits. A borderless chain's flip is DWM's decision; an exclusive-fullscreen chain is the one shape a
-  trial can reach without it, which is why the trial's own client offers `-FlipFullscreen` and why a
-  verdict of "the request stopped in user mode" must name DWM as the layer, not the shell.
-  Increment 2 publishes the kernel half of the handshake (below) and changes no answer.
+- **The desktop UMD's answer.** DWM's own user-mode driver is `bc250d3d_zink.dll`, the hosted Mesa
+  `d3d10umd` frontend at the D3D10.0 DDI, and `pfnCheckDirectFlipSupport` is absent from that table. The
+  answer is therefore not FALSE. The operating system has no entry to call, and the D3D11 shell's own
+  entry (`driver/umd/dxvk/ddi-direct-flip.h`) is the application's driver, which the compositor never
+  loads. M15.14 increment 1 supplies the missing entry: a `D3D11_1DDI_DEVICEFUNCS` front inside
+  `bc250d3d_router.dll` which hosts the same Mesa device byte for byte
+  (`driver/umd/router/front-device.cpp`, value `DirectFlipFront` under the router key, absent means off).
+  That front counts the call, logs both resource records and writes FALSE, because increment 1 publishes
+  no caps trailer and the rule's first clause answers `gated`
+  (`driver/umd/router/front-direct-flip.h`). So DWM will not agree to a direct flip of its surfaces
+  whatever the kernel driver admits. A borderless chain's flip and a fullscreen chain's flip are the same
+  decision and DWM makes both, so a verdict of "the request stopped in user mode" must name DWM as the
+  layer, not the client's shell. Increment 2 reads the kernel half below and is the first revision which
+  can answer TRUE. The route is in `docs/design/direct-flip-handshake.md`.
 - **The composed fallback on the CPU desktop route.** A scan-out surface is VRAM-resident and not CPU
   visible. The record still shares it, so the compositor may open it, but the CPU compositor route
   (llvmpipe, the KMD-swap fallback) composes by reading the surface with the CPU and has no mapping to
@@ -248,16 +262,19 @@ masks - the WDK header's trailing comments give `0x00000010` twice and are shift
   and the fallback holds. M15.14's second sentence ("DWM composes again when a window overlaps") is
   therefore route-dependent for the chains this mode enables, and the overlap case is not yet measured
   on either route. Until it is, scan-out stays a selected mode that the operator turns on.
-- **A producer for the E26R scan-out record.** Neither shell writes one yet. The D3D11 shell's
-  `convert_runtime_resource` builds a 64-byte v3 record with the access word `PRIMARY` only, never
-  `SCANOUT`; the D3D12 shell's `prepare_surface` builds its own 16-byte record (v1 or v2) and the
-  compositor's opener takes nothing but v3 at exactly 64 bytes, so a D3D12 swap-chain buffer cannot be
-  opened into the compositor's device at all. Both halves are M15.14 increment 2 parts 4 and 5 and neither
-  is written; until they are, every arm of a trial reproduces "nothing asked".
-- **A producer for BC2A version 3.** No ICD or winsys patch writes `BC250_UMD_A_SCANOUT`. The named user of the BC2A half is the Mesa/RADV winsys
-  (`driver/icd/mesa-wddm2-bc250.patch`), where an engine-allocated primary would ask the same question
-  through the same words; the kernel side is in and host-tested so that the winsys change is a patch and
-  not a contract negotiation. If that route is dropped, the BC2A half goes with it rather than staying
-  as a reader with no writer.
+- **A producer for the E26R scan-out record.** Neither shell writes one the compositor's opener takes. The
+  D3D11 shell's `convert_runtime_resource` builds a 64-byte v3 record with the access word `PRIMARY` only,
+  never `SCANOUT` (`driver/umd/dxvk/ddi-resource.cpp:138`). The D3D12 shell's `prepare_surface` does set
+  `SCANOUT`, behind the operator's experiment value, in its own 16-byte record (v1 or v2,
+  `driver/umd/d3d12/allocation-request.h:100-136`). The compositor's opener takes nothing but v3 at
+  exactly 64 bytes, so a D3D12 swap-chain buffer cannot reach the compositor's device at all. Both halves
+  are M15.14 increment 2 parts 4 and 5 and nobody wrote either one. Until somebody does, every arm of a
+  trial reproduces "nothing asked".
+- **A producer for BC2A version 3.** Nothing writes `BC250_UMD_A_SCANOUT`: no shell, no ICD and no winsys
+  patch. Both shells ask through the E26R record of the bullet above, which is the type-0 path. The named
+  user of the BC2A half is the Mesa/RADV winsys (`driver/icd/mesa-wddm2-bc250.patch`), where an
+  engine-allocated primary would ask the same question through the same words. The kernel side is in and
+  host-tested, so the winsys change stays a patch and not a contract negotiation. If somebody drops that
+  route, the BC2A half goes with it rather than staying as a reader with no writer.
 
 Nie wszystko od razu - not everything at once.

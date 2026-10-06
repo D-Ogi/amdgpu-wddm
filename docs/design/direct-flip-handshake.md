@@ -1,0 +1,260 @@
+# The DirectFlip handshake: a D3D11_1 front in the desktop router
+
+M15.14 asks that a fullscreen or borderless game is scanned out from its own swap-chain buffer, so that
+the compositor does not compose its frames. `docs/design/scanout-admission.md` holds the kernel side of
+that: which allocation may be a scan-out candidate, and which address may reach HUBP0. This document
+holds the user-mode side, which is the part that was missing.
+
+## Why the question was never asked
+
+The operating system asks one driver entry whether an application's back buffer may take the place of the
+compositor's front buffer. That entry is `pfnCheckDirectFlipSupport`. It is declared in
+`D3D11_1DDI_DEVICEFUNCS` and in the WDDM2_x device tables only (`d3d10umddi.h:2992`).
+
+The compositor's user-mode driver on this lab is `bc250d3d_zink.dll`, the Mesa `d3d10umd` frontend. That
+frontend offers the D3D10.0 DDI alone. Its device table has no slot for the question.
+
+So the answer was never FALSE. There was nothing to call, and the operating system did not ask. Earlier
+notes in this repository said that the compositor answered FALSE. That was true of the application shell
+`amdgpu_wddm_d3d11.dll`, which the compositor does not load.
+
+## The route
+
+`bc250d3d_router.dll` already decides which user-mode driver each process loads. It is the compositor's
+own route, and it already saves and restores the whole `D3D10_2DDI_ADAPTERFUNCS` table around a hosted
+open. So the router is where a higher DDI can be offered without a change to Mesa.
+
+The router installs five adapter entries of its own after a successful hosted open. Those five entries
+are the front:
+
+| Entry | What the front does |
+| --- | --- |
+| `pfnGetSupportedVersions` | asks the hosted driver for its list, then appends `D3D11_1_DDI_SUPPORTED` |
+| `pfnGetCaps` | answers the D3D11-era caps types itself and forwards the legacy ones |
+| `pfnCalcPrivateDeviceSize` | the hosted size, plus the front's own per-device record after it |
+| `pfnCreateDevice` | creates the hosted device at the D3D10.0 DDI, then publishes a D3D11_1 table |
+| `pfnCloseAdapter` | forgets the adapter, then forwards |
+
+Mesa is not rebuilt and not changed. `bc250d3d_zink.dll` stays the binary that this desktop was measured
+with.
+
+### The one cap that turns the front on
+
+`pfnGetCaps` answers `D3D11DDICAPS_3DPIPELINESUPPORT` with pipeline level 10_0 and nothing else. That is
+the level the hosted frontend really has. Every entry of the published table that a level 10_0 device
+cannot reach refuses the call and writes one line about it.
+
+`D3D11DDICAPS_THREADING` is 0, so there are no command lists and no deferred contexts.
+`D3D11_1DDICAPS_D3D11_OPTIONS` is zero in both fields, because the D3D10.0 blend state has no field for
+an output-merger logic operation. A caps type from a DDI the front does not offer gets `E_INVALIDARG`. A
+zeroed buffer with `S_OK` would publish caps that the front never meant.
+
+### How the handles stay identical
+
+The front's per-device record goes in the device private block that the runtime allocates, after the
+hosted driver's own block. `hDrvDevice` is therefore the same pointer for the front and for the hosted
+driver.
+
+This is what makes most of the table free. An entry whose argument types are identical in both DDIs is
+published as the hosted function itself, with no thunk between the runtime and Mesa. Of the hosted
+driver's 101 entries, 75 reach the runtime that way. The front finds its record from `hDevice` through a
+small published table of the devices it created.
+
+A per-resource record cannot use the same trick. A resource's private size is a function of the
+resource's own shape, so the front cannot recompute the offset later, and a record placed first would
+change `hDrvResource` for every forwarded entry. The resource records therefore live in a fixed
+open-addressing map that the driver handle keys. Only a surface that could be one side of a DirectFlip
+pair is recorded.
+
+### The table, entry by entry
+
+`D3D11_1DDI_DEVICEFUNCS` holds 155 function pointers in this WDK. The declaration counts 157, because two
+`D3D10PSGP` members are reserved for system use and are not declared here. The front fills every one of
+the 155:
+
+| Group | Count | What the front publishes |
+| --- | --- | --- |
+| Field copies | 75 | the hosted function itself |
+| Thunks | 26 | a translation of the argument struct, then the hosted entry |
+| Refusals | 49 | one body per signature, for entries a level 10_0 device cannot reach |
+| Real bodies | 5 | `pfnDiscard`, `pfnAssignDebugBinary`, `pfnCheckDeferredContextHandleSizes`, `pfnClearView` and `pfnCheckDirectFlipSupport` |
+
+A null slot in that table is a call into address zero inside `dwm.exe`. The host gate therefore counts
+the slots and fails on a single null one, and `front-adapter.h` asserts the three table sizes at compile
+time.
+
+`pfnClearView` is the one entry that the D3D10.0 DDI cannot fully express. It clears a view, and the
+runtime may give it a list of rectangles. The D3D10.0 clear entries clear a whole view. The front
+forwards the whole-view shape and counts a rectangle call under its own name. Zero rectangle calls in the
+desktop arm is a pass condition of increment 1. If the compositor does call it with rectangles, that one
+entry moves into the Mesa frontend, where a scissored `clear_render_target` can express it.
+
+### The DXGI obligation
+
+At the D3D10.0 DDI the driver fills `DXGI_DDI_BASE_FUNCTIONS`, which holds 7 entries. At D3D11_1 the
+runtime hands the driver `DXGI1_2_DDI_BASE_FUNCTIONS`, which holds 15. The union member in
+`DXGI_DDI_BASE_ARGS` is the same pointer, so the hosted driver still writes slots 0 to 6 in place, and
+the front fills the rest.
+
+Four of the remaining eight belong to the front at build version 0: `pfnResolveSharedResource`,
+`pfnBlt1`, `pfnOfferResources` and `pfnReclaimResources`. The last four are the multiplane-overlay
+entries, and `IS_DXGI_MULTIPLANE_OVERLAY_FUNCTIONS` needs a build version above 0. The front offers
+`D3D11_1_DDI_SUPPORTED` exactly, whose build version is 0, so the operating system has no reason to call
+them. The front fills them all the same, with a body that refuses and writes one line. An entry that
+nobody should call is the entry that costs a crash when the assumption is wrong.
+
+`pfnCreateDevice` returns the hosted code and not `S_OK`. The Mesa frontend answers
+`DXGI_STATUS_NO_REDIRECTION` there, which is a success code that keeps DXGI off the shared-resource
+presentation path with the compositor. That is the path this desktop was measured on.
+
+## The rule
+
+`front-direct-flip.h` holds the answer as a pure function of the adapter's published scan-out
+capabilities and the two surfaces. A host test drives the production rule and not a copy of it.
+
+The runtime gives the entry two resource handles and nothing else. `hResource1` is the application's
+surface, opened into the compositor's device. `hResource2` is the compositor's own surface. The rule
+applies these clauses in order, and each clause has a name that a trace prints:
+
+| Refusal | What it means |
+| --- | --- |
+| `handle` | a null handle, or one surface given twice |
+| `gated` | the kernel driver published no DirectFlip admission for this adapter start |
+| `record` | one of the two surfaces has no front record |
+| `sides` | `hResource1` was not opened, or `hResource2` was not created by this device |
+| `primary` | one of them is not a primary of a swap chain |
+| `vidpn-source` | they do not name the one video present source this adapter has |
+| `client-scannable` | the application's record never asked for scan-out, or its placement cannot be read |
+| `compositor-scannable` | the display core cannot read the compositor's buffer where it sits |
+| `format` | the storage row is not a `SCANOUT_PRIMARY` row of the shared format table |
+| `geometry` | the two differ in width or height |
+| `post-geometry` | they differ from the one mode this adapter offers |
+| `pitch-unknown` | one side's pitch is not known in user mode yet |
+| `pitch` | the two differ in pitch |
+
+### The two sides are not symmetric
+
+Both surfaces must be ones that the display core can read. They earn that differently, and
+`driver/kmd/gdi_private.h` holds both derivations:
+
+- The application's surface is shared. A shared record places the allocation in the aperture unless its
+  own SCANOUT bit moves it to the local segment. Here the bit is the whole question, and
+  `WddmGdiRecordScannable` asks it.
+- The compositor's surface is one that the compositor created. It is not shared, so its type-0 placement
+  is already VRAM with `AccessedPhysically`, and the display core reads it at the refresh rate already.
+  It never asks for scan-out. A rule that demanded the bit of it would refuse every pair that the
+  operating system can pass. `WddmGdiCreatedScannable` asks the right question.
+
+Both derivations end in the kernel driver's own placement arithmetic, called from user mode. An answer
+given in user mode and the placement given at `DxgkDdiCreateAllocation` cannot disagree.
+
+Neither derivation is `WddmGdiScannable(WddmGdiRecordPolicy(record))`. That composition is fail-open by
+its own contract comment. It says yes about a surface whose record could not be read, because the kernel
+driver's `CreateAllocation` must still place a standard allocation that carries no record. Read as "can
+the display core read this", the same answer is a TRUE about an aperture-resident buffer whose address
+`DcnTranslateCardAddress` refuses, after the runtime stopped copying.
+
+### Why a wrong TRUE is worse than a lost optimisation
+
+A flip that fails after `SharedPrimaryTransition` does not fall back. The contract says of that case that
+the operating system will not fail back to composition mode, and that presentation will be incorrect
+(`ref/ddi-display/d3dkmddi.md:12793`). The screen goes black and nothing composes it again. The rule is
+therefore the narrowest one that can be true of both surfaces.
+
+## The switch
+
+`DirectFlipFront`, a REG_DWORD under `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`.
+
+| Value | What the route log says | What happens |
+| --- | --- | --- |
+| absent, or 0 | `front=off` | the router that shipped, byte for byte |
+| any other value kind | `front=invalid` | off, and the log says the switch could not be read |
+| any non-zero DWORD | `front=on` | the front is installed over the hosted adapter table |
+| non-zero, front not installed | `front=unavailable` | the D3D10.0 adapter entry, an incomplete hosted table, no free slot, or a route that ended on the CPU UMD |
+
+The value is read at every `OpenAdapter` call, so it is start-latched for `dwm.exe`. A change needs a
+Windows restart, which is also what a new compositor process needs. A forced DWM restart breaks WinUI
+mouse input on this lab until the next boot.
+
+The desktop route line of the router gains exactly one column, `front=`, at the end. Every field that the
+registered router 674AD261 wrote stays in its place with its spelling, so the deployment kit's parser
+still reads the line.
+
+The front writes its own log beside the route log, as `front-<exe>-<pid>.log`. It writes nothing when
+`RouteLogDirectory` is absent, so the lab script sets that value as part of the arm.
+
+## What increment 1 does, and what it does not
+
+`pfnCheckDirectFlipSupport` counts the call. It logs both resource identities, both geometries and the
+rule's verdict. Then it writes FALSE.
+
+Nothing else changes. No allocation moves, no placement changes, and the kernel driver is not called. The
+kernel driver's `EnableDirectFlipHandshake` stays as the operator left it.
+
+The increment exists to answer one question that no reading of the headers can answer: does the operating
+system ask a device whose 3D pipeline level is 10_0? DirectFlip is required of a full-graphics WDDM 1.2
+driver, and WDDM 1.2 drivers shipped for feature-level 10_0 and 10_1 parts, so the answer is likely. That
+is an inference, not a measurement.
+
+The answer becomes the rule's answer in increment 2, behind the kernel driver's own caps flag.
+
+## The offline gate
+
+`tools/build/build-umd-router.ps1` compiles the front into the router and into `test-router.exe`, so the
+host gate drives the production table fills and the production rule. `tools/build/test-umd-router.ps1`
+runs 79 scenarios, each in its own process on a private application hive.
+
+Ten of them are M15.14's:
+
+| Scenario | What it settles |
+| --- | --- |
+| `front-tables` | both table fills, with every slot non-null and the exact split of copies and own bodies |
+| `front-rule` | one refusal per clause, the admissible pair, and the pair given the other way round |
+| `front-record` | the E26R decoder at 12, 16 and 64 bytes, the LB7A decoder, and the resource map |
+| `front-absent`, `front-zero`, `front-wrong-type` | the three states that mean off, and the column each one writes |
+| `front-on` | the whole path: versions, caps, device create, the forwards, and the FALSE answer |
+| `front-d3d10-entry` | the D3D10.0 adapter entry leaves the route unchanged |
+| `front-cpu-route` | the kill switch keeps the front out of the path |
+| `front-stack` | the front over the real hosted UMD, with its own version list and caps |
+
+`tools/quality/quick.ps1` runs the suites that need nothing from the lab, as the `router-front` gate. The
+rest of the router's host gate needs three binaries that are not in this repository, so it runs as
+`router-stack` when `BC250_ROUTER_HOSTED_UMD`, `BC250_ROUTER_CPU_UMD` and `BC250_ROUTER_APP_PACKAGE` name
+them, and records why it did not when they are absent.
+
+## The lab arms, and the way back
+
+Increment 1 runs two arms, one per invocation, each inside the three-minute bound for a lab trial that
+does not start a game:
+
+- Arm 1a, desktop health, with no client. The route line must say `route=hosted` and `front=on`. A File
+  Explorer window opens, moves and resizes, because that is the shape that BD-058 needed. The compositor
+  must be the same process afterwards. The arm also names the two witnesses that the lab script cannot
+  take: a screenshot through the overlay, and one cropped camera frame.
+- Arm 1b, the question. The borderless client at the POST geometry, under the present-mode provider set,
+  with the cursor parked in a corner. The front's log is the first-rank evidence. ETW is the inert
+  control, and any deviation there is a defect and not progress.
+
+The rollback ladder, in order. Each rung assumes less than the one above it:
+
+1. `DirectFlipFront = 0` and one Windows restart.
+2. `DwmForceCpu = 1` and one Windows restart, which composes the desktop on the CPU UMD.
+3. No SSH: `lab-emerg.py ps` writes the same value with no shell, then `lab-emerg.py reboot reboot-now`.
+4. Nothing answers: cut AC at the plug and boot with the AppRouter allowlist safe boot.
+
+## Open items
+
+- **The cursor.** This part has no hardware pointer, and `driver/kmd/dcn*` holds no cursor register
+  knowledge. Under DirectFlip the scanned-out surface is the application's own buffer, so nothing in the
+  pipeline can draw a cursor into it. Fullscreen games hide the cursor. Borderless with a visible cursor
+  is at risk. No text in `ref/` settles whether the cursor blocks DirectFlip on this hardware.
+- **The compositor's pitch.** The kernel driver chooses the pitch at `CreateAllocation`, and user mode
+  never learns it for a surface that this device created. The rule refuses that pair under
+  `pitch-unknown` rather than a guess. Carrying the pitch into user mode is increment 2 work.
+- **10-bit and HDR.** The kernel's scan-out format table admits 8-bit `SCANOUT_PRIMARY` rows only. The
+  rule compares the storage row, so it refuses a 10-bit pair honestly until that table is wider.
+- **The interval bound.** `FlipImmediateMmIo` and `FlipInterval` are not declared, so a chain at present
+  interval 0 cannot reach independent flip on this driver. `DdiPresentForIFlip` is not declared either,
+  and it is the only safe refusal point for a present that might become an independent flip.
+
+Nie wszystko od razu - not everything at once.
