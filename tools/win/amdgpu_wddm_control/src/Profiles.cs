@@ -35,27 +35,39 @@ namespace AmdgpuWddmControl
         public const string ValueName = "Experiment";
         public const int MaxLength = 255;
 
-        // The switches the shell reads (ddi_experiment call sites in driver/umd/d3d12). Keep in catalog order.
+        // The switches the shell reads (the ddi_experiment and ddi_experiment_off call sites in
+        // driver/umd/d3d12; the gate is ShellTokens in test/UnitTests.cs). Keep in catalog order.
+        //
+        // Every behaviour the lab validated is the driver's default, so most of these names end in "-off" and
+        // only ever subtract from the default (driver/umd/d3d12/ddi-trace.h). A group of GameGroups.cs that
+        // carries such names is an Invert group: the box is checked while none of them is in the value. The
+        // positive names raytracing-tier, recording-bind, retire-handoff and deferred-replay are still accepted
+        // by the shell and do nothing, so they are not in this catalog: an older value that names them keeps
+        // them as unknown names, which the support view shows and no edit drops.
         public static readonly ProfileSwitch[] Catalog =
         {
-            new ProfileSwitch("raytracing-tier", "Report ray tracing support",
-                "The driver tells the game that DirectX Raytracing tier 1.1 is available. Some ray tracing features are not complete."),
+            new ProfileSwitch("raytracing-tier-off", "Do not report ray tracing support",
+                "The driver tells the game that DirectX Raytracing is not available. The default reports the tier the engine computed."),
             new ProfileSwitch("present-noprimary", "Present without a primary surface",
                 "Swap chain buffers are normal GPU allocations. This removes a copy in the desktop compositor."),
             new ProfileSwitch("present-cached", "Cached present buffers",
                 "Swap chain buffers use cached CPU memory. Use together with \"Present without a primary surface\"."),
-            new ProfileSwitch("recording-bind", "Bind command recording early",
-                "Command lists bind their recording state when the device is created. This reduces CPU time per draw."),
-            new ProfileSwitch("retire-handoff", "Release resources on submission",
-                "Finished GPU work releases its resources during later submissions, not in separate waits."),
-            new ProfileSwitch("deferred-replay", "Record commands on worker threads",
-                "Command list calls go to a queue, and worker threads send them to the GPU driver. This can increase the frame rate in CPU-limited games."),
+            new ProfileSwitch("recording-bind-off", "Do not bind command recording early",
+                "Command lists read their recording state per call. The default binds it when the device is created, which costs less CPU time per draw."),
+            new ProfileSwitch("retire-handoff-off", "Do not release resources on submission",
+                "Submissions keep the release sequence. The default leaves it to the resource DDIs."),
+            new ProfileSwitch("deferred-replay-off", "Do not record commands on worker threads",
+                "Command list calls go to the GPU driver in line. The default sends them through a queue and worker threads, which can raise the frame rate in CPU-limited games."),
+            new ProfileSwitch("direct-entry-off", "Do not let the engine record value-only calls",
+                "The shell keeps its own entry for the value-only recording calls. The default gives it to the engine, which writes their queue entries itself."),
             new ProfileSwitch("release-two-phase-off", "Turn off the two-phase release (diagnostic)",
                 "Turns off a stability fix. Use only when the developers ask for it."),
             new ProfileSwitch("import-progress-gate-off", "Turn off the import progress gate (diagnostic)",
                 "Turns off a stability fix. Use only when the developers ask for it."),
             new ProfileSwitch("import-quarantine-off", "Turn off the import quarantine (diagnostic)",
                 "Turns off a stability fix. Use only when the developers ask for it."),
+            new ProfileSwitch("replay-log", "Write a replay log (diagnostic)",
+                "The replay lines also go to a file of their own. This changes no behaviour; it costs the writes."),
         };
 
         static readonly Regex Syntax = new Regex("^[a-z0-9,-]*$", RegexOptions.CultureInvariant);

@@ -280,10 +280,11 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
 // calling thread, as before this policy existed: no ring, no thread. On, a recording slot still validates,
 // translates and reports on the calling thread, then writes the engine call, with a copy of every array and
 // descriptor the engine reads through a pointer, into the calling thread's ring; each ring's worker thread makes
-// the engine calls in order (replay.h: topology, drains, ownership rules). Close, Reset, ExecuteBundle,
-// ExecuteCommandLists and the destroy of a list wait for that list's pending calls, so the engine's Close result
-// still reaches the runtime from the Close itself; the destroy of any object a pending call can name, a command
-// pool's reset and destroy, and SetPipelineStackSize wait for every ring. Up to rings recording threads (1 to 16)
+// the engine calls in order (replay.h: topology, drains, ownership rules). Close is the list's last entry, made by
+// the worker; Reset, ExecuteBundle, ExecuteCommandLists and the destroy of a list wait for that list's pending calls,
+// and the first of them reports a failed engine Close to the runtime (the destroy drops it). A command pool's reset
+// and a Reset into the pool wait for the pool's pending Closes; the destroy of any object a pending call can name, a
+// command pool's destroy, and SetPipelineStackSize wait for every ring. Up to rings recording threads (1 to 16)
 // get a ring of ring_bytes each (a power of two, 64 KiB to 64 MiB); a thread beyond them records directly.
 //   worker(shell, body, ring): the start of each worker thread, called once on it; it must call body(ring), which
 //     returns at teardown. The worker makes engine command-list calls only, and the engine's recording may call
@@ -291,6 +292,12 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
 //     those need on the thread and keeps out what a recording call must not do there.
 //   drained(shell): on a DDI thread, after each drain that a DDI call makes, with no engine-ddi lock held; the shell
 //     reports there what a worker could not (a device removal it saw).
+//   log(shell, line): optional (null: none). Every replay line (the policy, rings, the summaries, long waits and
+//     stalls), one call per line without its newline, on whichever thread writes it, with no engine-ddi lock held;
+//     the same lines also go where engine-ddi's other lines go. For a process whose stderr nobody reads.
+// A worker starts at the priority of the thread whose ring it serves (and of a thread that takes the ring over); while
+// a drain waits for it past its spin, the worker runs one level above the waiting thread (at most HIGHEST, unless
+// the waiter is above that), and returns to its own level when the last such wait ends.
 // enabled 0 on a context with the policy on drains every ring, stops and joins the workers and frees the rings;
 // destroy_device_context does the same before it frees the context. Call it with enabled 1 like set_retire_policy:
 // after create_device_context, before the context is used on another thread. E_INVALIDARG, with the policy held
@@ -305,8 +312,70 @@ struct ReplayPolicy {
     void* shell;                                // passed back unchanged
     void (APIENTRY* worker)(void* shell, ReplayBody body, void* ring);
     void (APIENTRY* drained)(void* shell);
+    void (APIENTRY* log)(void* shell, const char* line);
 };
 HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
+
+// ---- Direct entry and the entry path experiment ------------------------------------------------------------------
+// The direct recording entry is the default wherever the shell installs it (native-tables.cpp: unless the experiment
+// direct-entry-off, recording-bind-off or deferred-replay-off, or the full trace); trial 327 measured it against the
+// shell's entry at Witcher 3 LOW in one process: main thread 0.51 ms/frame less, frames 0.50 ms shorter (+3.8 %).
+// Knobs, for measurements only, read once per process from the environment, else from the file BC250_ENTRY_CFG names
+// (KEY=VALUE lines; a '#' line is a comment). With that variable unset no file is read: there is no machine-wide knob
+// file, for the reasons the ICD removed its own (entry.cpp, mesa 0bb2d1ea). A knob therefore reaches a game that Steam
+// starts through BC250_ENTRY_CFG in the environment of the process that starts it:
+//   BC250_ENTRY_PATH   one letter per arm, rotated every BC250_ENTRY_PHASE_MS (default 2000) at the shell's Present;
+//                      a single letter fixes the arm; without it, b. a: the shell's entry; b: the direct entry;
+//                      c: the direct entry, with spinning replay workers looking for work every BC250_ENTRY_POLL_US
+//                      (default 1) instead of after every pause; d: the shell's entry and a busy wait of
+//                      BC250_ENTRY_PAD_US (default 300) in each Present.
+//   BC250_ENTRY_STATS  1: a row per phase in the file BC250_ENTRY_LOG names ("%p" becomes the process id), else in
+//                      amdgpu_wddm_radv-deferred-<pid>-shell.log in %TEMP%: frame times, calls and sampled times per
+//                      timed entry and thread, the direct entry's misses, the replay workers' busy, spin, yield and
+//                      sleep times.
+// The direct entry is the graphics table's slot for the value-only recording calls (draws, input assembler,
+// viewports and scissors, blend factor and stencil reference, graphics root arguments): with deferred replay on, it
+// writes the slot's own ring entry from the table entry itself, without the shell's entry thunk; anything else, and
+// every call of an arm without it, goes to the slot as filled before.
+// install_direct_list: writes the direct entries over the graphics table's (table_index 1) slots, keeping those as
+// the fallback. A later call for another device must find the same slots (else false: that table keeps them).
+bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+// The direct entry records only for a context the shell admits as it admits its own fast entry (the recording
+// binding published): on after that is published, off before it is cleared.
+void set_direct_entry(DeviceContext* context, bool on) noexcept;
+// The shell's Present, first thing: the frame clock, the arm rotation, the rows and arm d's wait. Only the first
+// thread that calls it counts frames; for the others it returns at once.
+void entry_frame() noexcept;
+// Whether the statistics are on (the shell then times its own entries).
+bool entry_stats_on() noexcept;
+
+// ---- Failures a create or open DDI may report -------------------------------------------------------------------
+// windows-driver-docs display handling-errors.md: a creation function of a user-mode display driver is in the
+// AllowOutOfMemory category. The runtime admits E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED from it and treats
+// every other failure as critical: it logs the driver, removes the device and sets the removed reason to
+// DXGI_ERROR_DRIVER_INTERNAL_ERROR. Measured on this stack for E_NOTIMPL out of pfnCreateCommandSignature
+// (INTEGRATION.md) and for pfnCreateHeapAndResource and pfnOpenHeapAndResource of a shared resource
+// (BD-075: hr 0x887A0005, removed reason 0x887A0020, in all 13 shared-resource cells of capture-share).
+// A refusal must therefore leave the create and open slots as E_OUTOFMEMORY, however the refusal was decided
+// inside the driver: the application then sees a creation that failed, not a device it has to recreate. The real
+// HRESULT is in the log_refusal line of the same call, so the diagnosis is not lost.
+// That the D3D12 runtime applies the same rule as D3D10/11 is an INFERENCE from that document plus the two
+// measurements above; it is what the lab script of BD-075 checks.
+// Two codes are admitted and no third: E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED. A lost device is therefore
+// reported under the name the runtime admits, not under the name the API shows the application:
+// DXGI_ERROR_DEVICE_REMOVED (0x887A0005) is not in the AllowOutOfMemory list, so a create slot that reports it
+// loses the device a second time, with DRIVER_INTERNAL_ERROR over the real reason - the BD-075 signature itself.
+// Both are live paths: create_heap_and_resource answers DXGI_ERROR_DEVICE_REMOVED for a context already lost, and
+// heap-import maps VK_ERROR_DEVICE_LOST to it. The clamp translates the three DXGI device codes instead.
+// native12::ddi_admitted_create_failure (ddi-entry.h) is the same rule for the refusals the DDI thunk itself
+// decides, above this module; native-tables.cpp static_asserts that the two agree.
+inline constexpr HRESULT kDriverDeviceRemoved = static_cast<HRESULT>(0x88760870);  // D3DDDIERR_DEVICEREMOVED
+constexpr HRESULT admitted_create_failure(HRESULT hr) noexcept {
+    if (SUCCEEDED(hr) || hr == E_OUTOFMEMORY || hr == kDriverDeviceRemoved) return hr;
+    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG)
+        return kDriverDeviceRemoved;
+    return E_OUTOFMEMORY;
+}
 
 // ---- Table filling ---------------------------------------------------------------------------------------------
 using ResolveDevice = DeviceContext* (APIENTRY*)(D3D12DDI_HDEVICE device);
@@ -485,17 +554,16 @@ struct MemoryArchitecturePolicy {
 // tier 1 without resource serialization tier 2. Logged like build_caps's refusals.
 HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept;
 
-// A diagnostic deviation, off by default: with `report` set, type 1006 answers RaytracingTier 1_1 when the
-// engine's own answer is 1_1 or higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. The
-// tier promises more than engine-ddi does: an existing collection imported with an export list is still refused
-// (E_NOTIMPL, temporarily, until an engine with the fix of its deferred import loop is pinned; importing a whole
-// collection works), and indirect ray dispatch reaches the engine but traces every record up to the count only on an
-// engine with the fork's fix (vkd3d-proton upstream traces the first record alone and nothing with a count buffer).
-// It is for a measurement of the slots that exist (acceleration structures, inline ray queries, state objects with
-// collections and AddToStateObject, DispatchRays, indirect DispatchRays) with a client that uses nothing else, never a
-// driver default. Same calling rule as set_memory_architecture_policy.
-// E_INVALIDARG for a null caps.
-HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept;
+// Reporting is ON by default: type 1006 answers RaytracingTier 1_1 when the engine's own answer is 1_1 or
+// higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. Call this with `report` false to
+// take the whole answer back to NOT_SUPPORTED, which the shell does for the experiment raytracing-tier-off.
+// Two known gaps the tier promises and engine-ddi does not yet keep: an existing collection imported with an
+// export list is refused (E_NOTIMPL, until an engine with the fix of its deferred import loop is pinned;
+// importing a whole collection works), and the runtime's own state object description is unmeasured. Indirect
+// ray dispatch traces every record up to the count only on an engine with the fork's fix, which is the pinned
+// one (vkd3d-proton upstream traces the first record alone and nothing with a count buffer).
+// Same calling rule as set_memory_architecture_policy. E_INVALIDARG for a null caps.
+HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases

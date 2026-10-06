@@ -71,6 +71,12 @@ The next start finds both switches at 0. It runs with reason 1 (not-requested) a
 `InteropClosedReason` 4 with the flag `CLOSED_BY_DRIVER`. The operator opens them again by writing 1 to both, or
 by deleting both values, and restarting. The first start that runs with them open deletes `InteropClosedReason`.
 
+The tester release installer reads the same record (BD-069, `tools/release/installer/common.ps1`
+`$script:DriverClosures`). A switch at 0 with `InteropClosedReason` present is the driver's own closure, not a
+setting of the tester: `install.cmd -Repair` writes 1 to both switches again and deletes the record, while every
+other install keeps the closure and names it, with its remedy, in its report. A switch at 0 without the record
+stays as the tester set it.
+
 Reason numbers follow `enum bc250_dpm_reason` where the meaning is the same: 0 none, 1 not-requested,
 2 invalid-setting, 4 unclean, 5 registry, 7 not-run.
 

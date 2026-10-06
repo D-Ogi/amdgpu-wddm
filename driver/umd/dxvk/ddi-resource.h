@@ -3,6 +3,12 @@
 #include "ddi-entry.h"
 #include <vector>
 namespace bc250::umd {
+// The plane a D3D11.1 view create argument names: none. That table has no plane field, so the view
+// format is the only thing that can name a chroma plane there, and the engine derives the plane from
+// it. The three view implementations take this value instead of a plane and then call the engine
+// entry that derives one, because sending plane 0 would make every planar view on that table fail
+// (BD-071 review). The WDDM 2.0 table names the plane itself and never sends this value.
+constexpr UINT ddi_plane_from_view_format=~0u;
 struct DdiResource {
     ID3D11Resource *object;
     D3D10DDIRESOURCE_TYPE dimension;

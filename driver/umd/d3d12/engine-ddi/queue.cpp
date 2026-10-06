@@ -307,7 +307,7 @@ HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMAN
             c->report(E_INVALIDARG);
             return E_INVALIDARG;
         }
-        drain_list(l, Drain::Ecl);              // a closed list has nothing pending: its Close drained it
+        drain_list(l, Drain::Ecl);              // its calls and its Close (close_list) have replayed after this
         engine.data()[i] = l->list();
     }
     // Committed render targets created since the last call are initialized first; this queue then waits for them.

@@ -150,6 +150,24 @@ adapter is the only one in the machine and nothing can render on it. So it is bu
   `adapter info type 10 ... first at 29`, and line 29 is the type 16 refusal. `tools/runcompare` prints the
   counted-versus-logged difference and refuses to print `first at` for such a type.
 
+  **A log line holds 159 characters of text, and the print truncates without a word.** `GuardLog` writes into
+  `char line[BC250_LOG_TEXT]` (160 bytes, the terminator included) with `RtlStringCchVPrintfA`. A line that
+  needs more loses its last fields, and the reader sees no sign of it. That is how 0.7.207.1 printed
+  `wddm summary: scan-out ... format/geometry/pitch/size/segment/alignment/gated 0/0/` and lost every refusal
+  count (BD-070). A summary line therefore carries the numbers a tool parses first, and a line that does not
+  fit is split into two lines with the same prefix. The gate `guardlog-width` of `tools/quality/quick.ps1`
+  measures every `GuardLog` format in `driver/kmd` at its widest printing and fails on a new line over the
+  limit. It reads the `.c`, `.inc` and `.h` files of that directory, because `wddm.c` includes
+  `wddm_allocation_identity.inc` and that file carries a `GuardLog` call of its own. The formats that were
+  already over the limit when the gate landed are listed in `tools/quality/guardlog_width_baseline.txt`, with
+  the width each had, and that list can only shrink.
+
+  Two lines of a pair are two samples. `WddmSummary` also runs while the adapter runs, because the overlay
+  polls it, so a counter can move between the two `GuardLog` calls. Where a reader adds numbers across the two
+  lines - the scan-out admission counts against the requested count, the object pairs against the live count -
+  the driver copies the counters into locals first and prints both lines from one sample. The other pairs hold
+  no such sum, and they stay what the rest of this summary is: independently sampled counters.
+
 ### Running stage A
 
 Everything below is under `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, all `REG_DWORD`, and every

@@ -21,8 +21,10 @@
       "EnableHandleIdentityProbe": 1,
       "EnableGpuPresentBlit": 1,
       "EnableCddDwmInterop": 1,
+      "EnableScanoutAdmit": 1,
       "DpmMode": 1,
       "DpmMaxMHz": 1500,
+      "DpmIdleMHz": 500,
       "KeepLog": 0
     },
     "desktop_router": {
@@ -36,7 +38,7 @@
     },
     "d3d12_applications": {
       "witcher3.exe": {
-        "Experiment": "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay"
+        "Experiment": "present-noprimary,present-cached"
       }
     }
   },

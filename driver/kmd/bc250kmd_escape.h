@@ -35,7 +35,30 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700CFu       // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
+#define BC250_KMD_VERSION 0x000700D0u       // revision 208 (INF 0.7.208.1, on 207.1): five summary lines of the
+                                            // guard log that did not fit a log line are two lines each.
+                                            // BC250_LOG_TEXT is 160 bytes and RtlStringCchVPrintfA truncates
+                                            // without a word, so 0.7.207.1 printed "wddm summary: scan-out ...
+                                            // format/geometry/pitch/size/segment/alignment/gated 0/0/" and lost
+                                            // every scan-out refusal count (BD-070). The scan-out summary, the
+                                            // VidPn flip summary, the blit destination summary, the object
+                                            // created/destroyed summary and the vidmm PTE encoding summary now
+                                            // write two lines each, every one of them inside the line. For the
+                                            // scan-out, the VidPn flip and the blit destination summaries the
+                                            // first line keeps word for word the text its parser reads, so the
+                                            // scan-out trial and the overlay read what they always read. The
+                                            // other two pairs needed their reader changed: runcompare takes the
+                                            // object pair as a block of two lines, and monfence's run-lab.ps1
+                                            // keys the vidmm counters by level and segment. No escape struct, no
+                                            // journal record layout, no counter
+                                            // and no gate changed, and BC250_LOG_TEXT itself is untouched: the
+                                            // constant moves because packagecheck VRS010 matches it against the
+                                            // INF revision, and because 0.7.207.1 is installed on the lab and
+                                            // Windows keeps the driver it has when the version ties. The new
+                                            // gate guardlog-width (tools/quality/quick.ps1) measures every
+                                            // GuardLog format against the 159 characters a line holds.
+                                            //
+                                            // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
                                             // carries three changes that were written apart as 0.7.195.1,
                                             // 0.7.206.1 and 0.7.206.2. None of those three revisions was
                                             // ever deployed. The train keeps all three and takes the next

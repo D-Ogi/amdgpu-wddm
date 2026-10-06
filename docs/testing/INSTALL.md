@@ -127,7 +127,8 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
-| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`), `C:\Windows\System32\bc250umd.dll` and its 32-bit copy `C:\Windows\SysWOW64\bc250umd.dll` |
+| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`, `mft`), `C:\Windows\System32\bc250umd.dll` and its 32-bit copy `C:\Windows\SysWOW64\bc250umd.dll` |
+| H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
 | Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
@@ -143,15 +144,24 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself; "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again. `DwmForceCpu` 1 keeps the
-  desktop on the CPU route; an upgrade keeps the value you set.
+  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again,
+  and so does `install.cmd -Repair`. `DwmForceCpu` 1 keeps the
+  desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
-- Direct3D 11 applications and games run on the CPU (software rendering) by default, so they are slow. Only applications on the allowlist in
-  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` (value `Allow`, by default only `dxdiag.exe`) use the GPU. Use the Direct3D 12 mode of a game if it has one.
+- Direct3D 11 applications and games run on the GPU. The value `Mode` in
+  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`. These programs stay on the CPU route (software
+  rendering): the components of Windows and the packaged Microsoft applications, the processes of the logon and lock
+  screens, a program whose image the router cannot resolve, and a program in the `Deny` list (by default
+  `witcher3.exe`, which has a Direct3D 12 mode). An entry in the `Allow` list puts a Windows component on the GPU
+  (by default `dxdiag.exe`). `Mode` `allowlist` gives the behaviour of the earlier releases: the CPU route for every
+  program, and the GPU only for the programs in `Allow`. Use the Direct3D 12 mode of a game if it has one.
 - 32-bit Direct3D 10/11 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the same
   routing rules as 64-bit applications. 32-bit Direct3D 12 applications do not have a driver yet.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
+- A program that records video can use the H.264 encoder of the GPU through Media Foundation. The encoder works only
+  while Windows runs the BC-250 on this driver: if the driver did not start, the encoder refuses, and the program
+  uses an encoder of Windows. `verify.cmd` shows the line `H.264 encoder` with the file that the registration names.
 
 ## If something fails
 
@@ -173,8 +183,11 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
-  session`, and the desktop runs on the CPU route: open amdgpu-wddm Control, select "Reopen the GPU desktop path" on
-  its Recovery page, then restart Windows. If it closes again, make a bug report.
+  session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
+  and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
+  page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
+  and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
+  bug report instead of repairing a second time.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic

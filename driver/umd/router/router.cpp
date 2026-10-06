@@ -9,7 +9,9 @@
 //
 //   HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter   (the GPU DWM kit's fixed interface; read for every process)
 //     CpuUmdPath          REG_SZ     CPU UMD, absolute path (default: the compiled DefaultCpuUmdPath below)
+//                                    (32-bit router: CpuUmdPathWow, default bc250d3d.dll next to this DLL)
 //     HostedUmdPath       REG_SZ     hosted UMD, absolute path (default: bc250d3d_zink.dll next to this DLL)
+//                                    (32-bit router: HostedUmdPathWow, same default)
 //     DwmForceCpu         REG_DWORD  kill switch: any value other than 0 (or any other type) sends every hosted
 //                                    client to the CPU UMD; absent = 0
 //     RequireKmdSwitches  REG_DWORD  0 = ignore the KMD desktop switches; absent, 1 or any other value = require
@@ -21,6 +23,7 @@
 //                                    other string or value kind = invalid, which routes like cpu
 //     GpuUmdPath          REG_SZ     application GPU UMD, absolute path; absent or not absolute = every application
 //                                    on the CPU UMD (reason app-gpu-umd-unset). No compiled default.
+//                                    (32-bit router: GpuUmdPathWow)
 //     Allow               REG_MULTI_SZ  image base names routed to the GPU UMD in allowlist mode
 //     Deny                REG_MULTI_SZ  image base names kept on the CPU UMD in both modes (Deny wins over Allow).
 //                                    A Deny or Allow value that cannot be read (other kind, too long) makes the mode
@@ -64,7 +67,25 @@
 
 using namespace bc250router;
 
+#ifdef _WIN64
 static const wchar_t DefaultCpuUmdPath[] = L"C:\\BC250\\m15\\desktop-umd173-007\\bc250d3d.dll";
+static const wchar_t CpuUmdPathValue[] = L"CpuUmdPath";
+static const wchar_t HostedUmdPathValue[] = L"HostedUmdPath";
+static const wchar_t GpuUmdPathValue[] = L"GpuUmdPath";
+static const REGSAM RegistryView = 0;
+#else
+// The 32-bit router (UserModeDriverNameWow, BD-064) reads the same keys and the same policy values as the 64-bit
+// one: KEY_WOW64_64KEY keeps HKLM\SOFTWARE from being redirected to WOW6432Node, so Mode, Allow, Deny, DwmForceCpu
+// and the rest have one copy for both. Only the three UMD paths differ, because a 32-bit process needs 32-bit UMDs:
+// CpuUmdPathWow, HostedUmdPathWow and GpuUmdPathWow. An absent CpuUmdPathWow means bc250d3d.dll next to this DLL
+// (there is no lab path to default to); an absent HostedUmdPathWow means bc250d3d_zink.dll next to this DLL, as in
+// the 64-bit router. DWM is a 64-bit process, so the hosted route serves only 32-bit HostedClients entries.
+static const wchar_t CpuUmdPathValue[] = L"CpuUmdPathWow";
+static const wchar_t HostedUmdPathValue[] = L"HostedUmdPathWow";
+static const wchar_t GpuUmdPathValue[] = L"GpuUmdPathWow";
+static const wchar_t DefaultCpuUmdFile[] = L"bc250d3d.dll";
+static const REGSAM RegistryView = KEY_WOW64_64KEY;
+#endif
 static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t AppRouterKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
 static const wchar_t KmdParametersKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
@@ -155,10 +176,10 @@ static void ReadConfig(Config *c)
     ZeroMemory(c, sizeof(*c));
     c->require_switches = 1;
     HKEY key = nullptr;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, RouterKey, 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
-        if (ReadString(key, L"CpuUmdPath", c->cpu, PathChars) && IsAbsolute(c->cpu)) c->cpu_source = "registry";
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, RouterKey, 0, KEY_QUERY_VALUE | RegistryView, &key) == ERROR_SUCCESS) {
+        if (ReadString(key, CpuUmdPathValue, c->cpu, PathChars) && IsAbsolute(c->cpu)) c->cpu_source = "registry";
         else c->cpu[0] = 0;
-        if (ReadString(key, L"HostedUmdPath", c->hosted, PathChars)) {
+        if (ReadString(key, HostedUmdPathValue, c->hosted, PathChars)) {
             // A present but unusable value must not silently pick the default: the hosted load then fails and
             // the route falls back to the CPU UMD, visible in the route line.
             c->hosted_source = IsAbsolute(c->hosted) ? "registry" : "registry-invalid";
@@ -181,8 +202,19 @@ static void ReadConfig(Config *c)
         RegCloseKey(key);
     }
     if (!c->cpu[0]) {
+#ifdef _WIN64
         wcscpy_s(c->cpu, DefaultCpuUmdPath);
         c->cpu_source = "default";
+#else
+        wchar_t dir[PathChars];
+        ModuleDirectory(dir, PathChars);
+        if (dir[0] && _snwprintf_s(c->cpu, PathChars, _TRUNCATE, L"%ls\\%ls", dir, DefaultCpuUmdFile) > 0)
+            c->cpu_source = "router-directory";
+        else {
+            c->cpu[0] = 0;
+            c->cpu_source = "unavailable";
+        }
+#endif
     }
     if (!c->hosted_source) {
         wchar_t dir[PathChars];
@@ -195,7 +227,7 @@ static void ReadConfig(Config *c)
         }
     }
     c->switch_source = "unreadable";
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, KmdParametersKey, 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, KmdParametersKey, 0, KEY_QUERY_VALUE | RegistryView, &key) == ERROR_SUCCESS) {
         DWORD v = 0;
         switch (ReadDword(key, L"InteropLastState", &v)) {
         case Dword::Value:
@@ -224,7 +256,7 @@ static void ReadAppConfig(AppConfig *a)
     a->mode_source = "key-absent";
     a->gpu_source = "absent";
     HKEY key = nullptr;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, AppRouterKey, 0, KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) return;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, AppRouterKey, 0, KEY_QUERY_VALUE | RegistryView, &key) != ERROR_SUCCESS) return;
     wchar_t text[64];
     switch (ReadText(key, L"Mode", RRF_RT_REG_SZ, text, sizeof(text))) {
     case Text::Absent: a->mode = AppMode::Cpu; a->mode_source = "absent"; break;
@@ -234,7 +266,7 @@ static void ReadAppConfig(AppConfig *a)
         break;
     case Text::Other: a->mode = AppMode::Invalid; a->mode_source = "registry-invalid"; break;
     }
-    switch (ReadText(key, L"GpuUmdPath", RRF_RT_REG_SZ, a->gpu, sizeof(a->gpu))) {
+    switch (ReadText(key, GpuUmdPathValue, RRF_RT_REG_SZ, a->gpu, sizeof(a->gpu))) {
     case Text::Absent: a->gpu_source = "absent"; break;
     case Text::Value:
         a->gpu_source = a->gpu[0] && IsAbsolute(a->gpu) ? "registry" : "registry-invalid";
@@ -415,12 +447,21 @@ static HRESULT Forward(const char *entry, D3D10DDIARG_OPENADAPTER *args, size_t 
     return hr;
 }
 
-extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10(D3D10DDIARG_OPENADAPTER *args)
+#ifdef _WIN64
+#define UMD_EXPORT __declspec(dllexport)
+#else
+// x86: __stdcall decorates an exported name (_OpenAdapter10@4), and the D3D runtime asks GetProcAddress for the
+// plain one. The linker exports the plain names instead (BD-064).
+#define UMD_EXPORT
+#pragma comment(linker, "/EXPORT:OpenAdapter10=_OpenAdapter10@4")
+#pragma comment(linker, "/EXPORT:OpenAdapter10_2=_OpenAdapter10_2@4")
+#endif
+extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10(D3D10DDIARG_OPENADAPTER *args)
 {
     return Forward("OpenAdapter10", args, sizeof(D3D10DDI_ADAPTERFUNCS));
 }
 
-extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args)
+extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args)
 {
     return Forward("OpenAdapter10_2", args, sizeof(D3D10_2DDI_ADAPTERFUNCS));
 }

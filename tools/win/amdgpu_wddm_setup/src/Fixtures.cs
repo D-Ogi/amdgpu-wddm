@@ -59,6 +59,12 @@ namespace AmdgpuWddmSetup
                   "{\"group\":\"parameters\",\"name\":\"CuMode\",\"decision\":\"kept\",\"current\":40,\"value\":null,\"default\":null,\"present\":true}," +
                   "{\"group\":\"parameters\",\"name\":\"EnableFullWddm\",\"decision\":\"update\",\"current\":1,\"value\":2,\"default\":2,\"present\":true}," +
                   "{\"group\":\"parameters\",\"name\":\"EnableMmio\",\"decision\":\"same\",\"current\":1,\"value\":1,\"default\":1,\"present\":true}," +
+                  // BD-069: the upgrade screen of a computer whose driver closed the GPU desktop path itself. The two
+                  // switches make one line, and the desktop line says the processor draws it until a repair.
+                  "{\"group\":\"parameters\",\"name\":\"EnableGpuPresentBlit\",\"decision\":\"driver-closed\",\"current\":0,\"value\":0,\"default\":1,\"present\":true," +
+                  "\"closure\":\"the driver closed the GPU desktop path after a boot that ended with the path in use\"}," +
+                  "{\"group\":\"parameters\",\"name\":\"EnableCddDwmInterop\",\"decision\":\"driver-closed\",\"current\":0,\"value\":0,\"default\":1,\"present\":true," +
+                  "\"closure\":\"the driver closed the GPU desktop path after a boot that ended with the path in use\"}," +
                   "{\"group\":\"desktop_router\",\"name\":\"DwmForceCpu\",\"decision\":\"same\",\"current\":0,\"value\":0,\"default\":0,\"present\":true}," +
                   "{\"group\":\"app_router\",\"name\":\"Mode\",\"decision\":\"update\",\"current\":\"allowlist\",\"value\":\"gpu-default\",\"default\":\"gpu-default\",\"present\":true}," +
                   "{\"group\":\"d3d12:witcher3.exe\",\"name\":\"Experiment\",\"decision\":\"update\",\"current\":\"present-noprimary\",\"value\":\"present-noprimary,raytracing-tier\",\"default\":\"present-noprimary,raytracing-tier\",\"present\":true}"
@@ -69,7 +75,8 @@ namespace AmdgpuWddmSetup
                   "{\"group\":\"desktop_router\",\"name\":\"DwmForceCpu\",\"decision\":\"set\",\"current\":null,\"value\":0,\"default\":0,\"present\":false}," +
                   "{\"group\":\"app_router\",\"name\":\"Mode\",\"decision\":\"set\",\"current\":null,\"value\":\"gpu-default\",\"default\":\"gpu-default\",\"present\":false}," +
                   "{\"group\":\"d3d12:witcher3.exe\",\"name\":\"Experiment\",\"decision\":\"set\",\"current\":null,\"value\":\"present-noprimary\",\"default\":\"present-noprimary\",\"present\":false}";
-            var summary = upgradeRows ? "\"kept\":2,\"updated\":2,\"added\":0,\"unchanged\":3,\"command\":0" : "\"kept\":0,\"updated\":0,\"added\":7,\"unchanged\":0,\"command\":0";
+            var summary = upgradeRows ? "\"kept\":2,\"updated\":2,\"added\":0,\"unchanged\":3,\"command\":0,\"reopened\":0,\"driver_closed\":2"
+                                      : "\"kept\":0,\"updated\":0,\"added\":7,\"unchanged\":0,\"command\":0,\"reopened\":0,\"driver_closed\":0";
             list.Add(Ev("settings-plan", "\"summary\":{" + summary + "},\"rows\":[" + rows + "]"));
             list.Add(Ev("result", "\"outcome\":\"planned\",\"exit_code\":0,\"message_id\":\"result.planned\",\"mutated\":false"));
             return list.ToArray();

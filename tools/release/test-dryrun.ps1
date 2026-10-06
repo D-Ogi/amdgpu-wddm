@@ -99,6 +99,28 @@ Check ($r.text -match 'would: copy payload\\syswow64\\bc250umd\.dll -> .+\\SysWO
 Check ($r.text -match 'would: .+ UserModeDriverNameWow = bc250umd\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json') 'UserModeDriverNameWow: stub and two x86 routers, no D3D12 slot; VulkanDriverNameWow'
 Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
 Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
+# The H.264 encoder MFT (M15.11, driver/umd/mft-h264/INSTALL.md): manifest.json "mft_h264" says whether this release
+# registers the transform, and the dry run shows every key it would write, or that it writes none.
+$mftPath = 'payload/mft/amdgpu_wddm_mft_h264.dll'
+$mftOn = [bool]($m.mft_h264 -and $m.mft_h264.register)
+Check ((-not $m.mft_h264) -or (($m.mft_h264.clsid -eq '{A32438F0-0D79-4CA9-A5BF-9F3C80837253}') -and ($m.mft_h264.package_path -eq $mftPath) -and ($m.mft_h264.friendly_name -eq 'BC-250 H.264 Encoder MFT'))) "manifest mft_h264: register $mftOn, class id and name as INSTALL.md gives them"
+if ($mftOn) {
+    Check (@($m.files | Where-Object { $_.path -eq $mftPath }).Count -eq 1) "the package carries $mftPath"
+    Check (@($m.components | Where-Object { $_.package_path -eq $mftPath -and $_.install_path -eq '<InstallDir>\mft\amdgpu_wddm_mft_h264.dll' }).Count -eq 1) 'manifest components: the encoder goes to <InstallDir>\mft'
+    Check ($r.text -match 'would: copy payload\\mft -> [^\r\n]+\\mft \(same SHA256') 'phase 2 installs the encoder DLL'
+    Check ($r.text -match 'H\.264 encoder MFT: BC-250 H\.264 Encoder MFT \{A32438F0-0D79-4CA9-A5BF-9F3C80837253\}, registration values from payload/mft/amdgpu_wddm_mft_h264\.dll') 'the registration values come out of the shipped DLL'
+    Check ($r.text -match 'would: register the H\.264 encoder MFT: HKLM:\\SOFTWARE\\Classes\\CLSID\\\{A32438F0-0D79-4CA9-A5BF-9F3C80837253\} = ''BC-250 H\.264 Encoder MFT'', InprocServer32 = [^\r\n]+\\mft\\amdgpu_wddm_mft_h264\.dll \(ThreadingModel Both\)') 'the plan names the COM server key and its DLL path'
+    Check ($r.text -match 'MediaFoundation\\Transforms\\A32438F0-0D79-4CA9-A5BF-9F3C80837253: MFTFlags 0x00000006, InputTypes \d+ bytes, OutputTypes \d+, Attributes \d+;') 'the plan names MFTFlags 0x00000006 and the three binary values with their sizes'
+    Check ($r.text -match 'MediaFoundation\\Transforms\\Categories\\F79EAC7D-E545-4387-BDEE-D647D7BDE42A\\A32438F0-0D79-4CA9-A5BF-9F3C80837253 \(the key is the category membership') 'the plan names the category membership key'
+    Check ($r.text -notmatch 'WOW6432Node\\Classes') 'no 32-bit registration of the encoder (the DLL is x64)'
+} else {
+    Check ($r.text -match 'H\.264 encoder MFT: not registered by this release') 'the dry run says this release does not register the encoder'
+    Check ($r.text -notmatch 'would: copy payload\\mft|would: register the H\.264 encoder MFT') 'nothing of the encoder is installed'
+}
+'H.264 encoder MFT registration (test-mft-h264.ps1 under 5.1, HKCU scratch key)'
+$rm = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-mft-h264.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Dll', (Join-Path $Package ($mftPath -replace '/', '\')))
+$rm.text
+Check ($rm.code -eq 0) "install, repair, uninstall and rollback of the encoder keys: exit $($rm.code)"
 '32-bit registration (test-wow64.ps1 under 5.1, HKCU scratch key)'
 $rw = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-wow64.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase)
 $rw.text
@@ -119,18 +141,28 @@ Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itsel
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
 Check (($src -match "Add-Result 'GPU desktop path'") -and ($src -match "Invoke-Native \`$cli @\('interop'\)") -and ($src -match 'effective blit\\\+cdd') -and ($src -match 'died in a session') -and ($src -match 'bc250d3d_zink')) 'verify checks the GPU desktop path (interop effective blit+cdd, no unclean session, zink in DWM)'
 $pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'pnputil /add-driver", "Invoke-RegistryDefaults `$script:ParametersKey") | ForEach-Object { $src.IndexOf($_) }
-Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$infParameterNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
-Check ($r.text -match 'driver settings before the driver package: \d+ of \d+ values present') 'the walk-through takes the snapshot before pnputil'
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$restoreNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
+Check ($r.text -match 'driver settings before the driver package: \d+ values under Parameters, \d+ of \d+ judged by this release') 'the walk-through takes the snapshot before pnputil'
+# The snapshot keeps the whole key, and every value that this release does not judge goes back as it was. A snapshot
+# of the judged names alone dropped CuMode at every release install, and the GPU then ran on 24 of its 40 compute
+# units (test-registry-defaults.ps1 has the case).
+Check (($src -match 'foreach \(\$n in \$all\.Keys\) \{ \$parametersBefore\[\$n\] = \$all\[\$n\] \}') -and ($src -match '\$restoreNames = @\(@\(\$infParameterNames\) \+ @\(\$parametersBefore\.Keys \| Where-Object \{ \$_ -notin \$judgedNames -and \(Test-RestorableRegistryValue')) 'the snapshot keeps every value of the Parameters key, and the ones outside the table are written back'
+# The encoder registration is reported where a support report can read it (BugReport.cs collects every verify report).
+Check (($src -match "Add-Result 'H\.264 encoder'") -and ($src -match "Add-Warning 'H\.264 encoder'") -and ($src -match 'Test-MftRegistration -ClassesKey \$script:ClassesKey -DllPath \$mftInstalled')) 'verify reports the H.264 encoder registration, and a registration that is not right is a warning'
 Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
 $common = [IO.File]::ReadAllText((Join-Path $Package 'installer\common.ps1'))
 Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-1-5-32-545:\(OI\)\(CI\)RX") -and ($common -match "'/reset', '/T'") -and ($common -match 'function Set-StateDirAccess \{\s+if \(\$script:DryRunMode\) \{ return \}')) 'the state folder (logs, verify results) gets administrators/SYSTEM full and users read, children reset; not in a dry run'
-Check (([string]$m.kmd_abi -eq '0x000700CC' -and [version]($m.kmd_build) -ge [version]'0.7.204.0') -or ([string]$m.kmd_abi -eq '0x000700CB' -and [version]($m.kmd_build) -ge [version]'0.7.203.0' -and [version]($m.kmd_build) -lt [version]'0.7.204.0') -or ([string]$m.kmd_abi -eq '0x000700CA' -and [version]($m.kmd_build) -ge [version]'0.7.202.0' -and [version]($m.kmd_build) -lt [version]'0.7.203.0') -or ([string]$m.kmd_abi -eq '0x000700C9' -and [version]($m.kmd_build) -ge [version]'0.7.201.0' -and [version]($m.kmd_build) -lt [version]'0.7.202.0') -or ([string]$m.kmd_abi -eq '0x000700C8' -and [version]($m.kmd_build) -ge [version]'0.7.200.0' -and [version]($m.kmd_build) -lt [version]'0.7.201.0') -or ([string]$m.kmd_abi -eq '0x000700C7' -and [version]($m.kmd_build) -lt [version]'0.7.200.0')) "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
+Check (([string]$m.kmd_abi -eq '0x000700D0' -and [version]($m.kmd_build) -ge [version]'0.7.208.0') -or ([string]$m.kmd_abi -eq '0x000700CF' -and [version]($m.kmd_build) -ge [version]'0.7.207.0' -and [version]($m.kmd_build) -lt [version]'0.7.208.0') -or ([string]$m.kmd_abi -eq '0x000700CE' -and [version]($m.kmd_build) -ge [version]'0.7.206.0' -and [version]($m.kmd_build) -lt [version]'0.7.207.0') -or ([string]$m.kmd_abi -eq '0x000700CD' -and [version]($m.kmd_build) -ge [version]'0.7.205.0' -and [version]($m.kmd_build) -lt [version]'0.7.206.0') -or ([string]$m.kmd_abi -eq '0x000700CC' -and [version]($m.kmd_build) -ge [version]'0.7.204.0' -and [version]($m.kmd_build) -lt [version]'0.7.205.0') -or ([string]$m.kmd_abi -eq '0x000700CB' -and [version]($m.kmd_build) -ge [version]'0.7.203.0' -and [version]($m.kmd_build) -lt [version]'0.7.204.0') -or ([string]$m.kmd_abi -eq '0x000700CA' -and [version]($m.kmd_build) -ge [version]'0.7.202.0' -and [version]($m.kmd_build) -lt [version]'0.7.203.0') -or ([string]$m.kmd_abi -eq '0x000700C9' -and [version]($m.kmd_build) -ge [version]'0.7.201.0' -and [version]($m.kmd_build) -lt [version]'0.7.202.0') -or ([string]$m.kmd_abi -eq '0x000700C8' -and [version]($m.kmd_build) -ge [version]'0.7.200.0' -and [version]($m.kmd_build) -lt [version]'0.7.201.0') -or ([string]$m.kmd_abi -eq '0x000700C7' -and [version]($m.kmd_build) -lt [version]'0.7.200.0')) "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 # BD-060: nothing in the installer stops or restarts DWM or the GPU under the running desktop; the driver package
 # changes the GPU at the restart (INF Reboot directive), and only uninstall moves it in place (documented there).
 $scripts = @(Get-ChildItem -LiteralPath (Join-Path $Package 'installer') -Filter *.ps1 | ForEach-Object { [pscustomobject]@{ name = $_.Name; text = [IO.File]::ReadAllText($_.FullName) } })
 $bad = @(foreach ($s in $scripts) { foreach ($p in 'Stop-Process', 'taskkill', 'Restart-Service', 'Stop-Service', '/restart-device', '/disable-device', '/enable-device', '/remove-device', 'Disable-PnpDevice', 'Enable-PnpDevice', 'Restart-PnpDevice') { if ($s.text -match [regex]::Escape($p)) { "$($s.name): $p" } } })
 Check ($bad.Count -eq 0) "no installer script stops or restarts DWM, a service or the GPU$(if ($bad.Count) { ': ' + ($bad -join '; ') })"
+# The encoder DLL exports no DllRegisterServer on purpose (driver/umd/mft-h264/INSTALL.md, step 1): a driver package
+# writes its COM registration itself.
+$bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
+Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
 $pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, "Invoke-Native pnputil\.exe @\('(/[a-z-]+)'")) { "$($s.name) $($mm.Groups[1].Value)" } })
 Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
 $pos = @('Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile))', "Invoke-Change 'pnputil /add-driver") | ForEach-Object { $src.IndexOf($_) }
@@ -141,6 +173,12 @@ $sc0 = [IO.File]::ReadAllText((Join-Path $Package 'installer\start-confirm.ps1')
 Check (($sc0 -match 'if \(-not \$Probe\) \{\s+try \{\s+\. \(Join-Path \$here ''dwm-session\.ps1''\)') -and ($sc0 -match 'Save-DwmBaseline \$epoch')) 'the start-confirm task records the DWM baseline at each logon (not in -Probe)'
 Check ((Test-Path -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps1')) -and ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps1')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'installer\dwm-session.ps1')).Hash)) 'dwm-session.ps1 ships next to the installed start-confirm task'
 Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the walk-through records the DWM before the driver package'
+# BD-069: the installer tells the driver's own safety closure from a setting of the tester, and only a repair reopens
+# one. The records belong to the KMD (driver/kmd/interop.c, driver/kmd/dpm.c); the installer reads them.
+Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record) and both decisions'
+Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
+Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; remedy: run install\.cmd -Repair") -and ($src -notmatch "if \(\`$ioClosed\) \{ \`$ioClosed \+= '; remedy")) 'every reason the DPM guard persists is a closure (3, 4, 8), and verify names the repair only where the driver left a record'
+Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
 Check ($marker.Count -eq 0) "the BD-059 session marker stays under KMD ownership: no installer code names it$(if ($marker.Count) { ': ' + ($marker -join ', ') })"
 $pos = @("Invoke-Change 'pnputil /add-driver", "Add-DwmObservation 'after the driver package'", "Save-Phase 'driver-pending-restart'", "Add-DwmObservation 'end of phase 2'", "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
@@ -231,7 +269,10 @@ foreach ($c in @(
 $r = Invoke-Ps51 @((Join-Path $Package 'payload\tools\start-confirm.ps1'), '-Probe')
 $r.text
 Check ($r.code -eq 5) "probe on a PC without the driver: exit $($r.code) (5 = no start-health reading)"
-Check ($r.text -match "probe: fallback view: device problem -1, driver version  \(expected $($m.kmd_abi)\), LastStage ") "probe: fallback view runs bc250kmd_cli info/stages and expects the manifest's kmd_abi $($m.kmd_abi)"
+# The package has no manifest.json next to payload\tools\, so the probe uses the built-in expected version of
+# start-confirm.ps1. This gate therefore holds that constant at the release's kmd_abi: an install whose manifest.json
+# cannot be read must still expect the driver version this package carries.
+Check ($r.text -match "probe: fallback view: device problem -1, driver version  \(expected $($m.kmd_abi)\), LastStage ") "probe: fallback view runs bc250kmd_cli info/stages; the built-in expected version is this release's kmd_abi $($m.kmd_abi)"
 Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
 Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
@@ -395,6 +436,12 @@ try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\uninstall.ps1'), '-DryRu
 Check ($r.code -eq 0) "uninstall -DryRun with a state: exit $($r.code)"
 Check (($r.text -match 'would: remove .+\\System32\\bc250umd\.dll') -and ($r.text -match 'would: remove .+\\SysWOW64\\bc250umd\.dll')) 'both stubs removed (neither was there before the install)'
 Check ($r.text -match "would: remove '[^']+\\wow64\\vulkan\\radeon_icd\.json' from HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers") 'the WOW6432Node Khronos entry removed'
+# The H.264 encoder MFT keys go at every uninstall, whether this release registered the transform or not. On this
+# computer none of them is there, and the step says so instead of naming keys that do not exist.
+Check ($r.text -match 'would: remove the H\.264 encoder MFT registration \(no key of ours present\)') 'the encoder registration is removed at uninstall'
+$mftAt = $r.text.IndexOf('would: remove the H.264 encoder MFT registration')
+$rootAt = $r.text.IndexOf('would: remove ' + (Join-Path $env:ProgramFiles 'amdgpu-wddm'))
+Check (($mftAt -gt 0) -and ($rootAt -gt $mftAt)) 'the encoder keys go before the install root, so no COM registration points at a DLL that is gone'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
 if ($r.code -ne 0) { $r.text }
 Remove-Item -LiteralPath $dir -Recurse -Force

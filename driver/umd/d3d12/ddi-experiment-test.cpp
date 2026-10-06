@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // The experiment list and its sources (ddi-trace.h): the environment variable, the application profile in
-// HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image>, the "none" value and the refusals. The registry part is
-// read only: this test creates no key, so its own image has no profile and resolves to None without the variable.
+// HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image>, the machine-wide value under
+// HKLM\SOFTWARE\amdgpu-wddm\D3D12, the "none" value, the refusals and the "-off" form every driver default is
+// read through. The registry part is read only: this test creates no key, so its own image has no profile, the
+// machine-wide value does not exist on a build machine, and both resolve to None without the variable.
 #include "ddi-trace.h"
 #include <cassert>
 #include <cstdio>
@@ -85,13 +87,28 @@ int main() {
     v = with_variable(longest.c_str());
     assert(v.source == DdiExperimentSource::Environment && std::strlen(v.text) == 255);
 
-    // Without the variable: this image has no profile.
+    // The "-off" form: every driver default is read through it, and it matches whole entries only.
+    v = with_variable("deferred-replay-off");
+    assert(v.source == DdiExperimentSource::Environment);
+    assert(native12::ddi_experiment_off("deferred-replay"));
+    assert(!native12::ddi_experiment_off("deferred-repla"));
+    assert(!native12::ddi_experiment_off("replay"));
+    assert(!native12::ddi_experiment_off(""));
+    assert(!native12::ddi_experiment_off(nullptr));
+    // The positive name of a default is accepted and turns nothing off.
+    assert(!native12::ddi_experiment_listed("raytracing-tier,recording-bind", "raytracing-tier-off"));
+    // A name too long for the "-off" buffer is no switch, never an accidental off.
+    assert(!native12::ddi_experiment_off(std::string(60, 'a').c_str()));
+
+    // Without the variable: this image has no profile and the build machine has no machine-wide value.
     assert(SetEnvironmentVariableA(kVariable, nullptr));
     v = detail::resolve_experiment();
     assert(v.source == DdiExperimentSource::None && !v.text[0]);
     char text[256]{};
     assert(detail::application_profile(text, sizeof(text)) == 0 && !text[0]);
+    assert(detail::machine_experiment(text, sizeof(text)) == 0 && !text[0]);
 
-    std::puts("PASS ddi experiment sources: syntax, matching, profile key, variable precedence, none, refusals");
+    std::puts("PASS ddi experiment sources: syntax, matching, profile key, machine-wide value, variable "
+              "precedence, none, refusals, the -off form of every default");
     return 0;
 }

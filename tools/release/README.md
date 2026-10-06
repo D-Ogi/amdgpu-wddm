@@ -15,7 +15,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-cli-commands.ps1` | Gate (build and `test-dryrun.ps1`): the packaged `bc250kmd_cli.exe`, run without arguments, lists every form of `cli-commands.json` (what the installer and the lab kits call), and it and both copies of `bc250control.dll` come from one control-app build folder. |
 | `test-dryrun.ps1` | Host test on a PC without a BC-250: install and uninstall dry runs refuse cleanly and change nothing; `-DryRunIgnoreBoard` walks every phase. Never run the real install on a development PC. |
 | `test-firmware.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: both download hosts answer, a real download of the 8 firmware files and `LICENSE.amdgpu` with each SHA256 checked, the same from a folder (`-FirmwareDir`), and the refusal of a file whose SHA256 is not the pinned one. Installs nothing. |
-| `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
+| `test-registry-defaults.ps1` | Called by `test-dryrun.ps1` under 5.1: the upgrade rule for the registry defaults (new, unchanged, new default over a value the previous installer wrote, a tester's value kept, command line, installer-owned), the driver's own safety closures (BD-069: a repair reopens them and clears the record after the write, another install keeps them and reports them, a reason the table does not name still counts in a durable record, a value the tester set by hand stays kept), the `Release\AppliedDefaults` round trip, and a write and read-back in the scratch key `HKCU:\Software\amdgpu-wddm-installer-test`, removed at the end. |
 | `test-session-checks.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-060): the INF `Reboot` directive (found through `[Manufacturer]` and its models, added once after each install section header, line endings kept, present in the packaged INF), the pnputil outcomes 3010 / 0 / 259 (only what the exit code establishes; no installer function for the KMD's BD-059 session marker), the install inputs that the argument-free run after a restart takes from the state (an offline fresh install and an upgrade, both resume phases, the resumed run's own arguments, another package version, cleared at completion, a tester.10 state), the `resume` action, and the DWM baseline (`dwm-session.ps1`, files under `-WorkRoot` only): one whole record per boot, session and logon (a record with a missing or malformed field is ignored and replaced by the next recording), a replacement only when another instance than the recorded one runs, unknown history without a record, the upgrade's before/after observation; plus a read-only reading of this computer's own session. |
 | `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`, run for real from folders with spaces and cmd metacharacters), the kept repair set (each set against its own manifest's firmware), the running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record and the job object's child closure. |
 | `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the deadline and the child-process closure (section 10), the footprint unchanged. |
@@ -51,8 +51,36 @@ action `resume`), and the inputs of the install (`-FirmwareDir`, `-DpmMaxMHz`, `
 `-NoReboot`, `-Force`) come from the state, as after the test-signing restart; they are cleared when phase 2
 completes. A newer package started over an older one's unfinished phase 1 takes the installation over: the state
 names it from then on (its inputs come back after its own restarts), test signing is still finished first, and the
-run after the test-signing restart is the newer package's (RunOnce armed again). The installer never changes the KMD's BD-059 session marker; a closed GPU desktop path is reopened with
-the control application (INSTALL.md). The KMD's own INF stays without `Reboot`, because the lab's deployment kits
+run after the test-signing restart is the newer package's (RunOnce armed again). `-Repair` is one of the inputs that
+come back, because a repair reopens the driver's own closures (below). The installer never changes the KMD's BD-059
+session marker. The control application (INSTALL.md) or a repair install opens a closed GPU desktop path again.
+
+The driver's own safety closures (BD-069): the KMD writes a release default away itself after a start it must not
+repeat, and records that act next to the value (`InteropClosedReason` for `EnableGpuPresentBlit` and
+`EnableCddDwmInterop`, `DpmClosedReason` 3, 4 or 8 for `DpmMode`). `common.ps1` `$script:DriverClosures` holds the
+value each closure writes, its record and its reason words. A value at the closure value with its record is the
+driver's act: `install.cmd -Repair` writes the release default again and clears the record (decision `reopened`),
+every other install keeps it and reports it with its remedy (decision `driver-closed`), and a value the tester set
+by hand, with no record, stays `kept` as before. The write comes first and the clear after it, so a write that
+fails leaves the record where it is and the next install still reads the closure. Only the `-Repair` switch reopens
+a closure. The automatic `repair` action of an unfinished phase does not, because nobody asked for the closure to go
+and the cause may still be there. The reason code stays in the installer's log. The window and the tester's report
+get the act in plain words.
+
+Only the driver writes a record of its own, so any reason in one is the driver's act (`any_reason` in the table), and
+a reason the table does not name is reported by its number. A new reason in a later driver therefore stays a closure
+instead of reading as a setting of the tester.
+
+Both records outlive the boot that wrote them, so a closure is read as the driver's act at every later install until
+somebody asks for the value back (`DpmClosedReason` from KMD 0.7.208.1). A driver
+before 0.7.208.1 writes no `DpmClosedReason`, so `DpmMode` is read through `DpmLastReason` instead (`legacy_record`
+in the table). That one is the reason of the last start, and a start that reads `DpmMode` 0 writes 1 (not-requested)
+over it, so it names the fallback only inside the boot that wrote it. There only 3, 4 and 8 count as a closure, and
+a durable record with nothing in it is read through the legacy one. One start later the installer keeps such a
+driver's 0 and reports it as the tester's value. A repair clears no legacy record, because the next start writes it
+again anyway (`docs/design/dpm.md`).
+
+The KMD's own INF stays without `Reboot`, because the lab's deployment kits
 restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks for a
 restart. Install records the session's DWM (process ID and creation time) before the driver package, right after it
 (before the restart-pending branch) and at the end of phase 2, each with its boot, in `dwm_observations` in

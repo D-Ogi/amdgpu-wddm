@@ -24,28 +24,28 @@ void APIENTRY map(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,UINT subresource,
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
-        if (!output || !s || !s->object) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!output || !s || !s->object) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return; }
         D3D11_MAP mappedType{}; UINT mappedFlags=0;
         HRESULT hr=convert_map(type,flags,mappedType,mappedFlags);
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return; }
         D3D11_MAPPED_SUBRESOURCE result{};
         hr=ddi_map_status(context.Map(s->object,subresource,mappedType,mappedFlags,&result),
             (flags & D3D10_DDI_MAP_FLAG_DONOTWAIT)!=0);
         // Translate API status to DDI status. Do not retry a
         // DO_NOT_WAIT request or expose a stale pointer on failure.
         if (FAILED(hr)) {
-            if (hr==D3DDDIERR_DEVICEREMOVED) owner.bridge().device_lost=true;
-            report_ddi_error(owner,hr); return;
+            if (hr==D3DDDIERR_DEVICEREMOVED) latch_device_lost(owner.bridge());
+            report_ddi_error(owner,hr,DdiErrorClass::still_drawing); return;
         }
-        if (!result.pData) { context.Unmap(s->object,subresource); report_ddi_error(owner,E_FAIL); return; }
+        if (!result.pData) { context.Unmap(s->object,subresource); report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return; }
         output->pData=result.pData; output->RowPitch=result.RowPitch; output->DepthPitch=result.DepthPitch;
-    });
+    },DdiErrorClass::still_drawing);
 }
 void APIENTRY unmap(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,UINT subresource) {
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
-        if (!s || !s->object) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !s->object) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED); return; }
         context.Unmap(s->object,subresource);
     });
 }

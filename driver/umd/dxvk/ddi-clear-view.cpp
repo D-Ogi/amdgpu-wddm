@@ -17,7 +17,7 @@ void APIENTRY clear(D3D10DDI_HDEVICE h,D3D11DDI_HANDLETYPE type,void *handle,
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto *view=clear_view_object(type,handle);
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!view || !color) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!view || !color) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED); return; }
         // Engine ABI1.1 candidate includes buffer-RTV clears (dd35ce7c).
 
         // DDI RECT is the Win32 RECT type. Preserve rectangles and float color

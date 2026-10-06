@@ -7,11 +7,21 @@
 // null size arrays, fills a shader-visible heap with a permutation of eight buffer UAVs; a dispatch through each
 // table slot writes its own seed, and every buffer must come back with the seed of the slot its descriptor went to.
 //
+// Root tables: dispatches through descriptor tables set and set again over two root signatures that order the same
+// three tables differently; each table's slot must take the value of the last dispatch that named it.
+//
 // Buffer rebinds: sixteen 16x16 cells of one target, one draw each under its own scissor, between which the vertex
 // and index buffers are set again unchanged, or changed in exactly one of buffer, offset, size, stride or index
 // format. The draw's tag comes from the vertex the bound buffers select (the fixture shaders of test_graphics), so a
 // change the engine failed to bind leaves the previous cell's tag, and a format change it failed to bind draws a
 // triangle where none belongs.
+//
+// Query reuse: occlusion queries over three lists, the second after a reset of the first's pool, the third on a new
+// pool. The engine's command allocator borrows Vulkan query pools from the device and resets a pool lent again over
+// the queries it handed out last; each query's count must be the one its own draws give.
+//
+// Read-only transitions: a texture moved between read-only states between draws into another target, which the
+// engine may hold until the render pass ends, over three lists (test_read_barriers).
 //
 // Cost: the recording thread's time per draw for a list of such draws, with the buffer sets repeated unchanged and
 // with the vertex buffer alternating, and per call of ranged and simple descriptor copies. The figures are printed
@@ -19,6 +29,7 @@
 #include "harness.h"
 #include "fixture-cs.h"
 #include "fixture-gfx.h"
+#include "fixture-tables.h"
 #include <cstdio>
 #include <cstring>
 
@@ -400,6 +411,183 @@ void test_descriptor_ranges(Env& env, Device& device) {
     if (rs) env.core.pfnDestroyRootSignature(device.h(), hrs);
 }
 
+// ---- Root tables ------------------------------------------------------------------------------------------------------
+// Two root signatures over the fixture-tables program, its three UAV tables at different parameter indices around a
+// root constant: A = {Table(u2), Constants(b0), Table(u0), Table(u1)}, B = {Table(u1), Table(u0), Constants(b0),
+// Table(u2)}. Six dispatches on one list, each followed by a UAV barrier: all tables set on A, one changed, a switch to
+// B with all set, one changed, back to A with all set, one changed. A dispatch stores seed ^ tag into the slot each
+// table names (twelve 16-byte slots of one buffer, a raw UAV each), and every slot must hold the value of the last
+// dispatch that named it: a table a set left out, or a table order taken from the other signature, shows up as another
+// seed or tag.
+void test_root_tables(Env& env, Device& device) {
+    constexpr UINT kSlots = 12, kSlotBytes = 16, kParams = 4, kSeedBase = 0x7AB1E000u;
+    constexpr UINT kTagOf[3] = {0x10000000u, 0x20000000u, 0x30000000u};     // fixture-tables: tags of u0, u1, u2
+    struct Layout {
+        UINT constant;      // parameter of b0
+        int reg[kParams];   // UAV register of each table parameter, -1 for the constant
+    };
+    const Layout layouts[2] = {{1, {2, -1, 0, 1}}, {2, {1, 0, -1, 2}}};
+    struct Step {
+        int layout;   // root signature set before the tables, -1: the bound one kept
+        UINT count;
+        UINT param[3];
+        UINT slot[3];
+    };
+    const Step steps[] = {
+        {0, 3, {0, 2, 3}, {0, 1, 2}}, {-1, 1, {3}, {3}}, {1, 3, {0, 1, 3}, {4, 5, 6}},
+        {-1, 1, {1}, {7}},            {0, 3, {0, 2, 3}, {8, 9, 10}}, {-1, 1, {0}, {11}},
+    };
+    constexpr UINT kSteps = sizeof(steps) / sizeof(steps[0]);
+    const uint32_t errors_before = device.shell.device_errors;
+
+    D3D12DDI_DESCRIPTOR_RANGE_0013 ranges[3];
+    for (UINT r = 0; r < 3; ++r)
+        ranges[r] = {D3D12DDI_DESCRIPTOR_RANGE_TYPE_UAV, 1, r, 0, D3D12DDI_DESCRIPTOR_RANGE_FLAG_0013_NONE,
+                     D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
+    void* rs[2] = {};
+    void* cs_storage[2] = {};
+    void* pso[2] = {};
+    int pso_rt[2] = {};
+    DdiShader cs;
+    bool made = ddi_form(g_fixture_tables, sizeof(g_fixture_tables), cs);
+    for (UINT l = 0; l < 2 && made; ++l) {
+        D3D12DDI_ROOT_PARAMETER_0013 params[kParams]{};
+        for (UINT p = 0; p < kParams; ++p) {
+            params[p].ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
+            if (layouts[l].reg[p] < 0) {
+                params[p].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+                params[p].Constants = {0, 0, 1};
+            } else {
+                params[p].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                params[p].DescriptorTable = {1, &ranges[layouts[l].reg[p]]};
+            }
+        }
+        rs[l] = create_root_signature(env, device, kParams, params);
+        const D3D12DDI_HROOTSIGNATURE hrs{rs[l]};
+        cs_storage[l] = rs[l] ? create_shader(env, device, env.core.pfnCreateComputeShader, cs, hrs) : nullptr;
+        D3D12DDIARG_CREATE_PIPELINE_STATE_0075 pso_args{};
+        pso_args.hComputeShader = D3D12DDI_HSHADER{cs_storage[l]};
+        pso_args.hRootSignature = hrs;
+        pso[l] = cs_storage[l] ? env.storage.alloc(env.core.pfnCalcPrivatePipelineStateSize(device.h(), &pso_args))
+                               : nullptr;
+        if (pso[l] && env.core.pfnCreatePipelineState(device.h(), &pso_args, D3D12DDI_HPIPELINESTATE{pso[l]},
+                                                      D3D12DDI_HRTPIPELINESTATE{&pso_rt[l]}) != S_OK)
+            pso[l] = nullptr;
+        made = pso[l] != nullptr;
+    }
+
+    Buffer out, readback;
+    made = made && create_buffer(env, device, HeapKind::Default, kSlots * kSlotBytes, true, out) == S_OK &&
+           create_buffer(env, device, HeapKind::Readback, kSlots * kSlotBytes, false, readback) == S_OK;
+    D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu{};
+    D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu{};
+    void* heap = create_view_heap(env, device, kSlots, true, cpu, &gpu);
+    const UINT inc = env.core.pfnGetDescriptorSizeInBytes(device.h(), D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    made = made && heap && cpu.ptr && gpu.ptr && inc;
+    if (made) {
+        for (UINT k = 0; k < kSlots; ++k) {
+            D3D12DDIARG_CREATE_UNORDERED_ACCESS_VIEW_0002 uav{};
+            uav.hDrvResource = out.hres();
+            uav.Format = DXGI_FORMAT_R32_TYPELESS;
+            uav.ResourceDimension = D3D12DDI_RD_BUFFER;
+            uav.Buffer.FirstElement = UINT64{k} * kSlotBytes / 4;
+            uav.Buffer.NumElements = kSlotBytes / 4;
+            uav.Buffer.Flags = D3D12DDI_BUFFER_UAV_FLAG_RAW;
+            env.core.pfnCreateUnorderedAccessView(device.h(), &uav, {cpu.ptr + SIZE_T{k} * inc});
+        }
+        made = device.shell.device_errors == errors_before;
+    }
+    checkf(made, "root tables: two root signatures with three UAV tables in different orders, a compute pipeline on "
+                 "each, a DEFAULT and a READBACK buffer, twelve raw UAVs in a shader-visible heap");
+
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    Recording rec;
+    if (made) {
+        made = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue) == S_OK && queue &&
+               open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE, rec) == S_OK && rec.table == 0;
+        checkf(made, "root tables: COMPUTE queue and list");
+    }
+    if (made) {
+        const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[0];
+        D3D12DDI_HDESCRIPTORHEAP heaps[] = {D3D12DDI_HDESCRIPTORHEAP{heap}};
+        t.pfnSetDescriptorHeaps(rec.hlist(), 1, heaps);
+        D3D12DDIARG_RESOURCE_BARRIER_0022 barrier =
+            transition(out, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS);
+        t.pfnResourceBarrier(rec.hlist(), 1, &barrier);
+        D3D12DDIARG_RESOURCE_BARRIER_0022 uav{};
+        uav.Type = D3D12DDI_RESOURCE_BARRIER_TYPE_UAV;
+        UINT expected[kSlots] = {};
+        UINT table_slot[kParams] = {};
+        int bound = -1;
+        for (UINT d = 0; d < kSteps; ++d) {
+            const Step& s = steps[d];
+            if (s.layout >= 0) {
+                bound = s.layout;
+                t.pfnSetComputeRootSignature(rec.hlist(), D3D12DDI_HROOTSIGNATURE{rs[bound]});
+                t.pfnSetPipelineState(rec.hlist(), D3D12DDI_HPIPELINESTATE{pso[bound]});
+            }
+            for (UINT k = 0; k < s.count; ++k) {
+                t.pfnSetComputeRootDescriptorTable(rec.hlist(), s.param[k], {gpu.ptr + UINT64{s.slot[k]} * inc});
+                table_slot[s.param[k]] = s.slot[k];
+            }
+            t.pfnSetComputeRoot32BitConstant(rec.hlist(), layouts[bound].constant, kSeedBase + d, 0);
+            t.pfnDispatch(rec.hlist(), 1, 1, 1);
+            t.pfnResourceBarrier(rec.hlist(), 1, &uav);
+            for (UINT p = 0; p < kParams; ++p) {
+                if (layouts[bound].reg[p] >= 0)
+                    expected[table_slot[p]] = (kSeedBase + d) ^ kTagOf[layouts[bound].reg[p]];
+            }
+        }
+        barrier = transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+        t.pfnResourceBarrier(rec.hlist(), 1, &barrier);
+        D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
+        dst.BaseAddress.UMD = {readback.hres(), 0};
+        src.BaseAddress.UMD = {out.hres(), 0};
+        t.pfnCopyBufferRegion(rec.hlist(), dst, src, kSlots * kSlotBytes);
+        t.pfnCloseCommandList(rec.hlist());
+        const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        checkf(hr == S_OK && !device.shell.list_errors,
+               "root tables: six dispatches over two root signatures with some tables set again, copy, execute "
+               "(hr %08lx)",
+               static_cast<unsigned long>(hr));
+        wait_queue_idle(env, queue, "root tables");
+        void* mapped = nullptr;
+        UINT bad = 0, first = kSlots, got = 0;
+        if (env.core.pfnMapHeap(device.h(), readback.hheap(), &mapped) == S_OK && mapped) {
+            const auto* words = static_cast<const UINT32*>(mapped);
+            for (UINT k = 0; k < kSlots; ++k) {
+                if (words[k * kSlotBytes / 4] != expected[k]) {
+                    if (!bad) {
+                        first = k;
+                        got = words[k * kSlotBytes / 4];
+                    }
+                    ++bad;
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        } else {
+            bad = ~0u;
+        }
+        checkf(!bad, "root tables: every slot holds seed ^ tag of the last dispatch whose table named it (%u slots "
+                     "differ, first %u: %08x, expected %08x)",
+               bad, first, got, first < kSlots ? expected[first] : 0u);
+    }
+    destroy_recording(env, device, rec);
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "root tables: destroy_engine_queue reports Retired");
+    if (heap) env.core.pfnDestroyDescriptorHeap(device.h(), D3D12DDI_HDESCRIPTORHEAP{heap});
+    destroy_buffer(env, device, out);
+    destroy_buffer(env, device, readback);
+    for (UINT l = 0; l < 2; ++l) {
+        if (pso[l]) env.core.pfnDestroyPipelineState(device.h(), D3D12DDI_HPIPELINESTATE{pso[l]});
+        if (cs_storage[l]) env.core.pfnDestroyShader(device.h(), D3D12DDI_HSHADER{cs_storage[l]});
+        if (rs[l]) env.core.pfnDestroyRootSignature(device.h(), D3D12DDI_HROOTSIGNATURE{rs[l]});
+    }
+}
+
 // ---- Buffer rebinds ---------------------------------------------------------------------------------------------------
 // Vertex buffer a: five full-target triangles, tagged A, B, C, E and A (vertices 0-2, 3-5, 6-8, 9-11, 12-14); vertex
 // buffer d: one, tagged D. The index buffer holds u16 0..11 at byte 0 and u32 3, 4, 5 at byte 64; read as u16, the
@@ -537,6 +725,324 @@ void test_buffer_rebinds(Env& env, Device& device, const Pipeline& pipeline, Tar
     if (queue)
         check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
               "buffer rebinds: destroy_engine_queue reports Retired");
+}
+
+// ---- Query reuse ------------------------------------------------------------------------------------------------------
+// Round r records kCounts[r] occlusion queries of one heap; query i counts a full-target triangle (every one of the
+// target's 4096 samples) when i + r is even and holds no draw otherwise. Round 1 reuses round 0's pool after
+// ResetCommandPool and hands out two queries round 0 never did; round 2 records on a new pool after round 0's is
+// destroyed. A query lent again without its reset keeps the previous round's count or fails validation.
+void test_query_reuse(Env& env, Device& device, const Pipeline& pipeline, Target& target,
+                      D3D12DDI_GPU_VIRTUAL_ADDRESS a) {
+    constexpr UINT kQueries = 8, kRounds = 3;
+    constexpr UINT kCounts[kRounds] = {6, 8, 3};
+    constexpr UINT64 kFull = UINT64{kSize} * kSize;
+    const uint32_t errors_before = device.shell.device_errors;
+    D3D12DDIARG_CREATE_QUERY_HEAP_0001 heap_args{D3D12DDI_QUERY_HEAP_TYPE_OCCLUSION, kQueries, 0};
+    void* heap = env.storage.alloc(env.core.pfnCalcPrivateQueryHeapSize(device.h(), &heap_args));
+    if (heap && env.core.pfnCreateQueryHeap(device.h(), &heap_args, D3D12DDI_HQUERYHEAP{heap}) != S_OK) heap = nullptr;
+    const D3D12DDI_HQUERYHEAP hheap{heap};
+    Buffer results;
+    bool made = heap && create_buffer(env, device, HeapKind::Readback, UINT64{kRounds} * kQueries * 8, false,
+                                      results) == S_OK;
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    made = made && engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue) == S_OK && queue;
+    checkf(made && device.shell.device_errors == errors_before,
+           "query reuse: occlusion query heap of %u, READBACK buffer, DIRECT queue", kQueries);
+
+    Recording rec;
+    for (UINT r = 0; made && r < kRounds; ++r) {
+        if (r == 1) {
+            // The pool of round 0 again: its allocator returns the query pools it borrowed and borrows them back.
+            env.core.pfnResetCommandPool(device.h(), D3D12DDI_HCOMMANDPOOL_0040{rec.pool});
+            D3D12DDIARG_RESETCOMMANDLIST_0040 reset{D3D12DDI_HCOMMANDRECORDER_0040{rec.recorder}, 1,
+                                                   D3D12DDI_COMMAND_LIST_FLAG_NONE};
+            env.lists[rec.table].pfnResetCommandList(rec.hlist(), &reset);
+        } else {
+            destroy_recording(env, device, rec);
+            if (open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec) != S_OK || rec.table != 1) {
+                checkf(false, "query reuse: DIRECT list for round %u", r);
+                break;
+            }
+        }
+        const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[1];
+        const D3D12DDI_HCOMMANDLIST l = rec.hlist();
+        const D3D12DDI_VERTEX_BUFFER_VIEW view{a, 3 * sizeof(Vertex), sizeof(Vertex)};
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_target =
+            transition(target.texture, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RENDER_TARGET);
+        t.pfnResourceBarrier(l, 1, &to_target);
+        t.pfnOMSetRenderTargets(l, 1, &target.rtv, TRUE, nullptr);
+        const D3D12DDI_VIEWPORT viewport{0.0f, 0.0f, static_cast<FLOAT>(kSize), static_cast<FLOAT>(kSize), 0.0f, 1.0f};
+        t.pfnRsSetViewports(l, 1, &viewport);
+        const D3D12DDI_RECT scissor{0, 0, static_cast<LONG>(kSize), static_cast<LONG>(kSize)};
+        t.pfnRsSetScissorRects(l, 1, &scissor);
+        t.pfnSetGraphicsRootSignature(l, pipeline.hrs());
+        t.pfnSetPipelineState(l, pipeline.hpso());
+        t.pfnSetGraphicsRoot32BitConstant(l, 0, kSeed, 0);
+        t.pfnIaSetTopology(l, D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        t.pfnIASetVertexBuffers(l, 0, 1, &view);
+        for (UINT i = 0; i < kCounts[r]; ++i) {
+            t.pfnBeginQuery(l, hheap, D3D12DDI_QUERY_TYPE_OCCLUSION, i);
+            if ((i + r) % 2 == 0) t.pfnDrawInstanced(l, 3, 1, 0, 0);
+            t.pfnEndQuery(l, hheap, D3D12DDI_QUERY_TYPE_OCCLUSION, i);
+        }
+        t.pfnResolveQueryData(l, hheap, D3D12DDI_QUERY_TYPE_OCCLUSION, 0, kCounts[r], results.hres(),
+                              UINT64{r} * kQueries * 8);
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_common =
+            transition(target.texture, D3D12DDI_RESOURCE_STATE_RENDER_TARGET, D3D12DDI_RESOURCE_STATE_COMMON);
+        t.pfnResourceBarrier(l, 1, &to_common);
+        t.pfnCloseCommandList(l);
+        const D3D12DDI_HCOMMANDLIST lists[] = {l};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        made = hr == S_OK && !device.shell.list_errors && wait_queue_idle(env, queue, "query reuse");
+        checkf(made, "query reuse: round %u, %u occlusion queries, resolve, execute (hr %08lx)", r, kCounts[r],
+               static_cast<unsigned long>(hr));
+    }
+    destroy_recording(env, device, rec);
+
+    if (made) {
+        UINT bad = 0, first = 0;
+        UINT64 first_value = 0;
+        void* cpu = nullptr;
+        if (env.core.pfnMapHeap(device.h(), results.hheap(), &cpu) == S_OK && cpu) {
+            const auto* values = static_cast<const UINT64*>(cpu);
+            for (UINT r = 0; r < kRounds; ++r) {
+                for (UINT i = 0; i < kCounts[r]; ++i) {
+                    const UINT64 v = values[r * kQueries + i];
+                    if (v != ((i + r) % 2 == 0 ? kFull : 0)) {
+                        if (!bad) first = r * kQueries + i, first_value = v;
+                        ++bad;
+                    }
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), results.hheap());
+        } else {
+            bad = ~0u;
+        }
+        checkf(!bad, "query reuse: each query counts its own draws, %llu samples or none (%u differ, first round %u "
+                     "query %u: %llu)",
+               static_cast<unsigned long long>(kFull), bad, first / kQueries, first % kQueries,
+               static_cast<unsigned long long>(first_value));
+    }
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "query reuse: destroy_engine_queue reports Retired");
+    destroy_buffer(env, device, results);
+    if (heap) env.core.pfnDestroyQueryHeap(device.h(), hheap);
+}
+
+// ---- Read-only transitions in a render pass ---------------------------------------------------------------------------
+// Three lists on one queue, around a second R32_UINT target "tex". List 1 draws tex (tag A) and copies it out, then
+// moves it between read-only states (COPY_SOURCE, PIXEL_SHADER_RESOURCE, both shader-resource states) between draws
+// into cells of the target, transitions it to RENDER_TARGET, draws it again (D) and copies it out. List 2 moves tex
+// from COPY_SOURCE between two more cells and closes with no further barrier; list 3 draws tex (C) and copies tex and
+// the target out. The engine may hold a read-only transition until the render pass ends, and must then emit it before
+// the next barrier and at Close: every draw into tex comes after a copy that read it, and the only chain from that
+// copy to the draw runs through the transition out of COPY_SOURCE, so a lost or misplaced one shows as a
+// write-after-read hazard under synchronization validation. The copies and the target's cells check the images.
+//
+// Cost: the recording thread's time per draw in one render pass, plain and with a read-only transition of tex
+// (PIXEL_SHADER_RESOURCE to both shader-resource states and back) before each draw, printed as a "measure" line.
+void test_read_barriers(Env& env, Device& device, const Pipeline& pipeline, Target& target,
+                        D3D12DDI_GPU_VIRTUAL_ADDRESS a, D3D12DDI_GPU_VIRTUAL_ADDRESS d) {
+    constexpr UINT64 kImage = UINT64{kPitch} * kSize;
+    constexpr UINT kDraws = 2048;
+    const uint32_t errors_before = device.shell.device_errors;
+    Target tex;
+    Buffer readback;
+    bool made = tex.create(env, device) &&
+                create_buffer(env, device, HeapKind::Readback, 4 * kImage, false, readback) == S_OK;
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    made = made && engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue) == S_OK && queue;
+    checkf(made && device.shell.device_errors == errors_before,
+           "read-only transitions: second 64x64 R32_UINT target, READBACK buffer of four images, DIRECT queue");
+
+    const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[1];
+    const D3D12DDI_VERTEX_BUFFER_VIEW va{a, 15 * sizeof(Vertex), sizeof(Vertex)};
+    const D3D12DDI_VERTEX_BUFFER_VIEW vd{d, 3 * sizeof(Vertex), sizeof(Vertex)};
+    const D3D12DDI_VIEWPORT viewport{0.0f, 0.0f, static_cast<FLOAT>(kSize), static_cast<FLOAT>(kSize), 0.0f, 1.0f};
+    const D3D12DDI_RECT full{0, 0, static_cast<LONG>(kSize), static_cast<LONG>(kSize)};
+    const D3D12DDI_RESOURCE_STATES common = D3D12DDI_RESOURCE_STATE_COMMON;
+    const D3D12DDI_RESOURCE_STATES rt = D3D12DDI_RESOURCE_STATE_RENDER_TARGET;
+    const D3D12DDI_RESOURCE_STATES source = D3D12DDI_RESOURCE_STATE_COPY_SOURCE;
+    const D3D12DDI_RESOURCE_STATES pixel = D3D12DDI_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    const D3D12DDI_RESOURCE_STATES shader =
+        D3D12DDI_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12DDI_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    D3D12DDI_HCOMMANDLIST l{};
+    const auto barrier = [&](const Target& of, D3D12DDI_RESOURCE_STATES before, D3D12DDI_RESOURCE_STATES after) {
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 b = transition(of.texture, before, after);
+        t.pfnResourceBarrier(l, 1, &b);
+    };
+    const auto begin = [&](const Recording& rec) {
+        l = rec.hlist();
+        t.pfnRsSetViewports(l, 1, &viewport);
+        t.pfnSetGraphicsRootSignature(l, pipeline.hrs());
+        t.pfnSetPipelineState(l, pipeline.hpso());
+        t.pfnSetGraphicsRoot32BitConstant(l, 0, kSeed, 0);
+        t.pfnIaSetTopology(l, D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    };
+    const auto copy_out = [&](const Target& of, UINT image) {
+        const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT footprint{DXGI_FORMAT_R32_UINT, kSize, kSize, 1, kPitch,
+                                                                        kPitch * kSize};
+        D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
+        dst.BaseAddress.UMD = {readback.hres(), image * kImage};
+        src.BaseAddress.UMD = {of.texture.hres(), 0};
+        t.pfnCopyTextureRegion(l, &dst, {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &footprint}, 0, 0, 0, &src,
+                               {D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr}, nullptr);
+    };
+    // A full-target triangle into tex: triangle k of va (tags A B C E A), or vd's (D) for k = 5.
+    const auto draw_tex = [&](UINT k) {
+        t.pfnOMSetRenderTargets(l, 1, &tex.rtv, TRUE, nullptr);
+        t.pfnRsSetScissorRects(l, 1, &full);
+        t.pfnIASetVertexBuffers(l, 0, 1, k < 5 ? &va : &vd);
+        t.pfnDrawInstanced(l, 3, 1, k < 5 ? 3 * k : 0, 0);
+    };
+    // Triangle k of va into the next 16x16 cell of the target, which must be bound.
+    UINT cell = 0;
+    const auto draw_cell = [&](UINT k) {
+        const LONG x = static_cast<LONG>(cell % 4 * 16), y = static_cast<LONG>(cell / 4 * 16);
+        const D3D12DDI_RECT scissor{x, y, x + 16, y + 16};
+        t.pfnRsSetScissorRects(l, 1, &scissor);
+        t.pfnDrawInstanced(l, 3, 1, 3 * k, 0);
+        ++cell;
+    };
+
+    Recording recs[3];
+    for (Recording& rec : recs)
+        made = made && open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec) == S_OK && rec.table == 1;
+    checkf(made, "read-only transitions: three DIRECT lists");
+    if (made) {
+        const FLOAT zero[4] = {};
+        // The target's transition out of COMMON waits for all earlier work: it comes before the first copy of tex.
+        begin(recs[0]);
+        barrier(target, common, rt);
+        t.pfnClearRenderTargetView(l, target.rtv, zero, 0, nullptr);
+        barrier(tex, common, rt);
+        draw_tex(0);                                    // tex: A
+        barrier(tex, rt, source);
+        copy_out(tex, 0);
+        t.pfnOMSetRenderTargets(l, 1, &target.rtv, TRUE, nullptr);
+        t.pfnIASetVertexBuffers(l, 0, 1, &va);
+        draw_cell(1);                                   // 0: B
+        barrier(tex, source, pixel);
+        draw_cell(2);                                   // 1: C
+        barrier(tex, pixel, shader);
+        draw_cell(3);                                   // 2: E
+        barrier(tex, shader, rt);
+        draw_tex(5);                                    // tex: D, after the copy of A read it
+        barrier(tex, rt, source);
+        copy_out(tex, 1);
+        barrier(target, rt, pixel);
+        t.pfnCloseCommandList(l);
+
+        // A barrier first, as a frame's list has: the engine holds read-only transitions only once an action command
+        // has settled that the list does not resume the previous list's render pass.
+        begin(recs[1]);
+        barrier(target, pixel, rt);
+        t.pfnOMSetRenderTargets(l, 1, &target.rtv, TRUE, nullptr);
+        t.pfnIASetVertexBuffers(l, 0, 1, &va);
+        draw_cell(0);                                   // 3: A
+        barrier(tex, source, shader);                   // emitted at Close at the latest
+        draw_cell(1);                                   // 4: B
+        t.pfnCloseCommandList(l);
+
+        begin(recs[2]);
+        barrier(tex, shader, rt);
+        draw_tex(2);                                    // tex: C, after the copy of D read it
+        barrier(tex, rt, source);
+        copy_out(tex, 2);
+        barrier(target, rt, source);
+        copy_out(target, 3);
+        D3D12DDIARG_RESOURCE_BARRIER_0022 to_common[2] = {transition(tex.texture, source, common),
+                                                          transition(target.texture, source, common)};
+        t.pfnResourceBarrier(l, 2, to_common);
+        t.pfnCloseCommandList(l);
+
+        const D3D12DDI_HCOMMANDLIST lists[] = {recs[0].hlist(), recs[1].hlist(), recs[2].hlist()};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 3, lists);
+        made = hr == S_OK && !device.shell.list_errors && wait_queue_idle(env, queue, "read-only transitions");
+        checkf(made, "read-only transitions: three lists with read-only transitions of tex between draws into the "
+                     "target, execute (hr %08lx)",
+               static_cast<unsigned long>(hr));
+    }
+    for (Recording& rec : recs) destroy_recording(env, device, rec);
+
+    if (made) {
+        constexpr UINT kNone = ~0u;
+        constexpr UINT kImages[3] = {A, D, C};
+        constexpr UINT kCells[16] = {B, C, E, A, B, kNone, kNone, kNone, kNone, kNone, kNone, kNone, kNone, kNone, kNone,
+                                     kNone};
+        UINT bad[4] = {};
+        void* cpu = nullptr;
+        if (env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu) == S_OK && cpu) {
+            const auto* bytes = static_cast<const BYTE*>(cpu);
+            for (UINT image = 0; image < 4; ++image) {
+                for (UINT y = 0; y < kSize; ++y) {
+                    for (UINT x = 0; x < kSize; ++x) {
+                        UINT v;
+                        std::memcpy(&v, bytes + image * kImage + SIZE_T{y} * kPitch + SIZE_T{x} * 4, 4);
+                        const UINT tag = image < 3 ? kImages[image] : kCells[y / 16 * 4 + x / 16];
+                        bad[image] += v != (tag == kNone ? 0u : expected_texel(kTags[tag], x, y));
+                    }
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        } else {
+            bad[0] = ~0u;
+        }
+        checkf(!bad[0] && !bad[1] && !bad[2],
+               "read-only transitions: tex shows A, D and C in turn (texels differ: %u %u %u)", bad[0], bad[1], bad[2]);
+        checkf(!bad[3], "read-only transitions: the target's five cells show B C E A B, the rest zero (%u differ)",
+               bad[3]);
+    }
+
+    // Cost: each list is recorded twice and the second figure kept, as in measure_draw_path.
+    double per_draw[2]{};
+    for (int run = 0; made && run < 4; ++run) {
+        const int variant = run & 1;
+        Recording rec;
+        if (open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec) != S_OK || rec.table != 1) {
+            checkf(false, "read-only transitions: DIRECT list for the cost");
+            destroy_recording(env, device, rec);
+            break;
+        }
+        begin(rec);
+        barrier(tex, common, pixel);
+        barrier(target, common, rt);
+        t.pfnOMSetRenderTargets(l, 1, &target.rtv, TRUE, nullptr);
+        t.pfnRsSetScissorRects(l, 1, &full);
+        t.pfnIASetVertexBuffers(l, 0, 1, &va);
+        const uint64_t t0 = qpc();
+        for (UINT k = 0; k < kDraws; ++k) {
+            if (variant) barrier(tex, k & 1 ? shader : pixel, k & 1 ? pixel : shader);
+            t.pfnDrawInstanced(l, 3, 1, 0, 0);
+        }
+        const uint64_t t1 = qpc();
+        if (run >= 2) per_draw[variant] = ns_per(t1 - t0, kDraws);
+        D3D12DDIARG_RESOURCE_BARRIER_0022 to_common[2] = {transition(tex.texture, pixel, common),
+                                                          transition(target.texture, rt, common)};
+        t.pfnResourceBarrier(l, 2, to_common);
+        t.pfnCloseCommandList(l);
+        const D3D12DDI_HCOMMANDLIST lists[] = {l};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        checkf(hr == S_OK && !device.shell.list_errors && wait_queue_idle(env, queue, "read-only transitions"),
+               "read-only transitions: cost list %s, execute (hr %08lx)", variant ? "with transitions" : "plain",
+               static_cast<unsigned long>(hr));
+        destroy_recording(env, device, rec);
+    }
+    if (made) {
+        std::printf("measure  per draw in one render pass on the recording thread: %.1f ns plain, %.1f ns with a "
+                    "read-only transition of another texture before each (%u draws each)\n",
+                    per_draw[0], per_draw[1], kDraws);
+    }
+
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "read-only transitions: destroy_engine_queue reports Retired");
+    destroy_buffer(env, device, readback);
+    tex.destroy(env, device);
 }
 
 // ---- Cost -------------------------------------------------------------------------------------------------------------
@@ -752,6 +1258,7 @@ void measure_draw_path(Env& env, Device& device, Target& target, const Buffer& r
 
 void test_draw_path(Env& env, Device& device) {
     test_descriptor_ranges(env, device);
+    test_root_tables(env, device);
 
     D3D12DDI_ROOT_PARAMETER_0013 constant{};
     constant.ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -789,6 +1296,8 @@ void test_draw_path(Env& env, Device& device) {
                  "and scratch buffers");
     if (made) {
         test_buffer_rebinds(env, device, pipeline, target, readback, a, d, ib_va, ib, scratch);
+        test_query_reuse(env, device, pipeline, target, a);
+        test_read_barriers(env, device, pipeline, target, a, d);
         measure_draw_path(env, device, target, readback, a, ib_va);
     }
     destroy_buffer(env, device, vb_a);

@@ -236,9 +236,28 @@ HRESULT RuntimeHeapImports::release_import(Record& record,VkDeviceMemory memory)
     // RADV may call Unlock2 from vkFreeMemory, on this thread; keep the allocation record live.
     free_report_.stage=FreeStage::VulkanFree;
     if(memory)free_(device_,memory,nullptr);
-    bool locked=false;
-    {Exclusive held(lock_);locked=record.locked;}
-    return locked?E_UNEXPECTED:S_OK;
+    return unlock_for_release(record);
+}
+// BD-045: a CPU lock belongs to whoever releases the allocation. RADV unlocks a mapped import in
+// vkFreeMemory; when its Unlock2 failed, the ICD gave its pointer up and the lock is still on the record.
+// The releasing thread unlocks it itself, by dispatch()'s protocol. If that fails too, the record keeps
+// the lock and stays retired and owned, and the next release point (close_after_engine_retirement) tries
+// again through release().
+HRESULT RuntimeHeapImports::unlock_for_release(Record& record) noexcept {
+    const DWORD self=GetCurrentThreadId();
+    {
+        Exclusive held(lock_);
+        if(!record.locked)return S_OK;
+        if(record.busy || (record.releasing && record.releasing!=self) || !kernel_.pfnUnlock2Cb)return E_UNEXPECTED;
+        record.busy=true;
+    }
+    free_report_.stage=FreeStage::Unlock;
+    D3DDDICB_UNLOCK2 b{};b.hAllocation=record.handle;
+    const HRESULT hr=kernel_.pfnUnlock2Cb(runtime_.handle,&b);
+    Exclusive held(lock_);record.busy=false;
+    if(hr!=S_OK)return FAILED(hr)?hr:E_FAIL;
+    record.locked=false;free_report_.unlocked=true;
+    return S_OK;
 }
 HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
     free_report_.stage=FreeStage::Unmap;
@@ -281,6 +300,29 @@ void RuntimeHeapImports::end_owner_scope() noexcept {
         if(record->destroyed || record->retired)record->allocation.revoke_owner();
     }
 }
+// One line per declined request, before anything was allocated. The caller reads the same facts out of
+// last_report(); the line exists because the lab reads a log, not a debugger variable, and because
+// capture-share copies the debugger channel into its cell log. BD-075 needs exactly this for the shared
+// create: which check declined, and the heap flags the runtime had asked for.
+HRESULT RuntimeHeapImports::refuse(const char* why,HRESULT hr,const engine_ddi::MemoryRequest& request,
+                                   uint32_t unimplemented_heap_flags) noexcept {
+    report_.refusal=why;
+    report_.unimplemented_heap_flags=unimplemented_heap_flags;
+    const auto& heap=*request.heap;
+    const auto* r=request.resource;
+    ddi_refusal("heap import refused (%s): %08lx; request flags 0x%x, heap flags 0x%x (no use for 0x%x), pool %u, "
+                "cpu page %u, nodes %u/%u, %llu bytes, alignment %llu; resource %s (type %u, %llux%u, depth %u, "
+                "mips %u, format %u, samples %u, layout %u, flags 0x%x)",
+                why,static_cast<unsigned long>(hr),request.flags,unsigned(heap.Flags),unimplemented_heap_flags,
+                unsigned(heap.MemoryPool),unsigned(heap.CPUPageProperty),heap.CreationNodeMask,heap.VisibleNodeMask,
+                static_cast<unsigned long long>(request.byte_size),
+                static_cast<unsigned long long>(request.alignment),r?"given":"none",
+                r?unsigned(r->ResourceType):0u,r?static_cast<unsigned long long>(r->Width):0ull,r?r->Height:0u,
+                r?unsigned(r->DepthOrArraySize):0u,r?unsigned(r->MipLevels):0u,r?unsigned(r->Format):0u,
+                r?r->SampleDesc.Count:0u,r?unsigned(r->Layout):0u,r?unsigned(r->Flags):0u);
+    return hr;
+}
+
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
     report_={};report_.stage=ImportStage::Request;
@@ -289,7 +331,9 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // that destroys and then creates at its budget gets the quarantined addresses back first.
     drain(false);
     if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || request->reserved2 ||
-       !request->byte_size || !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
+       !request->byte_size || !request->alignment || (request->alignment&(request->alignment-1))){
+        report_.refusal="malformed request";return E_INVALIDARG;
+    }
     const auto& heap=*request->heap;
     // The linear primary is the one request with more than kMemoryDedicated: all three flags, on a
     // heap that says PRIMARY. A primary that engine-ddi could not make linear has no surface here.
@@ -298,9 +342,17 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
         D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
     if(surface)allowed|=D3D12DDI_HEAP_FLAG_PRIMARY;
-    if((!surface && (request->flags&~engine_ddi::kMemoryDedicated)) || (unsigned(heap.Flags)&~allowed) ||
-       heap.CreationNodeMask>1 || heap.VisibleNodeMask>1)return E_NOTIMPL;
-    if(!surface && (request->surface_row_pitch || request->surface_layout_size))return E_INVALIDARG;
+    // The three admission checks of the heap description are kept apart, because their names are the answer to
+    // a question a lab run has to settle once: which heap flags the D3D12 runtime adds for a shared heap. The
+    // DDI defines no SHARED bit (d3d12umddi.h, D3D12DDI_HEAP_FLAGS, where 0x1 is the one gap), so the shell
+    // cannot name the bit in advance; it names the bits it has no use for and declines (BD-075).
+    if(!surface && (request->flags&~engine_ddi::kMemoryDedicated))
+        return refuse("request flags",E_NOTIMPL,*request);
+    if(const unsigned unimplemented=unsigned(heap.Flags)&~allowed)
+        return refuse("heap flags",E_NOTIMPL,*request,unimplemented);
+    if(heap.CreationNodeMask>1 || heap.VisibleNodeMask>1)return refuse("node mask",E_NOTIMPL,*request);
+    if(!surface && (request->surface_row_pitch || request->surface_layout_size))
+        return refuse("surface fields without a surface",E_INVALIDARG,*request);
     D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
     bool surface_scanout=false;
     if(surface){
@@ -308,7 +360,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         if(!(heap.Flags&D3D12DDI_HEAP_FLAG_PRIMARY) || (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE) ||
            heap.CPUPageProperty!=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE || !r ||
            r->ResourceType!=D3D12DDI_RT_TEXTURE2D || r->DepthOrArraySize!=1 || r->MipLevels!=1 ||
-           r->SampleDesc.Count!=1 || r->SampleDesc.Quality || r->Width>UINT32_MAX)return E_NOTIMPL;
+           r->SampleDesc.Count!=1 || r->SampleDesc.Quality || r->Width>UINT32_MAX)
+            return refuse("primary shape",E_NOTIMPL,*request);
         // The storage formats the compositor may open, from the one table the kernel driver and the
         // compositor's UMD read as well. M15.14: when the scan-out mode is selected and this format is
         // also a SCANOUT_PRIMARY row - BGRA8 or X8, never the 10-bit or FP16 composed primaries - the
@@ -332,10 +385,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                                                          AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
             if(direct){row=direct;surface_scanout=true;}
         }
-        if(!row)return E_NOTIMPL;
+        if(!row)return refuse("primary format",E_NOTIMPL,*request);
         surface_format=static_cast<D3DDDIFORMAT>(row->d3dddi);
         if(!request->memory_type_bits || !request->surface_row_pitch || !request->surface_layout_size ||
-           request->surface_layout_size>request->byte_size)return E_INVALIDARG;
+           request->surface_layout_size>request->byte_size)return refuse("primary layout",E_INVALIDARG,*request);
     }
     // The allocation is raw memory; the engine places the buffer or image in it. A texture is admitted
     // only as the one resource of a heap without CPU access: CPU-visible texture layouts, primaries and
@@ -344,26 +397,28 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(request->resource)switch(request->resource->ResourceType){
     case D3D12DDI_RT_BUFFER:break;
     case D3D12DDI_RT_TEXTURE1D:case D3D12DDI_RT_TEXTURE2D:case D3D12DDI_RT_TEXTURE3D:texture=true;break;
-    default:return E_NOTIMPL;
+    default:return refuse("resource type",E_NOTIMPL,*request);
     }
     constexpr unsigned textures=D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
     if(texture){
         if(!(request->flags&engine_ddi::kMemoryDedicated) || !(unsigned(heap.Flags)&(textures|D3D12DDI_HEAP_FLAG_BUFFERS)) ||
            heap.CPUPageProperty!=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE ||
-           (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE))return E_NOTIMPL;
-    } else if(!(heap.Flags&D3D12DDI_HEAP_FLAG_BUFFERS))return E_NOTIMPL;
+           (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE))
+            return refuse("texture on this heap",E_NOTIMPL,*request);
+    } else if(!(heap.Flags&D3D12DDI_HEAP_FLAG_BUFFERS))return refuse("buffer heap",E_NOTIMPL,*request);
     AllocationAccess access{};VkMemoryPropertyFlags want{};
     switch(heap.CPUPageProperty){
     case D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE:access=AllocationAccess::GpuOnly;want=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;break;
     case D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:access=AllocationAccess::CpuWriteCombined;want=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;break;
     case D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK:access=AllocationAccess::CpuCached;want=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT;break;
-    default:return E_NOTIMPL;
+    default:return refuse("cpu page property",E_NOTIMPL,*request);
     }
     if(heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE){
         // The admitted adapter supplies coherent GTT CPU mappings. Limit this
         // promise to CPU-visible system memory and require the same property
         // on the Vulkan type importing that runtime allocation.
-        if(heap.MemoryPool!=D3D12DDI_MEMORY_POOL_L0 || access==AllocationAccess::GpuOnly)return E_NOTIMPL;
+        if(heap.MemoryPool!=D3D12DDI_MEMORY_POOL_L0 || access==AllocationAccess::GpuOnly)
+            return refuse("systemwide coherency",E_NOTIMPL,*request);
         want|=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     }
     AllocationRequest allocation;HRESULT hr=S_OK;uint64_t alignment=0;uint32_t bits=0;

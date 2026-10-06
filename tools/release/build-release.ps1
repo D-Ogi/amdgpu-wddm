@@ -10,17 +10,23 @@
 # and the catalog is signed. The package holds the public .cer only.
 # manifest.json lists every file of the package with its SHA256, and every installed component with its role,
 # install location, file version and SHA256 (the control application reads it from the install root).
-# Gates: every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
+# Gates: the work ledger (every check rule, plus no finished but unlanded work for a component of this release;
+# override with -AllowLedgerDebt -LedgerDebtReason, or -NoLedger -NoLedgerReason in a workspace without the
+# ledger; manifest.json records which of the three happened), every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1. Nothing here opens a window: child processes
 # run with CreateNoWindow and redirected output.
 [CmdletBinding()]
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.205.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
-    [string]$Version = '0.7.205.100-tester.11',
+    [string]$DriverVer = '0.7.208.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$Version = '0.7.208.100-tester.13',
     [string]$KitVersion = '10.0.26100.0',
-    [string]$SetupApp                            # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
+    [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
+    [switch]$NoLedger,                           # build in a workspace that has no work ledger at all
+    [string]$NoLedgerReason                      # required with -NoLedger: recorded in the build log and manifest
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
@@ -40,6 +46,55 @@ $sdk = Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c'
 $signtool = Join-Path $sdk "bin\$KitVersion\x64\signtool.exe"
 $inf2cat = Join-Path $wdk "bin\$KitVersion\x86\Inf2Cat.exe"
 foreach ($t in $signtool, $inf2cat) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
+
+# Work ledger gate: a release must not ship a component whose finished fix is still unlanded,
+# and must not be cut over a ledger that hides new work or claims a landing nobody can verify
+# (the checker runs every rule in release mode). The ledger is a local file of the workspace
+# (BC250_ROOT), so none of its contents reach the package or the public repository.
+# The gate is never skipped silently: without the checker the build stops unless -NoLedger
+# states why, and a failing gate needs -AllowLedgerDebt with a reason. manifest.json records
+# which of the three happened, so the package itself says whether it was gated.
+$ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
+$script:ledgerGate = 'enforced'
+$script:ledgerGateReason = ''
+if (-not (Test-Path -LiteralPath $ledgerTool)) {
+    if (-not $NoLedger) {
+        throw ("work ledger: no $ledgerTool in this workspace (BC250_ROOT=$Root). The gate is " +
+               "required: point -Root at the workspace, or build with -NoLedger -NoLedgerReason '<why>'.")
+    }
+    if (-not $NoLedgerReason) { throw '-NoLedger needs -NoLedgerReason "<why this build has no ledger>"' }
+    $script:ledgerGate = 'absent'
+    $script:ledgerGateReason = $NoLedgerReason
+    Write-Host "work ledger: NO LEDGER in this workspace, gate skipped by -NoLedger"
+    Write-Host "work ledger: reason: $NoLedgerReason"
+} else {
+    Write-Host "work ledger: checking $Version against the release components"
+    $ledgerOut = & python $ledgerTool --root $Root check --release $Version 2>&1
+    $ledgerExit = $LASTEXITCODE
+    $ledgerOut | ForEach-Object { "  $_" }
+    if ($ledgerExit -gt 1) {
+        # Exit 2 is a broken or missing ledger, not debt: -AllowLedgerDebt must not wave it through.
+        throw ("work ledger: the checker failed with exit $ledgerExit (a malformed or missing " +
+               "LEDGER.json, or no python). Fix the ledger: this is not release debt.")
+    }
+    if ($ledgerExit -ne 0) {
+        if (-not $AllowLedgerDebt) {
+            throw ("work ledger: finished but unlanded work serves a component of this release, or the " +
+                   "ledger itself is inconsistent (see the lines above). Land it, or build with " +
+                   "-AllowLedgerDebt -LedgerDebtReason '<why>'.")
+        }
+        if (-not $LedgerDebtReason) {
+            throw '-AllowLedgerDebt needs -LedgerDebtReason "<why this release ships with unlanded work>"'
+        }
+        $script:ledgerGate = 'debt-accepted'
+        $script:ledgerGateReason = $LedgerDebtReason
+        Write-Host "work ledger: DEBT ACCEPTED for $Version by -AllowLedgerDebt"
+        Write-Host "work ledger: reason: $LedgerDebtReason"
+        Write-Host "work ledger: accepted at $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')) UTC"
+    } else {
+        Write-Host 'work ledger: clean: no unlanded work for any component of this release'
+    }
+}
 
 if (Test-Path -LiteralPath $pkg) { Remove-Item -LiteralPath $pkg -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
@@ -80,7 +135,9 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
 foreach ($f in $taskScripts) { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
-Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\TESTERS.md') -Destination (Join-Path $pkg 'TESTERS.md')
+# TESTERS.md is not shipped any more. It named one package version of its own ("0.7.199.100-tester.11") in every
+# package up to tester.12, it read as the tester-facing note, and no gate held it to the release that carried it. The
+# per-release RELEASE-NOTES.md below replaced it.
 # Release notes (GUI plan WU-044, C16): docs/testing/release-notes/<version>.md in English, with the four sections of the
 # release checklist; the setup window shows them before any change. A translation <version>.<lang>.md goes in as
 # RELEASE-NOTES.<lang>.md; without one the window shows the English text, labelled as English.
@@ -131,6 +188,16 @@ foreach ($f in $sources.files) {
     $leaf = ($f.path -replace '^payload/', '') -replace '/', '\'
     if ((Get-Content -LiteralPath (Join-Path $pkg 'THIRD-PARTY.md') -Raw) -notmatch [regex]::Escape("``$leaf``")) { throw "THIRD-PARTY.md has no row for $($f.path)" }
 }
+# No shipped document may name a package version other than this one: TESTERS.md named 0.7.199.100-tester.11 in every
+# package up to tester.12, and it read as the tester-facing note. This runs after the last document is copied, so it
+# covers every one of them. The release notes are the one exception: they are chosen by version above, and they name
+# an earlier release where a tester has to know about it.
+foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
+    if ($d.Name -like 'RELEASE-NOTES*') { continue }
+    $versionNames = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
+    if ($versionNames.Count) { throw "$($d.Name) names the package version $($versionNames -join ', '): a shipped document may name only this package's version ($Version), or no version at all" }
+}
+'  documents: {0} name no package version but this one ({1})' -f @(Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' }).Count, ((Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' } | ForEach-Object { $_.Name }) -join ', ')
 
 # The AMD firmware is not part of the package: manifest.json carries the pinned list (tools/firmware) and the
 # installer downloads the files at install time.
@@ -257,6 +324,22 @@ foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMax
 if ($null -eq $regDefaults.defaults.desktop_router.DwmForceCpu) { throw 'registry-defaults.json: desktop_router.DwmForceCpu missing' }
 if (-not $regDefaults.legacy_applied) { throw 'registry-defaults.json: legacy_applied missing' }
 '  registry defaults: {0} parameters, DwmForceCpu {1}' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu
+# The H.264 encoder MFT switch (M15.11): manifest.json carries it, so the package itself says whether the installer
+# registers the transform (installer\mft-h264.ps1, driver/umd/mft-h264/INSTALL.md). The identifiers must be the ones
+# the installer and the DLL use; a release that registers the encoder has to carry its DLL.
+. (Join-Path $PSScriptRoot 'installer\mft-h264.ps1')
+$mftRelease = $null
+if ($sources.PSObject.Properties['mft_h264']) {
+    $mftRelease = [ordered]@{ register = [bool]$sources.mft_h264.register; package_path = [string]$sources.mft_h264.package_path
+        clsid = [string]$sources.mft_h264.clsid; friendly_name = [string]$sources.mft_h264.friendly_name }
+    if ($mftRelease.clsid -ne $script:MftClsid) { throw "release-sources.json mft_h264.clsid $($mftRelease.clsid) is not the installer's $($script:MftClsid)" }
+    if ($mftRelease.friendly_name -ne $script:MftFriendlyName) { throw "release-sources.json mft_h264.friendly_name '$($mftRelease.friendly_name)' is not the installer's '$($script:MftFriendlyName)'" }
+    if ($mftRelease.package_path -ne $script:MftPackagePath) { throw "release-sources.json mft_h264.package_path $($mftRelease.package_path) is not the installer's $($script:MftPackagePath)" }
+    if ($mftRelease.register -and -not (Test-Path -LiteralPath (Join-Path $pkg ($mftRelease.package_path -replace '/', '\')))) {
+        throw "release-sources.json registers the H.264 encoder MFT, but the package has no $($mftRelease.package_path): add its files row"
+    }
+    '  H.264 encoder MFT: {0} ({1} {2})' -f $(if ($mftRelease.register) { 'registered by the installer' } else { 'not registered by this release' }), $mftRelease.package_path, $mftRelease.clsid
+}
 $manifest = [ordered]@{
     schema = 1
     name = $name
@@ -266,8 +349,13 @@ $manifest = [ordered]@{
     kmd_build = $sources.kmd_version
     kmd_abi = $sources.kmd_abi             # BC250_KMD_VERSION, what bc250kmd_cli info reports (start-confirm, verify)
     built_utc = [DateTime]::UtcNow.ToString('o')
+    # Which of the three the work-ledger gate did: enforced (clean), debt-accepted, or absent.
+    # The package states it itself, so a build that waved the gate cannot look like a gated one.
+    work_ledger_gate = $script:ledgerGate
+    work_ledger_gate_reason = $script:ledgerGateReason
     release_certificate = $release.Thumbprint
     control_app_exe = $sources.control_app_exe
+    mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
     sources = $sources.sources
     firmware = $firmware
     defaults = $regDefaults.defaults

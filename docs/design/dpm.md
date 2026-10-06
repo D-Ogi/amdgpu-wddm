@@ -407,7 +407,8 @@ every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 | `DpmIdleBusyPermille` | the mean busy share the hold window still admits; absent = 2, at most 100. The exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500), which no setting changes |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
-| `DpmLastMode`, `DpmLastReason` | what the last start chose and why |
+| `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |
+| `DpmClosedReason` | 0.7.208: the reason the driver itself wrote `DpmMode` 0 (3 UNCONFIRMED, 4 UNCLEAN, 8 SMU_ERROR). `PersistFallback` writes it, a start that reads a `DpmMode` other than 0 deletes it, a start that reads `DpmMode` 0 leaves it alone |
 
 The guard follows the CU-mode pattern. A dpm start with a request not yet confirmed writes `DpmPending` and runs
 dpm; start health reaching ready (or `bc250kmd_cli dpm confirm`, administrator) writes `DpmConfirmed` with the
@@ -415,6 +416,48 @@ request's encoding and deletes the pending mark. A start that finds `DpmPending`
 healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode = 0` and runs fixed-lab, reason
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
+
+### The durable record of a fallback (0.7.208, BD-069)
+
+`DpmMode` 0 alone does not say who wrote it. The three fallbacks of `PersistFallback` write it (reason 3
+UNCONFIRMED, 4 UNCLEAN, 8 SMU_ERROR, the last one from `DpmGiveUp`), and so does a tester who wants the base clock.
+`DpmLastReason` holds the fallback only inside the boot that wrote it, because every start with the SMU online
+overwrites it, and a start that reads `DpmMode` 0 decides NOT_REQUESTED (1).
+
+`DpmClosedReason` is therefore written next to the 0 and left alone by every start that reads `DpmMode` 0. Only a
+start that reads another `DpmMode` deletes it, because somebody wrote over the fallback: the tester, the control
+application or `install.cmd -Repair`. The decision is in the shim (`bc250_dpm_decide`, fields `closed_reason` and
+`clear_closed`, host-tested in `driver/shim/test/dpm_test.c`); `driver/kmd/dpm.c` does the registry work and logs
+both acts, and it writes the shim's `closed_reason` itself, so the host test asserts the value the key gets.
+`interop.c` keeps `InteropClosedReason` the same way.
+
+`PersistFallback` writes the record before the 0 it describes. Both writes are flushed, so a start that dies between
+them leaves a record beside a `DpmMode` that still asks for the clock, and the next start deletes that record by
+itself. The other order leaves a 0 with no record, which is the state this section is about. A failed record write
+does not hold back the 0: a start that tries DPM again is the worse failure, and the log says that the record is not
+durable.
+
+Only `PersistFallback` writes that record. Its readers therefore take any reason in it as the driver's act, and they
+name a reason the table does not know by its number. A later caller of `PersistFallback` with a new reason stays a
+closure that way, instead of reading as the tester's own setting. The legacy record holds the reason of any start, so
+there only 3, 4 and 8 count, and a durable record with nothing in it (0) is read through the legacy one.
+
+The tester release installer reads the record (`tools/release/installer/common.ps1`, `$script:DriverClosures`, branch
+`bd069-repair-closures`): every install keeps the 0 and names the fallback in its report, and `install.cmd -Repair`
+writes `DpmMode` 1 again and then deletes the record. That order matters: a write that fails leaves the record where
+it is, so the next install still reads the closure. The installer deletes no guard mark: the start that reads
+`DpmMode` 1 clears the marks of a request no longer made by itself. A driver before 0.7.208.1 writes no record, so
+the installer reads `DpmLastReason` instead (`legacy_record` in its table), with the one-boot limit above: one start
+later the installer keeps such a driver's 0 and reports it as the tester's value.
+
+The control application reads the record as well (`tools/win/amdgpu_wddm_control/src/Recovery.cs`, branch
+`bd069-gui-closed-record`): its Recovery page takes `DpmClosedReason` first and the live reason and `DpmLastReason`
+after it, so it offers the way back one boot after a fallback too. Against a driver before 0.7.208.1 it keeps the
+one-boot limit of `DpmLastReason`. The way back without any record is the automatic-clock box on its Graphics page,
+which writes `DpmMode` 1 whatever the last reason was.
+
+The driver, the installer and the control application ship in one release for this reason: a package whose driver
+writes the record and whose installer and control application do not read it gives a tester no way back.
 
 ## Runtime tuning (0.7.185)
 

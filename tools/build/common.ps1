@@ -50,9 +50,11 @@ function Find-VsInstall([string]$VsInstall) {
 
 # The recorded builds ran from a cmd script that called vcvars64.bat first. This is the same thing for a
 # PowerShell process: run vcvars64.bat in cmd, then copy the resulting environment into this process.
-function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir) {
+# -Arch x86 runs vcvarsamd64_x86.bat instead (x64-hosted compiler for 32-bit targets): the WoW64 user-mode drivers
+# that 32-bit processes load. Meson takes the target from VSCMD_ARG_TGT_ARCH and treats it as a native x86 build.
+function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir, [ValidateSet('x64', 'x86')][string]$Arch = 'x64') {
     $install = Find-VsInstall $VsInstall
-    $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvars64.bat'
+    $vcvars = Join-Path $install ('VC\Auxiliary\Build\{0}' -f @{ x64 = 'vcvars64.bat'; x86 = 'vcvarsamd64_x86.bat' }[$Arch])
     New-Item -ItemType Directory -Force $TempDir | Out-Null
     $probe = Join-Path $TempDir ('vsenv-{0}.cmd' -f [Guid]::NewGuid().ToString('N'))
     Set-Content -LiteralPath $probe -Encoding ascii -Value @(
@@ -63,7 +65,7 @@ function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir) {
         'set')
     try {
         $lines = @(& cmd.exe /d /c $probe)
-        if ($LASTEXITCODE -ne 0) { throw "vcvars64.bat failed ($LASTEXITCODE): $vcvars" }
+        if ($LASTEXITCODE -ne 0) { throw "$(Split-Path -Leaf $vcvars) failed ($LASTEXITCODE): $vcvars" }
     } finally {
         Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
     }
@@ -72,6 +74,7 @@ function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir) {
         if ($eq -gt 0) { [Environment]::SetEnvironmentVariable($line.Substring(0, $eq), $line.Substring($eq + 1), 'Process') }
     }
     if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) { throw "cl.exe is not on PATH after $vcvars" }
+    if ($env:VSCMD_ARG_TGT_ARCH -ne $Arch) { throw "$vcvars set VSCMD_ARG_TGT_ARCH=$($env:VSCMD_ARG_TGT_ARCH), wanted $Arch" }
     return $install
 }
 

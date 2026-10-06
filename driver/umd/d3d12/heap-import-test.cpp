@@ -16,6 +16,7 @@ static UINT64 gpu_address=UINT64_C(0x100000000);
 static D3DKMT_HANDLE next_allocation=50;
 static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false,fail_deallocate=false;
 static bool resident_pending=false,fail_wait=false,fail_evict=false;
+static bool fail_lock=false,fail_unlock=false;  // BD-045: the kernel refuses Lock2 or Unlock2
 static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
 static unsigned long surface_format=0;
@@ -99,8 +100,8 @@ static HRESULT APIENTRY wait_cpu_cb(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATI
  if(fail_wait)return E_FAIL;
  completed=a->FenceValueArray[0];return S_OK;
 }
-static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){a->pData=mapped;events+='L';return S_OK;}
-static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return S_OK;}
+static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){events+='L';if(fail_lock)return E_FAIL;a->pData=mapped;return S_OK;}
+static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return fail_unlock?E_FAIL:S_OK;}
 static void VKAPI_CALL memory_properties(VkPhysicalDevice d,VkPhysicalDeviceMemoryProperties* out){
  assert(d==handle<VkPhysicalDevice>(3));*out={};out->memoryTypeCount=4;
  out->memoryTypes[0].propertyFlags=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -184,19 +185,31 @@ int main(){
  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");req.memory_type_bits=0;
  const auto coherent_flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE);
  heap.Flags=coherent_flags;
- auto reject_before_probe=[&](){
+ // Every refusal taken before a probe names the check that took it in the report (BD-075: that name and the
+ // heap flags beside it are what a shared create has to be read off a lab log), and nothing is allocated.
+ auto reject_before_probe=[&](const char* why,uint32_t unimplemented=0){
   const auto old_probes=probes;const auto old_allocation=next_allocation;events.clear();
   assert(owner.allocate(&req,&memory)==E_NOTIMPL && !memory.memory && events.empty());
   assert(probes==old_probes && next_allocation==old_allocation);
+  const auto& report=owner.last_report();
+  assert(report.refusal && !std::strcmp(report.refusal,why) && report.unimplemented_heap_flags==unimplemented);
  };
- heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;reject_before_probe();
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;reject_before_probe("systemwide coherency");
  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
- heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;reject_before_probe();
- heap.MemoryPool=static_cast<D3D12DDI_MEMORY_POOL>(2);reject_before_probe();heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
- heap.CreationNodeMask=2;reject_before_probe();heap.CreationNodeMask=1;
- heap.VisibleNodeMask=2;reject_before_probe();heap.VisibleNodeMask=1;
- heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|0x80000000u);reject_before_probe();
- resource.ResourceType=D3D12DDI_RT_TEXTURE2D;heap.Flags=coherent_flags;reject_before_probe();resource.ResourceType=D3D12DDI_RT_BUFFER;
+ heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;reject_before_probe("systemwide coherency");
+ heap.MemoryPool=static_cast<D3D12DDI_MEMORY_POOL>(2);reject_before_probe("systemwide coherency");
+ heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ heap.CreationNodeMask=2;reject_before_probe("node mask");heap.CreationNodeMask=1;
+ heap.VisibleNodeMask=2;reject_before_probe("node mask");heap.VisibleNodeMask=1;
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|0x80000000u);
+ reject_before_probe("heap flags",0x80000000u);
+ // The shape of a shared create: the heap flag the D3D12 runtime adds is undefined in the DDI, so each
+ // candidate bit is declined by the same check, under its own name, with the bit in the report.
+ for(const uint32_t bit:{0x1u,0x40u}){
+  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|bit);reject_before_probe("heap flags",bit);
+ }
+ resource.ResourceType=D3D12DDI_RT_TEXTURE2D;heap.Flags=coherent_flags;
+ reject_before_probe("texture on this heap");resource.ResourceType=D3D12DDI_RT_BUFFER;
  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
  assert(creates==1 && makes_resident && makes_resident==evictions);
  expected_type=0;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
@@ -210,19 +223,19 @@ int main(){
  resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
  // System-wide coherence alone refuses an otherwise admitted texture.
  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)|unsigned(D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE));
- reject_before_probe();
+ reject_before_probe("texture on this heap");
  // Refused before any probe or allocation: a texture that is not the heap's one resource, a texture on a
  // CPU-visible heap, an unknown resource type, and a heap for buffers that does not allow buffers.
  heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
- req.flags=0;reject_before_probe();req.flags=engine_ddi::kMemoryDedicated;
- heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;reject_before_probe();
- heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;reject_before_probe();
+ req.flags=0;reject_before_probe("texture on this heap");req.flags=engine_ddi::kMemoryDedicated;
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;reject_before_probe("texture on this heap");
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;reject_before_probe("texture on this heap");
  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
- resource.ResourceType=static_cast<D3D12DDI_RESOURCE_TYPE>(0x7f);reject_before_probe();
- resource.ResourceType=D3D12DDI_RT_BUFFER;reject_before_probe();
- req.resource=nullptr;reject_before_probe();req.resource=&resource;
+ resource.ResourceType=static_cast<D3D12DDI_RESOURCE_TYPE>(0x7f);reject_before_probe("resource type");
+ resource.ResourceType=D3D12DDI_RT_BUFFER;reject_before_probe("buffer heap");
+ req.resource=nullptr;reject_before_probe("buffer heap");req.resource=&resource;
  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
- req.flags=engine_ddi::kMemoryPrimary;assert(owner.allocate(&req,&memory)==E_NOTIMPL);req.flags=engine_ddi::kMemoryDedicated;
+ req.flags=engine_ddi::kMemoryPrimary;reject_before_probe("request flags");req.flags=engine_ddi::kMemoryDedicated;
  req.memory_type_bits=2;assert(owner.allocate(&req,&memory)==E_INVALIDARG);req.memory_type_bits=0;
  gpu_address+=4096;events.clear();assert(owner.allocate(&req,&memory)==E_INVALIDARG && events=="AMZEUD" && !memory.memory);gpu_address-=4096;
  events.clear();fail_import=true;assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMZIEUD");fail_import=false;
@@ -246,6 +259,30 @@ int main(){
  owner.return_backing(memory.allocation);assert(owner.borrow_backing(memory.allocation));owner.return_backing(memory.allocation);
  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD" && !owner.borrow_backing(memory.allocation));
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
+ // BD-045: a lock the ICD left (its Unlock2 failed, then vkFreeMemory gave the BO up) belongs to the release.
+ // The shell unlocks it after vkFreeMemory, before the unmap: V N E U D.
+ {
+  const auto saved_type=expected_type;const auto saved_page=heap.CPUPageProperty;
+  expected_type=1;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI");
+  D3DKMT_LOCK2 lock{};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK);
+  assert(owner.free(&memory)==S_OK && events=="AMZILVNEUD" && owner.last_free_report().unlocked);
+  // The shell's own Unlock2 fails: the release stops there, the record keeps the lock and the allocation,
+  // and close retries it, then releases the rest.
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK);
+  lock={};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK);
+  fail_unlock=true;assert(owner.free(&memory)==E_FAIL && events=="AMZILVN" && owner.owns_allocation(memory.allocation) &&
+                          owner.last_free_report().stage==FreeStage::Unlock && !owner.last_free_report().unlocked);
+  events.clear();assert(owner.close_after_engine_retirement()==E_FAIL && events=="N" && owner.owns_allocation(memory.allocation));
+  fail_unlock=false;events.clear();
+  assert(owner.close_after_engine_retirement()==S_OK && events=="NEUDP" && !owner.owns_allocation(memory.allocation));
+  // A failed Lock2 leaves no lock: free unlocks nothing.
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK);
+  lock={};lock.hAllocation=memory.allocation;fail_lock=true;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==E_FAIL);fail_lock=false;
+  assert(owner.free(&memory)==S_OK && events=="AMZILVEUD" && !owner.last_free_report().unlocked);
+  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
+  expected_type=saved_type;heap.CPUPageProperty=saved_page;
+ }
  // The linear primary: all three flags on a PRIMARY heap. The memory type is one of the image's, no
  // buffer is probed, the address needs the image's alignment only, and the kernel gets the LB7A
  // description with the image's pitch and the backing's size.
@@ -583,7 +620,7 @@ int main(){
   }
   assert(surfaces==13);
  }
- std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
+ std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release)");
 }

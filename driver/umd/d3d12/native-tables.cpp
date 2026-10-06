@@ -12,6 +12,7 @@
 #include "native-residency-ddi.h"
 #include "present-outputs.h"
 #include "heap-import.h"
+#include "engine-ddi/entry.h"
 #include <atomic>
 #include <cstring>
 #include "stdio-log.h"
@@ -152,6 +153,37 @@ struct EntryPolicy:EntryOwner<Device> {
         else device->lost.store(true);
     }
 };
+// The entry path experiment's timing (engine-ddi.h, "Entry path"; entry.h): with BC250_ENTRY_STATS=1 a timed slot's
+// table entry counts the call, and samples its time, around the shell's own entry. Table tells the two list tables
+// apart, whose entries for one member differ.
+template<engine_ddi::EntryClass C,unsigned Table,class Fn> struct TimedEntry;
+template<engine_ddi::EntryClass C,unsigned Table,class R,class... A> struct TimedEntry<C,Table,R(APIENTRY*)(A...)> {
+    inline static R(APIENTRY* target)(A...)=nullptr;
+    static R APIENTRY call(A... args) noexcept {
+        engine_ddi::EntryTimer timer(C);
+        return target(args...);
+    }
+};
+// A refill of a table passes the same entries again: the target stays the shell's entry.
+template<engine_ddi::EntryClass C,unsigned Table,class Fn> void time_entry(Fn& slot) noexcept {
+    using T=TimedEntry<C,Table,Fn>;
+    if(slot!=&T::call){T::target=slot;slot=&T::call;}
+}
+template<unsigned Table> void time_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t) noexcept {
+#define N12_TIME_LIST(name) time_entry<engine_ddi::EntryClass::name,Table>(t.pfn##name);
+    ENGINE_DDI_ENTRY_TIMED_LIST_CLASSES(N12_TIME_LIST)
+#undef N12_TIME_LIST
+}
+void time_core(D3D12DDI_DEVICE_FUNCS_CORE_0088& t) noexcept {
+#define N12_TIME_CORE(name) time_entry<engine_ddi::EntryClass::name,0>(t.pfn##name);
+    ENGINE_DDI_ENTRY_TIMED_CORE_CLASSES(N12_TIME_CORE)
+#undef N12_TIME_CORE
+}
+void time_queue(D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001& t) noexcept {
+#define N12_TIME_QUEUE(name) time_entry<engine_ddi::EntryClass::name,0>(t.pfn##name);
+    ENGINE_DDI_ENTRY_TIMED_QUEUE_CLASSES(N12_TIME_QUEUE)
+#undef N12_TIME_QUEUE
+}
 engine_ddi::DeviceContext* APIENTRY resolve_engine(D3D12DDI_HDEVICE handle) {
     auto device=static_cast<Device*>(handle.pDrvPrivate);
     return device && device_engine_entered(*device)?engine_context(*device):nullptr;
@@ -160,6 +192,23 @@ UINT APIENTRY present_private_size(D3D12DDI_HDEVICE,const D3D12DDIARG_PRESENT_00
 // The two resource DDIs are engine-ddi's, run inside the owner scope of the shell's imports: a linear
 // primary is released by its runtime resource only while that resource's own DDI is running.
 using CoreTable=D3D12DDI_DEVICE_FUNCS_CORE_0088;
+// The AllowOutOfMemory clamp exists twice, once per module: engine_ddi::admitted_create_failure for what the
+// slots themselves decide, native12::ddi_admitted_create_failure for what the DDI thunk refuses above them
+// (BD-075). This translation unit is the one that sees both, so it is where they are held to the same answer -
+// including the device codes, which must come out as D3DDDIERR_DEVICEREMOVED and not as the DXGI name.
+static_assert(engine_ddi::admitted_create_failure(S_OK)==ddi_admitted_create_failure(S_OK));
+static_assert(engine_ddi::admitted_create_failure(E_OUTOFMEMORY)==ddi_admitted_create_failure(E_OUTOFMEMORY));
+static_assert(engine_ddi::admitted_create_failure(E_NOTIMPL)==ddi_admitted_create_failure(E_NOTIMPL));
+static_assert(engine_ddi::admitted_create_failure(E_INVALIDARG)==ddi_admitted_create_failure(E_INVALIDARG));
+static_assert(engine_ddi::admitted_create_failure(E_UNEXPECTED)==ddi_admitted_create_failure(E_UNEXPECTED));
+static_assert(engine_ddi::admitted_create_failure(E_FAIL)==ddi_admitted_create_failure(E_FAIL));
+static_assert(engine_ddi::admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED)==engine_ddi::kDriverDeviceRemoved);
+static_assert(engine_ddi::admitted_create_failure(DXGI_ERROR_DEVICE_RESET)==engine_ddi::kDriverDeviceRemoved);
+static_assert(engine_ddi::admitted_create_failure(DXGI_ERROR_DEVICE_HUNG)==engine_ddi::kDriverDeviceRemoved);
+static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_REMOVED)==engine_ddi::kDriverDeviceRemoved);
+static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_RESET)==engine_ddi::kDriverDeviceRemoved);
+static_assert(ddi_admitted_create_failure(DXGI_ERROR_DEVICE_HUNG)==engine_ddi::kDriverDeviceRemoved);
+static_assert(engine_ddi::kDriverDeviceRemoved==kDdiDriverDeviceRemoved);
 std::atomic<decltype(CoreTable{}.pfnCreateHeapAndResource)> engine_create_resource{};
 std::atomic<decltype(CoreTable{}.pfnDestroyHeapAndResource)> engine_destroy_resource{};
 HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDIARG_CREATEHEAP_0001* heap,
@@ -168,11 +217,16 @@ HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDI
     D3D12DDI_HRESOURCE driver_resource) {
     const auto engine=engine_create_resource.load();
     const auto device=static_cast<Device*>(handle.pDrvPrivate);
-    if(!engine || !device)return E_UNEXPECTED;
+    // Every failure of this slot leaves it as E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED (engine-ddi.h,
+    // admitted_create_failure): a create DDI that reports anything else costs the application its device
+    // (BD-075). The scope's own refusals come through here as well, which is why the clamp sits outside the
+    // scope and not only in engine-ddi. The thunk above this wrapper clamps its own refusals itself
+    // (ddi-entry.h, CoreBinding::allow_out_of_memory), which this wrapper never sees.
+    if(!engine || !device)return engine_ddi::admitted_create_failure(E_UNEXPECTED);
     // A resource DDI entered from inside another one of this device is refused before the engine runs.
-    return create_in_owner_scope(engine_imports(*device),[&]() noexcept {
+    return engine_ddi::admitted_create_failure(create_in_owner_scope(engine_imports(*device),[&]() noexcept {
         return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
-    });
+    }));
 }
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP heap,D3D12DDI_HRESOURCE resource) {
     const auto engine=engine_destroy_resource.load();
@@ -213,6 +267,8 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12D
 void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     const D3D12DDIARG_PRESENT_0001* args,D3D12DDI_PRESENT_0051* result,
     D3D12DDI_PRESENT_CONTEXTS_0051* contexts,D3D12DDI_PRESENT_HWQUEUES_0051* queues) {
+    // The entry path experiment's frame clock and arms (engine-ddi.h, "Entry path"); nothing without its knobs.
+    engine_ddi::entry_frame();
     const auto device=EntryPolicy::resolve(list);
     // A queue operation: its context must not be executing on another thread (QueueDomainScope).
     QueueDomainScope serial(device);
@@ -270,6 +326,7 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         original.pfnCreateHeapAndResource=create_heap_and_resource;
         original.pfnDestroyHeapAndResource=destroy_heap_and_resource;
         hr=DdiEntryTables<EntryPolicy>::wrap_core(original,&wrapped);if(hr!=S_OK)return hr;
+        if(engine_ddi::entry_stats_on())time_core(wrapped);
         *static_cast<Core*>(output)=wrapped;return S_OK;
     }
     case D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D:{
@@ -278,6 +335,14 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         List original{},wrapped{};
         HRESULT hr=compose_list_0092(&original,sizeof(original),number,present,fill);if(hr!=S_OK)return hr;
         hr=DdiEntryTables<EntryPolicy>::wrap_list(number,original,&wrapped);if(hr!=S_OK)return hr;
+        // The entry statistics' timed entries (engine-ddi.h, "Direct entry"), and the direct entries of the graphics
+        // table over the shell's own. Those write ring entries only for a device with the recording binding and
+        // deferred replay, so they are not installed when either default is off, nor under the full trace (mode 1),
+        // whose hooks only the shell's entry runs; direct-entry-off takes them back alone.
+        if(engine_ddi::entry_stats_on()){if(number)time_list<1>(wrapped);else time_list<0>(wrapped);}
+        if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
+           !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
+            (void)engine_ddi::install_direct_list(&wrapped,1);
         AcquireSRWLockExclusive(&adapter.tables_lock);
         auto& prior=adapter.list_tables[number];
         if(prior.handle && prior.handle!=runtime.handle)hr=E_UNEXPECTED;
@@ -294,6 +359,7 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         WRAP_QUEUE(pfnSignalFence)
         WRAP_QUEUE(pfnWaitForFence)
 #undef WRAP_QUEUE
+        if(engine_ddi::entry_stats_on())time_queue(wrapped);
         *static_cast<Queue*>(output)=wrapped;return S_OK;
     }
     case D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES:{

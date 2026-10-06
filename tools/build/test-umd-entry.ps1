@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$DxvkSource, [Parameter(Mandatory)][string]$UmdPath, [string]$OutputDir, [string]$VsInstall)
+param([Parameter(Mandatory)][string]$DxvkSource, [Parameter(Mandatory)][string]$UmdPath, [string]$OutputDir, [string]$VsInstall, [ValidateSet('x64', 'x86')][string]$Arch = 'x64')
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Force $OutputDir | Out-Null
 $saved=Save-ProcessEnvironment
 try {
     $env:TEMP=$OutputDir; $env:TMP=$OutputDir
-    $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
+    $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
     $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
     $includes=@("/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$DxvkSource\src", "/external:I$DxvkSource\include\vulkan\include", "/external:I$DxvkSource\include\spirv\include", "/external:I$DxvkSource\subprojects\dxbc-spirv")
     Push-Location $OutputDir

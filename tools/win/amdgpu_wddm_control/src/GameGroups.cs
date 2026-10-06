@@ -17,6 +17,10 @@ namespace AmdgpuWddmControl
         public string Id;
         public string[] Tokens;
         public bool SupportOnly;
+        // An Invert group names the off switches of behaviours the driver does by default (Profiles.cs): the box
+        // is checked while the value names none of them, and turning it off writes them all. The group's title
+        // keeps naming the feature, so what the user reads does not change with the name of the switch.
+        public bool Invert;
         public string Title { get { return Strings.T("game.group." + Id); } }
         public string Explain { get { return Strings.T("game.group." + Id + ".explain"); } }
         public string Cost { get { return Strings.T("game.group." + Id + ".cost"); } }
@@ -26,10 +30,10 @@ namespace AmdgpuWddmControl
     {
         public static readonly GameGroup[] All =
         {
-            new GameGroup { Id = "rt", Tokens = new[] { "raytracing-tier" } },
+            new GameGroup { Id = "rt", Tokens = new[] { "raytracing-tier-off" }, Invert = true },
             new GameGroup { Id = "present", Tokens = new[] { "present-noprimary", "present-cached" } },
-            new GameGroup { Id = "cpu", Tokens = new[] { "recording-bind", "retire-handoff", "deferred-replay" } },
-            new GameGroup { Id = "diag", Tokens = new[] { "release-two-phase-off", "import-progress-gate-off", "import-quarantine-off" }, SupportOnly = true },
+            new GameGroup { Id = "cpu", Tokens = new[] { "recording-bind-off", "retire-handoff-off", "deferred-replay-off", "direct-entry-off" }, Invert = true },
+            new GameGroup { Id = "diag", Tokens = new[] { "release-two-phase-off", "import-progress-gate-off", "import-quarantine-off", "replay-log" }, SupportOnly = true },
         };
 
         public static GameGroup Find(string id) { return All.FirstOrDefault(g => g.Id == id); }
@@ -40,17 +44,23 @@ namespace AmdgpuWddmControl
         {
             var names = new HashSet<string>(Names(value));
             int n = g.Tokens.Count(names.Contains);
+            if (g.Invert) return n == 0 ? GroupState.On : n == g.Tokens.Length ? GroupState.Off : GroupState.Partial;
             return n == 0 ? GroupState.Off : n == g.Tokens.Length ? GroupState.On : GroupState.Partial;
         }
+
+        // The state a game with no value of its own is in: Off for a group of opt-in names, On for an Invert group,
+        // whose names subtract from what the driver already does.
+        public static GroupState Default(GameGroup g) { return g.Invert ? GroupState.On : GroupState.Off; }
 
         // stored: the game's stored value, null when the game has no key; recommended: the release's value for this
         // file name (manifest defaults.d3d12_applications), null when none.
         public static ValueOrigin Origin(GameGroup g, string stored, string recommended)
         {
             if (stored == null) return ValueOrigin.DriverDefault;
+            var def = Default(g);
             var now = State(g, stored);
-            if (recommended != null && State(g, recommended) != GroupState.Off && now == State(g, recommended)) return ValueOrigin.Recommended;
-            return now == GroupState.Off ? ValueOrigin.DriverDefault : ValueOrigin.ThisGame;
+            if (recommended != null && State(g, recommended) != def && now == State(g, recommended)) return ValueOrigin.Recommended;
+            return now == def ? ValueOrigin.DriverDefault : ValueOrigin.ThisGame;
         }
 
         public static string OriginText(ValueOrigin o)
@@ -68,7 +78,7 @@ namespace AmdgpuWddmControl
                 var g = Find(c.Key);
                 if (g == null) throw new ArgumentException("unknown group " + c.Key);
                 names.RemoveAll(n => g.Tokens.Contains(n));
-                if (c.Value) names.AddRange(g.Tokens);
+                if (c.Value != g.Invert) names.AddRange(g.Tokens);
             }
             return names;
         }

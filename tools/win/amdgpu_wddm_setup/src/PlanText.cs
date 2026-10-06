@@ -19,6 +19,26 @@ namespace AmdgpuWddmSetup
 
     public static class SettingsView
     {
+        // The two switches of the GPU desktop path. The driver closes them together, so they get one line (BD-069).
+        public static bool IsDesktopPath(string name)
+        {
+            return name == "EnableGpuPresentBlit" || name == "EnableCddDwmInterop";
+        }
+
+        // The state of the GPU desktop path in this plan: "driver-closed", "reopened", or null when no switch of the
+        // path carries a closure. The driver's closure wins over a reopen, so a half-open pair reads as closed.
+        static string DesktopPath(SettingsPlan plan)
+        {
+            string state = null;
+            foreach (var r in plan.Rows)
+            {
+                if ((r.Group ?? "") != "parameters" || !IsDesktopPath(r.Name)) continue;
+                if (r.Decision == "driver-closed") return "driver-closed";
+                if (r.Decision == "reopened") state = "reopened";
+            }
+            return state;
+        }
+
         // The settings a user knows from the control app get a line each; every other driver value is counted in one
         // line ("other driver settings"). Registry names never reach the window: they are in the support file.
         public static List<SettingLine> Lines(SettingsPlan plan)
@@ -26,16 +46,31 @@ namespace AmdgpuWddmSetup
             var lines = new List<SettingLine>();
             if (plan == null) return lines;
             int other = 0, otherChanged = 0;
+            // BD-069: the user is told that the driver closed the desktop path, and that a repair sets it back. The
+            // closed path also sends the desktop to the processor at the next start, whatever DwmForceCpu holds, so
+            // the desktop line says that instead of promising the graphics chip.
+            string path = DesktopPath(plan);
+            bool pathShown = false;
             foreach (var r in plan.Rows)
             {
-                var shown = r.Decision == "kept" || r.Decision == "same" ? (r.Current ?? r.Value) : r.Value;
+                // kept, same and driver-closed keep what the computer holds now; every other decision writes r.Value.
+                var shown = r.Decision == "kept" || r.Decision == "same" || r.Decision == "driver-closed" ? (r.Current ?? r.Value) : r.Value;
                 var decision = "settings.decision." + (r.Decision ?? "set");
                 string group = r.Group ?? "", name = r.Name ?? "";
                 SettingLine line = null;
-                if (group == "parameters" && name == "DpmMaxMHz") line = new SettingLine { TextId = "settings.clock-limit", Args = new[] { Json.Show(shown) } };
+                if (group == "parameters" && IsDesktopPath(name) && path != null)
+                {
+                    // One line for the pair: the second switch of the same act adds nothing and is not counted
+                    // among the other settings either.
+                    if (pathShown) continue;
+                    pathShown = true;
+                    line = new SettingLine { TextId = "settings.desktop-path" };
+                    decision = "settings.decision." + path;
+                }
+                else if (group == "parameters" && name == "DpmMaxMHz") line = new SettingLine { TextId = "settings.clock-limit", Args = new[] { Json.Show(shown) } };
                 else if (group == "parameters" && name == "DpmMode") line = new SettingLine { TextId = Number(shown) == 0 ? "settings.auto-clock.off" : "settings.auto-clock.on" };
                 else if (group == "parameters" && name == "CuMode") line = new SettingLine { TextId = "settings.cores", Args = new[] { Json.Show(shown) } };
-                else if (group == "desktop_router" && name == "DwmForceCpu") line = new SettingLine { TextId = Number(shown) == 1 ? "settings.desktop.cpu" : "settings.desktop.gpu" };
+                else if (group == "desktop_router" && name == "DwmForceCpu") line = new SettingLine { TextId = Number(shown) == 1 ? "settings.desktop.cpu" : (path == "driver-closed" ? "settings.desktop.cpu-until-repair" : "settings.desktop.gpu") };
                 // The D3D11 route (tester.11 on): gpu-default sends Direct3D 11 and 10.1 applications to the graphics chip,
                 // while Windows' own applications and Direct3D 10.0 stay on the processor; allowlist sends only the listed ones.
                 else if (group == "app_router" && name == "Mode" && Json.Show(shown) == "gpu-default") line = new SettingLine { TextId = "settings.d3d11.gpu" };
@@ -44,7 +79,7 @@ namespace AmdgpuWddmSetup
                 if (line == null)
                 {
                     other++;
-                    if (r.Decision != "same" && r.Decision != "kept") otherChanged++;
+                    if (r.Decision != "same" && r.Decision != "kept" && r.Decision != "driver-closed") otherChanged++;
                     continue;
                 }
                 line.DecisionId = decision;

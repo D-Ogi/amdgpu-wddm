@@ -28,6 +28,25 @@ inline int ddi_trace_mode() noexcept {
 inline bool ddi_trace_enabled() noexcept {return ddi_trace_mode()==1;}
 inline std::atomic<uint64_t> ddi_trace_sequence{};
 inline std::atomic<int32_t> ddi_failure_budget{4096};
+// A refusal the shell decided, written whether or not any switch is on: to the AMDGPU_WDDM_LOG sink when the
+// process named one, and always one line to the debugger channel, as engine-ddi's log_refusal does. The channel
+// costs a raised-and-swallowed exception when nothing listens, and a refusal happens once per declined object,
+// never per frame; capture-share and any attached debugger record the line. One budget bounds both channels, so
+// a process that declines in a loop - which a survivable refusal invites (BD-075) - cannot be slowed by this
+// diagnostic without bound. No handles, no pointers and no resource contents: names and scalars only.
+inline std::atomic<int32_t> ddi_refusal_budget{4096};
+inline void ddi_refusal(_Printf_format_string_ const char* format,...) noexcept {
+    if(ddi_refusal_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
+    char text[600];
+    va_list args;
+    va_start(args,format);
+    std::vsnprintf(text,sizeof(text),format,args);
+    va_end(args);
+    amdgpu_wddm_log::print("amdgpu_wddm_d3d12: %s\n",text);
+    char line[640];
+    std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 %s\n",text);
+    OutputDebugStringA(line);
+}
 inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
     if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);
@@ -36,28 +55,54 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
         name,static_cast<unsigned long>(outcome),now.QuadPart,GetCurrentThreadId());
     OutputDebugStringA(line);
 }
-// Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a
-// measurement that needs them: one name or several separated by commas. Empty, "none" or unknown names mean
-// none; unset means the application profile below, if any. Read once per process. Names: raytracing-tier
-// (adapter-caps.cpp), present-cached and present-noprimary (heap-import.cpp), recording-bind, retire-handoff and
-// deferred-replay (device-engine.cpp: the recording entry binding, the retire hand-off and the deferred
-// command-list replay, all read once per device).
-// The three switches of the release gate (M15.8, the fixes of the trial 245 report) are the other way round:
-// each names the fix to turn OFF, because all three are the driver's behaviour.
-//   release-two-phase-off: engine-ddi waits for one snapshot per release, not two (device-engine.cpp, F1).
+// AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a measurement that needs
+// them: one name or several separated by commas. Empty, "none" or unknown names mean none. Read once per
+// process.
+//
+// **Every validated behaviour is the driver's default and needs no switch, no profile and no variable.** A
+// switch is only ever how an operator turns one OFF again, for a bisect or a rollback without a new binary,
+// and every such name ends in "-off". The defaults and their off switches:
+//   raytracing-tier-off: the adapter reports D3D12 RaytracingTier NOT_SUPPORTED instead of the tier the
+//     engine computed (adapter-caps.cpp, engine-ddi set_raytracing_tier_reporting).
+//   recording-bind-off: the command-list recording entry is not published (device-engine.cpp, lever L2).
+//   retire-handoff-off: submissions keep the release sequence instead of leaving it to the resource DDIs
+//     (device-engine.cpp, lever L3).
+//   deferred-replay-off: recording calls make their engine calls in line, with no ring and no worker thread
+//     (device-engine.cpp).
+//   direct-entry-off: the graphics list table keeps the shell's entry for the value-only recording calls
+//     instead of engine-ddi's direct entry, which writes their ring entries itself (native-tables.cpp; trial 327:
+//     +3.8 % at Witcher 3 LOW). recording-bind-off or deferred-replay-off implies it.
+//   release-two-phase-off: engine-ddi waits for one snapshot per release, not two (device-engine.cpp, F1 of
+//     the trial 245 report, M15.8).
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
-// All three off is adapter106's release behaviour.
-// Application profile (M15.7): a game started by its own launcher (Steam) inherits nothing from a trial, so it
-// would run without the switches its trials measured. When the process has no AMDGPU_WDDM_D3D12_EXPERIMENT,
-// the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image file name> gives the
-// list in the same syntax (registry key names compare without case). The variable wins whenever it is present;
-// its value "none" names no switch and keeps a trial independent of any profile.
+// All eight off is the release and reporting behaviour of adapter106 with no ray tracing.
+//
+// Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
+//   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
+//     refuses Cached on a PRIMARY allocation (trial 105), so it needs present-noprimary with it.
+//   present-noprimary: the swap-chain buffers are not PRIMARY (heap-import.cpp), which also forfeits the
+//     scanout route. Measured gain of the pair under the CPU compositor, none under the GPU one (K115).
+// One more name asks for a diagnostic rather than a deviation:
+//   replay-log: with deferred replay on, the replay lines also go to a file of their own (replay-log.h), for a
+//     game whose stderr nobody reads. It changes no behaviour; it costs the writes.
+// The positive names of the defaults (raytracing-tier, recording-bind, retire-handoff, deferred-replay) are
+// still accepted and do nothing, so that an older trial string or profile naming them still resolves.
+//
+// Where the list comes from, first source that exists wins:
+//   1. AMDGPU_WDDM_D3D12_EXPERIMENT in the process environment, "none" and empty included. A trial sets it
+//      so that it never inherits a profile.
+//   2. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image file name>, the
+//      application profile (M15.7), for an application-specific workaround shipped by the package.
+//   3. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12, which turns a default off for the
+//      whole machine without replacing the binary.
+// Registry key names compare without case; both values take the same syntax.
 enum class DdiExperimentSource : unsigned {
-    None,         // neither the variable nor a profile for this image
+    None,         // no variable, no profile for this image and no machine-wide value
     Environment,  // AMDGPU_WDDM_D3D12_EXPERIMENT, "none" and empty included
     Profile,      // the image's application profile
+    Machine,      // the machine-wide value under HKLM\SOFTWARE\amdgpu-wddm\D3D12
     Invalid,      // a value outside the syntax or too long: no switch
 };
 struct DdiExperimentValue {
@@ -81,13 +126,9 @@ inline bool application_profile_key(const wchar_t* image,wchar_t* key,size_t cap
     std::wmemcpy(key+prefix_length,name,name_length+1);
     return true;
 }
-// The profile's list for this process into text, 1 when found, 0 when there is none, -1 when the value is not a
-// string of the syntax that fits.
-inline int application_profile(char* text,size_t capacity) noexcept {
-    wchar_t image[MAX_PATH]{};
-    const DWORD n=GetModuleFileNameW(nullptr,image,MAX_PATH);
-    wchar_t key[96+MAX_PATH]{};
-    if(!n || n>=MAX_PATH || !application_profile_key(image,key,sizeof(key)/sizeof(wchar_t)))return 0;
+// The "Experiment" value of one key into text, 1 when found, 0 when the key or the value does not exist, -1
+// when the value is not a string of the syntax that fits.
+inline int registry_experiment(const wchar_t* key,char* text,size_t capacity) noexcept {
     wchar_t value[256]{};DWORD bytes=sizeof(value);
     const LSTATUS status=RegGetValueW(HKEY_LOCAL_MACHINE,key,L"Experiment",RRF_RT_REG_SZ,nullptr,value,&bytes);
     if(status==ERROR_FILE_NOT_FOUND)return 0;
@@ -100,6 +141,18 @@ inline int application_profile(char* text,size_t capacity) noexcept {
     text[i]=0;
     return 1;
 }
+// The profile's list for this process into text, with the same three outcomes. An image whose name cannot be
+// read has no profile, which leaves the machine-wide value to answer.
+inline int application_profile(char* text,size_t capacity) noexcept {
+    wchar_t image[MAX_PATH]{};
+    const DWORD n=GetModuleFileNameW(nullptr,image,MAX_PATH);
+    wchar_t key[96+MAX_PATH]{};
+    if(!n || n>=MAX_PATH || !application_profile_key(image,key,sizeof(key)/sizeof(wchar_t)))return 0;
+    return registry_experiment(key,text,capacity);
+}
+inline int machine_experiment(char* text,size_t capacity) noexcept {
+    return registry_experiment(L"SOFTWARE\\amdgpu-wddm\\D3D12",text,capacity);
+}
 inline DdiExperimentValue resolve_experiment() noexcept {
     DdiExperimentValue v{};
     SetLastError(ERROR_SUCCESS);
@@ -107,8 +160,10 @@ inline DdiExperimentValue resolve_experiment() noexcept {
     if(n || GetLastError()!=ERROR_ENVVAR_NOT_FOUND){
         v.source=n<sizeof(v.text)?DdiExperimentSource::Environment:DdiExperimentSource::Invalid;
     } else {
-        const int found=application_profile(v.text,sizeof(v.text));
-        v.source=found>0?DdiExperimentSource::Profile:found<0?DdiExperimentSource::Invalid:DdiExperimentSource::None;
+        int found=application_profile(v.text,sizeof(v.text));
+        DdiExperimentSource source=DdiExperimentSource::Profile;
+        if(found==0){found=machine_experiment(v.text,sizeof(v.text));source=DdiExperimentSource::Machine;}
+        v.source=found>0?source:found<0?DdiExperimentSource::Invalid:DdiExperimentSource::None;
     }
     if(v.source==DdiExperimentSource::Invalid || !experiment_syntax(v.text)){
         v.text[0]=0;v.source=DdiExperimentSource::Invalid;
@@ -172,6 +227,17 @@ inline bool ddi_experiment_scanout(const char* list,unsigned* width,unsigned* he
 }
 inline bool ddi_experiment_scanout(unsigned* width,unsigned* height) noexcept {
     return ddi_experiment_scanout(ddi_experiment_name(),width,height);
+}
+// Whether the list turns the named default off, i.e. whether it names "<name>-off". Every default of this
+// driver is read this way, so that the behaviour an application gets is the one the lab validated and a
+// switch can only ever subtract from it. A name too long for the buffer is no switch, never an accidental off.
+inline bool ddi_experiment_off(const char* name) noexcept {
+    char text[64];
+    const size_t length=name?std::strlen(name):0;
+    if(!length || length+5>sizeof(text))return false;
+    std::memcpy(text,name,length);
+    std::memcpy(text+length,"-off",5);
+    return ddi_experiment(text);
 }
 // A formatted line of the failures-only mode, under the same budget.
 inline void ddi_mode2_note(const char* text) noexcept {

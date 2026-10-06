@@ -14,8 +14,8 @@ static partial class UnitTests
         var s = Open();
         s.DefaultParameters = new Dictionary<string, long> { { "EnableGpuPresentBlit", 1 }, { "EnableCddDwmInterop", 1 }, { "DpmMode", 1 }, { "DpmMaxMHz", 1500 }, { "KeepLog", 0 } };
         s.DefaultRouter = new Dictionary<string, long> { { "DwmForceCpu", 0 }, { "RequireKmdSwitches", 1 } };
-        s.DefaultApplications = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "witcher3.exe", "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay" } };
-        s.GameProfiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "witcher3.exe", "raytracing-tier" }, { "game.exe", "deferred-replay" } };
+        s.DefaultApplications = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "witcher3.exe", "present-noprimary,present-cached,raytracing-tier-off,recording-bind-off,retire-handoff-off,deferred-replay-off" } };
+        s.GameProfiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "witcher3.exe", "raytracing-tier-off" }, { "game.exe", "deferred-replay-off" } };
         s.CuBadValues = new List<string>();
         return s;
     }
@@ -85,10 +85,10 @@ static partial class UnitTests
 
         // game-profile: the scope note, effect at the next game start, undoable.
         s = WithDefaults();
-        p = Recovery.Plan("game-profile", s, more: new Recovery.PlanArgs { Image = "game.exe", Value = "deferred-replay,recording-bind" });
-        Check(!p.Refused && p.GameWrites["game.exe"] == "recording-bind,deferred-replay" && p.Undoable, "game-profile writes the composed list");
+        p = Recovery.Plan("game-profile", s, more: new Recovery.PlanArgs { Image = "game.exe", Value = "deferred-replay-off,recording-bind-off" });
+        Check(!p.Refused && p.GameWrites["game.exe"] == "recording-bind-off,deferred-replay-off" && p.Undoable, "game-profile writes the composed list");
         Check(p.Effect == "the next time game.exe starts" && p.Notes.Any(n => n.Contains("every game named game.exe")), "game-profile: next start of the game, file-name scope");
-        Check(Recovery.Plan("game-profile", s, more: new Recovery.PlanArgs { Image = "game.exe", Value = "deferred-replay" }).Refused, "game-profile without a change: refused");
+        Check(Recovery.Plan("game-profile", s, more: new Recovery.PlanArgs { Image = "game.exe", Value = "deferred-replay-off" }).Refused, "game-profile without a change: refused");
         Check(Recovery.Plan("game-profile", s, more: new Recovery.PlanArgs { Image = "game.exe", Value = "" }).GameWrites["game.exe"] == "", "game-profile with nothing checked removes the key");
         Check(Recovery.Plan("game-profile", s, more: new Recovery.PlanArgs { Image = "..\\x.exe", Value = "" }).Refused, "game-profile refuses a path");
 
@@ -113,10 +113,10 @@ static partial class UnitTests
         // A global undo of a reset with games restores the games, never the CU values.
         var reset = new BackupRecord { File = "r", Utc = "9", Action = "reset-defaults", Undoable = true };
         reset.Values.Add(new BackupValue { Path = Recovery.ParametersPath, Name = "DpmMode", Existed = true, Kind = "DWord", Number = 0 });
-        reset.Values.Add(new BackupValue { Path = Recovery.GamePath("game.exe"), Name = Profiles.ValueName, Existed = true, Kind = "String", Text = "deferred-replay" });
+        reset.Values.Add(new BackupValue { Path = Recovery.GamePath("game.exe"), Name = Profiles.ValueName, Existed = true, Kind = "String", Text = "deferred-replay-off" });
         reset.Diagnosis.Add(new BackupValue { Path = Recovery.ParametersPath, Name = "CuModeConfirmed", Existed = true, Kind = "DWord", Number = 40 });
         p = Recovery.Plan("undo", WithDefaults(), backups: new[] { reset });
-        Check(!p.Refused && p.GameWrites["game.exe"] == "deferred-replay" && p.Writes.All(w => w.Name != "CuModeConfirmed") && p.Notes.Any(n => n.Contains("graphics-core part")),
+        Check(!p.Refused && p.GameWrites["game.exe"] == "deferred-replay-off" && p.Writes.All(w => w.Name != "CuModeConfirmed") && p.Notes.Any(n => n.Contains("graphics-core part")),
             "undo of a reset: games restored, CU values never");
         var forged = new BackupRecord { File = "f", Utc = "10", Action = "reopen-gpu-path", Undoable = true };
         forged.Values.Add(new BackupValue { Path = Recovery.ParametersPath, Name = "CuModeConfirmed", Existed = true, Kind = "DWord", Number = 40 });

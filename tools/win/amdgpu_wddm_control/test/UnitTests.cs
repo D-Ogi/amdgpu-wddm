@@ -156,10 +156,12 @@ static partial class UnitTests
     static void ShellTokens(string root)
     {
         // Every catalog switch is a name the shell asks for; every name the shell asks for is in the catalog.
+        // ddi_experiment_off("x") asks for "x-off" (driver/umd/d3d12/ddi-trace.h): the default is on and the
+        // switch subtracts from it, so the name in the value, and in the catalog, is the off form.
         var asked = new HashSet<string>();
         foreach (var file in Directory.GetFiles(Path.Combine(root, @"driver\umd\d3d12"), "*.cpp").Where(f => !f.EndsWith("-test.cpp")))
-            foreach (Match m in Regex.Matches(File.ReadAllText(file), "ddi_experiment\\(\"([a-z0-9-]+)\"\\)"))
-                asked.Add(m.Groups[1].Value);
+            foreach (Match m in Regex.Matches(File.ReadAllText(file), "ddi_experiment(_off)?\\(\"([a-z0-9-]+)\"\\)"))
+                asked.Add(m.Groups[2].Value + (m.Groups[1].Success ? "-off" : ""));
         foreach (var s in Profiles.Catalog) Check(asked.Contains(s.Token), "catalog switch " + s.Token + " is read by the shell");
         foreach (var t in asked) Check(Profiles.Find(t) != null, "shell switch " + t + " is in the catalog");
         var trace = File.ReadAllText(Path.Combine(root, @"driver\umd\d3d12\ddi-trace.h"));
@@ -169,12 +171,16 @@ static partial class UnitTests
 
     static void ProfileEditing()
     {
-        var p = Profiles.Parse("present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay");
+        var p = Profiles.Parse("present-noprimary,present-cached,raytracing-tier-off,recording-bind-off,retire-handoff-off,deferred-replay-off");
         Equal(6, p.Known.Count, "witcher3 profile known"); Equal(0, p.Unknown.Count, "witcher3 profile unknown");
-        Equal("raytracing-tier", p.Known[0], "catalog order");
-        p = Profiles.Parse("future-switch,raytracing-tier,raytracing-tier,,none");
+        Equal("raytracing-tier-off", p.Known[0], "catalog order");
+        // The positive names of the defaults are accepted by the shell and do nothing, so they are unknown here.
+        p = Profiles.Parse("raytracing-tier,recording-bind,retire-handoff,deferred-replay");
+        Equal(0, p.Known.Count, "the positive names of the defaults are not catalog switches");
+        Equal(4, p.Unknown.Count, "the positive names are kept as unknown names");
+        p = Profiles.Parse("future-switch,raytracing-tier-off,raytracing-tier-off,,none");
         Equal(1, p.Known.Count, "duplicates, empty and none dropped"); Equal("future-switch", p.Unknown.Single(), "unknown kept");
-        Equal("raytracing-tier,deferred-replay,future-switch", Profiles.Compose(new[] { "deferred-replay", "raytracing-tier" }, p.Unknown), "compose order");
+        Equal("raytracing-tier-off,deferred-replay-off,future-switch", Profiles.Compose(new[] { "deferred-replay-off", "raytracing-tier-off" }, p.Unknown), "compose order");
         Equal("", Profiles.Compose(new string[0], new string[0]), "empty profile");
         p = Profiles.Parse("Present-Cached;x");
         Equal(1, p.Unknown.Count, "value outside the syntax is one unknown entry"); Equal(0, p.Known.Count, "nothing parsed from it");
@@ -557,6 +563,14 @@ static partial class UnitTests
         Check(line(Recovery.Describe(noReply), "GPU desktop path").Text.Contains("before 0.7.198"), "closed path, version unknown: both causes named");
         Check(line(lines, "Desktop composition").Text.StartsWith("CPU route (GPU route disabled, BD-058)") && line(lines, "Desktop composition").Action == null, "CPU route: release default, no action");
         Check(line(lines, "Clock control").Action == "enable-dpm", "clock fallback recommends enable-dpm");
+        // BD-069: one start after the fallback the live reason is "fixed requested" (1); only the durable record remembers.
+        var later = Closed(); later.Dpm = new DpmState { Mode = 0, Reason = 1 }; later.Parameters["DpmLastReason"] = 1; later.Parameters["DpmClosedReason"] = 8;
+        var ll = line(Recovery.Describe(later), "Clock control");
+        Check(ll.Action == "enable-dpm" && ll.Severity == "warn" && ll.Text.Contains(KmdReply.ReasonText(8)), "a fallback one start later: the durable record still recommends enable-dpm");
+        later.Parameters.Remove("DpmClosedReason");
+        Check(line(Recovery.Describe(later), "Clock control").Action == null, "no durable record, live reason 1: no recommendation");
+        later.Parameters["DpmClosedReason"] = 8; later.Parameters["DpmMode"] = 1;
+        Check(line(Recovery.Describe(later), "Clock control").Action != "enable-dpm", "automatic clock already requested: the record is not a fallback any more");
         var gpuDefault = Open(); gpuDefault.DefaultRouter["DwmForceCpu"] = 0;
         var gl = line(Recovery.Describe(gpuDefault), "Desktop composition");
         Check(gl.Text.StartsWith("CPU route (DwmForceCpu 1). The release default is the GPU route.") && gl.Action == "desktop-gpu", "release default GPU (manifest): the CPU route recommends the GPU route");
@@ -685,20 +699,20 @@ static partial class UnitTests
         var none = new string[0];
         Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", null, none).Kind, "profile: nothing checked, no key: nothing written");
         Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", null, null).Kind, "profile: no names at all: nothing written");
-        var w = Profiles.PlanWrite("a.exe", "raytracing-tier", none);
+        var w = Profiles.PlanWrite("a.exe", "raytracing-tier-off", none);
         Equal(ProfileWriteKind.Delete, w.Kind, "profile: checked, saved, then unchecked: the key is removed");
         Equal(ProfileWriteKind.Delete, Profiles.PlanWrite("a.exe", "", none).Kind, "profile: an empty stored value is removed, not kept");
-        w = Profiles.PlanWrite("a.exe", "raytracing-tier,x-future", new[] { "raytracing-tier" });
-        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier", "profile: unchecking one name removes exactly that name");
-        w = Profiles.PlanWrite("a.exe", null, new[] { "deferred-replay", "x-future", "raytracing-tier" });
-        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier,deferred-replay,x-future", "profile: the exact checked set is written, catalog order first");
-        Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", "raytracing-tier,deferred-replay", new[] { "deferred-replay", "raytracing-tier" }).Kind, "profile: same set: nothing written");
-        const string witcher = "present-noprimary,present-cached,raytracing-tier,recording-bind,retire-handoff,deferred-replay";
+        w = Profiles.PlanWrite("a.exe", "raytracing-tier-off,x-future", new[] { "raytracing-tier-off" });
+        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier-off", "profile: unchecking one name removes exactly that name");
+        w = Profiles.PlanWrite("a.exe", null, new[] { "deferred-replay-off", "x-future", "raytracing-tier-off" });
+        Check(w.Kind == ProfileWriteKind.Set && w.Value == "raytracing-tier-off,deferred-replay-off,x-future", "profile: the exact checked set is written, catalog order first");
+        Equal(ProfileWriteKind.None, Profiles.PlanWrite("a.exe", "raytracing-tier-off,deferred-replay-off", new[] { "deferred-replay-off", "raytracing-tier-off" }).Kind, "profile: same set: nothing written");
+        const string witcher = "present-noprimary,present-cached,raytracing-tier-off,recording-bind-off,retire-handoff-off,deferred-replay-off";
         var parsed = Profiles.Parse(witcher);
         Equal(6, parsed.Known.Count, "installer profile: every name shows as checked");
         Equal(ProfileWriteKind.None, Profiles.PlanWrite("witcher3.exe", witcher, parsed.Known.Concat(parsed.Unknown)).Kind, "installer profile in its own order: not a change");
-        w = Profiles.PlanWrite("witcher3.exe", witcher, parsed.Known.Where(n => n != "deferred-replay"));
-        Check(w.Kind == ProfileWriteKind.Set && !w.Value.Contains("deferred-replay") && w.Value.Split(',').Length == 5, "installer profile: one unchecked name is removed");
+        w = Profiles.PlanWrite("witcher3.exe", witcher, parsed.Known.Where(n => n != "deferred-replay-off"));
+        Check(w.Kind == ProfileWriteKind.Set && !w.Value.Contains("deferred-replay-off") && w.Value.Split(',').Length == 5, "installer profile: one unchecked name is removed");
         Throws<ArgumentException>(() => Profiles.PlanWrite("a.exe", "BAD VALUE", new[] { "BAD VALUE" }), "profile: a checked value outside the syntax is not written");
         Equal(ProfileWriteKind.Delete, Profiles.PlanWrite("a.exe", "BAD VALUE", none).Kind, "profile: an unchecked bad value is removed");
 

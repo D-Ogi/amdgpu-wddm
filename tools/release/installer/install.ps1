@@ -51,6 +51,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'engine.ps1')
 . (Join-Path $here 'release-witness.ps1')
 . (Join-Path $here 'compatibility.ps1')
+. (Join-Path $here 'mft-h264.ps1')
 if ($Plan) { $DryRun = [Management.Automation.SwitchParameter]$true }
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
@@ -303,6 +304,14 @@ $commandLineParameters = $installInputs.parameters
 $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
+$Repair = [switch](@($installInputs.switches) -contains 'Repair')
+# BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
+# itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
+# keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
+# failed phase (Get-InstallAction): nobody asked for the closure to go, and what made the driver close it may still
+# be there. The run after a restart gets -Repair back from the state, so a repair that waits for the driver package
+# still reopens.
+$script:ReopenClosures = [bool]$Repair
 
 # Verification needs no preflight. It checks the installed release against one manifest, which also names it in the
 # verify report: <install root>\manifest.json, read once (its bytes are hashed and parsed together), whatever package
@@ -489,8 +498,20 @@ function Invoke-Verify {
         $dwmOk = $zink
         $dwmNote = "DwmForceCpu 0, DWM of session $mySession has bc250d3d_zink.dll loaded: $(if ($zink) { 'yes' } else { 'no (CPU route)' })"
     }
-    $ioClosed = ''; if ($io -match 'closed by the driver: (\S+)') { $ioClosed = "; closed by the driver: $($Matches[1])" }
-    if ($io -match 'died in a session') { $ioClosed += '; last boot died in a session' }
+    # BD-069: the driver closed the path itself, so the remedy is a repair install, not a setting the tester has to
+    # find. The repair reads the driver's own record of the closure (InteropClosedReason), so only the line that
+    # proves the record is there gets the remedy. A boot that died with both switches already at 0 leaves no record,
+    # a repair would change nothing, and the reading says so without naming one.
+    $ioClosed = ''; $ioRemedy = ''
+    if ($io -match 'closed by the driver: (\S+)') {
+        $ioClosed = "; closed by the driver: $($Matches[1])"
+        $ioRemedy = '; remedy: run install.cmd -Repair, which opens it again'
+    }
+    if ($io -match 'died in a session') {
+        $ioClosed += '; last boot died in a session'
+        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in amdgpu-wddm Control' }
+    }
+    $ioClosed += $ioRemedy
     Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
 
     # BD-060: a replacement of the session's DWM that was observed against the start-confirm task's record of this
@@ -545,6 +566,32 @@ function Invoke-Verify {
         $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $wowKey)
         Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9/10/11, no D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
+
+    # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
+    # encoder is registered, which DLL the registration names and which bytes that DLL has (BugReport.cs collects
+    # every verify report). The encoder is an extra, never a condition of the driver, so a registration that is not
+    # right is a warning with its remedy, not a failed verification.
+    try {
+        $mftSwitch = Get-MftReleaseSwitch -Manifest $script:Manifest -PackageRoot $null
+        $mftInstalled = Join-Path $InstallRoot $mftSwitch.install_path
+        if (-not $mftSwitch.register) {
+            Add-Info 'H.264 encoder' "not registered by this release; keys of ours on this computer: $(@(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey).Count)"
+        } elseif ($script:DryRunMode) {
+            Add-Info 'H.264 encoder' "registered by this release: $($mftSwitch.clsid), $mftInstalled"
+        } else {
+            # The values of the installed DLL when it can be read, so that the check compares the registration with
+            # the file it names; the keys and the names alone when it cannot.
+            $mftBlobs = $null
+            $mftWhy = ''
+            try { $mftBlobs = Get-MftRegistrationBlobs -DllPath $mftInstalled } catch { $mftWhy = " (the values of $($mftSwitch.install_path) could not be read: $($_.Exception.Message))" }
+            $mftState = Test-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftInstalled -Blobs $mftBlobs
+            $mftSha = 'no file'
+            if (Test-Path -LiteralPath $mftInstalled -PathType Leaf) { $mftSha = (Get-Sha256 $mftInstalled).Substring(0, 16) }
+            $mftWhere = "InprocServer32 = $mftInstalled (SHA256 $mftSha), $(@($mftState.keys).Count) of our 3 keys present$mftWhy"
+            if ($mftState.ok) { Add-Result 'H.264 encoder' $true "registered, $mftWhere" }
+            else { Add-Warning 'H.264 encoder' "the registration is not right: $($mftState.detail). $mftWhere. Remedy: run install.cmd -Repair, and send the support report if it stays. The driver itself is not affected." }
+        }
+    } catch { Add-Info 'H.264 encoder' "not checked: $($_.Exception.Message)" }
     $script:VerifyComplete = $true
     return $results
     } catch {
@@ -624,7 +671,7 @@ function Get-InstallSettingsImpact {
         $params = @{}; foreach ($p in $state.parameters_before_install.PSObject.Properties) { $params[$p.Name] = $p.Value }
     }
     $groups = @(
-        @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters) }
+        @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters -Reopen:$script:ReopenClosures) }
         @{ group = 'desktop_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.desktop_router -Previous $prev.applied.desktop_router -Current (Read-RegistryValues "$($script:SoftwareKey)\DesktopRouter")) }
         @{ group = 'app_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.app_router -Previous $prev.applied.app_router -Current (Read-RegistryValues "$($script:SoftwareKey)\AppRouter")) }
     )
@@ -659,8 +706,9 @@ Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $ac
     compatibility = $compat })
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
-    Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command)
-    foreach ($row in @($impact.rows | Where-Object { $_.decision -ne 'same' })) { Write-Log ("   setting {0}\{1}: {2} {3} -> {4}" -f $row.group, $row.name, $row.decision, (Format-RegistryValue $row.current), (Format-RegistryValue $row.value)) }
+    Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line, {5} reopened after the driver closed them, {6} left closed by the driver" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command, $impact.summary.reopened, $impact.summary.driver_closed)
+    foreach ($row in @($impact.rows | Where-Object { $_.decision -ne 'same' })) { Write-Log ("   setting {0}\{1}: {2} {3} -> {4}{5}" -f $row.group, $row.name, $row.decision, (Format-RegistryValue $row.current), (Format-RegistryValue $row.value), $(if ($row.closure) { " ($($row.closure))" } else { '' })) }
+    foreach ($row in @($impact.rows | Where-Object { $_.decision -eq 'driver-closed' })) { Write-Info "$($row.name) stays as the driver left it: $($row.closure). Remedy: run install.cmd -Repair." }
     Write-EngineEvent 'settings-plan' ([ordered]@{ summary = $impact.summary; rows = @($impact.rows) })
 }
 $script:EngineConsents = @($consents)
@@ -829,10 +877,36 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
 $dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
+# The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
+# it is installed at all (manifest.json "mft_h264"). The decision is taken here, before the first change of this
+# stage, and the settings stage below writes or removes its registry keys by the same answer.
+$mft = Get-MftReleaseSwitch -Manifest $script:Manifest -PackageRoot $package
+$mftDll = Join-Path $InstallRoot $mft.install_path
+$mftKeys = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
+$mftAction = Get-MftAction -Switch $mft -PresentKeys $mftKeys -DirPresent (Test-Path -LiteralPath (Split-Path $mftDll))
+if ($mft.register) {
+    if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
+    $dirs += $mft.payload_dir
+}
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
     Invoke-Change "copy payload\$d -> $InstallRoot\$d (same SHA256: kept; in use: replaced by rename)" {
         Copy-TreeSafe -Source $src -Destination (Join-Path $InstallRoot $d)
+    } | Out-Null
+}
+# A release that does not register the encoder takes the registration and the files of an earlier install away again. A
+# repair with the switch off is therefore a rollback. The keys go first, in this stage, and the file after them, as
+# uninstall.ps1 does it: a step between the two (pnputil, the firmware, a restart, a failure of any of them) would
+# otherwise leave a COM registration that names a DLL which is gone, and every Media Foundation client that enumerates
+# hardware or asynchronous H.264 encoders would get an activation object that cannot be created.
+if ($mftAction -eq 'rollback' -and $mftKeys.Count) {
+    Invoke-Change "remove the H.264 encoder MFT registration of an earlier install ($($mftKeys -join ', ')): this release does not register it" {
+        [void](Remove-MftRegistration -ClassesKey $script:ClassesKey)
+    } | Out-Null
+}
+if ($mftAction -eq 'rollback' -and (Test-Path -LiteralPath (Split-Path $mftDll))) {
+    Invoke-Change "remove $(Split-Path $mftDll) (the H.264 encoder MFT of an earlier install; this release does not register it)" {
+        Remove-PathOrSchedule (Split-Path $mftDll)
     } | Out-Null
 }
 Invoke-Change "copy the installer's own scripts to $InstallRoot\installer (uninstall works without the package folder)" {
@@ -896,12 +970,21 @@ if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $sta
     foreach ($p in $state.parameters_before_install.PSObject.Properties) { $parametersBefore[$p.Name] = $p.Value }
     Write-Info "driver settings from before the first driver package install of this run: $($parametersBefore.Count) values"
 } else {
+    # The whole key, not only the names this release judges. The driver package install takes the other values of the
+    # service key away, and a value this release knows nothing about is still the tester's setting: unit A lost
+    # CuMode 40 at every release install until this release, which halved its compute units with nothing saying so.
     $all = Read-RegistryValues $script:ParametersKey
-    foreach ($n in $judgedNames) { if ($all.ContainsKey($n)) { $parametersBefore[$n] = $all[$n] } }
+    foreach ($n in $all.Keys) { $parametersBefore[$n] = $all[$n] }
     Set-StateValue $state 'parameters_before_install' ([pscustomobject]$parametersBefore)
     Save-InstallState $state
-    Write-Info "driver settings before the driver package: $($parametersBefore.Count) of $(@($judgedNames).Count) values present"
+    Write-Info "driver settings before the driver package: $($parametersBefore.Count) values under Parameters, $(@(@($judgedNames) | Where-Object { $parametersBefore.ContainsKey($_) }).Count) of $(@($judgedNames).Count) judged by this release"
 }
+# Values outside the table and outside the command line go back as they were (Get-RegistryDefaultPlan -Restore): the
+# INF's own names, and every other value the key held before. A value whose type the plan cannot write back is named
+# here and left to the driver package.
+$restoreNames = @(@($infParameterNames) + @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and (Test-RestorableRegistryValue $parametersBefore[$_]) })) | Select-Object -Unique
+$keptBack = @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and -not (Test-RestorableRegistryValue $parametersBefore[$_]) })
+if ($keptBack.Count) { Write-Warn2 "not written back after the driver package (the plan writes REG_DWORD, REG_SZ and REG_MULTI_SZ only): $($keptBack -join ', ')" }
 
 # The driver package. Its INF carries the Reboot directive (build-release.ps1): Windows installs the package but does
 # not restart a GPU that is already started (on Microsoft Basic Display or on the previous release), so the desktop
@@ -986,10 +1069,10 @@ $record = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name 
 if ($record) { try { $applied = $record | ConvertFrom-Json } catch { Write-Warn2 "Release\AppliedDefaults does not parse: $($_.Exception.Message)" } }
 if (-not $applied) { $applied = $regDefaults.legacy_applied; $appliedSource = 'the defaults of tester.1 to tester.7 (no record)' }
 Write-Info "previous installer defaults: $appliedSource"
-function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @()) {
+function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @(), [switch]$Reopen) {
     $now = Read-RegistryValues $Key
-    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned }
-    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore }
+    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned -Reopen:$Reopen }
+    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore -Reopen:$Reopen }
     Invoke-Change ("${Key}: " + (Format-RegistryPlan $plan)) { Write-RegistryPlan $Key $plan } | Out-Null
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
@@ -997,7 +1080,7 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 # the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
 # from before pnputil; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
 # pnputil back.
-Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $infParameterNames
+Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames -Reopen:$script:ReopenClosures
 
 # Graphics registration in the GPU's software key: D3D9/10/11 slots, D3D12 slot, Vulkan.
 $umd = @('bc250umd.dll', (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'), (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
@@ -1023,6 +1106,50 @@ Invoke-Change "$($script:KhronosKeyWow) '$icdJsonWow' = 0 (32-bit system Vulkan 
     New-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_wow_value' $icdJsonWow
+
+# The H.264 encoder MFT (M15.11): route A of driver/umd/mft-h264/INSTALL.md, machine wide under
+# HKLM\SOFTWARE\Classes, which is what HKCR gives every process. A client that wants the encoder of one adapter asks
+# Media Foundation with MFT_ENUM_ADAPTER_LUID; the registration holds no LUID and cannot hold one, because Windows
+# gives a LUID at boot (INSTALL.md, "What a per-adapter enumeration needs"). The four binary values come out of the
+# shipped DLL itself (Bc250BuildMftRegistration), so the enumeration view and the live object cannot differ.
+# The encoder is an extra, never a condition of the driver: a computer whose Windows edition has no Media Foundation
+# gets a warning here and the rest of the install.
+if ($mftAction -eq 'register') {
+    $mftBlobs = $null
+    # The installed copy, under %ProgramFiles%, not the package copy: the package can sit on a file server, and a UNC
+    # path is not a path the interop of mft-h264.ps1 takes. A dry run has copied nothing, so there the package copy is
+    # the only one there is.
+    $mftBlobDll = $mftDll
+    if (-not (Test-Path -LiteralPath $mftBlobDll -PathType Leaf)) { $mftBlobDll = $mft.source }
+    try { $mftBlobs = Get-MftRegistrationBlobs -DllPath $mftBlobDll }
+    catch { Write-Warn2 "the H.264 encoder MFT is NOT registered: $($_.Exception.Message). The driver itself is not affected." }
+    if ($mftBlobs) {
+        Write-Info "H.264 encoder MFT: $($mft.name) $($mft.clsid), registration values from $(if ($mftBlobDll -eq $mft.source) { $mft.package_path } else { $mft.install_path })"
+        # The encoder is an extra: a registry key that this computer does not let us write ends the step with a
+        # warning, never the install of the driver (the comment above this block). Invoke-Change itself throws on to
+        # the top-level trap, so the catch has to be outside it.
+        try {
+            Invoke-Change ('register the H.264 encoder MFT: ' + (Format-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)) {
+                [void](Write-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs)
+                $mftCheck = Test-MftRegistration -ClassesKey $script:ClassesKey -DllPath $mftDll -Blobs $mftBlobs
+                if (-not $mftCheck.ok) { throw "the H.264 encoder MFT registration does not read back: $($mftCheck.detail)" }
+            } | Out-Null
+            Set-StateValue $state 'mft_h264' $mftDll
+        } catch {
+            Write-Warn2 "the H.264 encoder MFT is NOT registered: $($_.Exception.Message). The driver itself is not affected."
+            Set-StateValue $state 'mft_h264' $null
+        }
+    } else { Set-StateValue $state 'mft_h264' $null }
+} elseif ($mftAction -eq 'rollback') {
+    # The registration of an earlier install went in the files stage, before its DLL: the keys must never outlive the
+    # file they name.
+    if ($mftKeys.Count) { Write-Info 'H.264 encoder MFT: the registration of an earlier install was removed with its file, in the files stage' }
+    else { Write-Info 'H.264 encoder MFT: not registered by this release; no registry key of an earlier install' }
+    Set-StateValue $state 'mft_h264' $null
+} else {
+    Write-Info 'H.264 encoder MFT: not registered by this release, and nothing of an earlier install on this computer'
+    Set-StateValue $state 'mft_h264' $null
+}
 
 # Router policy (HKLM\SOFTWARE\amdgpu-wddm). DesktopRouter DwmForceCpu 0 composes the desktop on the GPU route (zink);
 # 1 is the kill switch to the CPU route (tester.1 to tester.8 shipped 1 until BD-058 was fixed). RequireKmdSwitches 1

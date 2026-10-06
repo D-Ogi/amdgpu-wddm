@@ -10,10 +10,10 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D10DDIARG_CREATEELEMENTLAYOUT *d
     if (storage) storage->object=nullptr;
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!storage || !desc) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!storage || !desc) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         HRESULT hr=bc250_create_engine_input_layout(owner.engine(),*desc,&storage->object);
-        if (FAILED(hr)) report_ddi_error(owner,hr);
-    });
+        if (FAILED(hr)) report_ddi_error(owner,hr,DdiErrorClass::out_of_memory);
+    },DdiErrorClass::out_of_memory);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HELEMENTLAYOUT layout) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {

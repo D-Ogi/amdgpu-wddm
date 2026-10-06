@@ -55,15 +55,15 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D10_DDI_SAMPLER_DESC *desc,
     if (storage) storage->object=nullptr;
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!storage || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
-        if (desc->Filter==D3D10_DDI_FILTER_TEXT_1BIT) { report_ddi_error(owner,E_NOTIMPL); return; }
+        if (!storage || !desc || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
+        if (desc->Filter==D3D10_DDI_FILTER_TEXT_1BIT) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         const auto converted=convert_sampler(*desc);
         HRESULT hr=owner.device()->CreateSamplerState(&converted,&storage->object);
         if (FAILED(hr)) {
             if (storage->object) { storage->object->Release(); storage->object=nullptr; }
-            report_ddi_error(owner,hr);
-        } else if (!storage->object) report_ddi_error(owner,E_FAIL);
-    });
+            report_ddi_error(owner,hr,DdiErrorClass::out_of_memory);
+        } else if (!storage->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory);
+    },DdiErrorClass::out_of_memory);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HSAMPLER sampler) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
@@ -75,7 +75,7 @@ template<auto Set> void APIENTRY bind(D3D10DDI_HDEVICE h,UINT first,UINT count,c
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         constexpr UINT limit=D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT;
         if (first>=limit || count>limit-first || (count && !samplers)) {
-            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,E_INVALIDARG); return;
+            report_ddi_error(*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner,D3DDDIERR_DEVICEREMOVED); return;
         }
         std::array<ID3D11SamplerState *,limit> states{};
         for (UINT i=0;i<count;++i) {

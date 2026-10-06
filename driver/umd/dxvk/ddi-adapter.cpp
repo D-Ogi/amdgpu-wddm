@@ -4,6 +4,7 @@
 #include "ddi-negotiation.h"
 #include "diagnostics.h"
 #include "../d3d12/instance-policy.h"
+#include "../recent-launch/recent-launch.h"
 #include <mutex>
 #include <string>
 #include <memory>
@@ -90,6 +91,8 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
         HRESULT hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps,a->policy_flags);
         if (!a->failed.back().owner) a->failed.pop_back();
         if(FAILED(hr))failure_diagnostic("CreateDevice",hr);
+        // The outer device exists: note the launch once per process, off this thread (recent-launch.h).
+        else amdgpu_wddm::recent_launch::note_outer_device(amdgpu_wddm::recent_launch::ApiD3D11);
         return hr;
     } catch (const std::bad_alloc &) {return E_OUTOFMEMORY;}
       catch (...) {return E_FAIL;}

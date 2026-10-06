@@ -38,26 +38,27 @@ int main(){
   return query_sparse_policy(expected,kmt,&policy,&unresolved)==S_OK && policy.sparse==sparse && policy.source==source &&
          policy.status==query_status && closes==before+1 && !unresolved;
  };
- // The value as written: 1 on, 0 off, anything else off.
+ // The value as written: 1 on, 0 off. Only that 0 turns it off; anything else keeps the default on and says
+ // in the source why, so that the caller logs it.
  answer_value=1;assert(resolved(true,Source::RegistryOn));
  answer_value=0;assert(resolved(false,Source::RegistryOff));
- answer_value=2;assert(resolved(false,Source::Invalid));
- answer_value=0xffffffffu;assert(resolved(false,Source::Invalid));
- answer_value=1;answer_size=8;assert(resolved(false,Source::Invalid));
- answer_size=0;assert(resolved(false,Source::Invalid));answer_size=sizeof(DWORD);
- answer_status=D3DDDI_QUERYREGISTRY_STATUS_BUFFER_OVERFLOW;assert(resolved(false,Source::Invalid));
- answer_status=D3DDDI_QUERYREGISTRY_STATUS_MAX;assert(resolved(false,Source::Invalid));
- // The payload's FAIL does not say that the value is missing: off, whatever the output fields hold.
- answer_status=D3DDDI_QUERYREGISTRY_STATUS_FAIL;answer_value=1;assert(resolved(false,Source::Unreadable));
- answer_value=0;assert(resolved(false,Source::Unreadable));
+ answer_value=2;assert(resolved(true,Source::Invalid));
+ answer_value=0xffffffffu;assert(resolved(true,Source::Invalid));
+ answer_value=1;answer_size=8;assert(resolved(true,Source::Invalid));
+ answer_size=0;assert(resolved(true,Source::Invalid));answer_size=sizeof(DWORD);
+ answer_status=D3DDDI_QUERYREGISTRY_STATUS_BUFFER_OVERFLOW;assert(resolved(true,Source::Invalid));
+ answer_status=D3DDDI_QUERYREGISTRY_STATUS_MAX;assert(resolved(true,Source::Invalid));
+ // The payload's FAIL does not say that the value is 0: the default stays, whatever the output fields hold.
+ answer_status=D3DDDI_QUERYREGISTRY_STATUS_FAIL;answer_value=1;assert(resolved(true,Source::Unreadable));
+ answer_value=0;assert(resolved(true,Source::Unreadable));
  answer_status=D3DDDI_QUERYREGISTRY_STATUS_SUCCESS;
  // The system names the value as not found: the default, on. The output fields are not read.
  query_status=static_cast<NTSTATUS>(0xc0000034u);assert(resolved(true,Source::Default));
- // A key that cannot be asked: off, and the call itself succeeds. The answer's fields are not read.
+ // A key that cannot be asked: the default again, and the call itself succeeds. Its fields are not read.
  answer_value=1;
  const auto failure=static_cast<NTSTATUS>(0xc0000001u);
- query_status=failure;assert(resolved(false,Source::Unreadable));
- query_status=0x103;assert(resolved(false,Source::Unreadable));query_status=0;
+ query_status=failure;assert(resolved(true,Source::Unreadable));
+ query_status=0x103;assert(resolved(true,Source::Unreadable));query_status=0;
  // Open and close failures are errors of the call; a failed close hands the handle over.
  const unsigned asked=queries;
  open_status=failure;policy.sparse=true;
@@ -73,6 +74,6 @@ int main(){
  assert(query_sparse_policy(expected,kmt,&policy,&unresolved)==E_UNEXPECTED && !policy.sparse && unresolved==0x12345678);
  close_status=0;
  assert(resolved(true,Source::RegistryOn));
- std::puts("PASS instance policy: value 1 on, 0 off, named not found on, invalid, failed or unreadable off, "
-           "close failure hands the adapter over");
+ std::puts("PASS instance policy: value 1 on, only 0 off, named not found, invalid and unreadable all keep the "
+           "default on, close failure hands the adapter over");
 }

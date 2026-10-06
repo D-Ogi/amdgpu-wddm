@@ -29,14 +29,20 @@ struct bc250_host_import {
    uint32_t flags;
    uint64_t va, size;
 };
+/* Both endpoints live in one process and are built for one target, so the layout is that target's natural one,
+ * pinned here per target. MSVC x86 (the WoW64 UMDs): pointers are 4 bytes, flags follows allocation at offset 16,
+ * 4 bytes of padding put va at 24, 40 bytes in all. A 32-bit GCC aligns uint64_t to 4 and is not supported. */
 #if defined(_M_X64) || defined(__x86_64__)
-#ifdef __cplusplus
-static_assert(sizeof(bc250_host_import) == 48, "bc250_host_import layout");
+#define BC250_HOST_IMPORT_LAYOUT_BYTES 48
+#elif defined(_M_IX86)
+#define BC250_HOST_IMPORT_LAYOUT_BYTES 40
 #else
-_Static_assert(sizeof(struct bc250_host_import) == 48, "bc250_host_import layout");
+#error "bc250_host_import is defined for x64 and MSVC x86 only"
 #endif
+#ifdef __cplusplus
+static_assert(sizeof(bc250_host_import) == BC250_HOST_IMPORT_LAYOUT_BYTES, "bc250_host_import layout");
 #else
-#error "bc250_host_import is defined for x64 only"
+_Static_assert(sizeof(struct bc250_host_import) == BC250_HOST_IMPORT_LAYOUT_BYTES, "bc250_host_import layout");
 #endif
 /* The host answers Lock2 and Unlock2 for this allocation: vkMapMemory may map it. Without the bit a
  * borrowed allocation is never mapped by the ICD. */
