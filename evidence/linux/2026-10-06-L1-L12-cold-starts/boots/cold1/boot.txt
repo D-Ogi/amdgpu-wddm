@@ -1,0 +1,6 @@
+label cold1
+uptime 29.35
+date_utc_skewed 2026-10-06T15:18:24Z
+boot_id [uuid redacted]
+amdgpu_loaded 0
+cmdline BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=network

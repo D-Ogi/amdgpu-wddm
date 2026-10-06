@@ -1,0 +1,22 @@
+label warm-after-amdgpu
+uptime 33.09
+date_utc_skewed 2026-10-06T15:24:41Z
+boot_id [uuid redacted]
+amdgpu_loaded 0
+cmdline BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=network
+		LnkSta:	Speed 5GT/s, Width x2
+			TrErr- Train- SlotClk+ DLActive+ BWMgmt- ABWMgmt-
+--
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+			 Transmit Margin: Normal Operating Range, EnterModifiedCompliance- ComplianceSOS-
+--
+== nvme
+nvme0
+GC.SDMA0_DEC_START 0x04980 00000000
+== positive control: the two values every later reading is checked against
+GC.CC_GC_SHADER_ARRAY_CONFIG 0x089bc FFF80000
+GC.GB_ADDR_CONFIG 0x098f8 00000044
+== ---- step sweep rc=0 after 22s
+== done. Pull it with:  tar -C /media/usb/l1006c/out/warm-after-amdgpu -cf - collect
+sweep lines: 6315
+DONE-warm-after-amdgpu

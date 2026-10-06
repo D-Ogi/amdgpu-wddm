@@ -11,10 +11,12 @@ flowchart LR
   M1["M1"]
   M4["M4"]
   M5["M5<br/>linux"]
+  M6["M6"]
   M9["M9"]
   M11["M11"]
   M12["M12<br/>linux"]
   M15["M15"]
+  M19["M19"]
   M35["M35"]
   M39["M39"]
   M44["M44"]
@@ -30,6 +32,8 @@ flowchart LR
   M789["M789"]
   M804["M804"]
   M807["M807"]
+  M812["M812"]
+  M813["M813"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -49,6 +53,8 @@ flowchart LR
   M789 -.->|refutes| M90
   M804 ==>|supports| M787
   M807 ==>|supports| M789
+  M812 ==>|supports| M19
+  M813 ==>|supports| M6
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
   M333 ==>|supersedes| M35
@@ -57,6 +63,8 @@ flowchart LR
 ```
 
 ## References
+
+### Part 1
 
 ```mermaid
 flowchart LR
@@ -69,6 +77,7 @@ flowchart LR
   M18["M18"]
   M19["M19"]
   M20["M20"]
+  M21["M21"]
   M22["M22"]
   M24["M24<br/>linux"]
   M25["M25"]
@@ -86,6 +95,7 @@ flowchart LR
   M44["M44"]
   M46["M46<br/>linux"]
   M47["M47"]
+  M48["M48<br/>linux"]
   M53["M53<br/>linux"]
   M54["M54<br/>linux"]
   M55["M55<br/>linux"]
@@ -103,8 +113,6 @@ flowchart LR
   M333["M333<br/>linux"]
   M348["M348<br/>kmd"]
   M349["M349"]
-  M429["M429"]
-  M433["M433"]
   M776["M776<br/>games"]
   M785["M785"]
   M787["M787"]
@@ -116,6 +124,10 @@ flowchart LR
   M805["M805<br/>linux"]
   M806["M806"]
   M807["M807"]
+  M812["M812"]
+  M813["M813"]
+  M814["M814"]
+  M815["M815"]
   M2 --> M1
   M3 --> M4
   M18 --> M4
@@ -134,7 +146,6 @@ flowchart LR
   M59 --> M55
   M95 --> M53
   M349 --> M348
-  M433 --> M429
   M785 --> M47
   M787 --> M46
   M789 --> M776
@@ -145,6 +156,13 @@ flowchart LR
   M806 --> M807
   M807 --> M776
   M807 --> M805
+  M812 --> M4
+  M812 --> M5
+  M813 --> M48
+  M813 --> M812
+  M814 --> M6
+  M814 --> M812
+  M815 --> M21
   M37 --> M33
   M37 --> M39
   M81 --> M30
@@ -160,6 +178,16 @@ flowchart LR
   M55 --> M44
   M805 --> M47
   classDef other stroke-dasharray:4 3
-  class M5,M24,M37,M40,M41,M46,M53,M54,M55,M81,M85,M106,M117,M118,M333,M348,M776,M801,M805 other
+  class M5,M24,M37,M40,M41,M46,M48,M53,M54,M55,M81,M85,M106,M117,M118,M333,M348,M776,M801,M805 other
+```
+
+### Part 2
+
+```mermaid
+flowchart LR
+  M429["M429"]
+  M433["M433"]
+  M433 --> M429
+  classDef other stroke-dasharray:4 3
 ```
 

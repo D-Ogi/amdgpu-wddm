@@ -1,0 +1,13 @@
+This directory is a raw capture. It redacts nothing, on purpose: a capture that edits itself is a
+capture nobody can check (docs/01-evidence-rules.md, "Never edit afterwards").
+
+Before any of it is copied into evidence/, run it through
+experiments/E13-linux-reference-2/redact.py on the development PC and put the provenance line
+"Copied through redact.py, nothing edited by hand." into the directory's README.txt.
+
+What is in here that must not reach the repository:
+  - MAC addresses (dmesg.txt, lspci-*.txt, interrupts, anything the network came up in)
+  - the Wi-Fi SSID and anything of wpa_supplicant (dmesg.txt)
+  - board and USB serial numbers, UUIDs (dmesg.txt, lspci-*.txt, iomem.txt, ip_discovery.txt)
+  - the EDID, which this script does not read on purpose - check anyway
+Firmware blobs and ACPI tables are not captured here and stay outside the repository in any case.

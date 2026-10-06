@@ -1,0 +1,78 @@
+warm-after-windows: 5021 registers
+cold1: 5021 registers
+cold2: 5021 registers
+cold3: 5021 registers
+warm-after-amdgpu: 5021 registers
+
+== cold1 vs cold2: 468 differ
+  GC.CB_BLEND0_CONTROL                             4FCC08FF 0FDC08FF
+  GC.CB_BLEND1_CONTROL                             8B45000E 8345000E
+  GC.CB_BLEND2_CONTROL                             D9DD1691 CDD91791
+  GC.CB_BLEND3_CONTROL                             58C9080F 58CD000F
+  GC.CB_BLEND5_CONTROL                             B33A1D9E B33A1D9F
+  GC.CB_BLEND7_CONTROL                             C21F039F C21F039E
+  GC.CB_BLEND_BLUE                                 F9B6FDC2 F9B7FDC2
+  GC.CB_BLEND_GREEN                                114063FC 114067FC
+  GC.CB_BLEND_RED                                  604EFEF7 604EBEF5
+  GC.CB_COLOR0_ATTRIB                              00065154 000E5154
+  GC.CB_COLOR0_BASE                                9771DDCE 9E715FCE
+  GC.CB_COLOR0_CLEAR_WORD0                         ECFFBE3C ECFB3E3C
+
+== cold2 vs cold3: 450 differ
+  GC.CB_BLEND0_CONTROL                             0FDC08FF 4FCC00FF
+  GC.CB_BLEND2_CONTROL                             CDD91791 DDD91791
+  GC.CB_BLEND7_CONTROL                             C21F039E 421F039F
+  GC.CB_BLEND_GREEN                                114067FC 505E67FC
+  GC.CB_BLEND_RED                                  604EBEF5 205EBED5
+  GC.CB_COLOR0_ATTRIB                              000E5154 00065154
+  GC.CB_COLOR0_ATTRIB2                             1A9C9C52 9A9C9C52
+  GC.CB_COLOR0_BASE                                9E715FCE 9E715DCE
+  GC.CB_COLOR0_CLEAR_WORD0                         ECFB3E3C ECFFBE3C
+  GC.CB_COLOR0_CLEAR_WORD1                         F95B5BCE 79DB5BEE
+  GC.CB_COLOR0_CMASK                               35D6993F 25F6993F
+  GC.CB_COLOR0_CMASK_SLICE                         00000E5A 00000D5A
+
+== cold1 vs cold3: 472 differ
+  GC.CB_BLEND0_CONTROL                             4FCC08FF 4FCC00FF
+  GC.CB_BLEND1_CONTROL                             8B45000E 8345000E
+  GC.CB_BLEND2_CONTROL                             D9DD1691 DDD91791
+  GC.CB_BLEND3_CONTROL                             58C9080F 58CD000F
+  GC.CB_BLEND5_CONTROL                             B33A1D9E B33A1D9F
+  GC.CB_BLEND7_CONTROL                             C21F039F 421F039F
+  GC.CB_BLEND_BLUE                                 F9B6FDC2 F9B7FDC2
+  GC.CB_BLEND_GREEN                                114063FC 505E67FC
+  GC.CB_BLEND_RED                                  604EFEF7 205EBED5
+  GC.CB_COLOR0_ATTRIB2                             1A9C9C52 9A9C9C52
+  GC.CB_COLOR0_BASE                                9771DDCE 9E715DCE
+  GC.CB_COLOR0_CLEAR_WORD1                         79DB5BCE 79DB5BEE
+
+== cold1 vs warm-after-windows: 690 differ
+  GC.CB_BLEND0_CONTROL                             4FCC08FF 00000000
+  GC.CB_BLEND1_CONTROL                             8B45000E 00000000
+  GC.CB_BLEND2_CONTROL                             D9DD1691 00000000
+  GC.CB_BLEND3_CONTROL                             58C9080F 00000000
+  GC.CB_BLEND4_CONTROL                             5F781F03 00000000
+  GC.CB_BLEND5_CONTROL                             B33A1D9E 00000000
+  GC.CB_BLEND6_CONTROL                             E3201012 00000000
+  GC.CB_BLEND7_CONTROL                             C21F039F 00000000
+  GC.CB_BLEND_ALPHA                                8686F7C0 00000000
+  GC.CB_BLEND_BLUE                                 F9B6FDC2 00000000
+  GC.CB_BLEND_GREEN                                114063FC 00000000
+  GC.CB_BLEND_RED                                  604EFEF7 00000000
+
+== cold3 vs warm-after-amdgpu: 506 differ
+  GC.CB_BLEND0_CONTROL                             4FCC00FF 00000000
+  GC.CB_BLEND1_CONTROL                             8345000E 00000000
+  GC.CB_BLEND2_CONTROL                             DDD91791 00000000
+  GC.CB_BLEND3_CONTROL                             58CD000F 00000000
+  GC.CB_BLEND4_CONTROL                             5F781F03 00000000
+  GC.CB_BLEND5_CONTROL                             B33A1D9F 00000000
+  GC.CB_BLEND6_CONTROL                             E3201012 00000000
+  GC.CB_BLEND7_CONTROL                             421F039F 00000000
+  GC.CB_BLEND_ALPHA                                8686F7C0 00000000
+  GC.CB_BLEND_BLUE                                 F9B7FDC2 00000000
+  GC.CB_BLEND_GREEN                                505E67FC 00000000
+  GC.CB_BLEND_RED                                  205EBED5 00000000
+
+== vary across cold1-3: 557
+  by block: {'GC': 555, 'MP0': 1, 'MP1': 1}

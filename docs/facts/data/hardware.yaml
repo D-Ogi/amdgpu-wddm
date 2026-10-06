@@ -106,8 +106,8 @@ facts:
     date: "2026-09-21"
     date_from: "git"
     claim: "The 468 registers that differ are not a Windows effect"
-    status_text: "MEASURED for the pattern, HYPOTHESIS for the cause"
-    detail: "457 of them differ in 1-5 bits of random-looking values (context registers `PA_*`, `CB_*`, `SPI_*`, `COMPUTE_*`, `GRBM_SCRATCH_REG1-7`, `CP_DMA_WATCH*`): consistent with flops that nothing initializes and that power up slightly differently each time. The rest are clocks/timestamps and three PSP mailbox registers whose values match the earlier Linux session *after* amdgpu, i.e. PSP state that survived a restart. To confirm: a second sweep after a recorded cold start"
+    status_text: "MEASURED for the pattern, the per-power-up cause confirmed by M812 (2026-10-06)"
+    detail: "457 of them differ in 1-5 bits of random-looking values (context registers `PA_*`, `CB_*`, `SPI_*`, `COMPUTE_*`, `GRBM_SCRATCH_REG1-7`, `CP_DMA_WATCH*`): consistent with flops that nothing initializes and that power up slightly differently each time. The rest are clocks/timestamps and three PSP mailbox registers whose values match the earlier Linux session *after* amdgpu, i.e. PSP state that survived a restart. Three sweeps after recorded cold starts confirm the per-power-up cause (M812, 2026-10-06)"
   - id: M20
     status: MEASURED
     date: "2026-09-21"
@@ -700,6 +700,47 @@ facts:
       - {"type": "uses", "to": "M776"}
       - {"type": "uses", "to": "M805"}
       - {"type": "supports", "to": "M789"}
+  - id: M812
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The pre-driver register state of unit A changes with every power-up (L1, three recorded cold starts with 30 s without AC, 2026-10-06). Of 5021 registers per sweep, 468, 450 and 472 differ between the pairs of cold starts, and 557 vary across the three: 555 in GC, and `MP0_SMN_C2PMSG_81` read through the MP0 and the MP1 apertures (M814). The differences are small: for each register the largest bit distance between two cold starts has the median 2, and 477 of the 557 differ by at most 3 bits. The widest are timers (`RLC_REFCLOCK_TIMESTAMP_LSB`, `RLC_GPU_CLOCK_32`, `SQ_TIME_LO`). The varying registers are context and dispatch registers that no one initializes before a driver (`CB_BLEND*`, `CB_COLOR*`, `PA_CL_VPORT_*`, `SPI_PS_INPUT_CNTL_*`, `COMPUTE_*`). This confirms the cause that M19 gave as a hypothesis"
+    status_text: "MEASURED (unit A, three cold starts, positive control in every sweep)"
+    detail: "`GB_ADDR_CONFIG = 0x44` and `CC_GC_SHADER_ARRAY_CONFIG = 0xFFF80000` in all five sweeps of the visit. A register is a sweep line with an upper-case name and an 8-digit hex value, compared as a string (`analysis/l1_compare.py`). The stick-side `cmp.sh` of the same visit is not valid: its `awk` compares hex values such as `000000E0` as numbers. A pre-driver sweep therefore never proves a register change by itself: compare two sweeps of the same boot, or a sweep with a known cold or warm history"
+    evidence: "[L1006 visit 3, L1](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M4"}
+      - {"type": "uses", "to": "M5"}
+      - {"type": "supports", "to": "M19"}
+  - id: M813
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "A warm restart of unit A stops the engines but keeps register contents that no reset touches (L2, 2026-10-06). After a warm restart out of Windows with our KMD and after a warm restart from an amdgpu boot, the engine registers read the BIOS handover values of M6, the same as after the cold starts: `CP_ME_CNTL = 0x15000000`, `CP_MEC_CNTL = 0x50000000`, `RLC_CNTL = RLC_STAT = 0`, `SDMA0/1_F32_CNTL = 1`, `GRBM_STATUS = 0x3028`, `CP_RB0_BASE = 0xFEDCBAEF`, `CP_RB0_RPTR = CP_RB0_WPTR = 0`, `MP0_SMN_C2PMSG_64 = 0x80000000`. The boot after Windows still holds a compute dispatch: `COMPUTE_DIM_X/Y/Z = 0x30, 1, 1`, `COMPUTE_NUM_THREAD_X = 0x00400040`, `COMPUTE_PGM_LO = 0x010028C3`, `COMPUTE_PGM_RSRC1 = 0x202C0001`, `COMPUTE_DISPATCH_INITIATOR = 0x2047`. The boot after amdgpu keeps the power-up values of the cold start before it in 166 of the 557 power-up registers of M812"
+    status_text: "MEASURED (unit A, two warm restarts, n = 1 each)"
+    detail: "Of the 557 registers of M812, 385 read 0 after the restart out of Windows and 359 after the restart from amdgpu. These data do not show whether the restart or the driver before it cleared them. 190 registers differ between the two warm boots, 42 of them `COMPUTE_*`, 66 `PA_*` and 55 `SPI_*`. Under Windows only our driver stack drives the GPU, so the dispatch is most likely the last one of the Windows session. Consequence for a driver: after a warm restart, do not read engine or dispatch registers as proof of what the current boot did. The run state of the engines is reset, so an engine needs the same bring-up as after a cold start"
+    evidence: "[L1006 visit 3, L2](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M48"}
+      - {"type": "uses", "to": "M812"}
+      - {"type": "supports", "to": "M6"}
+  - id: M814
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "`MP0_SMN_C2PMSG_81` (SMN `0x58244`) tells a cold start of unit A from a warm restart before any driver loads (2026-10-06): it reads `0x0043xxxx` after each of three cold starts (`0x004314EE`, `0x0043192E`, `0x00431AC5`) and `0x002Bxxxx` after each of two warm restarts (`0x002B3EF6`, `0x002B2155`). A second read later in the same sweep is higher in every boot, so the register most likely counts"
+    status_text: "MEASURED (unit A, three cold starts, two warm restarts)"
+    detail: "The sweeps ran 29 to 38 s after the kernel started. The split can be a different count since the PSP started, not a flag. Use it as a cold or warm marker only together with the uptime of the read. M6 read `0x002AFC44` in a boot of unrecorded history"
+    evidence: "[L1006 visit 3, C2PMSG_81](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M6"}
+      - {"type": "uses", "to": "M812"}
+  - id: M815
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The M.2 link of unit A came up in all five recorded starts of 2026-10-06 (L12: three cold starts with 30 s without AC, two warm restarts). Root port `00:15.0` reads `LnkSta 5 GT/s x2`, equal to its `LnkCap` maximum, with `LnkCtl2` target 5 GT/s, and the NVMe device `03:00.0` and its partitions are present each time. The port has no Advanced Error Reporting capability (its only extended capability is vendor-specific, at `0x100`) and sysfs has no `aer_*` file for it, so there are no AER counters to read"
+    status_text: "MEASURED (unit A, n = 5 starts, no loss)"
+    detail: "The kernel reports that the port limits the SSD to 5 GT/s x2 (the SSD can do 8 GT/s x4). M21's lost link did not occur in these five starts. With no AER, the next loss can only show as `LnkSta` without a link partner or as a missing `03:00.0`"
+    evidence: "[L1006 visit 3, L12](../evidence/linux/2026-10-06-L1-L12-cold-starts/README.md)"
+    edges:
+      - {"type": "uses", "to": "M21"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

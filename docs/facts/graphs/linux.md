@@ -81,6 +81,8 @@ flowchart LR
   M808["M808"]
   M809["M809"]
   M810["M810"]
+  M812["M812<br/>hardware"]
+  M813["M813<br/>hardware"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -91,6 +93,8 @@ flowchart LR
   M787 --> M46
   M804 --> M46
   M807 --> M805
+  M812 --> M5
+  M813 --> M48
   M78 --> M55
   M113 --> M40
   M114 --> M40
@@ -115,6 +119,6 @@ flowchart LR
   M809 --> M91
   M810 --> M788
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M788,M801,M804,M807 other
+  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M788,M801,M804,M807,M812,M813 other
 ```
 

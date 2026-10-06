@@ -1,0 +1,7 @@
+== pre-driver sweep, streamed: the last unfinished line is the register that hung us
+==    6315 lines
+# sweep_stream kernel=6.18.52-0-lts driver='' items=6313 time=2026-10-06T15:15:14Z
+GC.SDMA0_DEC_START 0x04980 00000000
+== positive control: the two values every later reading is checked against
+GC.CC_GC_SHADER_ARRAY_CONFIG 0x089bc FFF80000
+GC.GB_ADDR_CONFIG 0x098f8 00000044

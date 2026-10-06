@@ -1,0 +1,6 @@
+label warm-after-windows
+uptime 29.46
+date_utc_skewed 2026-10-06T15:15:14Z
+boot_id [uuid redacted]
+amdgpu_loaded 0
+cmdline BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=network
