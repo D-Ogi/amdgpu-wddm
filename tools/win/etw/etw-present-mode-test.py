@@ -127,6 +127,27 @@ def consumed(time, count):
             % (time, DWM, LUID, count))
 
 
+def consumed_struct(time, count):
+    """The same row with its surfaceLuid expanded, which is how the dumper writes a LUID when the manifest
+    gives it as a struct. Reading that cell as one number returns nothing, and a consumption nobody decoded
+    looks exactly like a present nobody consumed."""
+    return ('Microsoft-Windows-Dwm-Core/Dx_Flip_Consumed/win:Info, %9d, %24s, 100, 0, , , , ,'
+            ' 0x243c1, 0x243c1, 1, 4352, 3, [{lowpart : 0x%08X; highpart : 0x00000000}], 1, %d,'
+            ' [{left : 0; top : 0; right : 1920; bottom : 1200}]' % (time, DWM, LUID, count))
+
+
+def consumed_without_luid(time, count):
+    """A consumption row whose layout has no surface LUID at all: the key cannot be built from it."""
+    return ('Microsoft-Windows-Dwm-Core/Dx_Flip_Consumed/win:Info, %9d, %24s, 100, 0, , , , ,'
+            ' 0x243c1, 0x243c1, 1, 4352, 3, 1, %d, [{left : 0; top : 0; right : 1920; bottom : 1200}]'
+            % (time, DWM, count))
+
+
+def header_with(replacement):
+    """The header block with the Dx_Flip_Consumed line's LUID column rewritten."""
+    return [line.replace(' uniqueId, surfaceLuid, bindId,', replacement) for line in HEADER]
+
+
 def surface_update(time, count, direct, independent, scanout):
     return ('Microsoft-Windows-Dwm-Core/SCHEDULE_SURFACEUPDATE/win:Info, %9d, %24s, 100, 0, , , , ,'
             ' [{lowpart : 0x%08X; highpart : 0x00000000}], 0x0000000000000001, 0x%016X,'
@@ -192,6 +213,21 @@ def mixed_dump():
              packet(48950, DWM, 7004), independent_flip(49100, 7004, 1),
              packet(48960, GAME, 7005, present=False)]
     return '\n'.join(HEADER + rows) + '\n'
+
+
+def composed_dump(consumed_row=consumed, header=None):
+    """One composed present of the client, and ANOTHER process flipping its own buffers in the same capture.
+
+    The inert control is about the route of one process. A capture holds the whole desktop, so the second
+    half of this dump is what a trace-wide count would read as "our client moved".
+    """
+    rows = [detailed(1000, GAME, 0xC1), present_call(1010, GAME), surface_object(1100, GAME, 0xC1, 1),
+            state(1200, 1, False, False, 3), surface_update(1250, 1, 1, 0, True),
+            packet(950, GAME, 9001),
+            packet(960, DWM, 9002), independent_flip(1280, 9002, 1), mmio_flip(1290, 9002, 4)]
+    if consumed_row is not None:
+        rows.append(consumed_row(1400, 1))
+    return '\n'.join((header or HEADER) + rows) + '\n'
 
 
 def true_dump(dpc_address=ADMITTED):
@@ -454,6 +490,49 @@ def synthetic_cases(check):
         check.present('a missing header line is reported, not ignored',
                       r"rows with no usable header layout: \{'Microsoft-Windows-DxgKrnl/MMIOFlip/win:Info': 3\}",
                       done.stdout)
+
+        # The inert control is per process. Another process's independent flip is a warning on the line,
+        # not a verdict about our client: a trace-wide count would send the lead rolling back a route that
+        # never moved.
+        composed = Path(directory) / 'composed.txt'
+        composed.write_text(composed_dump(), encoding='utf-8')
+        done = run(composed, 'flipclient')
+        check.check('the parser runs over the composed dump', done.returncode == 0, done.stderr[-400:])
+        check.present("another process's flip does not fail this client's control",
+                      r'no_independent_flip\s+PASS\s+0 naming this process, 1 elsewhere in the trace '
+                      r'\(another process flipping its own buffers is not this verdict', done.stdout)
+        check.present('so the client reads INERT',
+                      r'M15\.14 INCREMENT1 "flipclient\.exe" \(4242\): .*no_independent_flip=PASS '
+                      r'no_plane_for_this_process=PASS result=INERT', done.stdout)
+        done = run(composed, 'dwm')
+        check.present('the compositor carries the caveat instead of a finding',
+                      r'M15\.14 INCREMENT1 "dwm\.exe" \(900\): .*result=MOVED {2}CAVEAT: the compositor '
+                      r'itself',
+                      done.stdout)
+
+        # A struct-shaped surfaceLuid is the shape that broke: read as one number it comes back empty, and
+        # a consumption nobody decoded is indistinguishable from a present nobody consumed.
+        struct = Path(directory) / 'consumed-struct.txt'
+        struct.write_text(composed_dump(consumed_row=consumed_struct,
+                                        header=header_with(' uniqueId, surfaceLuid {lowpart; highpart},'
+                                                           ' bindId,')), encoding='utf-8')
+        done = run(struct, 'flipclient')
+        check.check('the parser runs over the struct-LUID dump', done.returncode == 0, done.stderr[-400:])
+        check.present('an expanded surfaceLuid still names the present it consumed',
+                      r'composed flip \(DWM consumed\)\s+1\b', done.stdout)
+        check.present('and the consumption refuses increment 2',
+                      r'not_consumed_by_dwm\s+FAIL\s+0 Windowed_Dx_Flip_Consumed and 1 Dx_Flip_Consumed',
+                      done.stdout)
+
+        # And a layout with no surface LUID at all cannot be read as "nothing was consumed".
+        undecoded = Path(directory) / 'consumed-undecoded.txt'
+        undecoded.write_text(composed_dump(consumed_row=consumed_without_luid,
+                                           header=header_with(' uniqueId, bindId,')), encoding='utf-8')
+        done = run(undecoded, 'flipclient')
+        check.check('the parser runs over the undecodable dump', done.returncode == 0, done.stderr[-400:])
+        check.present('a consumption row that did not decode is not an absence of consumption',
+                      r"not_consumed_by_dwm\s+FAIL\s+.*1 consumption rows did not decode their surface key "
+                      r"\(\{'Dx_Flip_Consumed': 1\}\), so this absence is not evidence", done.stdout)
 
         # The command line must refuse what it cannot do instead of doing something else.
         done = run(true, '--dump-out', str(Path(directory) / 'x.txt'))

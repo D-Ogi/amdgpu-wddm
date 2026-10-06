@@ -334,6 +334,7 @@ def parse(dump):
         'inframe': collections.defaultdict(collections.Counter),  # process -> rows/independent/skip at InFrame
         'dwm_surface': {},                                   # key -> (direct, independent, scanout)
         'consumed': collections.defaultdict(collections.Counter),         # key -> Counter(event)
+        'consumed_undecoded': collections.Counter(),         # event -> rows whose surface key did not read
         'presents': [],                                      # (time, process, key) of flip-model presents
         'present_calls': collections.defaultdict(collections.Counter),    # process -> Counter(flags)
         'packets': collections.defaultdict(dict),            # process -> {submit sequence: first time}
@@ -406,11 +407,18 @@ def parse(dump):
                 t['state_log'].append(((luid, bind, count), independent, skip, state))
         elif name.startswith(('Microsoft-Windows-Dwm-Core/Dx_Flip_Consumed',
                               'Microsoft-Windows-Dwm-Core/Windowed_Dx_Flip_Consumed')):
-            luid = reader.integer(parts, 'surfaceLuid')
+            # surfaceLuid is a LUID like the Win32k ones, so it is read with the same reader: the dumper
+            # expands a LUID as {lowpart; highpart} whenever its manifest says so, and reading it as one
+            # number returns None for every row. That silence was the whole defect - a key that never
+            # lands here is a present nothing ever consumed, which is exactly what increment 2 wants to
+            # be told, so an undecoded row is counted and the clause fails on it instead of passing.
+            luid = reader.luid(parts, 'surfaceLuid')
             bind = reader.integer(parts, 'bindId')
             count = reader.integer(parts, 'presentCount')
             if None not in (luid, bind, count):
                 t['consumed'][(luid, bind, count)][name.split('/')[1]] += 1
+            else:
+                t['consumed_undecoded'][name.split('/')[1]] += 1
         elif name.startswith('Microsoft-Windows-Dwm-Core/SCHEDULE_SURFACEUPDATE'):
             luid = reader.luid(parts, 'luidSurface')
             bind = reader.integer(parts, 'bindId')
@@ -593,10 +601,18 @@ def increment1(t, process):
                     '%d of %d surface updates' % (composed, len(updates))))
 
     kernel = kernel_side(t, process)
+    # This process's own packets decide the clause. A trace-wide count cannot: a capture holds every
+    # process on the desktop, and one unrelated fullscreen window flipping its own buffers would turn the
+    # inert control of OUR client into MOVED and send the lead rolling back a route that never moved. The
+    # trace-wide number is still reported, as the warning it is.
+    elsewhere = len(t['independent_flips']) - len(kernel['flips'])
     clauses.append(('no_independent_flip',
-                    'PASS' if not kernel['flips'] and not t['independent_flips'] else 'FAIL',
-                    '%d naming this process, %d in the trace'
-                    % (len(kernel['flips']), len(t['independent_flips']))))
+                    'PASS' if not kernel['flips'] else 'FAIL',
+                    '%d naming this process, %d elsewhere in the trace'
+                    % (len(kernel['flips']), elsewhere)
+                    + ('' if elsewhere <= 0 else
+                       ' (another process flipping its own buffers is not this verdict; check which one '
+                       'before reading the capture as a baseline)')))
 
     plane = len(kernel['programmed']) + len(kernel['scanned'])
     clauses.append(('no_plane_for_this_process',
@@ -610,7 +626,15 @@ def increment1(t, process):
         result = 'NO-DATA'
     else:
         result = 'INERT'
-    return {'result': result, 'clauses': clauses}
+    # The control is written for a client process. The compositor is the process whose own packets reach
+    # the plane on a composing desktop, so the last two clauses fail for it in a perfectly inert capture:
+    # dwm.exe reads MOVED by construction and says nothing about the route. The note travels with the
+    # result so that a reader of the output cannot take that MOVED for a finding.
+    # The name as the dumper writes it is '"dwm.exe" (900)', so the test is on the quoted image name.
+    note = ('the compositor itself: its own present packets are the ones that reach the plane on a '
+            'composing desktop, so this control reads MOVED whatever the route does. Read the client '
+            'process instead.' if process.strip('" ').lower().startswith('dwm.exe') else None)
+    return {'result': result, 'clauses': clauses, 'note': note}
 
 
 def increment2(t, process, admitted, counters):
@@ -625,10 +649,22 @@ def increment2(t, process, admitted, counters):
     for key in keys:
         windowed += t['consumed'].get(key, {}).get('Windowed_Dx_Flip_Consumed', 0)
         plain += t['consumed'].get(key, {}).get('Dx_Flip_Consumed', 0)
-    clauses.append(('not_consumed_by_dwm',
-                    'NO-DATA' if not keys else ('PASS' if windowed + plain == 0 else 'FAIL'),
+    # A consumption row whose surface key did not read is not an absence of consumption. The clause is the
+    # only one of the four that is an absence, so it is the only one a decoding fault can turn into a
+    # false CONFIRMED: it fails on such a row and says how many there were.
+    undecoded = sum(t['consumed_undecoded'].values())
+    if not keys:
+        status = 'NO-DATA'
+    elif undecoded:
+        status = 'FAIL'
+    else:
+        status = 'PASS' if windowed + plain == 0 else 'FAIL'
+    clauses.append(('not_consumed_by_dwm', status,
                     '%d Windowed_Dx_Flip_Consumed and %d Dx_Flip_Consumed over %d present counts'
-                    % (windowed, plain, len(keys))))
+                    % (windowed, plain, len(keys))
+                    + ('' if not undecoded
+                       else '; %d consumption rows did not decode their surface key (%s), so this absence '
+                            'is not evidence' % (undecoded, dict(t['consumed_undecoded'])))))
 
     kernel = kernel_side(t, process)
     matched = sorted(a for a in kernel['physical'] if a in admitted)
@@ -794,7 +830,9 @@ def report(t, wanted, admitted, counters, out=sys.stdout):
                direct_yes, direct_total, result))
         one = increment1(t, process)
         two = increment2(t, process, admitted, counters)
-        say('M15.14 INCREMENT1 %s: %s result=%s' % (process, clause_text(one), one['result']))
+        say('M15.14 INCREMENT1 %s: %s result=%s%s'
+            % (process, clause_text(one), one['result'],
+               '' if not one.get('note') else '  CAVEAT: %s' % one['note']))
         for name, status, detail in one['clauses']:
             say('    %-32s %-8s %s' % (name, status, detail))
         say('M15.14 INCREMENT2 %s: %s result=%s' % (process, clause_text(two), two['result']))

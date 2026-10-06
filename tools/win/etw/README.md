@@ -54,7 +54,12 @@ Each clause prints its own `PASS`, `FAIL` or `NO-DATA` line with the numbers beh
 reads `NO-DATA` and keeps the whole verdict away from `CONFIRMED`. Three clauses out of four are not a result.
 
 Read `INCREMENT1` for the client under test only. On a composing desktop the compositor's own packets are the
-ones that reach the plane, so the compositor reads `MOVED` by construction.
+ones that reach the plane, so the compositor reads `MOVED` by construction. The line says so itself: for
+`dwm.exe` it carries a `CAVEAT` that names the reason, so nobody reads that `MOVED` as a finding.
+
+Every clause of the control is about this process. A capture holds the whole desktop, so an independent flip
+of another process is a count on the clause line and not a verdict about the client: a trace-wide test would
+send a lead rolling back a route that never moved.
 
 `INCREMENT2` reads two of its clauses from numbers outside the trace:
 
@@ -72,7 +77,10 @@ It is not PresentMon and does not reproduce the PresentMon state machine. A pres
 counts as unclassified, with the shape that made it so. The tool never guesses a present into a class.
 Field positions come from the dumper's own header block, so no column index is hard-coded. The tool counts and names
 every row of an event kind with no header line. Such a row reads as all-None and would otherwise vanish
-without a word.
+without a word. A LUID column reads as one number or as the dumper's expanded `{lowpart; highpart}` struct,
+whichever the manifest gives. The tool counts a consumption row whose surface key did not read at all, and
+fails the clause that asks whether the compositor consumed the present. An absence that comes from a field nobody
+decoded is not evidence of an absence.
 
 The tool cannot say which plane a multi-plane overlay flip belongs to, beyond `LayerIndex`. It cannot tell
 exclusive fullscreen from borderless. Both answers lie outside the increment of this parser.
