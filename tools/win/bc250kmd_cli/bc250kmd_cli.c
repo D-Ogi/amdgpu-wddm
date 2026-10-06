@@ -633,7 +633,7 @@ BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
 BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
 {
     NTSTATUS status;
-    typedef char HwmonAbiSizeCheck[(sizeof(BC250_ESCAPE_HWMON) == 200) ? 1 : -1];
+    typedef char HwmonAbiSizeCheck[(sizeof(BC250_ESCAPE_HWMON) == 216) ? 1 : -1];
     (void)sizeof(HwmonAbiSizeCheck);
     if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
     memset(data, 0, sizeof(*data));
@@ -883,6 +883,12 @@ BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, U
 // duty_proven=0 says that no lab trial has yet shown that duty follow the fan that turns. tsi_c is the chip's own
 // reading of the APU over SB-TSI, an independent second measurement of the temperature the SMU reports as Tctl;
 // board_c is the first board thermistor.
+//
+// turning= and answered= are not the same question. answered= counts the present tachometers whose value THIS
+// sample accepted, turning= those that report a speed above zero. "answered 4/5" means one channel was refused,
+// which is what a second reader on this unarbitrated window looks like; a stopped fan reads 0 and answers.
+// mode= and engine= are the two UNPROVEN registers as the START read them, not per sample, so they do not move
+// inside a run. refusals= counts every refused value since the start.
 static const char *HwmonReasonName(unsigned long reason)
 {
     static const char *const names[] = { "ok", "gated", "base", "identity", "monitoring", "customer",
@@ -892,12 +898,13 @@ static const char *HwmonReasonName(unsigned long reason)
 
 static void HwmonLine(const BC250_ESCAPE_HWMON *h)
 {
-    unsigned long i, fan = 0, rpm = 0, duty = 0, turning = 0, present = 0;
+    unsigned long i, fan = 0, rpm = 0, duty = 0, turning = 0, present = 0, answered = 0;
     long tsi = 0, board = 0;
     int haveTsi = 0, haveBoard = 0;
 
     for (i = 0; i < BC250_HWMON_FAN_SLOTS; i++) {
         if (h->FanPresentMask & (1u << i)) present++;
+        if (h->RpmValidMask & (1u << i)) answered++;
         if (h->Rpm[i] > rpm) { rpm = h->Rpm[i]; fan = i; }
         if (h->Rpm[i] != 0) turning++;
         if (h->DutyPermille[i] > duty) duty = h->DutyPermille[i];
@@ -907,14 +914,16 @@ static void HwmonLine(const BC250_ESCAPE_HWMON *h)
         if (h->TemperatureSource[i] == BC250_HWMON_SOURCE_APU) { tsi = h->TemperatureMc[i]; haveTsi = 1; }
         else if (!haveBoard) { board = h->TemperatureMc[i]; haveBoard = 1; }
     }
-    printf("fan fan=%lu rpm=%lu turning=%lu/%lu duty_pct=%lu duty_proven=%d mode=0x%02lX ", fan + 1, rpm,
-           turning, present, (duty + 5) / 10, (h->Flags & BC250_HWMON_FLAG_DUTY_PROVEN) ? 1 : 0, h->ModeMask);
+    printf("fan fan=%lu rpm=%lu turning=%lu/%lu answered=%lu/%lu duty_pct=%lu duty_proven=%d mode=0x%02lX "
+           "engine=0x%02lX ", fan + 1, rpm, turning, present, answered, present, (duty + 5) / 10,
+           (h->Flags & BC250_HWMON_FLAG_DUTY_PROVEN) ? 1 : 0, h->ModeMask, h->Engine);
     if (haveTsi) printf("tsi_c=%.1f ", tsi / 1000.0); else printf("tsi_c=n/a ");
     if (haveBoard) printf("board_c=%.1f ", board / 1000.0); else printf("board_c=n/a ");
-    printf("age_ms=%lu fresh=%d valid=%d stopped=%d reason=%s samples=%llu errors=%llu retries=%llu\n",
+    printf("age_ms=%lu fresh=%d valid=%d stopped=%d reason=%s samples=%llu errors=%llu retries=%llu "
+           "refusals=%llu\n",
            h->AgeMs, (h->Flags & BC250_HWMON_FLAG_FRESH) ? 1 : 0, (h->Flags & BC250_HWMON_FLAG_VALID) ? 1 : 0,
            (h->Flags & BC250_HWMON_FLAG_STOPPED) ? 1 : 0, HwmonReasonName(h->Reason),
-           h->Samples, h->Errors, h->Retries);
+           h->Samples, h->Errors, h->Retries, h->Refusals);
 }
 
 // "fan [count [interval ms]]". The interval has a floor of one second, because the chip caches its registers for

@@ -111,7 +111,7 @@ namespace Bc250Mon
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Committed;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Limit;
     }
-    // BC250_ESCAPE_HWMON, ABI 1, 200 bytes (driver/kmd/bc250kmd_escape.h; test_telemetry.py keeps the two
+    // BC250_ESCAPE_HWMON, ABI 1, 216 bytes (driver/kmd/bc250kmd_escape.h; test_telemetry.py keeps the two
     // layouts equal). What the board's own Nuvoton hardware monitor says about the case fan: the tachometers,
     // the duty read-back and the chip's own temperatures. A published snapshot, so no port access and no BAR
     // access happen in this escape; the fan itself still follows the BIOS curve (docs/design/fan.md).
@@ -135,7 +135,9 @@ namespace Bc250Mon
         public ulong Samples, Errors, Retries;
         public ulong Generation;
         public uint Reason;
-        public uint Reserved;
+        public uint Engine;
+        public uint RpmValidMask, DutyValidMask;
+        public ulong Refusals;
 
         public const uint FlagValid = 1, FlagMonitoring = 2, FlagFresh = 4, FlagGated = 8,
                           FlagIdPinned = 16, FlagDutyProven = 32, FlagStopped = 64;
@@ -303,7 +305,7 @@ namespace Bc250Mon
         {
             HwmonSnapshot data;
             uint bytes = (uint)Marshal.SizeOf(typeof(HwmonSnapshot));
-            if (bytes != 200) throw new InvalidOperationException("KMD hardware monitor layout mismatch");
+            if (bytes != 216) throw new InvalidOperationException("KMD hardware monitor layout mismatch");
             int status = Bc250Hwmon(out data, bytes);
             if (status < 0)
                 throw new InvalidOperationException("KMD fan snapshot unavailable (0x" + status.ToString("X8") + ")");

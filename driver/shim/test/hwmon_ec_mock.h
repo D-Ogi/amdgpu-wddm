@@ -25,6 +25,10 @@ struct ec_mock {
 	int		held, holds, accesses_in_hold, max_accesses_in_hold;
 	int		answer_fixed;		/* 1: every data read answers `fixed`, whatever the address */
 	unsigned char	fixed;
+	/* 1: every data read answers the index byte it was last given. That is an I/O window with nothing behind
+	 * it but its own address latch, and it is the shape the identity rules have to refuse: every byte it
+	 * returns is plausible on its own. */
+	int		answer_index;
 };
 
 static void ec_reset(struct ec_mock *ec)
@@ -102,6 +106,8 @@ static unsigned char ec_in8(void *context, unsigned int port)
 	ec->step = 0;
 	if (ec->answer_fixed)
 		return ec->fixed;
+	if (ec->answer_index)
+		return (unsigned char)ec->index;
 	address = ((ec->page << 8) | ec->index) & (EC_MOCK_BYTES - 1u);
 	return ec->mem[address];
 }
@@ -137,10 +143,24 @@ static void ec_io(struct bc250_hwmon_io *io, struct ec_mock *ec)
 
 /* Unit A as our own Linux recon E01 measured it: five tachometers and five duty outputs, one fan turning at
  * 1589 RPM on channel 1 (fan2 in the Linux labels), every duty read-back 245 of 255, the APU at 83.0 C over
- * SB-TSI and two board thermistors at 59.5 C. The EC firmware is 1.0, built 2021-07-28.
+ * SB-TSI, two board thermistors at 59.5 C and SIX voltage channels. The EC firmware is 1.0, built 2021-07-28.
  * The customer ID is the one value E01 did not print, so the fixture carries an ASRock value and the tests
- * never assert which one the board has. */
+ * never assert which one the board has.
+ *
+ * The monitor channels are deliberately NOT 0, 1, 2. E01 printed the values and their labels, not which
+ * monitor index carried each one, so the index map is an assumption either way - and a fixture that puts the
+ * three temperatures first lets a reader that ignores MON_CFG and uses a fixed table pass every test. The
+ * voltages therefore interleave with the temperatures, which is also what makes the "at least one voltage"
+ * identity rule and the channel map itself testable. The real map is a stage-1 readback (A13). */
 #define EC_MOCK_UNIT_A_CUSTOMER 0x0E2Cu
+#define EC_MOCK_APU_CHANNEL 1u
+#define EC_MOCK_TH14_CHANNEL 5u
+#define EC_MOCK_TH15_CHANNEL 9u
+
+/* The six voltage sources E01 found, at the even channels between the temperatures. */
+static const unsigned char ec_mock_voltages[6][2] = {
+	{ 0u, 0x66u }, { 2u, 0x67u }, { 4u, 0x68u }, { 6u, 0x6Cu }, { 8u, 0x6Du }, { 10u, 0x76u }
+};
 
 static void ec_unit_a(struct ec_mock *ec)
 {
@@ -159,12 +179,16 @@ static void ec_unit_a(struct ec_mock *ec)
 		ec_put8(ec, BC250_HWMON_REG_DUTY_PRESENT(i), BC250_HWMON_PRESENT_BIT);
 		ec_put8(ec, BC250_HWMON_REG_DUTY(i), 245);
 	}
-	ec_put8(ec, BC250_HWMON_REG_MON_CFG(0), BC250_HWMON_SOURCE_APU);
-	ec_put8(ec, BC250_HWMON_REG_MON_CFG(1), BC250_HWMON_SOURCE_THERMISTOR14);
-	ec_put8(ec, BC250_HWMON_REG_MON_CFG(2), BC250_HWMON_SOURCE_THERMISTOR15);
-	ec_put16(ec, BC250_HWMON_REG_MON(0), 0x5300u);	/* 83.0 C: 166 steps of 0.5 C, 166 * 128 */
-	ec_put16(ec, BC250_HWMON_REG_MON(1), 0x3B80u);	/* 59.5 C */
-	ec_put16(ec, BC250_HWMON_REG_MON(2), 0x3B80u);
+	ec_put8(ec, BC250_HWMON_REG_MON_CFG(EC_MOCK_APU_CHANNEL), BC250_HWMON_SOURCE_APU);
+	ec_put8(ec, BC250_HWMON_REG_MON_CFG(EC_MOCK_TH14_CHANNEL), BC250_HWMON_SOURCE_THERMISTOR14);
+	ec_put8(ec, BC250_HWMON_REG_MON_CFG(EC_MOCK_TH15_CHANNEL), BC250_HWMON_SOURCE_THERMISTOR15);
+	for (i = 0; i < 6u; i++) {
+		ec_put8(ec, BC250_HWMON_REG_MON_CFG(ec_mock_voltages[i][0]), ec_mock_voltages[i][1]);
+		ec_put16(ec, BC250_HWMON_REG_MON(ec_mock_voltages[i][0]), 0x0330u);	/* a voltage raw word */
+	}
+	ec_put16(ec, BC250_HWMON_REG_MON(EC_MOCK_APU_CHANNEL), 0x5300u);	/* 83.0 C: 166 steps of 0.5 C */
+	ec_put16(ec, BC250_HWMON_REG_MON(EC_MOCK_TH14_CHANNEL), 0x3B80u);	/* 59.5 C */
+	ec_put16(ec, BC250_HWMON_REG_MON(EC_MOCK_TH15_CHANNEL), 0x3B80u);
 	ec_put16(ec, BC250_HWMON_REG_FAN(1), 1589u);	/* the one fan that turns */
 	ec_put8(ec, BC250_HWMON_REG_MODE, 0x00u);	/* Standard Mode: the EC curve owns every channel */
 	ec_put8(ec, BC250_HWMON_REG_ENGINE, 0x00u);

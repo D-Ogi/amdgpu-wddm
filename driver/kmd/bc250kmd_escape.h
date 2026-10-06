@@ -461,17 +461,22 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 // the driver.
 //
 // Rpm[i] is raw RPM of tachometer i; 0 means either a channel that does not turn or a value this driver
-// refused, and the two are told apart by FanPresentMask and by the counters. DutyPermille[i] is the duty
+// refused. The two are told apart by RpmValidMask, which carries one bit per tachometer whose value THIS
+// sample accepted: a channel that is present (FanPresentMask) with its valid bit clear was refused, and
+// Refusals counts every refused value of the start. DutyPermille[i] is the duty
 // READ-BACK of output i, 0..1000. Until DUTY_PROVEN is set the duty is a number the chip reports and not a
 // proven description of the fan that turns: at E01 all five duty channels read 245 of 255 (96 %) while the
 // fan turned at 1589 RPM, which is about half of this board's measured full-duty speed, and those two do not
 // belong to the same fan. One lab trial settles it, and HwmonDutyProven then opens the flag.
 // TemperatureMc[i] is the monitor's own channel i with its source code in TemperatureSource[i]: 0x46 is the
 // APU over SB-TSI (an independent second reading of the temperature the SMU reports as Tctl), 0x08 and 0x09
-// are board thermistors. ModeMask is 0xA00 as read, one bit per channel, set meaning manual; it is
-// documented by the out-of-tree nct6687d alone, so it is UNPROVEN on this board and no decision reads it.
-// AgeMs counts from the last accepted sample at the time of the escape, so a stopped sampler shows its age
-// growing. Reason is enum bc250_hwmon_reason (driver/shim/include/bc250_hwmon.h) and says why VALID is clear.
+// are board thermistors. A source of 0 means the channel carries nothing in this sample, which covers a
+// channel the map does not hold and a value the driver refused: a reader must then show "no reading" for it
+// and never a temperature. ModeMask is 0xA00 and Engine is 0xCF8, both AS THE START READ THEM and not per
+// sample; both are documented by the out-of-tree nct6687d alone, so both are UNPROVEN on this board and no
+// decision reads either. AgeMs counts from the last accepted sample at the time of the escape, so a stopped
+// sampler shows its age growing. Reason is enum bc250_hwmon_reason (driver/shim/include/bc250_hwmon.h) and
+// says why VALID is clear.
 #define BC250_HWMON_ABI 1u
 #define BC250_HWMON_OP_READ 0u
 #define BC250_HWMON_FAN_SLOTS 8u             // tachometer and duty slots on the wire
@@ -482,7 +487,11 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 #define BC250_HWMON_FLAG_GATED 8u            // EnableHwmon is 0: no port access ever happened
 #define BC250_HWMON_FLAG_ID_PINNED 16u       // HwmonExpectId was set and matched
 #define BC250_HWMON_FLAG_DUTY_PROVEN 32u     // HwmonDutyProven is 1: a lab trial proved the duty read-back
-#define BC250_HWMON_FLAG_STOPPED 64u         // a duty output runs and no tachometer turns
+// STOPPED: every present tachometer answered, every one of them reads 0, and a duty output is not 0, in
+// BC250_HWMON_STOPPED_SAMPLES samples in a row (driver/kmd/hwmon.h). Three conditions and a repeat, because this flag is shown in
+// red and is what the owner reacts to: one refused tachometer reading is not a stopped fan, and the driver
+// must not send anybody to the case over a collision on a window that has no arbiter.
+#define BC250_HWMON_FLAG_STOPPED 64u         // the duty is not 0 and no present tachometer turns (see above)
 // Monitor source codes, so that a tool can name a channel without the shim header. Identical definitions live in
 // driver/shim/include/bc250_hwmon.h, which the driver includes beside this file; the guard keeps that legal and
 // the values are the ones measured on unit A through the Linux labels (E01 sensors-all.txt).
@@ -513,8 +522,11 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long long Samples, Errors, Retries;
     unsigned long long Generation;          // start-health generation of the start this describes
     unsigned long Reason;                   // enum bc250_hwmon_reason when VALID is clear
-    unsigned long Reserved;                 // zero in, zero out
-} BC250_ESCAPE_HWMON; // 200 bytes on Windows, ABI 1
+    unsigned long Engine;                   // 0xCF8 as the start read it; UNPROVEN, reported and logged only
+    unsigned long RpmValidMask;             // bit i: Rpm[i] is a value this sample accepted, not a refusal
+    unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
+    unsigned long long Refusals;            // values refused since the start, over every register
+} BC250_ESCAPE_HWMON; // 216 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

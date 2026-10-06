@@ -18,13 +18,26 @@
 
 /* ---- the allowlist -------------------------------------------------------------------------- */
 
+/* The three windows the DSDT reports, and nothing else. The header says why a registry DWORD gets a list
+ * instead of the two upstream rules: those rules admit 0x0CF8 and 0x0CD0, and this reader writes three latch
+ * bytes per register read. The upstream rules are kept as well, in front of the list, so that a base which
+ * fails them is refused for the reason upstream gives and the list stays the narrow end of the funnel. */
+static const unsigned int g_hwmon_bases[] = {
+	BC250_HWMON_BASE_ALT_1, BC250_HWMON_BASE_ALT_2, BC250_HWMON_BASE_DEFAULT
+};
+
 int bc250_hwmon_base_allowed(unsigned int base)
 {
-	if (base < 0x100u)
+	unsigned int i;
+
+	if (base < 0x100u || base > BC250_HWMON_BASE_MAX)
 		return 0;
 	if ((base & 0xF007u) != 0u)
 		return 0;
-	return 1;
+	for (i = 0; i < sizeof(g_hwmon_bases) / sizeof(g_hwmon_bases[0]); i++)
+		if (base == g_hwmon_bases[i])
+			return 1;
+	return 0;
 }
 
 static int in_range(unsigned int reg, unsigned int first, unsigned int count, unsigned int stride)
@@ -41,19 +54,21 @@ int bc250_hwmon_read_allowed(unsigned int reg)
 {
 	if (reg > 0xFFFFu)
 		return 0;			/* the page register is eight bits wide */
-	if (in_range(reg, 0x100u, BC250_HWMON_MON_MAX * 2u, 1u))
+	/* Every range starts at its own macro, so that a register block which moves in the header cannot leave
+	 * an address behind in this list. */
+	if (in_range(reg, BC250_HWMON_REG_MON(0), BC250_HWMON_MON_MAX * 2u, 1u))
 		return 1;			/* monitor values, both halves of each one */
-	if (in_range(reg, 0x140u, BC250_HWMON_FAN_MAX * 2u, 1u))
+	if (in_range(reg, BC250_HWMON_REG_FAN(0), BC250_HWMON_FAN_MAX * 2u, 1u))
 		return 1;			/* tachometers, both halves */
-	if (in_range(reg, 0x160u, BC250_HWMON_FAN_MAX, 1u))
+	if (in_range(reg, BC250_HWMON_REG_DUTY(0), BC250_HWMON_FAN_MAX, 1u))
 		return 1;			/* duty read-back */
 	if (reg == BC250_HWMON_REG_CFG)
 		return 1;			/* HWM_CFG, read side only */
-	if (in_range(reg, 0x1A0u, BC250_HWMON_MON_MAX, 1u))
+	if (in_range(reg, BC250_HWMON_REG_MON_CFG(0), BC250_HWMON_MON_MAX, 1u))
 		return 1;			/* monitor source assignment */
-	if (in_range(reg, 0x1C0u, BC250_HWMON_FAN_MAX, 1u))
+	if (in_range(reg, BC250_HWMON_REG_FAN_PRESENT(0), BC250_HWMON_FAN_MAX, 1u))
 		return 1;			/* tachometer present */
-	if (in_range(reg, 0x1D0u, BC250_HWMON_FAN_MAX, 1u))
+	if (in_range(reg, BC250_HWMON_REG_DUTY_PRESENT(0), BC250_HWMON_FAN_MAX, 1u))
 		return 1;			/* duty output present */
 	if (reg == BC250_HWMON_REG_CUSTOMER || reg == BC250_HWMON_REG_CUSTOMER + 1u)
 		return 1;			/* customer ID, 16-bit */
@@ -227,6 +242,10 @@ int bc250_hwmon_identify(const struct bc250_hwmon_io *io, unsigned int base,
 	id->version = (hi << 8) | lo;
 	if (!plausible_byte_pair(hi, lo))
 		return BC250_HWMON_REFUSED;
+	/* The major version, not the whole value: unit A reads 1.0, a later EC build of the same firmware may
+	 * read 1.1, and a window that echoes its own index latch reads 8.9. */
+	if (hi != BC250_HWMON_EC_MAJOR)
+		return BC250_HWMON_REFUSED;
 	if (bc250_hwmon_read8(io, BC250_HWMON_REG_BUILD_YEAR, &year) != 0 ||
 	    bc250_hwmon_read8(io, BC250_HWMON_REG_BUILD_MONTH, &month) != 0 ||
 	    bc250_hwmon_read8(io, BC250_HWMON_REG_BUILD_DAY, &day) != 0)
@@ -234,6 +253,8 @@ int bc250_hwmon_identify(const struct bc250_hwmon_io *io, unsigned int base,
 	/* The chip stores the date in BCD-free bytes: 07/28/21 on unit A. */
 	id->build = (year << 16) | (month << 8) | day;
 	if (month == 0u || month > 12u || day == 0u || day > 31u)
+		return BC250_HWMON_REFUSED;
+	if (year < BC250_HWMON_BUILD_YEAR_MIN || year > BC250_HWMON_BUILD_YEAR_MAX)
 		return BC250_HWMON_REFUSED;
 	if (bc250_hwmon_read16(io, BC250_HWMON_REG_CUSTOMER, &customer) != 0)
 		return BC250_HWMON_REFUSED;
@@ -252,18 +273,43 @@ int bc250_hwmon_identify(const struct bc250_hwmon_io *io, unsigned int base,
 		id->reason = BC250_HWMON_REASON_MONITORING;
 		return BC250_HWMON_REFUSED;
 	}
-	/* The channel map: the monitor channels are generic, so their meaning comes from 0x1A0 + i.
-	 * Walked once, here; a sample then reads only the channels it needs. */
-	for (i = 0; i < BC250_HWMON_MON_MAX && id->temperatures < BC250_HWMON_TEMP_MAX; i++) {
+	/* The channel map: the monitor channels are generic, so their meaning comes from 0x1A0 + i. All 32 are
+	 * walked once, here; a sample then reads only the channels it kept.
+	 *
+	 * Two rules inside the walk:
+	 *   - the APU channel is kept whatever its index. A board whose first four channels are thermistors
+	 *     would otherwise drop the one channel a thermal reading cares about, and the tools would print a
+	 *     board sensor where the operator expects the die.
+	 *   - a voltage channel is counted, not read. One of them must exist, or this window is not a chip:
+	 *     see BC250_HWMON_EC_MAJOR in the header. */
+	for (i = 0; i < BC250_HWMON_MON_MAX; i++) {
 		if (bc250_hwmon_read8(io, BC250_HWMON_REG_MON_CFG(i), &source) != 0)
 			return BC250_HWMON_REFUSED;
 		source &= 0x7Fu;
-		if (source == 0u || source >= BC250_HWMON_SOURCE_VOLTAGE_FIRST)
-			continue;		/* unused, or a voltage: we read no voltage */
-		id->channel[id->temperatures] = i;
-		id->source[id->temperatures] = source;
-		id->temperatures++;
+		if (source == 0u)
+			continue;		/* unused */
+		if (source >= BC250_HWMON_SOURCE_VOLTAGE_FIRST) {
+			id->voltages++;		/* we read no voltage: it only proves the chip is one */
+			continue;
+		}
+		if (id->temperatures < BC250_HWMON_TEMP_MAX) {
+			id->channel[id->temperatures] = i;
+			id->source[id->temperatures] = source;
+			id->temperatures++;
+		} else if (source == BC250_HWMON_SOURCE_APU) {
+			/* The map is full and the APU is not in it. It takes the last slot: three board sensors
+			 * and the die beat four board sensors. */
+			id->channel[BC250_HWMON_TEMP_MAX - 1u] = i;
+			id->source[BC250_HWMON_TEMP_MAX - 1u] = source;
+		}
 	}
+	if (id->voltages == 0u)
+		return BC250_HWMON_REFUSED;
+	/* The two UNPROVEN registers, once. They are allowlisted, so neither read can fail here. */
+	if (bc250_hwmon_read8(io, BC250_HWMON_REG_MODE, &source) == 0)
+		id->mode_mask = source & 0xFFu;
+	if (bc250_hwmon_read8(io, BC250_HWMON_REG_ENGINE, &source) == 0)
+		id->engine = source & 0xFFu;
 	id->reason = BC250_HWMON_REASON_OK;
 	return 0;
 }
@@ -312,13 +358,21 @@ static int accept_rpm(const struct bc250_hwmon_io *io, unsigned int reg, unsigne
 }
 
 /* The raw word first, then the conversion. 0xFFFF and 0x0000 are the chip's "nothing on this
- * channel", and the conversion would hand both of them back as 0.0 C. */
+ * channel", and the conversion would hand both of them back as 0.0 C. So would every raw word from 1 to 127,
+ * because the step is 0.5 C, so a converted 0 mC is refused as well whatever produced it: the whole purpose
+ * of the rule is that a dead or a noisy window never looks like a cold board. */
 static int temperature_accepted(unsigned int raw, int *mc)
 {
 	*mc = 0;
 	if (raw == BC250_HWMON_MON_NONE || raw == BC250_HWMON_MON_EMPTY)
 		return 0;
-	return bc250_hwmon_temperature_mc(raw, mc) == 0;
+	if (bc250_hwmon_temperature_mc(raw, mc) != 0)
+		return 0;
+	if (*mc == 0) {
+		*mc = 0;
+		return 0;
+	}
+	return 1;
 }
 
 static int accept_temperature(const struct bc250_hwmon_io *io, unsigned int reg,
@@ -378,16 +432,10 @@ int bc250_hwmon_sample(const struct bc250_hwmon_io *io, const struct bc250_hwmon
 		out->duty_valid |= 1u << i;
 		/* Published, but it does not make the sample: see the contract in the header. */
 	}
-	/* Both of these are documented by the out-of-tree driver alone. They are read, published and
-	 * logged; no decision of ours reads them until one lab readback proves them. */
-	if (read_checked(io, BC250_HWMON_REG_MODE, &value, out, 0) == 0)
-		out->mode_mask = value & 0xFFu;
-	else
-		out->refusals++;
-	if (read_checked(io, BC250_HWMON_REG_ENGINE, &value, out, 0) == 0)
-		out->engine = value & 0xFFu;
-	else
-		out->refusals++;
+	/* The mode mask and the fan engine status are NOT read here. Both are documented by the out-of-tree
+	 * driver alone, neither is proven on this board, and no decision of ours reads either one, so
+	 * bc250_hwmon_identify reads them once at start instead of putting eight port accesses a second on an
+	 * uncharacterised register of the chip that cools the board. */
 	for (i = 0; i < id->temperatures && i < BC250_HWMON_TEMP_MAX; i++) {
 		int mc = 0;
 

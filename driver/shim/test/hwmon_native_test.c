@@ -66,7 +66,7 @@ static int NoWriteOutsideTheLatch(void)
  * test_telemetry.py compares the same layout. A silent change here is a wrong fan speed on a machine that still
  * runs the installed application, so the size and every offset a reader uses are pinned here - at compile time,
  * so that a drift fails the build instead of a run. */
-C_ASSERT(sizeof(BC250_ESCAPE_HWMON) == 200);
+C_ASSERT(sizeof(BC250_ESCAPE_HWMON) == 216);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Magic) == 0);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Command) == 4);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Status) == 8);
@@ -92,7 +92,10 @@ C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Errors) == 168);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Retries) == 176);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Generation) == 184);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Reason) == 192);
-C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Reserved) == 196);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Engine) == 196);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, RpmValidMask) == 200);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, DutyValidMask) == 204);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_HWMON, Refusals) == 208);
 /* The freshness window is three missed samples, and nothing may silently make it something else. */
 C_ASSERT(BC250_HWMON_FRESH_MS == BC250_HWMON_PERIOD_MS * BC250_HWMON_STALE_SAMPLES);
 
@@ -210,6 +213,22 @@ static void gate(void)
     CHECK(h.Flags == 0 && h.Reason == BC250_HWMON_REASON_BASE);   /* enabled, so not GATED; offline, so not VALID */
     CHECK(NoWriteOutsideTheLatch());
 
+    /* The one an operator could actually type: 0x0CF8 is printed in this design as the fan engine status
+     * register, and it is also the PCI configuration ADDRESS port, with its DATA port at base + 4. The two
+     * upstream rules admit it. This driver must not, because a sample would then write 0xFF and a page byte
+     * into the configuration space of whatever device the last selector named, ninety times a second. */
+    Fresh();
+    NativeSetSetting(L"EnableHwmon", 1);
+    NativeSetSetting(L"HwmonBasePort", 0x0CF8);
+    HwmonStart(&device);
+    CHECK(device.Hwmon.Enabled && !device.Hwmon.Online);
+    CHECK(device.Hwmon.Reason == BC250_HWMON_REASON_BASE && device.Hwmon.BasePort == 0);
+    CHECK(native_ec.reads == 0 && native_ec.writes_latch == 0 && native_ports_outside == 0);
+    CHECK(native_log_has("0x0CF8"));
+    HwmonSample(&device);
+    CHECK(native_ec.writes_latch == 0 && native_ports_outside == 0);
+    CHECK(NoWriteOutsideTheLatch());
+
     /* A base of 0 means "the one measured on this board", and the driver must actually use it. */
     Fresh();
     NativeSetSetting(L"EnableHwmon", 1);
@@ -218,18 +237,19 @@ static void gate(void)
     CHECK(device.Hwmon.Online && device.Hwmon.BasePort == BC250_HWMON_BASE_DEFAULT);
     CHECK(native_ports_outside == 0);
 
-    /* Another legal base. The model answers only on the window the test configured, so a driver that ignored
-     * HwmonBasePort and used its own constant would count ports outside and fail here. */
+    /* Another admitted base: the second window the DSDT reports. The model answers only on the window the
+     * test configured, so a driver that ignored HwmonBasePort and used its own constant would count ports
+     * outside and fail here. */
     Fresh();
-    native_base = 0x0290;
+    native_base = BC250_HWMON_BASE_ALT_2;
     NativeSetSetting(L"EnableHwmon", 1);
-    NativeSetSetting(L"HwmonBasePort", 0x0290);
+    NativeSetSetting(L"HwmonBasePort", BC250_HWMON_BASE_ALT_2);
     HwmonStart(&device);
-    CHECK(device.Hwmon.Online && device.Hwmon.BasePort == 0x0290);
+    CHECK(device.Hwmon.Online && device.Hwmon.BasePort == BC250_HWMON_BASE_ALT_2);
     CHECK(native_ports_outside == 0);
     HwmonSample(&device);
     Read(&h);
-    CHECK(h.BasePort == 0x0290 && Fastest(&h) == 1589);
+    CHECK(h.BasePort == BC250_HWMON_BASE_ALT_2 && Fastest(&h) == 1589);
     CHECK(NoWriteOutsideTheLatch());
 }
 
@@ -238,6 +258,7 @@ static void gate(void)
 static void start(void)
 {
     BC250_ESCAPE_HWMON h;
+    ULONG i;
 
     /* Unit A as E01 measured it. */
     Fresh();
@@ -249,10 +270,12 @@ static void start(void)
     CHECK(device.Hwmon.Identity.customer_id == EC_MOCK_UNIT_A_CUSTOMER);
     CHECK(device.Hwmon.Identity.monitoring != 0);
     CHECK(device.Hwmon.Identity.fan_present == 0x1F && device.Hwmon.Identity.duty_present == 0x1F);
-    CHECK(device.Hwmon.Identity.temperatures == 3);
+    CHECK(device.Hwmon.Identity.temperatures == 3 && device.Hwmon.Identity.voltages == 6);
     CHECK(!device.Hwmon.IdPinned && !device.Hwmon.DutyProven);
-    /* The identity line carries every value it read: this is the line an operator pins the customer ID from. */
+    /* The identity line carries every value it read: this is the line an operator pins the customer ID from,
+     * and the one that answers the stage-1 question about the two UNPROVEN registers at rest. */
     CHECK(native_log_has("base 0x0A20") && native_log_has("ec 1.0") && native_log_has("build 07/28/21"));
+    CHECK(native_log_has("temps 3 volts 6 mode 0x00 eng 0x00"));
     CHECK(native_log_has("is not pinned"));
     /* A 16-bit read is eight accesses in one hold, and no hold ever carried more: the index latch cannot move
      * between the two halves of a tachometer. */
@@ -319,6 +342,27 @@ static void start(void)
     CHECK(!device.Hwmon.Online && device.Hwmon.Reason == BC250_HWMON_REASON_IDENTITY);
     CHECK(NoWriteOutsideTheLatch());
 
+    /* A window that only echoes its own index latch. Every byte it returns is plausible on its own, so the
+     * start must refuse it on the version, the build year and the absent voltage channel - or the tools would
+     * show four temperature channels of 0.0 C from a window with no chip behind it. */
+    Fresh();
+    NativeSetSetting(L"EnableHwmon", 1);
+    native_ec.answer_index = 1;
+    HwmonStart(&device);
+    CHECK(!device.Hwmon.Online && device.Hwmon.Reason == BC250_HWMON_REASON_IDENTITY);
+    HwmonSample(&device);
+    Read(&h);
+    CHECK((h.Flags & BC250_HWMON_FLAG_VALID) == 0 && h.Samples == 0);
+    CHECK(h.TemperatureSource[0] == 0 && h.TemperatureMc[0] == 0);
+    CHECK(NoWriteOutsideTheLatch());
+    native_ec.answer_index = 0;
+
+    /* An offline reader writes ONE log line per reason, not one per telemetry tick: the ring's tail is 768
+     * lines, and a 20-minute session would otherwise spend 240 of them on the same sentence. */
+    native_lines = 0;
+    for (i = 0; i < 20; i++) HwmonLogLine(&device, "telemetry");
+    CHECK(native_lines == 1 && native_log_has("no reading, reason identity"));
+
     /* Every byte reads 0x00: the other half of a dead window. */
     Fresh();
     NativeSetSetting(L"EnableHwmon", 1);
@@ -356,6 +400,10 @@ static void sampler(void)
     CHECK(h.TemperatureSource[2] == BC250_HWMON_SOURCE_THERMISTOR15 && h.TemperatureMc[2] == 59500);
     CHECK(h.TemperatureSource[3] == 0 && h.TemperatureMc[3] == 0);
     CHECK(h.ModeMask == 0 && h.Samples == 1 && h.Errors == 0 && h.Generation == 7);
+    CHECK(h.Engine == 0 && h.Refusals == 0);
+    /* Every present tachometer and every present duty output answered this sample. A reader tells a refused
+     * value from a channel that reads 0 by these two masks and by nothing else. */
+    CHECK(h.RpmValidMask == 0x1F && h.DutyValidMask == 0x1F);
     CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) == 0);
     CHECK(NoWriteOutsideTheLatch());
 
@@ -383,8 +431,16 @@ static void sampler(void)
     CHECK(h.AgeMs == 3001 && (h.Flags & BC250_HWMON_FLAG_FRESH) == 0);
     CHECK((h.Flags & BC250_HWMON_FLAG_VALID) != 0 && h.Rpm[1] == 2400);   /* stale, not absent */
 
-    /* A duty output runs and nothing turns: the one case the owner must see at a glance. */
+    /* A duty output runs and nothing turns: the one case the owner must see at a glance. It is shown in red
+     * and the owner reacts to it, so it needs BC250_HWMON_STOPPED_SAMPLES samples in a row, and the two before
+     * that must NOT raise it. */
     ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), 0);
+    for (i = 0; i < BC250_HWMON_STOPPED_SAMPLES - 1u; i++) {
+        native_time += 10000ull * BC250_HWMON_PERIOD_MS;
+        HwmonSample(&device);
+        Read(&h);
+        CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) == 0 && h.RpmValidMask == 0x1F && Fastest(&h) == 0);
+    }
     native_time += 10000ull * BC250_HWMON_PERIOD_MS;
     HwmonSample(&device);
     Read(&h);
@@ -392,6 +448,31 @@ static void sampler(void)
     native_lines = 0;
     HwmonLogLine(&device, "summary");
     CHECK(native_log_has("(0/5 turn)"));
+
+    /* ONE refused tachometer reading is not a stopped fan. The duty read-backs stay at 961, the one turning
+     * channel answers 0xFFFF and is refused, and a red "not turning" row over that would send the owner to the
+     * case over a collision on a window that has no arbiter - which is the very reason the gate exists. */
+    ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), BC250_HWMON_RPM_NONE);
+    native_time += 10000ull * BC250_HWMON_PERIOD_MS;
+    HwmonSample(&device);
+    Read(&h);
+    CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) == 0);
+    CHECK((h.Flags & (BC250_HWMON_FLAG_VALID | BC250_HWMON_FLAG_FRESH)) ==
+          (BC250_HWMON_FLAG_VALID | BC250_HWMON_FLAG_FRESH));
+    CHECK(h.RpmValidMask == 0x1D && h.Rpm[1] == 0 && h.DutyPermille[1] == 961);  /* channel 1 refused */
+    CHECK(h.Refusals >= 1 && h.Errors == 0);                /* and the refusal is counted, not silent */
+    /* And the count starts again from there: the refused sample is no evidence either way. */
+    ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), 0);
+    for (i = 0; i < BC250_HWMON_STOPPED_SAMPLES - 1u; i++) {
+        native_time += 10000ull * BC250_HWMON_PERIOD_MS;
+        HwmonSample(&device);
+        Read(&h);
+        CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) == 0);
+    }
+    native_time += 10000ull * BC250_HWMON_PERIOD_MS;
+    HwmonSample(&device);
+    Read(&h);
+    CHECK((h.Flags & BC250_HWMON_FLAG_STOPPED) != 0);
 
     /* A stopped fan with no duty either is an idle board, not a fault. */
     for (i = 0; i < 5; i++) ec_put8(&native_ec, BC250_HWMON_REG_DUTY(i), 0);
@@ -410,6 +491,7 @@ static void sampler(void)
     Read(&h);
     CHECK(h.Rpm[1] == 0 && h.Retries > 0 && h.Samples == 1);    /* the rest of the sample was still accepted */
     CHECK(h.TemperatureMc[0] == 83000);
+    CHECK(h.RpmValidMask == 0x1D && h.Refusals == 1);
 
     /* An impossible speed on this board. Same answer, and the duty read-back beside it survives. */
     ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), 20000);
@@ -417,6 +499,43 @@ static void sampler(void)
     HwmonSample(&device);
     Read(&h);
     CHECK(h.Rpm[1] == 0 && h.DutyPermille[1] == 961);
+    CHECK(NoWriteOutsideTheLatch());
+}
+
+/* ---- the missing governor thread ------------------------------------------------------------------------ */
+
+/* EnableHwmon is 1 and the identity passed, but nothing ever samples: the sampler is the DPM governor thread,
+ * and a start without the native SMU owner never creates it. The reader published VALID and reason "ok", so
+ * every tool said "no reading" and named the healthy reason, which told the operator nothing. After one
+ * freshness window with no sample at all the answer is NO_THREAD. */
+static void no_thread(void)
+{
+    BC250_ESCAPE_HWMON h;
+    ULONG i;
+
+    Fresh();
+    NativeSetSetting(L"EnableHwmon", 1);
+    HwmonStart(&device);
+    CHECK(device.Hwmon.Online);
+    Read(&h);
+    /* Inside the window the first sample is still due, so the answer is still "ok". */
+    CHECK((h.Flags & BC250_HWMON_FLAG_VALID) != 0 && h.Samples == 0);
+    CHECK(h.Reason == BC250_HWMON_REASON_OK && (h.Flags & BC250_HWMON_FLAG_FRESH) == 0);
+    native_time += 10000ull * (BC250_HWMON_NO_THREAD_MS + 1u);
+    Read(&h);
+    CHECK(h.Reason == BC250_HWMON_REASON_NO_THREAD && h.Samples == 0);
+    CHECK((h.Flags & BC250_HWMON_FLAG_VALID) != 0 && (h.Flags & BC250_HWMON_FLAG_FRESH) == 0);
+    native_lines = 0;
+    for (i = 0; i < 10; i++) HwmonLogLine(&device, "telemetry");
+    CHECK(native_lines == 1 && native_log_has("no reading, reason no-thread"));
+
+    /* One sample settles it: the reason goes back to the published one and stays there. */
+    HwmonSample(&device);
+    Read(&h);
+    CHECK(h.Reason == BC250_HWMON_REASON_OK && h.Samples == 1);
+    native_time += 10000ull * (BC250_HWMON_NO_THREAD_MS + 10000u);
+    Read(&h);
+    CHECK(h.Reason == BC250_HWMON_REASON_OK);                   /* stale, with an age, but not thread-less */
     CHECK(NoWriteOutsideTheLatch());
 }
 
@@ -515,6 +634,7 @@ int main(void)
     gate();
     start();
     sampler();
+    no_thread();
     give_up();
     printf("hardware monitor binding: %ld checks, %ld failures\n", native_checks, native_failures);
     return native_failures ? 1 : 0;

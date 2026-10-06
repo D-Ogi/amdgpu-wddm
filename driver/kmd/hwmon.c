@@ -42,7 +42,10 @@
 //
 // Settings, REG_DWORD under Services\bc250kmd\Parameters, all closed or absent by every install:
 //   EnableHwmon        0 (default) means no port access happens at all. 1 starts the reader.
-//   HwmonBasePort      the EC base; 0 or absent means the built-in 0x0A20, measured on unit A.
+//   HwmonBasePort      the EC base; 0 or absent means the built-in 0x0A20, measured on unit A. The only other
+//                      values this driver admits are 0x0A00 and 0x0A10, the two other windows the DSDT
+//                      reports. Anything else is refused before a port is touched: a registry DWORD may not
+//                      aim three latch writes a second at 0x0CF8 or 0x0CD0 (bc250_hwmon_base_allowed).
 //   HwmonExpectId      the pinned EC customer ID. Absent is stage 1: the driver reads the ID, logs it and
 //                      publishes with ID_PINNED clear, so that an operator can read the value once and pin it.
 //                      Present and different is a refusal: the reader never guesses which chip it found.
@@ -63,6 +66,20 @@ C_ASSERT(RTL_NUMBER_OF(g_HwmonReason) == BC250_HWMON_REASON_COUNT);
 static const char* HwmonReasonText(ULONG reason)
 {
     return reason < RTL_NUMBER_OF(g_HwmonReason) ? g_HwmonReason[reason] : "?";
+}
+
+// The reason a reader sees, which is the published one plus the one case the publisher cannot know: the
+// sampler is the DPM governor thread, and a start without the native SMU owner never creates it. The identity
+// then passed, the snapshot carries VALID, and no sample ever arrives. Reporting "ok" there told the operator
+// the reader was healthy and said nothing about the missing thread, so after one freshness window with no
+// sample at all the answer becomes NO_THREAD. Before that window it is still "ok": the first sample is due.
+static ULONG HwmonReportedReason(const BC250_HWMON_OWNER* Owner, const BC250_HWMON_SNAP* Snap, ULONGLONG Now)
+{
+    if (Snap->Reason != BC250_HWMON_REASON_OK || Snap->SampleAt != 0 || Snap->Samples != 0) return Snap->Reason;
+    if ((Snap->Flags & BC250_HWMON_FLAG_VALID) == 0u) return Snap->Reason;
+    if (Owner->StartedAt == 0 || Now < Owner->StartedAt) return Snap->Reason;
+    if ((Now - Owner->StartedAt) / 10000ull <= BC250_HWMON_NO_THREAD_MS) return Snap->Reason;
+    return BC250_HWMON_REASON_NO_THREAD;
 }
 
 // ---- the ports --------------------------------------------------------------------------------------------
@@ -96,6 +113,11 @@ static void HwmonOut8(void* Context, unsigned int Index, unsigned char Value)
 static unsigned char HwmonIn8(void* Context, unsigned int Index)
 {
     BC250_HWMON_PORTS* ports = (BC250_HWMON_PORTS*)Context;
+    // The data port only, for the same reason the write side names its two: base + 7 is the EC event register,
+    // which this driver never touches, and a read of it could clear a latch the firmware or the resident
+    // SmmGenericSio owns. The shim asks for nothing else; this is the second place that says so.
+    NT_ASSERT(Index == BC250_HWMON_PORT_DATA);
+    if (Index != BC250_HWMON_PORT_DATA) return 0xFF;
     return READ_PORT_UCHAR(HwmonPort(ports, Index));
 }
 
@@ -135,11 +157,31 @@ static void HwmonIo(BC250_HWMON_PORTS* Ports, BC250_HWMON_OWNER* Owner, struct b
 
 // ---- the published snapshot -------------------------------------------------------------------------------
 
+// A duty output runs and NOTHING turns. Three conditions, because this is the state the owner reacts to:
+//   - every present tachometer answered this sample. One refused value is a collision on a window that has no
+//     arbiter, which is the very reason the gate exists; it is not a stopped fan, and a red "not turning" row
+//     over it would send somebody to the case for nothing.
+//   - every one of those answers is 0.
+//   - some duty output that answered is not 0.
+// The repeat count is the caller's: HwmonSample counts the samples in a row that satisfy this.
+static BOOLEAN HwmonStoppedSample(const BC250_HWMON_OWNER* Owner, const struct bc250_hwmon_sample* Sample)
+{
+    ULONG i, duty = 0;
+
+    if (Sample == NULL) return FALSE;
+    if ((Sample->rpm_valid & Owner->Identity.fan_present) != Owner->Identity.fan_present) return FALSE;
+    for (i = 0; i < BC250_HWMON_FAN_MAX; i++) {
+        if ((Sample->rpm_valid & (1u << i)) != 0u && Sample->rpm[i] != 0u) return FALSE;
+        if ((Sample->duty_valid & (1u << i)) != 0u && Sample->duty[i] != 0u) duty = 1;
+    }
+    return duty != 0u;
+}
+
 static void HwmonPublish(BC250_DEVICE* Device, const struct bc250_hwmon_sample* Sample, ULONGLONG At)
 {
     BC250_HWMON_OWNER* owner = &Device->Hwmon;
     BC250_HWMON_SNAP snap;
-    ULONG i, duty = 0, turning = 0;
+    ULONG i;
     KIRQL irql;
 
     RtlZeroMemory(&snap, sizeof(snap));
@@ -148,6 +190,7 @@ static void HwmonPublish(BC250_DEVICE* Device, const struct bc250_hwmon_sample* 
     snap.Samples = owner->Samples;
     snap.Errors = owner->Errors;
     snap.Retries = owner->Retries;
+    snap.Refusals = owner->Refusals;
     if (!owner->Enabled) snap.Flags |= BC250_HWMON_FLAG_GATED;
     if (owner->Online) {
         snap.Flags |= BC250_HWMON_FLAG_VALID;
@@ -160,19 +203,17 @@ static void HwmonPublish(BC250_DEVICE* Device, const struct bc250_hwmon_sample* 
         snap.EcBuild = owner->Identity.build;
         snap.FanPresentMask = owner->Identity.fan_present;
         snap.DutyPresentMask = owner->Identity.duty_present;
+        // Both as the start read them, not per sample: they are UNPROVEN registers and nothing decides on them.
+        snap.ModeMask = owner->Identity.mode_mask;
+        snap.Engine = owner->Identity.engine;
     }
     if (Sample != NULL) {
-        snap.ModeMask = Sample->mode_mask;
-        snap.Engine = Sample->engine;
+        snap.RpmValidMask = Sample->rpm_valid;
+        snap.DutyValidMask = Sample->duty_valid;
         for (i = 0; i < BC250_HWMON_FAN_MAX; i++) {
-            if ((Sample->rpm_valid & (1u << i)) != 0u) {
-                snap.Rpm[i] = Sample->rpm[i];
-                if (Sample->rpm[i] != 0u) turning++;
-            }
-            if ((Sample->duty_valid & (1u << i)) != 0u) {
+            if ((Sample->rpm_valid & (1u << i)) != 0u) snap.Rpm[i] = Sample->rpm[i];
+            if ((Sample->duty_valid & (1u << i)) != 0u)
                 snap.DutyPermille[i] = bc250_hwmon_duty_permille(Sample->duty[i]);
-                if (snap.DutyPermille[i] > duty) duty = snap.DutyPermille[i];
-            }
         }
         for (i = 0; i < BC250_HWMON_TEMP_MAX; i++) {
             if ((Sample->temperature_valid & (1u << i)) == 0u) continue;
@@ -180,9 +221,9 @@ static void HwmonPublish(BC250_DEVICE* Device, const struct bc250_hwmon_sample* 
             snap.TemperatureSource[i] = owner->Identity.source[i];
         }
         snap.SampleAt = At;
-        // A duty output runs and nothing turns. That is the one case the owner must see at a glance, and it is
-        // what the camera fire watch looks for as well.
-        if (duty != 0u && turning == 0u) snap.Flags |= BC250_HWMON_FLAG_STOPPED;
+        // A duty output runs and nothing turns, in enough samples in a row to rule out one collision. That is
+        // the one case the owner must see at a glance, and it is what the camera fire watch looks for as well.
+        if (owner->StoppedInRow >= BC250_HWMON_STOPPED_SAMPLES) snap.Flags |= BC250_HWMON_FLAG_STOPPED;
     }
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     owner->Snap = snap;
@@ -193,6 +234,10 @@ static void HwmonPublish(BC250_DEVICE* Device, const struct bc250_hwmon_sample* 
 
 // Its own line, like DpmLogIdleLine: the DPM telemetry line is already near the log's 160 bytes. Only while
 // the reader is online, so a machine with the gate closed logs exactly what the revision before this one did.
+//
+// An offline reader writes ONE line per reason and not one per tick. The caller is the telemetry and summary
+// poller, so a 20-minute session with the gate open and the reader offline would otherwise spend 240 of the
+// ring's 768 tail lines on the same sentence and raise Lost for the lines that matter.
 void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
 {
     BC250_HWMON_OWNER* owner = &Device->Hwmon;
@@ -200,18 +245,27 @@ void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
     KIRQL irql;
     ULONG i, fan = 0, rpm = 0, duty = 0, turning = 0, present = 0;
     LONG apu = 0;
+    BOOLEAN haveApu = FALSE;
 
     if (!owner->Enabled) return;
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     snap = owner->Snap;
     KeReleaseSpinLock(&owner->SnapLock, irql);
-    if ((snap.Flags & BC250_HWMON_FLAG_VALID) == 0u) {
-        GuardLog("hwmon: %s offline, reason %s (base 0x%04lX, ec 0x%04lX build %02lu/%02lu/%02lu, fans 0x%02lX)",
-                 What, HwmonReasonText(snap.Reason), snap.BasePort, snap.EcVersion,
+    // No reading means either offline or online with no sample at all; the second one is the missing governor
+    // thread, which HwmonReportedReason names once its grace window has passed.
+    if ((snap.Flags & BC250_HWMON_FLAG_VALID) == 0u || snap.SampleAt == 0) {
+        ULONG reason = HwmonReportedReason(owner, &snap, KeQueryInterruptTime());
+
+        if (owner->LoggedOffline && owner->LoggedReason == reason) return;
+        owner->LoggedOffline = TRUE;
+        owner->LoggedReason = reason;
+        GuardLog("hwmon: %s no reading, reason %s (base 0x%04lX, ec 0x%04lX build %02lu/%02lu/%02lu, fans 0x%02lX)",
+                 What, HwmonReasonText(reason), snap.BasePort, snap.EcVersion,
                  (snap.EcBuild >> 8) & 0xFFu, snap.EcBuild & 0xFFu, (snap.EcBuild >> 16) & 0xFFu,
                  snap.FanPresentMask);
         return;
     }
+    owner->LoggedOffline = FALSE;
     for (i = 0; i < BC250_HWMON_FAN_MAX; i++) {
         if ((snap.FanPresentMask & (1u << i)) != 0u) present++;
         if (snap.Rpm[i] == 0u) continue;
@@ -221,12 +275,21 @@ void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
     for (i = 0; i < BC250_HWMON_FAN_MAX; i++)
         if (snap.DutyPermille[i] > duty) duty = snap.DutyPermille[i];
     for (i = 0; i < BC250_HWMON_TEMP_MAX; i++)
-        if (snap.TemperatureSource[i] == BC250_HWMON_SOURCE_APU) apu = snap.TemperatureMc[i];
+        if (snap.TemperatureSource[i] == BC250_HWMON_SOURCE_APU) { apu = snap.TemperatureMc[i]; haveApu = TRUE; }
+    // "apu n/a" and never "apu 0.0 C": no channel of this map carries the die, or its value was refused. A
+    // zero printed as a temperature is the one thing this whole read path refuses to do.
+    if (!haveApu) {
+        GuardLog("hwmon: %s fan%lu %lu rpm (%lu/%lu turn) duty %lu permille%s mode 0x%02lX eng 0x%02lX apu n/a, "
+                 "%llu samples %llu errors %llu refusals",
+                 What, fan + 1u, rpm, turning, present, duty, owner->DutyProven ? "" : " unproven",
+                 snap.ModeMask, snap.Engine, snap.Samples, snap.Errors, snap.Refusals);
+        return;
+    }
     GuardLog("hwmon: %s fan%lu %lu rpm (%lu/%lu turn) duty %lu permille%s mode 0x%02lX eng 0x%02lX apu %ld.%01ld C, "
-             "%llu samples %llu errors %llu retries",
+             "%llu samples %llu errors %llu retries %llu refusals",
              What, fan + 1u, rpm, turning, present, duty, owner->DutyProven ? "" : " unproven",
              snap.ModeMask, snap.Engine, apu / 1000, (apu < 0 ? -apu : apu) % 1000 / 100,
-             snap.Samples, snap.Errors, snap.Retries);
+             snap.Samples, snap.Errors, snap.Retries, snap.Refusals);
 }
 
 // ---- life cycle -----------------------------------------------------------------------------------------
@@ -254,7 +317,11 @@ void HwmonStart(BC250_DEVICE* Device)
     owner->Online = FALSE;
     owner->LastValid = FALSE;
     owner->FailuresInRow = 0;
-    owner->Samples = owner->Errors = owner->Retries = 0;
+    owner->StoppedInRow = 0;
+    owner->LoggedOffline = FALSE;
+    owner->LoggedReason = 0;
+    owner->StartedAt = KeQueryInterruptTime();
+    owner->Samples = owner->Errors = owner->Retries = owner->Refusals = 0;
     RtlZeroMemory(&owner->Identity, sizeof(owner->Identity));
     RtlZeroMemory(&owner->Last, sizeof(owner->Last));
     owner->Enabled = GuardReadSetting(HWMON_SETTING_ENABLE, 0) == 1;
@@ -282,12 +349,13 @@ void HwmonStart(BC250_DEVICE* Device)
     // One line with every value it read, whatever the answer: this is the line an operator pins the customer
     // ID from, and the line that says why a refusal happened.
     GuardLog("hwmon: base 0x%04lX ec %lu.%lu build %02lu/%02lu/%02lu customer 0x%04lX cfg 0x%02lX fans 0x%02lX "
-             "duties 0x%02lX temps %lu -> %s",
+             "duties 0x%02lX temps %lu volts %lu mode 0x%02lX eng 0x%02lX -> %s",
              base, (ULONG)(owner->Identity.version >> 8), (ULONG)(owner->Identity.version & 0xFFu),
              (ULONG)((owner->Identity.build >> 8) & 0xFFu), (ULONG)(owner->Identity.build & 0xFFu),
              (ULONG)((owner->Identity.build >> 16) & 0xFFu), (ULONG)owner->Identity.customer_id,
              (ULONG)owner->Identity.cfg, (ULONG)owner->Identity.fan_present,
              (ULONG)owner->Identity.duty_present, (ULONG)owner->Identity.temperatures,
+             (ULONG)owner->Identity.voltages, (ULONG)owner->Identity.mode_mask, (ULONG)owner->Identity.engine,
              HwmonReasonText(owner->Identity.reason));
     if (status != 0) {
         owner->Reason = owner->Identity.reason;
@@ -325,7 +393,8 @@ void HwmonStop(BC250_HWMON_OWNER* Owner)
     // now withholds without VALID. The numbers stay, so a support report taken after a stop still has them.
     Owner->Snap.Flags &= ~BC250_HWMON_FLAG_VALID;
     KeReleaseSpinLock(&Owner->SnapLock, irql);
-    GuardLog("hwmon: stop after %llu samples, %llu errors, %llu retries", snap.Samples, snap.Errors, snap.Retries);
+    GuardLog("hwmon: stop after %llu samples, %llu errors, %llu retries, %llu refusals", snap.Samples,
+             snap.Errors, snap.Retries, snap.Refusals);
 }
 
 // ---- the sampler ----------------------------------------------------------------------------------------
@@ -349,6 +418,7 @@ void HwmonSample(BC250_DEVICE* Device)
     HwmonIo(&ports, owner, &io);
     status = bc250_hwmon_sample(&io, &owner->Identity, owner->LastValid ? &owner->Last : NULL, &sample);
     owner->Retries += sample.retries;
+    owner->Refusals += sample.refusals;
     now = KeQueryInterruptTime();
     if (status != 0) {
         owner->Errors++;
@@ -365,6 +435,11 @@ void HwmonSample(BC250_DEVICE* Device)
     }
     owner->FailuresInRow = 0;
     owner->Samples++;
+    // Only an accepted sample is evidence about the fan, so only one moves this counter. A refused sample
+    // republishes the last accepted one, with the count it already had, so a collision neither raises STOPPED
+    // nor clears it.
+    if (HwmonStoppedSample(owner, &sample)) owner->StoppedInRow++;
+    else owner->StoppedInRow = 0;
     owner->Last = sample;
     owner->LastValid = TRUE;
     owner->LastAt = now;
@@ -395,8 +470,9 @@ void HwmonRequest(BC250_DEVICE* Device, BC250_ESCAPE_HWMON* Data, ULONG EscapeFl
     RtlZeroMemory(Data->DutyPermille, sizeof(Data->DutyPermille));
     RtlZeroMemory(Data->TemperatureMc, sizeof(Data->TemperatureMc));
     RtlZeroMemory(Data->TemperatureSource, sizeof(Data->TemperatureSource));
-    Data->AgeMs = Data->Reason = Data->Reserved = 0;
-    Data->Samples = Data->Errors = Data->Retries = Data->Generation = 0;
+    Data->AgeMs = Data->Reason = Data->Engine = 0;
+    Data->RpmValidMask = Data->DutyValidMask = 0;
+    Data->Samples = Data->Errors = Data->Retries = Data->Refusals = Data->Generation = 0;
     if (Data->AbiVersion != BC250_HWMON_ABI || Data->Op != BC250_HWMON_OP_READ ||
         EscapeFlags != expectedFlags.Value) return;
     if (!ExAcquireRundownProtection(&Device->StartHealth.Readers)) {
@@ -421,7 +497,7 @@ void HwmonRequest(BC250_DEVICE* Device, BC250_ESCAPE_HWMON* Data, ULONG EscapeFl
         if (Data->AgeMs <= BC250_HWMON_FRESH_MS && (Data->Flags & BC250_HWMON_FLAG_VALID) != 0)
             Data->Flags |= BC250_HWMON_FLAG_FRESH;
     }
-    Data->Reason = snap.Reason;
+    Data->Reason = HwmonReportedReason(owner, &snap, now);
     Data->BasePort = snap.BasePort;
     Data->CustomerId = snap.CustomerId;
     Data->EcVersion = snap.EcVersion;
@@ -429,6 +505,9 @@ void HwmonRequest(BC250_DEVICE* Device, BC250_ESCAPE_HWMON* Data, ULONG EscapeFl
     Data->FanPresentMask = snap.FanPresentMask;
     Data->DutyPresentMask = snap.DutyPresentMask;
     Data->ModeMask = snap.ModeMask;
+    Data->Engine = snap.Engine;
+    Data->RpmValidMask = snap.RpmValidMask;
+    Data->DutyValidMask = snap.DutyValidMask;
     for (i = 0; i < BC250_HWMON_FAN_SLOTS; i++) {
         Data->Rpm[i] = snap.Rpm[i];
         Data->DutyPermille[i] = snap.DutyPermille[i];
@@ -440,6 +519,7 @@ void HwmonRequest(BC250_DEVICE* Device, BC250_ESCAPE_HWMON* Data, ULONG EscapeFl
     Data->Samples = snap.Samples;
     Data->Errors = snap.Errors;
     Data->Retries = snap.Retries;
+    Data->Refusals = snap.Refusals;
     Data->Generation = snap.Generation;
     Data->Status = BC250_ESCAPE_STATUS_DONE;
     Data->NtStatus = (ULONG)STATUS_SUCCESS;

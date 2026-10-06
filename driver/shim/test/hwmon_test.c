@@ -114,12 +114,24 @@ static void allowlist(void)
 
 static void base(void)
 {
+	/* The three windows the DSDT reports on this board, and nothing else. */
 	CHECK(bc250_hwmon_base_allowed(BC250_HWMON_BASE_DEFAULT));	/* 0x0A20, measured on unit A */
+	CHECK(bc250_hwmon_base_allowed(BC250_HWMON_BASE_ALT_1));	/* 0x0A00, DSDT IO1B */
+	CHECK(bc250_hwmon_base_allowed(BC250_HWMON_BASE_ALT_2));	/* 0x0A10, DSDT IO2B */
 	CHECK(!bc250_hwmon_base_allowed(0u));
 	CHECK(!bc250_hwmon_base_allowed(0xFFu));
 	CHECK(!bc250_hwmon_base_allowed(0x0A21u));			/* the low three bits must be clear */
 	CHECK(!bc250_hwmon_base_allowed(0x1A20u));			/* and so must bits 12 to 15 */
-	CHECK(bc250_hwmon_base_allowed(0x0290u));
+	CHECK(!bc250_hwmon_base_allowed(0x0290u));			/* a legal Super I/O window, not one of ours */
+
+	/* The four an operator could plausibly type, or mistype, into HwmonBasePort, and what each one would
+	 * have been. The two upstream rules admit every one of them, because upstream reads its base OUT OF THE
+	 * CHIP; here the value comes from the registry, and the reader writes three latch bytes per register. */
+	CHECK(!bc250_hwmon_base_allowed(0x0CF8u));	/* the PCI configuration ADDRESS port: base+6 is its DATA port */
+	CHECK(!bc250_hwmon_base_allowed(0x0CD0u));	/* the FCH power-management index pair sits at base+6 */
+	CHECK(!bc250_hwmon_base_allowed(0x04D0u));	/* the fixed legacy block this board reserves */
+	CHECK(!bc250_hwmon_base_allowed(0x10A20u));	/* 0x0A20 with a typed digit too many: the HAL would truncate it */
+	CHECK(!bc250_hwmon_base_allowed(0xFFFFFFF8u));
 }
 
 /* ---- conversions -------------------------------------------------------------------------------------- */
@@ -128,6 +140,10 @@ static void base(void)
  * so it is defence and never a live refusal. Written as a type and not as a CHECK, because a constant `if` is
  * a warning and this is not a run-time question. */
 typedef char hwmon_upper_bound_is_defence[BC250_HWMON_TEMP_MAX_MC > 127500 ? 1 : -1];
+/* The same for the tachometer: the chip's own "no reading" is above the speed range, so the RPM_NONE branch of
+ * bc250_hwmon_rpm_plausible is a named defence that the range rule already covers. Stated here, so that the
+ * CHECK below is not mistaken for coverage of that branch. */
+typedef char hwmon_rpm_none_is_above_the_range[BC250_HWMON_RPM_NONE > BC250_HWMON_RPM_MAX ? 1 : -1];
 
 static void conversions(void)
 {
@@ -155,7 +171,10 @@ static void plausibility(void)
 	CHECK(bc250_hwmon_rpm_plausible(1589u, 1600u));
 	CHECK(bc250_hwmon_rpm_plausible(0u, 1589u));		/* a fan that stopped is a real event */
 	CHECK(bc250_hwmon_rpm_plausible(3100u, 0u));		/* this board's measured full-duty speed */
-	CHECK(!bc250_hwmon_rpm_plausible(BC250_HWMON_RPM_NONE, 0u));	/* the chip's own "no reading" */
+	/* The chip's own "no reading". The range rule refuses it as well (the type above says so at compile
+	 * time), so this one check cannot tell the two rules apart, and the test says that instead of claiming
+	 * coverage it does not have. The named branch stays because it documents the chip's own value. */
+	CHECK(!bc250_hwmon_rpm_plausible(BC250_HWMON_RPM_NONE, 0u));
 	CHECK(!bc250_hwmon_rpm_plausible(20000u, 0u));
 	CHECK(!bc250_hwmon_rpm_plausible(BC250_HWMON_RPM_MAX + 1u, 0u));
 	CHECK(!bc250_hwmon_rpm_plausible(1589u, 300u));		/* a jump by more than a factor of four */
@@ -170,6 +189,7 @@ static void identity(void)
 	struct ec_mock ec;
 	struct bc250_hwmon_io io;
 	struct bc250_hwmon_identity id;
+	unsigned int i;
 
 	ec_unit_a(&ec);
 	ec_io(&io, &ec);
@@ -182,12 +202,67 @@ static void identity(void)
 	CHECK(id.monitoring == 1u);
 	CHECK(id.fan_present == 0x1Fu && id.duty_present == 0x1Fu);	/* five channels each */
 	/* The source walk: the channel map, not a fixed table. nct6687d's hard-coded MSI layout would get this
-	 * wrong on this board. */
+	 * wrong on this board. The fixture interleaves six voltages with the three temperatures, so a reader that
+	 * assumed channels 0, 1, 2 would map a voltage onto the APU slot and publish it as a temperature. */
 	CHECK(id.temperatures == 3u);
-	CHECK(id.channel[0] == 0u && id.source[0] == BC250_HWMON_SOURCE_APU);
-	CHECK(id.channel[1] == 1u && id.source[1] == BC250_HWMON_SOURCE_THERMISTOR14);
-	CHECK(id.channel[2] == 2u && id.source[2] == BC250_HWMON_SOURCE_THERMISTOR15);
+	CHECK(id.voltages == 6u);					/* VIN0, VIN1, VIN2, VIN6, VIN7, VIN16 at E01 */
+	CHECK(id.channel[0] == EC_MOCK_APU_CHANNEL && id.source[0] == BC250_HWMON_SOURCE_APU);
+	CHECK(id.channel[1] == EC_MOCK_TH14_CHANNEL && id.source[1] == BC250_HWMON_SOURCE_THERMISTOR14);
+	CHECK(id.channel[2] == EC_MOCK_TH15_CHANNEL && id.source[2] == BC250_HWMON_SOURCE_THERMISTOR15);
+	CHECK(id.channel[3] == 0u && id.source[3] == 0u);
+	/* The two UNPROVEN registers, read here and never in a sample. */
+	CHECK(id.mode_mask == 0u && id.engine == 0u);
 	CHECK(ec.writes_other == 0 && ec.sequence_errors == 0 && ec.outside_hold == 0);
+
+	/* A window that only ECHOES its own index latch: every read answers with the low byte of the register it
+	 * was asked for. The all-0x00 and all-0xFF pair below passes that, and so does the month/day range, so
+	 * three further rules refuse it. Checked one at a time, from the real fixture, so that each rule is the
+	 * reason for its own refusal and not a passenger. */
+	ec_unit_a(&ec);
+	ec_put8(&ec, BC250_HWMON_REG_VERSION_HI, 8);	/* the echo would answer 0x08 here and 0x09 below */
+	ec_put8(&ec, BC250_HWMON_REG_VERSION_LO, 9);
+	CHECK(bc250_hwmon_identify(&io, BC250_HWMON_BASE_DEFAULT, &id) == BC250_HWMON_REFUSED);
+	CHECK(id.reason == BC250_HWMON_REASON_IDENTITY && id.version == 0x0809u);
+	ec_unit_a(&ec);
+	ec_put8(&ec, BC250_HWMON_REG_BUILD_YEAR, 4);	/* 2004: the echo's own answer at 0x604 */
+	CHECK(bc250_hwmon_identify(&io, BC250_HWMON_BASE_DEFAULT, &id) == BC250_HWMON_REFUSED);
+	ec_unit_a(&ec);
+	ec_put8(&ec, BC250_HWMON_REG_BUILD_YEAR, 40);	/* and the other end of the range */
+	CHECK(bc250_hwmon_identify(&io, BC250_HWMON_BASE_DEFAULT, &id) == BC250_HWMON_REFUSED);
+	ec_unit_a(&ec);
+	for (i = 0; i < 6u; i++)			/* no voltage channel at all: not this chip */
+		ec_put8(&ec, BC250_HWMON_REG_MON_CFG(ec_mock_voltages[i][0]), 0);
+	CHECK(bc250_hwmon_identify(&io, BC250_HWMON_BASE_DEFAULT, &id) == BC250_HWMON_REFUSED);
+	CHECK(id.reason == BC250_HWMON_REASON_IDENTITY && id.voltages == 0u && id.temperatures == 3u);
+
+	/* The whole echo, built from the model: a data port that answers the last index byte. Version 0x0809,
+	 * build 04/05/06, every present mask 0xFF, 32 "temperature" sources of 0x20 to 0x3F and no voltage. Part A
+	 * would otherwise publish four channels of 0.0 C from a window with no chip behind it. */
+	ec_unit_a(&ec);
+	ec.answer_index = 1;
+	CHECK(bc250_hwmon_identify(&io, BC250_HWMON_BASE_DEFAULT, &id) == BC250_HWMON_REFUSED);
+	CHECK(id.reason == BC250_HWMON_REASON_IDENTITY);
+	CHECK(ec.writes_other == 0);
+	ec.answer_index = 0;
+
+	/* Four board sensors ahead of the APU. The map holds four channels, so a walk that simply took the first
+	 * four would lose the die - the one channel a thermal reading cares about. It keeps the last slot. */
+	ec_unit_a(&ec);
+	ec_put8(&ec, BC250_HWMON_REG_MON_CFG(EC_MOCK_APU_CHANNEL), BC250_HWMON_SOURCE_THERMISTOR14);
+	ec_put8(&ec, BC250_HWMON_REG_MON_CFG(3), BC250_HWMON_SOURCE_THERMISTOR15);
+	ec_put8(&ec, BC250_HWMON_REG_MON_CFG(7), BC250_HWMON_SOURCE_THERMISTOR14);
+	ec_put8(&ec, BC250_HWMON_REG_MON_CFG(11), BC250_HWMON_SOURCE_APU);
+	ec_put16(&ec, BC250_HWMON_REG_MON(11), 0x5300u);
+	CHECK(bc250_hwmon_identify(&io, BC250_HWMON_BASE_DEFAULT, &id) == 0);
+	CHECK(id.temperatures == BC250_HWMON_TEMP_MAX);
+	CHECK(id.channel[BC250_HWMON_TEMP_MAX - 1u] == 11u);
+	CHECK(id.source[BC250_HWMON_TEMP_MAX - 1u] == BC250_HWMON_SOURCE_APU);
+	{
+		struct bc250_hwmon_sample last_slot;
+
+		CHECK(bc250_hwmon_sample(&io, &id, 0, &last_slot) == 0);
+		CHECK(last_slot.temperature_mc[BC250_HWMON_TEMP_MAX - 1u] == 83000);
+	}
 
 	/* A base the chip cannot sit on is refused before any port is touched. */
 	ec_unit_a(&ec);
@@ -260,9 +335,18 @@ static void sampling(void)
 		CHECK(first.duty[i] == 245u);
 	CHECK(first.temperature_valid == 7u);
 	CHECK(first.temperature_mc[0] == 83000 && first.temperature_mc[1] == 59500);
-	CHECK(first.mode_mask == 0u);			/* Standard Mode: the EC curve owns our channel */
 	CHECK(first.refusals == 0 && first.retries == 0);
 	CHECK(ec.writes_other == 0 && ec.sequence_errors == 0 && ec.outside_hold == 0);
+	/* A sample reads the tachometers, the duty read-backs and the mapped temperatures, and NOTHING else. The
+	 * mode mask and the fan engine status belong to the start: both are UNPROVEN registers of the chip that
+	 * cools the board, and no decision of ours reads either one. 5 + 5 + 3 transactions, 13 reads. */
+	CHECK(first.reads == 13u);
+	{
+		unsigned int before = ec.reads;
+
+		CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == 0);
+		CHECK(ec.reads - before == 5u * 2u + 5u + 3u * 2u);	/* the 16-bit ones are two reads each */
+	}
 
 	/* The chip's own "no reading" never becomes a number. */
 	ec_unit_a(&ec);
@@ -310,14 +394,45 @@ static void sampling(void)
 
 	/* One dead monitor channel among three is not a dead window. */
 	ec_unit_a(&ec);
-	ec_put16(&ec, BC250_HWMON_REG_MON(1), BC250_HWMON_MON_NONE);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_TH14_CHANNEL), BC250_HWMON_MON_NONE);
 	CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == 0);
 	CHECK(second.temperature_valid == 5u && second.temperature_mc[1] == 0);
 	CHECK(second.temperature_mc[0] == 83000 && second.temperature_mc[2] == 59500);
 	ec_unit_a(&ec);
-	ec_put16(&ec, BC250_HWMON_REG_MON(1), BC250_HWMON_MON_EMPTY);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_TH14_CHANNEL), BC250_HWMON_MON_EMPTY);
 	CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == 0);
 	CHECK(second.temperature_valid == 5u && second.retries == 1u);
+
+	/* The 0.5 C step means the raw words 1 to 127 convert to 0 mC as well, and a converted 0 is refused with
+	 * the two "nothing here" words: that is the whole rule, and a quarter of a degree of noise may not print
+	 * the 0.0 C the rule exists to prevent. */
+	ec_unit_a(&ec);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_APU_CHANNEL), 0x0001u);
+	CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == 0);
+	CHECK((second.temperature_valid & 1u) == 0u && second.temperature_mc[0] == 0);
+	CHECK(second.refusals >= 1u);
+	ec_unit_a(&ec);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_APU_CHANNEL), 0x007Fu);	/* 127: still 0.0 C */
+	CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == 0);
+	CHECK((second.temperature_valid & 1u) == 0u);
+	ec_unit_a(&ec);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_APU_CHANNEL), 0x0080u);	/* 128: 0.5 C, the first step */
+	CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == 0);
+	CHECK((second.temperature_valid & 1u) != 0u && second.temperature_mc[0] == 500);
+
+	/* The retry budget. Every tachometer and every temperature answers 0xFFFF, so every one of the eight
+	 * values wants a re-read; four of them get one, and the fifth does not. The budget exists to bound the
+	 * traffic a bad minute can put on a window that has no arbiter. */
+	ec_unit_a(&ec);
+	for (i = 0; i < 5u; i++)
+		ec_put16(&ec, BC250_HWMON_REG_FAN(i), BC250_HWMON_RPM_NONE);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_APU_CHANNEL), BC250_HWMON_MON_NONE);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_TH14_CHANNEL), BC250_HWMON_MON_NONE);
+	ec_put16(&ec, BC250_HWMON_REG_MON(EC_MOCK_TH15_CHANNEL), BC250_HWMON_MON_NONE);
+	CHECK(bc250_hwmon_sample(&io, &id, 0, &second) == BC250_HWMON_REFUSED);
+	CHECK(second.retries == BC250_HWMON_RETRY_MAX);
+	CHECK(second.refusals == 8u);				/* five tachometers and three temperatures */
+	CHECK(second.reads == 13u + BC250_HWMON_RETRY_MAX);	/* and not one transaction more */
 
 	/* A board with no temperature channel at all would still be a reading, on its tachometers alone. No such
 	 * board is known; the rule is written so that the refusal above is about the window and not about us. */

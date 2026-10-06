@@ -127,7 +127,7 @@ class TelemetryAbiTest(unittest.TestCase):
         """The fan reply, word for word. A drift here shows a wrong fan speed instead of failing."""
         fields = c_fields(HEADER.read_text(), 'BC250_ESCAPE_HWMON')
         self.assertEqual(fields, cs_fields('HwmonSnapshot'))
-        self.assertEqual(size_of(fields), 200)
+        self.assertEqual(size_of(fields), 216)
 
     def test_hwmon_constants(self):
         header = HEADER.read_text()
@@ -150,7 +150,9 @@ class TelemetryAbiTest(unittest.TestCase):
         source = DRIVER_CS.read_text()
         self.assertIn('Bc250Dpm(out data, 160)', source)
         self.assertIn('Bc250VideoMemory(null, out data, 264)', source)
-        self.assertIn('bytes != 200', source)
+        # The fan reply's size is passed by Marshal.SizeOf, so the literal here is the thing that would
+        # not move with the struct. 216 is the size test_monitor_hwmon_layout checks above.
+        self.assertIn('bytes != 216', source)
 
 
 class MonTelemetryTest(unittest.TestCase):

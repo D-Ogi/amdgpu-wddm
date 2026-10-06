@@ -46,7 +46,20 @@
 #define BC250_HWMON_PORT_COUNT	4u
 
 #define BC250_HWMON_PAGE_UNLOCK	0xFFu	/* written to the page port before the page itself */
+
+/* The three windows this chip can sit on, and the only three HwmonBasePort admits. The DSDT reports exactly
+ * these and nothing else: IO1B 0x0A00, IO2B 0x0A10 and IO3B 0x0A20, 16 bytes each (facts-firmware, DSDT
+ * _CRS of SIO1). The hardware monitor itself is on the third one, which E01 also measured.
+ *
+ * An allowlist and not a rule, because the two upstream rules (at least 0x100, eight-byte aligned, bits 12
+ * to 15 clear) were written for a base READ OUT OF THE SUPER I/O, where the chip itself names the window.
+ * Here the value comes from the registry, and those rules admit 0x0CF8, the PCI configuration address port,
+ * and 0x0CD0, the FCH power-management index pair. The reader would then write its latch bytes into one of
+ * them once a second. A registry DWORD is not a chip's own answer, so it gets a list. */
 #define BC250_HWMON_BASE_DEFAULT 0x0A20u	/* measured on unit A (E01 ioports.txt, DSDT IO3B) */
+#define BC250_HWMON_BASE_ALT_1	0x0A00u		/* DSDT IO1B */
+#define BC250_HWMON_BASE_ALT_2	0x0A10u		/* DSDT IO2B */
+#define BC250_HWMON_BASE_MAX	0xFFF8u		/* a port is 16 bits wide: the HAL would truncate anything above */
 
 /* ---- EC registers, read side -------------------------------------------------------------- */
 
@@ -86,6 +99,21 @@
 #define BC250_HWMON_SOURCE_THERMISTOR14	0x08u	/* a board sensor, 59.5 C at E01 */
 #define BC250_HWMON_SOURCE_THERMISTOR15	0x09u	/* a board sensor, 59.5 C at E01 */
 
+/* What the identity insists on, beyond "the bytes are not all 0x00 or all 0xFF". A window that only echoes
+ * its own index latch answers every read with the low byte of the register it was asked for, which passes
+ * that pair: version 0x0809, a build date of 04/05/06, five present masks of 0xFF... and the reader would
+ * then publish four temperature channels of 0.0 C from a window with no chip behind it.
+ *
+ * So three independent rules, each one a value an echo cannot produce:
+ *   - the firmware's major version is 1 (unit A reads 1.0; the echo reads 8.9),
+ *   - the build year is between 2020 and 2039 (the echo reads 2004),
+ *   - at least one monitor channel carries a VOLTAGE source. E01 found six on this board (VIN0, VIN1, VIN2,
+ *     VIN6, VIN7, VIN16) through the same MON_CFG walk, so this costs a real chip nothing, and an echo
+ *     cannot give one: its sources are the channel indexes 0x20 to 0x3F, every one of them a temperature. */
+#define BC250_HWMON_EC_MAJOR		1u	/* 0x608: the EC firmware major version this reader knows */
+#define BC250_HWMON_BUILD_YEAR_MIN	20u	/* 0x604 holds the year without its century */
+#define BC250_HWMON_BUILD_YEAR_MAX	39u
+
 /* Plausibility bounds. A collision with another agent on this unarbitrated window returns a
  * plausible byte and no error, so every sample is checked. */
 #define BC250_HWMON_RPM_NONE		0xFFFFu	/* the chip's own "no reading" */
@@ -93,7 +121,10 @@
  * are refused before the conversion, because the conversion turns either of them into 0.0 C and a
  * dead window must never look like a cold board. A sensor genuinely at 0.0 C is refused with them.
  * That costs one reading on a board whose coldest sensor sits inside a closed case next to an APU,
- * and it buys the one thing the window cannot otherwise give us: a wrong reading that says so. */
+ * and it buys the one thing the window cannot otherwise give us: a wrong reading that says so.
+ * The conversion step is 0.5 C, so the raw words 1 to 127 also come out as 0 mC: refusing the two
+ * words alone would let a quarter of a degree of noise print the same 0.0 C this rule exists to
+ * prevent. A CONVERTED 0 mC is therefore refused as well, whatever raw word produced it. */
 #define BC250_HWMON_MON_NONE		0xFFFFu
 #define BC250_HWMON_MON_EMPTY		0x0000u
 #define BC250_HWMON_RPM_MAX		6000u	/* the measured full-duty speed of this board is 3100 */
@@ -139,8 +170,15 @@ struct bc250_hwmon_identity {
 	unsigned int	fan_present;	/* bit i: tachometer i exists */
 	unsigned int	duty_present;	/* bit i: duty output i exists */
 	unsigned int	temperatures;	/* temperature channels found, at most BC250_HWMON_TEMP_MAX */
+	unsigned int	voltages;	/* voltage channels seen in the walk; at least one, or the window is not a chip */
 	unsigned int	channel[BC250_HWMON_TEMP_MAX];	/* monitor index of each one */
 	unsigned int	source[BC250_HWMON_TEMP_MAX];	/* its source code */
+	/* The two UNPROVEN registers, read once here and never again. They answer a Part B question ("does the
+	 * EC curve own every channel at rest?") and no decision of ours reads them, so a sample has no business
+	 * putting eight more port accesses a second on an uncharacterised register of the chip that cools the
+	 * board. Published and logged as the start found them. */
+	unsigned int	mode_mask;	/* 0xA00 as read: one bit per channel, set = manual. UNPROVEN */
+	unsigned int	engine;		/* 0xCF8 as read: fan engine status. UNPROVEN, published and logged only */
 	unsigned int	reason;		/* enum bc250_hwmon_reason */
 };
 
@@ -150,8 +188,6 @@ struct bc250_hwmon_sample {
 	unsigned int	rpm_valid;	/* bit i */
 	unsigned int	duty[BC250_HWMON_FAN_MAX];	/* raw 0..255 */
 	unsigned int	duty_valid;
-	unsigned int	mode_mask;	/* 0xA00 as read; UNPROVEN */
-	unsigned int	engine;		/* 0xCF8 as read; UNPROVEN, logged only */
 	int		temperature_mc[BC250_HWMON_TEMP_MAX];
 	unsigned int	temperature_valid;
 	unsigned int	reads;		/* register transactions of this sample */
@@ -161,8 +197,8 @@ struct bc250_hwmon_sample {
 
 /* ---- policy -------------------------------------------------------------------------------- */
 
-/* The base a HwmonBasePort may name. The two rules are the ones the Linux drivers apply to the base
- * they read out of the Super I/O: at least 0x100, and (base & 0xF007) == 0. 0x0A20 passes. */
+/* The base a HwmonBasePort may name: one of the three windows the DSDT reports, and nothing else. See the
+ * BC250_HWMON_BASE_* block above for why this is a list and not the two upstream rules. */
 int bc250_hwmon_base_allowed(unsigned int base);
 
 /* The read allowlist, as code. Everything outside it is refused, a page above 0xFF included. */
@@ -178,13 +214,18 @@ int bc250_hwmon_write_allowed(unsigned int reg);
 int bc250_hwmon_read8(const struct bc250_hwmon_io *io, unsigned int reg, unsigned int *value);
 int bc250_hwmon_read16(const struct bc250_hwmon_io *io, unsigned int reg, unsigned int *value);
 
-/* The chip identity and the channel map. Zero when the chip answered plausibly; otherwise the
- * reason is in id->reason and the caller must not sample. */
+/* The chip identity, the channel map and the two UNPROVEN registers, all read once. Zero when the
+ * chip answered plausibly; otherwise the reason is in id->reason and the caller must not sample.
+ *
+ * The walk reads all 32 MON_CFG entries, keeps at most BC250_HWMON_TEMP_MAX temperature channels
+ * and counts the voltage channels it passed. The APU channel (source BC250_HWMON_SOURCE_APU) is
+ * kept whatever its index: it is the one channel a thermal decision would ever read, and a board
+ * that puts four thermistors before it must not push it out of the map. */
 int bc250_hwmon_identify(const struct bc250_hwmon_io *io, unsigned int base,
 			 struct bc250_hwmon_identity *id);
 
-/* One sample of every present tachometer and duty output, the mode mask, the engine status and the
- * mapped temperature channels. `previous` may be null (the first sample).
+/* One sample of every present tachometer and duty output and of the mapped temperature channels.
+ * `previous` may be null (the first sample).
  *
  * Zero when the sample is a reading, BC250_HWMON_REFUSED when it is not. A reading needs at least
  * one accepted tachometer or temperature, AND every mapped temperature channel refused makes the

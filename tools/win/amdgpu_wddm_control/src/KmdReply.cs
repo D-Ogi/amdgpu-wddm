@@ -54,11 +54,12 @@ namespace AmdgpuWddmControl
     {
         public uint Version, Flags, Reason, BasePort, CustomerId, EcVersion, EcBuild;
         public uint FanPresentMask, DutyPresentMask, ModeMask, AgeMs;
+        public uint Engine, RpmValidMask, DutyValidMask;
         public uint[] Rpm = new uint[8];
         public uint[] DutyPermille = new uint[8];
         public int[] TemperatureMc = new int[4];
         public uint[] TemperatureSource = new uint[4];
-        public ulong Samples, Errors, Retries, Generation;
+        public ulong Samples, Errors, Retries, Refusals, Generation;
 
         public const uint FlagValid = 1, FlagMonitoring = 2, FlagFresh = 4, FlagGated = 8,
             FlagIdPinned = 16, FlagDutyProven = 32, FlagStopped = 64;
@@ -111,7 +112,7 @@ namespace AmdgpuWddmControl
         public const uint Magic = 0x30353242;   // "B250"
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
         public const uint CmdCuMode = 22, CmdHwmon = 27;
-        public const int HwmonBytes = 200;
+        public const int HwmonBytes = 216;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
         public const uint CmdStartHealth = 21, CmdDpm = 23, CmdInterop = 25, CmdGetLog = 12;
@@ -184,7 +185,8 @@ namespace AmdgpuWddmControl
                 EcVersion = U(b, 10), EcBuild = U(b, 11), FanPresentMask = U(b, 12), DutyPresentMask = U(b, 13),
                 ModeMask = U(b, 14), AgeMs = U(b, 39),
                 Samples = Q(b, 160), Errors = Q(b, 168), Retries = Q(b, 176), Generation = Q(b, 184),
-                Reason = U(b, 48),
+                Reason = U(b, 48), Engine = U(b, 49), RpmValidMask = U(b, 50), DutyValidMask = U(b, 51),
+                Refusals = Q(b, 208),
             };
             for (int i = 0; i < 8; i++) { h.Rpm[i] = U(b, 15 + i); h.DutyPermille[i] = U(b, 23 + i); }
             for (int i = 0; i < 4; i++) { h.TemperatureMc[i] = (int)U(b, 31 + i); h.TemperatureSource[i] = U(b, 35 + i); }
