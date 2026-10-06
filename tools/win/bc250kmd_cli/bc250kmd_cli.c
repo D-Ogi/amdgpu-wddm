@@ -2375,11 +2375,12 @@ static void TuneFloorText(char *text, size_t size, unsigned long mhz)
     else _snprintf_s(text, size, _TRUNCATE, "off");
 }
 
-// "below 85.5 C for 3000 ms" or "off". 87 C is BC250_DPM_HOT_MC (driver/shim/include/bc250_dpm.h), fixed since 0.7.195.
+// "below 85.5 C for 3000 ms" or "off". The reference is BC250_DPM_TUNE_HOT_MC (bc250kmd_escape.h), which the driver
+// asserts equal to BC250_DPM_HOT_MC, 87 C, fixed since 0.7.195.
 static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs)
 {
     if (deltaMc) {
-        long below = 87000l - (long)deltaMc;
+        long below = BC250_DPM_TUNE_HOT_MC - (long)deltaMc;
         _snprintf_s(text, size, _TRUNCATE, "below %ld.%ld C for %lu ms", below / 1000l, (below % 1000l) / 100l, stepMs);
     } else _snprintf_s(text, size, _TRUNCATE, "off");
 }
@@ -2389,7 +2390,7 @@ static void TuneSoftText(char *text, size_t size, unsigned long deltaMc, unsigne
 static void TuneZoneText(char *text, size_t size, unsigned long deltaMc, unsigned long stepMs, unsigned long leadMs)
 {
     if (deltaMc) {
-        long from = 87000l - (long)deltaMc;
+        long from = BC250_DPM_TUNE_HOT_MC - (long)deltaMc;
         _snprintf_s(text, size, _TRUNCATE, "from %ld.%ld C per %lu ms, lead %lu ms", from / 1000l,
                     (from % 1000l) / 100l, stepMs, leadMs);
     } else _snprintf_s(text, size, _TRUNCATE, "off");

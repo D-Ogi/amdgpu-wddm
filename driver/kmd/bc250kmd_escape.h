@@ -553,6 +553,12 @@ typedef struct _BC250_ESCAPE_DPM {
 #define BC250_DPM_TUNE_ABI 3u
 #define BC250_DPM_TUNE_ABI_2 2u
 #define BC250_DPM_TUNE_ABI_1 1u
+// The reading the two deltas of this escape are counted down from: BC250_DPM_HOT_MC of
+// driver/shim/include/bc250_dpm.h, 87 C, fixed since 0.7.195. Both the soft release and the soft zone travel as a
+// delta below it, so a tool has to know it to print the threshold in force, and a user-mode tool does not include the
+// shim's kernel header. The driver's own C_ASSERT (driver/kmd/dpm.c) keeps the two equal, so moving the hot limit
+// breaks the driver build instead of a printed threshold (0.7.213 safety review, finding 8).
+#define BC250_DPM_TUNE_HOT_MC 87000l
 #define BC250_DPM_TUNE_ABI1_SIZE 120u        // the ABI 1 prefix of BC250_ESCAPE_DPM_TUNE
 #define BC250_DPM_TUNE_ABI2_SIZE 152u        // the ABI 2 prefix
 #define BC250_DPM_TUNE_OP_READ 0u
