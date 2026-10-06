@@ -13,8 +13,8 @@
 //   bc250kmd_cli telemetry | vram     what the monitor's GPU line shows (bc250control.dll exports the same reads)
 //   bc250kmd_cli dpm [n [ms]]       the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
-//   bc250kmd_cli dpm curve ...        the operator's V/F curve and its trial (0.7.212, docs/design/tuner.md)
-//   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.212)
+//   bc250kmd_cli dpm curve ...        the operator's V/F curve and its trial (0.7.213, docs/design/tuner.md)
+//   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.213)
 //                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
@@ -678,17 +678,17 @@ BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
     return 0;
 }
 
-// The board's hardware monitor (BC250_ESCAPE_RUN_HWMON, KMD 0.7.212.1 and later): the fan speed, the duty
+// The board's hardware monitor (BC250_ESCAPE_RUN_HWMON, KMD 0.7.213.1 and later): the fan speed, the duty
 // read-back, the fan mode mask and the chip's own temperature channels, as the governor thread published them a
 // second ago at most. Adapter-owned software snapshot, so NoAdapterSynchronization alone, like the DPM read: no
 // port access on this path, no BAR access, no scheduler idle, so a sampler may call it while a game runs.
 //
 // No ABI fallback loop and no size negotiation: the escape was born at ABI 1 with one size. A driver older than
-// 0.7.212.1 does not know command 27 and answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which the check below maps
+// 0.7.213.1 does not know command 27 and answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which the check below maps
 // to 0xC00000BB (STATUS_NOT_SUPPORTED), the same answer the other snapshots give for a driver that is too old.
 // The deployed 0.7.208.1 is such a driver: it stops at command 26, so 0xC00000BB from here is its correct
 // answer and not a defect of the fan path. The reader was written as revision 208 on fan/read-nct6686 and
-// reached a release in 0.7.212.1, which is why no 0.7.208.1 knows it.
+// reached a release in 0.7.213.1, which is why no 0.7.208.1 knows it.
 BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
 {
     NTSTATUS status;
@@ -740,7 +740,7 @@ BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration
     return 0;
 }
 
-// The operator's V/F curve (0.7.212): READ for the window's chart, and the trial operations behind one elevated
+// The operator's V/F curve (0.7.213): READ for the window's chart, and the trial operations behind one elevated
 // action. Every operation is adapter-owned software state answered with NoAdapterSynchronization alone, like the
 // DPM read above: the governor thread applies the curve at its next tick, so no escape of this surface touches a
 // mailbox. A write needs an administrator (the KMD checks the caller's token itself) and the Generation of a READ
@@ -769,7 +769,7 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
         data->TrialMs = windowMs;
     }
     status = TelemetryEscape(data, sizeof(*data));
-    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.212 refuses the command: DEVICE_NOT_READY
+    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.213 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
@@ -779,7 +779,7 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
     return 0;
 }
 
-// The CPU surface (0.7.212). One request structure instead of seven arguments, so that a new field is a version of
+// The CPU surface (0.7.213). One request structure instead of seven arguments, so that a new field is a version of
 // this DLL and not a new export. READ is software state, and so is KEEP from 0.7.213 (it writes the registry and
 // ends the trial, and sends nothing); every other operation sends mailbox messages on the firmware's queue 3 and
 // therefore goes with HardwareAccess, an administrator and the Generation of a READ of the
@@ -835,7 +835,7 @@ BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_E
             status = TelemetryEscapeFlags(data, sizeof(*data), 1);
         }
     }
-    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.212 refuses the command: DEVICE_NOT_READY
+    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.213 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
@@ -937,7 +937,7 @@ static NTSTATUS TelemetryOpenLocked(const WCHAR *wantedId, D3DKMT_OPENADAPTERFRO
 
 // hardware = 0: NoAdapterSynchronization alone, a software snapshot, which is what every read of this DLL sends
 // and what the KMD demands of them. hardware = 1: HardwareAccess alone (the Level Two exclusion), for the one
-// surface whose writes reach a mailbox, the CPU surface of 0.7.212 - its KEEP excepted, which reaches no mailbox
+// surface whose writes reach a mailbox, the CPU surface of 0.7.213 - its KEEP excepted, which reaches no mailbox
 // and goes with hardware = 0 from 0.7.213. The KMD refuses any other combination, per
 // operation, so a mistake here is a refusal and never a half-privileged escape.
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
@@ -2638,7 +2638,7 @@ static int DpmFloor(int argc, WCHAR **argv)
     return TuneWrite(BC250_DPM_TUNE_OP_FLOOR, &t, "dpm floor");
 }
 
-// ---- dpm curve: the operator's V/F curve and its trial (BC250_ESCAPE_RUN_DPM_CURVE, 0.7.212) ---------------------
+// ---- dpm curve: the operator's V/F curve and its trial (BC250_ESCAPE_RUN_DPM_CURVE, 0.7.213) ---------------------
 //
 // "dpm curve" prints the three curves side by side (the table's own line, what is stored, what runs now) with the
 // lowest voltage each level admits. "dpm curve set <mV> ..." puts a whole curve on trial, one value per level from
@@ -2668,7 +2668,7 @@ static int CurveQuery(BC250_ESCAPE_DPM_CURVE *c, unsigned long op, unsigned long
     if (!NT_SUCCESS(status)) {
         if (!quiet) {
             PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM_CURVE)", status);
-            printf("# a driver before 0.7.212 (0x000700D4) has no V/F curve\n");
+            printf("# a driver before 0.7.213 (0x000700D5) has no V/F curve\n");
         }
         return 1;
     }
@@ -2809,7 +2809,7 @@ static int DpmCurve(int argc, WCHAR **argv)
     return 2;
 }
 
-// ---- cpu: the clock limit, the undervolt, the temperature cap and the core mask (BC250_ESCAPE_RUN_CPU, 0.7.212) --
+// ---- cpu: the clock limit, the undervolt, the temperature cap and the core mask (BC250_ESCAPE_RUN_CPU, 0.7.213) --
 //
 // "cpu" prints what is applied, stored and recorded and what the chip last answered; "cpu readback" sends the
 // getters of both queues, which is also what admits every setter of this start. "cpu set [clock <MHz>]
@@ -2861,7 +2861,7 @@ static int CpuQuery(BC250_ESCAPE_CPU *c, unsigned long op, unsigned long long ge
     if (!NT_SUCCESS(status)) {
         if (!quiet) {
             PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_CPU)", status);
-            printf("# a driver before 0.7.212 (0x000700D4) has no CPU surface\n");
+            printf("# a driver before 0.7.213 (0x000700D5) has no CPU surface\n");
         }
         return 1;
     }

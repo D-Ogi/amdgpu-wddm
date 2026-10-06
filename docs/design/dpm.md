@@ -612,9 +612,9 @@ start, without a restart and without the registry:
   the step, lead and warm threshold), and every `dpm: tune` line is followed by a `zone:` line with the steps so far
   and the lead of the last tick.
 
-## The operator's V/F curve (0.7.212)
+## The operator's V/F curve (0.7.213)
 
-The table above gives one voltage per clock. From 0.7.212 the operator can lower that voltage. The full design,
+The table above gives one voltage per clock. From 0.7.213 the operator can lower that voltage. The full design,
 the refusal table and the lab plan are in [tuner.md](tuner.md); this section is what the governor does with it.
 
 - The curve holds 11 voltages, for levels 5 to 15 (1000 to 2000 MHz). The levels under the lab floor keep the

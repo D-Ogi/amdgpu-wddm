@@ -44,7 +44,7 @@ namespace Bc250Mon
         public uint? GfxMHz;
         public ulong? VramUsedBytes, VramTotalBytes, ApertureUsedBytes, ApertureTotalBytes;
         // The case fan, from the board's own hardware monitor (docs/design/fan.md). Null means no reading: the
-        // gate is closed, the reader is offline, the sample is stale or the driver is older than 0.7.212.1.
+        // gate is closed, the reader is offline, the sample is stale or the driver is older than 0.7.213.1.
         // FanStopped is the one case worth a colour: a duty output runs and no tachometer turns.
         public uint? FanRpm, FanDutyPercent;
         public double? FanApuC;

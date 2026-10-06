@@ -120,7 +120,7 @@ static void WddmRecordFenceLedgerLocked(BC250_WDDM* w,UINT n,ULONGLONG e,UINT f,
 #endif
 static void WddmRecordCompletionLocked(BC250_WDDM* w,UINT f,UINT n) { (void)w; (void)n; reported=f; }
 static void WddmQueueReport(BC250_WDDM* w) { (void)w; ++reports; }
-/* The ring-gap instrument (ring_gap.h, KMD 0.7.212): WddmGfxHeadLocked calls one edge of it, and the gap
+/* The ring-gap instrument (ring_gap.h, KMD 0.7.213): WddmGfxHeadLocked calls one edge of it, and the gap
  * arithmetic itself is driven by run_ring_gap.ps1 with a clock of its own. Here it is a counted stub, so this
  * harness states what the extracted region calls without taking a second model of the histogram. The node
  * number is wddm.c's, which is above the extracted region. */

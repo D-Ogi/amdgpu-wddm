@@ -38,24 +38,72 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
-#define BC250_KMD_VERSION 0x000700D4u       // revision 212 (INF 0.7.212.1, on 208.1): the b20 train driver. Five
-                                            // revisions were written apart on five branches, each taking the next
-                                            // free number for itself: 209 (the DirectFlip handshake), 208 again
-                                            // (the fan reader), 210 twice (the ring-gap instrument with the
-                                            // notify-DPC pairing, and the Tuner). None of the five was deployed.
-                                            // The train carries all of them in one driver and takes 212, above
-                                            // every number any of the five claimed, so that no claimed revision
-                                            // is reused and Windows cannot tie this driver with one of them.
+#define BC250_KMD_VERSION 0x000700D5u       // revision 213 (INF 0.7.213.1, on 208.1): the b20 train driver after
+                                            // the respin. Seven revisions were written apart on seven branches,
+                                            // each taking the next free number for itself: 209 (the DirectFlip
+                                            // handshake), 208 again (the fan reader), 210 twice (the ring-gap
+                                            // instrument with the notify-DPC pairing, and the Tuner), and two
+                                            // more for the soft thermal zone and the softened flag words. None
+                                            // of them was deployed. The train carries all of them in one driver
+                                            // and takes 213, above every number any of them claimed, so that no
+                                            // claimed revision is reused and Windows cannot tie this driver with
+                                            // one of them. The first build of this train (0.7.212.1, escape ABI
+                                            // 0x000700D4) was never installed either.
+                                            //
                                             // Three new escape numbers against 0.7.208.1: 27 RUN_HWMON (reply
                                             // 216 bytes, ABI 1), 28 RUN_DPM_CURVE (360 bytes, ABI 1) and 29
-                                            // RUN_CPU (296 bytes, ABI 1). No structure of an older escape
-                                            // changed, so every reader of 0.7.208.1 still parses what it read.
-                                            // Every addition is default-off: EnableDirectFlipHandshake,
-                                            // EnableHwmon, HwmonBasePort, NotifyDpcInReport, HotSubmitLog and
-                                            // CpuTune are all 0 or absent in the release, and a start with the
-                                            // whole set absent behaves as 0.7.208.1 did.
+                                            // RUN_CPU (296 bytes, ABI 1).
                                             //
-                                            // The five revisions as they were written, newest first:
+                                            // Two changes to an older escape, both of them additive, and both
+                                            // the reason this constant is 0x000700D5 and not 0x000700D4:
+                                            //
+                                            //   - RUN_DPM_TUNE grows to ABI 3, 184 bytes (the soft thermal
+                                            //     zone). ABI 1 (120 bytes) and ABI 2 (152 bytes) keep their
+                                            //     layout and their meaning, so every reader of 0.7.208.1 still
+                                            //     parses what it read, and a THERMAL at ABI 1 or ABI 2 leaves
+                                            //     the zone's own values alone. A driver before 0.7.213 refuses
+                                            //     the 184-byte escape, which is how a tool finds the step down.
+                                            //   - START_HEALTH CONFIRM and RUN_CPU KEEP admit
+                                            //     NoAdapterSynchronization: neither sends a mailbox message or
+                                            //     reads a BAR, and CONFIRM is retried every 5.5 s at an
+                                            //     administrator logon, where idling the GPU scheduler is the
+                                            //     wrong price. For one release both also admit the
+                                            //     HardwareAccess word they asked for up to 0.7.212, so an older
+                                            //     CLI, DLL or overlay still works against this driver.
+                                            //
+                                            // Every finished addition is ON in the release, with one switch each
+                                            // to bisect a regression (the release-train policy, owner
+                                            // 2026-10-05): EnableDirectFlipHandshake 1, EnableHwmon 1,
+                                            // NotifyDpcInReport 1 and the soft thermal zone on when
+                                            // DpmThermalZone is absent. What stays absent is what an operator
+                                            // sets, not a feature: HwmonBasePort, HwmonExpectId,
+                                            // HwmonDutyProven, HotSubmitLog, CpuTune and the rest of the Tuner's
+                                            // own values. A start with the whole switch set closed behaves as
+                                            // 0.7.208.1 did.
+                                            //
+                                            // The revisions as they were written, newest first:
+                                            //
+                                            // the soft thermal zone (written on dpm/thermal-soft-zone and merged
+                                            // into this lineage by train b20, BD-087 and C56): the governor steps
+                                            // the clock cap down inside a zone below the 87 C hot cap instead of
+                                            // waiting for the cap itself, holds a step at a start and across a
+                                            // stall, and judges its thresholds with a lead measured over a fixed
+                                            // slope window. RUN_DPM_TUNE ABI 3 carries the zone's threshold, its
+                                            // step and its lead, each with its default, and the slope window out.
+                                            // The zone is on when DpmThermalZone is absent; DpmThermalZone 0 runs
+                                            // the 0.7.212 thermal rules for a whole start, which is this wagon's
+                                            // bisect switch. BC250_DPM_TUNE_HOT_MC publishes the 87 C both deltas
+                                            // count down from, and driver/kmd/dpm.c holds a C_ASSERT against the
+                                            // shim's own BC250_DPM_HOT_MC, so moving the hot limit breaks the
+                                            // build instead of a printed threshold.
+                                            //
+                                            // the softened flag words (written on kmd/confirm-soft and merged
+                                            // into this lineage by train b20, C57 and K195): START_HEALTH CONFIRM
+                                            // and RUN_CPU KEEP take NoAdapterSynchronization, as described above.
+                                            // Nothing else about either operation changed: both still need an
+                                            // administrator, KEEP still writes the Parameters key and ends the
+                                            // trial, and CONFIRM still names the generation and the visibility
+                                            // epoch its client observed.
                                             //
                                             // revision 209 (INF 0.7.209.1, on 208.1): M15.14 increment 2, the
                                             // DirectFlip handshake's kernel half. One derivation of the type-0
@@ -87,9 +135,10 @@
                                             // nothing in Windows could read it, so the control application
                                             // said "The driver cannot read it yet".
                                             //
-                                            // The reader is read-only and gated. EnableHwmon 0 (the INF
-                                            // default) means no port access happens at all. With the gate
-                                            // open the start proves the chip from the EC window alone
+                                            // The reader is read-only and gated. EnableHwmon 1 is the INF
+                                            // default from 0.7.213; EnableHwmon 0 means no port access
+                                            // happens at all and is the bisect switch of this wagon. With
+                                            // the gate open the start proves the chip from the EC window alone
                                             // (firmware version, build date, customer ID, the monitor's own
                                             // run bit and the two present masks) and refuses to read a
                                             // window that does not answer like this chip. The governor
@@ -132,8 +181,8 @@
                                             // idle. "The GPU must not wait" now has a number in every
                                             // workload, game or client, from the log summary alone.
                                             //
-                                            // It also changes one thing, behind NotifyDpcInReport (default 0 in
-                                            // this driver; written as default 1 on c48/notifydpc-in-report):
+                                            // It also changes one thing, behind NotifyDpcInReport (default 1,
+                                            // as it was written on c48/notifydpc-in-report):
                                             // the report pass calls DxgkCbNotifyDpc itself, and the
                                             // DxgkCbQueueDpc whose only job was to bring that call about is
                                             // then not made - one dxgkrnl device DPC per completion fewer.
@@ -679,7 +728,7 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
     unsigned long long Refusals;            // values refused since the start, over every register
 } BC250_ESCAPE_HWMON; // 216 bytes on Windows, ABI 1
-// The operator's GPU V/F curve and its trial (0.7.212.1; driver/kmd/dpm.c, driver/shim/bc250_dpm.c,
+// The operator's GPU V/F curve and its trial (0.7.213.1; driver/kmd/dpm.c, driver/shim/bc250_dpm.c,
 // docs/design/tuner.md, ADR 0020). The clock grid cannot move, so a curve is BC250_DPM_CURVE_POINTS voltages, one
 // per level from FirstMHz (1000) up in StepMHz (100) steps to the table's ceiling (2000). Software state only: the
 // escape stores a candidate under the DPM state's locks and the governor thread applies it at its next tick
@@ -741,7 +790,7 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
     unsigned long Reserved[2];              // zero in, zero out
 } BC250_ESCAPE_DPM_CURVE; // 360 bytes on Windows, ABI 1
 
-// The CPU surface (0.7.212.1; driver/kmd/cpu.c, driver/shim/bc250_cpu.c, docs/design/tuner.md, ADR 0020): a clock
+// The CPU surface (0.7.213.1; driver/kmd/cpu.c, driver/shim/bc250_cpu.c, docs/design/tuner.md, ADR 0020): a clock
 // limit, an undervolt in firmware curve-scale steps, the firmware's own temperature cap, the readbacks of all
 // three, and the core-enable mask. The transport is the firmware's queue 3, whose three mailbox registers are in
 // the BAR5 aperture the driver already maps; the KMD is still the single SMU owner, with a second allowlist so

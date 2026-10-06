@@ -118,7 +118,7 @@ int main(void)
     Prepare(&o);fail_reg=BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT;
     CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);CHECK(o.ValidMask==((1u<<11)-1u) && o.TimingPhase==0);
     CHECK(others==0);
-    /* The fan reading (0.7.212.1): a published snapshot, so the dispatcher answers it with
+    /* The fan reading (0.7.213.1): a published snapshot, so the dispatcher answers it with
        NoAdapterSynchronization alone and ahead of the power-phase check, and only at its exact size. */
     {
         BC250_ESCAPE_HWMON h;DXGKARG_ESCAPE he={&h,sizeof(h),{8}};

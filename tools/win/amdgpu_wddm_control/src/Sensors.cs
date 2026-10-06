@@ -2,7 +2,7 @@
 // driver gives no value, never a guessed one. The current driver reports no power, so that row always says "No
 // reading". Voltage goes only into the support report.
 //
-// The fan row became a real reading with KMD 0.7.212.1, from the board's own hardware monitor (docs/design/fan.md).
+// The fan row became a real reading with KMD 0.7.213.1, from the board's own hardware monitor (docs/design/fan.md).
 // The board still turns the fan from its BIOS curve; the driver only reads it. Two rules this row keeps: a reading
 // needs the reader online AND the sample fresh, and the duty percentage appears only where a lab trial has proved
 // the read-back (HwmonDutyProven), because at E01 the chip reported 96 % duty while the fan turned at about half
