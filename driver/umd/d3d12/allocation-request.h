@@ -31,6 +31,17 @@ static_assert(uint32_t(BC250_SURFACE_RESOURCE_MAGIC)==kE26rMagic &&
               uint32_t(BC250_SURFACE_RESOURCE_CPU_READ)==kE26rCpuRead &&
               uint32_t(BC250_SURFACE_RESOURCE_SCANOUT)==kE26rScanout);
 static_assert(sizeof(BC250_SURFACE_RESOURCE_PRIVATE)==64 && sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
+// Bytes an E26R record of a given version occupies on the wire. v3 is the full texture description and
+// is 64 bytes (driver/contract/bc250_scanout_record.h); the compositor's opener takes exactly that many
+// and refuses anything else, so a v3 header on this 16-byte body would be refused with nothing to show
+// for it but a flip that never happens. kE26rWritten is the only place the version is chosen, and raising
+// it past what this struct can describe does not compile.
+inline constexpr uint32_t e26r_bytes(uint32_t version) noexcept {
+    return version>=3?64u:version==2?16u:kE26rV1Bytes;
+}
+inline constexpr uint32_t kE26rWritten=2; // raise this and E26rResource together, never alone
+static_assert(e26r_bytes(kE26rWritten)==sizeof(E26rResource),
+              "E26rResource cannot describe the record version this shell writes");
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
               AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
@@ -134,13 +145,14 @@ struct AllocationRequest final {
         // SetVidPnSourceAddress. A scan-out primary is exactly that argument, so it names source 0 -
         // the one source this adapter has - and the kernel driver can match the flip to the surface.
         info.VidPnSourceId=primary&&!scanout?D3DDDI_ID_UNINITIALIZED:0;
-        resource.magic=kE26rMagic;resource.version=cpuRead||scanout?2:1;resource.shared=1;
+        resource.magic=kE26rMagic;resource.version=cpuRead||scanout?kE26rWritten:1u;resource.shared=1;
         // shared stays 1 for a scan-out surface as well: the OS composes this buffer again whenever a
         // window overlaps the output, and the compositor can only open what the record shares. What the
         // SCANOUT bit changes is the placement - the local segment, the only one the display core reads -
         // and not who may open it (M15.14).
         resource.access=(cpuRead?kE26rCpuRead:0u)|(scanout?kE26rPrimary|kE26rScanout:0u);
-        args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=cpuRead||scanout?sizeof(resource):kE26rV1Bytes;
+        args.pPrivateDriverData=&resource;
+        args.PrivateDriverDataSize=cpuRead||scanout?e26r_bytes(kE26rWritten):kE26rV1Bytes;
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;
