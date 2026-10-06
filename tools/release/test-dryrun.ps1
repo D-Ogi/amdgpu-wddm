@@ -242,6 +242,61 @@ foreach ($c in $cases) {
 
 Check ($src -notmatch 'New-Item -Path [^\r\n]*-Force') 'install.ps1 never runs New-Item -Force on a registry key (it deletes the key''s values)'
 
+'an install over an older release: the files of that release that this package does not install (BD-089)'
+# The install root of this case is a folder under the work base (the state file names it, as a real installation does).
+# Its manifest.json is the one an older release left there: this package's manifest with two more files. One of them
+# has on disk the bytes that manifest records, the other one was changed after that install and must stay.
+$oldRoot = Join-Path $WorkBase ('install-root-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+$orphan = Join-Path $oldRoot 'desktop\bc250d3d_old.dll'
+$orphanChanged = Join-Path $oldRoot 'tools\old_tool.exe'
+foreach ($p in @($orphan, $orphanChanged)) { [void][IO.Directory]::CreateDirectory((Split-Path $p)) }
+[IO.File]::WriteAllText($orphan, 'the desktop driver of the older release')
+[IO.File]::WriteAllText($orphanChanged, 'a tester put their own file here')
+$someoneElse = Join-Path $oldRoot 'desktop\bc250d3d.dll.b20orig'
+[IO.File]::WriteAllText($someoneElse, 'a file of nobody''s release, next to ours')
+$recorded = Join-Path $WorkBase 'bd089-recorded.bin'
+[IO.File]::WriteAllText($recorded, 'what the older release installed there')
+$recordedSha = (Get-FileHash -LiteralPath $recorded -Algorithm SHA256).Hash
+Remove-Item -LiteralPath $recorded -Force
+$oldVersion = '0.7.197.100-tester.1'
+$oldManifest = $m | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+$oldManifest.version = $oldVersion
+$oldManifest.files = @(@($oldManifest.files) + @(
+        [pscustomobject]@{ path = 'payload/desktop/bc250d3d_old.dll'; sha256 = (Get-FileHash -LiteralPath $orphan -Algorithm SHA256).Hash; size = 1 }
+        [pscustomobject]@{ path = 'payload/tools/old_tool.exe'; sha256 = $recordedSha; size = 1 }))
+[IO.File]::WriteAllText((Join-Path $oldRoot 'manifest.json'), ($oldManifest | ConvertTo-Json -Depth 10))
+$dir = Join-Path $WorkBase ('state-bd089-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+[void][IO.Directory]::CreateDirectory($dir)
+$st = [ordered]@{ schema = 1; phase = 'verified'; package_version = $oldVersion; install_root = $oldRoot; testsigning_set_by_installer = $true; updated_utc = '2026-10-03T00:00:00Z' }
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check ($r.code -eq 0) "install over $oldVersion`: exit $($r.code)"
+Check ($r.text -match ("files of the installed release " + [regex]::Escape($oldVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 2 \(1 to remove, 1 changed after that install and kept, 0 already gone\)")) 'the plan names the count before any change'
+Check ($r.text -match ('to remove in the files stage: ' + [regex]::Escape($orphan))) 'the plan names the file it removes, before the first step'
+Check ($r.text -match ('would: remove ' + [regex]::Escape($orphan) + ': installed by ' + [regex]::Escape($oldVersion))) 'the files stage removes it and names the release that installed it'
+Check ($r.text -match ('kept: ' + [regex]::Escape($orphanChanged) + ' was installed by ' + [regex]::Escape($oldVersion))) 'a file whose bytes are not the ones of that install is kept and reported'
+# Nothing is removed by a wildcard: every removal line names one of the two files of the older manifest.
+$removals = @([regex]::Matches($r.text, '(?m)^\s*\[dry run\] would: remove (.+?): installed by ') | ForEach-Object { $_.Groups[1].Value })
+Check (((@($removals) -join ' | ') -eq $orphan)) "one removal, and only the file the older manifest names: $(@($removals) -join ', ')"
+Check ((Test-Path -LiteralPath $orphan) -and (Test-Path -LiteralPath $orphanChanged) -and (Test-Path -LiteralPath $someoneElse)) 'the dry run removes nothing, the file that belongs to nobody''s release included'
+Check ($r.text -notmatch 'would: pnputil /delete-driver') 'no driver package is deleted while the package the GPU uses cannot be read'
+if ($r.code -ne 0) { $r.text }
+# The same install root with this package's own manifest: a repair must take nothing away.
+[IO.File]::Copy((Join-Path $Package 'manifest.json'), (Join-Path $oldRoot 'manifest.json'), $true)
+$st.package_version = $pkgVersion
+[IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
+$env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
+Check (($r.code -eq 0) -and ($r.text -match ("files of the installed release " + [regex]::Escape($pkgVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 0")) -and ($r.text -notmatch 'would: remove ')) "a repair of the installed version removes nothing (exit $($r.code))"
+Remove-Item -LiteralPath $dir -Recurse -Force
+Remove-Item -LiteralPath $oldRoot -Recurse -Force
+# The invariants of the removal, in the source: the files stage takes the rows of the plan and nothing else, it reads the
+# SHA256 again before each removal, and no step of an install removes a whole folder of the install root.
+Check (($src -match '(?m)^foreach \(\$row in @\(\$script:OrphanRows \| Where-Object \{ \$_\.state -eq ''remove'' \}\)\) \{') -and ($src -match 'if \(\$now -ne \$row\.sha256\)') -and ($src -match 'Remove-PathOrSchedule \$row\.path')) 'install.ps1 removes only the rows of the plan and checks each SHA256 again before the removal'
+Check (($src -notmatch 'Remove-PathOrSchedule \$InstallRoot') -and ($src -notmatch 'Get-ChildItem[^\r\n]*\$InstallRoot[^\r\n]*-Recurse[^\r\n]*Remove')) 'install.ps1 never removes the install root or sweeps it by wildcard'
+Check ($common -match '(?m)^function Get-OrphanFilePlan \{') 'the orphan plan is a function of common.ps1 (pure, unit-tested in test-engine-units.ps1)'
+
 'verify before and after the restart (test state, phase installed, the boot it was saved in)'
 $thisBoot = $null
 $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId -ErrorAction SilentlyContinue).BootId
