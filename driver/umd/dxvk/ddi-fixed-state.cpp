@@ -65,14 +65,14 @@ void create_state(D3D10DDI_HDEVICE h,const Desc *desc,Handle handle,Convert conv
     if (s) s->object=nullptr;
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!s || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !desc || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         const auto d=convert(*desc);
         const HRESULT hr=(owner.device()->*create)(&d,&s->object);
         if (FAILED(hr)) {
             if (s->object) { s->object->Release(); s->object=nullptr; }
-            report_ddi_error(owner,hr);
-        } else if (!s->object) report_ddi_error(owner,E_FAIL);
-    });
+            report_ddi_error(owner,hr,DdiErrorClass::out_of_memory);
+        } else if (!s->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory);
+    },DdiErrorClass::out_of_memory);
 }
 void APIENTRY depth_create(D3D10DDI_HDEVICE h,const D3D10_DDI_DEPTH_STENCIL_DESC *d,
     D3D10DDI_HDEPTHSTENCILSTATE s,D3D10DDI_HRTDEPTHSTENCILSTATE) {
@@ -91,17 +91,17 @@ void APIENTRY raster2_create(D3D10DDI_HDEVICE h,const D3DWDDM2_0DDI_RASTERIZER_D
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !desc || !owner.device() ||
             UINT(desc->ConservativeRasterizationMode)>UINT(D3DWDDM2_0DDI_CONSERVATIVE_RASTERIZATION_ON)) {
-            report_ddi_error(owner,E_INVALIDARG); return;
+            report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return;
         }
         const auto d=convert_rasterizer2(*desc);
         ID3D11RasterizerState2 *state=nullptr;
         const HRESULT hr=owner.device()->CreateRasterizerState2(&d,&state);
         if (FAILED(hr)) {
             if (state) state->Release();
-            report_ddi_error(owner,hr);
-        } else if (!state) report_ddi_error(owner,E_FAIL);
+            report_ddi_error(owner,hr,DdiErrorClass::out_of_memory);
+        } else if (!state) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory);
         else s->object=state; // RasterizerState2 is a RasterizerState1: binding and release are unchanged.
-    });
+    },DdiErrorClass::out_of_memory);
 }
 template<typename Storage,typename Handle> void APIENTRY destroy(D3D10DDI_HDEVICE h,Handle handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {

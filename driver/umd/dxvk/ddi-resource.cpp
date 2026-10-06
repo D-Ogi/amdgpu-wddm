@@ -31,8 +31,21 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     BIND(D3D10_DDI_BIND_RENDER_TARGET,D3D11_BIND_RENDER_TARGET);
     BIND(D3D10_DDI_BIND_DEPTH_STENCIL,D3D11_BIND_DEPTH_STENCIL);
     BIND(D3D11_DDI_BIND_UNORDERED_ACCESS,D3D11_BIND_UNORDERED_ACCESS);
+    // The video bind flags. DECODER and VIDEO_ENCODER have the same value in the DDI and in the API,
+    // and the engine carries them without a usage of their own, so a planar image is still sampled
+    // and written the way its other bind flags ask. The media pipeline asks for NV12 with
+    // SHADER_RESOURCE|DECODER, and E_NOTIMPL for that costs the device, because CreateResource may
+    // not report it (BD-071). D3D11_DDI_BIND_CAPTURE has no API flag at all, so the engine cannot be
+    // asked for a capture-capable resource: the request falls through to the answer below, which
+    // fails that one call. Consuming the bit would hand the video capture engine a resource it cannot
+    // write (BD-071 review). This driver reports no CAPTURE format support, so the runtime does not
+    // ask.
+    BIND(D3D11_DDI_BIND_DECODER,D3D11_BIND_DECODER);
+    BIND(D3D11_DDI_BIND_VIDEO_ENCODER,D3D11_BIND_VIDEO_ENCODER);
 #undef BIND
-    if (remaining) return E_NOTIMPL;
+    // A bind flag this driver does not know is a request it cannot serve, which is what
+    // DXGI_DDI_ERR_UNSUPPORTED says. The runtime then fails the caller instead of losing the device.
+    if (remaining) return DXGI_DDI_ERR_UNSUPPORTED;
     if (s.MapFlags & ~UINT(D3D10_DDI_CPU_ACCESS_MASK)) return E_INVALIDARG;
     UINT cpu=0;
     if (s.MapFlags & D3D10_DDI_CPU_ACCESS_READ) cpu|=D3D11_CPU_ACCESS_READ;
@@ -40,6 +53,9 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     UINT misc=0; remaining=s.MiscFlags;
 #define MISC(ddi,api) if (remaining & ddi) { misc|=api; remaining&=~UINT(ddi); }
     MISC(D3D10_DDI_RESOURCE_AUTO_GEN_MIP_MAP,D3D11_RESOURCE_MISC_GENERATE_MIPS);
+    // A present hint with no API flag of its own. The present path above answers E_NOTIMPL before
+    // this loop, so the bit only arrives here without BIND_PRESENT, and then it asks for nothing.
+    MISC(D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT,0u);
     MISC(D3D11_DDI_RESOURCE_MISC_DRAWINDIRECT_ARGS,D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS);
     MISC(D3D11_DDI_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS,D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS);
     MISC(D3D11_DDI_RESOURCE_MISC_BUFFER_STRUCTURED,D3D11_RESOURCE_MISC_BUFFER_STRUCTURED);
@@ -48,7 +64,7 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     MISC(D3DWDDM1_3DDI_RESOURCE_MISC_TILED,D3D11_RESOURCE_MISC_TILED);
     MISC(D3DWDDM1_3DDI_RESOURCE_MISC_TILE_POOL,D3D11_RESOURCE_MISC_TILE_POOL);
 #undef MISC
-    if (remaining) return E_NOTIMPL;
+    if (remaining) return DXGI_DDI_ERR_UNSUPPORTED;
     ResourceDescription d; d.dimension=s.ResourceDimension;
     const auto &m=s.pMipInfoList[0];
     if (!m.TexelWidth) return E_INVALIDARG;
@@ -166,6 +182,15 @@ HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_AL
     metadata=m; desc=d; return S_OK;
 }
 namespace {
+// CreateResource may report E_OUTOFMEMORY, D3DDDIERR_DEVICEREMOVED or DXGI_DDI_ERR_UNSUPPORTED. A
+// descriptor this driver cannot serve is the third case, not the second: the runtime then fails that
+// one call and its caller can choose another format, while device removal ends every device of the
+// process. The Ascent's RGB10A2 primary (339-342) is the measured example, and BD-071 is the same
+// mistake made with E_NOTIMPL, a status this page does not allow at all.
+HRESULT unsupported_request(HRESULT hr) {
+    const HRESULT status=ddi_device_status(hr);
+    return (status==E_OUTOFMEMORY || status==D3DDDIERR_DEVICEREMOVED) ? status : DXGI_DDI_ERR_UNSUPPORTED;
+}
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { return sizeof(DdiResource); }
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE runtimeHandle) {
@@ -173,7 +198,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     if (s) *s={};
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!s || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !desc || !owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return; }
         if (desc->pPrimaryDesc || (desc->BindFlags&D3D10_DDI_BIND_PRESENT) ||
             (desc->MiscFlags&(D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) {
             RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
@@ -193,14 +218,14 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                         desc->SampleDesc.Count,desc->SampleDesc.Quality,m ? m->TexelWidth : 0u,m ? m->TexelHeight : 0u);
                     OutputDebugStringA(text);
                 }
-                report_ddi_error(owner,hr); return;
+                report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported); return;
             }
             RuntimeSurface *surface=nullptr;
             hr=owner.begin_surface(request,texture,surface);
             if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
             if (hr!=S_OK) {
                 if (surface) owner.release_surface_handle(*surface);
-                report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
+                report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return;
             }
             s->runtime_surface=surface; s->object=surface->texture.texture;
             s->dimension=D3D10DDIRESOURCE_TEXTURE2D;
@@ -215,7 +240,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         }
         ResourceDescription d;
         HRESULT hr=convert_resource(*desc,d);
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported); return; }
         const auto *initial=d.initial.empty() ? nullptr : d.initial.data();
         switch(d.dimension) {
         case D3D10DDIRESOURCE_BUFFER: case D3D11DDIRESOURCE_BUFFEREX: {
@@ -234,10 +259,11 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         }
         if (FAILED(hr)) {
             if (s->object) { s->object->Release(); s->object=nullptr; }
-            report_ddi_error(owner,hr);
-        } else if (!s->object) report_ddi_error(owner,E_FAIL);
+            // The engine refuses a format or a flag combination it cannot build with E_INVALIDARG.
+            report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported);
+        } else if (!s->object) report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported);
         else s->dimension=d.dimension;
-    });
+    },DdiErrorClass::unsupported);
 }
 SIZE_T APIENTRY opened_size(D3D10DDI_HDEVICE,const D3D10DDIARG_OPENRESOURCE *) { return sizeof(DdiResource); }
 void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
@@ -245,21 +271,21 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
     auto *s=static_cast<DdiResource *>(handle.pDrvPrivate); if (s) *s={};
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!s || !args || !runtimeHandle.handle) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!s || !args || !runtimeHandle.handle) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         BC250_WDDM_ALLOCATION_PRIVATE metadata{}; D3D11_TEXTURE2D_DESC1 desc{};
         HRESULT hr=decode_open_resource(*args,metadata,desc);
-        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
         RuntimeSurfaceAllocation allocation{reinterpret_cast<HANDLE>(runtimeHandle.handle),args->pOpenAllocationInfo2[0].hAllocation,args->hKMResource.handle};
         RuntimeSurface *surface=nullptr;
         hr=owner.adopt_surface(allocation,metadata,desc,surface);
         if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
         if (hr!=S_OK) {
             if (surface) owner.release_surface_handle(*surface);
-            report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
+            report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return;
         }
         s->runtime_surface=surface; s->object=surface->texture.texture;
         s->dimension=D3D10DDIRESOURCE_TEXTURE2D; s->present_allocation=surface->allocation.allocation;
-    });
+    },DdiErrorClass::out_of_memory);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {

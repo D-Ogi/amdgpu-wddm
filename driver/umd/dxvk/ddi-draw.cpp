@@ -26,9 +26,9 @@ template<auto Call,UINT Bytes> void APIENTRY indirect(D3D10DDI_HDEVICE h,D3D10DD
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         ID3D11Buffer *buffer=nullptr;
-        if (FAILED(resource_buffer(handle,buffer)) || !buffer) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (FAILED(resource_buffer(handle,buffer)) || !buffer) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED); return; }
         D3D11_BUFFER_DESC desc{}; buffer->GetDesc(&desc);
-        if (!valid_indirect_arguments(desc,offset,Bytes)) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!valid_indirect_arguments(desc,offset,Bytes)) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED); return; }
         // Argument contents stay on the GPU. No Map or CPU readback here.
         (context.*Call)(buffer,offset);
     });

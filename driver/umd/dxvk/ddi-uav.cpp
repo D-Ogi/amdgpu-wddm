@@ -4,9 +4,11 @@
 #include "ddi-buffer-binding.h"
 #include <array>
 namespace bc250::umd {
-HRESULT convert_uav(const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW &s,UINT layers,UINT samples,D3D11_UNORDERED_ACCESS_VIEW_DESC &out) {
+HRESULT convert_uav(const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW &s,UINT layers,UINT samples,UINT plane,
+    D3D11_UNORDERED_ACCESS_VIEW_DESC1 &out) {
     if (samples!=1) return E_INVALIDARG;
-    D3D11_UNORDERED_ACCESS_VIEW_DESC d{}; d.Format=s.Format;
+    if (plane && s.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D) return E_INVALIDARG;
+    D3D11_UNORDERED_ACCESS_VIEW_DESC1 d{}; d.Format=s.Format;
     if (s.ResourceDimension==D3D10DDIRESOURCE_BUFFER || s.ResourceDimension==D3D11DDIRESOURCE_BUFFEREX) {
         constexpr UINT known=D3D11_DDI_BUFFER_UAV_FLAG_RAW|D3D11_DDI_BUFFER_UAV_FLAG_APPEND|D3D11_DDI_BUFFER_UAV_FLAG_COUNTER;
         const UINT f=s.Buffer.Flags;
@@ -25,18 +27,46 @@ HRESULT convert_uav(const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW &s,UINT layers,U
         case D3D10DDIRESOURCE_TEXTURE3D: r.Tex3D={s.Tex3D.MipSlice,s.Tex3D.FirstW,s.Tex3D.WSize}; break;
         default: return E_INVALIDARG; // Cube storage is viewed as 2D array faces.
         }
-        D3D11_RENDER_TARGET_VIEW_DESC v{};
-        HRESULT hr=convert_rtv(r,layers,1,v); if (FAILED(hr)) return hr;
+        D3D11_RENDER_TARGET_VIEW_DESC1 v{};
+        // The render-target conversion already validates the array range and the plane.
+        HRESULT hr=convert_rtv(r,layers,1,plane,v); if (FAILED(hr)) return hr;
         switch(v.ViewDimension) {
         case D3D11_RTV_DIMENSION_TEXTURE1D: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE1D; d.Texture1D.MipSlice=v.Texture1D.MipSlice; break;
         case D3D11_RTV_DIMENSION_TEXTURE1DARRAY: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE1DARRAY; d.Texture1DArray={v.Texture1DArray.MipSlice,v.Texture1DArray.FirstArraySlice,v.Texture1DArray.ArraySize}; break;
-        case D3D11_RTV_DIMENSION_TEXTURE2D: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2D; d.Texture2D.MipSlice=v.Texture2D.MipSlice; break;
-        case D3D11_RTV_DIMENSION_TEXTURE2DARRAY: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2DARRAY; d.Texture2DArray={v.Texture2DArray.MipSlice,v.Texture2DArray.FirstArraySlice,v.Texture2DArray.ArraySize}; break;
+        case D3D11_RTV_DIMENSION_TEXTURE2D: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2D; d.Texture2D={v.Texture2D.MipSlice,v.Texture2D.PlaneSlice}; break;
+        case D3D11_RTV_DIMENSION_TEXTURE2DARRAY: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE2DARRAY; d.Texture2DArray={v.Texture2DArray.MipSlice,v.Texture2DArray.FirstArraySlice,v.Texture2DArray.ArraySize,v.Texture2DArray.PlaneSlice}; break;
         case D3D11_RTV_DIMENSION_TEXTURE3D: d.ViewDimension=D3D11_UAV_DIMENSION_TEXTURE3D; d.Texture3D={v.Texture3D.MipSlice,v.Texture3D.FirstWSlice,v.Texture3D.WSize}; break;
         default: return E_INVALIDARG;
         }
     }
     out=d; return S_OK;
+}
+void demote_uav(const D3D11_UNORDERED_ACCESS_VIEW_DESC1 &s,D3D11_UNORDERED_ACCESS_VIEW_DESC &out) {
+    D3D11_UNORDERED_ACCESS_VIEW_DESC d{}; d.Format=s.Format; d.ViewDimension=s.ViewDimension;
+    switch(s.ViewDimension) {
+    case D3D11_UAV_DIMENSION_BUFFER:
+        d.Buffer={s.Buffer.FirstElement,s.Buffer.NumElements,s.Buffer.Flags}; break;
+    case D3D11_UAV_DIMENSION_TEXTURE1D: d.Texture1D.MipSlice=s.Texture1D.MipSlice; break;
+    case D3D11_UAV_DIMENSION_TEXTURE1DARRAY:
+        d.Texture1DArray={s.Texture1DArray.MipSlice,s.Texture1DArray.FirstArraySlice,s.Texture1DArray.ArraySize}; break;
+    // The plane field stops here: the engine derives the plane from the view format instead.
+    case D3D11_UAV_DIMENSION_TEXTURE2D: d.Texture2D.MipSlice=s.Texture2D.MipSlice; break;
+    case D3D11_UAV_DIMENSION_TEXTURE2DARRAY:
+        d.Texture2DArray={s.Texture2DArray.MipSlice,s.Texture2DArray.FirstArraySlice,s.Texture2DArray.ArraySize}; break;
+    case D3D11_UAV_DIMENSION_TEXTURE3D:
+        d.Texture3D={s.Texture3D.MipSlice,s.Texture3D.FirstWSlice,s.Texture3D.WSize}; break;
+    default: break; // The conversion above produces no other dimension.
+    }
+    out=d;
+}
+HRESULT plan_uav(const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW &s,UINT layers,UINT samples,UINT plane,
+    UavRequest &out) {
+    UavRequest request{};
+    request.derive_plane=plane==ddi_plane_from_view_format;
+    const HRESULT hr=convert_uav(s,layers,samples,request.derive_plane ? 0u : plane,request.desc1);
+    if (FAILED(hr)) return hr;
+    if (request.derive_plane) demote_uav(request.desc1,request.legacy);
+    out=request; return S_OK;
 }
 namespace {
 DeviceOwner &owner(D3D10DDI_HDEVICE h) { return *static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner; }
@@ -44,53 +74,72 @@ ID3D11UnorderedAccessView *view(D3D11DDI_HUNORDEREDACCESSVIEW h) {
     auto *s=static_cast<DdiUnorderedAccessView *>(h.pDrvPrivate); return s ? s->object : nullptr;
 }
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW *) { return sizeof(DdiUnorderedAccessView); }
-void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW *desc,
-    D3D11DDI_HUNORDEREDACCESSVIEW handle,D3D11DDI_HRTUNORDEREDACCESSVIEW) {
+}
+// CreateUnorderedAccessView may report E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED, and nothing else.
+void create_unordered_access_view(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW *desc,
+    UINT plane,D3D11DDI_HUNORDEREDACCESSVIEW handle,D3D11DDI_HRTUNORDEREDACCESSVIEW) {
     auto *s=static_cast<DdiUnorderedAccessView *>(handle.pDrvPrivate); if (s) s->object=nullptr;
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &o=owner(h); auto *r=desc ? static_cast<DdiResource *>(desc->hDrvResource.pDrvPrivate) : nullptr;
-        if (!s || !r || !r->object || !o.device()) { report_ddi_error(o,E_INVALIDARG); return; }
+        const auto refuse=[&] { report_ddi_error(o,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); };
+        if (!s || !r || !r->object || !o.device()) { refuse(); return; }
         UINT layers=1,samples=1; D3D11_RESOURCE_DIMENSION actual{}; r->object->GetType(&actual);
         switch(desc->ResourceDimension) {
         case D3D10DDIRESOURCE_BUFFER: case D3D11DDIRESOURCE_BUFFEREX:
-            if (actual!=D3D11_RESOURCE_DIMENSION_BUFFER) { report_ddi_error(o,E_INVALIDARG); return; } break;
+            if (actual!=D3D11_RESOURCE_DIMENSION_BUFFER) { refuse(); return; } break;
         case D3D10DDIRESOURCE_TEXTURE1D: {
-            if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE1D) { report_ddi_error(o,E_INVALIDARG); return; }
+            if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE1D) { refuse(); return; }
             D3D11_TEXTURE1D_DESC d{}; static_cast<ID3D11Texture1D *>(r->object)->GetDesc(&d); layers=d.ArraySize; break;
         }
         case D3D10DDIRESOURCE_TEXTURE2D: {
-            if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE2D) { report_ddi_error(o,E_INVALIDARG); return; }
+            if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE2D) { refuse(); return; }
             D3D11_TEXTURE2D_DESC d{}; static_cast<ID3D11Texture2D *>(r->object)->GetDesc(&d); layers=d.ArraySize; samples=d.SampleDesc.Count; break;
         }
         case D3D10DDIRESOURCE_TEXTURE3D:
-            if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE3D) { report_ddi_error(o,E_INVALIDARG); return; } break;
-        default: report_ddi_error(o,E_INVALIDARG); return;
+            if (actual!=D3D11_RESOURCE_DIMENSION_TEXTURE3D) { refuse(); return; } break;
+        default: refuse(); return;
         }
-        D3D11_UNORDERED_ACCESS_VIEW_DESC d{}; HRESULT hr=convert_uav(*desc,layers,samples,d);
-        if (SUCCEEDED(hr)) hr=o.device()->CreateUnorderedAccessView(r->object,&d,&s->object);
+        UavRequest request{}; HRESULT hr=plan_uav(*desc,layers,samples,plane,request);
+        ID3D11UnorderedAccessView *created=nullptr;
+        if (SUCCEEDED(hr)) {
+            if (request.derive_plane) {
+                hr=o.device()->CreateUnorderedAccessView(r->object,&request.legacy,&created);
+            } else {
+                ID3D11UnorderedAccessView1 *planar=nullptr;
+                hr=o.device()->CreateUnorderedAccessView1(r->object,&request.desc1,&planar);
+                created=planar;
+            }
+        }
         if (FAILED(hr)) {
-            if (s->object) { s->object->Release(); s->object=nullptr; }
-            report_ddi_error(o,hr);
-        } else if (!s->object) report_ddi_error(o,E_FAIL);
-    });
+            if (created) created->Release();
+            report_ddi_error(o,hr,DdiErrorClass::out_of_memory);
+        } else if (!created) refuse();
+        else s->object=created;
+    },DdiErrorClass::out_of_memory);
+}
+namespace {
+void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATEUNORDEREDACCESSVIEW *desc,
+    D3D11DDI_HUNORDEREDACCESSVIEW handle,D3D11DDI_HRTUNORDEREDACCESSVIEW runtime) {
+    // The D3D11 argument has no plane field, so the engine derives the plane from the view format.
+    create_unordered_access_view(h,desc,ddi_plane_from_view_format,handle,runtime);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D11DDI_HUNORDEREDACCESSVIEW handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) { auto *s=static_cast<DdiUnorderedAccessView *>(handle.pDrvPrivate); if (s && s->object) { s->object->Release(); s->object=nullptr; } });
 }
 template<typename T,auto Clear> void APIENTRY clear(D3D10DDI_HDEVICE h,D3D11DDI_HUNORDEREDACCESSVIEW handle,const T values[4]) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
-        auto *v=view(handle); if (!v || !values) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        auto *v=view(handle); if (!v || !values) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         (c.*Clear)(v,values);
     });
 }
 void APIENTRY bind(D3D10DDI_HDEVICE h,UINT first,UINT count,const D3D11DDI_HUNORDEREDACCESSVIEW *handles,const UINT *initialCounts) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
         constexpr UINT limit=D3D11_1_UAV_SLOT_COUNT;
-        if (first>=limit || count>limit-first || (count && !handles)) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        if (first>=limit || count>limit-first || (count && !handles)) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         std::array<ID3D11UnorderedAccessView *,limit> views{};
         for (UINT i=0;i<count;++i) {
             views[i]=view(handles[i]);
-            if (handles[i].pDrvPrivate && !views[i]) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+            if (handles[i].pDrvPrivate && !views[i]) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         }
         // Preserve UINT_MAX (keep counter) and optional null count array.
         c.CSSetUnorderedAccessViews(first,count,views.data(),initialCounts);
@@ -99,7 +148,7 @@ void APIENTRY bind(D3D10DDI_HDEVICE h,UINT first,UINT count,const D3D11DDI_HUNOR
 void APIENTRY copy_count(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT offset,D3D11DDI_HUNORDEREDACCESSVIEW src) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
         ID3D11Buffer *b=nullptr; auto *v=view(src);
-        if (FAILED(resource_buffer(dst,b)) || !b || !v || offset%4) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        if (FAILED(resource_buffer(dst,b)) || !b || !v || offset%4) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         c.CopyStructureCount(b,offset,v);
     });
 }

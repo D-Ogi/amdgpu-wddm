@@ -38,7 +38,7 @@ void APIENTRY bind(D3D10DDI_HDEVICE h,const D3D10DDI_HRENDERTARGETVIEW *rtvs,UIN
     UINT first,UINT count,UINT changedFirst,UINT changedCount) {
     enter_context(h,[&](ID3D11DeviceContext4 &context) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-        if (!owner.device()) { report_ddi_error(owner,E_FAIL); return; }
+        if (!owner.device()) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED); return; }
         const UINT limit=owner.device()->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1 ? D3D11_1_UAV_SLOT_COUNT : D3D11_PS_CS_UAV_REGISTER_COUNT;
         OutputBindings b;
         HRESULT hr=prepare_output_bindings(rtvs,numRtvs,clearSlots,dsv,uavs,counters,first,count,changedFirst,changedCount,limit,b);

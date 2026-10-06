@@ -59,7 +59,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D10DDIARG_CREATEQUERY *desc,D3D1
     auto *s=query(q); if (s) *s={};
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &o=owner(h);
-        if (!s || !desc || !o.device()) { report_ddi_error(o,E_INVALIDARG); return; }
+        if (!s || !desc || !o.device()) { report_ddi_error(o,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::non_exclusive); return; }
         D3D11_QUERY_DESC d{}; bool predicate=false; HRESULT hr=convert_query(*desc,d,predicate);
         if (SUCCEEDED(hr)) {
             if (predicate) { hr=o.device()->CreatePredicate(&d,&s->predicate); s->object=s->predicate; }
@@ -67,18 +67,18 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D10DDIARG_CREATEQUERY *desc,D3D1
         }
         if (FAILED(hr) || !s->object) {
             if (s->object) s->object->Release(); *s={};
-            report_ddi_error(o,FAILED(hr) ? hr : E_FAIL); return;
+            report_ddi_error(o,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::non_exclusive); return;
         }
         // predicate is a borrowed typed alias of the single owned COM reference.
         s->legacy_pipeline=desc->Query==D3D10DDI_QUERY_PIPELINESTATS;
-    });
+    },DdiErrorClass::non_exclusive);
 }
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q) {
     enter_context(h,[&](ID3D11DeviceContext4 &) { auto *s=query(q); if (s) { if (s->object) s->object->Release(); *s={}; } });
 }
 template<bool Begin> void APIENTRY issue(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
-        auto *s=query(q); if (!s || !s->object) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        auto *s=query(q); if (!s || !s->object) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         if constexpr(Begin) c.Begin(s->object); else c.End(s->object);
     });
 }
@@ -86,17 +86,17 @@ void APIENTRY data(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q,void *out,UINT bytes,UIN
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
         auto *s=query(q); auto &o=owner(h);
         if (!s || !s->object || (flags & ~UINT(D3D10_DDI_GET_DATA_DO_NOT_FLUSH)) || (!out && bytes)) {
-            report_ddi_error(o,E_INVALIDARG); return;
+            report_ddi_error(o,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return;
         }
-        if (o.bridge().device_lost || o.bridge().submission_failed) { report_ddi_error(o,D3DDDIERR_DEVICEREMOVED); return; }
+        if (o.bridge().device_lost || o.bridge().submission_failed) { report_ddi_error(o,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return; }
         if (o.device()) {
             const HRESULT deviceStatus=o.device()->GetDeviceRemovedReason();
-            if (FAILED(deviceStatus)) { report_ddi_error(o,deviceStatus); return; }
+            if (FAILED(deviceStatus)) { report_ddi_error(o,deviceStatus,DdiErrorClass::still_drawing); return; }
         }
         const UINT f=flags ? D3D11_ASYNC_GETDATA_DONOTFLUSH : 0;
         HRESULT hr;
         if (s->legacy_pipeline && out) {
-            if (bytes!=sizeof(D3D10_DDI_QUERY_DATA_PIPELINE_STATISTICS)) { report_ddi_error(o,E_INVALIDARG); return; }
+            if (bytes!=sizeof(D3D10_DDI_QUERY_DATA_PIPELINE_STATISTICS)) { report_ddi_error(o,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing); return; }
             D3D11_QUERY_DATA_PIPELINE_STATISTICS v{};
             hr=c.GetData(s->object,&v,sizeof(v),f);
             if (hr==S_OK) {
@@ -106,13 +106,13 @@ void APIENTRY data(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q,void *out,UINT bytes,UIN
             }
         } else hr=read_query_result(out,bytes,[&](void *buffer,UINT length) { return c.GetData(s->object,buffer,length,f); });
         // DDI has a void return: COM S_FALSE must become the DDI pending status.
-        if (hr!=S_OK) report_ddi_error(o,query_ddi_status(hr));
-    });
+        if (hr!=S_OK) report_ddi_error(o,query_ddi_status(hr),DdiErrorClass::still_drawing);
+    },DdiErrorClass::still_drawing);
 }
 void APIENTRY predication(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q,BOOL value) {
     enter_context(h,[&](ID3D11DeviceContext4 &c) {
         auto *s=query(q);
-        if (s && !s->predicate) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+        if (s && !s->predicate) { report_ddi_error(owner(h),D3DDDIERR_DEVICEREMOVED); return; }
         c.SetPredication(s ? s->predicate : nullptr,value);
     });
 }
