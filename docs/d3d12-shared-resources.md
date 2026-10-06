@@ -24,6 +24,14 @@ then failed in `query_linear_surface`, and an sRGB shared create never reached i
 found it also found why nothing caught it - the blob layer's tests round-trip both sRGB views, so the wire looked
 covered, and `capture-share` had no `--format` value that could ask for one.
 
+The shell's own admission gate was one caller behind until 2026-10-06: `RuntimeHeapImports::allocate`
+(`driver/umd/d3d12/heap-import.cpp`) still looked a shared surface's format up with
+`amdgpu_wddm_surface_format_by_dxgi`, so the lab's `s12to11-srgb` row reached the retry, had its description
+admitted by `engine-ddi`, and was then refused by the shell with `shared surface format` and `E_NOTIMPL` -
+reported to the application as `E_OUTOFMEMORY` from `CreateCommittedResource`. The gate now uses
+`Bc250SharedSurfaceFormat` for a shared surface. A primary keeps the storage column, because no `D3DDDIFORMAT`
+expresses an sRGB view and the `SCANOUT_PRIMARY` `X8` row has no DXGI format at all.
+
 | Call | Slot | What happens |
 |---|---|---|
 | `CreateCommittedResource` with `D3D12_HEAP_FLAG_SHARED` | D60 `pfnCreateHeapAndResource` | Two attempts. The runtime refuses the first, which is the ordinary create. The second describes a linear surface and publishes the two private-data records. |
@@ -224,6 +232,33 @@ The keyed mutex needs no code in this driver. `IDXGIKeyedMutex` is the runtime's
 it at the first `Acquire`. The `km12to11` and `km11to12` cells use the same two records as the plain shared
 cells, so they are expected to work with the create and the open above and nothing else.
 
+### The handover, and what is not proven about it
+
+"No code in this driver" is true of the mutex object and is not true of the ordering it implies. A D3D12 creator
+writes the surface with `ExecuteCommandLists` and then hands the key over with `ReleaseSync`, and the reader is
+entitled to the written pixels. Nothing in this driver places the runtime's kernel-side release behind that
+submission:
+
+- the two queue slots that could, `pfnSignalFence` and `pfnWaitForFence`
+  (`driver/umd/d3d12/native-queue-ddi.cpp`), only select the physical adapters of a broadcast. Both set
+  `PhysicalAdapterMask` to this single node and let the system runtime queue its own kernel operation on the
+  queue's context. **Neither slot has ever been called on the lab**: `SignalFence` and `WaitForFence` appear in
+  none of the eleven DDI traces of 2026-10-06, while `w12`'s three `ID3D12CommandQueue::Wait` controls passed. So
+  the runtime answers a single-adapter fence operation without the driver, and the driver cannot order it;
+- `pfnSignalFence`'s own comment states the precondition it depends on - "Execute must already have submitted all
+  work on that same context" - and `submit_locked` (`engine-ddi/queue.cpp`) forwards to vkd3d-proton's
+  `ExecuteCommandLists`, which may hand the work to its submission thread and return. The precondition is
+  therefore not guaranteed, only usually met.
+
+The lab's `km12to11` row is the open question: its reader blocks in `AcquireSync(3)` (a real CPU block, the gate
+proves it did not acquire early) and still reads poison, while the plain `s12to11` row passes - and the one
+difference in the client is that `s12to11`'s creator calls `Finish()`, a CPU wait on its own work, before it tells
+the reader. The discriminator is `capshare --creator-finish`, which gives the keyed-mutex creator that same wait
+before every `ReleaseSync`. If the row then passes, the memory path is sound and the handover ordering above is
+the defect; if it still reads poison, the write itself is not reaching the reader, and the record and the
+placement are the next suspects. Do not read a `km12to11` pass under `--creator-finish` as a fix: it is the
+measurement that says which half to fix.
+
 ## What refuses
 
 Every refusal below reports `E_OUTOFMEMORY` to the runtime and leaves the device alive. A create's refusal names
@@ -247,13 +282,48 @@ An earlier version of this table invented three names (`opened surface records`,
 | a shared heap with no resource, to place resources in later | the shell's allocate | `shareable heap without a resource` |
 | a placed resource on an opened or created linear surface | the create, after the base is known | `log_line` "placed: the base is a linear surface, its memory holds that image alone" |
 | a retry whose description the engine has no linear image for | attempt 2 | `log_line` "shared surface: the runtime refused the ordinary shape and the engine has no linear image for this description" |
-| an open of more than one allocation, a zero handle, or a blob of the wrong size | `open_shared_surface` | `arguments`, or `record` for a blob the decoder cannot read |
-| an open whose record the decoder declines (not shared, an access intent, two mips, a width that is not the allocation's) | `open_shared_surface` | `record` |
+| an open of more than one allocation, or a zero handle | `open_shared_surface` | `arguments` |
+| an open whose records the decoder declines | `open_shared_surface` | the decoder's own name for the check that decided: see the table below |
 | an open of a format with no COMPOSED row | `open_shared_surface` | `record format` |
 | an open whose description the engine has no linear image for | `open_shared_surface` | `engine image` |
 | an open whose record and engine layout disagree (pitch, or a backing below what the image needs) | `open_shared_surface` | `layout agreement`, with both numbers |
 | an open the shell will not adopt, or whose engine heap or image placement fails | `open_shared_surface` | `adopt`, `engine heap`, `engine image placement` |
 | an open naming a protected resource session | `open_heap_and_resource` | `protected resource session` |
+
+### Which check the decoder declined at
+
+One status covered sixteen checks until 2026-10-06, and `declined at record` is not a diagnosis. Round 1 of
+BD-075 shipped a D3D12 open that refused every cross-API surface the CPU D3D11 route creates, and it took a lab
+pass plus a 1.4 MB DDI trace to learn that the refusal was the record's *length*: that route writes E26R v2, 16
+bytes, while this decoder admits v3, 64 bytes, and reads the DXGI format out of it. The decoder now names its
+check (`Bc250SharedSurfaceDecodeWhy`, `BC250_SHARED_SURFACE_WHY_*` in `driver/contract/bc250_shared_surface.h`),
+the open's `*why` is that name, and `driver/contract/test/shared-surface-test.cpp` pins the names. They are a
+contract: the lab kit matches them, so they are not renamed silently.
+
+| The name in the log | What the producer got wrong |
+|---|---|
+| `record arguments` | a null blob or a null result |
+| `record length` | not exactly 64 bytes of E26R and 32 of LB7A. **E26R v1 (12 bytes) and v2 (16 bytes) land here**, and that is the whole cross-API failure of round 1 |
+| `allocation record` | the LB7A magic or version |
+| `record magic`, `record version` | the E26R magic, or a version that is not 3 in a 64-byte record |
+| `record policy` | the kernel driver's own parser (`Bc250SurfaceResourcePolicy`) refuses the access bits, so nobody placed this memory the way the record claims |
+| `record shared` | the record shares nothing (`Shared != 1`), which the strict D3D12 policy needs |
+| `record access` | an access intent the opener does not admit: `PRIMARY`, `CPU_READ` or `SCANOUT` under the strict policy, whose mask is 0 |
+| `record geometry` | the width or height is not the allocation's |
+| `record extent` | a zero edge, or one over `BC250_SHARED_MAX_EDGE` |
+| `record subresources` | more than one mip, slice or sample, or a sample quality |
+| `record usage` | a usage that is not DEFAULT, a CPU access flag, or a texture layout of its own |
+| `record flags` | a bind or misc flag outside the wire's mask |
+| `record format` | no COMPOSED row for the record's DXGI format (reported `E_NOTIMPL`, not malformed) |
+| `allocation format` | the LB7A `Format` is not the row the record's DXGI format names |
+| `allocation geometry` | the pitch does not hold a row of pixels, or the size does not hold the rows |
+
+The two routes a D3D11 producer may run on are not interchangeable to this opener, and that is measured, not
+assumed. The GPU route's shell (`driver/umd/dxvk/ddi-resource.cpp`) writes the full v3 record for every runtime
+surface, so a D3D12 open of its shared texture passes every check above. The CPU route's Mesa `d3d10umd` writes
+v2, 16 bytes, with no format, no bind flags and `Access = CPU_READ`, so it declines at `record length` and would
+decline at `record access` next. A trial that wants a cross-API row to pass must therefore put the D3D11 process
+on the GPU route (the application router's allowlist), which is also the route games use.
 
 The open's envelope is one rule wider than the create's, on purpose. The decoder bounds an edge at
 `BC250_SHARED_MAX_EDGE` (16384), which is what the D3D11 shell creates up to, while a D3D12 shared create stops
@@ -297,6 +367,13 @@ hold is told that the driver cannot do it, in a code the runtime survives.
    its own expected number of shared creates and shared opens, and a row whose counts are wrong scores 0 even when
    its pixels are right. The controls `w12` and `f12to12` must show zero of each, which is what says the retry did
    not fire on an ordinary committed texture.
+   The cross-API rows need the D3D11 process on the **GPU** route. Its shell writes the full E26R v3 record; the
+   CPU route's Mesa `d3d10umd` writes v2, 16 bytes, which this opener declines at `record length` and would
+   decline again at `record access`. The trial therefore puts `capshare.exe` and `capshare-peer.exe` on the
+   application router's allowlist for the run and restores the list afterwards, and it reads the route each side
+   reported back out of the verdict line rather than assuming it. A `--sync fence` row with a CPU-route side is
+   not a content measurement at all: that shell copies on the CPU inside `Flush`, so no `Wait` can order the copy,
+   and the client reports such a row as `skip`.
 5. Later: the shapes the table does not hold (tiled and multi-mip sharing need a deterministic layout, which
    `check_resource_allocation_info` does not implement), cross-adapter sharing, and the reported tier.
 
@@ -304,14 +381,14 @@ hold is told that the driver cannot do it, in a code the runtime survives.
 
 | Test | What it pins |
 |---|---|
-| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. The runner prints its own total ("48 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
+| `driver/contract/test/shared-surface-test.cpp` | the two records as byte literals: named checks over the encoder, both decoders, the kernel driver's parser and every single-field refusal. The last of these covers all 5 COMPOSED rows and their 7 format round trips. Since round 2 it also pins the name every refusal reports, one check per `BC250_SHARED_SURFACE_WHY_*` constant, so a log line is a contract and not a courtesy. The runner prints its own total ("64 checks, 0 failures"). Three documents had counted that total by hand, and disagreed |
 | `driver/umd/d3d12/allocation-request-test.cpp` | what the create publishes, field by field, and that `prepare_surface` still writes the primary's v1 record |
 | `driver/umd/d3d12/heap-import-test.cpp` | the shell half: the shareable envelope, `kShareRequired` only from the runtime's refusal, the shared surface's records and refusals, and the borrowed lifetime of an adopted allocation |
 | `engine-ddi/tests/test-shared-create.cpp` | round trip 8 on the GPU: the retry, and the geometry the engine measured. A texel-exact render and read-back of the created surface, in five formats. Both sRGB views are two of the five. Each retry raises the counter once and writes its line once |
 | `engine-ddi/tests/test-shared-open.cpp` | round trip 9 on the GPU: one adopt, and a texel-exact clear and read-back of the opened surface. Also both sRGB views, the same handle opened twice, and 12 malformed records. Also an open of two allocations, an open that names a protected resource session, the two Present questions, and the two shells that serve no adopt |
 | `engine-ddi/engine-ddi-header-test.cpp` | boundary revision 5, the `AdoptRequest` layout, and `kShareRequired` clamped to `E_OUTOFMEMORY` |
-| `tools/win/capture-share/host-validate.ps1` | the real client on a working driver: 34 cells. Among them the two sRGB cells `s12to11-srgb` and `s11to12-srgb`, and the four injected negative controls. It proves the oracles before the lab sees them |
-| `scratch/train/b19-bd075/lab-bd075-classify-test.ps1` (local) | the trial's own scoring: 18 classification cases, 8 restore cases and 9 trace cases on written trace files. Two of the trace cases are the control that shows a retry and the double counting the first rule did |
+| `tools/win/capture-share/host-validate.ps1` | the real client on a working driver: 35 cells. Among them the two sRGB cells `s12to11-srgb` and `s11to12-srgb`, the keyed handover discriminator `km12to11-finish`, and the four injected negative controls. It proves the oracles before the lab sees them |
+| `scratch/train/b19-bd075/lab-bd075-classify-test.ps1` (local) | the trial's own scoring: 24 classification cases, 8 restore cases, 11 route-arm cases, 6 allowlist-restore cases, 15 trace cases on written trace files and 6 refusal-text cases. Among the trace cases are the control that shows a retry, the double counting the first rule did, and the 64-byte ICD winsys allocations the first rule counted as shared creates |
 
 ## Open questions for later work
 
