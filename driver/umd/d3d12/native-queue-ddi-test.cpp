@@ -259,8 +259,29 @@ int main() {
         Fixture f;native12::QueueEngineSlot slot{};
         D3D12DDI_HDEVICE device{&f.device};D3D12DDI_HCOMMANDQUEUE q{&slot};
         assert(core.pfnCreateCommandQueue(device,&args,q,f.rt(0))==S_OK);
-        D3D12DDIARG_FENCE_OPERATION wait{{},17,88};queue.pfnWaitForFence(q,&wait);
-        assert(wait.PhysicalAdapterMask==0 && f.device.lost && !f.executes);
+        // The wait is the signal's mirror: this node is selected, the runtime queues its own kernel wait, and
+        // nothing is submitted. A wait with no fence, and a wait naming another device's fence, each refuse -
+        // and a refusal of either slot must never be a device loss (BD-075 round 2).
+        D3D12DDI_FENCE placement{};placement.FenceValue.BaseAddress=0x300010000ULL;
+        D3D12DDIARG_CREATE_FENCE create_fence{1,&placement};
+        alignas(native12::FenceState) unsigned char fence_storage[sizeof(native12::FenceState)];
+        D3D12DDI_HFENCE fence{fence_storage};
+        assert(core.pfnCreateFence(device,fence,&create_fence)==S_OK);
+        D3D12DDIARG_FENCE_OPERATION wait{fence,17,88};queue.pfnWaitForFence(q,&wait);
+        assert(wait.PhysicalAdapterMask==1 && wait.Value==17 && wait.Fence.pDrvPrivate==fence_storage);
+        assert(!f.device.lost && !f.executes);
+        D3D12DDIARG_FENCE_OPERATION headless{{},17,88};queue.pfnWaitForFence(q,&headless);
+        assert(headless.PhysicalAdapterMask==0 && f.device.lost && !f.executes);
+        core.pfnDestroyFence(device,fence);core.pfnDestroyCommandQueue(device,q);
+        unsigned unresolved{};assert(f.registry.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1);
+    }
+    {   // A wait naming a fence of another device removes this device and leaves the other alone.
+        Fixture f,other;native12::QueueEngineSlot slot{};
+        D3D12DDI_HDEVICE device{&f.device};D3D12DDI_HCOMMANDQUEUE q{&slot};
+        assert(core.pfnCreateCommandQueue(device,&args,q,f.rt(0))==S_OK);
+        native12::FenceState foreign{&other.device,{}};
+        D3D12DDIARG_FENCE_OPERATION wait{{&foreign},3,88};queue.pfnWaitForFence(q,&wait);
+        assert(wait.PhysicalAdapterMask==0 && f.device.lost && !other.device.lost && !f.executes);
         core.pfnDestroyCommandQueue(device,q);
         unsigned unresolved{};assert(f.registry.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1);
     }
@@ -275,5 +296,5 @@ int main() {
         assert(ext.pfnSetExtendedFeatureCallbacks(device,D3D12DDI_TABLE_TYPE_DEVICE_CORE,&core,sizeof(core))==E_NOTIMPL);
         assert(!f.device.lost && !f.engine_creates && !f.creates);
     }
-    std::puts("PASSED: native typed queue create/execute/Signal mask/close, actual registry ownership, foreign fence refusal, tile mappings to the engine queue, deferred Wait and empty extended features; host-only");
+    std::puts("PASSED: native typed queue create/execute/Signal and Wait mask/close, actual registry ownership, foreign fence refusal, tile mappings to the engine queue, and empty extended features; host-only");
 }

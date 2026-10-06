@@ -80,9 +80,28 @@ void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATIO
         amdgpu_wddm_log::print("d3d12-ddi SignalFence runtime-context mask=1 value=%llu\n",
             static_cast<unsigned long long>(args->Value));
 }
+// The wait is the signal's mirror and is answered the same way. PhysicalAdapterMask is an out
+// parameter only - "the set of adapters to broadcast the operation to" (d3d12umddi.h,
+// D3D12DDIARG_FENCE_OPERATION) - so the slot selects this single node and the system runtime queues
+// its own kernel wait on this queue's context. The slot used to remove the device instead, which is
+// the one thing a slot that cannot do a thing must not do: a refusal is never a device loss
+// (BD-075). Nothing in the lab has reached either slot yet - neither SignalFence nor WaitForFence
+// appears in any of the eleven DDI traces of 2026-10-06, while w12's three ID3D12CommandQueue::Wait
+// controls and every cross-process fence cell passed - so the runtime handles a single-adapter fence
+// operation without asking the driver, and this is a landmine being disarmed, not a measured fix.
 void APIENTRY native_wait(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATION* args) {
     if (args) args->PhysicalAdapterMask = 0;
-    queue_failure(h); // Cross-queue/runtime wait transport has not been implemented.
+    auto device = resolve_queue_device(h);
+    if (!device || !args || !args->Fence.pDrvPrivate ||
+        reinterpret_cast<uintptr_t>(args->Fence.pDrvPrivate) % alignof(FenceState)) {
+        queue_failure(h); return;
+    }
+    const auto fence = static_cast<const FenceState*>(args->Fence.pDrvPrivate);
+    if (device->lost.load() || fence->device != device) { device->remove(); return; }
+    args->PhysicalAdapterMask = 1;
+    if (ddi_trace_enabled())
+        amdgpu_wddm_log::print("d3d12-ddi WaitForFence runtime-context mask=1 value=%llu\n",
+            static_cast<unsigned long long>(args->Value));
 }
 // The tile mappings are one operation of the queue, admitted as an execute is. The engine checks
 // that the resources and the heap are the device's; a refusal or a failure removes the device.
