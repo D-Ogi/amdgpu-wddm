@@ -33,7 +33,7 @@ namespace AmdgpuWddmControl
             new GameGroup { Id = "rt", Tokens = new[] { "raytracing-tier-off" }, Invert = true },
             new GameGroup { Id = "present", Tokens = new[] { "present-noprimary", "present-cached" } },
             new GameGroup { Id = "cpu", Tokens = new[] { "recording-bind-off", "retire-handoff-off", "deferred-replay-off", "direct-entry-off" }, Invert = true },
-            new GameGroup { Id = "diag", Tokens = new[] { "release-two-phase-off", "import-progress-gate-off", "import-quarantine-off", "replay-log" }, SupportOnly = true },
+            new GameGroup { Id = "diag", Tokens = new[] { "release-two-phase-off", "import-progress-gate-off", "import-quarantine-off", "shared-create-retry-off", "fence-wait-accept-off", "replay-log" }, SupportOnly = true },
         };
 
         public static GameGroup Find(string id) { return All.FirstOrDefault(g => g.Id == id); }
