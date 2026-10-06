@@ -57,6 +57,7 @@
 #define BC250_WDDM_NODE_COPY 1u
 #define BC250_WDDM_NODE_COUNT 1u            // gate closed: the value wddm->NodeCount starts at, and the only one C_ASSERT still checks
 #define BC250_WDDM_NODE_COUNT_MAX 2u        // sizes every per-node array below, gate open or closed
+#define BC250_WDDM_REPORT_RETRY_MAX 4L      // passes a completion report may be retried before it is dropped
 
 // The GPU virtual address space stage A declares. Four levels of nine index bits over 4 KB pages is what GFX10's
 // GPUVM does and what M4's page table format (facts M37) is built for, so stage B can keep the numbers; the root
@@ -307,6 +308,16 @@ typedef struct _BC250_WDDM {
     UINT RejectedFence[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN WatchdogFaulted[BC250_WDDM_NODE_COUNT_MAX]; // sticky until adapter state is rebuilt
     volatile LONG CompletionPending[BC250_WDDM_NODE_COUNT_MAX];    // set by the submit, cleared by the DPC
+    // A completion report that did not reach dxgkrnl must not advance LastReportedFence: that value is what a
+    // later preemption report hands back as "the fence you were told about", so advancing it there would name a
+    // fence dxgkrnl never saw completed. The pending flag goes back instead and the pass runs again, at most
+    // BC250_WDDM_REPORT_RETRY_MAX times a node, so a callback that keeps failing cannot spin this DPC for ever.
+    volatile LONG CompletionRetries[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG CompletionsDropped[BC250_WDDM_NODE_COUNT_MAX];
+    // The preemption ack is not retried: its locked part has already released the preempted paging ownership,
+    // and running that release twice is a worse failure than the lost ack, which the watchdog still sees. It is
+    // counted and logged, so "the scheduler waits for a preemption that never came" has a line of its own.
+    volatile LONG PreemptionReportsLost;
     volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value";
                                          // shared across nodes on purpose (design note section 5): a lab
                                          // simplification, not a claim that dxgkrnl only ever sees one node's value
@@ -1751,10 +1762,33 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
             {
                 WddmPairingReport(wddm, FALSE);
                 reported = TRUE;
+                InterlockedExchange(&wddm->LastCompletedFence, fence);
+                InterlockedExchange(&wddm->LastReportedFence[node], fence);
+                wddm->LastReportedValid[node] = TRUE;
+                InterlockedExchange(&wddm->CompletionRetries[node], 0);
             }
-            InterlockedExchange(&wddm->LastCompletedFence, fence);
-            InterlockedExchange(&wddm->LastReportedFence[node], fence);
-            wddm->LastReportedValid[node] = TRUE;
+            else
+            {
+                // The report did not reach dxgkrnl, so the fence it carried is not a fence dxgkrnl was told
+                // about. Nothing advances here; the pending flag goes back and this pass asks for another one.
+                // Bounded, because the failure modes are "the callbacks are gone" and "SynchronizeExecution
+                // keeps failing", and a DPC that requeues itself for ever on either would be worse than a
+                // dropped completion with a line in the log.
+                BOOLEAN retry;
+
+                KeAcquireSpinLock(&wddm->Lock, &irql);
+                retry = (InterlockedIncrement(&wddm->CompletionRetries[node]) <= BC250_WDDM_REPORT_RETRY_MAX);
+                if (retry)
+                {
+                    wddm->CompletionPending[node] = 1;
+                    wddm->ReportAgain = TRUE;
+                }
+                else InterlockedIncrement(&wddm->CompletionsDropped[node]);
+                KeReleaseSpinLock(&wddm->Lock, irql);
+                GuardLog("wddm: completion report node %u fence %ld not delivered, %s (retry %ld of %ld)",
+                         node, fence, retry ? "pending again" : "DROPPED",
+                         wddm->CompletionRetries[node], (LONG)BC250_WDDM_REPORT_RETRY_MAX);
+            }
         }
 
         // DMA-buffer-boundary preemption cannot be acknowledged while that buffer is
@@ -1807,6 +1841,12 @@ static void WddmReportDpcPublish(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
             {
                 WddmPairingReport(wddm, FALSE);
                 reported = TRUE;
+            }
+            else
+            {
+                InterlockedIncrement(&wddm->PreemptionReportsLost);
+                GuardLog("wddm: preemption report fence %u node %u NOT delivered (lost %ld); recovery is the"
+                         " watchdog's", preemptFence, node, wddm->PreemptionReportsLost);
             }
         }
     }
@@ -2255,6 +2295,14 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm profile: notify pairing %lu vsync reports (%lu waiting, worst %lu), %lu contended",
              Wddm->NotifyPairing.VsyncReports, Wddm->NotifyPairing.VsyncPending,
              Wddm->NotifyPairing.MaxVsyncPending, Wddm->NotifyPairing.Contended);
+    // Undelivered reports. Every number here should be 0: a dropped completion is a fence dxgkrnl was never told
+    // about, which ends as a scheduler timeout, and a lost preemption ack ends the same way. They are printed
+    // even at 0 so that a TDR in the trail can be read against them instead of being guessed at.
+    GuardLog("wddm profile: reports not delivered: node 0 retried %ld dropped %ld",
+             Wddm->CompletionRetries[BC250_WDDM_NODE_3D], Wddm->CompletionsDropped[BC250_WDDM_NODE_3D]);
+    GuardLog("wddm profile: reports not delivered: node 1 retried %ld dropped %ld, %ld preemption acks lost",
+             Wddm->CompletionRetries[BC250_WDDM_NODE_COPY], Wddm->CompletionsDropped[BC250_WDDM_NODE_COPY],
+             Wddm->PreemptionReportsLost);
     // D5: a quiet log must never be read as a quiet ring, so the lines HotSubmitLog left out are counted here.
     GuardLog("wddm profile: hot submit log lines left out: %lu (HotSubmitLog off)",
              GfxHotSubmitLinesSkipped(Wddm->Device));
@@ -2597,6 +2645,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         (void)KeQueryPerformanceCounter(&wddm->RingGapFrequency);
         Bc250NotifyPairingReset(&wddm->NotifyPairing);
         wddm->NotifyDpcBusy = 0;
+        for (ringNode = 0; ringNode < BC250_WDDM_NODE_COUNT_MAX; ringNode++)
+        {
+            wddm->CompletionRetries[ringNode] = 0;
+            wddm->CompletionsDropped[ringNode] = 0;
+        }
+        wddm->PreemptionReportsLost = 0;
     }
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
