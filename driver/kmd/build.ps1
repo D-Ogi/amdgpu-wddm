@@ -97,6 +97,7 @@ $shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_c
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
 $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
+    '/Brepro',                      # no timestamp in the object files: the same sources must give the same bytes
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
@@ -127,8 +128,11 @@ Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244',
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
+    '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
     'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
-    "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") + (Get-ChildItem "$obj\*.obj").FullName)
+    "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
+    (Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName)   # fixed order: /OPT:ICF folds by input order
+Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 
 # What does the prologue of each function take off rsp? A kernel thread has 24 KB and dxgmms2 has already
 # spent some of it when it calls us (facts M104: a 0x5B00-byte local bugchecked 0x50 in nt!_chkstk).
@@ -138,7 +142,7 @@ if ($LASTEXITCODE -ne 0) { throw 'stack budget: a function allocates too much st
 
 Copy-Item (Join-Path $here 'bc250kmd.inf') $pkg -Force
 Write-Host 'catalog'
-Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64', '/uselocaltime')
+Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64')
 
 $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq $CertSubject -and $_.NotAfter -gt (Get-Date) } | Select-Object -First 1
 if (-not $cert) { throw "test certificate '$CertSubject' not found: run tools\win\bc250rd\build.ps1 once, it creates it" }
@@ -168,7 +172,7 @@ if ($UmdStub) {
     # Inf2Cat before the certificate is put there: the .cer is not a packaged file and Inf2Cat would object to it.
     # Signing the .sys does not disturb the catalog, which hashes the PE without its certificate table - which is
     # also why the plain package above catalogues before it signs.
-    Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkgUmd", '/os:10_X64', '/uselocaltime')
+    Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkgUmd", '/os:10_X64')
     Invoke-Tool $signtool @('sign', '/fd', 'SHA256', '/sha1', $cert.Thumbprint, "$pkgUmd\bc250kmd.cat")
     Copy-Item "$pkg\bc250-lab-test.cer" $pkgUmd -Force
     Write-Host "umd package: $pkgUmd"
