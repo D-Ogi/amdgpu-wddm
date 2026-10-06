@@ -13,8 +13,8 @@
 //   bc250kmd_cli telemetry | vram     what the monitor's GPU line shows (bc250control.dll exports the same reads)
 //   bc250kmd_cli dpm [n [ms]]       the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //   bc250kmd_cli dpm tune|floor ...   the governor's thresholds and a runtime floor, until the next device start (0.7.185)
-//   bc250kmd_cli dpm curve ...        the operator's V/F curve and its trial (0.7.210, docs/design/tuner.md)
-//   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.210)
+//   bc250kmd_cli dpm curve ...        the operator's V/F curve and its trial (0.7.212, docs/design/tuner.md)
+//   bc250kmd_cli cpu ...              the CPU clock limit, undervolt, temperature cap and core mask (0.7.212)
 //                                     the header also names the idle state: its point, window and counters (0.7.207)
 //   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
@@ -702,7 +702,7 @@ BC250_CONTROL_API LONG WINAPI Bc250CuMode(ULONG op, ULONGLONG expectedGeneration
     return 0;
 }
 
-// The operator's V/F curve (0.7.210): READ for the window's chart, and the trial operations behind one elevated
+// The operator's V/F curve (0.7.212): READ for the window's chart, and the trial operations behind one elevated
 // action. Every operation is adapter-owned software state answered with NoAdapterSynchronization alone, like the
 // DPM read above: the governor thread applies the curve at its next tick, so no escape of this surface touches a
 // mailbox. A write needs an administrator (the KMD checks the caller's token itself) and the Generation of a READ
@@ -731,7 +731,7 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
         data->TrialMs = windowMs;
     }
     status = TelemetryEscape(data, sizeof(*data));
-    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.210 refuses the command: DEVICE_NOT_READY
+    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.212 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
@@ -741,7 +741,7 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
     return 0;
 }
 
-// The CPU surface (0.7.210). One request structure instead of seven arguments, so that a new field is a version of
+// The CPU surface (0.7.212). One request structure instead of seven arguments, so that a new field is a version of
 // this DLL and not a new export. READ is software state; every other operation sends mailbox messages on the
 // firmware's queue 3 and therefore goes with HardwareAccess, an administrator and the Generation of a READ of the
 // same start. READBACK asks for the administrator as well since 0.7.211: it holds the surface for some twenty
@@ -778,7 +778,7 @@ BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_E
     if (op == BC250_CPU_OP_CORES) data->CoreMask = request->CoreMask;
     if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_BEGIN) data->TrialMs = request->TrialMs;
     status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ);
-    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.210 refuses the command: DEVICE_NOT_READY
+    if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.212 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
@@ -880,7 +880,7 @@ static NTSTATUS TelemetryOpenLocked(const WCHAR *wantedId, D3DKMT_OPENADAPTERFRO
 
 // hardware = 0: NoAdapterSynchronization alone, a software snapshot, which is what every read of this DLL sends
 // and what the KMD demands of them. hardware = 1: HardwareAccess alone (the Level Two exclusion), for the one
-// surface whose writes reach a mailbox, the CPU surface of 0.7.210. The KMD refuses any other combination, per
+// surface whose writes reach a mailbox, the CPU surface of 0.7.212. The KMD refuses any other combination, per
 // operation, so a mistake here is a refusal and never a half-privileged escape.
 static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
 {
@@ -2518,7 +2518,7 @@ static int DpmFloor(int argc, WCHAR **argv)
     return TuneWrite(BC250_DPM_TUNE_OP_FLOOR, &t, "dpm floor");
 }
 
-// ---- dpm curve: the operator's V/F curve and its trial (BC250_ESCAPE_RUN_DPM_CURVE, 0.7.210) ---------------------
+// ---- dpm curve: the operator's V/F curve and its trial (BC250_ESCAPE_RUN_DPM_CURVE, 0.7.212) ---------------------
 //
 // "dpm curve" prints the three curves side by side (the table's own line, what is stored, what runs now) with the
 // lowest voltage each level admits. "dpm curve set <mV> ..." puts a whole curve on trial, one value per level from
@@ -2548,7 +2548,7 @@ static int CurveQuery(BC250_ESCAPE_DPM_CURVE *c, unsigned long op, unsigned long
     if (!NT_SUCCESS(status)) {
         if (!quiet) {
             PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM_CURVE)", status);
-            printf("# a driver before 0.7.210 (0x000700D2) has no V/F curve\n");
+            printf("# a driver before 0.7.212 (0x000700D4) has no V/F curve\n");
         }
         return 1;
     }
@@ -2689,7 +2689,7 @@ static int DpmCurve(int argc, WCHAR **argv)
     return 2;
 }
 
-// ---- cpu: the clock limit, the undervolt, the temperature cap and the core mask (BC250_ESCAPE_RUN_CPU, 0.7.210) --
+// ---- cpu: the clock limit, the undervolt, the temperature cap and the core mask (BC250_ESCAPE_RUN_CPU, 0.7.212) --
 //
 // "cpu" prints what is applied, stored and recorded and what the chip last answered; "cpu readback" sends the
 // getters of both queues, which is also what admits every setter of this start. "cpu set [clock <MHz>]
@@ -2724,7 +2724,7 @@ static int CpuQuery(BC250_ESCAPE_CPU *c, unsigned long op, unsigned long long ge
     if (!NT_SUCCESS(status)) {
         if (!quiet) {
             PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_CPU)", status);
-            printf("# a driver before 0.7.210 (0x000700D2) has no CPU surface\n");
+            printf("# a driver before 0.7.212 (0x000700D4) has no CPU surface\n");
         }
         return 1;
     }
