@@ -45,8 +45,12 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   write to any register of that chip, and it never touches the Super I/O configuration ports `0x2E`/`0x2F`,
   which the DSDT drives under an ACPI mutex a kernel driver cannot take. The window has no arbiter, so the
   reader is off unless `EnableHwmon` is 1, and a measured session needs the preflight check of
-  [`design/fan.md`](design/fan.md). Setting the fan duty from the driver is **not implemented** and waits for
-  the owner's decision. The same page says what it would need.
+  [`design/fan.md`](design/fan.md). `HwmonBasePort` admits exactly three values: `0x0A20` (the default, also
+  selected by 0), `0x0A00` and `0x0A10`, the three windows the DSDT declares on this board. Every other value
+  is refused before a port is touched, because this reader writes three latch bytes to read one register, and
+  a mistyped base such as `0x0CF8` (the PCI configuration address port) or `0x0CD0` (the FCH power-management
+  index pair) would take those writes. Setting the fan duty from the driver is **not implemented** and waits
+  for the owner's decision. The same page says what it would need.
 - Design options that were examined and rejected, with the reason for each:
   [`design/rejected-options.md`](design/rejected-options.md). Read it before you propose
   an SMU message, an SMN path or a CU mask that is not in the list above.
