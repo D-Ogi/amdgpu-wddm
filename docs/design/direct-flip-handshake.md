@@ -75,13 +75,21 @@ the 155:
 | Group | Count | What the front publishes |
 | --- | --- | --- |
 | Field copies | 75 | the hosted function itself |
-| Thunks | 26 | a translation of the argument struct, then the hosted entry |
-| Refusals | 49 | one body per signature, for entries a level 10_0 device cannot reach |
+| Thunks and hooks | 32 | a translation of the argument struct, then the hosted entry |
+| Refusals | 43 | one body per signature, for entries a level 10_0 device cannot reach |
 | Real bodies | 5 | `pfnDiscard`, `pfnAssignDebugBinary`, `pfnCheckDeferredContextHandleSizes`, `pfnClearView` and `pfnCheckDirectFlipSupport` |
 
 A null slot in that table is a call into address zero inside `dwm.exe`. The host gate therefore counts
 the slots and fails on a single null one, and `front-adapter.h` asserts the three table sizes at compile
-time.
+time. The gate also names every one of the 75 copies and every one of the 37 own bodies, and checks that
+each copy is the hosted entry it claims: a copy that names its neighbour reads as a pass on a count alone.
+
+The front answers at one interface version. `D3D10DDIARG_CREATEDEVICE` is a union keyed by `Interface`,
+so a device created at the D3D10.0 or D3D10.1 DDI holds a smaller function table and a smaller DXGI
+table than the front would fill. `CalcPrivateDeviceSize` and `CreateDevice` therefore forward any
+interface other than `D3D11_1_DDI_INTERFACE_VERSION` to the hosted driver untouched, and say so once in
+the log. Without that guard the front wrote 155 entries into a 101-entry table and 15 into a 7-entry one:
+432 and 64 bytes past two buffers the runtime owns, in `dwm.exe`.
 
 `pfnClearView` is the one entry that the D3D10.0 DDI cannot fully express. It clears a view, and the
 runtime may give it a list of rectangles. The D3D10.0 clear entries clear a whole view. The front
@@ -96,12 +104,29 @@ runtime hands the driver `DXGI1_2_DDI_BASE_FUNCTIONS`, which holds 15. The union
 `DXGI_DDI_BASE_ARGS` is the same pointer, so the hosted driver still writes slots 0 to 6 in place, and
 the front fills the rest.
 
-Four of the remaining eight belong to the front at build version 0: `pfnResolveSharedResource`,
-`pfnBlt1`, `pfnOfferResources` and `pfnReclaimResources`. The last four are the multiplane-overlay
-entries, and `IS_DXGI_MULTIPLANE_OVERLAY_FUNCTIONS` needs a build version above 0. The front offers
-`D3D11_1_DDI_SUPPORTED` exactly, whose build version is 0, so the operating system has no reason to call
-them. The front fills them all the same, with a body that refuses and writes one line. An entry that
-nobody should call is the entry that costs a crash when the assumption is wrong.
+Four of the remaining eight belong to the front: `pfnResolveSharedResource`, `pfnBlt1`,
+`pfnOfferResources` and `pfnReclaimResources`. Slot 7 arrived at DXGI1_1, so the hosted driver may have
+filled it already through the union member. The front keeps a non-null slot and installs its own stub
+only where the slot is empty.
+
+`pfnBlt1` is on the desktop's present path, because installing the front is what moves the presentation
+blt from `pfnBlt` to it. It never refuses. The older entry carries a destination rectangle, the whole
+source subresource and its own `Rotate` field, so an unstretched copy from the source origin is exact and
+a rotation needs no clause. Any other source rectangle is named once in the log and forwarded all the
+same: wrong pixels in one blt are recoverable, a dead compositor is not.
+
+The last four are the multiplane-overlay entries. The build version does not exclude them: the second
+clause of `IS_DXGI_MULTIPLANE_OVERLAY_FUNCTIONS` is `major == 11 && minor > D3D11_1_DDI_MINOR_VERSION_RC`,
+which holds at `D3D11_1_DDI_INTERFACE_VERSION` whatever the build version is, and our own DXVK shell
+relies on exactly that. What keeps the operating system off them is the kernel driver, which implements no
+multiplane-overlay DDI at all, so DXGI has nothing to build an overlay plan from. They answer
+`DXGI_ERROR_UNSUPPORTED`, the same refusal our own UMD gives, and write one line. An entry that nobody
+should call is the entry that costs a crash when the assumption is wrong.
+
+The DXGI entries carry a `DXGI_DDI_HDEVICE`, which is the runtime's handle and not the device handle the
+front publishes, so these bodies have no device record to log through. The front therefore keeps a
+process-wide log channel, seeded when an adapter is installed, and every refusal reaches the file the
+trial reads.
 
 `pfnCreateDevice` returns the hosted code and not `S_OK`. The Mesa frontend answers
 `DXGI_STATUS_NO_REDIRECTION` there, which is a success code that keeps DXGI off the shared-resource
@@ -176,6 +201,11 @@ The value is read at every `OpenAdapter` call, so it is start-latched for `dwm.e
 Windows restart, which is also what a new compositor process needs. A forced DWM restart breaks WinUI
 mouse input on this lab until the next boot.
 
+Per `OpenAdapter` is not per system: a process that opens the adapter after the value changed gets the
+new state while `dwm.exe` keeps the old one, so between a write and the restart the desktop and a newly
+started application can be on different routes. The route log line of each process says which one it got,
+and that is the field to read before comparing two processes in one capture.
+
 The desktop route line of the router gains exactly one column, `front=`, at the end. Every field that the
 registered router 674AD261 wrote stays in its place with its spelling, so the deployment kit's parser
 still reads the line.
@@ -202,9 +232,9 @@ The answer becomes the rule's answer in increment 2, behind the kernel driver's 
 
 `tools/build/build-umd-router.ps1` compiles the front into the router and into `test-router.exe`, so the
 host gate drives the production table fills and the production rule. `tools/build/test-umd-router.ps1`
-runs 79 scenarios, each in its own process on a private application hive.
+runs 80 scenarios, each in its own process on a private application hive.
 
-Ten of them are M15.14's:
+Eleven of them are M15.14's:
 
 | Scenario | What it settles |
 | --- | --- |
@@ -214,6 +244,7 @@ Ten of them are M15.14's:
 | `front-absent`, `front-zero`, `front-wrong-type` | the three states that mean off, and the column each one writes |
 | `front-on` | the whole path: versions, caps, device create, the forwards, and the FALSE answer |
 | `front-d3d10-entry` | the D3D10.0 adapter entry leaves the route unchanged |
+| `front-d3d10-interface` | the front forwards a device created at the D3D10.0 interface whole, and writes nothing past either table or past the hosted private block |
 | `front-cpu-route` | the kill switch keeps the front out of the path |
 | `front-stack` | the front over the real hosted UMD, with its own version list and caps |
 
@@ -229,8 +260,9 @@ does not start a game:
 
 - Arm 1a, desktop health, with no client. The route line must say `route=hosted` and `front=on`. A File
   Explorer window opens, moves and resizes, because that is the shape that BD-058 needed. The compositor
-  must be the same process afterwards. The arm also names the two witnesses that the lab script cannot
-  take: a screenshot through the overlay, and one cropped camera frame.
+  must be the same process afterwards. The arm also names the one witness that the lab script cannot
+  take: a screenshot through the overlay. A refused front entry in that arm is a finding, not noise: the
+  desktop can look right while the runtime drops the call or the frame it belonged to.
 - Arm 1b, the question. The borderless client at the POST geometry, under the present-mode provider set,
   with the cursor parked in a corner. The front's log is the first-rank evidence. ETW is the inert
   control, and any deviation there is a defect and not progress.
@@ -240,7 +272,10 @@ The rollback ladder, in order. Each rung assumes less than the one above it:
 1. `DirectFlipFront = 0` and one Windows restart.
 2. `DwmForceCpu = 1` and one Windows restart, which composes the desktop on the CPU UMD.
 3. No SSH: `lab-emerg.py ps` writes the same value with no shell, then `lab-emerg.py reboot reboot-now`.
-4. Nothing answers: cut AC at the plug and boot with the AppRouter allowlist safe boot.
+4. The desktop does not come back: `lab-emerg.py usb-boot linux:N`, then `lab-emerg.py reboot reboot-now`.
+   The diagnostic stick runs no Windows desktop driver, and the lead fixes the NVMe system from there.
+5. Nothing answers at all: cut AC at the plug and boot with the AppRouter allowlist safe boot. An AC cycle
+   starts the same route again, so it recovers a hung machine and changes nothing else.
 
 ## Open items
 

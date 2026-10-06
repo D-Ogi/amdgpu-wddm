@@ -20,7 +20,9 @@
 // created with `D3D10_DDI_BIND_PRESENT` or a `pPrimaryDesc`, or a shared one, or any opened one (an
 // opened resource is shared by definition). An ordinary texture or buffer is not recorded at all, so the
 // map holds the compositor's own primaries and the surfaces it opened - a handful, not a population. A
-// handle the map does not know is answered FALSE with the reason "record", which is the safe answer.
+// handle the map does not know is answered FALSE with the reason "record", which is the safe answer, and a
+// null handle or the same surface twice with the reason "handle": two different facts, two different words
+// (front-device.cpp, CheckDirectFlipSupport).
 //
 // The map is a fixed open-addressing table with no allocation: a full table refuses to record further
 // surfaces, says so once, and the rule then answers FALSE for them. It is read under a shared lock and

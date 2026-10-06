@@ -495,10 +495,10 @@ static void FrontTableTests()
     printf("  front device table: %u entries, %u field copies, %u own bodies\n", frontCount, copies, own);
     CHECK(copies + own == frontCount, "%u + %u != %u", copies, own, frontCount);
     // The exact split, so that a change to the forwarding table shows up here and is reviewed entry by entry.
-    // 75 of the hosted driver's 101 entries reach the runtime as the hosted function itself; the other 26 are
-    // ones whose argument struct grew, whose semantics the front has to carry, or that keep the resource map.
-    // 80 of the 155 published entries are the front's own body: those 26 thunks plus the 54 entries a 3D
-    // pipeline level 10_0 device cannot reach and the five the front answers itself.
+    // 75 of the published entries hold a hosted function itself. The other 80 are the front's own body: 32
+    // thunks and hooks (an argument struct that grew, a semantic the front has to carry, or the resource map
+    // and the device record), 43 entries a 3D pipeline level 10_0 device cannot reach, and 5 the front
+    // answers itself. The two tables below name all 155 of them.
     CHECK(copies == 75 && own == 80, "the table splits %u field copies and %u own bodies, expected 75 and 80",
           copies, own);
 
@@ -506,47 +506,173 @@ static void FrontTableTests()
         const UINT_PTR v = (UINT_PTR)p;
         return v >= HostedDeviceSlotBase && v < HostedDeviceSlotBase + hostedCount;
     };
-    // A sample of the entries that must be the hosted function ITSELF, with no thunk in between: these are
-    // the hot draw and state entries, and a thunk on them would cost the desktop a call per draw.
-    struct CopyCase { const void *got; const void *want; const char *name; };
-    const CopyCase copiesWanted[] = {
-        {(const void *)front.pfnDraw, (const void *)hosted.pfnDraw, "pfnDraw"},
-        {(const void *)front.pfnDrawIndexed, (const void *)hosted.pfnDrawIndexed, "pfnDrawIndexed"},
-        {(const void *)front.pfnIaSetVertexBuffers, (const void *)hosted.pfnIaSetVertexBuffers, "pfnIaSetVertexBuffers"},
-        {(const void *)front.pfnPsSetShaderResources, (const void *)hosted.pfnPsSetShaderResources, "pfnPsSetShaderResources"},
-        {(const void *)front.pfnSetViewports, (const void *)hosted.pfnSetViewports, "pfnSetViewports"},
-        {(const void *)front.pfnResourceMap, (const void *)hosted.pfnResourceMap, "pfnResourceMap"},
-        {(const void *)front.pfnClearRenderTargetView, (const void *)hosted.pfnClearRenderTargetView, "pfnClearRenderTargetView"},
-        {(const void *)front.pfnQueryEnd, (const void *)hosted.pfnQueryEnd, "pfnQueryEnd"},
+    // EVERY field copy, by name, with the hosted slot it must hold. A count alone cannot see a mis-wire
+    // inside a family that shares a typedef: `out->pfnVsSetSamplers = hosted.pfnGsSetSamplers` compiles and
+    // passes a count, and the compiler is the only guard for a CROSS-typedef error. A wrong stage binding is
+    // the likeliest hand-transcription error in a 155-member table and it would show up on the lab as wrong
+    // textures on the desktop, not as a crash. With this table the 75 is a checked mapping, not a total.
+    struct Pair { size_t front_at, hosted_at; const char *name; };
+#define FRONT_COPY(member) \
+    { offsetof(D3D11_1DDI_DEVICEFUNCS, member), offsetof(D3D10DDI_DEVICEFUNCS, member), #member }
+#define FRONT_COPY_AS(member, hostedMember)                                                  \
+    { offsetof(D3D11_1DDI_DEVICEFUNCS, member), offsetof(D3D10DDI_DEVICEFUNCS, hostedMember), \
+      #member " = hosted." #hostedMember }
+    static const Pair copyPairs[] = {
+        FRONT_COPY(pfnPsSetShaderResources),
+        FRONT_COPY(pfnPsSetShader),
+        FRONT_COPY(pfnPsSetSamplers),
+        FRONT_COPY(pfnVsSetShader),
+        FRONT_COPY(pfnDrawIndexed),
+        FRONT_COPY(pfnDraw),
+        FRONT_COPY(pfnDynamicIABufferMapNoOverwrite),
+        FRONT_COPY(pfnDynamicIABufferUnmap),
+        FRONT_COPY(pfnDynamicConstantBufferMapDiscard),
+        FRONT_COPY(pfnDynamicIABufferMapDiscard),
+        FRONT_COPY(pfnDynamicConstantBufferUnmap),
+        FRONT_COPY(pfnIaSetInputLayout),
+        FRONT_COPY(pfnIaSetVertexBuffers),
+        FRONT_COPY(pfnIaSetIndexBuffer),
+        FRONT_COPY(pfnDrawIndexedInstanced),
+        FRONT_COPY(pfnDrawInstanced),
+        FRONT_COPY(pfnDynamicResourceMapDiscard),
+        FRONT_COPY(pfnDynamicResourceUnmap),
+        FRONT_COPY(pfnGsSetShader),
+        FRONT_COPY(pfnIaSetTopology),
+        FRONT_COPY(pfnStagingResourceMap),
+        FRONT_COPY(pfnStagingResourceUnmap),
+        FRONT_COPY(pfnVsSetShaderResources),
+        FRONT_COPY(pfnVsSetSamplers),
+        FRONT_COPY(pfnGsSetShaderResources),
+        FRONT_COPY(pfnGsSetSamplers),
+        FRONT_COPY(pfnShaderResourceViewReadAfterWriteHazard),
+        FRONT_COPY(pfnResourceReadAfterWriteHazard),
+        FRONT_COPY(pfnSetBlendState),
+        FRONT_COPY(pfnSetDepthStencilState),
+        FRONT_COPY(pfnSetRasterizerState),
+        FRONT_COPY(pfnQueryEnd),
+        FRONT_COPY(pfnQueryBegin),
+        FRONT_COPY(pfnSoSetTargets),
+        FRONT_COPY(pfnDrawAuto),
+        FRONT_COPY(pfnSetViewports),
+        FRONT_COPY(pfnSetScissorRects),
+        FRONT_COPY(pfnClearRenderTargetView),
+        FRONT_COPY(pfnClearDepthStencilView),
+        FRONT_COPY(pfnSetPredication),
+        FRONT_COPY(pfnQueryGetData),
+        FRONT_COPY(pfnGenMips),
+        FRONT_COPY(pfnResourceCopy),
+        FRONT_COPY(pfnResourceResolveSubresource),
+        FRONT_COPY(pfnResourceMap),
+        FRONT_COPY(pfnResourceUnmap),
+        FRONT_COPY(pfnResourceIsStagingBusy),
+        FRONT_COPY(pfnCalcPrivateOpenedResourceSize),
+        FRONT_COPY(pfnDestroyShaderResourceView),
+        FRONT_COPY(pfnCalcPrivateRenderTargetViewSize),
+        FRONT_COPY(pfnCreateRenderTargetView),
+        FRONT_COPY(pfnDestroyRenderTargetView),
+        FRONT_COPY(pfnDestroyDepthStencilView),
+        FRONT_COPY(pfnCalcPrivateElementLayoutSize),
+        FRONT_COPY(pfnCreateElementLayout),
+        FRONT_COPY(pfnDestroyElementLayout),
+        FRONT_COPY(pfnDestroyBlendState),
+        FRONT_COPY(pfnCalcPrivateDepthStencilStateSize),
+        FRONT_COPY(pfnCreateDepthStencilState),
+        FRONT_COPY(pfnDestroyDepthStencilState),
+        FRONT_COPY(pfnDestroyRasterizerState),
+        FRONT_COPY(pfnDestroyShader),
+        FRONT_COPY(pfnCalcPrivateSamplerSize),
+        FRONT_COPY(pfnCreateSampler),
+        FRONT_COPY(pfnDestroySampler),
+        FRONT_COPY(pfnCalcPrivateQuerySize),
+        FRONT_COPY(pfnCreateQuery),
+        FRONT_COPY(pfnDestroyQuery),
+        FRONT_COPY(pfnCheckFormatSupport),
+        FRONT_COPY(pfnCheckMultisampleQualityLevels),
+        FRONT_COPY(pfnCheckCounterInfo),
+        FRONT_COPY(pfnCheckCounter),
+        FRONT_COPY(pfnSetTextFilterSize),
+        FRONT_COPY_AS(pfnResourceConvert, pfnResourceCopy),
+        FRONT_COPY_AS(pfnDynamicConstantBufferMapNoOverwrite, pfnResourceMap),
     };
-    for (const CopyCase &c : copiesWanted) CHECK(c.got == c.want, "%s is not the hosted entry itself", c.name);
-    // And the entries that must NOT be a field copy, because the front has work to do in them.
-    struct OwnCase { const void *got; const char *name; };
-    const OwnCase ownWanted[] = {
-        {(const void *)front.pfnCheckDirectFlipSupport, "pfnCheckDirectFlipSupport"},
-        {(const void *)front.pfnClearView, "pfnClearView"},
-        {(const void *)front.pfnFlush, "pfnFlush"},
-        {(const void *)front.pfnRelocateDeviceFuncs, "pfnRelocateDeviceFuncs"},
-        {(const void *)front.pfnDestroyDevice, "pfnDestroyDevice"},
-        {(const void *)front.pfnCreateResource, "pfnCreateResource"},
-        {(const void *)front.pfnOpenResource, "pfnOpenResource"},
-        {(const void *)front.pfnDestroyResource, "pfnDestroyResource"},
-        {(const void *)front.pfnCreateBlendState, "pfnCreateBlendState"},
-        {(const void *)front.pfnCreateDepthStencilView, "pfnCreateDepthStencilView"},
-        {(const void *)front.pfnCreateShaderResourceView, "pfnCreateShaderResourceView"},
-        {(const void *)front.pfnCreateVertexShader, "pfnCreateVertexShader"},
-        {(const void *)front.pfnSetRenderTargets, "pfnSetRenderTargets"},
-        {(const void *)front.pfnCheckDeferredContextHandleSizes, "pfnCheckDeferredContextHandleSizes"},
-        {(const void *)front.pfnDiscard, "pfnDiscard"},
-        {(const void *)front.pfnCreateDeferredContext, "pfnCreateDeferredContext (refused)"},
-        {(const void *)front.pfnCsSetShader, "pfnCsSetShader (refused)"},
-        {(const void *)front.pfnDispatch, "pfnDispatch (refused)"},
-        {(const void *)front.pfnCreateUnorderedAccessView, "pfnCreateUnorderedAccessView (refused)"},
-    };
-    for (const OwnCase &c : ownWanted) {
-        CHECK(c.got != nullptr, "%s is null", c.name);
-        CHECK(!isCopy(c.got), "%s is a field copy, but the front owes it a body of its own", c.name);
+#undef FRONT_COPY
+#undef FRONT_COPY_AS
+    // The two deliberate cross-name forwards are in that table by name, so a reviewer reads them there:
+    // pfnResourceConvert takes the hosted pfnResourceCopy (the 10.1 convert is a copy at this DDI) and
+    // pfnDynamicConstantBufferMapNoOverwrite takes the generic hosted pfnResourceMap.
+    static_assert(ARRAYSIZE(copyPairs) == 75, "the copy table must name all 75 field copies");
+    std::vector<char> covered(frontCount, 0);
+    for (const Pair &p : copyPairs) {
+        const void *got = *(void **)((BYTE *)&front + p.front_at);
+        const void *want = (const void *)(HostedDeviceSlotBase + p.hosted_at / sizeof(void *));
+        CHECK(got == want, "%s is not the hosted entry it names (slot %Iu, got slot %Id)", p.name,
+              p.hosted_at / sizeof(void *),
+              (ptrdiff_t)((UINT_PTR)got - HostedDeviceSlotBase) / (ptrdiff_t)sizeof(void *));
+        covered[p.front_at / sizeof(void *)] = 1;
     }
+    // And no field copy outside that table: a new copy added to FillDeviceFuncs without a line here is a
+    // forward nobody reviewed.
+    for (unsigned i = 0; i < frontCount; ++i)
+        CHECK(!isCopy(frontSlots[i]) || covered[i], "device entry %u is a field copy the gate does not name",
+              i);
+
+    // And every own body that is NOT a refusal, by name: the thunks, the four resource and device hooks and
+    // the five answers the front gives itself. 37 names; the remaining 43 of the 80 own bodies are the
+    // refusals, which is how the split below is checked rather than asserted.
+    struct Own { size_t front_at; const char *name; };
+#define FRONT_OWN(member) { offsetof(D3D11_1DDI_DEVICEFUNCS, member), #member }
+    static const Own ownBodies[] = {
+        FRONT_OWN(pfnDefaultConstantBufferUpdateSubresourceUP),
+        FRONT_OWN(pfnVsSetConstantBuffers),
+        FRONT_OWN(pfnPsSetConstantBuffers),
+        FRONT_OWN(pfnGsSetConstantBuffers),
+        FRONT_OWN(pfnSetRenderTargets),
+        FRONT_OWN(pfnResourceCopyRegion),
+        FRONT_OWN(pfnResourceUpdateSubresourceUP),
+        FRONT_OWN(pfnFlush),
+        FRONT_OWN(pfnRelocateDeviceFuncs),
+        FRONT_OWN(pfnCalcPrivateResourceSize),
+        FRONT_OWN(pfnCreateResource),
+        FRONT_OWN(pfnOpenResource),
+        FRONT_OWN(pfnDestroyResource),
+        FRONT_OWN(pfnCalcPrivateShaderResourceViewSize),
+        FRONT_OWN(pfnCreateShaderResourceView),
+        FRONT_OWN(pfnCalcPrivateDepthStencilViewSize),
+        FRONT_OWN(pfnCreateDepthStencilView),
+        FRONT_OWN(pfnCalcPrivateBlendStateSize),
+        FRONT_OWN(pfnCreateBlendState),
+        FRONT_OWN(pfnCalcPrivateRasterizerStateSize),
+        FRONT_OWN(pfnCreateRasterizerState),
+        FRONT_OWN(pfnCalcPrivateShaderSize),
+        FRONT_OWN(pfnCreateVertexShader),
+        FRONT_OWN(pfnCreateGeometryShader),
+        FRONT_OWN(pfnCreatePixelShader),
+        FRONT_OWN(pfnCalcPrivateGeometryShaderWithStreamOutput),
+        FRONT_OWN(pfnCreateGeometryShaderWithStreamOutput),
+        FRONT_OWN(pfnDestroyDevice),
+        FRONT_OWN(pfnResourceConvertRegion),
+        FRONT_OWN(pfnCheckDeferredContextHandleSizes),
+        FRONT_OWN(pfnPsSetShaderWithIfaces),
+        FRONT_OWN(pfnVsSetShaderWithIfaces),
+        FRONT_OWN(pfnGsSetShaderWithIfaces),
+        FRONT_OWN(pfnDiscard),
+        FRONT_OWN(pfnAssignDebugBinary),
+        FRONT_OWN(pfnCheckDirectFlipSupport),
+        FRONT_OWN(pfnClearView),
+    };
+#undef FRONT_OWN
+    static_assert(ARRAYSIZE(ownBodies) == 37, "the own-body table must name all 37 non-refusal own bodies");
+    // 75 + 37 + 43 = 155. The 43 refusals are the remainder, so this one line is what keeps the split in
+    // front-device.cpp's header comment honest.
+    static_assert(kDeviceEntries == ARRAYSIZE(copyPairs) + ARRAYSIZE(ownBodies) + 43,
+                  "the three groups no longer add up to the published table");
+    for (const Own &o : ownBodies) {
+        const void *got = *(void **)((BYTE *)&front + o.front_at);
+        CHECK(got != nullptr, "%s is null", o.name);
+        CHECK(!isCopy(got), "%s is a field copy, but the front owes it a body of its own", o.name);
+    }
+    const unsigned refusals = frontCount - (unsigned)ARRAYSIZE(copyPairs) - (unsigned)ARRAYSIZE(ownBodies);
+    printf("  front device table split: %u field copies, %u thunks hooks and own answers, %u refusals\n",
+           (unsigned)ARRAYSIZE(copyPairs), (unsigned)ARRAYSIZE(ownBodies), refusals);
 
     // Completeness assert 2: the DXGI table. The hosted driver fills 7 of the 15 through the union member and
     // the front owes the rest; at build version 0 the last four are excluded by the operating system and
@@ -576,6 +702,23 @@ static void FrontTableTests()
     CHECK(dxgiCopies == 7 && dxgiOwn == 8, "DXGI: %u field copies and %u own bodies, expected 7 and 8",
           dxgiCopies, dxgiOwn);
     printf("  front DXGI table: %u entries, %u field copies, %u own bodies\n", frontDxgiCount, dxgiCopies, dxgiOwn);
+    // Slot 7, pfnResolveSharedResource, arrived at DXGI1_1. Whether the hosted driver filled it depends on
+    // IS_DXGI1_1_BASE_FUNCTIONS over the runtime's own `Version`, which the front does not control, so the
+    // front keeps a non-null slot and installs its stub only in an empty one. The zeroed case above is the
+    // stub; this is the other one.
+    DXGI1_2_DDI_BASE_FUNCTIONS keptDxgi;
+    memset(&keptDxgi, 0, sizeof(keptDxgi));
+    void *const hostedResolve = (void *)(UINT_PTR)0x00D2BEEF;
+    *((void **)&keptDxgi + 7) = hostedResolve;
+    FillDxgiFuncs(&keptDxgi, hostedDxgi);
+    CHECK((void *)keptDxgi.pfnResolveSharedResource == hostedResolve,
+          "the front overwrote the hosted driver's own pfnResolveSharedResource");
+    CHECK((void *)frontDxgi.pfnResolveSharedResource != hostedResolve &&
+          frontDxgi.pfnResolveSharedResource != nullptr,
+          "an empty pfnResolveSharedResource slot did not get the front's stub");
+    unsigned keptNulls = 0;
+    for (unsigned i = 0; i < frontDxgiCount; ++i) if (!*((void **)&keptDxgi + i)) ++keptNulls;
+    CHECK(keptNulls == 0, "%u DXGI entries are null when slot 7 came from the hosted driver", keptNulls);
 }
 
 // ---------------------------------------------------------------- the DirectFlip rule (pure)
@@ -1168,13 +1311,24 @@ static void Child(const std::string &s)
             // half-written.
             caps.DataSize = sizeof(options) + 4;
             CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == E_INVALIDARG, "a caps buffer of the wrong size");
-            // A D3D11-era type the front does not offer is refused, not answered with a zeroed buffer.
+            // A D3D11-era type the front does not model is answered the way the hosted driver answered every
+            // type before the front existed: zeroed, S_OK. An E_INVALIDARG here is a device create that does
+            // not happen inside dwm.exe, and every one of these structures means "unsupported" when zeroed.
             UINT32 unknown = 0xFFFFFFFF;
             caps.Type = (D3D10_2DDICAPS_TYPE)136; // D3DWDDM1_3DDICAPS_D3D11_OPTIONS1
             caps.pData = &unknown;
             caps.DataSize = sizeof(unknown);
-            CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == E_INVALIDARG, "an unknown D3D11-era caps type");
-            CHECK(unknown == 0xFFFFFFFF, "a refused caps type wrote into the buffer");
+            CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == S_OK, "an unknown D3D11-era caps type was refused");
+            CHECK(unknown == 0, "an unknown caps type did not zero the buffer");
+            // And it is answered by the front, not forwarded: the hosted driver's GetCaps sees nothing.
+            if (record && recordReset && !real) {
+                recordReset();
+                unknown = 0xFFFFFFFF;
+                caps.Type = (D3D10_2DDICAPS_TYPE)137;
+                CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == S_OK, "a second unknown type was refused");
+                CHECK(!strstr(record(), "get-caps type=137"),
+                      "an unknown D3D11-era type reached the hosted driver: %s", record());
+            }
             // A legacy type still goes to the hosted driver, whose zeroing answer is the right one for it.
             if (record && recordReset && !real) {
                 recordReset();
@@ -1184,7 +1338,151 @@ static void Child(const std::string &s)
                       "a legacy caps type did not reach the hosted driver: %s", record());
             }
         }
+        // The blocker of the DDI review, as a scenario: the runtime creates a D3D10.0 device from the list the
+        // front appended to. The front must forward that create untouched. If it fills its 11.1 shapes into the
+        // runtime's 101-entry table and 7-entry DXGI block instead, it writes 432 and 64 bytes past them and
+        // answers S_OK, inside dwm.exe. The two tables here are oversized with a guard pattern, so an overrun
+        // is caught by name instead of by a heap crash somewhere else.
+        if (s == "front-d3d10-interface") {
+            if (!record || !recordReset || !fakeSize || !fakeFuncs) return;
+            void *const guard = (void *)(UINT_PTR)0x6A6A6A6A;
+            const unsigned deviceSlots = (unsigned)(sizeof(D3D10DDI_DEVICEFUNCS) / sizeof(void *));
+            const unsigned dxgiSlots = (unsigned)(sizeof(DXGI_DDI_BASE_FUNCTIONS) / sizeof(void *));
+            std::vector<void *> table(deviceSlots + 64, guard);
+            std::vector<void *> dxgiTable(dxgiSlots + 16, guard);
+            D3D10DDIARG_CALCPRIVATEDEVICESIZE sizeArgs10 = {};
+            sizeArgs10.Interface = D3D10_0_DDI_INTERFACE_VERSION;
+            sizeArgs10.Version = D3D10_0_DDI_SUPPORTED & 0xFFFFFFFF;
+            const SIZE_T size10 = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &sizeArgs10);
+            CHECK(fakeSize && size10 == fakeSize(),
+                  "a D3D10.0 private device size is %Iu, expected the hosted driver's own %Iu", size10,
+                  fakeSize ? fakeSize() : 0);
+            // The block is bigger than the hosted driver asked for, with a pattern behind it: a front record
+            // written for a device the front does not front would show up there.
+            std::vector<BYTE> block(size10 + 512, 0x3C);
+            D3D10DDI_CORELAYER_DEVICECALLBACKS um10 = {};
+            PFND3D10DDI_RETRIEVESUBOBJECT retrieve10 = nullptr;
+            D3D10DDIARG_CREATEDEVICE create10 = {};
+            create10.hRTDevice.handle = (HANDLE)(UINT_PTR)0x7A7B;
+            create10.Interface = D3D10_0_DDI_INTERFACE_VERSION;
+            create10.Version = D3D10_0_DDI_SUPPORTED & 0xFFFFFFFF;
+            create10.pDeviceFuncs = (D3D10DDI_DEVICEFUNCS *)table.data();
+            create10.hDrvDevice.pDrvPrivate = block.data();
+            create10.DXGIBaseDDI.pDXGIDDIBaseFunctions = (DXGI_DDI_BASE_FUNCTIONS *)dxgiTable.data();
+            create10.pUMCallbacks = &um10;
+            create10.ppfnRetrieveSubObject = &retrieve10;
+            recordReset();
+            const HRESULT hr10 = o.funcs.pfnCreateDevice(o.adapter, &create10);
+            CHECK(hr10 == DXGI_STATUS_NO_REDIRECTION, "a D3D10.0 create answered %08lx", hr10);
+            CHECK(strstr(record(), "create-device\n") != nullptr,
+                  "the hosted CreateDevice was not reached: %s", record());
+            CHECK(!strstr(record(), "create-device-wrong-interface"),
+                  "the front rewrote Interface on a create it must forward: %s", record());
+            unsigned past = 0;
+            for (unsigned i = deviceSlots; i < table.size(); ++i) if (table[i] != guard) ++past;
+            CHECK(past == 0, "%u slots past D3D10DDI_DEVICEFUNCS were written (%u bytes)", past,
+                  (unsigned)(past * sizeof(void *)));
+            unsigned pastDxgi = 0;
+            for (unsigned i = dxgiSlots; i < dxgiTable.size(); ++i) if (dxgiTable[i] != guard) ++pastDxgi;
+            CHECK(pastDxgi == 0, "%u slots past DXGI_DDI_BASE_FUNCTIONS were written (%u bytes)", pastDxgi,
+                  (unsigned)(pastDxgi * sizeof(void *)));
+            // The hosted driver's own table reached the runtime, entry for entry.
+            D3D10DDI_DEVICEFUNCS hosted10;
+            fakeFuncs(&hosted10);
+            unsigned wrong = 0;
+            for (unsigned i = 0; i < deviceSlots; ++i)
+                if (table[i] != *((void **)&hosted10 + i)) ++wrong;
+            CHECK(wrong == 0, "%u of the %u D3D10.0 device entries are not the hosted driver's own", wrong,
+                  deviceSlots);
+            // And no front record behind the hosted block: the pattern is untouched from the hosted size on.
+            unsigned behind = 0;
+            for (SIZE_T i = size10; i < block.size(); ++i) if (block[i] != 0x3C) ++behind;
+            CHECK(behind == 0, "%u bytes behind the hosted device block were written", behind);
+            const std::string log10 = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                              std::to_wstring(GetCurrentProcessId()) + L".log");
+            CHECK(Has(log10, "create_device forwarded interface="),
+                  "the front log does not name the forwarded create: %s", log10.c_str());
+            CHECK(o.funcs.pfnCloseAdapter && o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
+            return;
+        }
         if (real) {
+            // The front over the REAL hosted UMD, through its device create. Everything below this line used
+            // to be checked against fake-hosted.dll alone, which was written to match one reading of the Mesa
+            // frontend's Device.cpp: the hosted private size, the 101 entries it fills, how many DXGI entries
+            // it really writes and what it returns. This is a host-side call and needs no lab.
+            D3D10DDIARG_CALCPRIVATEDEVICESIZE realSize = {};
+            realSize.Interface = D3D11_1_DDI_INTERFACE_VERSION;
+            realSize.Version = D3D11_1_DDI_SUPPORTED & 0xFFFFFFFF;
+            const SIZE_T frontSize = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &realSize);
+            CHECK(frontSize > sizeof(bc250front::Device),
+                  "the front's private device size over the real hosted UMD is %Iu", frontSize);
+            printf("  real hosted UMD: front private device size %Iu (the front's record is %Iu)\n", frontSize,
+                   sizeof(bc250front::Device));
+            fflush(stdout);
+            // The device create against the REAL hosted UMD needs the GPU: the Mesa frontend's CreateDevice
+            // builds a gallium screen over the Vulkan ICD, and on this development host (placeholder ICD, no
+            // BC-250) it faults inside the hosted driver before the front sees anything. Measured, not
+            // assumed: with the create wired below the scenario died with 0xC0000005 while the same adapter's
+            // CalcPrivateDeviceSize answered 10544. So the create is opt-in and runs where a GPU is, and the
+            // host gate checks the arithmetic that needs no device.
+            const bool realCreate = GetEnvironmentVariableW(L"BC250_ROUTER_REAL_CREATE_DEVICE", nullptr, 0) != 0;
+            if (!realCreate)
+                printf("  real hosted UMD: CreateDevice not driven here (set BC250_ROUTER_REAL_CREATE_DEVICE "
+                       "on a host with the GPU and our KMD)\n");
+            if (frontSize && realCreate) {
+                void *const guard = (void *)(UINT_PTR)0x6B6B6B6B;
+                const unsigned deviceSlots = (unsigned)(sizeof(D3D11_1DDI_DEVICEFUNCS) / sizeof(void *));
+                const unsigned dxgiSlots = (unsigned)(sizeof(DXGI1_2_DDI_BASE_FUNCTIONS) / sizeof(void *));
+                std::vector<void *> table(deviceSlots + 32, nullptr);
+                std::vector<void *> dxgiTable(dxgiSlots + 16, nullptr);
+                for (unsigned i = deviceSlots; i < table.size(); ++i) table[i] = guard;
+                for (unsigned i = dxgiSlots; i < dxgiTable.size(); ++i) dxgiTable[i] = guard;
+                std::vector<BYTE> block(frontSize + 256, 0x2E);
+                D3D10DDI_CORELAYER_DEVICECALLBACKS um = {};
+                PFND3D10DDI_RETRIEVESUBOBJECT retrieve = nullptr;
+                D3D10DDIARG_CREATEDEVICE create = {};
+                create.hRTDevice.handle = (HANDLE)(UINT_PTR)0x7A7C;
+                create.Interface = D3D11_1_DDI_INTERFACE_VERSION;
+                create.Version = D3D11_1_DDI_SUPPORTED & 0xFFFFFFFF;
+                create.p11_1DeviceFuncs = (D3D11_1DDI_DEVICEFUNCS *)table.data();
+                create.hDrvDevice.pDrvPrivate = block.data();
+                create.DXGIBaseDDI.pDXGIDDIBaseFunctions3 = (DXGI1_2_DDI_BASE_FUNCTIONS *)dxgiTable.data();
+                create.pUMCallbacks = &um;
+                create.ppfnRetrieveSubObject = &retrieve;
+                printf("  real hosted UMD: calling CreateDevice\n");
+                fflush(stdout);
+                const HRESULT realHr = o.funcs.pfnCreateDevice(o.adapter, &create);
+                printf("  real hosted UMD: CreateDevice hr=%08lx\n", (unsigned long)realHr);
+                fflush(stdout);
+                unsigned past = 0, pastDxgi = 0;
+                for (unsigned i = deviceSlots; i < table.size(); ++i) if (table[i] != guard) ++past;
+                for (unsigned i = dxgiSlots; i < dxgiTable.size(); ++i) if (dxgiTable[i] != guard) ++pastDxgi;
+                CHECK(past == 0 && pastDxgi == 0, "%u device and %u DXGI slots past the runtime's tables were "
+                      "written over the real hosted UMD", past, pastDxgi);
+                unsigned behind = 0;
+                for (SIZE_T i = frontSize; i < block.size(); ++i) if (block[i] != 0x2E) ++behind;
+                CHECK(behind == 0, "%u bytes behind the front's device block were written", behind);
+                if (SUCCEEDED(realHr)) {
+                    // A success the lab will see: every published slot must be filled, and how many DXGI
+                    // entries the real frontend wrote is the assumption the front's slot-7 rule rests on.
+                    unsigned nulls = 0, dxgiNulls = 0, dxgiHosted = 0;
+                    for (unsigned i = 0; i < deviceSlots; ++i) if (!table[i]) ++nulls;
+                    for (unsigned i = 0; i < dxgiSlots; ++i) if (!dxgiTable[i]) ++dxgiNulls;
+                    for (unsigned i = 0; i < 8; ++i) if (dxgiTable[i]) ++dxgiHosted;
+                    CHECK(nulls == 0, "%u of the %u device entries are null over the real hosted UMD", nulls,
+                          deviceSlots);
+                    CHECK(dxgiNulls == 0, "%u DXGI entries are null over the real hosted UMD", dxgiNulls);
+                    printf("  real hosted UMD: %u of the first 8 DXGI slots are filled\n", dxgiHosted);
+                    D3D11_1DDI_DEVICEFUNCS *funcs = (D3D11_1DDI_DEVICEFUNCS *)table.data();
+                    if (funcs->pfnDestroyDevice) funcs->pfnDestroyDevice(create.hDrvDevice);
+                } else {
+                    // A failure is a legitimate outcome on a host with no GPU: what the scenario then proves
+                    // is that the front hands the hosted code back and writes nothing outside the buffers,
+                    // which the three checks above have already done.
+                    printf("  real hosted UMD: CreateDevice failed with %08lx, which this host may do\n",
+                           (unsigned long)realHr);
+                }
+            }
             CHECK(o.funcs.pfnCloseAdapter && o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
             return;
         }
@@ -1263,10 +1561,61 @@ static void Child(const std::string &s)
                                         &supported);
         CHECK(supported == FALSE, "CheckDirectFlipSupport answered TRUE for an immediate flip");
         device.pfnCheckDirectFlipSupport(create.hDrvDevice, r1, r2, 0, nullptr); // must not fault
+        // A null or duplicated handle is `handle`; a handle the front never recorded reaches the next clause,
+        // which in increment 1 is `gated` (the caps trailer is zeroed) with `recorded=0` beside it. The two
+        // facts print differently, which is what increment 1 exists to read.
+        supported = TRUE;
+        D3D10DDI_HRESOURCE rNull;
+        rNull.pDrvPrivate = nullptr;
+        device.pfnCheckDirectFlipSupport(create.hDrvDevice, rNull, r2, 0, &supported);
+        CHECK(supported == FALSE, "a null handle answered TRUE");
+        supported = TRUE;
+        device.pfnCheckDirectFlipSupport(create.hDrvDevice, r1, r1, 0, &supported);
+        CHECK(supported == FALSE, "the same surface twice answered TRUE");
         const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                              std::to_wstring(GetCurrentProcessId()) + L".log");
-        CHECK(Has(frontLog, "check_direct_flip call=1") && Has(frontLog, "answer=0") && Has(frontLog, "rule=handle"),
-              "the front log has no CheckDirectFlipSupport line: %s", frontLog.c_str());
+        CHECK(Has(frontLog, "check_direct_flip call=1") && Has(frontLog, "answer=0") && Has(frontLog, "rule=gated"),
+              "the front log has no CheckDirectFlipSupport line for an unrecorded surface: %s", frontLog.c_str());
+        CHECK(Has(frontLog, "rule=gated client=0000000040000000 recorded=0"),
+              "the line does not say that the front had no record for the surface: %s", frontLog.c_str());
+        CHECK(Has(frontLog, "rule=handle"), "no line names a null or duplicated handle: %s", frontLog.c_str());
+        // The DXGI side. At D3D11_1 the runtime holds pfnBlt1 and prefers it for a stretch, a convert or a
+        // resolve present, so this entry is on the desktop's present path: it forwards to the hosted pfnBlt
+        // for every shape, names a source rectangle it could not carry, and never refuses.
+        recordReset();
+        DXGI_DDI_ARG_BLT1 blt = {};
+        blt.DstRight = 1920; blt.DstBottom = 1200;
+        blt.SrcRight = 1920; blt.SrcBottom = 1200;
+        blt.Flags.Present = 1;
+        blt.Rotate = DXGI_DDI_MODE_ROTATION_IDENTITY;
+        CHECK(dxgi.pfnBlt1 != nullptr, "pfnBlt1 is null");
+        CHECK(dxgi.pfnBlt1(&blt) == S_OK, "a whole-surface pfnBlt1 was refused");
+        CHECK(strstr(record(), "dxgi-blt dst=0,0,1920,1200") != nullptr,
+              "pfnBlt1 did not reach the hosted pfnBlt: %s", record());
+        // A rotated blt: DXGI_DDI_ARG_BLT has its own Rotate field, so there is nothing to refuse.
+        recordReset();
+        blt.Rotate = DXGI_DDI_MODE_ROTATION_ROTATE90;
+        CHECK(dxgi.pfnBlt1(&blt) == S_OK, "a rotated pfnBlt1 was refused");
+        CHECK(strstr(record(), "rotate=2") != nullptr, "the rotation was not carried: %s", record());
+        // A source sub-rectangle: forwarded all the same, and named once in the log.
+        recordReset();
+        blt.Rotate = DXGI_DDI_MODE_ROTATION_IDENTITY;
+        blt.SrcLeft = 16; blt.SrcTop = 8;
+        CHECK(dxgi.pfnBlt1(&blt) == S_OK, "a sub-rectangle pfnBlt1 was refused");
+        CHECK(strstr(record(), "dxgi-blt dst=0,0,1920,1200") != nullptr,
+              "a sub-rectangle pfnBlt1 did not forward: %s", record());
+        const std::string bltLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                           std::to_wstring(GetCurrentProcessId()) + L".log");
+        CHECK(Has(bltLog, "pfnBlt1 dropped a source rectangle"),
+              "the dropped source rectangle is not in the front log: %s", bltLog.c_str());
+        // The four multiplane-overlay entries answer DXGI_ERROR_UNSUPPORTED, not E_NOTIMPL, and their lines
+        // reach the file through the process-wide log although they have no device record.
+        CHECK(dxgi.pfnPresentMultiplaneOverlay(nullptr) == DXGI_ERROR_UNSUPPORTED,
+              "pfnPresentMultiplaneOverlay did not answer DXGI_ERROR_UNSUPPORTED");
+        const std::string mpoLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                           std::to_wstring(GetCurrentProcessId()) + L".log");
+        CHECK(Has(mpoLog, "refused dxgi pfnPresentMultiplaneOverlay"),
+              "a DXGI refusal did not reach the front log: %s", mpoLog.c_str());
 
         // What the front forwards, and what it does not. ClearView with no rectangle list is the whole-view
         // clear the D3D10.0 DDI has; with a rectangle list it cannot be expressed and is counted, not faked.
@@ -1551,7 +1900,7 @@ static int RunAll(const std::wstring &out)
         {"front-tables", nullptr, {}}, {"front-rule", nullptr, {}}, {"front-record", nullptr, {}},
         {"front-absent", nullptr, {}}, {"front-zero", nullptr, {}}, {"front-wrong-type", nullptr, {}},
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
-        {"front-stack", nullptr, {}},
+        {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}},
         // Application policy (AppRouter).
         {"app-absent-key", nullptr, {}}, {"app-mode-absent", nullptr, {}}, {"app-mode-cpu", nullptr, {}},
         {"app-mode-invalid", nullptr, {}}, {"app-mode-wrong-type", nullptr, {}},

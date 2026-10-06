@@ -81,7 +81,6 @@ static VOID APIENTRY FakeClearDepthStencilView(D3D10DDI_HDEVICE, D3D10DDI_HDEPTH
                 view.pDrvPrivate, flags, depth, (unsigned)stencil);
     Note(line);
 }
-
 // Every slot, in one place. Called by the double's CreateDevice and exported for the gate, so the two can
 // never disagree about what the hosted table holds.
 extern "C" __declspec(dllexport) void FakeDeviceFuncs(D3D10DDI_DEVICEFUNCS *out)
@@ -108,6 +107,19 @@ static SIZE_T APIENTRY Size(D3D10DDI_HADAPTER, const D3D10DDIARG_CALCPRIVATEDEVI
 // The failing double never gets as far as a device: its OpenAdapter refuses. Its four adapter entries would
 // then be functions with internal linkage that nothing references (C4505, and /WX makes that an error).
 #ifndef FAKE_FAIL
+// The DXGI blt the front's pfnBlt1 must reach. A real function and not a sentinel, because the front's own
+// entry is on the desktop's present path at D3D11_1 and "it forwarded" is the only thing worth asserting.
+static HRESULT APIENTRY FakeBlt(DXGI_DDI_ARG_BLT *args)
+{
+    char line[192];
+    if (!args) return E_INVALIDARG;
+    _snprintf_s(line, sizeof(line), _TRUNCATE,
+                "dxgi-blt dst=%u,%u,%u,%u src_sub=%u flags=%08x rotate=%d", args->DstLeft, args->DstTop,
+                args->DstRight, args->DstBottom, args->SrcSubresource, args->Flags.Value, (int)args->Rotate);
+    Note(line);
+    return S_OK;
+}
+
 static HRESULT APIENTRY CreateDeviceFn(D3D10DDI_HADAPTER, D3D10DDIARG_CREATEDEVICE *args)
 {
     if (!args || !args->pDeviceFuncs) { Note("create-device-no-table"); return E_INVALIDARG; }
@@ -121,6 +133,8 @@ static HRESULT APIENTRY CreateDeviceFn(D3D10DDI_HADAPTER, D3D10DDIARG_CREATEDEVI
         void **dxgi = (void **)args->DXGIBaseDDI.pDXGIDDIBaseFunctions;
         for (unsigned i = 0; i < sizeof(DXGI_DDI_BASE_FUNCTIONS) / sizeof(void *); ++i)
             dxgi[i] = (void *)(FakeSlotBase + 0x1000 + i);
+        // Slot 6 is the one the front really calls, from its own pfnBlt1.
+        args->DXGIBaseDDI.pDXGIDDIBaseFunctions->pfnBlt = FakeBlt;
     }
     Note("create-device");
     // The Mesa frontend answers DXGI_STATUS_NO_REDIRECTION and not S_OK (Device.cpp). The double answers the

@@ -7,28 +7,33 @@
 //
 //   a field copy    the typedef is identical at the D3D10.0 DDI, so the runtime's table holds the hosted
 //                   driver's own function. The front is not on that call at all: no thunk, no lookup, no
-//                   cost. 73 entries.
-//   a hook          the typedef is identical but the front must see the call: OpenResource and
-//                   CreateResource to record a surface, DestroyResource to forget it, DestroyDevice to
-//                   retire the device. 3 of them share a typedef with the hosted entry; CreateResource's
-//                   typedef grew, so it is in the next group.
-//   a thunk         the argument struct or the signature grew between the two DDIs. The thunk forwards
-//                   what the hosted entry can express and names, once, every semantic it had to drop.
-//                   It never refuses: a refused draw or create is a dead desktop, and the semantics a
-//                   10_0 pipeline never uses are exactly the ones that are dropped. 25 entries.
+//                   cost. 75 entries, two of which name a hosted entry of another name
+//                   (pfnResourceConvert takes pfnResourceCopy, pfnDynamicConstantBufferMapNoOverwrite
+//                   takes the generic pfnResourceMap).
+//   a thunk or hook the argument struct or the signature grew between the two DDIs, or the typedef is
+//                   identical but the front must see the call (OpenResource and CreateResource to record a
+//                   surface, DestroyResource to forget it, DestroyDevice to retire the device). A thunk
+//                   forwards what the hosted entry can express and names, once, every semantic it had to
+//                   drop. It never refuses: a refused draw or create is a dead desktop, and the semantics
+//                   a 10_0 pipeline never uses are exactly the ones that are dropped. 32 entries.
 //   a refusal       an entry a device at 3D pipeline level 10_0 cannot reach: tessellation, compute,
 //                   unordered access, indirect draws, command lists and deferred contexts, shader
 //                   interfaces. The front publishes `3DPIPELINESUPPORT` with the 10_0 bit alone and
 //                   `THREADING` 0, so the runtime has no reason to call them; each body counts the call
 //                   and logs the entry once, which turns a wrong assumption into a line instead of a
-//                   crash in address zero. 50 entries.
+//                   crash in address zero. A refusing CREATE also reports the failure through
+//                   pfnSetErrorCb, because the entry is VOID and a runtime that was not told believes the
+//                   object exists. 43 entries.
 //   a real body     pfnDiscard (a no-op: there is nothing to discard below), pfnAssignDebugBinary (a
-//                   no-op), pfnCheckDeferredContextHandleSizes (zero sizes), pfnClearView (amendment 4),
-//                   pfnCheckDirectFlipSupport (the point of the increment) and pfnRelocateDeviceFuncs
-//                   (re-fills the moved table from the front's own copy of the hosted one).
+//                   no-op), pfnCheckDeferredContextHandleSizes (zero sizes), pfnClearView (amendment 4)
+//                   and pfnCheckDirectFlipSupport (the point of the increment). 5 entries;
+//                   pfnRelocateDeviceFuncs, which re-fills the moved table from the front's own copy of
+//                   the hosted one, is counted with the thunks because it is one of the 32 the gate names.
 //
-// No entry is left null. `FillDeviceFuncs` writes every slot, the static asserts in front-adapter.h fail
-// if the WDK changes either table's shape, and tests/test-router.cpp walks the filled table slot by slot.
+// 75 + 32 + 43 + 5 = 155. No entry is left null: `FillDeviceFuncs` writes every slot, the static asserts in
+// front-adapter.h fail if the WDK changes either table's shape, and tests/test-router.cpp names every one of
+// the 75 field copies with the hosted slot it must hold and every one of the 37 non-refusal own bodies, so
+// neither the split nor a single stage binding can drift unnoticed.
 
 #include "front-resource.h"
 #include "front-direct-flip.h"
@@ -532,8 +537,13 @@ VOID APIENTRY CreateShaderResourceView(D3D10DDI_HDEVICE hDevice,
     FRONT_DEVICE(hDevice, )
     static volatile LONG once = 0;
     D3D10DDIARG_CREATESHADERRESOURCEVIEW translated;
-    if (!TranslateShaderResourceView(dev, "pfnCreateShaderResourceView", args, &translated, &once))
+    // The paired CalcPrivateShaderResourceViewSize answered 0 for the same arguments, so the runtime holds a
+    // view handle over no private block at all; it must learn that the view does not exist, or its
+    // pfnDestroyShaderResourceView (a field copy) hands that block to the hosted driver.
+    if (!TranslateShaderResourceView(dev, "pfnCreateShaderResourceView", args, &translated, &once)) {
+        CreateFailed(dev);
         return;
+    }
     dev->hosted.pfnCreateShaderResourceView(hDevice, &translated, hView, hRTView);
 }
 
@@ -556,7 +566,12 @@ VOID APIENTRY CreateDepthStencilView(D3D10DDI_HDEVICE hDevice,
     FRONT_DEVICE(hDevice, )
     static volatile LONG once = 0;
     D3D10DDIARG_CREATEDEPTHSTENCILVIEW translated;
-    if (!TranslateDepthStencilView(dev, "pfnCreateDepthStencilView", args, &translated, &once)) return;
+    // Same pair as the shader-resource view above: a refused translation must be reported, or the runtime's
+    // pfnDestroyDepthStencilView reaches the hosted driver with an uninitialised private block.
+    if (!TranslateDepthStencilView(dev, "pfnCreateDepthStencilView", args, &translated, &once)) {
+        CreateFailed(dev);
+        return;
+    }
     dev->hosted.pfnCreateDepthStencilView(hDevice, &translated, hView, hRTView);
 }
 
@@ -760,17 +775,29 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
     if (supported) *supported = FALSE;  // before anything that could fail
     FRONT_DEVICE(hDevice, )
     const LONG call = InterlockedIncrement(&dev->direct_flip_calls);
+    // The two causes of a FALSE must not print the same word, because reading that word is what increment 1
+    // is for. `handle` is the operating system passing a null handle or the same surface twice; `record` is
+    // the front never having seen this surface (FindResource misses, so the struct stays zeroed and
+    // `recorded` is false). Both structs are therefore passed whenever the handles themselves are sound.
+    //   In increment 1 the caps trailer is zeroed, so the rule stops one clause earlier, at `gated`, and the
+    // `recorded=` field of the line below is what says whether the front knew the surface. `record` becomes
+    // the printed word in increment 2, where the clause before it can pass.
     Resource client_record, compositor_record;
-    const Resource *client =
-        FindResource(hResource1.pDrvPrivate, &client_record) ? &client_record : nullptr;
-    const Resource *compositor =
-        FindResource(hResource2.pDrvPrivate, &compositor_record) ? &compositor_record : nullptr;
+    const bool found_client = FindResource(hResource1.pDrvPrivate, &client_record);
+    const bool found_compositor = FindResource(hResource2.pDrvPrivate, &compositor_record);
+    const bool bad_handles = !hResource1.pDrvPrivate || !hResource2.pDrvPrivate ||
+                             hResource1.pDrvPrivate == hResource2.pDrvPrivate;
+    const Resource *client = bad_handles ? nullptr : &client_record;
+    const Resource *compositor = bad_handles ? nullptr : &compositor_record;
     // Increment 1 holds no caps trailer, so the rule is computed against a zeroed one and its first
     // clause answers "gated". The two record shapes are logged all the same: they are what decides
     // whether increment 2 can ever answer TRUE.
     bc250_scanout_caps caps;
     ZeroMemory(&caps, sizeof(caps));
-    const FlipRefusal reason = FlipReason(caps, client, compositor);
+    FlipRefusal reason = FlipReason(caps, client, compositor);
+    // A rule that said "supported" and an answer of FALSE is exactly what FlipRefusal::forced_false names,
+    // and the log must say that rather than "supported" next to answer=0.
+    if (reason == FlipRefusal::none) reason = FlipRefusal::forced_false;
     // The log is bounded: the compositor asks at least once per swap-chain creation and after every mode
     // change, and a flood would cost more than it tells. The counters above are never bounded.
     if (InterlockedIncrement(&dev->direct_flip_logged) <= 64)
@@ -781,12 +808,12 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
                   "compositor=%p recorded=%u opened=%u primary=%u shared=%u %ux%u pitch=%u fmt=%u "
                   "record_v=%lu record_access=%lu\n",
                   call, checkFlags, FlipRefusalText(reason), hResource1.pDrvPrivate,
-                  client ? 1u : 0u, client && client->opened ? 1u : 0u,
+                  found_client ? 1u : 0u, client && client->opened ? 1u : 0u,
                   client && client->primary ? 1u : 0u, client && client->shared ? 1u : 0u,
                   client ? client->width : 0u, client ? client->height : 0u, client ? client->pitch : 0u,
                   client ? client->format : 0u, client ? client->record.Version : 0ul,
                   client ? client->record.Access : 0ul, hResource2.pDrvPrivate,
-                  compositor ? 1u : 0u, compositor && compositor->opened ? 1u : 0u,
+                  found_compositor ? 1u : 0u, compositor && compositor->opened ? 1u : 0u,
                   compositor && compositor->primary ? 1u : 0u, compositor && compositor->shared ? 1u : 0u,
                   compositor ? compositor->width : 0u, compositor ? compositor->height : 0u,
                   compositor ? compositor->pitch : 0u, compositor ? compositor->format : 0u,
@@ -822,6 +849,17 @@ VOID APIENTRY CheckDirectFlipSupport(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURC
         REFUSE_ONCE(dev, "pfn" #Name);                            \
         return E_NOTIMPL;                                         \
     }
+// A refused CREATE. The entry is VOID, so the runtime is told through pfnSetErrorCb; without that it holds a
+// handle over an uninitialised private block and hands it to the hosted driver's own Destroy* later
+// (front-adapter.h, CreateFailed). Every refusing create of this table uses this macro and not the plain one.
+#define FRONT_REFUSE_CREATE(Name, Params, Args)                   \
+    VOID APIENTRY Name Params                                     \
+    {                                                             \
+        Args                                                      \
+        FRONT_DEVICE(hDevice, )                                    \
+        REFUSE_ONCE(dev, "pfn" #Name);                            \
+        CreateFailed(dev);                                        \
+    }
 
 // Indirect draws (11.0).
 FRONT_REFUSE_VOID(DrawIndexedInstancedIndirect,
@@ -847,11 +885,11 @@ FRONT_REFUSE_STAGE(Ds)
 FRONT_REFUSE_STAGE(Cs)
 #undef FRONT_REFUSE_STAGE
 // Tessellation and compute shader creation.
-FRONT_REFUSE_VOID(CreateHullShader,
+FRONT_REFUSE_CREATE(CreateHullShader,
                   (D3D10DDI_HDEVICE hDevice, CONST UINT *a, D3D10DDI_HSHADER b, D3D10DDI_HRTSHADER c,
                    CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES *d),
                   (void)a; (void)b; (void)c; (void)d;)
-FRONT_REFUSE_VOID(CreateDomainShader,
+FRONT_REFUSE_CREATE(CreateDomainShader,
                   (D3D10DDI_HDEVICE hDevice, CONST UINT *a, D3D10DDI_HSHADER b, D3D10DDI_HRTSHADER c,
                    CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES *d),
                   (void)a; (void)b; (void)c; (void)d;)
@@ -859,7 +897,7 @@ FRONT_REFUSE_SIZE(CalcPrivateTessellationShaderSize,
                   (D3D10DDI_HDEVICE hDevice, CONST UINT *a,
                    CONST D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES *b),
                   (void)a; (void)b;)
-FRONT_REFUSE_VOID(CreateComputeShader,
+FRONT_REFUSE_CREATE(CreateComputeShader,
                   (D3D10DDI_HDEVICE hDevice, CONST UINT *a, D3D10DDI_HSHADER b, D3D10DDI_HRTSHADER c),
                   (void)a; (void)b; (void)c;)
 // Command lists and deferred contexts: THREADING 0 excludes every one of them.
@@ -869,12 +907,12 @@ FRONT_REFUSE_SIZE(CalcDeferredContextHandleSize,
 FRONT_REFUSE_SIZE(CalcPrivateDeferredContextSize,
                   (D3D10DDI_HDEVICE hDevice, CONST D3D11DDIARG_CALCPRIVATEDEFERREDCONTEXTSIZE *a),
                   (void)a;)
-FRONT_REFUSE_VOID(CreateDeferredContext,
+FRONT_REFUSE_CREATE(CreateDeferredContext,
                   (D3D10DDI_HDEVICE hDevice, CONST D3D11DDIARG_CREATEDEFERREDCONTEXT *a), (void)a;)
 FRONT_REFUSE_VOID(AbandonCommandList, (D3D10DDI_HDEVICE hDevice), )
 FRONT_REFUSE_SIZE(CalcPrivateCommandListSize,
                   (D3D10DDI_HDEVICE hDevice, CONST D3D11DDIARG_CREATECOMMANDLIST *a), (void)a;)
-FRONT_REFUSE_VOID(CreateCommandList,
+FRONT_REFUSE_CREATE(CreateCommandList,
                   (D3D10DDI_HDEVICE hDevice, CONST D3D11DDIARG_CREATECOMMANDLIST *a,
                    D3D11DDI_HCOMMANDLIST b, D3D11DDI_HRTCOMMANDLIST c),
                   (void)a; (void)b; (void)c;)
@@ -924,7 +962,7 @@ FRONT_REFUSE_VOID(CsSetShaderWithIfaces,
 // Unordered access and compute dispatch (11.0).
 FRONT_REFUSE_SIZE(CalcPrivateUnorderedAccessViewSize,
                   (D3D10DDI_HDEVICE hDevice, CONST D3D11DDIARG_CREATEUNORDEREDACCESSVIEW *a), (void)a;)
-FRONT_REFUSE_VOID(CreateUnorderedAccessView,
+FRONT_REFUSE_CREATE(CreateUnorderedAccessView,
                   (D3D10DDI_HDEVICE hDevice, CONST D3D11DDIARG_CREATEUNORDEREDACCESSVIEW *a,
                    D3D11DDI_HUNORDEREDACCESSVIEW b, D3D11DDI_HRTUNORDEREDACCESSVIEW c),
                   (void)a; (void)b; (void)c;)
@@ -951,6 +989,7 @@ FRONT_REFUSE_VOID(CopyStructureCount,
                    D3D11DDI_HUNORDEREDACCESSVIEW c),
                   (void)a; (void)b; (void)c;)
 
+#undef FRONT_REFUSE_CREATE
 #undef FRONT_REFUSE_VOID
 #undef FRONT_REFUSE_SIZE
 #undef FRONT_REFUSE_HRESULT

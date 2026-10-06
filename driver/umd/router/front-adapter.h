@@ -61,6 +61,14 @@ struct Adapter {
     void *hosted_adapter;                  // hAdapter.pDrvPrivate the hosted driver published
     D3D10_2DDI_ADAPTERFUNCS hosted;        // the five hosted adapter entries, before the front's install
     Log log;
+    // The hosted private device size the last CalcPrivateDeviceSize computed, with the two create inputs
+    // that decided it. CreateDevice recomputes the size and compares it against this one for the same pair:
+    // the front's record sits at that offset inside a block the runtime sized from the earlier answer, so a
+    // hosted size that moved between the two calls would put the record past the end of a dwm.exe heap block
+    // and the symptom would be a delayed crash with no line in any log.
+    SIZE_T hosted_device_size;
+    unsigned int size_version, size_flags;
+    volatile LONG size_valid;
 };
 
 // Per-device record, in the runtime's device private block after the hosted driver's block.
@@ -72,6 +80,10 @@ struct Device {
     DXGI_DDI_BASE_FUNCTIONS hosted_dxgi;   // the seven entries the hosted driver filled
     const D3D10DDI_CORELAYER_DEVICECALLBACKS *um;  // pfnSetErrorCb lives here
     D3D10DDI_HRTDEVICE hRTDevice;
+    // pfnSetErrorCb takes the CORE LAYER handle, not the device one (d3d10umddi.h:6757). Kept because a
+    // create entry of this DDI returns VOID: a driver that cannot create the object has no other way to say
+    // so, and a runtime that was not told believes the object exists.
+    D3D10DDI_HRTCORELAYER hRTCoreLayer;
     unsigned int interface_version;        // what the runtime asked for, before the front rewrote it
     unsigned int create_flags;             // D3D11DDI_CREATEDEVICE_FLAG_*: carries the pipeline level
     // Witnesses. Every one of them is a count, so a trial reads one line and knows what happened.
@@ -125,6 +137,13 @@ void Refuse(Device *device, const char *entry, volatile LONG *once);
 // the first occurrence of each entry; the call is NOT refused, because a refused draw path is a dead
 // desktop and the dropped semantics are ones a 10_0 pipeline does not use.
 void Dropped(Device *device, const char *entry, const char *what, volatile LONG *once);
+// A create entry that did not create the object. Every pfnCreate* of this DDI returns VOID, so the runtime
+// learns of a failure through pfnSetErrorCb alone: told, it treats the handle as invalid and does NOT call
+// the matching Destroy* (ref/ddi-display/d3d10umddi.md:745). Not told, it calls that Destroy*, which is a
+// field copy straight into the hosted driver over a private block the hosted driver never initialised - a
+// wild pointer inside dwm.exe instead of a line in a log. E_OUTOFMEMORY is the one failure the runtime does
+// not treat as critical; any other code it reads as device loss.
+void CreateFailed(Device *device);
 
 }  // namespace bc250front
 
