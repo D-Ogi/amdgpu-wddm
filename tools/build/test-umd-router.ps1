@@ -7,11 +7,11 @@
 # router 5BBEB783's gate runs unchanged next to the AppRouter ones. The gate of 674AD261 (2026-10-01) used the
 # hosted UMD E6B944CF, the CPU UMD 4176D1DF and the shell E748418C with its config A9B498ED: 68 scenarios, 0 failed.
 #
-# M15.14 increment 1 adds ten scenarios, which 'run' takes with the rest: three pure suites of the D3D11_1 front
-# (front-tables walks both filled tables slot by slot, front-rule drives the DirectFlip rule, front-record drives the
-# E26R decode and the resource map) and seven hive scenarios for the states of DirectFlipFront (absent, 0, a wrong
-# type, on, the D3D10 entry point, the CPU route, and the front over the real hosted UMD). 79 scenarios, 0 failed on
-# 2026-10-06.
+# M15.14 increment 1 adds eleven scenarios, which 'run' takes with the rest: three pure suites of the D3D11_1 front
+# (front-tables walks both filled tables slot by slot and names every copied and own entry, front-rule drives the
+# DirectFlip rule, front-record drives the E26R decode and the resource map) and eight hive scenarios for the states
+# of DirectFlipFront (absent, 0, a wrong type, on, the D3D10 entry point, a device created at the D3D10.0 interface,
+# the CPU route, and the front over the real hosted UMD). 80 scenarios, 0 failed on 2026-10-06.
 #
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
