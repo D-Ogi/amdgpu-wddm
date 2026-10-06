@@ -44,6 +44,10 @@ struct Options {
     DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM;
     std::wstring adapter = L"auto", peerExe;
     bool syncFence = false, kmt = false, simultaneous = false, skipWait = false;
+    // BD-075 round 2, the keyed-mutex handover discriminator: the creator waits for its own GPU work on the CPU
+    // before it releases a key. km12to11 reads poison where the CPU-synchronised s12to11 passes, and that wait is
+    // the one difference between the two protocols. A pass with this flag is a measurement, not a fix.
+    bool creatorFinish = false;
     unsigned delayCopies = 128, delaySize = 2048, gateMs = 300;
     bool producerGdi = false;
     int x = INT_MIN, y = INT_MIN, tolerance = 0;

@@ -59,6 +59,10 @@ $runs = @(
     @('s12to11-srgb', 'pass', '--cell s12to11 --format bgra8-srgb --sync fence'),
     @('s11to12-srgb', 'pass', '--cell s11to12 --format rgba8-srgb --sync fence'),
     @('s12to12-simultaneous', 'pass', '--cell s12to12 --simultaneous --sync fence'),
+    # The keyed-mutex handover discriminator (BD-075 round 2). On a driver that orders the release behind the
+    # creator's submitted write, the extra CPU wait changes nothing and the row passes exactly as km12to11 does;
+    # that is what makes a difference between the two rows on the lab a statement about our driver.
+    @('km12to11-finish', 'pass', '--cell km12to11 --creator-finish'),
     @('km12to11-stderr', 'pass', '--cell km12to11 --stderr {dir}\km12to11-stderr-err.txt'),
     @('ipc-stderr', 'pass', '--cell ipc --stderr {dir}\ipc-stderr-err.txt'),
     @('neg-f11to11', 'mismatch', '--cell f11to11 --inject skip-wait'),

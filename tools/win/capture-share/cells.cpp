@@ -138,6 +138,13 @@ static bool KeyedParent(Side &s)
     VerdictGate("key-3", !early, early ? "the peer acquired key 3 before the creator released it" : "");
     SetStage("write-a");
     if (!s.WritePattern(Pattern::A, true)) return FailA(s);
+    // --creator-finish, the BD-075 round 2 discriminator for km12to11. By the keyed mutex's contract the release
+    // belongs behind this write: the creator submitted it on the same queue the mutex's release is signalled on.
+    // The lab reads poison here while s12to11 - the same memory, the same two processes, a CPU wait after the
+    // write - passes. With this wait the handover cannot race the submission, so a pass says the memory path is
+    // sound and the ordering of the runtime's own release against our ExecuteCommandLists is the defect, and a
+    // poison read says the write itself is not reaching the reader. It is a measurement, never a fix.
+    if (g_opt.creatorFinish && !s.Finish()) return FailA(s);
     SetStage("release-3");
     if (!s.Release(3)) return FailA(s);
     if (!PeerStep("ACQUIRED", m, "peer-acquire-3")) return false;

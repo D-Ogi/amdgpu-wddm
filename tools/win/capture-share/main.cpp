@@ -51,6 +51,8 @@ static const char *Usage =
     "  --delay-size <n>       their square size (default 2048)\n"
     "  --gate-ms <ms>         how long a gate is held before it is checked (default 300)\n"
     "  --simultaneous         D3D12 shared textures with ALLOW_SIMULTANEOUS_ACCESS\n"
+    "  --creator-finish       keyed-mutex cells: the creator waits for its own GPU work before it releases a key\n"
+    "                         (BD-075 km12to11 discriminator; a pass with it is a measurement, not a fix)\n"
     "  --inject skip-wait     negative control (f-cells, s-cells with --sync fence): the opener leaves out its first\n"
     "                         GPU wait, so the run must end in mismatch with gate=violated\n"
     "  --producer d3d12|gdi   capture cells: how the producer draws (default d3d12)\n"
@@ -99,6 +101,8 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             g_opt.interactiveOk = true;
         } else if (a == L"--simultaneous") {
             g_opt.simultaneous = true;
+        } else if (a == L"--creator-finish") {
+            g_opt.creatorFinish = true;
         } else if (a == L"--inject") {
             if (!next(v)) return false;
             if (wcscmp(v, L"skip-wait")) return error = "--inject must be skip-wait", false;
