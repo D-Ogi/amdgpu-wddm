@@ -207,7 +207,7 @@ namespace Bc250Mon
         // The control application's own interop read. READ only; there is no write operation at all.
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Interop(out InteropSnapshot data, uint bytes);
-        // Added to bc250control.dll with KMD 0.7.208.1. A DLL older than that has no such export and the first
+        // Added to bc250control.dll with KMD 0.7.212.1. A DLL older than that has no such export and the first
         // call throws EntryPointNotFoundException, which the fan row reports instead of going blind.
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Hwmon(out HwmonSnapshot data, uint bytes);

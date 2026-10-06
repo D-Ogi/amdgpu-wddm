@@ -4,9 +4,10 @@ Unit A has one case fan. The board turns it, not our driver. A Nuvoton NCT6686D 
 board holds the fan curve, and the BIOS "Fan Setting" option selects which curve it uses. The owner keeps
 that option as it is (2026-10-05).
 
-Until KMD 0.7.208.1 nothing in Windows could read that chip. The control application showed "The driver
+Until KMD 0.7.212.1 nothing in Windows could read that chip. The control application showed "The driver
 cannot read it yet" in its Fan row, and a lab session record held no fan speed. This page is the design of
-the read path, which KMD 0.7.208.1 adds.
+the read path, which KMD 0.7.212.1 adds. The path was written as revision 208 on `fan/read-nct6686` and
+train b20 merged it into the lineage that ships, so the released 0.7.208.1 does not have it.
 
 **Part B, the write path, is NOT implemented.** The last section says what it would be, and why it waits
 for the owner.

@@ -643,14 +643,17 @@ BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
     return 0;
 }
 
-// The board's hardware monitor (BC250_ESCAPE_RUN_HWMON, KMD 0.7.208.1 and later): the fan speed, the duty
+// The board's hardware monitor (BC250_ESCAPE_RUN_HWMON, KMD 0.7.212.1 and later): the fan speed, the duty
 // read-back, the fan mode mask and the chip's own temperature channels, as the governor thread published them a
 // second ago at most. Adapter-owned software snapshot, so NoAdapterSynchronization alone, like the DPM read: no
 // port access on this path, no BAR access, no scheduler idle, so a sampler may call it while a game runs.
 //
 // No ABI fallback loop and no size negotiation: the escape was born at ABI 1 with one size. A driver older than
-// 0.7.208.1 does not know command 27 and answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which the check below maps
+// 0.7.212.1 does not know command 27 and answers BC250_ESCAPE_STATUS_UNKNOWN_COMMAND, which the check below maps
 // to 0xC00000BB (STATUS_NOT_SUPPORTED), the same answer the other snapshots give for a driver that is too old.
+// The deployed 0.7.208.1 is such a driver: it stops at command 26, so 0xC00000BB from here is its correct
+// answer and not a defect of the fan path. The reader was written as revision 208 on fan/read-nct6686 and
+// reached a release in 0.7.212.1, which is why no 0.7.208.1 knows it.
 BC250_CONTROL_API LONG WINAPI Bc250Hwmon(BC250_ESCAPE_HWMON *data, ULONG bytes)
 {
     NTSTATUS status;

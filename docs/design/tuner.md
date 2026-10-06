@@ -1,6 +1,7 @@
 # The Tuner: a GPU voltage curve, a CPU undervolt and the core mask
 
-KMD 0.7.210, with the review fixes of 0.7.211. Decision:
+KMD 0.7.212.1 (written as 0.7.210 on `tuner/vf-cpu` with the review fixes of 0.7.211; neither number was
+released). Decision:
 [ADR 0020](../adr/0020-operator-tuning-in-the-smu-owner.md). Limits: [`../hardware.md`](../hardware.md). The
 clock governor this page builds on: [`dpm.md`](dpm.md).
 

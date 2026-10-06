@@ -182,7 +182,10 @@ allocation is a candidate. `AddressAllowed` decides which address may be written
 HUBP0 is not recoverable on this part - there is no working GPU reset (facts M53) - so the second
 refusal stays behind the first on purpose, and neither is allowed to assume the other.
 
-## The DirectFlip handshake, kernel half (increment 2, 0.7.209.1)
+## The DirectFlip handshake, kernel half (increment 2, 0.7.212.1)
+
+The half below was written as revision 209 on `kmd209-iflip2`; train b20 merged it into the lineage that
+ships, so 0.7.212.1 is the first driver that has it and no 0.7.209 was ever released.
 
 The compositor's user-mode driver may only answer `CheckDirectFlipSupport` TRUE about a surface the
 display core can actually read, and it must decide that from the same words and the same arithmetic that

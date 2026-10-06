@@ -4,7 +4,8 @@ Date: 2026-10-06. Status: accepted (owner, 2026-10-06: build the Tuner parity th
 a GPU voltage and frequency curve, a CPU undervolt and a CPU clock - beside the fan control). It reopens two rows
 of [`../design/rejected-options.md`](../design/rejected-options.md) and extends ADR 0014 point 2.
 
-Implemented in KMD 0.7.210: the two escapes, the shim policy, the host tests, the command-line tool and the
+Implemented in KMD 0.7.212.1, written as revision 210 on `tuner/vf-cpu` and merged into the lineage that ships
+by train b20: the two escapes, the shim policy, the host tests, the command-line tool and the
 application. **No value in it is measured on unit A yet.** Every CPU message semantic and every CPU range is
 REPORTED by community projects, so the driver refuses every CPU setter until a queue 3 getter has answered in the
 same start, and the lab plan reads before it writes

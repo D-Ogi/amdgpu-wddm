@@ -73,7 +73,7 @@ namespace AmdgpuWddmControl
         static extern int Bc250LogRead(uint from, [Out] byte[] data, uint bytes);
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250CuMode(uint op, ulong expectedGeneration, [Out] byte[] data, uint bytes);
-        // Added to bc250control.dll with KMD 0.7.208.1. A deployed DLL without it throws
+        // Added to bc250control.dll with KMD 0.7.212.1. A deployed DLL without it throws
         // EntryPointNotFoundException, which Call() turns into "bc250control.dll is too old for this application".
         [DllImport(Dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250Hwmon([Out] byte[] data, uint bytes);

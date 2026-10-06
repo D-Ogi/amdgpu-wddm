@@ -369,11 +369,11 @@ void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
-// The operator's V/F curve and its trial (0.7.210, docs/design/tuner.md, ADR 0020).
+// The operator's V/F curve and its trial (0.7.212.1, docs/design/tuner.md, ADR 0020).
 void DpmCurveRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_CURVE* Data, ULONG Size, BOOLEAN Admin,
                      ULONG EscapeFlags);
 
-// cpu.c: the CPU surface (0.7.210), the firmware's queue 3 and the core-enable mask
+// cpu.c: the CPU surface (0.7.212.1), the firmware's queue 3 and the core-enable mask
 struct _BC250_ESCAPE_CPU;
 void CpuInitialize(BC250_DEVICE* Device);
 void CpuStart(BC250_DEVICE* Device);

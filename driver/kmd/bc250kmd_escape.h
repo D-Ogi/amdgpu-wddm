@@ -649,7 +649,7 @@ typedef struct _BC250_ESCAPE_HWMON {
     unsigned long DutyValidMask;            // bit i: DutyPermille[i] is a value this sample accepted
     unsigned long long Refusals;            // values refused since the start, over every register
 } BC250_ESCAPE_HWMON; // 216 bytes on Windows, ABI 1
-// The operator's GPU V/F curve and its trial (0.7.210.1; driver/kmd/dpm.c, driver/shim/bc250_dpm.c,
+// The operator's GPU V/F curve and its trial (0.7.212.1; driver/kmd/dpm.c, driver/shim/bc250_dpm.c,
 // docs/design/tuner.md, ADR 0020). The clock grid cannot move, so a curve is BC250_DPM_CURVE_POINTS voltages, one
 // per level from FirstMHz (1000) up in StepMHz (100) steps to the table's ceiling (2000). Software state only: the
 // escape stores a candidate under the DPM state's locks and the governor thread applies it at its next tick
@@ -711,7 +711,7 @@ typedef struct _BC250_ESCAPE_DPM_CURVE {
     unsigned long Reserved[2];              // zero in, zero out
 } BC250_ESCAPE_DPM_CURVE; // 360 bytes on Windows, ABI 1
 
-// The CPU surface (0.7.210.1; driver/kmd/cpu.c, driver/shim/bc250_cpu.c, docs/design/tuner.md, ADR 0020): a clock
+// The CPU surface (0.7.212.1; driver/kmd/cpu.c, driver/shim/bc250_cpu.c, docs/design/tuner.md, ADR 0020): a clock
 // limit, an undervolt in firmware curve-scale steps, the firmware's own temperature cap, the readbacks of all
 // three, and the core-enable mask. The transport is the firmware's queue 3, whose three mailbox registers are in
 // the BAR5 aperture the driver already maps; the KMD is still the single SMU owner, with a second allowlist so

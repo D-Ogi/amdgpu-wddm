@@ -511,9 +511,9 @@ start, without a restart and without the registry:
   its own line (`dpm: tune (thermal): hot step 500->2000 ms, soft release delta 0->1500 mC step 3000->3000 ms,
   serial 4`), and every `dpm: tune` line is followed by a `thermal:` line with the soft raises so far.
 
-## The operator's V/F curve (0.7.210)
+## The operator's V/F curve (0.7.212)
 
-The table above gives one voltage per clock. From 0.7.210 the operator can lower that voltage. The full design,
+The table above gives one voltage per clock. From 0.7.212 the operator can lower that voltage. The full design,
 the refusal table and the lab plan are in [tuner.md](tuner.md); this section is what the governor does with it.
 
 - The curve holds 11 voltages, for levels 5 to 15 (1000 to 2000 MHz). The levels under the lab floor keep the
