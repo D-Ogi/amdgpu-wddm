@@ -341,6 +341,41 @@ The kernel driver's own admission never reads this switch: `SetVidPnSourceAddres
 `scanout_admit.h` and `AddressAllowed` alone, so a stale or wrong "yes" in user mode cannot widen what
 may be programmed into HUBP0.
 
+## VMID pool (0.7.214.1)
+
+`EnableVmidPool` decides how many VMIDs the WDDM jobs use. It is a REG_DWORD under the service's
+`Parameters` key. From 0.7.214 **the default is 1: on.** The INF and the release installer write it, and an
+absent value is also on. The driver reads it once, when the adapter starts.
+
+With the value at 1, each page-table root gets its own VMID from a pool. A root keeps its VMID while it
+submits. A new root takes the VMID that was used least recently, but only if the last job of that VMID has
+retired. When no VMID is free, the submission waits, as before. The driver never changes the root of a VMID
+whose last job has not retired. The design and the host tests are in
+`docs/design/gfx-submit-root-serialization.md`.
+
+The pool is VMIDs 1 and 3 to 15. VMID 0 (the GART aperture) and VMID 2 (the paging node) are never in it.
+Before the first job, the driver reads the page-table base of all 16 VMIDs. A VMID in 3 to 15 that is not
+zero is excluded, and the start log says so:
+
+```
+gfx: VMID pool on (EnableVmidPool)
+gfx: VMID bring-up read: non-zero 0x0005 unread 0x0000, pool 0xFFFA (14 VMIDs), excluded 0x0000
+gfx: VMID 0 base 0x... at bring-up: GART aperture, reserved
+```
+
+The summary gives the counters. `rule refusals` must be 0:
+
+```
+wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+wddm summary: VMID pool: 812 claims, 40213 reuses, 3 busy, 0 rule refusals
+wddm summary: VMID pool FLUSH_TLB: 4410 built, 61740 VMID invalidations
+```
+
+Rollback: set `EnableVmidPool` to 0 and restart the adapter. Every job then runs at VMID 1, and a job of
+another root waits for the ring to drain, as in 0.7.213.1. A fault report and a timeout report name the
+VMID and its tenants (`ih: GPU FAULT vector vmid N now: root ... pid ...`), because with the pool a VMID
+alone no longer identifies the process.
+
 ## Scan-out witnesses in the summary
 
 `bc250kmd_cli log summary` carries, besides the two scan-out admission lines:

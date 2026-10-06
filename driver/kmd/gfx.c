@@ -7,6 +7,9 @@
 //     EnableGfx        REG_DWORD  1 = allow the GFX command. Needs EnableMmio, EnableVram, EnableGart, EnablePsp. Default 0.
 //     EnableGpuSubmit  REG_DWORD  1 = GfxSubmitIb() may write the gfx ring (ADR 0008 stage C). Needs EnableGfx and a
 //                                 bring-up that reached stage 8, i.e. EnableIh as well. Default 0.
+//     EnableVmidPool   REG_DWORD  0 = every WDDM job at VMID 1, a job of another root waits for the ring to drain
+//                                 (0.7.213.1). Absent or 1 = a VMID per page-table root from a pool (vmid_pool.h,
+//                                 docs/design/gfx-submit-root-serialization.md). Default 1 from 0.7.214.1.
 //
 // One escape (BC250_ESCAPE_RUN_GFX), four operations:
 //   PLAN    set up (allocates memory and zeroes it, the GART table untouched; reads registers), run stages 1..LastStage against the real registers
@@ -27,6 +30,7 @@
 // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
 #include "bc250kmd.h"
 #include "bc250_fence_order.h"
+#include "vmid_pool.h"
 #include "bc250_sdma_virtual_ptes.h"
 #include "paging_intervals.h"
 #include "paging_permutation.h"
@@ -146,10 +150,27 @@ typedef struct _BC250_GFX {
     // first, and IhStop() clears Active and drains the DPCs, so by the time TearDown() releases the fence page no
     // consumer of this field can still be running.
     struct amdgpu_device* SubmitAdev;
-    // The page directory root each VMID was last given. A different root must wait
-    // for preceding jobs; the MMIO invalidation still runs on every job. Index 0 is unused: VMID 0 is
-    // the GART aperture and has no root of ours.
-    ULONGLONG VmidRoot[16];
+    // The VMID pool (vmid_pool.h, docs/design/gfx-submit-root-serialization.md). Vmid.Root is the page directory
+    // root each VMID was last given (the VmidRoot array of 0.7.213.1); the rest of Vmid says which job last ran at
+    // each VMID and for whom. The MMIO invalidation still runs on every job. Index 0 is unused: VMID 0 is the GART
+    // aperture and has no root of ours. Every change happens under GartLock; a change of Root, of a tenant field or
+    // of VmidHistory also takes VmidLock, which is what the DISPATCH_LEVEL readers (the fault and timeout reports)
+    // and the FLUSH_TLB builder (GfxPagingLock, never GartLock) take to read them. Both resets of the table run
+    // with GfxAccessClose done and GfxPagingLock held exclusively, so they need no VmidLock.
+    BOOLEAN VmidPoolGate;           // EnableVmidPool, read once at GfxStart; absent = on
+    BOOLEAN VmidProbed;             // the bring-up read ran; once per device start, a teardown does not clear it
+    USHORT VmidMembers;             // the pool: VMIDs 1 and 3..15 less what the bring-up read found programmed
+    USHORT VmidExcluded;            // the VMIDs that read found programmed by something else
+    KSPIN_LOCK VmidLock;
+    BC250_VMID_TABLE Vmid;
+    BC250_VMID_HISTORY_RING VmidHistory;    // tenancies that ended, for fault attribution; survives a teardown
+    volatile LONG VmidClaims;       // a VMID given a root it did not hold
+    volatile LONG VmidReuses;       // a job at the VMID that already held its root
+    volatile LONG VmidBusy;         // the pool had no VMID free: STATUS_DEVICE_BUSY, the old wait
+    volatile LONG VmidRuleRefusals; // the rule check refused a root change of a live VMID (must stay 0)
+    volatile LONG VmidRuleLogged;
+    volatile LONG VmidFlushes;      // FLUSH_TLB operations built with the pool open
+    volatile LONG VmidFlushVmids;   // the VMID invalidations they carried
     // ADR 0013: the two VRAM scratch regions BC250_ESCAPE_RUN_SDMACOPY copies between. Allocated once from the
     // same VRAM pool the rest of this file's memory comes from (gpumem.c), on the first call, and freed with
     // everything else in TearDown - not by the escape itself, so that two calls in a row need not pay for the
@@ -366,7 +387,8 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     // PagingSubmitFailed is left exactly like SubmitFailed above, for the same reason and on its own hardware.
     Gfx->PagingSubmitSeq = 0;
     InterlockedExchange(&Gfx->PagingSubmitInFlight, 0);
-    RtlZeroMemory(Gfx->VmidRoot, sizeof(Gfx->VmidRoot));
+    // GfxAccessClose ran first and the caller holds GfxPagingLock exclusively: no reader of the table is left.
+    Bc250VmidResetAll(&Gfx->Vmid, &Gfx->VmidHistory);
     if (Gfx->Dispatch) { bc250_gfx_dispatch_teardown(Adev); Gfx->Dispatch = FALSE; }
     bc250_sdma_teardown(Adev);
     bc250_gfx_teardown(Adev);
@@ -1053,19 +1075,89 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
     return result;
 }
 
+// The bring-up read's reader. The gfx table holds the page-table base pairs of VMIDs 1..15 and the GART table the
+// pair of VMID 0, which gart.c programs; both lists are generated from the register headers, and the offsets come
+// from the shim's hub table (bc250_gmc_get_vmid_pd), so nothing here names an address.
+static NTSTATUS GfxVmidProbeRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
+{
+    if (NT_SUCCESS(MmioGfxRead(Device, Offset, Value))) return STATUS_SUCCESS;
+    return MmioGartRead(Device, Offset, Value);
+}
+
+// Once per device start and before this driver writes the page-table base of any VMID in the pool: the first
+// SubmitIbLocked with the pool open is that point, because nothing else in this driver programs VMIDs 1 or 3..15
+// (VMID 0 is the GART aperture, programmed by bc250_gmc_gart_enable; VMID 2 is node 1's, programmed per paging
+// buffer). Reads only. A VMID in 3..15 that reads non-zero was programmed by something that is not this instance
+// of the driver (firmware, or an earlier start in the same boot), and it stays out of the pool. VMID 1 stays in:
+// it is the single-VMID driver's own and every earlier start of ours wrote it. A pair that cannot be read is
+// treated as programmed. The caller holds GartLock and the gfx sequence is Adev->backend with no fault recorded;
+// a refused read would record one, so each is undone here - a read changes nothing on the hardware.
+static void GfxVmidProbe(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
+{
+    BC250_SEQUENCE* sequence = (BC250_SEQUENCE*)Adev->backend;
+    NTSTATUS (*read)(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
+    unsigned long long value[BC250_VMID_COUNT];
+    unsigned excluded = 0, members, set = 0, unread = 0, v;
+    KIRQL irql;
+
+    if (Gfx->VmidProbed || sequence == NULL || !NT_SUCCESS(sequence->Fault)) return;
+    Gfx->VmidProbed = TRUE;
+    read = sequence->Read;
+    sequence->Read = GfxVmidProbeRead;
+    for (v = 0; v < BC250_VMID_COUNT; v++)
+    {
+        u64 pair = 0;
+        if (bc250_gmc_get_vmid_pd(Adev, v, &pair) != 0 || !NT_SUCCESS(sequence->Fault))
+        {
+            pair = 0;
+            unread |= 1u << v;
+            sequence->Fault = STATUS_SUCCESS;
+            sequence->FaultOffset = 0;
+        }
+        value[v] = pair;
+        if (pair != 0) set |= 1u << v;
+    }
+    sequence->Read = read;
+    members = (Bc250VmidPoolFromProbe(value, &excluded) & ~unread) | (1u << BC250_VMID_LEGACY);
+    excluded |= unread & BC250_VMID_CANDIDATES & ~(1u << BC250_VMID_LEGACY);
+    KeAcquireSpinLock(&Gfx->VmidLock, &irql);
+    Gfx->VmidMembers = (USHORT)members;
+    Gfx->VmidExcluded = (USHORT)excluded;
+    KeReleaseSpinLock(&Gfx->VmidLock, irql);
+    GuardLog("gfx: VMID bring-up read: non-zero 0x%04lX unread 0x%04lX, pool 0x%04lX (%lu VMIDs), excluded 0x%04lX",
+             (ULONG)set, (ULONG)unread, (ULONG)members, (ULONG)Bc250VmidCount(members), (ULONG)excluded);
+    for (v = 0; v < BC250_VMID_COUNT; v++)
+        if (value[v] != 0)
+            GuardLog("gfx: VMID %lu base 0x%llX at bring-up: %s", (ULONG)v, value[v],
+                     v == BC250_VMID_GART ? "GART aperture, reserved" :
+                     v == BC250_VMID_SDMA_PAGING ? "SDMA paging, reserved" :
+                     v == BC250_VMID_LEGACY ? "VMID 1, kept" : "excluded from the pool");
+}
+
 // With GartLock held, the gfx sequence installed as adev->backend and a GpuMem sequence open. GfxSubmitIb is this plus
 // all three; GfxFenceEscape's IB_AT mode calls it directly, because it already holds them.
+//
+// Vmid is BC250_VMID_AUTO from the WDDM path and an explicit 0..15 from the IB_AT escape. Which VMID the job runs
+// at, and whether it may run now, is Bc250VmidAdmit's decision (vmid_pool.h). With EnableVmidPool 0, AUTO is VMID 1
+// and the decision is the predicate of 0.7.213.1, checked at the same point as before. With the pool, a root keeps
+// its VMID while it keeps submitting, and a new root takes the least recently used VMID whose last job has retired.
+// *VmidUsed is the VMID that the IB packet carries, 0 when nothing was submitted.
 static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev,
                                ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes,
-                               _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq)
+                               _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq,
+                               _Out_opt_ ULONG* VmidUsed)
 {
     struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
-    ULONG seq, previousSeq;
+    ULONG seq, previousSeq, observed;
     LONG previousPending;
+    BOOLEAN inFlight;
+    BC250_VMID_DECISION decision;
+    KIRQL irql;
     u64 address;
     long result;
 
     *Seq = 0;
+    if (VmidUsed != NULL) *VmidUsed = 0;
     // VMID2 belongs to SDMA paging; graphics and IB_AT must not change its root.
     if (Vmid == BC250_SDMA_PAGING_VMID) return STATUS_ACCESS_DENIED;
     if (Gfx->SubmitFailed) return STATUS_DEVICE_HARDWARE_ERROR;
@@ -1073,16 +1165,22 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     if (Gfx->Failed || !Gfx->SetUp || Gfx->StagesDone < BC250_GFX_STAGE_INTERRUPTS) return STATUS_INVALID_DEVICE_STATE;
     // The shim refuses the same three things, but a size in bytes is this file's unit, so the division is checked here:
     // an odd length would otherwise become a shorter IB rather than an error.
-    if (SizeBytes == 0 || (SizeBytes & 3) != 0 || Vmid >= RTL_NUMBER_OF(Gfx->VmidRoot)) return STATUS_INVALID_PARAMETER;
+    if (SizeBytes == 0 || (SizeBytes & 3) != 0 || (Vmid != BC250_VMID_AUTO && Vmid >= BC250_VMID_COUNT))
+        return STATUS_INVALID_PARAMETER;
 
-    // Queue only jobs sharing the current VMID1 root. A CPU MMIO root change
-    // must never redirect an earlier job still using that VMID. VMID0 diagnostics
-    // remain exclusive. MMIO invalidation stays until the leaf-PTE control passes.
-    if (Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq) &&
-        (Vmid != 1 || Gfx->SubmitVmid != 1 || Gfx->VmidRoot[Vmid] != RootPhysical)) return STATUS_DEVICE_BUSY;
+    // Whether a job is still running. GfxFenceArrived also clears the in-flight mark when the newest job retired.
+    inFlight = Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq);
+    // EnableVmidPool 0, or an explicit VMID: 0.7.213.1's refusal, at 0.7.213.1's point. Queue only jobs sharing the
+    // current VMID1 root. A CPU MMIO root change must never redirect an earlier job still using that VMID. VMID0
+    // diagnostics remain exclusive. Bc250VmidAdmit below repeats this predicate for these callers.
+    if ((Vmid != BC250_VMID_AUTO || !Gfx->VmidPoolGate) && inFlight &&
+        ((Vmid != BC250_VMID_AUTO && Vmid != BC250_VMID_LEGACY) || Gfx->SubmitVmid != BC250_VMID_LEGACY ||
+         Gfx->Vmid.Root[BC250_VMID_LEGACY] != RootPhysical)) return STATUS_DEVICE_BUSY;
     // GFX10 writeback is a 32-bit dword pointer; use a full aligned slot for
     // either frame. Do this before root writes or sequence publication.
     if (!bc250_ring_has_space(ring, ring->funcs->align_mask + 1u)) return STATUS_DEVICE_BUSY;
+    // Before the first write of a pool VMID's root, and before the fence page: the reads go first in the sequence.
+    if (Vmid == BC250_VMID_AUTO && Gfx->VmidPoolGate) GfxVmidProbe(Gfx, Adev);
     ring->track_rptr = true;
 
     if (!Gfx->FencePage)
@@ -1094,13 +1192,39 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     address = bc250_gfx_fence_addr(Adev, BC250_SUBMIT_FENCE_SLOT);
     if (address == 0) return STATUS_INSUFFICIENT_RESOURCES;
 
+    // The VMID. One read of the fence slot answers "has the last job of VMID v retired" for every v, because the
+    // fence is global and in order (vmid_pool.h).
+    observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
+    Bc250VmidSweep(&Gfx->Vmid, observed);
+    decision = Bc250VmidAdmit(&Gfx->Vmid, Gfx->VmidMembers, Gfx->VmidPoolGate, Vmid, RootPhysical, inFlight,
+                              Gfx->SubmitVmid, observed);
+    if (decision.Verdict == BC250_VMID_REFUSE_PARAM) return STATUS_INVALID_PARAMETER;
+    if (decision.Verdict == BC250_VMID_REFUSE_BUSY)
+    {
+        if (decision.Pool) InterlockedIncrement(&Gfx->VmidBusy);
+        return STATUS_DEVICE_BUSY;
+    }
+    if (decision.Verdict == BC250_VMID_REFUSE_RULE)
+    {
+        // The rule of the pool, checked on every path that can write a root: the root of a VMID whose last job has
+        // not retired is never rewritten. Nothing the chooser picks gets here (the host test model-checks it).
+        // Refused before the write, logged once, counted always; the caller sees the old wait.
+        InterlockedIncrement(&Gfx->VmidRuleRefusals);
+        if (InterlockedExchange(&Gfx->VmidRuleLogged, 1) == 0)
+            GuardLog("gfx: VMID %lu root 0x%llX -> 0x%llX REFUSED: its job %lu has not retired (fence %lu)",
+                     (ULONG)decision.Vmid, Gfx->Vmid.Root[decision.Vmid], RootPhysical,
+                     (ULONG)Gfx->Vmid.LiveSeq[decision.Vmid], observed);
+        return STATUS_DEVICE_BUSY;
+    }
+    Vmid = decision.Vmid;
+
     // VMID 0 is the GART aperture, whose root bc250_gmc_gart_enable() programmed and which bc250_gmc_set_vmid_pd()
     // refuses to touch; a caller submitting at VMID 0 is submitting out of the driver's own GTT pages. A job
-    // flushes VMID 1 on every submit. Remembering the root misses a leaf change under the same root, and the
-    // invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
+    // flushes its VMID on every submit, same root or not. Remembering the root misses a leaf change under the
+    // same root, and the invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
     if (Vmid != 0)
     {
-        ProgressEnter(ProgressSiteVmFlush);
+        ProgressEnterInput(ProgressSiteVmFlush, (LONG)Vmid);
         result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
         ProgressExit(ProgressSiteVmFlush, (LONG)result);
         // D5: the flush of a submit that worked is the third hot line. A flush that did not work keeps its line
@@ -1110,7 +1234,15 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
         if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
             return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
-        Gfx->VmidRoot[Vmid] = RootPhysical;
+        // The table follows the register. A claim moves the previous tenant into the history first.
+        if (decision.Claim)
+        {
+            KeAcquireSpinLock(&Gfx->VmidLock, &irql);
+            Bc250VmidClaim(&Gfx->Vmid, &Gfx->VmidHistory, Vmid, RootPhysical);
+            KeReleaseSpinLock(&Gfx->VmidLock, irql);
+            if (decision.Pool) InterlockedIncrement(&Gfx->VmidClaims);
+        }
+        else if (decision.Pool) InterlockedIncrement(&Gfx->VmidReuses);
     }
 
     seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);
@@ -1136,21 +1268,26 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         {
             GuardLog("gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000");
             // KMD193: the one line that names the submitter of the job frame above. 245 found the faulting job in
-            // the ring with nothing anywhere to say whose context it was on.
+            // the ring with nothing anywhere to say whose context it was on. KMD214: and the VMID the job runs at.
+            // The node left the line to make room within the 159 characters of a log entry: an identity reaches
+            // this function only from node 0 (wddm.c WddmSubmitHardware), and the journal record keeps it.
             if (Identity != NULL)
-                GuardLog("gfx: job seq %lu fence %lu node %lu ib 0x%llX x%lu dwords ctx 0x%llX pid %lu ctxflags 0x%lX",
-                         seq, Identity->Fence, Identity->Node, GpuAddress, SizeBytes / 4, Identity->Context,
+                GuardLog("gfx: job seq %lu vmid %lu fence %lu ib 0x%llX x%lu ctx 0x%llX pid %lu ctxflags 0x%lX",
+                         seq, Vmid, Identity->Fence, GpuAddress, SizeBytes / 4, Identity->Context,
                          Identity->ProcessId, Identity->ContextFlags);
         }
         // Two lines, not one, whenever there is an identity to name: the summary says "lines left out", and a
         // count of skip events would understate it by up to a factor of two, which is exactly the kind of quiet
         // number BD-070 taught us not to publish.
         else InterlockedExchangeAdd(&Gfx->HotSubmitLinesSkipped, (Identity != NULL) ? 2 : 1);
+        // The VMID goes into the IB packet's control word (PACKET3_INDIRECT_BUFFER__VMID, bc250_gfx_emit_ib): the
+        // CP fetches the IB, and the job makes every access, through this VMID's page tables.
         result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
     {
         // Nothing was committed: both emitters refuse before writing and bc250_gfx_submit_ib undoes the allocation.
+        // A claim above stands: the register holds the new root, the table says so, and the VMID has no live job.
         (void)InterlockedCompareExchange(&Gfx->SubmitInFlight, previousPending, (LONG)seq);
         Gfx->SubmitSeq = previousSeq;
         GuardLog("gfx: IB 0x%llX x%lu dwords at VMID %lu refused, result %d", GpuAddress, SizeBytes / 4, Vmid, result);
@@ -1158,25 +1295,33 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     }
 
     Gfx->SubmitVmid = Vmid;
+    if (Vmid != 0)
+    {
+        KeAcquireSpinLock(&Gfx->VmidLock, &irql);
+        Bc250VmidSubmitted(&Gfx->Vmid, Vmid, seq, Identity != NULL ? Identity->ProcessId : 0);
+        KeReleaseSpinLock(&Gfx->VmidLock, irql);
+    }
+    if (VmidUsed != NULL) *VmidUsed = Vmid;
     // KMD193: committed, so the journal gets its BC250_PJ_GFX_SUBMIT record here - before the DPM call and
     // before this function can take any other exit. The record is what lets a dump put a faulting sequence
-    // next to the unmap that took its memory away (bsod-245 item 4).
+    // next to the unmap that took its memory away (bsod-245 item 4). KMD214: the record carries the VMID.
     if (Identity != NULL)
         PagingJournalGfxSubmit(seq, Identity->Fence, GpuAddress, RootPhysical, Identity->Context, Identity->Node,
-                               Identity->ProcessId, Identity->ContextFlags);
+                               Identity->ProcessId, Identity->ContextFlags, Vmid);
     DpmBusyBegin(&Device->Dpm);     // committed: the ring is busy from here (dpm.h)
     if (InterlockedIncrement(&Gfx->PipelineSamples) <= 16) {
-        ULONG observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
-        GuardLog("gfx: pipeline queued seq%lu prior%lu observed_after_doorbell%lu overlap%u",
-                 seq, previousSeq, observed,
-                 previousSeq != 0 && !bc250_fence_reached(observed, previousSeq));
+        ULONG after = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
+        GuardLog("gfx: pipeline queued seq%lu prior%lu observed_after_doorbell%lu overlap%u vmid%lu",
+                 seq, previousSeq, after,
+                 previousSeq != 0 && !bc250_fence_reached(after, previousSeq), Vmid);
     }
     *Seq = seq;
     return STATUS_SUCCESS;
 }
 
 NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
-                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq)
+                     ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq,
+                     _Out_opt_ ULONG* VmidUsed)
 {
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
@@ -1186,6 +1331,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
     ULONG vram, gtt;
 
     *Seq = 0;
+    if (VmidUsed != NULL) *VmidUsed = 0;
     ProgressEnter(ProgressSiteGfxSubmit);   // before GartLock: a wait for it counts as inside
     // PASSIVE_LEVEL only, because of this: DxgkDdiSubmitCommandVirtual is annotated PASSIVE_LEVEL
     // (d3dkmddi.h) and DxgkDdiSubmitCommand is not, which is exactly why the paging path may not come here.
@@ -1200,13 +1346,60 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
         adev->backend = &gfx->Sequence;
         SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
         GpuMemBeginSequence(Device, NULL, 0);
-        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Identity, Seq);
+        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Identity, Seq, VmidUsed);
         (void)GpuMemEndSequence(Device, &vram, &gtt);
         adev->backend = previousBackend;
     }
     ExReleaseFastMutex(&Device->GartLock);
     ProgressExit(ProgressSiteGfxSubmit, (LONG)*Seq);
     return status;
+}
+
+// Who ran at Vmid, for the reports that read a fault latch (ih.c) or a timeout (wddm.c): the tenant now, and the
+// newest earlier tenant from the history. A latch names a VMID, not a job, and a latch read late can describe a
+// VMID that was recycled since. Any IRQL up to DISPATCH_LEVEL; values are copied under VmidLock and logged after.
+void GfxVmidReport(_In_ const BC250_DEVICE* Device, _In_z_ const char* Who, ULONG Vmid)
+{
+    BC250_GFX* gfx = GfxAccessAcquire(Device);
+    BC250_VMID_TENANT live, before;
+    int haveLive = 0, haveBefore = 0;
+    KIRQL irql;
+
+    RtlZeroMemory(&live, sizeof(live));
+    RtlZeroMemory(&before, sizeof(before));
+    if (gfx != NULL)
+    {
+        KeAcquireSpinLock(&gfx->VmidLock, &irql);
+        Bc250VmidDescribe(&gfx->Vmid, &gfx->VmidHistory, Vmid, &live, &haveLive, &before, &haveBefore);
+        KeReleaseSpinLock(&gfx->VmidLock, irql);
+        GfxAccessRelease(Device);
+    }
+    if (haveLive)
+        GuardLog("%s vmid %lu now: root 0x%llX pid %lu seq %lu-%lu", Who, Vmid, live.Root, live.Process,
+                 live.FirstSeq, live.LastSeq);
+    if (haveBefore)
+        GuardLog("%s vmid %lu before: root 0x%llX pid %lu seq %lu-%lu", Who, Vmid, before.Root, before.Process,
+                 before.FirstSeq, before.LastSeq);
+    if (!haveLive && !haveBefore) GuardLog("%s vmid %lu: no tenant on record", Who, Vmid);
+}
+
+// For the wddm summary: the pool's gate, membership and counters. Zeros when the graphics state is gone.
+void GfxVmidCounters(_In_ const BC250_DEVICE* Device, _Out_ BC250_GFX_VMID_COUNTERS* Counters)
+{
+    BC250_GFX* gfx = GfxAccessAcquire(Device);
+
+    RtlZeroMemory(Counters, sizeof(*Counters));
+    if (gfx == NULL) return;
+    Counters->Gate = gfx->VmidPoolGate;
+    Counters->Members = gfx->VmidMembers;
+    Counters->Excluded = gfx->VmidExcluded;
+    Counters->Claims = (ULONG)InterlockedCompareExchange(&gfx->VmidClaims, 0, 0);
+    Counters->Reuses = (ULONG)InterlockedCompareExchange(&gfx->VmidReuses, 0, 0);
+    Counters->Busy = (ULONG)InterlockedCompareExchange(&gfx->VmidBusy, 0, 0);
+    Counters->RuleRefusals = (ULONG)InterlockedCompareExchange(&gfx->VmidRuleRefusals, 0, 0);
+    Counters->Flushes = (ULONG)InterlockedCompareExchange(&gfx->VmidFlushes, 0, 0);
+    Counters->FlushVmids = (ULONG)InterlockedCompareExchange(&gfx->VmidFlushVmids, 0, 0);
+    GfxAccessRelease(Device);
 }
 
 // ---- fences (E12 part C) ------------------------------------------------------------------------------------------------
@@ -1272,7 +1465,9 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     // Both IB modes are one submission on the gfx ring: the ring because that is the only one bc250_gfx_emit_ib()
     // emits for, one because the ring holds eight unanswered submissions and nothing here reads the read pointer.
     else if ((ib || ibAt) && (Data->Ring != BC250_FENCE_RING_GFX || Data->Count != 1)) status = STATUS_INVALID_PARAMETER;
+    // An explicit VMID 0..15 only: BC250_VMID_AUTO is the WDDM path's, never the escape's (KMD214).
     else if (ibAt && (Data->Dwords == 0 || Data->Dwords > BC250_FENCE_IB_MAX_DWORDS || (Data->IbAddress & 3) != 0 ||
+                      Data->Vmid >= BC250_VMID_COUNT ||
                       (Data->RootPhysical & (AMDGPU_GPU_PAGE_SIZE - 1)) != 0)) status = STATUS_INVALID_PARAMETER;
     else if (gfx->Failed || !gfx->SetUp || gfx->StagesDone < (ULONG)(sdma ? BC250_GFX_STAGE_SDMA : BC250_GFX_STAGE_CP)) status = STATUS_INVALID_DEVICE_STATE;
     if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
@@ -1405,7 +1600,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             // No identity: the IB_AT escape has no WDDM context and no OS fence, so it writes no
             // BC250_PJ_GFX_SUBMIT record (KMD193).
             status = SubmitIbLocked(Device, gfx, adev, Data->Vmid, Data->RootPhysical, Data->IbAddress,
-                                    Data->Dwords * 4u, NULL, &seq);
+                                    Data->Dwords * 4u, NULL, &seq, NULL);
             if (NT_SUCCESS(status))
             {
                 Data->LastSeq = seq;
@@ -3213,22 +3408,29 @@ Done:
     return status;
 }
 
-// PASSIVE_LEVEL. Invalidate the entire application VMID instead of a range.
-// WDDM currently binds every process to VMID1; every later root assignment also
-// invalidates it. Over-invalidation avoids capturing a mutable process binding
-// while this OS paging buffer waits for submission. The OS paging fence follows
-// the ACK poll, so dependent work cannot observe a reported-but-unexecuted flush.
-NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONG Vmid,
+// PASSIVE_LEVEL. DXGK_OPERATION_FLUSH_TLB: invalidate whole VMIDs instead of a range. Over-invalidation avoids
+// capturing a mutable process binding while this OS paging buffer waits for submission. The OS paging fence
+// follows the ACK poll, so dependent work cannot observe a reported-but-unexecuted flush.
+//
+// Root is the root page table the OS names, as VidMmRootPhysical resolves it (0 when it does not resolve). With
+// EnableVmidPool 0 the buffer invalidates VMID 1, the single WDDM VMID, exactly as 0.7.213.1. With the pool it
+// invalidates Bc250VmidFlushMask: every VMID that holds Root, every pool member and every other VMID holding a
+// root at all, because the VMID that holds Root when this buffer is built need not be the one that holds it when
+// SDMA executes it (vmid_pool.h). One invalidation per VMID, back to back in one record; all or nothing, so an
+// INSUFFICIENT answer leaves no partial set behind and the next buffer starts the whole set again.
+NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONGLONG Root,
                             _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
                             _Out_ ULONG* DwordsWritten,
                             _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
 {
     BC250_GFX* gfx;
-    unsigned budget, written = 0;
-    int result;
+    unsigned budget, written = 0, total = 0, mask, count = 0, v;
+    int result = BC250_SDMA_PAGING_OK;
+    BOOLEAN pool;
+    KIRQL irql;
     NTSTATUS status = STATUS_SUCCESS;
     *DwordsWritten = 0; *Unsupported = BC250PagingSupported;
-    if (DmaBuffer == NULL || Vmid == 0 || Vmid >= 16 || (DmaBufferOffset & 3u) != 0 ||
+    if (DmaBuffer == NULL || (DmaBufferOffset & 3u) != 0 ||
         DmaBufferOffset > BC250_GFX_PAGING_BUFFER_BYTES) return STATUS_INVALID_PARAMETER;
     KeEnterCriticalRegion();
     ExAcquirePushLockShared(&Device->GfxPagingLock);
@@ -3241,8 +3443,30 @@ NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONG Vmid,
     budget = PagingStreamCapacity(DmaBufferFree,DmaBufferOffset,BC250_GFX_PAGING_BUFFER_BYTES,
                                   gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
                                   bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
-    result = bc250_sdma_paging_invalidate_vmid(gfx->PagingDevicePtr,(u32*)DmaBuffer,budget,Vmid,&written);
-    if (result == BC250_SDMA_PAGING_OK) *DwordsWritten = written;
+    pool = gfx->VmidPoolGate;
+    if (pool) {
+        // The submit path changes the table under GartLock and VmidLock; this path holds GfxPagingLock only.
+        KeAcquireSpinLock(&gfx->VmidLock, &irql);
+        mask = Bc250VmidFlushMask(&gfx->Vmid, gfx->VmidMembers, Root);
+        KeReleaseSpinLock(&gfx->VmidLock, irql);
+    } else mask = 1u << BC250_VMID_LEGACY;
+    for (v = 0; v < BC250_VMID_COUNT && result == BC250_SDMA_PAGING_OK; v++) {
+        if (!(mask & (1u << v))) continue;
+        written = 0;
+        result = bc250_sdma_paging_invalidate_vmid(gfx->PagingDevicePtr,(u32*)DmaBuffer + total,budget - total,v,
+                                                   &written);
+        if (result == BC250_SDMA_PAGING_OK) { total += written; count++; }
+    }
+    if (result == BC250_SDMA_PAGING_OK) {
+        *DwordsWritten = total;
+        if (pool) {
+            LONG n = InterlockedIncrement(&gfx->VmidFlushes);
+            InterlockedExchangeAdd(&gfx->VmidFlushVmids, (LONG)count);
+            if (n <= 4)
+                GuardLog("gfx: FLUSH_TLB root 0x%llX -> VMIDs 0x%04lX (%lu, %lu dwords)", Root, (ULONG)mask,
+                         (ULONG)count, (ULONG)total);
+        }
+    }
     else if (result == BC250_SDMA_PAGING_INSUFFICIENT) status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
     else status = STATUS_INVALID_PARAMETER;
 Done:
@@ -3484,7 +3708,9 @@ static NTSTATUS GfxPowerRetainedLocked(BC250_DEVICE* Device, BC250_GFX* Gfx,
     for (i=0;i<Adev->gfx.num_compute_rings;i++) GfxResetRetainedRing(&Adev->gfx.compute_ring[i]);
     for (i=0;i<Adev->gfx.num_gfx_rings;i++) GfxResetRetainedRing(&Adev->gfx.gfx_ring[i]);
     for (i=0;i<(ULONG)Adev->sdma.num_instances;i++) GfxResetRetainedRing(&Adev->sdma.instance[i].ring);
-    RtlZeroMemory(Gfx->VmidRoot,sizeof(Gfx->VmidRoot)); // force VMID reprogramming on the next job
+    // Force VMID reprogramming on the next job. The tenancies go to the history; access is closed and
+    // GfxPagingLock is exclusive here, so no reader of the table is left (the VmidLock comment in BC250_GFX).
+    Bc250VmidResetAll(&Gfx->Vmid,&Gfx->VmidHistory);
     KeMemoryBarrier();
     // From the first hardware write onward the prior halt verdict is invalid.
     Gfx->PowerSuspended=FALSE;
@@ -3563,11 +3789,18 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                            they wrote 3871 lines a second and 75 % of the ring was overwritten unread (D5).
     gfx->HotSubmitLog = (GuardReadSetting(L"HotSubmitLog", 0) == 1);
     gfx->HotSubmitLinesSkipped = 0;
+    //   EnableVmidPool  REG_DWORD  0 = every WDDM job at VMID 1, as 0.7.213.1. Absent or any other value = a VMID per
+    //                              page-table root from a pool (vmid_pool.h). Until the bring-up read at the first
+    //                              pool submit, the pool is VMID 1 alone.
+    gfx->VmidPoolGate = (GuardReadSetting(L"EnableVmidPool", 1) != 0);
+    gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
+    KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
     Device->Gfx = gfx;
     GfxAccessOpen(Device);
     GuardLog("gfx: ready, GPU submission %s, paging node %s, hot submit log %s", gfx->SubmitGate ? "allowed" : "off",
              gfx->PagingGate ? "allowed" : "off", gfx->HotSubmitLog ? "on" : "off");
+    GuardLog("gfx: VMID pool %s", gfx->VmidPoolGate ? "on (EnableVmidPool)" : "off (EnableVmidPool 0): every job at VMID 1");
     return STATUS_SUCCESS;
 }
 

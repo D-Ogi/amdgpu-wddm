@@ -170,6 +170,12 @@ static void IhFaultReport(_In_ const BC250_DEVICE* Device, _In_ const BC250_IH_F
              BC250_GCVM_FAULT_RW(status), BC250_GCVM_FAULT_PERMISSIONS(status),
              BC250_GCVM_FAULT_WALKER_ERROR(status), BC250_GCVM_FAULT_MORE(status),
              BC250_GCVM_FAULT_MAPPING(status), latched, refused);
+    // KMD214: with the VMID pool a VMID belongs to one root only for a while, so the VMID alone no longer names
+    // the process. Who held the vector's VMID, and the latch's when it differs (gfx.c, from the table and the
+    // history of retired tenancies).
+    GfxVmidReport(Device, "ih: GPU FAULT vector", (ULONG)Fault->VmId);
+    if (refused == 0 && BC250_GCVM_FAULT_VMID(status) != (ULONG)Fault->VmId)
+        GfxVmidReport(Device, "ih: GPU FAULT latch", BC250_GCVM_FAULT_VMID(status));
 }
 
 // At DISPATCH_LEVEL. amdgpu_ih_process(): consume up to the write pointer, publish the read pointer, look again. Every

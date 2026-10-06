@@ -91,4 +91,12 @@ int bc250_gmc_flush_gpu_tlb_observed(struct amdgpu_device *adev, u32 vmid, u32 v
  */
 int bc250_gmc_set_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 pd_phys, u32 flush_type);
 
+/*
+ * Read one VMID's page-table base pair (LO32 | HI32 << 32) as the hardware holds it, the valid bit
+ * included. vmid is 0..15. Returns 0, or BC250_EINVAL with *value 0 before the hub is initialized.
+ * The driver reads all sixteen once, before its first write to any of them, to find a VMID that
+ * something other than this driver has programmed (driver/kmd/vmid_pool.h).
+ */
+int bc250_gmc_get_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 *value);
+
 #endif /* BC250_GMC_H */

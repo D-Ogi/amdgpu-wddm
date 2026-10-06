@@ -13,6 +13,7 @@ typedef struct BC250_GFX_COMPLETION {
     unsigned long long Context;     /* the submitting BC250_WDDM_OBJECT as a value */
     unsigned long ProcessId;        /* the process that created that context */
     unsigned long ContextFlags;     /* BC250_PJ_CTX_* (bc250kmd_escape.h) */
+    unsigned long Vmid;             /* KMD214: the VMID the job ran at (gfx.c chose it, vmid_pool.h) */
 } BC250_GFX_COMPLETION;
 typedef struct BC250_GFX_COMPLETION_QUEUE {
     BC250_GFX_COMPLETION Items[BC250_GFX_PENDING_MAX];

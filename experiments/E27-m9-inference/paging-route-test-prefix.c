@@ -19,6 +19,7 @@ typedef long long LONG64;
 #include "paging_stream.h"
 #include "paging_mc.h"
 #include "bc250_gart.h"
+#include "vmid_pool.h"
 typedef unsigned long long ULONGLONG;
 typedef unsigned long ULONG;
 typedef int BOOLEAN;
@@ -30,7 +31,9 @@ typedef unsigned int UINT;
 #define RtlZeroMemory(p,n) memset(p,0,n)
 typedef enum {BC250PagingSupported,BC250PagingNotReady,BC250PagingNoTranslation,BC250PagingSystemMemory} BC250_WDDM_PAGING_UNSUPPORTED;
 typedef struct {struct {long long QuadPart;} VramPhysical;ULONGLONG VramMcBase,VramLength;void*Gfx;void*Wddm;int GfxPagingLock;BOOLEAN FullWddm,VramEnabled,VramWriteEnabled;struct {ULONG Pitch,Height;} Post;int GartLock;PAGING_APERTURE WddmAperture;} BC250_DEVICE;
-typedef struct {BOOLEAN PagingWindowReady;PAGING_WINDOW PagingWindow;struct amdgpu_device*PagingDevicePtr;BOOLEAN PagingReady;struct amdgpu_ring*PagingRing;BOOLEAN PagingCpuBootstrap;struct bc250_mem PagingCopyStaging;} BC250_GFX;
+typedef struct {BOOLEAN PagingWindowReady;PAGING_WINDOW PagingWindow;struct amdgpu_device*PagingDevicePtr;BOOLEAN PagingReady;struct amdgpu_ring*PagingRing;BOOLEAN PagingCpuBootstrap;struct bc250_mem PagingCopyStaging;
+ /* KMD214: what GfxPagingBuildFlush reads of the VMID pool (gfx.c BC250_GFX) */
+ BOOLEAN VmidPoolGate;unsigned VmidMembers;int VmidLock;BC250_VMID_TABLE Vmid;long VmidFlushes,VmidFlushVmids;} BC250_GFX;
 static ULONGLONG translated;static int isSystem,translationOk=1,fragmented;
 static int use_retained_walk,translation_by_offset;
 static BOOLEAN VidMmTranslateRetainedPaging(ULONGLONG,ULONGLONG,ULONGLONG*,BOOLEAN*);
@@ -108,6 +111,8 @@ static long TestIncrement(long*p){return ++*p;}
 static long long TestIncrement64(long long*p){return ++*p;}
 #define InterlockedIncrement TestIncrement
 #define InterlockedIncrement64 TestIncrement64
+static long TestExchangeAdd(long*p,long v){long o=*p;*p+=v;return o;}
+#define InterlockedExchangeAdd TestExchangeAdd
 static int cpu_map_fail,cpu_map_live,cpu_map_calls;
 static ULONGLONG last_map_physical;static SIZE_T last_map_bytes;
 __declspec(align(4096)) static u64 cpu_storage[4096];

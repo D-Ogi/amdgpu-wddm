@@ -2066,7 +2066,7 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
     const BC250_PAGING_JOURNAL_RECORD *r = &journal->Records[i];
     const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
     char segments[64] = "";
-    char identity[128] = "";
+    char identity[160] = "";
 
     // KMD193 (0.7.193.1 and later) puts identity in the words each kind left unused, so the same L/i/n/v
     // columns mean something else for these two kinds. Print what they mean rather than four bare numbers.
@@ -2075,9 +2075,11 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
         snprintf(identity, sizeof(identity), " by pid %lu tid %lu, created by pid %lu, bc2a v%lu gem 0x%llX",
                  r->Level, r->Index, r->Count, r->Valid, r->Dma);
     else if (r->Kind == BC250_PJ_GFX_SUBMIT)
-        snprintf(identity, sizeof(identity), " node %lu ctx 0x%llX pid %lu%s%s ib 0x%llX root 0x%llX",
+        // Valid: the VMID, from 0.7.214.1. 0 = an earlier driver, whose WDDM jobs all ran at VMID 1.
+        snprintf(identity, sizeof(identity), " node %lu ctx 0x%llX pid %lu%s%s ib 0x%llX root 0x%llX vmid %lu%s",
                  r->Level, r->Allocation, r->Index, (r->Count & BC250_PJ_CTX_UMD) ? " umd" : "",
-                 (r->Count & BC250_PJ_CTX_SYSTEM) ? " system" : "", r->Va, r->Offset);
+                 (r->Count & BC250_PJ_CTX_SYSTEM) ? " system" : "", r->Va, r->Offset,
+                 r->Valid != 0 ? r->Valid : 1ul, r->Valid != 0 ? "" : " (not recorded)");
     else if (r->Flags & BC250_PJ_FLAG_PROCESS)
         snprintf(identity, sizeof(identity), " hprocess 0x%llX (no allocation)", r->Allocation);
 

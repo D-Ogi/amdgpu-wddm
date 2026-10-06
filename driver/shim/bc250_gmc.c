@@ -237,10 +237,12 @@ int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32
  * gmc_v10_0_emit_flush_gpu_tlb() and gfx_v10_0_ring_emit_vm_flush()
  * (driver/amdgpu-import/reference/gfx_v10_0.c:8767), and the first one through the same packets.
  * Here both are MMIO, ahead of the ring write: the miniport serializes every submission under one
- * lock at PASSIVE_LEVEL, so nothing of ours can be executing while these registers move, and two
- * register writes plus one poll are a great deal less to be wrong about than a packet sequence
- * nothing has replayed. If an on-ring flush is ever added, PACKET3_PFP_SYNC_ME (nvd.h:322) belongs
- * with it on a gfx-type ring - upstream emits it there and only there.
+ * lock at PASSIVE_LEVEL and never changes the root of a VMID whose last job has not retired (the
+ * VMID pool, driver/kmd/vmid_pool.h; a job of the same root may still run while its VMID is
+ * invalidated again). Two register writes plus one poll are a great deal less to be wrong about
+ * than a packet sequence nothing has replayed. If an on-ring flush is ever added,
+ * PACKET3_PFP_SYNC_ME (nvd.h:322) belongs with it on a gfx-type ring - upstream emits it there and
+ * only there.
  *
  * The value: amdgpu_gmc_pd_addr() is the page directory's physical address with AMDGPU_PTE_VALID
  * and nothing else on this part (shim.c:57-80), so the caller passes the address and this adds the
@@ -274,6 +276,32 @@ int bc250_gmc_set_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 pd_phys, u32
 	 * only matter to an engine behind it. That also keeps the M25 semaphore hazard out of the
 	 * path - bc250_gmc_flush_gpu_tlb() takes the semaphore for MMHUB0 and for nothing else. */
 	return bc250_gmc_flush_gpu_tlb(adev, vmid, AMDGPU_GFXHUB(0), flush_type);
+}
+
+/*
+ * Read back one VMID's page-table base pair: the two registers gfxhub_v2_0_setup_vm_pt_regs()
+ * writes (gfxhub_v2_0.c:120-132), mmGCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32/HI32 plus
+ * ctx_addr_distance * vmid. The offsets are the hub fields gfxhub_v2_0_init() computed with
+ * SOC15_REG_OFFSET over AMD's headers, the same ones bc250_sdma_emit_vm_flush() uses; nothing
+ * here knows an address. Reads only.
+ */
+int bc250_gmc_get_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 *value)
+{
+	const struct amdgpu_vmhub *hub;
+	u32 lo, hi;
+
+	if (value == NULL)
+		return BC250_EINVAL;
+	*value = 0;
+	if (adev == NULL || vmid >= AMDGPU_NUM_VMID)
+		return BC250_EINVAL;
+	hub = &adev->vmhub[AMDGPU_GFXHUB(0)];
+	if (hub->vmhub_funcs == NULL || hub->ctx_addr_distance == 0 || hub->ctx0_ptb_addr_lo32 == 0)
+		return BC250_EINVAL;    /* the hub's init() has not run, so its offsets are 0 */
+	lo = RREG32(hub->ctx0_ptb_addr_lo32 + hub->ctx_addr_distance * vmid);
+	hi = RREG32(hub->ctx0_ptb_addr_hi32 + hub->ctx_addr_distance * vmid);
+	*value = ((u64)hi << 32) | lo;
+	return 0;
 }
 
 /*

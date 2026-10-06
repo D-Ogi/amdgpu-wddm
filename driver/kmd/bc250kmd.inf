@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/06/2026,0.7.213.1
+DriverVer   = 10/07/2026,0.7.214.1
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -168,6 +168,10 @@ HKR, Parameters, EnableDirectFlipHandshake, 0x00010001, 1
 ; dxgkrnl DPC is not asked for at all: one DPC per completion fewer, measured at 12 to 20 us each. 0 is
 ; 0.7.208.1 exactly, where the notification arrives with the next dxgkrnl DPC.
 HKR, Parameters, NotifyDpcInReport,  0x00010001, 1
+; The VMID pool (gfx.c, driver/kmd/vmid_pool.h, docs/design/gfx-submit-root-serialization.md). 1 gives each page-table
+; root its own VMID from a pool of up to 14, so a job of another process does not wait for the ring to drain. The
+; driver never changes the root of a VMID whose last job has not retired. 0 is 0.7.213.1 exactly: every job at VMID 1.
+HKR, Parameters, EnableVmidPool,     0x00010001, 1
 
 [Strings]
 Provider    = "amdgpu-wddm"
