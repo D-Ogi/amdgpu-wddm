@@ -82,6 +82,18 @@ refused before anything is read or written; the table of admitted and refused
 words, per operation, is in driver/kmd/test/start_health_test.c and
 tools/win/bc250kmd_cli/test_escape_flags.py.
 
+The other direction is the client's business, and Bc250StartHealth carries it: a
+driver of 0.7.212 or older refuses the new word at its gate (Status REFUSED,
+NtStatus STATUS_INVALID_PARAMETER, Version written before the refusal), so the
+export sends the same request once more with the old word and keeps sending it
+that way for the rest of the process. That pair is a normal state of a release
+upgrade - the installer copies the tools and defers the device restart, so this
+release's logon task, Recovery action and overlay all run against the loaded old
+driver until the next start. Without the retry every confirmation would be
+refused for the whole 120 s of the logon task, which falls back to the boot-loop
+guard alone and leaves the CU-mode and DPM requests unconfirmed: the next start
+would come up at 24 CU and the floor clock.
+
 Local Microsoft sources reviewed:
 
 - windows-driver-docs/windows-driver-docs-pr/display/threading-and-synchronization-second-level.md

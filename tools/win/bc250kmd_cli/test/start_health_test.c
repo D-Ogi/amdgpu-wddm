@@ -27,6 +27,12 @@ static int SendEscapeFlags(const WCHAR* id,void* p,unsigned size,int softwareOnl
     if(mode==9){d->Flags=0;d->Completed=0;}
     if(mode==10)d->NtStatus=0xC0000185;
     if(mode==11)d->Flags=BC250_START_HEALTH_CONFIRMED;
+    /* A driver of 0.7.212 or older: it refuses a CONFIRM that does not carry HardwareAccess, with
+       STATUS_INVALID_PARAMETER and the build in Version, and answers READ as every driver does. */
+    if(mode==12 && softwareOnly && d->Op==BC250_START_HEALTH_CONFIRM){
+        memset(d,0,sizeof(*d));
+        d->Status=BC250_ESCAPE_STATUS_REFUSED;d->NtStatus=0xC000000Dul;d->Version=0x000700D4ul;
+    }
     return 0;
 }
 // ACTUAL_START_HEALTH
@@ -45,6 +51,15 @@ int main(void)
     for(mode=1;mode<=8;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);
     mode=9;CHECK(Bc250StartHealth(0,0,0,&d,sizeof(d))==0 && d.Flags==0);
     for(mode=10;mode<=11;mode++)CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))<0);
+    /* Against a driver of 0.7.212 or older the refused CONFIRM goes again with the old flag word, with the request
+       rebuilt, and every later CONFIRM of this process goes that way at once. READ keeps the software word. */
+    mode=12;calls=0;
+    CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))==0 && accessFlag==1 && calls==2 &&
+          d.Generation==123 && d.Epoch==7);
+    calls=0;
+    CHECK(Bc250StartHealth(1,123,7,&d,sizeof(d))==0 && accessFlag==1 && calls==1);
+    calls=0;
+    CHECK(Bc250StartHealth(0,0,0,&d,sizeof(d))==0 && accessFlag==0 && calls==1);
     printf("Start health client: %d checks, %d failures\n",checks,failures);
     return failures?1:0;
 }

@@ -451,11 +451,15 @@ BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
 // READ is an adapter-owned software snapshot, never a hardware-idling diagnostic, and from 0.7.213 CONFIRM is one
 // too: it touches that snapshot and the registry, so both go with NoAdapterSynchronization alone. Up to 0.7.212
 // CONFIRM carried HardwareAccess, which suspends the GPU scheduler for up to one VSync while the driver flushes a
-// registry key - and the installer's logon task retries it every 5.5 s for two minutes. An older driver still
-// insists on HardwareAccess and refuses this; a machine upgrades its driver and its tools together.
+// registry key - and the installer's logon task retries it every 5.5 s for two minutes. A driver of 0.7.212 or
+// older still insists on HardwareAccess, which happens whenever a release defers the device restart, so a refused
+// CONFIRM is sent again with the old word (see the retry below) instead of leaving the start unconfirmed.
 BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULONGLONG epoch,
     BC250_ESCAPE_START_HEALTH* data,ULONG bytes)
 {
+    static int confirmLegacy;       // a CONFIRM was refused without HardwareAccess: this driver is 0.7.212 or older
+    BC250_ESCAPE_START_HEALTH request;
+    const int confirm=op==BC250_START_HEALTH_CONFIRM;
     NTSTATUS status=(NTSTATUS)0xC000000E;
     typedef char HealthAbiSizeCheck[(sizeof(BC250_ESCAPE_START_HEALTH)==96)?1:-1];
     (void)sizeof(HealthAbiSizeCheck);
@@ -467,7 +471,28 @@ BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULO
     data->Status=BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
     data->AbiVersion=BC250_START_HEALTH_ABI;data->Op=op;
     data->ExpectedGeneration=generation;data->ExpectedEpoch=epoch;
-    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),1,&status))return status;
+    request=*data;                  // the request as built, for the retry below
+    // A driver up to 0.7.212 demands HardwareAccess for CONFIRM and refuses this word at its gate: Status REFUSED
+    // with NtStatus STATUS_INVALID_PARAMETER, and Version written before the refusal (start_health.c). A
+    // well-formed request of this release gets that answer from nothing else, so it is the signal to send the same
+    // request once more with the old word and to keep sending it that way for the rest of the process - the mirror
+    // image of ReadEscapeOn's fallback, which carries a pre-0.7.184.1 driver the other way.
+    // The pair is not hypothetical: the installer copies the tools and defers the device restart, so this
+    // release's logon task, the overlay's automatic confirmation and the control application's Recovery action all
+    // run against the loaded old driver until the next start. Without the retry every one of them is refused for
+    // 120 s and start-confirm.ps1 falls back to `bc250kmd_cli confirm`, which writes the boot-loop guard alone:
+    // the CU-mode and DPM requests stay unconfirmed and the next start comes up at 24 CU and the floor clock.
+    if(confirm && confirmLegacy) {
+        if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),0,&status))return status;
+    } else {
+        if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),1,&status))return status;
+        if(confirm && NT_SUCCESS(status) &&
+           data->Status==BC250_ESCAPE_STATUS_REFUSED && data->NtStatus==0xC000000Dul) {
+            confirmLegacy=1;
+            *data=request;
+            if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),0,&status))return status;
+        }
+    }
     if(!NT_SUCCESS(status))return status;
     if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
     if(data->Status!=BC250_ESCAPE_STATUS_DONE || data->NtStatus!=0)
@@ -757,6 +782,8 @@ BC250_CONTROL_API LONG WINAPI Bc250DpmCurve(ULONG op, ULONGLONG expectedGenerati
 // deadline and the revert, so a window that stops calling loses the trial and nothing else.
 BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_ESCAPE_CPU *data, ULONG bytes)
 {
+    static int keepLegacy;          // a KEEP was refused without HardwareAccess: this driver is 0.7.212 or older
+    BC250_ESCAPE_CPU sent;
     NTSTATUS status;
     ULONG op;
     typedef char CpuAbiSizeCheck[(sizeof(BC250_ESCAPE_CPU) == 296 && sizeof(BC250_CPU_REQUEST) == 56) ? 1 : -1];
@@ -785,7 +812,23 @@ BC250_CONTROL_API LONG WINAPI Bc250Cpu(const BC250_CPU_REQUEST *request, BC250_E
     }
     if (op == BC250_CPU_OP_CORES) data->CoreMask = request->CoreMask;
     if (op == BC250_CPU_OP_SET || op == BC250_CPU_OP_SEARCH_BEGIN) data->TrialMs = request->TrialMs;
-    status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ && op != BC250_CPU_OP_KEEP);
+    sent = *data;                                   // the request as built, for the retry below
+    // KEEP sends no mailbox message, so it goes with the software flag word. A driver up to 0.7.212 refuses that
+    // word at its gate (cpu.c: Status REFUSED, NtStatus STATUS_INVALID_PARAMETER, Version written first), so the
+    // same request goes once more with the old word and this process keeps sending it that way, as
+    // Bc250StartHealth does for CONFIRM. Without it a tester who installs this release and defers the device
+    // restart loses the trial: the new DLL next to the still-loaded old driver would get nothing but refusals.
+    if (op == BC250_CPU_OP_KEEP && keepLegacy) {
+        status = TelemetryEscapeFlags(data, sizeof(*data), 1);
+    } else {
+        status = TelemetryEscapeFlags(data, sizeof(*data), op != BC250_CPU_OP_READ && op != BC250_CPU_OP_KEEP);
+        if (op == BC250_CPU_OP_KEEP && NT_SUCCESS(status) &&
+            data->Status == BC250_ESCAPE_STATUS_REFUSED && data->NtStatus == 0xC000000Dul) {
+            keepLegacy = 1;
+            *data = sent;
+            status = TelemetryEscapeFlags(data, sizeof(*data), 1);
+        }
+    }
     if (!NT_SUCCESS(status)) return status;          // a KMD before 0.7.212 refuses the command: DEVICE_NOT_READY
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
@@ -2721,17 +2764,32 @@ static const char *const g_CpuFail[CPU_FAILS] = {
 
 static int CpuQuery(BC250_ESCAPE_CPU *c, unsigned long op, unsigned long long generation, int quiet)
 {
+    static int keepLegacy;          // a KEEP was refused without HardwareAccess: this driver is 0.7.212 or older
+    BC250_ESCAPE_CPU sent;
     NTSTATUS status;
     c->Magic = BC250_ESCAPE_MAGIC;
     c->Command = BC250_ESCAPE_RUN_CPU;
     c->AbiVersion = BC250_CPU_ABI;
     c->Op = op;
     c->ExpectedGeneration = generation;
+    sent = *c;                      // the request as built, for the retry below
     // READ is software state (NoAdapterSynchronization), and so is KEEP from 0.7.213: it writes the registry and
     // ends the trial without a mailbox message. Every other operation sends messages and takes the adapter,
-    // exactly as a clock set does.
-    if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c),
-                        op == BC250_CPU_OP_READ || op == BC250_CPU_OP_KEEP, &status)) return 1;
+    // exactly as a clock set does. A driver up to 0.7.212 refuses KEEP without HardwareAccess (Status REFUSED,
+    // NtStatus STATUS_INVALID_PARAMETER): the request goes again with the old word, as in Bc250StartHealth, so that
+    // a client of this release still keeps a trial against a driver that has not been restarted yet.
+    if (op == BC250_CPU_OP_KEEP && keepLegacy) {
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), 0, &status)) return 1;
+    } else {
+        if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c),
+                            op == BC250_CPU_OP_READ || op == BC250_CPU_OP_KEEP, &status)) return 1;
+        if (op == BC250_CPU_OP_KEEP && NT_SUCCESS(status) &&
+            c->Status == BC250_ESCAPE_STATUS_REFUSED && c->NtStatus == 0xC000000Dul) {
+            keepLegacy = 1;
+            *c = sent;
+            if (SendEscapeFlags(BC250_DEFAULT_HWID, c, sizeof(*c), 0, &status)) return 1;
+        }
+    }
     if (!NT_SUCCESS(status)) {
         if (!quiet) {
             PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_CPU)", status);

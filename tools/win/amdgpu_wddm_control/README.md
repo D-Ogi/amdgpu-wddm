@@ -34,7 +34,8 @@ No `HardwareAccess` escape and no `LOG_SUMMARY`: a Level Two escape idles the GP
 Performance is shown and the window is not minimized.
 
 The one escape that changes the driver is the start-health CONFIRM of "Confirm this start" (Recovery), the same
-request the release's logon task sends: administrator only, `HardwareAccess`, once per action. DPM settings are
+request the release's logon task sends: administrator only, once per action, and from 0.7.213 with
+`NoAdapterSynchronization` as well - it writes the registry and touches no register. DPM settings are
 `DpmMode` and `DpmMaxMHz` under
 `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, which the KMD reads at device start
 (`docs/design/dpm.md`, "Settings and boot guard"): the page says to restart Windows. The runtime tuning escapes

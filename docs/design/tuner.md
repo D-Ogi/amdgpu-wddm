@@ -247,7 +247,9 @@ Keep is the exception, from 0.7.213: it copies the applied settings into the sto
 the Parameters key - each one flushed to the disk - and ends the trial. It sends no message and reads no register,
 so it takes `NoAdapterSynchronization` and never suspends the GPU scheduler over seven registry flushes. For one
 release the driver still admits the `HardwareAccess` word keep asked for up to 0.7.212, so an older CLI, DLL or
-control application keeps working; a tool of this release sends the new word.
+control application keeps working; a tool of this release sends the new word, and sends it again with the old one
+when a driver of 0.7.212 or older refuses it (`Status` REFUSED, `NtStatus` `STATUS_INVALID_PARAMETER`), so a keep
+is not lost on a machine whose device restart is still pending.
 
 The readback asks for an administrator although it changes nothing: it holds the surface for 19 messages, which
 is not something an unprivileged loop may do to a shared mailbox.
