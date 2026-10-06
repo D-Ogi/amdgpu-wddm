@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "note": "Registered lab artifacts that make up the tester release. File sources are relative to the workspace root (BC250_ROOT), licence sources to the repository. build-release.ps1 refuses a source whose SHA256 differs. The AMD firmware is not packaged: the installer downloads it at the pinned commit.",
-  "kmd_version": "0.7.208.1",
-  "kmd_abi": "0x000700D0",
+  "kmd_version": "0.7.212.1",
+  "kmd_abi": "0x000700D4",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "mft_h264": {
     "note": "The H.264 encoder Media Foundation transform (M15.11). register true: the installer copies payload/mft/amdgpu_wddm_mft_h264.dll to <install root>\\mft\\ and writes route A of driver/umd/mft-h264/INSTALL.md machine wide. register false: the installer installs and registers nothing, and takes away what an earlier install of this release family wrote. The value travels into manifest.json, so the package itself says what it does. This is the bisect lever of the encoder wagon.",
@@ -12,7 +12,7 @@
     "friendly_name": "BC-250 H.264 Encoder MFT"
   },
   "sources": {
-    "kmd": "bc250-win 85ac47b6 (train/b19-merge, the b19 train driver 0.7.208.1)",
+    "kmd": "bc250-win train/b20-setup, the b20 train driver 0.7.212.1",
     "d3d12_shell": "bc250-win 62aa9bc0 (train/b19-setup), which is 85ac47b6 plus the knob-channel fix of the entry path",
     "d3d12_engine": "vkd3d-proton fork amdgpu-wddm/upstream-2026-10-05 4e9a98e9, with dxil-spirv d2d82332",
     "d3d12_icd": "mesa fork amdgpu-wddm/b19-icd 31844893",

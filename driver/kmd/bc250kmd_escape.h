@@ -38,7 +38,26 @@
 #define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
 #define BC250_ESCAPE_RUN_DPM_CURVE 28u          // the operator's GPU V/F curve and its trial: read, set, keep, cancel, reset
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
-#define BC250_KMD_VERSION 0x000700D1u       // revision 209 (INF 0.7.209.1, on 208.1): M15.14 increment 2, the
+#define BC250_KMD_VERSION 0x000700D4u       // revision 212 (INF 0.7.212.1, on 208.1): the b20 train driver. Five
+                                            // revisions were written apart on five branches, each taking the next
+                                            // free number for itself: 209 (the DirectFlip handshake), 208 again
+                                            // (the fan reader), 210 twice (the ring-gap instrument with the
+                                            // notify-DPC pairing, and the Tuner). None of the five was deployed.
+                                            // The train carries all of them in one driver and takes 212, above
+                                            // every number any of the five claimed, so that no claimed revision
+                                            // is reused and Windows cannot tie this driver with one of them.
+                                            // Three new escape numbers against 0.7.208.1: 27 RUN_HWMON (reply
+                                            // 216 bytes, ABI 1), 28 RUN_DPM_CURVE (360 bytes, ABI 1) and 29
+                                            // RUN_CPU (296 bytes, ABI 1). No structure of an older escape
+                                            // changed, so every reader of 0.7.208.1 still parses what it read.
+                                            // Every addition is default-off: EnableDirectFlipHandshake,
+                                            // EnableHwmon, HwmonBasePort, NotifyDpcInReport, HotSubmitLog and
+                                            // CpuTune are all 0 or absent in the release, and a start with the
+                                            // whole set absent behaves as 0.7.208.1 did.
+                                            //
+                                            // The five revisions as they were written, newest first:
+                                            //
+                                            // revision 209 (INF 0.7.209.1, on 208.1): M15.14 increment 2, the
                                             // DirectFlip handshake's kernel half. One derivation of the type-0
                                             // placement (WddmGdiRecordPolicy) that CreateAllocation uses and the
                                             // compositor's user-mode driver asks, with WddmGdiRecordScannable as

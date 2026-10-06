@@ -59,6 +59,10 @@
 #define HWMON_SETTING_EXPECT_ID L"HwmonExpectId"
 #define HWMON_SETTING_DUTY_PROVEN L"HwmonDutyProven"
 
+// The reply's size is the dispatch test in display.c, so the image refuses to build if the structure moves,
+// the way cpu.c and dpm.c do for their own. The host test asserts every field offset as well.
+C_ASSERT(sizeof(BC250_ESCAPE_HWMON) == 216);      // ABI 1
+
 static const char* const g_HwmonReason[] = { "ok", "gated", "base", "identity", "monitoring", "customer",
                                              "no-thread", "port" };
 C_ASSERT(RTL_NUMBER_OF(g_HwmonReason) == BC250_HWMON_REASON_COUNT);
