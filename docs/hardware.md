@@ -48,8 +48,8 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   curve, and the BIOS "Fan Setting" option selects which curve it uses. The owner keeps that option as it is
   (2026-10-05). The chip sits on the I/O window `0x0A20-0x0A2F` and publishes five tachometer channels, five
   duty outputs and three temperature channels, one of which reads the APU die over SB-TSI independently of
-  the SMU ([M796](facts/hardware.md#m796)). KMD 0.7.213.1 reads it, and only reads it: the driver issues no
-  write to any register of that chip, and it never touches the Super I/O configuration ports `0x2E`/`0x2F`,
+  the SMU ([M796](facts/hardware.md#m796)). KMD 0.7.213.1 reads it. The reader writes only the chip's address
+  latch, and no driver code touches the Super I/O configuration ports `0x2E`/`0x2F`,
   which the DSDT drives under an ACPI mutex a kernel driver cannot take. `EnableHwmon` is 1 from 0.7.213, so
   the reader runs by default; `EnableHwmon` 0 takes every port access away again. The window has no arbiter,
   so a measured session needs the preflight check of
@@ -57,8 +57,15 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   selected by 0), `0x0A00` and `0x0A10`, the three windows the DSDT declares on this board. Every other value
   is refused before a port is touched, because this reader writes three latch bytes to read one register, and
   a mistyped base such as `0x0CF8` (the PCI configuration address port) or `0x0CD0` (the FCH power-management
-  index pair) would take those writes. Setting the fan duty from the driver is **not implemented** and waits
-  for the owner's decision. The same page says what it would need.
+  index pair) would take those writes.
+- The case fan control (Part B of [`design/fan.md`](design/fan.md), owner 2026-10-06). The driver takes fan
+  index 1 from the BIOS curve while it runs and gives it back to the chip's automatic mode on every exit path.
+  The BIOS "Fan Setting" stays unchanged. The driver writes three EC registers and no other: the configuration
+  request `0x0A01`, bit 1 of the mode mask `0x0A00` and the duty target `0x0A29`, inside the handshake that
+  [M803](facts/hardware.md#m803) measured. The give-back writes the recorded duty target (the M803 rest value
+  128 when no board record exists) and clears bit 1 only. The duty stays at 20 to 100 %. A guard temperature (the hotter of Tctl and
+  the EC's SB-TSI channel) at or above 87 C forces 100 % until it stays at or below 82 C for 10 s. A doubtful
+  input also forces 100 %. `EnableFanControl` 1 is the default and 0 is the bisect switch.
 - CPU clock, undervolt and cores (KMD 0.7.213.1, `driver/shim/include/bc250_cpu.h`, ADR 0020). These messages go to
   the firmware's **queue 3** (`C2PMSG_72`, `C2PMSG_98`, `C2PMSG_96`, the byte offsets `regcalc` computes,
   derived from the queue 0 constants and asserted at compile time), through the same owner lock as the GPU clock.
