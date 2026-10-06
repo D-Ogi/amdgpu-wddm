@@ -20,6 +20,7 @@ $script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
+$script:ProfilePathsOverride = $null                           # host tests: fixture profile folders
 $script:DryRunMode       = $false
 $script:LogPath          = $null
 $script:CurrentStep      = '(before the first change)'
@@ -966,13 +967,19 @@ public static extern bool MoveFileEx(string existing, string replacement, int fl
 
 # Per-user data of the release: the D3D12 engine's disk shader cache, the recent-launch list and the DWM
 # observations live in %LOCALAPPDATA%\amdgpu-wddm of every user who ran a program on the GPU. One folder per
-# profile in the ProfileList; $script:ProfileListKey lets a host test point it at a fixture.
+# profile in the ProfileList. A host test sets $script:ProfilePathsOverride to fixture profile folders.
 function Get-OurUserDataDirs {
+    $profiles = @()
+    if ($null -ne $script:ProfilePathsOverride) { $profiles = @($script:ProfilePathsOverride) }
+    else {
+        foreach ($k in @(Get-ChildItem -LiteralPath $script:ProfileListKey -ErrorAction SilentlyContinue)) {
+            $p = (Get-ItemProperty -LiteralPath $k.PSPath -Name ProfileImagePath -ErrorAction SilentlyContinue).ProfileImagePath
+            if ($p) { $profiles += [Environment]::ExpandEnvironmentVariables($p) }
+        }
+    }
     $out = New-Object System.Collections.Generic.List[string]
-    foreach ($k in @(Get-ChildItem -LiteralPath $script:ProfileListKey -ErrorAction SilentlyContinue)) {
-        $p = (Get-ItemProperty -LiteralPath $k.PSPath -Name ProfileImagePath -ErrorAction SilentlyContinue).ProfileImagePath
-        if (-not $p) { continue }
-        $d = Join-Path ([Environment]::ExpandEnvironmentVariables($p)) 'AppData\Local\amdgpu-wddm'
+    foreach ($p in $profiles) {
+        $d = Join-Path $p 'AppData\Local\amdgpu-wddm'
         if ((Test-Path -LiteralPath $d -PathType Container) -and -not $out.Contains($d)) { $out.Add($d) }
     }
     return $out.ToArray()

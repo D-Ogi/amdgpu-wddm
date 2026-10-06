@@ -313,9 +313,11 @@ Check ((-not @($sp.remove).Count) -and ((@($sp.keep) -join ',') -eq 'oem15.inf')
 $saveStateDir = $script:StateDir
 $script:StateDir = Join-Path $work 'footprint-state\installer'
 $fpRoot = Join-Path $work 'footprint\install-root'
+$saveProfiles = $script:ProfilePathsOverride
+$script:ProfilePathsOverride = @((Join-Path $work 'footprint\profiles\a'), (Join-Path $work 'footprint\profiles\b'))
 $fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
 $items = @($fp | ForEach-Object { $_.item })
-$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'certificates', 'GPU firmware', 'control application data')
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'certificates', 'GPU firmware', 'control application data')
 Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
 Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
 $byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
@@ -330,6 +332,16 @@ Check ($byItem2['install root'].present -and ($byItem2['install root'].detail -m
 Check ($byItem2['installer state'].present -and -not $byItem2['installer state'].kept) 'the installer state folder is reported, and it is not a kept item'
 Check (-not $byItem2['GPU firmware'].kept) 'a firmware folder that the install created itself is not a kept item'
 Check (-not @($fp2 | Where-Object { $_.item -eq 'H.264 encoder keys' } | Where-Object { $_.present }).Count) 'no encoder key given: the row says none'
+Check ((-not $byItem['per-user data'].present) -and ($byItem['per-user data'].detail -match 'in any profile')) 'no profile with our folder: the per-user row is gone'
+$udB = Join-Path $work 'footprint\profiles\b\AppData\Local\amdgpu-wddm'
+Write-Text (Join-Path $udB 'vkd3d\x.cache') 'x'
+$ud = @(Get-OurUserDataDirs)
+Check (($ud.Count -eq 1) -and ($ud[0] -eq $udB)) "one profile with our folder: exactly that folder is found ($($ud -join ', '))"
+$fp3 = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State $null)
+Check (@($fp3 | Where-Object { $_.item -eq 'per-user data' -and $_.present -and -not $_.kept }).Count -eq 1) 'per-user data that is there is reported as LEFT, not kept'
+Remove-PathOrSchedule $udB
+Check ((-not (Test-Path -LiteralPath $udB)) -and (-not @(Get-OurUserDataDirs).Count)) 'the uninstaller removal takes the per-user folder away'
+$script:ProfilePathsOverride = $saveProfiles
 $script:StateDir = $saveStateDir
 
 $saveStateDir = $script:StateDir
