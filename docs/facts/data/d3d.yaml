@@ -589,7 +589,7 @@ facts:
     date: "2026-10-01"
     date_from: "evidence-path"
     claim: "Media Foundation on unit A (Windows 11 22631, 2026-10-01, read-only survey): `MFTEnumEx` with `MFT_ENUM_FLAG_HARDWARE` returns no video encoder and no video decoder; the only H.264 encoder is the inbox software `H264 Encoder MFT` ({6ca50344-051a-4ded-9779-a43305165e35}, synchronous, inputs IYUV/YV12/NV12/YUY2, no hardware URL, vendor id or D3D11/D3D12 awareness on its activation object); the other software encoders are WMVideo8/9, H263, MPEG-2 (asynchronous) and the HEIF/HEVC/VP9 extension entries. The Media Foundation `HardwareMFT` key holds no values, no Game DVR policy key exists and `GameDVR_Enabled` is 1, so nothing on the image disables a hardware encoder MFT; `amfrt64.dll` is absent"
-    detail: "True on 2026-10-01 and no longer true of the image: since release 0.7.207.100-tester.12 our driver package registers `BC-250 H.264 Encoder MFT` machine wide, so `MFTEnumEx` reads two H.264 encoders on unit A (M796). The survey still holds for the hardware of the part and for every build before that release"
+    detail: "True on 2026-10-01 and no longer true of the image: since release 0.7.207.100-tester.12 our driver package registers `BC-250 H.264 Encoder MFT` machine wide, so `MFTEnumEx` reads two H.264 encoders on unit A (M801). The survey still holds for the hardware of the part and for every build before that release"
     evidence: "E46, `evidence/windows/2026-10-01-E46-mf-encoder-survey/`"
   - id: M778
     status: MEASURED
@@ -664,7 +664,7 @@ facts:
     evidence: "[E56, import reports and loader trace](../evidence/windows/2026-09-28-E56-dxgi-shadowing-dev-pc/README.md)"
     edges:
       - {"type": "uses", "to": "M792"}
-  - id: M796
+  - id: M801
     status: MEASURED
     date: "2026-10-06"
     claim: "The H.264 encoder MFT of our driver package encodes on unit A's own GPU (E52, 2026-10-06, release 0.7.208.100-tester.13 of train b19, 40 CU, kernel driver ABI 0x000700D0 in its own DPM mode): 82 of 82 cases pass in 59 s, the 76 encode cases give 386 pictures, every picture is bit exact against unit A's inbox H.264 decoder with exact `nnz` agreement, 81 of the 82 cases open a device on adapter 1002:13FE, and all 81 AppRouter lines read `route=gpu reason=app-allowed fallback=0` through the release D3D11 UMD. The asynchronous hardware MFT contract holds end to end, one picture costs 7.82 ms through the transform interface, and an `MFCreateSinkWriterFromURL` pipeline writes a 197615 byte .mp4 through the transform. Throughput is 153.0 pictures per second serial and 406.3 pipelined at 720p, and 85.4 and 218.1 at 1080p with 6.53 ms of GPU busy per picture, and the pipelined pass writes the same bytes as the serial pass. The run meets target T1 and target T2 and misses T3: against the inbox software encoder at the requested bit rate the gap of the mean PSNR over the 60 decoded pictures is Y -1.34, Cb -3.82 and Cr -4.94 dB at 720p and Y -2.31, Cb -4.94 and Cr -6.00 dB at 1080p, while the inbox encoder spent 4.2 % and 7.5 % more bytes and runs 4.3 times faster than our serial pass"
@@ -674,7 +674,7 @@ facts:
     edges:
       - {"type": "uses", "to": "M46"}
       - {"type": "supersedes", "to": "M774"}
-  - id: M797
+  - id: M802
     status: MEASURED
     date: "2026-10-06"
     claim: "D3D12 shared resources and cross-API sharing work on unit A on the GPU route, measured on a candidate shell (BD-075 round 2, 2026-10-06, release 0.7.207.100-tester.12, kernel driver 0.7.207.1 at ABI 0x000700CF, 40 CU, GPU desktop composition): seven passes of `tools/win/capture-share` ran 25 rows in 229 s of cells, 23 rows match the kit's expectation, and every row reports `removed=0`. 11 rows measure cross-API D3D12 to D3D11 sharing on the GPU D3D11 route for the first time, all 11 as expected and all at `fl=A:12_1,B:12_1`, both sRGB directions and both fence directions included. The negative control `neg-s12to11-fence.gpu11` skips the GPU wait and ends `result=mismatch gate=violated:fence-1`. Four D3D12 to D3D12 rows pass, among them the first completed `ALLOW_SIMULTANEOUS_ACCESS` row on this driver. The 16 creating rows each show one refused allocation shape and one accepted retry as a shared linear surface. `fence_signal` and `fence_wait` stay 0 in all 25 rows, so the runtime completes shared-fence work on this single-node adapter without those two DDI calls"

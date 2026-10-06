@@ -64,7 +64,7 @@ flowchart LR
   M515["M515<br/>icd"]
   M516["M516"]
   M787["M787<br/>hardware"]
-  M796["M796<br/>d3d"]
+  M801["M801<br/>d3d"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -77,7 +77,7 @@ flowchart LR
   M113 --> M40
   M114 --> M40
   M139 --> M50
-  M796 --> M46
+  M801 --> M46
   M24 --> M25
   M40 --> M38
   M41 --> M24
@@ -93,6 +93,6 @@ flowchart LR
   M510 --> M508
   M516 --> M515
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M796 other
+  class M18,M25,M35,M38,M43,M44,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M801 other
 ```
 
