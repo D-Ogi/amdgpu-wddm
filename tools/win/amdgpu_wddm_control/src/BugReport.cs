@@ -109,6 +109,10 @@ namespace AmdgpuWddmControl
                     f.AgeMs, f.Samples, f.Errors, f.Retries, f.Generation, f.Engine, f.RpmValidMask, f.DutyValidMask,
                     f.Refusals));
             }
+            // The fan control: who ran the fan when the report was made, and why the driver last gave it back.
+            var fanCtl = Kmd.Fan();
+            w.AppendLine(fanCtl.Value == null ? "fan control: " + fanCtl.Error + " (0x" + ((uint)fanCtl.Status).ToString("X8") + ")"
+                : FanCurves.ReportLine(fanCtl.Value));
             var health = Kmd.StartHealth();
             w.AppendLine(health.Value == null ? "start health: " + health.Error :
                 string.Format("start health: flags 0x{0:X} generation {1} completed {2} ready_age_ms {3}", health.Value.Flags, health.Value.Generation, health.Value.Completed, health.Value.ReadyAgeMs));

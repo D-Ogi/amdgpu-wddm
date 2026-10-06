@@ -869,6 +869,9 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // EnableHwmon decides whether anything happens at all; HwmonSample returns at once when it is closed.
         T->NextHwmon = now + 10000ull * BC250_HWMON_PERIOD_MS;
         HwmonSample(Device);
+        // The fan control (fan.c) on the sample just taken and this tick's Tctl. Its own gate, EnableFanControl,
+        // decides whether it writes anything; with the gate closed it only publishes its state.
+        FanStep(Device, T->TemperatureMc, T->TemperatureValid);
     }
     DpmPublish(Device, S, T, TRUE);
     if (now >= T->NextLog) {
@@ -884,6 +887,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
         HwmonLogLine(Device, "telemetry");
+        FanLogLine(Device, "telemetry");
         DpmLogCurveLine("telemetry", &snap);
         // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
         bc250_dpm_tune_default(&defaults);
@@ -1378,6 +1382,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
     HwmonLogLine(Device, "summary");
+    FanLogLine(Device, "summary");
     DpmLogCurveLine("summary", &snap);
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
     DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases, &snap);

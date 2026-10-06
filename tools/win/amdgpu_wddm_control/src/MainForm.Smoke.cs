@@ -45,6 +45,20 @@ namespace AmdgpuWddmControl
             _game = "witcher3.exe";
             _gameEdits["witcher3.exe"] = new Dictionary<string, bool> { { "cpu", true } };
             _ceilEdited = true; _ceilEdit = 1800;
+            // The fan card at its widest: the driver runs the standard curve, and the person has edited a curve of six
+            // points, so the render gates see every row the card can have short of the eight-point maximum.
+            if (_snap.Fan == null)
+            {
+                _snap.Fan = new FanState
+                {
+                    Version = 0x000700D5, Flags = FanState.FlagEnabled | FanState.FlagControlling, Mode = FanState.ModeCurve,
+                    State = FanState.StateCurve, Profile = FanState.ProfileStandard, Points = 5, Rpm = 1180, Generation = 5,
+                    CurveC = new uint[] { 40, 60, 70, 80, 85, 0, 0, 0 }, CurvePct = new uint[] { 50, 70, 82, 95, 100, 0, 0, 0 },
+                };
+            }
+            _fanEditC = new uint[] { 35, 50, 60, 70, 80, 85 };
+            _fanEditPct = new uint[] { 30, 40, 55, 70, 90, 100 };
+            _fanChoice = "custom";
             ComputeStatus();
             ShowPage(_page, null, false);
         }

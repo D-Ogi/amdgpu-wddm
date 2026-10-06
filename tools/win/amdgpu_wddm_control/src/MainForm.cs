@@ -491,6 +491,7 @@ namespace AmdgpuWddmControl
             _vram = Kmd.VideoMemory().Value;
             _fan = Kmd.Hwmon().Value;
             TickTuning();
+            TickFan();
             var before = _status == null ? "" : string.Join("|", _status.Items.Select(i => i.Text));
             ComputeStatus();
             var after = string.Join("|", _status.Items.Select(i => i.Text));

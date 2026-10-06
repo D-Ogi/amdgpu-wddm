@@ -370,6 +370,13 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         HwmonRequest(device,(BC250_ESCAPE_HWMON*)data,Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
+    // The case fan control: its published snapshot, and requests the governor thread applies at its next step. No
+    // port is touched by the escape itself (fan.c), so it sits with the software snapshots as well.
+    if (command == BC250_ESCAPE_RUN_FAN) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_FAN)) return STATUS_INVALID_PARAMETER;
+        FanRequest(device,(BC250_ESCAPE_FAN*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
     // Interop switches: the start's decision and the session marker, software state as well (interop.c).
     if (data->Command == BC250_ESCAPE_RUN_INTEROP) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_INTEROP)) return STATUS_INVALID_PARAMETER;

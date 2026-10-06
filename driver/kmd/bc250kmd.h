@@ -73,6 +73,7 @@
 #include "cumode.h"
 #include "dpm.h"
 #include "hwmon.h"
+#include "fan.h"
 #include "cpu.h"
 #include "interop.h"
 
@@ -159,6 +160,7 @@ typedef struct _BC250_DEVICE {
     BC250_CPU_STATE Cpu;               // cpu.c: the CPU clock limit, undervolt, temperature cap and core mask
     BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     BC250_HWMON_OWNER Hwmon;           // hwmon.c: the board's own hardware monitor, read only, gated
+    BC250_FAN_OWNER Fan;               // fan.c: the case fan control, the one writer of the board's monitor chip
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -393,6 +395,19 @@ void HwmonStop(BC250_HWMON_OWNER* Owner);
 void HwmonSample(BC250_DEVICE* Device);                 // the governor thread, PASSIVE_LEVEL, once a second
 void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
 void HwmonRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_HWMON* Data, ULONG EscapeFlags);
+
+// fan.c
+struct _BC250_ESCAPE_FAN;
+void FanInitialize(BC250_DEVICE* Device);
+void FanStart(BC250_DEVICE* Device);
+void FanStop(BC250_DEVICE* Device, ULONG Reason);      // enum bc250_fan_reason; idempotent
+void FanPause(BC250_DEVICE* Device);
+void FanResume(BC250_DEVICE* Device);
+void FanResetDevice(BC250_DEVICE* Device);             // HIGH_LEVEL: port writes only
+void FanDriverUnload(void);
+void FanStep(BC250_DEVICE* Device, LONG TctlMc, BOOLEAN TctlValid);    // the governor thread, after HwmonSample
+void FanLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
+void FanRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_FAN* Data, BOOLEAN Admin, ULONG EscapeFlags);
 
 // interop.c
 struct _BC250_ESCAPE_INTEROP;

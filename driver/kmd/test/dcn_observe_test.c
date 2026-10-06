@@ -49,6 +49,8 @@ static void HwmonRequest(BC250_DEVICE*d,BC250_ESCAPE_HWMON*p,ULONG f){(void)d;(v
 /* The two surfaces of 0.7.210: the V/F curve answers with the software snapshots, the CPU surface past the gate. */
 static void DpmCurveRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_CURVE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void CpuRequest(BC250_DEVICE*d,BC250_ESCAPE_CPU*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
+/* The case fan control (fan.c, docs/design/fan.md Part B): a software snapshot like the hardware monitor's. */
+static void FanRequest(BC250_DEVICE*d,BC250_ESCAPE_FAN*p,BOOLEAN a,ULONG f){(void)d;(void)p;(void)a;(void)f;others++;}
 /* TIMING_SOURCE */
 /* ACTUAL_SOURCE */
 static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)

@@ -24,6 +24,7 @@
       "EnableScanoutAdmit": 1,
       "EnableDirectFlipHandshake": 1,
       "EnableHwmon": 1,
+      "EnableFanControl": 1,
       "NotifyDpcInReport": 1,
       "EnableVmidPool": 1,
       "DpmMode": 1,

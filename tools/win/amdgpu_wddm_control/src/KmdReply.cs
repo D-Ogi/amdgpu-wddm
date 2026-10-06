@@ -130,6 +130,27 @@ namespace AmdgpuWddmControl
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
 
+    // BC250_ESCAPE_FAN (272 bytes, driver/kmd/fan.c, docs/design/fan.md Part B): who runs the case fan now, the curve
+    // in force, the choice stored for every start, and why the driver gave the fan back to the board last time.
+    // State, Mode, Profile, Reason and Error are the enumerations of driver/shim/include/bc250_fan.h.
+    public sealed class FanState
+    {
+        public uint Version, Flags, Mode, State, Reason, DoubtReason, Profile, Points;
+        public uint[] CurveC, CurvePct;
+        public uint FixedPct, LeaseMs, TargetPct, AppliedPct, WrittenRaw, ReadbackRaw, Rpm, Channel;
+        public int GuardMc;
+        public uint SavedMode, SavedTarget, Error, StoredMode, StoredProfile, Gate;
+        public ulong Takeovers, Handbacks, Writes, Failures, Emergencies, Doubts, LeaseExpiries, WatchdogFires, Generation;
+
+        public const uint FlagEnabled = 1, FlagControlling = 2, FlagEmergency = 4, FlagLeased = 8, FlagStored = 16,
+            FlagFault = 32, FlagGated = 64, FlagPaused = 128, FlagRestoreSaved = 256, FlagSubstituted = 512, FlagHeldBack = 1024;
+        public const uint ModeBoard = 0, ModeCurve = 1, ModeFixed = 2;
+        public const uint StateOff = 0, StateBoard = 1, StateCurve = 2, StateFixed = 3, StateEmergency = 4, StateDoubt = 5, StateFault = 6;
+        public const uint ProfileCustom = 0, ProfileStandard = 1, ProfileQuiet = 2, ProfilePerformance = 3;
+        public const uint GateOk = 0, GateSetting = 1, GateReader = 2, GateChip = 3;
+        public bool Has(uint flag) { return (Flags & flag) != 0; }
+    }
+
     public sealed class VideoMemoryState
     {
         public uint Segments;
@@ -154,7 +175,8 @@ namespace AmdgpuWddmControl
         public const int DpmBytes = 160, StartHealthBytes = 96, InteropBytes = 104, VideoMemoryBytes = 264, CuModeBytes = 184;
         public const int HwmonBytes = 216;
         public const int CurveBytes = 360, CpuBytes = 296, CurvePoints = 11, CpuCoreSlots = 8;
-        public const uint CmdCuMode = 22, CmdHwmon = 27, CmdCurve = 28, CmdCpu = 29;
+        public const uint CmdCuMode = 22, CmdHwmon = 27, CmdCurve = 28, CmdCpu = 29, CmdFan = 30;
+        public const int FanBytes = 272, FanCurveSlots = 8;
         public const int LogHeadBytes = 60, LogLineBytes = 168, LogTextBytes = 160, LogMaxLines = 64;
         public const int LogBytes = LogHeadBytes + LogMaxLines * LogLineBytes;
         public const uint CmdStartHealth = 21, CmdDpm = 23, CmdInterop = 25, CmdGetLog = 12;
@@ -283,6 +305,26 @@ namespace AmdgpuWddmControl
                 Reads = U(b, 58), Writes = U(b, 59), Refusals = U(b, 60), Reverts = U(b, 61),
                 RevertRetries = U(b, 62), RevertFailures = U(b, 63),
                 Generation = Q(b, 272),
+            };
+        }
+
+        public static FanState ParseFan(byte[] b)
+        {
+            Head(b, FanBytes, CmdFan);
+            if (U(b, 5) != 1) throw new FormatException("fan ABI " + U(b, 5) + ", 1 expected");
+            if (U(b, 13) > FanCurveSlots) throw new FormatException("fan curve has " + U(b, 13) + " points, " + FanCurveSlots + " at most");
+            return new FanState
+            {
+                Version = U(b, 3), Flags = U(b, 7), Mode = U(b, 8), State = U(b, 9), Reason = U(b, 10), DoubtReason = U(b, 11),
+                Profile = U(b, 12), Points = U(b, 13),
+                CurveC = Vector(b, 14, FanCurveSlots), CurvePct = Vector(b, 22, FanCurveSlots),
+                FixedPct = U(b, 30), LeaseMs = U(b, 31), TargetPct = U(b, 33), AppliedPct = U(b, 34),
+                WrittenRaw = U(b, 35), ReadbackRaw = U(b, 36), GuardMc = (int)U(b, 37), Rpm = U(b, 38), Channel = U(b, 39),
+                SavedMode = U(b, 40), SavedTarget = U(b, 41), Error = U(b, 42), StoredMode = U(b, 43), StoredProfile = U(b, 44),
+                Gate = U(b, 45),
+                Takeovers = Q(b, 184), Handbacks = Q(b, 192), Writes = Q(b, 200), Failures = Q(b, 208),
+                Emergencies = Q(b, 216), Doubts = Q(b, 224), LeaseExpiries = Q(b, 232), WatchdogFires = Q(b, 240),
+                Generation = Q(b, 248),
             };
         }
 

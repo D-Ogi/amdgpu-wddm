@@ -17,6 +17,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     InteropInitialize(device);
     SmuOwnerInitialize(&device->Smu);
     HwmonInitialize(&device->Hwmon);
+    FanInitialize(device);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
@@ -35,6 +36,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
     CpuStop(device);        // before DpmStop: a trial's revert still needs the mailbox and the governor's busy share
     DpmStop(device);        // idempotent, like the detector: its thread runs this image's code
+    FanStop(device, BC250_FAN_REASON_STOP);    // idempotent; the fan goes back to the board before the memory does
     StartHealthRemove(device);
     InteropRemove(device);  // the power callback must not find the device once its memory goes
     DisplayUnmapFramebuffer(device);
@@ -141,6 +143,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     InterlockedExchange(&device->RetainedPowerPhase,0);
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
     HangDetectorStart(device);
+    // Before the governor, whose thread runs its step, and after the last point where the start can fail: it arms a
+    // watchdog and a bugcheck callback. Never fails the start (fan.c).
+    FanStart(device);
     // After it: the governor starts from the floor the start set, and never fails the start (dpm.c).
     DpmStart(device);
     // After the governor: the CPU surface reads its settings and, if CpuTune is 1, starts its worker (cpu.c).
@@ -165,6 +170,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->InheritedSignalValid=FALSE;
     CpuStop(device);        // first: a trial's revert needs the mailbox, which SmuOwnerStop below takes away
     DpmStop(device);        // the floor while the owner is still online, then no governor tick
+    FanStop(device, BC250_FAN_REASON_STOP);    // after DpmStop (no step runs), before HwmonStop: the fan to the board
     HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
     device->SystemDisplayReady=FALSE;
@@ -223,8 +229,12 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
 
 void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
 {
-    // Called at high IRQL on the way to a bugcheck or hibernate. We never changed the mode: nothing to restore.
-    UNREFERENCED_PARAMETER(MiniportDeviceContext);
+    // Called at high IRQL on the way to a bugcheck or hibernate. We never changed the mode: nothing to restore
+    // there. The case fan is the one thing this driver takes from the board, so it goes back here, with port writes
+    // only (fan.c).
+    BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+
+    if (device != NULL) FanResetDevice(device);
 }
 
 NTSTATUS Bc250DispatchIoRequest(_In_ const PVOID MiniportDeviceContext, _In_ ULONG VidPnSourceId,
@@ -362,10 +372,12 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         NTSTATUS status;
         // The hang detector judges a started device in D0 only. A failed transition down leaves it paused:
         // silence is the safe side of a diagnostic that bugchecks.
-        if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); CpuPause(device); DpmPause(device); }
+        // FanPause after DpmPause: no fan step runs while the governor is paused, and the board has the fan out of D0.
+        if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); CpuPause(device); DpmPause(device); FanPause(device); }
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
         if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) {
             DpmResume(device);
+            FanResume(device);
             CpuResume(device);  // nothing of the CPU surface survives D3 in the chip: read it again (0.7.211)
             HangDetectorResume();
             InteropAdapterPower(device,DevicePowerState,ActionType);
@@ -377,6 +389,7 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         StartHealthClose(device);
         CpuStop(device);
         DpmStop(device);
+        FanStop(device, BC250_FAN_REASON_POWER);
         SmuOwnerStop(&device->Smu);
     }
     return STATUS_SUCCESS;
@@ -386,5 +399,6 @@ void Bc250Unload(void)
 {
     HangDetectorStop();     // its thread and DPC run this image's code: joined before the image goes
     InteropDriverUnload();  // likewise the power callback
+    FanDriverUnload();      // likewise the fan watchdog and its bugcheck callback; the fan goes back to the board
     GuardCleanup();
 }

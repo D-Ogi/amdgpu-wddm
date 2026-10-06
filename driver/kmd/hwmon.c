@@ -15,11 +15,11 @@
 //
 // Five rules this file keeps, each with a reason:
 //
-//  1. READ ONLY. The page and the index port of the EC window are written, because the window is an address
-//     latch and a read of one register is four port accesses. Those are the only writes this reader issues.
-//     They never go to a configuration, control, limit or duty register. bc250_hwmon_write_allowed() answers
-//     "no" for every EC register, the host test asserts that the mock EC saw no write outside the two latch
-//     ports, and tools/win/bc250rd/bc250rd_ioctl.h states the same rule for the SMN read that came before.
+//  1. THE READER IS READ ONLY. The page and the index port of the EC window are written, because the window is an
+//     address latch and a read of one register is four port accesses. Those are the only writes the reader
+//     issues: its transport (HwmonIo) has no data-port write at all, and the host test asserts that the mock EC
+//     saw no write outside the two latch ports. The fan control (fan.c, Part B) is the one writer of the chip. It
+//     uses a second transport (HwmonWriteIo) and the shim's exact write allowlist of three registers.
 //
 //  2. THE SUPER I/O CONFIGURATION PORTS 0x2E/0x2F ARE NEVER TOUCHED. The DSDT drives that pair itself, under
 //     ACPI mutex \_SB.PCI0.SBRG.SIO1.MUT0, at every device-tree rescan and at every sleep and resume. A kernel
@@ -99,13 +99,6 @@ static ULONG HwmonReportedReason(const BC250_HWMON_OWNER* Owner, const BC250_HWM
 // of BC250_HWMON_PORT_*, so the address is this owner's own window by construction: a wrong index cannot name
 // a port outside base + 4 .. base + 7, and nothing asks for the event port.
 
-// The transport's own context: the owner and the IRQL of the hold. It lives on the caller's stack, so the
-// saved IRQL is never shared between two callers.
-typedef struct _BC250_HWMON_PORTS {
-    BC250_HWMON_OWNER* Owner;
-    KIRQL Irql;
-} BC250_HWMON_PORTS;
-
 static PUCHAR HwmonPort(const BC250_HWMON_PORTS* Ports, unsigned int Index)
 {
     NT_ASSERT(Index < BC250_HWMON_PORT_COUNT);
@@ -164,6 +157,33 @@ static void HwmonIo(BC250_HWMON_PORTS* Ports, BC250_HWMON_OWNER* Owner, struct b
     Io->pause = HwmonPause;
     Io->lock = HwmonLockPorts;
     Io->unlock = HwmonUnlockPorts;
+}
+
+// The data port, for the fan control's writes alone. The shim calls it only for a register its write allowlist
+// admits (bc250_hwmon_write8: 0x0A01, 0x0A00 and 0x0A29), after the same latch sequence as a read, inside the same
+// hold. The read transport above never carries this function, so the reader stays unable to write the chip.
+static void HwmonOut8Data(void* Context, unsigned char Value)
+{
+    BC250_HWMON_PORTS* ports = (BC250_HWMON_PORTS*)Context;
+    WRITE_PORT_UCHAR(HwmonPort(ports, BC250_HWMON_PORT_DATA), Value);
+}
+
+// The handshake's poll interval. A stall and not a wait: the bugcheck path and the watchdog's DPC poll too.
+static void HwmonDelay(void* Context, unsigned int Us)
+{
+    UNREFERENCED_PARAMETER(Context);
+    KeStallExecutionProcessor(Us);
+}
+
+void HwmonWriteIo(BC250_HWMON_PORTS* Ports, BC250_HWMON_OWNER* Owner, struct bc250_hwmon_io* Io, BOOLEAN Lockless)
+{
+    HwmonIo(Ports, Owner, Io);
+    Io->out8_data = HwmonOut8Data;
+    Io->delay_us = HwmonDelay;
+    if (Lockless) {
+        Io->lock = NULL;
+        Io->unlock = NULL;
+    }
 }
 
 // ---- the published snapshot -------------------------------------------------------------------------------
