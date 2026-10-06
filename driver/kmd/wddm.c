@@ -3753,9 +3753,12 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         object->ScanoutPitch = view.scanout_pitch;
         object->ScanoutFormat = view.scanout_format;
         segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
-        align = 4096;
-        if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
-            align = (UINT)view.alignment;
+        // M15.14: the winsys's own granularity, except that a blob which asked for scan-out never gets
+        // less than the flip clause's page (Bc250ScanoutBlobAlignment) - the BC2A half of the same
+        // 0.7.209.1 rule the type-0 path below follows. Without it a UMD that asks for 64 bytes here
+        // gets 64 bytes for a scan-out surface too, and the flip of it is refused after the OS has taken
+        // SharedPrimaryTransition: a blank output, not a fallback to composition.
+        align = (UINT)Bc250ScanoutBlobAlignment(view.scanout ? 1 : 0, view.alignment);
         info->hAllocation = object;
         info->Size = (SIZE_T)ROUND_TO_PAGES((SIZE_T)view.bytes);
         info->Alignment = align;

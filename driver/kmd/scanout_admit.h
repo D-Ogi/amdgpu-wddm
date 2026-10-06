@@ -117,6 +117,22 @@ static __inline unsigned long Bc250ScanoutCreateAlignment(int ScanoutRequested)
     return ScanoutRequested ? BC250_SCANOUT_ADDRESS_ALIGNMENT : 64ul;
 }
 
+// The same rule for the other create path. A BC2A blob (an application allocation) carries the
+// granularity its winsys asked for, and the kernel driver honours a power-of-two request from 64 bytes
+// to 1 MiB; a request outside that, or none at all, gets 4 KiB. That default is why the measured b18r1
+// arm scanned out at all, and it is one UMD change away from 64 bytes, after which the flip clause
+// above refuses the surface and the transition flip blanks the output. So a blob that asked for
+// scan-out may not be given less than the clause demands, whatever it requested. Nothing else moves:
+// a blob that asked for no scan-out keeps the granularity it asked for, up or down.
+static __inline unsigned long Bc250ScanoutBlobAlignment(int ScanoutRequested, unsigned long long Requested)
+{
+    unsigned long align = BC250_SCANOUT_ADDRESS_ALIGNMENT;
+    if (Requested >= 64ull && Requested <= 0x100000ull && (Requested & (Requested - 1ull)) == 0ull)
+        align = (unsigned long)Requested;
+    if (ScanoutRequested && align < Bc250ScanoutCreateAlignment(1)) align = Bc250ScanoutCreateAlignment(1);
+    return align;
+}
+
 // BC250_SCANOUT_GATED is the one status this header does not decide: wddm.c answers it for a requesting
 // candidate before it asks, because the gate is a start-time registry value and not a property of the
 // surface. It has a status of its own all the same, so that the counters and the refusal line say "the
