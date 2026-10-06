@@ -2,7 +2,10 @@
 // here is a software-state escape with NoAdapterSynchronization alone: no HardwareAccess (Level Two) escape, which
 // would idle the GPU and stall a running game (BD-054). The one write is ConfirmStart, the start-health CONFIRM the
 // release's logon task sends as well: administrator only, once per Recovery action, and from 0.7.213 with
-// NoAdapterSynchronization as well - it writes the registry and touches no register. Settings go to
+// NoAdapterSynchronization instead of HardwareAccess - it writes the registry and touches no register. A driver of
+// 0.7.212 or older refuses that word, which is what runs while a release defers the device restart, so the DLL sends
+// the same request once more with the old HardwareAccess word rather than leave the start unconfirmed: one Level Two
+// escape per Recovery action, never on a schedule. Settings go to
 // the registry and take effect at the next driver start.
 using System;
 using System.Runtime.InteropServices;

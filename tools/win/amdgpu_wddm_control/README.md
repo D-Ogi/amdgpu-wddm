@@ -30,12 +30,16 @@ software-state escapes, each with `NoAdapterSynchronization` alone: the DPM snap
 (`Bc250StartHealth`, op READ), the GPU DWM interop decision (`Bc250Interop`), dxgkrnl's segment statistics
 (`Bc250VideoMemory`) and the log ring (`Bc250LogRead`, `GET_LOG`, answered without the adapter lock from 0.7.184.1).
 No `HardwareAccess` escape and no `LOG_SUMMARY`: a Level Two escape idles the GPU, and an overlay that polled one every
-5 s stalled a running game for 300 ms each time (BD-054). Live values are read every 2 s, and only while Overview or
-Performance is shown and the window is not minimized.
+5 s stalled a running game for 300 ms each time (BD-054). The one exception is named below. Live values are read
+every 2 s, and only while Overview or Performance is shown and the window is not minimized.
 
 The one escape that changes the driver is the start-health CONFIRM of "Confirm this start" (Recovery), the same
 request the release's logon task sends: administrator only, once per action, and from 0.7.213 with
-`NoAdapterSynchronization` as well - it writes the registry and touches no register. DPM settings are
+`NoAdapterSynchronization` instead of `HardwareAccess` - it writes the registry and touches no register. A driver of
+0.7.212 or older refuses that word, and that driver is what runs while a release defers the device restart. The DLL
+then sends the same request once more with the old `HardwareAccess` word, so the Recovery action still confirms the
+start. This is the one exception to the paragraph above, and it costs one Level Two escape per Recovery action,
+never on a schedule. DPM settings are
 `DpmMode` and `DpmMaxMHz` under
 `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, which the KMD reads at device start
 (`docs/design/dpm.md`, "Settings and boot guard"): the page says to restart Windows. The runtime tuning escapes

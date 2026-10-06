@@ -1330,7 +1330,9 @@ typedef struct _BC250_ESCAPE_FENCE {
 // As `From` with BC250_ESCAPE_LOG_SUMMARY: start at the first line this summary itself wrote, so that asking for
 // a summary does not reprint the whole run. The driver answers the real number in SummaryFrom either way.
 // `bc250kmd_cli log summary` does not send it (it prints the whole ring, which is what an evidence file wants);
-// `log summary only` does, for a caller that polls (the overlay, BD-054).
+// `log summary only` does, for a caller that asks for one block on request. No shipped caller polls it: the
+// overlay's graphics panel reads the ring with GET_LOG pages and sends this one only for the "graphics.summary"
+// action of its table (BD-054, C55).
 //
 // BC250_ESCAPE_LOG_SUMMARY is refused (REFUSED, STATUS_INVALID_DEVICE_REQUEST) unless D3DKMT_ESCAPE.Flags has
 // HardwareAccess set and NoAdapterSynchronization clear: the summary reads state that a device stop frees, and
