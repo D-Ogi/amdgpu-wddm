@@ -22,6 +22,14 @@ typedef struct _BC250_DPM_SNAP {
     ULONG SoftReleases;                     // 0.7.197: Gov.soft_releases
     ULONG WarmHolds;                        // 0.7.200: Gov.warm_holds, driver log only (not in the escape)
     ULONG RampHolds;                        // 0.7.203: Gov.ramp_holds, driver log only (not in the escape)
+    // 0.7.213, the soft thermal zone (BD-087): what the zone did, and the lead of the last tick, driver log only.
+    // ZoneLeadOk says whether the slope ring could measure a lead at all in that tick and ZoneLeadGaps counts the ticks
+    // where it could not, so a lead of 0 on a flat die reads differently from a sensor that keeps failing (0.7.213
+    // safety review, finding 6). ZoneIdleHolds counts the ticks in which the zone's threshold was met and the zone did
+    // not act because the GPU was idle (finding 2).
+    ULONG ZoneSteps, ZoneTicks, ZoneLeadGaps, ZoneIdleHolds;
+    LONG ZoneLeadMc;
+    BOOLEAN ZoneLeadOk;
     // 0.7.207, the idle state. IdleMHz is the point in force, 0 when the state is off for this start
     // (bc250_dpm_idle_mhz: DpmIdleMHz 0, a refused setting, or a point the firmware refused).
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;

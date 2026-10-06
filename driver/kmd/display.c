@@ -351,6 +351,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     // DpmTuneRequest matches the size against AbiVersion and touches nothing past the size it was given.
     if (command == BC250_ESCAPE_RUN_DPM_TUNE) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DPM_TUNE) &&
+            Escape->PrivateDriverDataSize != BC250_DPM_TUNE_ABI2_SIZE &&
             Escape->PrivateDriverDataSize != BC250_DPM_TUNE_ABI1_SIZE) return STATUS_INVALID_PARAMETER;
         DpmTuneRequest(device,(BC250_ESCAPE_DPM_TUNE*)data,Escape->PrivateDriverDataSize,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;

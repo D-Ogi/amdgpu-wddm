@@ -295,6 +295,10 @@ From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 
 - The warm zone does not change the thermal cap. The hot step, the critical rule, the release below 82 C and the soft
   release operate as before. Each soft-release threshold (82.5 C to 86.5 C) is below the warm zone, so the clock
   follows a released cap at the pace of the ramp.
+- From 0.7.213, with the soft zone on, the warm threshold is the soft-release threshold (83.0 C by default), not 87 C.
+  `bc250_dpm_warm_mc` gives the threshold in force. The cap and the clock then stop going up at the same temperature,
+  so the clock cannot run away above a cap that is no longer rising. `BC250_DPM_WARM_MC` stays 87 C and applies when
+  the zone is off.
 
 When the warm zone stops a raise, the throttle reason is `thermal-warm` (8). The counter `warm` in the driver log
 lines counts the governor ticks with a stopped raise. From 0.7.204 this counter stays at zero or near zero. The owner
@@ -303,6 +307,91 @@ asked for the first warm zone after session 344 (The Ascent, menu, no frame cap)
 `test_warm` in `dpm_test.c` covers the edges (85.000, 86.999 and 87.000 C, the hot steps, the backstop). A compile-time
 check in `dpm_test.c` makes sure that the warm zone is 87 C, is not above the hot threshold, and is above the release
 threshold, the ramp knee and each soft-release threshold.
+
+### The soft thermal zone (0.7.213, BD-087)
+
+Before 0.7.213 the first rule that read the temperature acted at 87 C, which is also where the lab runner ends a game
+session (Tctl 87 C or more for 10 s, or 89 C at once). The die lags the clock by approximately 25 s
+(`scratch/thermal-zone/model`, a first-order fit of the recorded sessions: `dTj/dt = P - B(Tj - Tamb)`,
+`B = 0.0395` per second), so a controller that first acts at 87 C cannot hold 87 C. Session 436 showed it: 80.2 C at
+1500 MHz at the start of the benchmark, 84.0 C at 1200 MHz 32 s later, 88.8 C at 800 MHz 31 s after that, and the
+runner stopped the game.
+
+The soft zone lowers the cap before the hot limit, and judges every soft threshold on the temperature the die is going
+to reach, not the one it reads:
+
+- The lead. The governor keeps the last 5 s of readings in a 20-slot ring (`BC250_DPM_ZONE_SLOPE_MS`, one slot per
+  250 ms). The slope is the least-squares fit over the ring, over the span the ring really covers;
+  `teff = Tctl + slope x zone_lead_ms` while the die rises, and `teff = Tctl` while it falls or holds. The default lead
+  is 15 s. Three guards keep the lead honest, and the safety review of this change is what put them there:
+  a deadband (`BC250_DPM_ZONE_SLOPE_MIN_MC`, 200 mC of fitted rise over the window, which is 0.04 C/s), a cap
+  (`BC250_DPM_ZONE_LEAD_MAX_MC`, 2.0 C) and a span limit (`BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS`, 10 s, measured both
+  across the ring and from its oldest slot to now). The cap is the load-bearing one: the recorded 1 s samples jump by
+  up to 1 C on a die whose time constant is 25 s, so on thermally flat recorded segments a two-point slope reported a
+  lead of up to 7.8 C and the zone engaged at a raw 78 C. With the cap the zone cannot engage below the zone threshold
+  minus 2.0 C, a raw 84.0 C by default, and it costs almost no signal: the median lead on a rising die over the 21
+  recorded sessions is 1.2 to 1.5 C and session 436's own rise carries 1.8 to 2.25 C.
+- The zone. At `teff` of 86.0 C or more (`BC250_DPM_HOT_MC - zone_delta_mc`), while the GPU has work, the cap comes
+  down once to the running clock and then goes down one level per `zone_step_ms` (1500 ms), to the thermal floor. The
+  throttle reason is `thermal-zone` (11).
+- The episode. Entry and continue are split as the hot rule splits them. The clamp to the running clock happens once,
+  at entry, and the episode holds until `teff` falls under the soft-release threshold - the same temperature at which
+  the cap may rise again. The cap therefore never follows the load: a loading screen inside the zone drops the clock to
+  the lab floor, and a cap that followed it would collapse to 800 MHz and stay there, because nothing between the two
+  thresholds raises the cap. The zone leaves `cap_ms` alone as well, so a zone step never defers the first step of the
+  87 C backstop.
+- An idle GPU. The zone does not act while the idle state holds the clock or while nothing has been on the GFX ring,
+  the graphics engine or the paging engine for `BC250_DPM_ZONE_QUIET_MS` (3 s). An idle GPU is not the heat the zone
+  can take out, and a cap left at 800 MHz is heat the next burst of work cannot use. It costs no safety: from the
+  soft-release threshold up the clock gate refuses every raise, so a GPU that gets work at 86 C cannot go above the lab
+  floor whatever the cap says. The driver log counts these ticks as `idle holds`. The quiet timer starts saturated and
+  saturates again on a tick whose `dt_ms` had to be clamped, so neither the governor's first ticks nor a resume is a
+  window in which the zone acts on a GPU that has had no work: counted from zero, those windows took a level off the
+  cap on a die the CPU was holding at 86 C, and with the clock `DpmResyncLevel` reads from an idle SMU they took the
+  cap straight to 800 MHz.
+- The band. Between the soft-release threshold and the zone threshold the cap holds.
+- The release. Below the soft-release threshold (83.0 C, `BC250_DPM_HOT_MC - soft_delta_mc`, held for
+  `soft_step_ms` 4000 ms) the cap goes up one level. Below 82 C the release of 0.7.195 keeps its own threshold and its
+  own 1 s step, but it reads `teff` as well, so a cap under the ceiling on a die that is already climbing rises one
+  level later than it did in 0.7.212. Only `BC250_DPM_HOT_MC`, `BC250_DPM_CRITICAL_MC` and the thermal ramp read the
+  raw sensor. The search found that a cap rising while the die climbs towards the zone is the one thing no threshold
+  repairs afterwards, which is why the way up reads the lead too.
+- The clock. The warm zone starts at the soft-release threshold, so the clock stops going up at 83.0 C.
+- The backstop. The hot cap at 87 C and the critical rule at 90 C are unchanged, and both read the raw sensor, not
+  `teff`. The thermal ramp also reads the raw sensor.
+- A sensor that fails. A tick with no reading skips its ring slot and keeps the window; a tick whose `dt_ms` had to be
+  clamped (a stall, a resume, a `DpmPause`) empties the ring, because the governor's own clock then advanced by less
+  than the time that passed and every age in the ring is wrong. The log says whether the last tick could measure a
+  slope at all and counts the ticks that could not, so a lead of 0 on a flat die reads differently from a sensor that
+  keeps failing.
+
+The thresholds come from a search over 21 recorded game sessions with the fitted plant (`scratch/thermal-zone/sim`) and
+were then re-validated against the same sessions replayed through the driver's own code with their recorded sensor
+noise (`scratch/thermal-zone/review-dpm`), which is what the lead's cap and the 1500 ms step come from. In that
+closed-loop replay, over some two hours of recorded play:
+
+| 21 recorded sessions, 1500 MHz ceiling | 0.7.212 rules | the soft zone |
+| --- | --- | --- |
+| peak reading | 89.3 C | 87.3 C |
+| total time at 87 C or more | 149.3 s | 9.4 s |
+| longest run at 87 C or more | 19.6 s | 7.1 s |
+| runner stops (87 C for 10 s, or 89 C) | 5 | 0 |
+| mean clock | 1099 MHz | 1048 MHz |
+
+Session 436, the session of BD-087, peaks at 85.4 C with no reading at 87 C at all, against 89.2 C and a runner stop
+as it was recorded. `test_zone` and `test_zone436` in `dpm_test.c` replay the shape of 436 on the fitted plant: with
+the 0.7.212 rules the model holds 87 C for 16.4 s, which is a runner stop; with the zone it peaks at 86.5 C with no
+reading at 87 C; with the zone and the lead off it is a runner stop again, which is the one result of the search worth
+carrying - it is the lead and not the threshold that does the work. `test_zone_traces` replays the recorded readings
+themselves, including 436 and the flattest segments of the noisiest sessions, and holds the review's requirement: the
+zone never engages below a raw 84.0 C. The cases named after the review's findings (`test_zone_dip`, `test_zone_idle`,
+`test_zone_idle_rise`, `test_zone_stall`, `test_zone_lead_bound`, `test_zone_sensor_gap`,
+`test_zone_backstop_timing`) each hold one of the rules above.
+
+The zone is on by default. `DpmThermalZone` 0 runs the 0.7.212 rules for a whole start, for a bisect against what the
+lab measured before this change. The three values are runtime-tunable (`RUN_DPM_TUNE` ABI 3), and
+`bc250_dpm_tune_check` refuses a zone threshold that is not at least 500 mC above the soft-release threshold, and a
+zone with no soft release at all: the cap must go up again below the band it steps down in.
 
 From 0.7.203 a thermal ramp starts at 70 C (`BC250_DPM_RAMP_KNEE_MC`). The rules are:
 
@@ -380,7 +469,8 @@ From 0.7.197 (BD-055) the drop on entering the hot band is at once only when the
 ago. Before, every upward crossing of 87 C stepped, so a reading hovering at the limit walked the clock down at the
 crossing rate rather than the hot step. A re-entry inside the hot step now clamps the cap to the running clock (no
 raise, nothing lowered) and steps a hot step after the last change, the spacing a steady 87 C gets. The hot step is a
-runtime value (250-10000 ms), and so is an optional soft release, off by default: held below 87 C minus a delta
+runtime value (250-10000 ms), and so is the soft release (off by default until 0.7.213, which turns it on at 83.0 C
+with a 4000 ms step as part of the soft zone above): held below 87 C minus a delta
 (500-4500 mC, so the threshold stays strictly between 82 and 87 C) for a whole soft step (2000-30000 ms) without a
 break, the cap rises one level. Without it the cap holds anywhere in 82-87 C, so under a sustained load one excursion
 past 87 C cost levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500-1600 MHz, frozen at
@@ -405,6 +495,7 @@ every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the hold window still admits; absent = 2, at most 100. The exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500), which no setting changes |
+| `DpmThermalZone` | the soft thermal zone (0.7.213): absent or any other value runs it, 0 runs the 0.7.212 thermal rules for the whole start (the hot cap at 87 C alone, no soft release, the warm zone at 87 C). A runtime `dpm tune reset` turns the zone back on |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
 | `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |
@@ -472,6 +563,7 @@ start, without a restart and without the registry:
 | `bc250kmd_cli dpm tune <up> <target> <down> [hold ms]` | the four thresholds (permille, ms; the hold stays when omitted) |
 | `bc250kmd_cli dpm floor <MHz\|off>` | a runtime floor: a clock of the table up to the start's ceiling (`DpmMaxMHz`) |
 | `bc250kmd_cli dpm tune thermal <hot ms> <soft mC\|off> <soft ms>` | 0.7.197: the hot step, the soft-release delta below 87 C and its step |
+| `bc250kmd_cli dpm tune thermal <hot ms> <soft mC\|off> <soft ms> <zone mC\|off> <zone step ms> <zone lead ms>` | 0.7.213: the same, and the soft zone's delta below 87 C, its step and its lead. The three omitted leave the zone as it is |
 | `bc250kmd_cli dpm tune reset` | thresholds, floor and thermal timing back to the defaults |
 | `bc250kmd_cli dpm tune` | what is in force, the defaults, how many ticks the floor lifted the clock |
 
@@ -510,6 +602,15 @@ start, without a restart and without the registry:
   back to ABI 1 when an older driver fails the 152-byte escape with `STATUS_INVALID_PARAMETER`. A thermal change logs
   its own line (`dpm: tune (thermal): hot step 500->2000 ms, soft release delta 0->1500 mC step 3000->3000 ms,
   serial 4`), and every `dpm: tune` line is followed by a `thermal:` line with the soft raises so far.
+- ABI 3 (0.7.213, 184 bytes) appends the soft zone's three values, their defaults and the slope window, under
+  `FLAG_ZONE` (32) and `FLAG_ZONE_OFF` (64), on the same `THERMAL` operation (error 8, `zone`). The driver takes all
+  three sizes, each only with its own `AbiVersion`. An ABI 2 `THERMAL` keeps the stored zone, because a tool built
+  before this ABI writes zeros where the zone's fields are and must not be able to switch the zone off by not knowing
+  about it; an ABI 1 or ABI 2 `RESET` resets the zone too, because a reset means the shim's defaults. The CLI asks with
+  ABI 3 and steps down to ABI 2 and then ABI 1 as a driver fails the size with `STATUS_INVALID_PARAMETER`. A zone
+  change logs two lines of its own (`dpm: tune (thermal): zone delta 1000->1500 mC (at 86000->85500 mC), serial 5` and
+  the step, lead and warm threshold), and every `dpm: tune` line is followed by a `zone:` line with the steps so far
+  and the lead of the last tick.
 
 ## The operator's V/F curve (0.7.212)
 

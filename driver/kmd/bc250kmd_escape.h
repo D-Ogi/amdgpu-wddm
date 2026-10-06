@@ -541,19 +541,39 @@ typedef struct _BC250_ESCAPE_DPM {
 // A size that does not match its AbiVersion is refused in the reply (NtStatus STATUS_INVALID_PARAMETER) before any
 // state is read. A driver before 0.7.197 fails the 152-byte escape itself with STATUS_INVALID_PARAMETER: a tool asks
 // with ABI 2 and repeats with ABI 1 on that answer.
-#define BC250_DPM_TUNE_ABI 2u
+// ABI 3 (0.7.213, BD-087) appends the soft thermal zone to the same THERMAL operation: the zone's threshold below HOT
+// (0: the zone off), its step down and the lead its thresholds are judged with, each with its default, plus the fixed
+// slope window the lead measures the die's rise over. The zone is ON by default, so a READ of a healthy start shows it;
+// the one switch that turns it off for a whole start is the registry value DpmThermalZone (driver/kmd/dpm.c), and a
+// RESET here goes back to the shim's defaults and therefore turns it on again. The driver takes all three sizes:
+// AbiVersion 1 with the first 120 bytes, AbiVersion 2 with the first 152 (both layouts unchanged), AbiVersion 3 with all
+// 184. An ABI 1 or ABI 2 THERMAL keeps the stored zone values, so an older tool cannot switch the zone off by writing
+// fields it does not know; a RESET resets everything, as it always did. A driver before 0.7.213 fails the 184-byte
+// escape itself with STATUS_INVALID_PARAMETER: a tool asks with ABI 3 and steps down to 2 and then to 1 on that answer.
+#define BC250_DPM_TUNE_ABI 3u
+#define BC250_DPM_TUNE_ABI_2 2u
 #define BC250_DPM_TUNE_ABI_1 1u
+// The reading the two deltas of this escape are counted down from: BC250_DPM_HOT_MC of
+// driver/shim/include/bc250_dpm.h, 87 C, fixed since 0.7.195. Both the soft release and the soft zone travel as a
+// delta below it, so a tool has to know it to print the threshold in force, and a user-mode tool does not include the
+// shim's kernel header. The driver's own C_ASSERT (driver/kmd/dpm.c) keeps the two equal, so moving the hot limit
+// breaks the driver build instead of a printed threshold (0.7.213 safety review, finding 8).
+#define BC250_DPM_TUNE_HOT_MC 87000l
 #define BC250_DPM_TUNE_ABI1_SIZE 120u        // the ABI 1 prefix of BC250_ESCAPE_DPM_TUNE
+#define BC250_DPM_TUNE_ABI2_SIZE 152u        // the ABI 2 prefix
 #define BC250_DPM_TUNE_OP_READ 0u
 #define BC250_DPM_TUNE_OP_THRESHOLDS 1u      // in: UpPermille, TargetPermille, DownPermille, DownHoldMs
 #define BC250_DPM_TUNE_OP_FLOOR 2u           // in: FloorMHz
-#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds, floor and (ABI 2 and ABI 1 alike) thermal timing to defaults
-#define BC250_DPM_TUNE_OP_THERMAL 4u         // ABI 2 only; in: HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs
+#define BC250_DPM_TUNE_OP_RESET 3u           // thresholds, floor and (every ABI alike) thermal timing and zone to defaults
+#define BC250_DPM_TUNE_OP_THERMAL 4u         // ABI 2: in HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs; ABI 3 also in
+                                             // ZoneDeltaMc, ZoneStepMs, ZoneLeadMs
 #define BC250_DPM_TUNE_FLAG_GOVERNING 1u     // a DPM start's governor thread runs and has not given up: writes are taken
 #define BC250_DPM_TUNE_FLAG_THRESHOLDS 2u    // the thresholds were set at run time (else the defaults)
 #define BC250_DPM_TUNE_FLAG_FLOOR 4u         // a runtime floor is set (else none)
 #define BC250_DPM_TUNE_FLAG_APPLIED 8u       // the governor thread runs with the values below (Applied == Serial)
 #define BC250_DPM_TUNE_FLAG_THERMAL 16u      // ABI 2: the thermal timing was set at run time (else the defaults)
+#define BC250_DPM_TUNE_FLAG_ZONE 32u         // ABI 3: the soft zone's values are not the defaults
+#define BC250_DPM_TUNE_FLAG_ZONE_OFF 64u     // ABI 3: the soft zone is off for this start (ZoneDeltaMc 0)
 typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -572,7 +592,12 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long HotStepMs, SoftReleaseDeltaMc, SoftReleaseStepMs;                  // in: THERMAL; out: in force
     unsigned long DefaultHotStepMs, DefaultSoftReleaseDeltaMc, DefaultSoftReleaseStepMs;    // out
     unsigned long Reserved2[2];             // zero in, zero out
-} BC250_ESCAPE_DPM_TUNE; // 152 bytes on Windows, ABI 2 (the first 120 are ABI 1)
+    // ABI 3 from here (BC250_DPM_TUNE_ABI2_SIZE bytes above).
+    unsigned long ZoneDeltaMc, ZoneStepMs, ZoneLeadMs;                               // in: THERMAL; out: in force
+    unsigned long DefaultZoneDeltaMc, DefaultZoneStepMs, DefaultZoneLeadMs;          // out
+    unsigned long ZoneSlopeMs;              // out: the window the lead's slope is measured over (fixed, not tunable)
+    unsigned long Reserved3;                // zero in, zero out
+} BC250_ESCAPE_DPM_TUNE; // 184 bytes on Windows, ABI 3 (the first 152 are ABI 2, the first 120 ABI 1)
 
 // The board's hardware monitor (driver/kmd/hwmon.c, driver/shim/bc250_hwmon.c, docs/design/fan.md). The
 // ASRock BC-250 carries a Nuvoton NCT6686D Super I/O. Its embedded controller turns the case fan from the

@@ -35,6 +35,11 @@
 //   DpmIdleBusyPermille  the busy share the hold window still admits, in permille of its wall time. Absent =
 //                   BC250_DPM_IDLE_BUSY_PERMILLE (2); at most BC250_DPM_IDLE_MAX_BUSY_PERMILLE. The desktop
 //                   on the GPU wakes for single frames, so the rule is this mean, not a strict zero.
+//   DpmThermalZone  the soft thermal zone (0.7.213, BD-087): absent or any non-zero value runs it, which is the
+//                   default, and 0 runs the 0.7.212 thermal rules instead (the hot cap at 87 C alone, no soft
+//                   release, the warm zone back at 87 C). It is one switch for a whole start, for bisecting a
+//                   regression against the rules the lab measured before it; the zone's own numbers are tunable at
+//                   run time through RUN_DPM_TUNE ABI 3, and a RESET there turns the zone back on.
 //   DpmLastMode, DpmLastReason   what the last start did, for the tools when the adapter is gone
 //   DpmClosedReason the reason the driver itself wrote DpmMode 0 (3 unconfirmed, 4 unclean, 8 SMU error).
 //                   PersistFallback writes it, the first start that reads a DpmMode other than 0 deletes it,
@@ -68,6 +73,7 @@
 #define DPM_SETTING_IDLE_MHZ L"DpmIdleMHz"
 #define DPM_SETTING_IDLE_HOLD L"DpmIdleHoldMs"
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
+#define DPM_SETTING_ZONE L"DpmThermalZone"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
 #define DPM_SETTING_CLOSED L"DpmClosedReason"
@@ -90,10 +96,13 @@
 C_ASSERT(sizeof(BC250_ESCAPE_DPM) == 192);        // ABI 2 (0.7.207); the ABI 1 prefix is 160 bytes
 C_ASSERT(BC250_DPM_ABI1_SIZE == 160);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM, IdleMHz) == BC250_DPM_ABI1_SIZE);
-C_ASSERT(BC250_DPM_THROTTLE_COUNT == 11);         // 0.7.207 appended "idle"
-C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 152);
+C_ASSERT(BC250_DPM_THROTTLE_COUNT == 12);         // 0.7.207 appended "idle", 0.7.213 "thermal-zone"
+C_ASSERT(sizeof(BC250_ESCAPE_DPM_TUNE) == 184);   // ABI 3 (0.7.213); ABI 2 is 152 bytes, ABI 1 120
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, HotStepMs) == BC250_DPM_TUNE_ABI1_SIZE);
-C_ASSERT(BC250_DPM_TUNE_COUNT == 8);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, ZoneDeltaMc) == BC250_DPM_TUNE_ABI2_SIZE);
+C_ASSERT(BC250_DPM_TUNE_ABI2_SIZE == 152);
+C_ASSERT(BC250_DPM_TUNE_HOT_MC == BC250_DPM_HOT_MC); // the deltas of the escape are counted down from this one value
+C_ASSERT(BC250_DPM_TUNE_COUNT == 9);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Status) == FIELD_OFFSET(BC250_ESCAPE, Status) &&
          FIELD_OFFSET(BC250_ESCAPE_DPM_TUNE, Version) == FIELD_OFFSET(BC250_ESCAPE, Version));
 C_ASSERT(sizeof(BC250_ESCAPE_DPM_CURVE) == 360);  // ABI 1 (0.7.210); one size, so the dispatch has one test
@@ -113,7 +122,7 @@ static const PCWSTR g_CurveSetting[BC250_CURVE_POINTS] = {
 
 static const char* const g_Throttle[BC250_DPM_THROTTLE_COUNT] = {
     "none", "thermal-soft", "thermal-hard", "sensor", "max-setting", "stable", "smu", "fixed", "thermal-warm",
-    "thermal-ramp", "idle"
+    "thermal-ramp", "idle", "thermal-zone"
 };
 
 static void DpmLock(BC250_DPM_STATE* S)
@@ -148,11 +157,19 @@ static BOOLEAN ThermalEqual(const struct bc250_dpm_tune* A, const struct bc250_d
     return A->hot_step_ms == B->hot_step_ms && A->soft_delta_mc == B->soft_delta_mc && A->soft_step_ms == B->soft_step_ms;
 }
 
+// The soft zone's own three values (0.7.213). Separate from ThermalEqual, because the escape reports them under their
+// own flag and an ABI 2 caller never sees them.
+static BOOLEAN ZoneEqual(const struct bc250_dpm_tune* A, const struct bc250_dpm_tune* B)
+{
+    return A->zone_delta_mc == B->zone_delta_mc && A->zone_step_ms == B->zone_step_ms &&
+           A->zone_lead_ms == B->zone_lead_ms;
+}
+
 static BOOLEAN TuneEqual(const struct bc250_dpm_tune* A, const struct bc250_dpm_tune* B)
 {
     return A->up_permille == B->up_permille && A->target_permille == B->target_permille &&
            A->down_permille == B->down_permille && A->down_hold_ms == B->down_hold_ms && A->floor_level == B->floor_level &&
-           ThermalEqual(A, B);
+           ThermalEqual(A, B) && ZoneEqual(A, B);
 }
 
 // The floor as the escape and the log give it: the clock, 0 for none (BC250_DPM_FLOOR_LEVEL is the lab floor,
@@ -175,17 +192,41 @@ static void DpmLogTuneChange(const char* What, const struct bc250_dpm_tune* Old,
         GuardLog("dpm: tune (%s): hot step %lu->%lu ms, soft release delta %lu->%lu mC step %lu->%lu ms, serial %lu",
                  What, Old->hot_step_ms, New->hot_step_ms, Old->soft_delta_mc, New->soft_delta_mc, Old->soft_step_ms,
                  New->soft_step_ms, Serial);
+    // The soft zone (0.7.213) on a line of its own too, with the thresholds it puts in force spelled out in mC: the
+    // deltas are relative to HOT_MC and nobody should have to subtract in their head while reading a game's log.
+    if (!ZoneEqual(Old, New)) {
+        GuardLog("dpm: tune (%s): zone delta %lu->%lu mC (at %d->%d mC), serial %lu", What, Old->zone_delta_mc,
+                 New->zone_delta_mc, bc250_dpm_zone_mc(Old), bc250_dpm_zone_mc(New), Serial);
+        GuardLog("dpm: tune (%s): zone step %lu->%lu ms lead %lu->%lu ms, no raise from %d->%d mC", What,
+                 Old->zone_step_ms, New->zone_step_ms, Old->zone_lead_ms, New->zone_lead_ms,
+                 bc250_dpm_warm_mc(Old), bc250_dpm_warm_mc(New));
+    }
 }
 
 // The governor's own values (Gov.tune) next to the telemetry, while they are not the defaults, and in the summary.
 static void DpmLogTune(const char* What, const struct bc250_dpm_tune* T, ULONG Serial, ULONG Applied, ULONG FloorTicks,
-                       ULONG SoftReleases)
+                       ULONG SoftReleases, const BC250_DPM_SNAP* Snap)
 {
     GuardLog("dpm: %s up %lu target %lu down %lu permille, hold %lu ms, floor %lu MHz, serial %lu applied %lu, "
              "floor ticks %lu", What, T->up_permille, T->target_permille, T->down_permille, T->down_hold_ms,
              TuneFloorMHz(T), Serial, Applied, FloorTicks);
     GuardLog("dpm: %s thermal: hot step %lu ms, soft release delta %lu mC step %lu ms, soft raises %lu", What,
              T->hot_step_ms, T->soft_delta_mc, T->soft_step_ms, SoftReleases);
+    // The soft zone (0.7.213, BD-087): the three tunable values, the two thresholds they put in force, and what the
+    // zone has actually done this start. A reader of a game's log needs the thresholds in the same units as the
+    // temperature samples beside them, so both are printed in mC.
+    if (T->zone_delta_mc) {
+        GuardLog("dpm: %s zone: at %d mC (delta %lu) step %lu ms, no raise from %d mC", What, bc250_dpm_zone_mc(T),
+                 T->zone_delta_mc, T->zone_step_ms, bc250_dpm_warm_mc(T));
+        GuardLog("dpm: %s zone lead: %lu ms over %lu ms, now %+d mC, %lu ticks with none", What, T->zone_lead_ms,
+                 (ULONG)BC250_DPM_ZONE_SLOPE_MS, Snap->ZoneLeadMc, Snap->ZoneLeadGaps);
+        // "slope none" is not "lead 0": the first says the ring could not measure the die's rise at all, so every soft
+        // threshold read the raw sensor, which is not what the zone's numbers were chosen for (0.7.213 review).
+        GuardLog("dpm: %s zone: %lu steps, %lu ticks, %lu idle holds, slope %s", What, Snap->ZoneSteps,
+                 Snap->ZoneTicks, Snap->ZoneIdleHolds, Snap->ZoneLeadOk ? "measured" : "none");
+    } else
+        GuardLog("dpm: %s zone: off (DpmThermalZone 0): the hot cap at %d mC is the only thermal rule, no raise "
+                 "from %d mC", What, (int)BC250_DPM_HOT_MC, bc250_dpm_warm_mc(T));
 }
 
 // The thread, at the start of a governing tick: the escape's values, copied under SnapLock, at most once per change.
@@ -426,6 +467,12 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.SoftReleases = g->soft_releases;
     snap.WarmHolds = g->warm_holds;
     snap.RampHolds = g->ramp_holds;
+    snap.ZoneSteps = g->zone_steps;
+    snap.ZoneTicks = g->zone_ticks;
+    snap.ZoneLeadMc = g->zone_lead_mc;
+    snap.ZoneLeadOk = g->zone_lead_ok ? TRUE : FALSE;
+    snap.ZoneLeadGaps = g->zone_lead_gaps;
+    snap.ZoneIdleHolds = g->zone_idle_holds;
     // The idle point only while this start governs the clock: a fixed-lab start never configures the state, and
     // a start that gave up after SMU failures no longer steps the governor, so neither may name a point that
     // nothing would apply (0.7.207, review). The flag below follows the same rule.
@@ -841,7 +888,8 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
         bc250_dpm_tune_default(&defaults);
         if (!TuneEqual(&S->Gov.tune, &defaults) || serial != S->TuneTaken)
-            DpmLogTune("tune", &S->Gov.tune, serial, S->TuneTaken, S->Gov.floor_ticks, S->Gov.soft_releases);
+            DpmLogTune("tune", &S->Gov.tune, serial, S->TuneTaken, S->Gov.floor_ticks, S->Gov.soft_releases,
+                       &snap);
     }
 }
 
@@ -899,6 +947,44 @@ static void DpmConfigureIdle(BC250_DPM_STATE* S, BOOLEAN Dpm)
              mhzPresent ? "" : " (absent)", (ULONG)hold, holdPresent ? "" : " (absent)", (ULONG)permille,
              busyPresent ? "" : " (absent)",
              bc250_dpm_idle_mhz(&S->Gov) ? "on" : (mhz == 0 ? "off by setting" : "off"), (int)error);
+}
+
+// The soft thermal zone's one switch (0.7.213, BD-087). DpmThermalZone 0 runs the 0.7.212 thermal rules for this whole
+// start: the hot cap at 87 C is then the only rule that reads the temperature, there is no soft release and the warm zone
+// is back at 87 C. Anything else, including an absent value, runs the zone with the defaults of bc250_dpm.h, which is
+// what the search over the recorded sessions picked. The switch is for bisecting a regression against the rules the lab
+// measured before this change, so it acts once, at the start, on both copies of the tune: the escape's (S->Tune, with its
+// serial bumped so a reader sees the change) and the governor's own (S->Gov.tune, which the thread will run with). A
+// run-time RUN_DPM_TUNE reset goes back to the shim's defaults and therefore turns the zone on again; the escape's
+// THERMAL operation is the way to set the zone's numbers while a start runs.
+// PASSIVE_LEVEL, under Lock, before the governor thread exists.
+static void DpmConfigureZone(BC250_DPM_STATE* S, BOOLEAN Dpm)
+{
+    unsigned int value = 0;
+    BOOLEAN present = QueryPresent(DPM_SETTING_ZONE, &value);
+    BOOLEAN off = present && value == 0;
+    enum bc250_dpm_tune_error error = BC250_DPM_TUNE_OK;
+
+    if (off) {
+        struct bc250_dpm_tune tune;
+        ULONG serial;
+        KIRQL irql;
+        bc250_dpm_tune_default(&tune);
+        bc250_dpm_tune_zone_off(&tune);
+        error = bc250_dpm_set_tune(&S->Gov, &tune);     // the thread does not exist yet: no lock needed for Gov
+        if (error == BC250_DPM_TUNE_OK) {
+            KeAcquireSpinLock(&S->SnapLock, &irql);
+            S->Tune = tune;
+            serial = ++S->TuneSerial;
+            KeReleaseSpinLock(&S->SnapLock, irql);
+            S->TuneTaken = S->TuneRefused = serial;
+        }
+    }
+    GuardLog("dpm: thermal zone DpmThermalZone %lu%s -> %s, error %d", (ULONG)value, present ? "" : " (absent)",
+             bc250_dpm_zone_mc(&S->Gov.tune) ? "on" : "off", (int)error);
+    GuardLog("dpm: thermal zone: steps from %d mC, no raise from %d mC%s",
+             bc250_dpm_zone_mc(&S->Gov.tune) ? bc250_dpm_zone_mc(&S->Gov.tune) : (int)BC250_DPM_HOT_MC,
+             bc250_dpm_warm_mc(&S->Gov.tune), Dpm ? "" : " (this start does not govern the clock)");
 }
 
 // This start's V/F curve, with the same two-mark guard as DPM itself (docs/design/tuner.md, ADR 0020). A curve
@@ -1071,6 +1157,7 @@ void DpmStart(BC250_DEVICE* Device)
         (void)StoreLogged(DPM_SETTING_LAST_REASON, d->reason);
     }
     bc250_dpm_init(&s->Gov, d->max_level);
+    DpmConfigureZone(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
     GuardLog("dpm: DpmMode %lu%s DpmMaxMHz %lu%s -> %s, ceiling %lu MHz, reason %lu%s%s", r.mode,
@@ -1293,7 +1380,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     HwmonLogLine(Device, "summary");
     DpmLogCurveLine("summary", &snap);
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
-    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases);
+    DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases, &snap);
 }
 
 // BC250_ESCAPE_RUN_DPM. Software state only, so NoAdapterSynchronization=1 for both operations.
@@ -1413,9 +1500,9 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEA
 // - No hardware: no register, no SMU message, nothing a power transition turns off. A new floor reaches the SMU only
 //   through the thread's next tick and its checked transaction (SmuSetPoint); a paused governor (DpmPause, D3) takes
 //   nothing until DpmResume, and DpmStop joins the thread before the owner stops. PASSIVE_LEVEL (the KMUTEX wait).
-// - Size (0.7.197): display.c admits sizeof (ABI 2) and BC250_DPM_TUNE_ABI1_SIZE only. With the ABI 1 size nothing
-//   past that prefix is read or written (abi2 below guards every ABI 2 field); a size that is not its AbiVersion's is
-//   refused before anything else.
+// - Size (0.7.197, 0.7.213): display.c admits sizeof (ABI 3), BC250_DPM_TUNE_ABI2_SIZE and BC250_DPM_TUNE_ABI1_SIZE
+//   only. With a shorter size nothing past that prefix is read or written (abi2 and abi3 below guard every field of
+//   their own ABI); a size that is not its AbiVersion's is refused before anything else.
 void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
@@ -1423,7 +1510,8 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     // The inputs, read once; the same fields carry the outputs.
     const ULONG abi = Data->AbiVersion;
-    const BOOLEAN abi2 = abi == BC250_DPM_TUNE_ABI && Size == sizeof(BC250_ESCAPE_DPM_TUNE);
+    const BOOLEAN abi3 = abi == BC250_DPM_TUNE_ABI && Size == sizeof(BC250_ESCAPE_DPM_TUNE);
+    const BOOLEAN abi2 = (abi == BC250_DPM_TUNE_ABI_2 && Size == BC250_DPM_TUNE_ABI2_SIZE) || abi3;
     const BOOLEAN abi1 = abi == BC250_DPM_TUNE_ABI_1 && Size == BC250_DPM_TUNE_ABI1_SIZE;
     const ULONG op = Data->Op;
     const BOOLEAN write = op != BC250_DPM_TUNE_OP_READ;
@@ -1448,6 +1536,12 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
         input.soft_step_ms = Data->SoftReleaseStepMs;
         inputClean = inputClean && !Data->Reserved2[0] && !Data->Reserved2[1];
     }
+    if (abi3) {
+        input.zone_delta_mc = Data->ZoneDeltaMc;
+        input.zone_step_ms = Data->ZoneStepMs;
+        input.zone_lead_ms = Data->ZoneLeadMs;
+        inputClean = inputClean && !Data->Reserved3;
+    }
     expectedFlags.NoAdapterSynchronization = 1;
     Data->Version = BC250_KMD_VERSION;
     Data->Status = BC250_ESCAPE_STATUS_REFUSED;
@@ -1460,6 +1554,10 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
     if (abi2) {
         Data->HotStepMs = Data->SoftReleaseDeltaMc = Data->SoftReleaseStepMs = 0;
         Data->DefaultHotStepMs = Data->DefaultSoftReleaseDeltaMc = Data->DefaultSoftReleaseStepMs = 0;
+    }
+    if (abi3) {
+        Data->ZoneDeltaMc = Data->ZoneStepMs = Data->ZoneLeadMs = 0;
+        Data->DefaultZoneDeltaMc = Data->DefaultZoneStepMs = Data->DefaultZoneLeadMs = Data->ZoneSlopeMs = 0;
     }
     if (!(abi1 || abi2) || !inputClean || op > (abi2 ? BC250_DPM_TUNE_OP_THERMAL : BC250_DPM_TUNE_OP_RESET) ||
         EscapeFlags != expectedFlags.Value) return;
@@ -1498,6 +1596,13 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
                 request.hot_step_ms = input.hot_step_ms;
                 request.soft_delta_mc = input.soft_delta_mc;
                 request.soft_step_ms = input.soft_step_ms;
+                // The soft zone only from an ABI 3 caller (0.7.213): an ABI 2 tool writes the three fields it knows and
+                // keeps the stored zone, so it cannot switch the zone off by leaving three zeros where it sees nothing.
+                if (abi3) {
+                    request.zone_delta_mc = input.zone_delta_mc;
+                    request.zone_step_ms = input.zone_step_ms;
+                    request.zone_lead_ms = input.zone_lead_ms;
+                }
             } else request = defaults;
             if (error == BC250_DPM_TUNE_OK) error = bc250_dpm_tune_check(&request, s->Decision.max_level);
             if (error != BC250_DPM_TUNE_OK) status = STATUS_INVALID_PARAMETER;
@@ -1533,7 +1638,9 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
                    ? BC250_DPM_TUNE_FLAG_THRESHOLDS : 0) |
                   (request.floor_level != BC250_DPM_FLOOR_LEVEL ? BC250_DPM_TUNE_FLAG_FLOOR : 0) |
                   (applied == serial ? BC250_DPM_TUNE_FLAG_APPLIED : 0) |
-                  (abi2 && !ThermalEqual(&request, &defaults) ? BC250_DPM_TUNE_FLAG_THERMAL : 0);
+                  (abi2 && !ThermalEqual(&request, &defaults) ? BC250_DPM_TUNE_FLAG_THERMAL : 0) |
+                  (abi3 && !ZoneEqual(&request, &defaults) ? BC250_DPM_TUNE_FLAG_ZONE : 0) |
+                  (abi3 && request.zone_delta_mc == 0u ? BC250_DPM_TUNE_FLAG_ZONE_OFF : 0);
     if (abi2) {
         Data->HotStepMs = request.hot_step_ms;
         Data->SoftReleaseDeltaMc = request.soft_delta_mc;
@@ -1541,6 +1648,15 @@ void DpmTuneRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM_TUNE* Data, ULONG Siz
         Data->DefaultHotStepMs = defaults.hot_step_ms;
         Data->DefaultSoftReleaseDeltaMc = defaults.soft_delta_mc;
         Data->DefaultSoftReleaseStepMs = defaults.soft_step_ms;
+    }
+    if (abi3) {
+        Data->ZoneDeltaMc = request.zone_delta_mc;
+        Data->ZoneStepMs = request.zone_step_ms;
+        Data->ZoneLeadMs = request.zone_lead_ms;
+        Data->DefaultZoneDeltaMc = defaults.zone_delta_mc;
+        Data->DefaultZoneStepMs = defaults.zone_step_ms;
+        Data->DefaultZoneLeadMs = defaults.zone_lead_ms;
+        Data->ZoneSlopeMs = BC250_DPM_ZONE_SLOPE_MS;
     }
     Data->UpPermille = request.up_permille;
     Data->TargetPermille = request.target_permille;

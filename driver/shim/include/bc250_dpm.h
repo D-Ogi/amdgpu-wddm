@@ -17,7 +17,9 @@
  *   bc250_dpm_tune_check()    the thresholds and floor an administrator may set at run time (0.7.185)
  *   bc250_dpm_session_step()  the "running above the floor" marker that turns a crash at a high
  *                             clock into a fixed-lab next start
- * The idle state (0.7.207) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on.
+ * The idle state (0.7.207) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on. So is the soft thermal
+ * zone (0.7.213, BD-087): the cap starts stepping down at 86 C instead of 87 C, judged on the reading plus its own
+ * slope extrapolated 15 s, and the 87 C hot cap stays behind it as the backstop on the raw reading.
  * The operating points themselves are bc250_clock.h's table; a level is an index into it.
  */
 #ifndef BC250_DPM_H
@@ -139,6 +141,7 @@ enum bc250_dpm_throttle {
 	BC250_DPM_THROTTLE_THERMAL_WARM = 8,	/* WARM_MC (85 C in 0.7.200, 87 C from 0.7.204): a raise refused */
 	BC250_DPM_THROTTLE_THERMAL_RAMP = 9,	/* 70 C to WARM_MC (0.7.203): a raise cut to one level, or held */
 	BC250_DPM_THROTTLE_IDLE = 10,		/* the idle state holds the clock at the idle point, or is being left (0.7.207) */
+	BC250_DPM_THROTTLE_THERMAL_ZONE = 11,	/* the soft zone (0.7.213): the cap stepped down below HOT_MC */
 	BC250_DPM_THROTTLE_COUNT
 };
 
@@ -153,7 +156,13 @@ enum bc250_dpm_throttle {
  * raise of clock or voltage; the level holds, a lowering still happens. 85 C (HOT_MC - 2 C) in 0.7.200-203; at HOT_MC
  * from 0.7.204 (owner, 2026-10-04: "próg na 87", the threshold at 87). The rule stays as a backstop at and above
  * HOT_MC, where the hot cap already holds the clock at or below the running level, and the clock gate refuses a
- * raise. Never above HOT_MC: the hot cap's step down and this rule's hold then cover the same readings. */
+ * raise. Never above HOT_MC: the hot cap's step down and this rule's hold then cover the same readings.
+ * Since 0.7.213 this constant is only what the rule falls back to with the soft zone off: with the zone on the
+ * threshold in force is the soft-release threshold, HOT_MC - soft_delta_mc (83.0 C by default), and it is read with the
+ * zone's lead. bc250_dpm_warm_mc() is the one place that decides. The two belong together: the cap's up side and the
+ * clock's up side must not disagree, or a released cap would be followed by a clock the zone is about to take back.
+ * The thermal ramp's table still runs to BC250_DPM_WARM_MC (bc250_dpm_ramp_interval_ms), on the raw reading, because
+ * it spaces raises below the knee as well and its shape was measured against 87 C (session 367). */
 #define BC250_DPM_WARM_MC		BC250_DPM_HOT_MC
 /* The thermal ramp (0.7.203, session 367): from RAMP_KNEE_MC up to WARM_MC a raise goes one level at most, and only
  * when the last raise is at least the ramp interval ago. The interval grows linearly from RAMP_MIN_MS at the knee to
@@ -176,11 +185,96 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_CRITICAL_MC		90000
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */
-/* The soft release (BD-055), off by default: below HOT_MC - delta for a whole step, the cap rises one level. Without
- * it the cap holds anywhere between RELEASE_MC and HOT_MC, so under a sustained load one excursion past 87 C costs
- * levels for the rest of the load (sessions 318, 320, 321: 2000 -> 1500..1600 MHz, frozen at 85.6-86.2 C). */
-#define BC250_DPM_SOFT_DELTA_MC		0u	/* 0: no soft release */
-#define BC250_DPM_SOFT_STEP_MS		3000u
+/* The soft release (BD-055): below HOT_MC - delta for a whole step, the cap rises one level. Without it the cap holds
+ * anywhere between RELEASE_MC and HOT_MC, so under a sustained load one excursion past 87 C costs levels for the rest
+ * of the load (sessions 318, 320, 321: 2000 -> 1500..1600 MHz, frozen at 85.6-86.2 C). It was off by default until
+ * 0.7.213, where it became the up side of the soft zone below: 4.0 C under HOT_MC, which is 83.0 C, held for 4 s.
+ * The soft zone's own search picked both numbers (scratch/thermal-zone/sim, best.txt "What the recommendation needs"),
+ * and this threshold is also where the warm zone now refuses a raise (bc250_dpm_warm_mc). */
+#define BC250_DPM_SOFT_DELTA_MC		4000u	/* HOT_MC - this = 83.0 C; 0: no soft release */
+#define BC250_DPM_SOFT_STEP_MS		4000u
+/* The soft thermal zone (0.7.213, BD-087, GRAPH.md C56, after session 436). The hot cap first acts at HOT_MC, which is
+ * also where the lab runner ends a game (87 C held 10 s, or 89 C at once), and the die's time constant is about 25 s:
+ * in 436 the benchmark read 80.2 C at 1500 MHz, 84.0 C at 1200 MHz 32 s later and 88.8 C at 800 MHz 31 s after that,
+ * and the runner stopped the game while the governor was still stepping down. A controller that first acts at 87 C
+ * cannot hold 87 C, so the cap now starts stepping at ZONE_MC and the clock stops rising at the soft-release
+ * threshold, both of them read with a lead.
+ *
+ * The numbers are the result of an exhaustive search over 6393 threshold/timer/trigger variants, replayed on 21
+ * recorded game sessions with each session's own measured disturbance over a fitted die model
+ * (P:\BC-250\scratch\thermal-zone, sim/best.txt; the model reproduces each session's Tctl to 0.13-0.23 C rms). The
+ * recommendation is the highest-clock variant that never reaches 87 C on any trace AND keeps the runner clear under
+ * every perturbation a fixed 800 MHz itself survives: peak 86.7 C, 0 s at or above 87 C, mean 1073 MHz against the
+ * shipped governor's 1131 MHz, which peaks 89.0 C and loses four of the traces. On 436 it peaks 85.9 C instead of
+ * 88.9 C and does not stop.
+ *
+ * Those are the numbers of a search whose plant has no sensor noise in it, and the lead they were scored with had no
+ * cap on it. The safety review of this change measured what the recorded noise does to such a lead (LEAD_MAX_MC below)
+ * and the thresholds were scored again with it, by replaying the same 21 sessions through this code over the same plant
+ * with each session's own recorded noise added to the die (scratch/thermal-zone/review-dpm, validation.txt). What ships
+ * is that second set of numbers: peak 87.3 C, 9.4 s at or above 87 C in some two hours of play, no runner stop on any
+ * trace, mean 1048 MHz, and 436 at 85.4 C with no reading at 87 C. The figures of the paragraph above stand as what the
+ * search found on a noise-free plant, not as a claim about the driver.
+ *
+ * ZONE_MC is HOT_MC - ZONE_DELTA_MC = 86.0 C. It is not "87 C minus a margin": the overshoot the controller allows
+ * grows with the clock it is allowed to reach, which is why a cooler die wants a LOWER threshold, not a higher one. */
+#define BC250_DPM_ZONE_DELTA_MC		1000u	/* HOT_MC - this = 86.0 C: the zone's step-down threshold; 0: no zone */
+/* One level off the cap per this, while in the zone. The noise-free search picked 3000 ms, with a lead that had no cap
+ * on it; the safety review's cap (BC250_DPM_ZONE_LEAD_MAX_MC) means the zone acts at a raw 84.0 C instead of the 78 to
+ * 83 C that the noise itself was producing, so it has less warning and has to step faster. 1500 ms is where both
+ * validations come out clean: on the fitted plant every arm of test_zone436 stays under 87 C with no runner stop, and
+ * over the 21 recorded sessions replayed closed-loop with their own sensor noise the die peaks at 87.3 C with 9.4 s at
+ * or above 87 C in some two hours of play and no stop, against 89.3 C, 149.3 s and five stops for the 0.7.212 rules, for
+ * a mean clock of 1048 MHz against 1099 (scratch/thermal-zone/review-dpm). */
+#define BC250_DPM_ZONE_STEP_MS		1500u
+/* The lead. Every threshold of the zone and of the soft release is judged on Tctl plus the slope of the last
+ * ZONE_SLOPE_MS seconds times this, when that is higher than Tctl itself. It is the whole gain of the search: at
+ * identical thresholds, turning it off gives peak 87.58 C and 47.5 s at or above 87 C over the 21 traces, and turning
+ * it on gives 86.71 C and no second at all, for 2.7 % of the mean clock. A plain threshold, however low, cannot do
+ * this - it is the 25 s lag that beats it. In the driver it is a least-squares fit over a short ring of past readings
+ * (bc250_dpm_governor::slope_mc), a deadband, and a cap: SLOPE_MIN_MC and LEAD_MAX_MC below say why each of the three
+ * is there. The fit's span is whatever the ring really covers, never a figure assumed from the slot spacing, because a
+ * skipped slot widens it. HOT_MC and CRITICAL_MC keep reading the raw sensor: the backstop must never be a guess. */
+#define BC250_DPM_ZONE_LEAD_MS		15000u	/* 0: no lead, every threshold on the raw reading */
+#define BC250_DPM_ZONE_SLOPE_MS		5000u	/* the window the slope is measured over; fixed, not a tune field */
+/* The ring the slope is measured over: one reading per slot, a slot every SLOPE_SLOT_MS. With 20 slots a full ring
+ * spans 4.75 to 5.0 s, which is SLOPE_MS within one slot, and the fit below divides by the span it measures, so the
+ * estimate is exact whatever the governor's real tick period turned out to be. 20 slots is 160 bytes of the governor;
+ * a per-tick ring at BC250_DPM_TICK_MS would be ten times that for no better slope. A tick that brings no reading
+ * skips its slot and the span grows, so the span is checked against SLOPE_MAX_SPAN_MS instead of assumed. */
+#define BC250_DPM_ZONE_SLOPE_SLOTS	20u
+#define BC250_DPM_ZONE_SLOPE_SLOT_MS	(BC250_DPM_ZONE_SLOPE_MS / BC250_DPM_ZONE_SLOPE_SLOTS)
+/* The widest ring the lead is taken from. A reading that fails now and then skips its slot instead of emptying the
+ * ring (0.7.213 review), so the span may exceed SLOPE_MS; past this the readings are too old to extrapolate from and
+ * the lead reports unavailable. Twice the window: a slope over 10 s still says something about a die whose time
+ * constant is 25 s. */
+#define BC250_DPM_ZONE_SLOPE_MAX_SPAN_MS (2u * BC250_DPM_ZONE_SLOPE_MS)
+/* The deadband and the cap on the lead (0.7.213 safety review, finding 4). The slope is the least-squares fit over the
+ * ring, not the difference of its two ends, because both ends carry the full noise of one reading each: replayed on the
+ * recorded sessions' thermally flat segments the two-point estimator reported a lead of up to 7.8 C, which moved the
+ * zone's 86.0 C threshold down to a raw 78 C.
+ *   The deadband is on the fitted rise over the ring's own span: under it the die counts as flat and there is no lead at
+ *   all. 200 mC over 5 s is 0.04 C/s, well under the 0.12 to 0.15 C/s of session 436, so it costs no signal.
+ *   The cap is what makes the bound provable, and the fit alone does not: the recorded 1 s samples jump by up to 1 C on
+ *   a die whose time constant is 25 s, and no estimator over a 5 s window can tell one such jump from the start of a
+ *   real rise. With the lead capped the zone cannot engage below bc250_dpm_zone_mc() minus the cap, a raw 84.0 C at the
+ *   default threshold. It costs almost nothing: over the 21 recorded sessions the median lead on a rising die is 1.2 to
+ *   1.5 C, and 436's own rise carries 1.8 to 2.25 C, so the signal sits at or under the cap already. */
+#define BC250_DPM_ZONE_SLOPE_MIN_MC	200	/* the fitted rise over the ring's span must reach this */
+#define BC250_DPM_ZONE_LEAD_MAX_MC	2000	/* and the lead itself never exceeds this */
+/* The zone acts only while the GPU is doing work (0.7.213 safety review, finding 2). An idle GPU is not the heat source
+ * the zone addresses: the clock is already at the idle point or the lab floor, a cap stepped down to 800 MHz lowers
+ * nothing, and the cap then stays there until the die falls under the soft-release threshold, so the first work of the
+ * next burst runs at 800 MHz on a die the CPU was heating. Refusing to act costs no safety, because from the
+ * soft-release threshold up the clock gate already refuses every raise: a GPU that gets work at 86 C cannot go above the
+ * lab floor whatever the cap says.
+ * "Work" is the GFX ring, the graphics engine or the paging engine; the share has to beat a single desktop frame, which
+ * is 1000 / BC250_DPM_TICK_MS = 40 permille of its own tick, and QUIET_MS without any of the three is the idle state's
+ * own definition of an idle GPU (BC250_DPM_IDLE_HOLD_MS). The gate holds from the governor's first tick and across a
+ * stall: zone_quiet_ms starts saturated and saturates again on a clamped tick with no work, because a window counted
+ * from a start or from a resume is a window in which the zone acts on a GPU nobody has given work to. */
+#define BC250_DPM_ZONE_WORK_PERMILLE	50u
+#define BC250_DPM_ZONE_QUIET_MS		BC250_DPM_IDLE_HOLD_MS
 /* The idle state (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
  * 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). While the GPU has no work the
  * governor holds the idle point, below the lab floor, at the floor's own 820 mV. The three settings are the
@@ -245,6 +339,10 @@ struct bc250_dpm_tune {
 	unsigned int	hot_step_ms;		/* at most one thermal step down per this */
 	unsigned int	soft_delta_mc;		/* soft release below HOT_MC - this; 0: none */
 	unsigned int	soft_step_ms;		/* held below that for this: the cap rises one level */
+	/* The soft zone (0.7.213, BD-087). zone_delta_mc 0 turns the whole zone off, the lead with it. */
+	unsigned int	zone_delta_mc;		/* the zone steps the cap down from HOT_MC - this; 0: no zone */
+	unsigned int	zone_step_ms;		/* at most one zone step down per this */
+	unsigned int	zone_lead_ms;		/* the lead the zone's thresholds are judged with; 0: raw readings */
 };
 #define BC250_DPM_TUNE_MIN_PERMILLE	100u
 #define BC250_DPM_TUNE_MAX_PERMILLE	1000u
@@ -257,6 +355,17 @@ struct bc250_dpm_tune {
 #define BC250_DPM_TUNE_MAX_SOFT_DELTA_MC 4500u
 #define BC250_DPM_TUNE_MIN_SOFT_STEP_MS	2000u	/* a soft raise never follows a thermal change by less than this */
 #define BC250_DPM_TUNE_MAX_SOFT_STEP_MS	30000u
+/* The soft zone (0.7.213). Its threshold lies strictly between the soft-release threshold and HOT_MC, at least half a
+ * degree from each, so the two never read the same temperature: zone_delta_mc + 500 <= soft_delta_mc, and a zone with
+ * no soft release above it is refused (the cap could then only ever fall). The upper bound on zone_delta_mc is the
+ * soft-release bound less that half degree; the arithmetic, not a second number, keeps them consistent. The step's
+ * lower bound is the hot step's, ten governor ticks. The lead has no lower bound (0 turns it off) and a minute is as
+ * far as an extrapolation of a 5 s slope can be worth anything on a die whose time constant is 25 s. */
+#define BC250_DPM_TUNE_MIN_ZONE_DELTA_MC 500u
+#define BC250_DPM_TUNE_MAX_ZONE_DELTA_MC (BC250_DPM_TUNE_MAX_SOFT_DELTA_MC - 500u)
+#define BC250_DPM_TUNE_MIN_ZONE_STEP_MS	250u
+#define BC250_DPM_TUNE_MAX_ZONE_STEP_MS	30000u
+#define BC250_DPM_TUNE_MAX_ZONE_LEAD_MS	60000u
 /* Why a tune was refused. Shared with the escape and the CLI. */
 enum bc250_dpm_tune_error {
 	BC250_DPM_TUNE_OK = 0,
@@ -267,9 +376,21 @@ enum bc250_dpm_tune_error {
 	BC250_DPM_TUNE_HOLD = 5,		/* down_hold_ms outside MIN..MAX_HOLD_MS */
 	BC250_DPM_TUNE_FLOOR = 6,		/* the floor is not a table level from the lab floor to the start's ceiling */
 	BC250_DPM_TUNE_THERMAL = 7,		/* hot step, soft delta or soft step outside its range */
+	BC250_DPM_TUNE_ZONE = 8,		/* the soft zone: a value out of range, or no deadband under HOT_MC (0.7.213) */
 	BC250_DPM_TUNE_COUNT
 };
 void bc250_dpm_tune_default(struct bc250_dpm_tune *t);
+/* The 0.7.212 thermal rules in a tune: no soft zone, no lead, no soft release, so the hot cap at HOT_MC is the only
+ * rule that reads the temperature and the warm zone is back at HOT_MC. The KMD calls it for a start whose
+ * DpmThermalZone is 0, which is the one switch that turns the zone off; a run-time RUN_DPM_TUNE reset goes back to
+ * bc250_dpm_tune_default() and therefore turns the zone on again. The thresholds, the floor and the hot step are left
+ * exactly as they are, so this composes with any other tune. */
+void bc250_dpm_tune_zone_off(struct bc250_dpm_tune *t);
+/* The zone's step-down threshold in mC, 0 when the zone is off, and the highest reading at which a raise of the clock
+ * is still admitted (BC250_DPM_WARM_MC, or the soft-release threshold with the zone on). The KMD's log line, the escape
+ * and the host test read both instead of recomputing them. */
+int bc250_dpm_zone_mc(const struct bc250_dpm_tune *t);
+int bc250_dpm_warm_mc(const struct bc250_dpm_tune *t);
 /* Ranges, order, then two invariants over the clock table, both checked exactly (every level, every busy
  * share the governor can see), not by a rule of thumb about the table's shape:
  *
@@ -295,7 +416,10 @@ void bc250_dpm_tune_default(struct bc250_dpm_tune *t);
  * invariants the host test finds no oscillation down to a one-tick hold.
  *
  * The thermal timing last: hot step MIN..MAX_HOT_STEP_MS, soft delta 0 or MIN..MAX_SOFT_DELTA_MC, soft step
- * MIN..MAX_SOFT_STEP_MS (checked even while the soft release is off, so that turning it on later is one field). */
+ * MIN..MAX_SOFT_STEP_MS (checked even while the soft release is off, so that turning it on later is one field), and
+ * then the soft zone (0.7.213): zone delta 0 or MIN..MAX_ZONE_DELTA_MC, zone step MIN..MAX_ZONE_STEP_MS, zone lead at
+ * most MAX_ZONE_LEAD_MS, and the deadband zone_delta_mc + 500 <= soft_delta_mc, which also refuses a zone with the soft
+ * release off. */
 enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level);
 
 struct bc250_dpm_input {
@@ -345,6 +469,35 @@ struct bc250_dpm_governor {
 	unsigned int	idle_acc;		/* busy permille x ms over that window, saturating */
 	unsigned int	idle_entries, idle_exits, idle_refusals;
 	unsigned int	idle_total_ms;		/* time held at the idle point, saturating */
+	/* The soft zone (0.7.213, BD-087). */
+	unsigned int	zone_ms;		/* time in the zone since its last step down */
+	unsigned int	zone_steps;		/* cap lowerings by the zone */
+	unsigned int	zone_ticks;		/* steps spent in the zone */
+	int		zone;			/* inside a zone episode: entered at the zone's threshold, left under the
+						 * soft-release threshold, so the cap is clamped to the running clock once
+						 * per episode and never follows a load lull (0.7.213 review) */
+	int		zone_lead_mc;		/* the lead of the last step, 0 without one (the log and the escape print it) */
+	int		zone_lead_ok;		/* the ring could measure a slope in the last step (the log prints it): 0
+						 * means every soft threshold read the raw sensor, which the zone's own
+						 * numbers were not chosen for */
+	unsigned int	zone_lead_gaps;		/* steps in which the lead was wanted and unavailable */
+	unsigned int	zone_quiet_ms;		/* since the GPU last had work, saturating: the zone acts only under
+						 * BC250_DPM_ZONE_QUIET_MS of it. It starts saturated (a governor that has
+						 * seen no tick has seen no work) and saturates again on a clamped tick that
+						 * brought no work, so no start and no resume gives the zone a window on a
+						 * GPU nobody has given work to (0.7.213 safety review, second round) */
+	unsigned int	zone_idle_holds;	/* steps in which the zone's threshold was met and the GPU was idle */
+	/* The slope ring the lead is measured from: one reading per BC250_DPM_ZONE_SLOPE_SLOT_MS. slope_at_ms and
+	 * zone_now_ms are the governor's own millisecond clock and WRAP on purpose - only unsigned differences of them
+	 * are ever read, which stay exact across the wrap, so no saturation can turn an age into a zero. A tick whose
+	 * dt_ms had to be clamped empties the ring: zone_now_ms then advanced by less than the time that really passed,
+	 * so every age in the ring is wrong. A tick that brings no reading skips its slot and keeps the window. */
+	int		slope_mc[BC250_DPM_ZONE_SLOPE_SLOTS];
+	unsigned int	slope_at_ms[BC250_DPM_ZONE_SLOPE_SLOTS];
+	unsigned int	slope_head;		/* the next slot to write, and the oldest one once the ring is full */
+	unsigned int	slope_count;		/* slots written, up to BC250_DPM_ZONE_SLOPE_SLOTS */
+	unsigned int	slope_push_ms;		/* since the last slot was written */
+	unsigned int	zone_now_ms;		/* the governor's millisecond clock, wrapping */
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
