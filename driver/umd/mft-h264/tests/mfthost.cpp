@@ -1223,9 +1223,8 @@ int PipelinedPass(const Options& o, const EncoderConfig& cfgIn, ID3D11Device* de
     std::vector<uint8_t> stream, frame;
     double totalGpuMs = 0.0, totalCpuMs = 0.0;
     double totalRecordMs = 0.0, totalMapWaitMs = 0.0, totalReadbackMs = 0.0;
-    uint32_t retired = 0, timed = 0, inWindow = 0;
+    uint32_t retired = 0, timed = 0;
     double encMs = 0.0, genMs = 0.0;
-    bool windowOpen = false;
     // The loop is the pipeline: submit until the GPU holds `depth` pictures, then retire the oldest
     // before submitting the next, and once the pictures run out keep retiring until it is empty.
     //
@@ -1233,18 +1232,22 @@ int PipelinedPass(const Options& o, const EncoderConfig& cfgIn, ID3D11Device* de
     // SubmitFrame plus every RetireFrame. It is the same quantity the serial pass divides, which starts
     // its clock after the picture has been made, and that matters here because making a 1080p picture
     // on the CPU costs about 1.6 ms - more than the encoder's own CPU half - and counting it would make
-    // the pipeline look 40 % worse than it is. It is reported on its own line instead of hidden.
+    // the pipeline look 40 % worse than it is. It is reported on its own line instead of hidden. The GPU
+    // runs during that time too, which is why the per-picture GPU figure can be larger than this one.
+    //
+    // Counted are the iterations that did both a submit and a retire, which is what a steady-state
+    // pipeline iteration is. A priming iteration submits without retiring and a draining one retires
+    // without submitting, so all three have different costs, and the earlier version mixed them: it
+    // divided a window of 51 retires and 50 submits by 51 while dividing the per-picture figures of 50
+    // pictures by 50, which understated the cost of a picture by about one submit in fifty.
     for (uint32_t i = 0; i < o.frames + depth - 1u; ++i) {
-        if (!windowOpen && i >= o.timingSkip) {
-            windowOpen = true;
-        }
+        bool submitted = false;
+        double iterEncMs = 0.0, iterGenMs = 0.0;
         if (i < o.frames) {
             GpuFrameInput in;
             const double gen0 = NowMs();
             hr = source.Frame(i, &in);
-            if (windowOpen) {
-                genMs += NowMs() - gen0;
-            }
+            iterGenMs = NowMs() - gen0;
             if (FAILED(hr)) {
                 printf("  the picture source failed at %u: 0x%08lX\n", i,
                        static_cast<unsigned long>(hr));
@@ -1252,32 +1255,31 @@ int PipelinedPass(const Options& o, const EncoderConfig& cfgIn, ID3D11Device* de
             }
             const double sub0 = NowMs();
             hr = enc.SubmitFrame(in, false);
-            if (windowOpen) {
-                encMs += NowMs() - sub0;
-            }
+            iterEncMs += NowMs() - sub0;
             if (FAILED(hr)) {
                 printf("  SubmitFrame(%u) failed 0x%08lX\n", i, static_cast<unsigned long>(hr));
                 return 2;
             }
+            submitted = true;
         }
-        if (enc.Pending() >= depth || i >= o.frames) {
+        // enc.Pending() > 0 first: with --frames below --depth the pipeline never fills, so the drain
+        // half of the loop would otherwise ask for one retirement more than there are pictures and a
+        // healthy encoder would report E_NOT_VALID_STATE.
+        if (enc.Pending() > 0 && (enc.Pending() >= depth || i >= o.frames)) {
             FrameStats st;
             const double ret0 = NowMs();
             hr = enc.RetireFrame(frame, &st);
-            if (windowOpen) {
-                encMs += NowMs() - ret0;
-            }
+            iterEncMs += NowMs() - ret0;
             if (FAILED(hr)) {
                 printf("  RetireFrame failed 0x%08lX\n", static_cast<unsigned long>(hr));
                 return 2;
             }
             stream.insert(stream.end(), frame.begin(), frame.end());
             ++retired;
-            if (windowOpen) {
-                ++inWindow;
-            }
-            if (retired > o.timingSkip) {
+            if (submitted && i >= o.timingSkip) {
                 ++timed;
+                encMs += iterEncMs;
+                genMs += iterGenMs;
                 totalGpuMs += st.gpuMs;
                 totalCpuMs += st.cpuMs;
                 totalRecordMs += st.recordMs;
@@ -1287,15 +1289,14 @@ int PipelinedPass(const Options& o, const EncoderConfig& cfgIn, ID3D11Device* de
         }
     }
     const uint32_t n = timed ? timed : 1u;
-    const uint32_t w = inWindow ? inWindow : 1u;
     printf("    %zu bytes against %zu serial, %s\n", stream.size(), reference.size(),
            (stream == reference) ? "byte identical" : "DIFFERENT");
     printf("    %.2f ms per picture, %.2f ms of it on the GPU, %.1f pictures per second\n",
-           encMs / w, totalGpuMs / n, (encMs > 0.0) ? (1000.0 * w / encMs) : 0.0);
+           encMs / n, totalGpuMs / n, (encMs > 0.0) ? (1000.0 * n / encMs) : 0.0);
     printf("    per picture: record %.2f ms, map wait %.2f ms, readback %.2f ms, cpu %.2f ms\n",
            totalRecordMs / n, totalMapWaitMs / n, totalReadbackMs / n, totalCpuMs / n);
-    printf("    %u pictures retired, %u of them timed, %u inside the clock; the test spent %.2f ms a "
-           "picture making them\n", retired, timed, inWindow, genMs / w);
+    printf("    %u pictures retired, %u of them timed; the test spent %.2f ms a picture making them, "
+           "which the clock above leaves out\n", retired, timed, genMs / n);
     if (retired != o.frames) {
         printf("  FAIL the pipeline retired %u pictures of %u\n", retired, o.frames);
         return 1;
@@ -1801,7 +1802,8 @@ void Usage()
     printf("usage: mfthost.exe [--selftest|--encode|--mft|--compare|--sinkwriter|--all]\n");
     printf("                   [--width N] [--height N] [--frames N] [--qp N] [--bitrate N]\n");
     printf("                   [--gop N] [--fps N] [--deblock] [--gpu-source] [--still] [--cbr]\n");
-    printf("                   [--timing-skip N] [--depth N] [--ours-qp N] [--verbose]\n");
+    printf("                   [--timing-skip N] [--depth N] [--deblock-mode rows|waves|serial]\n");
+    printf("                   [--ours-qp N] [--verbose]\n");
     printf("                   [--chroma-qp-offset N] [--lambda-scale N] [--skip-bias-scale N]\n");
     printf("                   [--rc-gain N]\n");
     printf("                   [--out <directory>]\n");
@@ -1871,6 +1873,24 @@ int wmain(int argc, wchar_t** argv)
             o.timingSkip = ArgU(argc, argv, i, o.timingSkip); ++i;
         } else if (wcscmp(a, L"--depth") == 0) {
             o.depth = ArgU(argc, argv, i, o.depth); ++i;
+        } else if (wcscmp(a, L"--deblock-mode") == 0 && i + 1 < argc) {
+            // The same three shapes BC250_MFT_DEBLOCK and BC250_MFT_SERIAL_DEBLOCK pick, as an argument,
+            // so a sweep case can hold one without the caller having to set and clear an environment
+            // variable around it. GpuEncoder reads the environment in Initialize, so this writes it.
+            const wchar_t* m = argv[i + 1];
+            ++i;
+            if (wcscmp(m, L"waves") == 0 || wcscmp(m, L"wavefront") == 0) {
+                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", "waves");
+                SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+            } else if (wcscmp(m, L"serial") == 0) {
+                SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", "1");
+            } else if (wcscmp(m, L"rows") == 0) {
+                SetEnvironmentVariableA("BC250_MFT_DEBLOCK", nullptr);
+                SetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr);
+            } else {
+                wprintf(L"--deblock-mode takes rows, waves or serial\n");
+                return 2;
+            }
         } else if (wcscmp(a, L"--ours-qp") == 0) {
             o.oursQp = ArgU(argc, argv, i, o.oursQp); ++i;
         } else if (wcscmp(a, L"--chroma-qp-offset") == 0) {

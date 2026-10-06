@@ -1513,6 +1513,148 @@ int RunMft(const Options& o)
             Say("after COMMAND_DRAIN, NOTIFY_START_OF_STREAM opens a new segment with a key frame "
                 "carrying its own parameter sets");
         }
+
+        // What the transform left in the event queue. A METransformDrainComplete is expected: the
+        // second segment was drained and the loop above stopped at its access unit. A
+        // METransformNeedInput is not, and at a pipeline depth above one it is what a drain produces by
+        // accident, because the access unit a drain leaves behind is collected through ProcessOutput and
+        // ProcessOutput is where the next picture is asked for. The transform would be asking for a
+        // picture of a segment that has ended, and a client that drops its events on a drain - which the
+        // asynchronous model allows - then finds the input credit taken at the next start of stream and
+        // waits for a request that is never re-issued. Drained here, where nothing needs the events any
+        // more.
+        // Only when a drain actually closed that second segment, which it does at a pipeline depth
+        // above one: one picture then gives no access unit, so the loop above has to drain to get one.
+        // At a depth of one the picture came straight back out, the segment is still open, and the
+        // request waiting in the queue is the ordinary request for the next picture.
+        uint32_t strayNeed = 0, strayOther = 0;
+        for (;;) {
+            ComPtr<IMFMediaEvent> ev;
+            if (FAILED(events->GetEvent(MF_EVENT_FLAG_NO_WAIT, &ev)) || !ev) {
+                break;
+            }
+            MediaEventType t = MEUnknown;
+            ev->GetType(&t);
+            if (t == METransformNeedInput) {
+                ++strayNeed;
+            } else {
+                ++strayOther;
+            }
+        }
+        if (!restartDrained) {
+            Say("the second segment was not drained (the pipeline is one picture deep in this run), so "
+                "the %u request(s) and %u other event(s) left in the queue are the open segment's",
+                strayNeed, strayOther);
+        } else if (strayNeed != 0) {
+            Say("FAIL the transform asked for %u more picture(s) after the segment was drained",
+                strayNeed);
+            ++settingFailures;
+        } else {
+            Say("after the drain the queue holds %u event(s) and no request for another picture",
+                strayOther);
+        }
+
+        // CODECAPI_AVLowLatencyMode turned on in the middle of a segment, with a picture already in the
+        // GPU. That is what a conferencing client does when a call starts, and the only thing it asked
+        // for is the frame of delivery delay the pipeline costs; a transform that accepts the setting,
+        // reports it back as in force and then keeps the pipeline for ever is lying to it. The slot ring
+        // can only be resized while it is empty, so the transform has to write out what it holds first,
+        // which makes the picture already in flight and the new picture two access units of one
+        // ProcessInput - and every picture after it one of its own.
+        //
+        // No blocking GetEvent in this block: what it measures is how many access units each
+        // ProcessInput produces, the credit model was checked above, and a wrong answer here must be a
+        // failure and not a hang.
+        uint32_t llOut = 0;
+        auto pump = [&]() {
+            for (;;) {
+                ComPtr<IMFMediaEvent> ev;
+                if (FAILED(events->GetEvent(MF_EVENT_FLAG_NO_WAIT, &ev)) || !ev) {
+                    break;
+                }
+                MediaEventType t = MEUnknown;
+                ev->GetType(&t);
+                if (t != METransformHaveOutput) {
+                    continue;
+                }
+                MFT_OUTPUT_DATA_BUFFER buf = {};
+                DWORD status = 0;
+                if (SUCCEEDED(mft->ProcessOutput(0, 1, &buf, &status))) {
+                    ComPtr<IMFSample> s;
+                    s.Attach(buf.pSample);
+                    if (buf.pEvents != nullptr) {
+                        buf.pEvents->Release();
+                    }
+                    ++llOut;
+                }
+            }
+        };
+        auto feedOne = [&](uint32_t index) -> HRESULT {
+            HRESULT fh = pattern.Draw(index);
+            ComPtr<IMFMediaBuffer> buffer;
+            if (SUCCEEDED(fh)) {
+                fh = MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), pattern.Texture(), 0, FALSE,
+                                               &buffer);
+            }
+            ComPtr<IMFSample> sample;
+            if (SUCCEEDED(fh)) { fh = MFCreateSample(&sample); }
+            if (SUCCEEDED(fh)) { fh = sample->AddBuffer(buffer.Get()); }
+            if (SUCCEEDED(fh)) {
+                fh = sample->SetSampleTime(static_cast<int64_t>(index) * duration);
+            }
+            if (SUCCEEDED(fh)) { fh = sample->SetSampleDuration(duration); }
+            if (SUCCEEDED(fh)) { fh = mft->ProcessInput(0, sample.Get(), 0); }
+            return fh;
+        };
+        HRESULT lh = mft->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
+        pump();
+        if (SUCCEEDED(lh)) { lh = feedOne(0); }
+        pump();
+        const uint32_t afterFirst = llOut;
+        if (FAILED(lh)) {
+            Say("FAIL the low latency segment would not start: 0x%08lX",
+                static_cast<unsigned long>(lh));
+            ++settingFailures;
+        } else if (afterFirst != 0) {
+            Say("the pipeline is one picture deep in this run (BC250_MFT_DEPTH), so there is no "
+                "delivery delay for low latency to remove: the check is not applicable here");
+        } else {
+            ComPtr<ICodecAPI> api;
+            VARIANT v;
+            VariantInit(&v);
+            v.vt = VT_BOOL;
+            v.boolVal = VARIANT_TRUE;
+            lh = mft->QueryInterface(__uuidof(ICodecAPI), reinterpret_cast<void**>(&api));
+            if (SUCCEEDED(lh)) { lh = api->SetValue(&CODECAPI_AVLowLatencyMode, &v); }
+            if (SUCCEEDED(lh)) { lh = feedOne(1); }
+            pump();
+            const uint32_t afterSecond = llOut;
+            if (SUCCEEDED(lh)) { lh = feedOne(2); }
+            pump();
+            const uint32_t afterThird = llOut;
+            if (FAILED(lh)) {
+                Say("FAIL the low latency segment failed: 0x%08lX", static_cast<unsigned long>(lh));
+                ++settingFailures;
+            } else if (afterSecond != 2 || afterThird != 3) {
+                Say("FAIL low latency was accepted but not applied: the picture in flight and the next "
+                    "one gave %u access unit(s) instead of 2, and the picture after them brought the "
+                    "total to %u instead of 3", afterSecond, afterThird);
+                ++settingFailures;
+            } else {
+                Say("CODECAPI_AVLowLatencyMode set mid-segment emptied the pipeline at once: 2 access "
+                    "units from the picture in flight and the next, then one per picture");
+            }
+            // Back to the shipped setting, and the segment closed, so nothing of this reaches the
+            // checks after it.
+            if (api) {
+                v.boolVal = VARIANT_FALSE;
+                api->SetValue(&CODECAPI_AVLowLatencyMode, &v);
+            }
+            VariantClear(&v);
+        }
+        mft->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+        mft->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0);
+        pump();
     }
 
     // A setting that would change the parameter sets, arriving while the encoder is already running.
@@ -1606,11 +1748,24 @@ int RunMft(const Options& o)
     }
     // With low latency cleared the transform is meant to hold a picture back, so a run that produced
     // its first access unit from the first input alone did not pipeline and this case stopped covering
-    // the drain path that flushes one.
+    // the drain path that flushes one. Both switches that make the shipped transform serial are
+    // honoured here, because both are documented ways to bisect on a lab machine without a rebuild and
+    // a diagnostic switch that makes the gate fail is a diagnostic nobody dares use.
+    char serialBy[8] = {};
+    const bool forcedSerial =
+        (GetEnvironmentVariableA("BC250_MFT_DEPTH", serialBy, sizeof(serialBy)) > 0 &&
+         serialBy[0] == '1') ||
+        GetEnvironmentVariableA("BC250_MFT_STAGE_TIMING", serialBy, sizeof(serialBy)) > 0;
     if (run.needBeforeFirstOutput < 2) {
-        Say("FAIL the transform produced its first access unit without asking for a second picture, "
-            "with low latency cleared");
-        rc = 1;
+        if (forcedSerial) {
+            Say("the transform answered the first picture at once: BC250_MFT_DEPTH or "
+                "BC250_MFT_STAGE_TIMING is set, so the pipeline is one picture deep and this is the "
+                "expected shape, not a failure");
+        } else {
+            Say("FAIL the transform produced its first access unit without asking for a second "
+                "picture, with low latency cleared");
+            rc = 1;
+        }
     }
     if (settingFailures != 0 || moduleLockFailures != 0) {
         rc = 1;
@@ -1871,6 +2026,10 @@ int RunCompare(const Options& o)
     // Ours, through the encoder core, CBR at the same bitrate.
     EncodeResult ours;
     std::vector<uint32_t> ourQp, ourBytes, ourSkipped;
+    // The same pictures a second time, with the pipeline the shipped transform runs. Speed only: zero
+    // while it has not been measured.
+    double oursPipeMs = 0.0;
+    uint32_t oursPipeDepth = 0, oursPipeCounted = 0;
     {
         EncoderConfig cfg;
         cfg.width = o.width;
@@ -1946,6 +2105,57 @@ int RunCompare(const Options& o)
         ours.ms = NowMs() - t0;
         ours.ok = true;
         enc.Shutdown();
+
+        // The speed of the shipped shape, measured apart from the quality. The rows above have to come
+        // from the serial pass: under a constant bit rate the controller feeds a retired picture's byte
+        // count into the quantiser of the next picture it submits, and at a pipeline depth of two that
+        // is one picture later, so the pipelined stream is a different stream and its PSNR would not be
+        // the PSNR of the bytes --encode gates. The inbox column is a Media Foundation transform and
+        // pipelines inside itself, so without this pass the two speed rows compare our serial shape
+        // against the inbox's pipelined one.
+        Encoder pipe;
+        if (SUCCEEDED(pipe.Initialize(device.Get(), cfg)) &&
+            SUCCEEDED(pipe.SetPipelineDepth(kShippedPipelineDepth))) {
+            oursPipeDepth = pipe.PipelineDepth();
+            // The clock opens on the first iteration that does both a submit and a retire, which is
+            // what a steady-state pipeline iteration is, and closes after the last submitting one.
+            const uint32_t first = (o.timingSkip > oursPipeDepth - 1u) ? o.timingSkip
+                                                                      : (oursPipeDepth - 1u);
+            std::vector<uint8_t> pframe;
+            double t1 = NowMs();
+            bool bad = false;
+            for (uint32_t i = 0; !bad && i < o.frames + oursPipeDepth - 1u; ++i) {
+                if (i == first) {
+                    t1 = NowMs();
+                }
+                if (i < o.frames) {
+                    GpuFrameInput in;
+                    in.kind = InputKind::Planar8;
+                    in.planeY = sources[i].y.data();
+                    in.planeCb = sources[i].cb.data();
+                    in.planeCr = sources[i].cr.data();
+                    in.pitchY = o.width;
+                    in.pitchC = o.width / 2;
+                    bad = FAILED(pipe.SubmitFrame(in, false));
+                }
+                if (!bad && pipe.Pending() > 0 &&
+                    (pipe.Pending() >= oursPipeDepth || i >= o.frames)) {
+                    FrameStats pst;
+                    bad = FAILED(pipe.RetireFrame(pframe, &pst));
+                }
+                if (!bad && i + 1u == o.frames) {
+                    oursPipeMs = NowMs() - t1;
+                    oursPipeCounted = (o.frames > first) ? (o.frames - first) : 1u;
+                }
+            }
+            if (bad) {
+                oursPipeMs = 0.0;
+                oursPipeCounted = 0;
+                printf("  the pipelined speed pass failed; the speed rows below are the serial shape "
+                       "only\n");
+            }
+            pipe.Shutdown();
+        }
     }
     HRESULT hr = MeasureAgainstSource(o, sources, &ours);
     if (FAILED(hr)) {
@@ -1982,6 +2192,17 @@ int RunCompare(const Options& o)
            inbox.ms / timedFrames);
     printf("  %-28s %14.1f %14.1f\n", "pictures per second", 1000.0 * timedFrames / ours.ms,
            inbox.ms > 0.0 ? 1000.0 * timedFrames / inbox.ms : 0.0);
+    // Our two speed rows above are the serial shape, one picture at a time, which is what produced the
+    // bytes and the PSNR of this table. The shipped transform holds two pictures at once, and the inbox
+    // column already does, so the comparable rate is this one.
+    if (oursPipeCounted != 0 && oursPipeMs > 0.0) {
+        printf("  %-28s %14.2f %14s\n", "ms per picture, pipelined",
+               oursPipeMs / oursPipeCounted, "(its own)");
+        printf("  %-28s %14.1f %14s\n", "pictures per second, pipelined",
+               1000.0 * oursPipeCounted / oursPipeMs, "(its own)");
+        printf("  our pipelined pass held %u pictures at once over %u of %u pictures; the byte and PSNR "
+               "rows are the serial pass\n", oursPipeDepth, oursPipeCounted, o.frames);
+    }
     printf("  %-28s %14.2f %14.2f\n", "PSNR Y (dB)", ours.psnrY, inbox.psnrY);
     printf("  %-28s %14.2f %14.2f\n", "PSNR Cb (dB)", ours.psnrCb, inbox.psnrCb);
     printf("  %-28s %14.2f %14.2f\n", "PSNR Cr (dB)", ours.psnrCr, inbox.psnrCr);
