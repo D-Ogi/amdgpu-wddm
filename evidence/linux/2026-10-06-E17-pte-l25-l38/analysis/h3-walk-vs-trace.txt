@@ -1,0 +1,1 @@
+38 set_ptes events replayed; 45 walked entries (22 distinct): 45 equal the traced value, 0 differ

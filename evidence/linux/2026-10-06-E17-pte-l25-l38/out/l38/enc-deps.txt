@@ -1,0 +1,7 @@
+libva Package libva was not found in the pkg-config search path.
+Perhaps you should add the directory containing `libva.pc'
+to the PKG_CONFIG_PATH environment variable
+Package 'libva', required by 'virtual:world', not found
+libdrm 2.4.124
+vulkan 1.4.309
+/usr/bin/glslangValidator

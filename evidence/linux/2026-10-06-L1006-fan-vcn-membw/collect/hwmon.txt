@@ -1,0 +1,21 @@
+== /sys/class/hwmon/hwmon0 nvme
+/sys/class/hwmon/hwmon0/temp1_input:56850
+/sys/class/hwmon/hwmon0/temp2_input:77850
+/sys/class/hwmon/hwmon0/temp3_input:56850
+/sys/class/hwmon/hwmon0/temp1_label:Composite
+/sys/class/hwmon/hwmon0/temp2_label:Sensor 1
+/sys/class/hwmon/hwmon0/temp3_label:Sensor 2
+== /sys/class/hwmon/hwmon1 k10temp
+/sys/class/hwmon/hwmon1/temp1_input:73375
+/sys/class/hwmon/hwmon1/temp1_label:Tctl
+== /sys/class/hwmon/hwmon2 amdgpu
+/sys/class/hwmon/hwmon2/freq1_input:1500000000
+/sys/class/hwmon/hwmon2/in0_input:906
+/sys/class/hwmon/hwmon2/in1_input:806
+/sys/class/hwmon/hwmon2/power1_input:58209000
+/sys/class/hwmon/hwmon2/temp1_input:70000
+/sys/class/hwmon/hwmon2/freq1_label:sclk
+/sys/class/hwmon/hwmon2/in0_label:vddgfx
+/sys/class/hwmon/hwmon2/in1_label:vddnb
+/sys/class/hwmon/hwmon2/power1_label:PPT
+/sys/class/hwmon/hwmon2/temp1_label:edge

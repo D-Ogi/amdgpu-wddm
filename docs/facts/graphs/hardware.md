@@ -26,7 +26,10 @@ flowchart LR
   M241["M241<br/>kmd"]
   M242["M242"]
   M333["M333<br/>linux"]
+  M787["M787"]
   M789["M789"]
+  M804["M804"]
+  M807["M807"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -44,6 +47,8 @@ flowchart LR
   M242 ==>|supersedes| M241
   M789 -.->|refutes| M47
   M789 -.->|refutes| M90
+  M804 ==>|supports| M787
+  M807 ==>|supports| M789
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
   M333 ==>|supersedes| M35
@@ -105,6 +110,12 @@ flowchart LR
   M787["M787"]
   M789["M789"]
   M791["M791"]
+  M801["M801<br/>d3d"]
+  M803["M803"]
+  M804["M804"]
+  M805["M805<br/>linux"]
+  M806["M806"]
+  M807["M807"]
   M2 --> M1
   M3 --> M4
   M18 --> M4
@@ -128,6 +139,12 @@ flowchart LR
   M787 --> M46
   M789 --> M776
   M791 --> M22
+  M803 --> M47
+  M804 --> M46
+  M804 --> M801
+  M806 --> M807
+  M807 --> M776
+  M807 --> M805
   M37 --> M33
   M37 --> M39
   M81 --> M30
@@ -141,7 +158,8 @@ flowchart LR
   M41 --> M25
   M54 --> M44
   M55 --> M44
+  M805 --> M47
   classDef other stroke-dasharray:4 3
-  class M5,M24,M37,M40,M41,M46,M53,M54,M55,M81,M85,M106,M117,M118,M333,M348,M776 other
+  class M5,M24,M37,M40,M41,M46,M53,M54,M55,M81,M85,M106,M117,M118,M333,M348,M776,M801,M805 other
 ```
 

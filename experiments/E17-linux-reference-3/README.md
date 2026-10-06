@@ -1,7 +1,7 @@
 # E17 - Linux reference 3: what is left after the evidence was counted
 
-Status: **prepared, not run, and deliberately much smaller than it started.** Nothing here has
-touched the lab.
+Status: **run on unit A on 2026-10-06 (visit 2 of that day). H1 to H7 are all CONFIRMED.** The first
+run found two defects in the kit. Both are fixed here (see "Result").
 
 ## Why this experiment shrank
 
@@ -190,6 +190,7 @@ gen_vmlists.py  -> vmlists.json    412 named VM registers of both hubs
 gen_pte_bits.py -> pte_bits.json   the AMD entry layout, parsed from the kernel with a citation per field
 offline/check_pte_from_trace.py    bc250_pte.h against 33348 entries already in evidence/
 offline/ring_wrapper.py            the ring dumps we already have, decoded in full
+offline/check_walk_vs_trace.py     H3: the walked entries against the set_ptes events of the hold phase
 ```
 
 `offline/` needs no lab and no session: it runs on this PC, today, and should run in CI so that a
@@ -202,4 +203,33 @@ a later session wants them back.
 
 ## Result
 
-Not run.
+Run on unit A on 2026-10-06, 12:55 to 13:01 UTC. Evidence:
+[`evidence/linux/2026-10-06-E17-pte-l25-l38/`](../../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md).
+Facts: M808.
+
+| # | Result |
+|---|---|
+| H1 | CONFIRMED. The `prt4k` leaf is `0x0088000000000006`: SYSTEM, SNOOPED, PRT, LOG, not VALID, address 0 |
+| H2 | CONFIRMED. The `noalloc` leaf `0x0400000107c96067` has NOALLOC (bit 58). Its other flags equal those of `nx` |
+| H3 | CONFIRMED. 45 of 45 walked entries equal the value the `amdgpu_vm_set_ptes` events describe |
+| H4 | CONFIRMED. 10 of 10 witness words read back at the address their own entry names |
+| H5 | CONFIRMED. `m2` and `vram2m` are one PDE_PTE entry each at level 2 (PDB0), FRAG 9 |
+| H6 | CONFIRMED. `far512g` resolves through root entry 1 |
+| H7 | CONFIRMED. `GCVM_CONTEXT1..15_PAGE_TABLE_BASE_ADDR` read 0 with the tables mapped and nothing submitted |
+
+`check_pte.py` on the pulled pages: 14 claims, 14 confirmed, 0 refuted, 0 not covered.
+
+The first run found two defects of the kit. Three attempts failed before the measurement:
+
+1. `e17_vm.py` gave the PRT rows the flags `R|W|P`. `amdgpu_gem_va_ioctl` admits only
+   `AMDGPU_VM_DELAY_UPDATE | AMDGPU_VM_PAGE_PRT` for a sparse mapping and returns EINVAL for other flags.
+   The PRT rows now carry `AMDGPU_VM_PAGE_PRT` alone.
+2. `pt_walk.py` read VRAM table pages at the address the entries name. Directory entries and VRAM leaves
+   hold the system physical address, `vram_base_offset` (`0x270000000` on unit A, facts M31 and M85)
+   plus the VRAM offset, and `amdgpu_vram` takes the offset. `pt_walk.py` now subtracts the environment
+   variable `E17_VRAM_BASE` from a VRAM address. **Set `E17_VRAM_BASE=0x270000000` before the `hold`
+   phase.** Without it, every VRAM read fails with errno 6.
+
+`check_pte.py` also failed on the `-` that `bos.txt` writes as the word of a PRT row. It now reads that
+as no word. The first failed attempt was a staging defect of the batch (a missing `dispatch.py`), not a
+defect of the kit.

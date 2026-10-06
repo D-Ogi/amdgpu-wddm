@@ -1,0 +1,3 @@
+both exit 0
+cold exit 0
+neg exit 1

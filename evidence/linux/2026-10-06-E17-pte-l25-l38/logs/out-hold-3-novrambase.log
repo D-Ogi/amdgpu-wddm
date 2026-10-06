@@ -1,0 +1,186 @@
+== mapping our buffers at known addresses 14:58:46
+# pid 3727, va base 0x200000000, node /dev/dri/renderD128
+# plan rw       0x0000000200000000     4096 GTT  R|W|X
+# plan ro       0x0000000200001000     4096 GTT  R
+# plan nx       0x0000000200002000     4096 GTT  R|W
+# plan noalloc  0x0000000200003000     4096 GTT  R|W|N
+# plan k64      0x0000000200010000    65536 GTT  R|W
+# plan m2       0x0000000200200000  2097152 GTT  R|W
+# plan vram4k   0x0000000200800000     4096 VRAM R|W
+# plan vram2m   0x0000000200c00000  2097152 VRAM R|W
+# plan far1g    0x0000000240000000     4096 GTT  R|W
+# plan far512g  0x0000008200000000     4096 GTT  R|W
+# plan prt4k    0x0000000201000000     4096 PRT  P
+# plan prt2m    0x0000000201400000  2097152 PRT  P
+# kernel VA range 0x10000..0x800000000000, alignment 4096
+rw       va 0x0000000200000000     4096 bytes GTT  flags 0x000e (R|W|X) handle 1    word 0xe17b0001
+ro       va 0x0000000200001000     4096 bytes GTT  flags 0x0002 (R) handle 2    word 0xe17b0002
+nx       va 0x0000000200002000     4096 bytes GTT  flags 0x0006 (R|W) handle 3    word 0xe17b0003
+noalloc  va 0x0000000200003000     4096 bytes GTT  flags 0x0206 (R|W|N) handle 4    word 0xe17b0004
+k64      va 0x0000000200010000    65536 bytes GTT  flags 0x0006 (R|W) handle 5    word 0xe17b0005
+m2       va 0x0000000200200000  2097152 bytes GTT  flags 0x0006 (R|W) handle 6    word 0xe17b0006
+vram4k   va 0x0000000200800000     4096 bytes VRAM flags 0x0006 (R|W) handle 7    word 0xe17b0007
+vram2m   va 0x0000000200c00000  2097152 bytes VRAM flags 0x0006 (R|W) handle 8    word 0xe17b0008
+far1g    va 0x0000000240000000     4096 bytes GTT  flags 0x0006 (R|W) handle 9    word 0xe17b0009
+far512g  va 0x0000008200000000     4096 bytes GTT  flags 0x0006 (R|W) handle 10   word 0xe17b000a
+prt4k    va 0x0000000201000000     4096 bytes PRT  flags 0x0010 (P) no buffer
+prt2m    va 0x0000000201400000  2097152 bytes PRT  flags 0x0010 (P) no buffer
+# 12 buffers mapped, described in /media/usb/l1006b/out/e17/hold/bos.json and bos.txt
+# client directory: grep 3727 /sys/kernel/debug/dri/client-*/proc_info
+# holding for 240.0 s; the other phases can read this VM now
+== holder pid 3727, drm client 5
+== what amdgpu says the shape of this VM is
+pd_address: 0x46ffe0001
+max_pfn: 0x1000000000
+num_level: 0x3
+block_size: 0x9
+fragment_size: 0x9
+== VM registers while our buffers are mapped (no submission, so no VMID is expected yet)
+GC.GCVM_CONTEXT0_CNTL 0x0a200 007ffe01
+GC.GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32 0x0a3ac 6fe00001
+GC.GCVM_CONTEXT1_CNTL 0x0a204 007ffe07
+GC.GCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32 0x0a3b4 00000000
+GC.GCVM_CONTEXT2_CNTL 0x0a208 007ffe07
+GC.GCVM_CONTEXT2_PAGE_TABLE_BASE_ADDR_LO32 0x0a3bc 00000000
+GC.GCVM_CONTEXT3_CNTL 0x0a20c 007ffe07
+GC.GCVM_CONTEXT3_PAGE_TABLE_BASE_ADDR_LO32 0x0a3c4 00000000
+GC.GCVM_CONTEXT4_CNTL 0x0a210 007ffe07
+GC.GCVM_CONTEXT4_PAGE_TABLE_BASE_ADDR_LO32 0x0a3cc 00000000
+GC.GCVM_CONTEXT5_CNTL 0x0a214 007ffe07
+GC.GCVM_CONTEXT5_PAGE_TABLE_BASE_ADDR_LO32 0x0a3d4 00000000
+GC.GCVM_CONTEXT6_CNTL 0x0a218 007ffe07
+GC.GCVM_CONTEXT6_PAGE_TABLE_BASE_ADDR_LO32 0x0a3dc 00000000
+GC.GCVM_CONTEXT7_CNTL 0x0a21c 007ffe07
+GC.GCVM_CONTEXT7_PAGE_TABLE_BASE_ADDR_LO32 0x0a3e4 00000000
+GC.GCVM_CONTEXT8_CNTL 0x0a220 007ffe07
+GC.GCVM_CONTEXT8_PAGE_TABLE_BASE_ADDR_LO32 0x0a3ec 00000000
+GC.GCVM_CONTEXT9_CNTL 0x0a224 007ffe07
+GC.GCVM_CONTEXT9_PAGE_TABLE_BASE_ADDR_LO32 0x0a3f4 00000000
+== amdgpu_vm_info and amdgpu_gem_info with our buffers in them
+		0x00000007:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x00000008:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x00000009:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x0000000a:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x0000000b:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+		0x0000000c:         4096 byte UNKNOWN CPU_GTT_USWC VRAM_CONTIGUOUS
+	Evicted BOs:
+	Relocated BOs:
+	Moved BOs:
+	Invalidated BOs:
+	Done BOs:
+		0x00000000:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000001:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000002:      2097152 byte VRAM VISIBLE CPU_ACCESS_REQUIRED VRAM_CLEARED	kernel fence:detached-driver signaled-timeline seq 0 signalled
+
+		0x00000003:         4096 byte VRAM VISIBLE CPU_ACCESS_REQUIRED VRAM_CLEARED	kernel fence:detached-driver signaled-timeline seq 0 signalled
+
+		0x00000004:      2097152 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000005:        65536 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000006:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000007:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000008:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x00000009:         4096 byte GTT CPU_ACCESS_REQUIRED VRAM_CLEARED
+		0x0000000a:      2097152 byte GTT pin count 1 CPU_ACCESS_REQUIRED VRAM_CONTIGUOUS
+	Total idle size:               53248	objs:	13
+	Total evicted size:                0	objs:	0
+	Total relocated size:              0	objs:	0
+	Total moved size:                  0	objs:	0
+	Total invalidated size:            0	objs:	0
+	Total done size:             6385664	objs:	11
+13 /media/usb/l1006b/out/e17/hold/gem_info.txt
+== pt_walk: the whole root directory
+# client-5: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3727 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+root: vram read at 0x46ffe0000 failed: errno 6
+== pt_walk: every buffer, with its table pages dumped -> /media/usb/l1006b/out/e17/hold/pt
+# client-5: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3727 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+va 0x0000000200000000  pfn 0x200000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200001000  pfn 0x200001  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200002000  pfn 0x200002  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200003000  pfn 0x200003  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200010000  pfn 0x200010  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200200000  pfn 0x200200  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200800000  pfn 0x200800  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200c00000  pfn 0x200c00  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000240000000  pfn 0x240000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000008200000000  pfn 0x8200000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000201000000  pfn 0x201000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000201400000  pfn 0x201400  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+== pt_walk: the positive control - the word each buffer starts with, read back through
+==          the physical address its own PTE names
+CONTROL va 0x200003000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200010000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200200000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200800000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200c00000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x240000000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x8200000000: no valid leaf entry - FAILED
+CONTROL: 0 of 10 passed
+== letting the holder go
+prt4k    va 0x0000000201000000     4096 bytes PRT  flags 0x0010 (P) no buffer
+prt2m    va 0x0000000201400000  2097152 bytes PRT  flags 0x0010 (P) no buffer
+# 12 buffers mapped, described in /media/usb/l1006b/out/e17/hold/bos.json and bos.txt
+# client directory: grep 3727 /sys/kernel/debug/dri/client-*/proc_info
+# holding for 240.0 s; the other phases can read this VM now
+== trace amdgpu-events-hold.txt: 8336 lines; overruns: 0
+== the kernel's own view of the same entries
+111
+         python3-3727    [010] .....   233.196668: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3727    [010] .....   233.196700: amdgpu_vm_set_ptes: pe=f5fffdf000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3727    [010] .....   233.196709: amdgpu_vm_set_ptes: pe=f5fffde000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3727    [010] .....   233.196711: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x144 start:0x0ffffffc00 end:0x0ffffffe00, flags:0x30000000004a7, incr:2097152, dst:
+         python3-3727    [010] .....   233.196712: amdgpu_vm_set_ptes: pe=f5fffdeff0, addr=016d600000, incr=2097152, flags=430000000004a7, count=1, immediate=0
+         python3-3727    [010] .....   233.196902: amdgpu_vm_set_ptes: pe=f5fffdd000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3727    [010] .....   233.196913: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-3727    [010] .....   233.196920: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0000000000, incr=0, flags=10, count=512, immediate=0
+         python3-3727    [010] .....   233.196923: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x144 start:0x0000200000 end:0x0000200001, flags:0x77, incr:4096, dst:
+         python3-3727    [010] .....   233.196923: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0109b47000, incr=4096, flags=77, count=1, immediate=0
+         python3-3727    [010] .....   233.196926: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=046ffdb000, incr=0, flags=1, count=1, immediate=0
+         python3-3727    [010] .....   233.196927: amdgpu_vm_set_ptes: pe=f5fffdd040, addr=046ffdc000, incr=0, flags=1, count=1, immediate=0
+         python3-3727    [010] .....   233.196927: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=046ffdd000, incr=0, flags=1, count=1, immediate=0
+         python3-3727    [010] .....   233.196928: amdgpu_vm_set_ptes: pe=f5fffdfff8, addr=046ffde000, incr=0, flags=1, count=1, immediate=0
+         python3-3727    [010] .....   233.196928: amdgpu_vm_set_ptes: pe=f5fffe0ff8, addr=046ffdf000, incr=0, flags=1, count=1, immediate=0
+         python3-3727    [010] .....   233.196995: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x144 start:0x0000200001 end:0x0000200002, flags:0x27, incr:4096, dst:
+         python3-3727    [010] .....   233.196996: amdgpu_vm_set_ptes: pe=f5fffdb008, addr=010b87e000, incr=4096, flags=27, count=1, immediate=0
+         python3-3727    [010] .....   233.197047: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x144 start:0x0000200002 end:0x0000200003, flags:0x67, incr:4096, dst:
+         python3-3727    [010] .....   233.197048: amdgpu_vm_set_ptes: pe=f5fffdb010, addr=010b87f000, incr=4096, flags=67, count=1, immediate=0
+         python3-3727    [010] .....   233.197096: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x144 start:0x0000200003 end:0x0000200004, flags:0x400000000000067, incr:4096, dst:
+== temperature
+edge 70.0 C
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+HOLD-DONE

@@ -1,0 +1,24 @@
+# client-5: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3727 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200000000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200001000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200002000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200003000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200010000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200200000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200800000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x200c00000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x240000000: no valid leaf entry - FAILED
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+CONTROL va 0x8200000000: no valid leaf entry - FAILED
+CONTROL: 0 of 10 passed

@@ -660,6 +660,46 @@ facts:
     detail: "Sources, facts only, nothing copied. `bc250-collective/bc250_smu_oc` at `327014d` (MIT) gives the descriptor-table offsets. `bc250-collective/amd_smu_reverse_engineering` at `3f47768` (no LICENSE file, all rights reserved, read only) gives the handler addresses. Their message names are applied by index from AMD's own header. Their table therefore shows that a slot exists and has a handler, never what it does. Our rule stands: presence in a header does not authorize use (`hardware.md`). Our side of the match is `regcalc` over `mp_11_0_8_offset.h` and `driver/shim/bc250_smu.c`. The firmware images that the second repository ships stay outside our tree"
     edges:
       - {"type": "uses", "to": "M22"}
+  - id: M803
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "The fan controller of unit A, read and written through `/dev/port` under Linux with amdgpu not loaded (2026-10-06, visit 1). The NCT6686D embedded controller at base `0x0A20` carries customer ID `0x162B` (the value that mainline `nct6683` names AMD), build date 2021-07-28 and firmware 1.0. Tachometers and duty outputs 0 to 4 are present, and only fan index 1 turns (1360 to 1396 RPM at rest). At rest all five duty read-backs (`0x160` to `0x164`) read 204, the mode mask `0xA00` reads `0xE0` (bits 0 to 4 clear, so the EC curve runs every channel) and the fan engine status `0xCF8` reads `0x60` (`CFG_CHECK_DONE` and `CFG_LOCK`). One register read through `/dev/port` costs 9.38 us. A write test on fan index 1 works with the `nct6687d` handshake: the open moves the status from `0x60` to `0x08` within one 1 ms poll, the close sets `CFG_CHECK_DONE` and `CFG_LOCK` again, and `CFG_INVALID` never sets. With mode bit 1 set, duty 255 drives the fan to 1699 to 1749 RPM and duty 102 to 771 to 774 RPM. The duty read-back follows the written value within one second. The restore of mode `0xE0` and write target 128 returns the fan to the EC curve (1357 RPM after 3 s)"
+    status_text: "MEASURED (unit A, n = 1 write test, one channel)"
+    detail: "This answers items 1 to 4 and 6 of the A13 lab questions of the fan control design, which is not yet in this repository: the customer ID, whether the duty read-back describes the fan that turns (yes for fan index 1), whether bit 1 of the mode mask is clear under the BIOS Standard Mode (yes), the engine status at rest (`0x60`) and the cost of a port access. Item 5 stays open, because the other four duty channels were not sampled during the write. The 9.38 us include four system calls, so they are an upper bound for the LPC access. Item 7 (the `PNP0C02` resource list) is a Windows question. Register meanings come from mainline `nct6683` and from `nct6687d`. Tctl read 70.4 C during the test. The build date and version agree with the E01 kernel log (M47)"
+    evidence: "[L1006 visit 1, fan controller](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md)"
+    edges:
+      - {"type": "uses", "to": "M47"}
+  - id: M804
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Unit A's video block is listed but not used under amdgpu (kernel 6.18.52, both boots of 2026-10-06). IP discovery hardware id 12 (UVD/VCN) reports version 2.0.3 (major 2, minor 0, revision 3), instance 0, `harvest 0x0` and the base addresses `0x00007800`, `0x00007E00` and `0x02403000`. amdgpu loads no firmware for it (VCN, UVD and VCE firmware version 0 in `amdgpu_firmware_info`), `amdgpu_pm_info` reports `VCN: Powered down`, and the IP block list holds no VCN and no JPEG block, because `amdgpu_discovery.c` adds no block for `IP_VERSION(2, 0, 3)`. The same boot reports SMC firmware 88.6.0 (`0x00580600`) and VBIOS `113-AMDRBN-003`"
+    status_text: "MEASURED (unit A, two boots)"
+    detail: "Wishlist L19. The source lines are `ref/linux-src/drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c:2409-2410` at v6.18 (`case IP_VERSION(2, 0, 3): break;`). This measures the presence, version and harvest part of the community report M787 on our unit. The hang part of M787 stays a third-party report, because nothing here attaches to the block. For M15.11 the GPU encoder route stays the compute MFT (M801)"
+    evidence: "[L1006 visit 1](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md)"
+    edges:
+      - {"type": "uses", "to": "M46"}
+      - {"type": "uses", "to": "M801"}
+      - {"type": "supports", "to": "M787"}
+  - id: M806
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "Heat on unit A at amdgpu's own clock (2026-10-06, visit 1). 110 s of continuous `vkmembw` copies (10039 batches of eight 256 MiB copies) at a fixed 1500 MHz and 899 to 906 mV drew PPT 80.2 to 85.0 W (median 83.2 W, 62 W before the load). Tctl rose from 71.5 C to 81.5 C, edge from 71 C to 81 C, and the wall from 110.2 W to 170.9 to 174.4 W. No stop rule (Tctl at or above 87 C for 10 s, or 89 C once) fired. 15 s after the load Tctl read 79.75 C"
+    status_text: "MEASURED (unit A, n = 1 run, 110 s)"
+    detail: "A thermal reference for the Windows DPM work: the same board, the BIOS fan curve, and amdgpu's fixed clock. Tctl still rose at the end (0.125 C in the last 10 s), so 81.5 C is not a steady state. The load is a memory copy (M807), so it is not the worst case for the shader array. The wall figures are the smart plug's telemetry as `plug.py` scales it"
+    evidence: "[L1006 visit 1, thermal](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md)"
+    edges:
+      - {"type": "uses", "to": "M807"}
+  - id: M807
+    status: MEASURED
+    date: "2026-10-06"
+    claim: "GPU memory bandwidth on unit A under amdgpu and RADV (Mesa 26.3.0-devel from the reference root, 2026-10-06), measured with the `vkmembw.c` and the SPIR-V of E48 at amdgpu's fixed 1500 MHz. Medians of 20 dispatches over seven runs (local and host placements, with and without warmup, two clients at once, and after 110 s of load): write 445.3 to 445.6 GB/s, copy 396.9 to 397.4 GB/s and read 390.4 to 395.7 GB/s. The best write dispatch reads 449.9 GB/s. A negative control fails both of its checks. Under our Windows driver E48 measured write 369.5 to 375.1, copy 386.1 to 388.8 and read 373.1 to 385.5 GB/s (M776), so Windows writes 16 to 17 % slower and copies and reads 2 to 5 % slower. The Linux write reaches 99 % of the 448 GB/s peak of M789 while amdgpu reports MCLK 450 MHz"
+    status_text: "MEASURED (unit A, Linux side n = 7 runs)"
+    detail: "Wishlist L39. The C file is byte identical to `tools/win/vkmembw/vkmembw.c`, the three SPIR-V headers are byte identical to those of the E48 binary, and a four-function `windows.h` stand-in replaces the Win32 calls. The shader clock differs (Linux 1500 MHz, fixed by amdgpu, see M805; Windows 1000 and 2000 MHz). That is a confound, but E48 found no clock dependence on Windows. One median is an outlier: the host-placement write without warmup reads 399.6 GB/s. The 450 MHz of `pp_dpm_mclk` therefore is not a low memory state under Linux either, which supports M789 with one instrument on both sides. The cause of the Windows write gap is not known"
+    evidence: "[L1006 visit 1, memory bandwidth](../evidence/linux/2026-10-06-L1006-fan-vcn-membw/README.md), [visit 2, L25 and L39](../evidence/linux/2026-10-06-E17-pte-l25-l38/README.md), [E48](../evidence/windows/2026-10-01-E48-gpu-memory-bandwidth/README.md)"
+    edges:
+      - {"type": "uses", "to": "M776"}
+      - {"type": "uses", "to": "M805"}
+      - {"type": "supports", "to": "M789"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

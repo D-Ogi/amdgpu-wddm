@@ -1,0 +1,166 @@
+# out/l25/ring-gfx_0.0.0-1.bin (od -A x -t x4 -v): 2051 dwords
+# first three dwords, the ring's own pointers: rptr 0x00000536 wptr 0x00000000 driver wptr 0x00000000
+# a ring is circular: this is history, several submissions deep
+
+  [dw     0] c0032200  COND_EXEC  (5 dwords)
+  [dw     5] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000ad mask 0xffffffff, every 4 clocks
+  [dw    12] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw    14] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw    16] c0032200  COND_EXEC  (5 dwords)
+  [dw    21] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw    24] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw    26] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw    30] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw    34] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw    36] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x55 -> 0x000000668000
+  [dw    44] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xae -> 0x000000401080
+  [dw    52] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw   256] c0032200  COND_EXEC  (5 dwords)
+  [dw   261] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000ae mask 0xffffffff, every 4 clocks
+  [dw   268] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw   270] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw   272] c0032200  COND_EXEC  (5 dwords)
+  [dw   277] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw   280] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw   282] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw   286] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw   290] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw   292] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x57 -> 0x000000667000
+  [dw   300] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xaf -> 0x000000401080
+  [dw   308] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw   512] c0032200  COND_EXEC  (5 dwords)
+  [dw   517] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000af mask 0xffffffff, every 4 clocks
+  [dw   524] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw   526] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw   528] c0032200  COND_EXEC  (5 dwords)
+  [dw   533] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw   536] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw   538] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw   542] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw   546] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw   548] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x56 -> 0x000000668000
+  [dw   556] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xb0 -> 0x000000401080
+  [dw   564] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw   768] c0032200  COND_EXEC  (5 dwords)
+  [dw   773] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000b0 mask 0xffffffff, every 4 clocks
+  [dw   780] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw   782] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw   784] c0032200  COND_EXEC  (5 dwords)
+  [dw   789] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw   792] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw   794] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw   798] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw   802] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw   804] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x58 -> 0x000000667000
+  [dw   812] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xb1 -> 0x000000401080
+  [dw   820] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw  1024] c0032200  COND_EXEC  (5 dwords)
+  [dw  1029] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000b1 mask 0xffffffff, every 4 clocks
+  [dw  1036] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1038] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1040] c0032200  COND_EXEC  (5 dwords)
+  [dw  1045] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw  1048] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1050] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1054] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1058] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1060] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x57 -> 0x000000668000
+  [dw  1068] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xb2 -> 0x000000401080
+  [dw  1076] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw  1280] c0032200  COND_EXEC  (5 dwords)
+  [dw  1285] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000b2 mask 0xffffffff, every 4 clocks
+  [dw  1292] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1294] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1296] c0032200  COND_EXEC  (5 dwords)
+  [dw  1301] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw  1304] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1306] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1310] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1314] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1316] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x59 -> 0x000000667000
+  [dw  1324] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xb3 -> 0x000000401080
+  [dw  1332] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw  1536] c0032200  COND_EXEC  (5 dwords)
+  [dw  1541] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000b3 mask 0xffffffff, every 4 clocks
+  [dw  1548] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1550] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1552] c0032200  COND_EXEC  (5 dwords)
+  [dw  1557] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw  1560] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1562] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1566] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=2  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1570] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1572] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x58 -> 0x000000668000
+  [dw  1580] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xb4 -> 0x000000401080
+  [dw  1588] c0008b00  SWITCH_BUFFER  (2 dwords)
+  ---- 202 dwords of NOP padding ----
+  [dw  1792] c0032200  COND_EXEC  (5 dwords)
+  [dw  1797] c0053c00  WAIT_REG_MEM  (7 dwords)
+          poll memory 0x000000401080 == 0x000000b4 mask 0xffffffff, every 4 clocks
+  [dw  1804] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1806] c0008b00  SWITCH_BUFFER  (2 dwords)
+  [dw  1808] c0032200  COND_EXEC  (5 dwords)
+  [dw  1813] c0012800  CONTEXT_CONTROL  (3 dwords)
+          load_cntl 0x81018003  shadow_cntl 0x00000000
+  [dw  1816] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1818] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff80010003e000  24 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1822] c0023f00  INDIRECT_BUFFER  (4 dwords)
+          IB at VA 0xffff800100016000  344 dwords  VMID=1  CHAIN=0  PRE_ENA=0  VALID=0
+  [dw  1826] c0009000  FRAME_CONTROL  (2 dwords)
+  [dw  1828] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 64-bit data 0x5a -> 0x000000667000
+  [dw  1836] c0064900  RELEASE_MEM  (8 dwords)
+          event 0x14, 32-bit data 0xb5 -> 0x000000401080
+  [dw  1844] c0008b00  SWITCH_BUFFER  (2 dwords)
+
+  packets: SWITCH_BUFFER x24, COND_EXEC x16, FRAME_CONTROL x16, INDIRECT_BUFFER x16, RELEASE_MEM x16, WAIT_REG_MEM x8, CONTEXT_CONTROL x8, NOP x8
+

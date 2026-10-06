@@ -1,0 +1,17 @@
+== modprobe amdgpu 14:55:32
+== trace amdgpu-events-load.txt: 90203 lines; overruns: 0
+[   43.751159] amdgpu 0000:01:00.0: amdgpu: ring comp_1.3.1 uses VM inv eng 10 on hub 0
+[   43.751165] amdgpu 0000:01:00.0: amdgpu: ring kiq_0.2.1.0 uses VM inv eng 11 on hub 0
+[   43.751171] amdgpu 0000:01:00.0: amdgpu: ring sdma0 uses VM inv eng 12 on hub 0
+[   43.751177] amdgpu 0000:01:00.0: amdgpu: ring sdma1 uses VM inv eng 13 on hub 0
+[   43.751741] amdgpu 0000:01:00.0: amdgpu: Runtime PM not available
+[   43.752530] [drm] Initialized amdgpu 3.64.0 for 0000:01:00.0 on minor 1
+[   43.761745] fbcon: amdgpudrmfb (fb0) is primary device
+[   43.953578] amdgpu 0000:01:00.0: [drm] fb0: amdgpudrmfb frame buffer device
+== the VM half of the init, for the record
+13878
+== temperature
+edge 69.0 C
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 

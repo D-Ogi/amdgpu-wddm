@@ -1,0 +1,162 @@
+{
+ "pid": 3727,
+ "va_base": 8589934592,
+ "node": "/dev/dri/renderD128",
+ "bos": [
+  {
+   "label": "rw",
+   "handle": 1,
+   "va": 8589934592,
+   "size": 4096,
+   "domain": "GTT",
+   "flags": 14,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE",
+    "AMDGPU_VM_PAGE_EXECUTABLE"
+   ],
+   "word": 3782934529
+  },
+  {
+   "label": "ro",
+   "handle": 2,
+   "va": 8589938688,
+   "size": 4096,
+   "domain": "GTT",
+   "flags": 2,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE"
+   ],
+   "word": 3782934530
+  },
+  {
+   "label": "nx",
+   "handle": 3,
+   "va": 8589942784,
+   "size": 4096,
+   "domain": "GTT",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934531
+  },
+  {
+   "label": "noalloc",
+   "handle": 4,
+   "va": 8589946880,
+   "size": 4096,
+   "domain": "GTT",
+   "flags": 518,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE",
+    "AMDGPU_VM_PAGE_NOALLOC"
+   ],
+   "word": 3782934532
+  },
+  {
+   "label": "k64",
+   "handle": 5,
+   "va": 8590000128,
+   "size": 65536,
+   "domain": "GTT",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934533
+  },
+  {
+   "label": "m2",
+   "handle": 6,
+   "va": 8592031744,
+   "size": 2097152,
+   "domain": "GTT",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934534
+  },
+  {
+   "label": "vram4k",
+   "handle": 7,
+   "va": 8598323200,
+   "size": 4096,
+   "domain": "VRAM",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934535
+  },
+  {
+   "label": "vram2m",
+   "handle": 8,
+   "va": 8602517504,
+   "size": 2097152,
+   "domain": "VRAM",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934536
+  },
+  {
+   "label": "far1g",
+   "handle": 9,
+   "va": 9663676416,
+   "size": 4096,
+   "domain": "GTT",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934537
+  },
+  {
+   "label": "far512g",
+   "handle": 10,
+   "va": 558345748480,
+   "size": 4096,
+   "domain": "GTT",
+   "flags": 6,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_READABLE",
+    "AMDGPU_VM_PAGE_WRITEABLE"
+   ],
+   "word": 3782934538
+  },
+  {
+   "label": "prt4k",
+   "handle": 0,
+   "va": 8606711808,
+   "size": 4096,
+   "domain": "PRT",
+   "flags": 16,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_PRT"
+   ],
+   "word": null
+  },
+  {
+   "label": "prt2m",
+   "handle": 0,
+   "va": 8610906112,
+   "size": 2097152,
+   "domain": "PRT",
+   "flags": 16,
+   "flag_names": [
+    "AMDGPU_VM_PAGE_PRT"
+   ],
+   "word": null
+  }
+ ]
+}

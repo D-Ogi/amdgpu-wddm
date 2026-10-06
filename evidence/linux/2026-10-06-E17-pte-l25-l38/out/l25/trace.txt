@@ -1,0 +1,1327 @@
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 1315/1315   #P:12
+#
+#                                _-----=> irqs-off/BH-disabled
+#                               / _----=> need-resched
+#                              | / _---=> hardirq/softirq
+#                              || / _--=> preempt-depth
+#                              ||| / _-=> migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+              sh-4304    [005] ...1.   405.918322: tracing_mark_write: bc250 begin l25
+         vkmembw-4316    [005] .....   405.968484: amdgpu_vm_bo_map: bo=000000000ae8be3d, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+   kworker/u48:2-3613    [004] .....   405.968488: amdgpu_sched_run_job: timeline=sdma1, fence=345:1, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   405.968494: amdgpu_sched_run_job: timeline=sdma0, fence=350:1, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   405.968506: amdgpu_sched_run_job: timeline=sdma1, fence=345:2, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.968518: amdgpu_sched_run_job: timeline=sdma1, fence=345:3, ring_name=sdma1, num_ibs=1
+         vkmembw-4317    [006] .....   405.968518: amdgpu_vm_bo_map: bo=000000000ae8be3d, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+   kworker/u48:2-3613    [004] .....   405.968523: amdgpu_sched_run_job: timeline=sdma1, fence=345:4, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.968536: amdgpu_sched_run_job: timeline=sdma1, fence=350:2, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.968549: amdgpu_sched_run_job: timeline=sdma1, fence=350:3, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.968555: amdgpu_sched_run_job: timeline=sdma1, fence=350:4, ring_name=sdma1, num_ibs=1
+         vkmembw-4316    [005] .....   405.981138: amdgpu_vm_bo_map: bo=000000000ae8be3d, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+   kworker/u48:2-3613    [004] .....   405.981139: amdgpu_sched_run_job: timeline=sdma1, fence=357:1, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.981156: amdgpu_sched_run_job: timeline=sdma1, fence=357:2, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.981166: amdgpu_sched_run_job: timeline=sdma1, fence=357:3, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.981170: amdgpu_sched_run_job: timeline=sdma1, fence=357:4, ring_name=sdma1, num_ibs=1
+         vkmembw-4317    [006] .....   405.981238: amdgpu_vm_bo_map: bo=000000000ae8be3d, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+   kworker/u48:2-3613    [004] .....   405.981239: amdgpu_sched_run_job: timeline=sdma1, fence=363:1, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.981258: amdgpu_sched_run_job: timeline=sdma0, fence=363:2, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.981270: amdgpu_sched_run_job: timeline=sdma0, fence=363:3, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.981275: amdgpu_sched_run_job: timeline=sdma0, fence=363:4, ring_name=sdma0, num_ibs=1
+         vkmembw-4316    [005] .....   405.982234: amdgpu_vm_bo_map: bo=0000000097808873, start=800100000, last=800100000, offset=0000000000, flags=e
+         vkmembw-4317    [006] .....   405.982245: amdgpu_vm_bo_map: bo=00000000c3068b75, start=800100000, last=800100000, offset=0000000000, flags=e
+   kworker/u48:2-3613    [004] .....   405.982253: amdgpu_sched_run_job: timeline=sdma1, fence=357:5, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982259: amdgpu_sched_run_job: timeline=sdma1, fence=363:5, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982272: amdgpu_sched_run_job: timeline=sdma1, fence=357:6, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982278: amdgpu_sched_run_job: timeline=sdma1, fence=363:6, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982290: amdgpu_sched_run_job: timeline=sdma1, fence=357:7, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982298: amdgpu_sched_run_job: timeline=sdma1, fence=357:8, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982306: amdgpu_sched_run_job: timeline=sdma1, fence=363:7, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982311: amdgpu_sched_run_job: timeline=sdma1, fence=357:9, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982324: amdgpu_sched_run_job: timeline=sdma1, fence=363:8, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.982335: amdgpu_sched_run_job: timeline=sdma1, fence=363:9, ring_name=sdma1, num_ibs=1
+         vkmembw-4316    [005] .....   405.983137: amdgpu_vm_bo_map: bo=00000000422ce599, start=800000000, last=800000000, offset=0000000000, flags=a
+         vkmembw-4317    [006] .....   405.983144: amdgpu_vm_bo_map: bo=00000000ae0296b8, start=800000000, last=800000000, offset=0000000000, flags=a
+   kworker/u48:2-3613    [004] .....   405.983157: amdgpu_sched_run_job: timeline=sdma0, fence=357:10, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.983161: amdgpu_sched_run_job: timeline=sdma0, fence=357:11, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.983165: amdgpu_sched_run_job: timeline=sdma1, fence=363:10, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.983171: amdgpu_sched_run_job: timeline=sdma1, fence=363:11, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   405.983175: amdgpu_sched_run_job: timeline=sdma0, fence=357:12, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   405.983182: amdgpu_sched_run_job: timeline=sdma1, fence=363:12, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.983182: amdgpu_sched_run_job: timeline=sdma0, fence=357:13, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   405.983189: amdgpu_sched_run_job: timeline=sdma1, fence=363:13, ring_name=sdma1, num_ibs=1
+         vkmembw-4316    [005] .....   405.983327: amdgpu_vm_bo_map: bo=000000006a0932b4, start=800100001, last=800100014, offset=0000000000, flags=8a
+   kworker/u48:2-3613    [004] .....   405.983339: amdgpu_sched_run_job: timeline=sdma1, fence=357:14, ring_name=sdma1, num_ibs=1
+         vkmembw-4317    [006] .....   405.983351: amdgpu_vm_bo_map: bo=000000007686bca4, start=800100001, last=800100014, offset=0000000000, flags=8a
+   kworker/u48:2-3613    [004] .....   405.983365: amdgpu_sched_run_job: timeline=sdma0, fence=363:14, ring_name=sdma0, num_ibs=1
+         vkmembw-4316    [005] .....   405.983550: amdgpu_vm_bo_map: bo=00000000bed16f26, start=800100015, last=800100015, offset=0000000000, flags=8a
+   kworker/u48:2-3613    [004] .....   405.983557: amdgpu_sched_run_job: timeline=sdma1, fence=357:15, ring_name=sdma1, num_ibs=1
+         vkmembw-4317    [006] .....   405.983570: amdgpu_vm_bo_map: bo=0000000090ac795e, start=800100015, last=800100015, offset=0000000000, flags=8a
+   kworker/u48:2-3613    [004] .....   405.983582: amdgpu_sched_run_job: timeline=sdma1, fence=363:15, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.983604: amdgpu_sched_run_job: timeline=sdma0, fence=357:16, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   405.983618: amdgpu_sched_run_job: timeline=sdma1, fence=363:16, ring_name=sdma1, num_ibs=1
+         vkmembw-4316    [005] .....   406.001341: amdgpu_vm_bo_map: bo=000000006a0932b4, start=800000001, last=800000040, offset=0000000000, flags=a
+         vkmembw-4317    [006] .....   406.001344: amdgpu_vm_bo_map: bo=000000007686bca4, start=800000001, last=800000040, offset=0000000000, flags=a
+   kworker/u48:2-3613    [004] .....   406.001368: amdgpu_sched_run_job: timeline=sdma1, fence=357:17, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.001371: amdgpu_sched_run_job: timeline=sdma0, fence=363:17, ring_name=sdma0, num_ibs=1
+         vkmembw-4316    [005] .....   406.003390: amdgpu_vm_bo_map: bo=000000004026761d, start=800000041, last=800000041, offset=0000000000, flags=a
+   kworker/u48:2-3613    [004] .....   406.003411: amdgpu_sched_run_job: timeline=sdma1, fence=357:18, ring_name=sdma1, num_ibs=1
+         vkmembw-4317    [006] .....   406.003426: amdgpu_vm_bo_map: bo=00000000f8192821, start=800000041, last=800000041, offset=0000000000, flags=a
+         vkmembw-4316    [005] .....   406.003441: amdgpu_vm_bo_map: bo=00000000b1441c5a, start=800100001, last=800100001, offset=0000000000, flags=e
+   kworker/u48:2-3613    [004] .....   406.003448: amdgpu_sched_run_job: timeline=sdma1, fence=363:18, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.003450: amdgpu_sched_run_job: timeline=sdma0, fence=357:19, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.003467: amdgpu_sched_run_job: timeline=sdma0, fence=305:14, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.003468: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+         vkmembw-4316    [005] .....   406.003470: amdgpu_vm_bo_map: bo=000000006f6223f0, start=800100200, last=8001101ff, offset=0000000000, flags=e
+         vkmembw-4317    [006] .....   406.003486: amdgpu_vm_bo_map: bo=0000000057332a10, start=800100001, last=800100001, offset=0000000000, flags=e
+   kworker/u48:0-12      [000] .....   406.003495: amdgpu_sched_run_job: timeline=sdma1, fence=363:19, ring_name=sdma1, num_ibs=1
+         vkmembw-4316    [005] .....   406.003496: amdgpu_vm_bo_map: bo=000000007ea6be8f, start=800110200, last=8001201ff, offset=0000000000, flags=e
+         vkmembw-4317    [006] .....   406.003521: amdgpu_vm_bo_map: bo=000000003317bff9, start=800100200, last=8001101ff, offset=0000000000, flags=e
+         vkmembw-4316    [005] .....   406.003523: amdgpu_vm_bo_map: bo=00000000c3cd925c, start=800120200, last=8001211ff, offset=0000000000, flags=e
+         vkmembw-4317    [006] .....   406.003547: amdgpu_vm_bo_map: bo=00000000e9f626c6, start=800110200, last=8001201ff, offset=0000000000, flags=e
+         vkmembw-4317    [006] .....   406.003565: amdgpu_vm_bo_map: bo=00000000abce3dc8, start=800120200, last=8001211ff, offset=0000000000, flags=e
+         vkmembw-4316    [005] .....   406.005132: amdgpu_vm_bo_map: bo=0000000023726c30, start=800121200, last=8001223ff, offset=0000000000, flags=e
+         vkmembw-4317    [006] .....   406.005169: amdgpu_vm_bo_map: bo=000000002e21165b, start=800121200, last=8001223ff, offset=0000000000, flags=e
+         vkmembw-4316    [005] .....   406.005230: amdgpu_vm_bo_map: bo=00000000cbdadf59, start=800100016, last=800100029, offset=0000000000, flags=8a
+         vkmembw-4317    [006] .....   406.005262: amdgpu_vm_bo_map: bo=00000000af118be2, start=800100016, last=800100029, offset=0000000000, flags=8a
+         vkmembw-4317    [006] .....   406.005834: amdgpu_vm_bo_map: bo=0000000014694d38, start=800000042, last=800000045, offset=0000000000, flags=e
+         vkmembw-4316    [005] .....   406.005856: amdgpu_vm_bo_map: bo=0000000048d8ebec, start=800000042, last=800000045, offset=0000000000, flags=e
+         vkmembw-4316    [005] .....   406.006273: amdgpu_vm_bo_map: bo=00000000a6dce4d5, start=80010002a, last=80010003d, offset=0000000000, flags=8a
+         vkmembw-4317    [006] .....   406.006297: amdgpu_vm_bo_map: bo=00000000e39b3af7, start=80010002a, last=80010003d, offset=0000000000, flags=8a
+         vkmembw-4316    [005] .....   406.006392: amdgpu_vm_bo_map: bo=0000000058c0adb2, start=80010003e, last=800100051, offset=0000000000, flags=8a
+         vkmembw-4317    [006] .....   406.006414: amdgpu_vm_bo_map: bo=000000001fb4bc03, start=80010003e, last=800100051, offset=0000000000, flags=8a
+         vkmembw-4316    [005] .....   406.006507: amdgpu_vm_bo_map: bo=00000000b93c1d9a, start=800100052, last=800100065, offset=0000000000, flags=8a
+         vkmembw-4317    [006] .....   406.006529: amdgpu_vm_bo_map: bo=00000000cd72e6c5, start=800100052, last=800100065, offset=0000000000, flags=8a
+   kworker/u48:0-12      [000] .....   406.006574: amdgpu_sched_run_job: timeline=sdma0, fence=303:3, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.006576: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:0-12      [000] .....   406.009039: amdgpu_sched_run_job: timeline=sdma1, fence=357:20, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.009053: amdgpu_sched_run_job: timeline=sdma0, fence=303:4, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.009054: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:0-12      [000] .....   406.009063: amdgpu_sched_run_job: timeline=sdma0, fence=305:15, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.009064: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+         vkmembw-4316    [005] .....   406.009079: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:1, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:0-12      [000] .....   406.009090: amdgpu_sched_run_job: timeline=sdma0, fence=305:16, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.009092: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+         vkmembw-4317    [006] .....   406.009112: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:1, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:0-12      [000] .....   406.014631: amdgpu_sched_run_job: timeline=sdma1, fence=357:21, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.014657: amdgpu_sched_run_job: timeline=sdma0, fence=305:17, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.014660: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   406.020181: amdgpu_sched_run_job: timeline=sdma1, fence=363:20, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020218: amdgpu_sched_run_job: timeline=sdma0, fence=305:18, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020219: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:0-12      [000] .....   406.020538: amdgpu_sched_run_job: timeline=sdma1, fence=357:22, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020545: amdgpu_sched_run_job: timeline=sdma1, fence=357:23, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020565: amdgpu_sched_run_job: timeline=sdma1, fence=357:24, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020572: amdgpu_sched_run_job: timeline=sdma1, fence=357:25, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020594: amdgpu_sched_run_job: timeline=sdma1, fence=357:26, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020600: amdgpu_sched_run_job: timeline=sdma1, fence=357:27, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020620: amdgpu_sched_run_job: timeline=sdma1, fence=357:28, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.020656: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=1
+   kworker/u48:0-12      [000] .....   406.020658: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:1, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:0-12      [000] .....   406.020665: amdgpu_vm_flush: ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001
+         vkmembw-4316    [005] .....   406.021450: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:2, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:0-12      [000] .....   406.021457: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:0-12      [000] .....   406.021458: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:2, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:0-12      [000] .....   406.026650: amdgpu_sched_run_job: timeline=sdma1, fence=363:21, ring_name=sdma1, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.026699: amdgpu_sched_run_job: timeline=sdma0, fence=305:19, ring_name=sdma0, num_ibs=1
+   kworker/u48:0-12      [000] .....   406.026700: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:0-12      [000] .....   406.027133: amdgpu_sched_run_job: timeline=sdma1, fence=363:22, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027142: amdgpu_sched_run_job: timeline=sdma1, fence=363:23, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027173: amdgpu_sched_run_job: timeline=sdma1, fence=363:24, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027225: amdgpu_sched_run_job: timeline=sdma1, fence=363:25, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027242: amdgpu_sched_run_job: timeline=sdma1, fence=363:26, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027261: amdgpu_sched_run_job: timeline=sdma1, fence=363:27, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027288: amdgpu_sched_run_job: timeline=sdma1, fence=363:28, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   406.027348: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=1
+   kworker/u48:2-3613    [004] .....   406.027350: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:1, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.027354: amdgpu_vm_flush: ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001
+         vkmembw-4316    [005] .....   406.033163: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:3, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.033174: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.033177: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:3, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.033859: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:2, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.033872: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.033874: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:2, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.044685: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:4, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.044695: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.044697: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:4, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.055551: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:3, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.055563: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.055565: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:3, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.066414: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:5, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.066424: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.066426: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:5, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.077279: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:4, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.077292: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.077294: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:4, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.088152: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:6, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.088162: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.088164: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:6, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.099020: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:5, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.099032: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.099034: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:5, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.109962: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:7, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.109975: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.109978: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:7, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.120787: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:6, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.120801: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.120803: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:6, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.131691: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:8, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.131703: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.131705: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:8, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.142521: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:7, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.142533: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.142535: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:7, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.153390: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:9, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.153399: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.153402: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:9, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.164274: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:8, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.164287: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.164289: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:8, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.175126: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:10, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.175136: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.175138: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:10, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.186001: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:9, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.186014: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.186016: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:9, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.196866: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:11, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.196876: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.196878: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:11, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.207734: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:10, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.207746: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.207748: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:10, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.218605: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:12, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.218615: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.218617: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:12, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.229515: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:11, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.229528: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.229530: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:11, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.240346: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:13, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.240356: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.240358: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:13, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.251225: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:12, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.251238: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.251240: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:12, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.262091: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:14, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.262100: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.262102: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:14, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.272952: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:13, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.272964: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.272966: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:13, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.283823: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:15, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.283832: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.283834: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:15, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.294688: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:14, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.294699: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.294701: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:14, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.305560: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:16, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.305570: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.305572: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:16, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.316434: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:15, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.316448: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.316451: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:15, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.327342: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:17, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.327352: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.327355: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:17, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.338191: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:16, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.338204: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.338214: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:16, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.349047: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:18, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.349056: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.349058: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:18, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.359912: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:17, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.359925: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.359927: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:17, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.370789: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:19, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.370799: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.370801: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:19, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.381636: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:18, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.381648: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.381650: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:18, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.392507: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:20, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.392516: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.392518: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:20, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.403371: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:19, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.403383: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.403385: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:19, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.414266: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:21, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.414277: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.414279: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:21, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.425115: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:20, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.425128: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.425130: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:20, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.436017: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:22, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.436028: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.436030: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:22, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.446850: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:21, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.446862: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.446864: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:21, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.457723: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:23, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.457732: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.457734: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:23, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.468592: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:22, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.468604: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.468607: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:22, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.479460: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:24, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.479469: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.479471: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:24, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.490322: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:23, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.490334: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.490336: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:23, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.501196: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:25, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.501216: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.501218: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:25, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.512059: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:24, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.512072: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.512074: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:24, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.522943: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:26, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.522953: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.522955: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:26, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.533867: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:25, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.533882: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.533884: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:25, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.544713: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:27, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.544723: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.544725: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:27, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.555563: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:26, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.555575: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.555577: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:26, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.566434: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:28, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.566444: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.566447: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:28, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.577306: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:27, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.577317: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.577320: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:27, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.588174: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:29, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.588183: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.588185: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:29, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.599048: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:28, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.599059: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.599062: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:28, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.609918: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:30, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.609927: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.609930: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:30, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.620782: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:29, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.620794: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.620796: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:29, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.631661: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:31, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.631671: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.631673: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:31, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.642553: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:30, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.642567: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.642569: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:30, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.653397: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:32, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.653406: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.653409: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:32, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.664277: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:31, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.664290: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.664292: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:31, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.675135: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:33, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.675144: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.675146: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:33, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.685999: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:32, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.686012: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.686014: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:32, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.696872: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:34, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.696882: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.696884: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:34, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.707732: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:33, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.707745: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.707747: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:33, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.718604: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:35, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.718613: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.718616: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:35, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.729469: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:34, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.729481: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.729483: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:34, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.740348: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:36, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.740357: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.740360: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:36, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.751294: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:35, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.751308: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.751311: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:35, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.762092: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:37, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.762101: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.762103: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:37, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.772953: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:36, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.772965: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.772967: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:36, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.783823: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:38, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.783833: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.783835: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:38, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.794688: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:37, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.794701: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.794703: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:37, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.805559: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:39, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.805568: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.805570: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:39, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.816424: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:38, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.816436: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.816439: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:38, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.827297: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:40, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.827307: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.827309: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:40, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.838158: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:39, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.838171: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.838173: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:39, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.849032: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:41, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.849042: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.849044: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:41, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.859917: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:40, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.859929: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.859931: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:40, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.870765: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:42, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.870775: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.870777: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:42, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.881632: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:41, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.881646: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.881648: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:41, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.892507: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:43, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.892517: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.892519: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:43, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.903371: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:42, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.903383: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.903385: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:42, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.914252: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:44, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.914263: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.914266: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:44, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.925110: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:43, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.925123: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.925125: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:43, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.935980: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:45, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.935990: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.935992: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:45, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.946867: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:44, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.946881: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.946884: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:44, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.957791: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:46, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.957804: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.957806: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:46, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.968599: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:45, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.968612: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.968614: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:45, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   406.979470: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:47, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.979480: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.979482: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:47, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   406.990335: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:46, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   406.990348: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   406.990350: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:46, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.001221: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:48, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.001233: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.001235: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:48, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.012072: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:47, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.012084: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.012086: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:47, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.022950: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:49, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.022960: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.022962: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:49, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.033809: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:48, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.033822: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.033824: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:48, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.044678: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:50, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.044688: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.044690: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:50, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.055546: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:49, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.055559: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.055561: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:49, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.066431: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:51, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.066442: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.066444: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:51, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.077274: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:50, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.077286: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.077288: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:50, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.088143: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:52, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.088153: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.088155: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:52, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.099008: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:51, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.099019: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.099021: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:51, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.109879: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:53, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.109889: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.109891: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:53, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.120748: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:52, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.120760: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.120762: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:52, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.131619: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:54, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.131629: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.131631: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:54, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.142483: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:53, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.142496: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.142498: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:53, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.153382: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:55, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.153392: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.153395: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:55, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.164316: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:54, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.164331: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.164333: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:54, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.175119: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:56, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.175128: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.175130: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:56, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.185987: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:55, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.186001: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.186003: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:55, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.196854: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:57, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.196864: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.196866: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:57, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.207717: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:56, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.207730: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.207732: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:56, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.218585: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:58, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.218595: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.218597: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:58, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.229450: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:57, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.229461: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.229463: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:57, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.240316: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:59, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.240325: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.240327: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:59, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.251184: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:58, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.251196: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.251198: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:58, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.262057: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:60, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.262067: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.262069: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:60, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.272945: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:59, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.272958: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.272961: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:59, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.283799: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:61, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.283809: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.283812: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:61, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.294658: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:60, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.294670: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.294672: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:60, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.305530: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:62, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.305539: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.305541: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:62, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.316393: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:61, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.316405: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.316407: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:61, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.327280: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:63, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.327290: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.327292: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:63, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.338129: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:62, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.338141: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.338142: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:62, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.349006: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:64, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.349016: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.349018: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:64, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.359879: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:63, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.359893: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.359896: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:63, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.370811: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:65, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.370824: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.370826: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:65, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.381614: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:64, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.381626: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.381628: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:64, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.392490: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:66, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.392500: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.392502: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:66, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.403351: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:65, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.403363: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.403365: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:65, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.414239: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:67, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.414251: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.414253: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:67, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.425081: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:66, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.425095: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.425097: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:66, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.435953: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:68, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.435963: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.435965: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:68, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.446818: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:67, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.446830: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.446832: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:67, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.457686: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:69, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.457696: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.457698: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:69, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.468544: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:68, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.468556: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.468558: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:68, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.479443: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:70, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.479454: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.479456: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:70, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.490289: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:69, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.490301: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.490303: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:69, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.501155: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:71, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.501165: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.501168: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:71, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.512018: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:70, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.512030: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.512032: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:70, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.522891: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:72, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.522901: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.522903: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:72, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.533754: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:71, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.533766: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.533768: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:71, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.544633: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:73, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.544643: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.544645: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:73, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.555497: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:72, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.555510: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.555512: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:72, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.566416: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:74, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.566429: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.566431: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:74, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.577263: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:73, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.577276: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.577278: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:73, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.588140: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:75, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.588150: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.588153: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:75, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.598977: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:74, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.598989: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.598991: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:74, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.609849: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:76, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.609859: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.609861: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:76, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.620711: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:75, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.620723: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.620725: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:75, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.631582: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:77, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.631593: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.631595: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:77, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.642445: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:76, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.642457: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.642459: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:76, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.653323: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:78, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.653333: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.653335: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:78, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.664185: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:77, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.664198: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.664200: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:77, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.675062: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:79, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.675073: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.675075: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:79, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.685944: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:78, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.685956: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.685958: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:78, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.696794: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:80, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.696804: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.696806: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:80, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.707658: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:79, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.707671: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.707673: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:79, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.718530: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:81, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.718540: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.718542: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:81, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.729395: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:80, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.729409: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.729411: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:80, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.740283: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:82, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.740293: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.740295: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:82, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.751129: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:81, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.751141: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.751143: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:81, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.762003: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:83, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.762012: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.762015: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:83, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.772868: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:82, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.772883: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.772886: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:82, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.783771: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:84, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.783783: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.783785: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:84, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.794631: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:83, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.794644: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.794646: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:83, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.805486: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:85, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.805496: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.805499: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:85, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.816345: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:84, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.816357: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.816359: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:84, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.827231: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:86, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.827242: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.827245: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:86, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.838083: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:85, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.838094: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.838097: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:85, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.848959: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:87, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.848969: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.848971: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:87, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.859824: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:86, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.859836: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.859838: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:86, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.870696: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:88, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.870707: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.870709: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:88, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.881557: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:87, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.881570: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.881572: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:87, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.892460: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:89, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.892470: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.892472: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:89, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.903294: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:88, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.903307: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.903309: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:88, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.914169: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:90, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.914179: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.914181: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:90, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.925062: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:89, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.925075: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.925077: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:89, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.936028: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:91, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.936038: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.936040: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:91, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.946903: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:90, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.946917: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.946919: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:90, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.957857: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:92, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.957863: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.957864: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:92, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.968722: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:91, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.968735: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.968737: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:91, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   407.979639: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:93, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.979649: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.979652: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:93, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   407.990489: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:92, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   407.990501: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   407.990503: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:92, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.001391: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:94, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.001402: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.001404: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:94, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.012223: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:93, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.012238: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.012240: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:93, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.023082: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:95, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.023092: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.023094: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:95, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.033949: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:94, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.033961: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.033963: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:94, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.044818: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:96, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.044828: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.044830: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:96, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.055682: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:95, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.055694: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.055696: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:95, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.066552: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:97, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.066563: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.066565: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:97, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.077426: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:96, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.077438: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.077440: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:96, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.088295: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:98, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.088304: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.088306: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:98, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.099187: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:97, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.099199: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.099201: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:97, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.110029: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:99, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.110038: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.110041: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:99, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.120888: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:98, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.120900: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.120902: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:98, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.131761: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:100, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.131770: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.131773: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:100, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.142622: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:99, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.142634: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.142636: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:99, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.153491: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:101, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.153500: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.153503: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:101, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.164355: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:100, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.164368: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.164370: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:100, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.175236: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:102, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.175247: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.175249: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:102, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.186092: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:101, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.186105: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.186107: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:101, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.197028: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:103, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.197040: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.197043: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:103, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.207890: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:102, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.207904: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.207906: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:102, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.218742: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:104, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.218752: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.218754: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:104, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.229610: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:103, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.229623: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.229625: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:103, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.240485: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:105, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.240495: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.240498: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:105, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.251349: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:104, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.251363: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.251365: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:104, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.262231: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:106, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.262243: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.262245: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:106, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.273080: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:105, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.273092: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.273094: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:105, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.283953: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:107, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.283963: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.283966: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:107, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.294822: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:106, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.294835: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.294837: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:106, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.305692: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:108, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.305703: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.305705: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:108, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.316576: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:107, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.316589: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.316591: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:107, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.327426: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:109, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.327436: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.327438: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:109, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.338287: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:108, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.338300: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.338302: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:108, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.349159: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:110, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.349168: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.349171: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:110, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.360022: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:109, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.360035: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.360037: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:109, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.370893: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:111, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.370903: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.370905: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:111, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.381760: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:110, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.381772: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.381773: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:110, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.392634: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:112, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.392644: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.392646: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:112, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.403517: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:111, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.403529: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.403532: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:111, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.414446: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:113, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.414456: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.414458: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:113, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.425271: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:112, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.425284: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.425286: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:112, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.436129: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:114, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.436140: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.436142: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:114, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.446995: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:113, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.447007: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.447009: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:113, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.457872: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:115, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.457882: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.457885: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:115, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.468734: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:114, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.468746: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.468748: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:114, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.479608: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:116, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.479618: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.479620: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:116, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.490472: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:115, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.490484: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.490486: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:115, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.501344: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:117, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.501354: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.501356: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:117, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.512220: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:116, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.512234: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.512236: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:116, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.523099: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:118, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.523109: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.523113: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:118, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.533940: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:117, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.533952: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.533953: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:117, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.544809: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:119, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.544819: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.544821: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:119, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.555676: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:118, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.555688: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.555690: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:118, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.566550: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:120, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.566560: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.566562: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:120, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.577414: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:119, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.577426: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.577428: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:119, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.588288: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:121, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.588298: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.588300: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:121, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.599147: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:120, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.599159: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.599161: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:120, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.610058: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:122, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.610069: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.610072: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:122, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.620919: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:121, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.620932: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.620934: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:121, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.631781: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:123, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.631791: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.631794: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:123, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.642639: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:122, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.642652: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.642654: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:122, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.653512: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:124, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.653524: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.653526: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:124, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.664368: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:123, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.664382: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.664384: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:123, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.675252: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:125, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.675264: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.675267: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:125, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.686099: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:124, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.686113: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.686115: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:124, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.696988: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:126, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.696999: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.697002: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:126, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.707835: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:125, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.707848: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.707850: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:125, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.718715: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:127, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.718727: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.718729: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:127, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.729596: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:126, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.729609: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.729612: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:126, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.740456: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:128, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.740467: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.740470: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:128, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.751314: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:127, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.751328: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.751331: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:127, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.762192: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:129, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.762203: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.762216: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:129, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.773049: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:128, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.773062: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.773065: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:128, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.783924: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:130, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.783936: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.783938: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:130, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.794779: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:129, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.794793: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.794796: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:129, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.805660: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:131, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   408.805671: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   408.805673: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:131, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.816554: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:130, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.816578: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.816584: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:130, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.827599: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:132, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.827609: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.827610: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:132, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.838387: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:131, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.838397: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.838399: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:131, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.849293: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:133, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.849303: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.849305: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:133, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.860112: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:132, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.860124: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.860127: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:132, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.870980: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:134, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.870988: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.870990: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:134, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.881850: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:133, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.881862: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.881864: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:133, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.892709: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:135, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.892718: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.892720: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:135, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.903578: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:134, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.903590: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.903592: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:134, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.914445: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:136, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.914454: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.914455: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:136, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.925318: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:135, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.925330: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.925332: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:135, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.936229: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:137, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.936238: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.936240: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:137, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.947052: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:136, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.947065: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.947067: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:136, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.957917: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:138, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.957925: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.957927: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:138, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.968786: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:137, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.968798: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.968800: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:137, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   408.979652: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:139, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.979660: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.979662: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:139, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   408.990526: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:138, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   408.990538: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   408.990540: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:138, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.001388: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:140, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.001396: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.001398: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:140, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.012276: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:139, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.012289: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.012290: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:139, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.023145: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:141, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.023154: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.023156: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:141, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.034071: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:140, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.034086: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.034088: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:140, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.044913: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:142, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.044921: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.044923: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:142, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.055763: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:141, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.055775: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.055777: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:141, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.066624: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:143, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.066634: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.066635: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:143, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.077501: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:142, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.077513: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.077515: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:142, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.088363: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:144, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.088371: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.088373: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:144, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.099244: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:143, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.099257: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.099259: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:143, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.110098: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:145, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.110106: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.110108: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:145, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.120971: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:144, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.120984: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.120985: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:144, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.131836: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:146, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.131844: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.131846: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:146, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.142739: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:145, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.142753: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.142755: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:145, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.153571: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:147, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.153579: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.153582: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:147, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.164442: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:146, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.164454: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.164456: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:146, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.175308: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:148, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.175316: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.175318: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:148, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.186181: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:147, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.186193: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.186195: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:147, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.197044: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:149, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.197053: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.197055: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:149, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.207916: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:148, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.207928: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.207930: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:148, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.218783: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:150, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.218791: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.218792: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:150, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.229675: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:149, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.229687: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.229689: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:149, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.240594: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:151, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.240604: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.240606: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:151, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.251430: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:150, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.251442: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.251444: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:150, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.262273: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:152, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.262282: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.262284: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:152, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.273143: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:151, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.273155: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.273157: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:151, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.284009: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:153, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.284017: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.284019: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:153, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.294882: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:152, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.294894: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.294896: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:152, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.305749: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:154, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.305757: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.305759: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:154, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.316626: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:153, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.316638: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.316640: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:153, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.327491: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:155, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.327500: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.327502: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:155, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.338365: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:154, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.338377: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.338379: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:154, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.349279: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:156, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.349289: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.349291: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:156, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.360101: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:155, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.360113: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.360115: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:155, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.370970: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:157, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.370978: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.370980: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:157, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.381842: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:156, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.381854: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.381856: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:156, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.392702: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:158, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.392710: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.392712: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:158, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.403574: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:157, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.403586: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.403588: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:157, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.414438: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:159, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.414447: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.414448: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:159, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.425303: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:158, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.425314: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.425316: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:158, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.436184: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:160, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.436192: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.436194: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:160, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.447057: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:159, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.447069: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.447071: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:159, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.457924: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:161, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.457932: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.457934: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:161, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.468792: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:160, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.468804: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.468806: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:160, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.479656: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:162, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.479665: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.479666: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:162, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.490524: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:161, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.490538: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.490540: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:161, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.501398: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:163, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.501407: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.501409: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:163, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.512270: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:162, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.512282: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.512284: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:162, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.523129: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:164, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.523137: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.523139: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:164, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.534001: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:163, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.534013: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.534015: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:163, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.544866: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:165, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.544875: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.544877: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:165, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.555759: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:164, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.555771: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.555773: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:164, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.566603: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:166, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.566613: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.566614: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:166, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.577474: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:165, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.577486: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.577488: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:165, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.588339: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:167, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.588347: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.588349: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:167, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.599223: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:166, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.599236: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.599238: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:166, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.610073: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:168, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.610081: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.610083: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:168, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.620944: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:167, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.620956: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.620958: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:167, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.631808: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:169, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.631817: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.631818: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:169, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.642682: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:168, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.642694: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.642696: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:168, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.653590: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:170, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.653599: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.653601: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:170, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.664451: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:169, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.664463: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.664465: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:169, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.675295: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:171, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.675303: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.675305: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:171, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.686161: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:170, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.686173: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.686175: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:170, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.697026: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:172, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.697035: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.697037: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:172, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.707895: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:171, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.707907: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.707909: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:171, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.718758: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:173, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.718766: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.718768: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:173, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.729635: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:172, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.729647: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.729649: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:172, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.740495: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:174, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.740503: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.740505: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:174, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.751370: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:173, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.751382: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.751384: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:173, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.762273: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:175, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.762283: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.762285: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:175, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.773110: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:174, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.773122: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.773124: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:174, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.783974: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:176, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.783982: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.783984: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:176, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.794848: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:175, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.794860: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.794862: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:175, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.805717: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:177, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.805725: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.805727: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:177, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.816584: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:176, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.816596: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.816598: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:176, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.827455: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:178, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.827463: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.827465: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:178, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.838370: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:177, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [002] .....   409.838385: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [002] .....   409.838387: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:177, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.849454: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:179, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [000] .....   409.849472: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [000] .....   409.849475: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:179, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.860283: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:178, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.860302: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.860305: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:178, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.871273: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:180, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.871281: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.871282: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:180, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.882062: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:179, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.882075: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.882077: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:179, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.892933: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:181, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.892943: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.892945: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:181, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.903802: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:180, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.903814: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.903816: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:180, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.914676: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:182, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.914687: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.914689: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:182, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.925539: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:181, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.925551: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.925553: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:181, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.936411: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:183, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.936421: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.936423: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:183, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.947276: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:182, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.947289: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.947291: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:182, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.958146: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:184, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.958155: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.958158: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:184, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.969006: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:183, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.969019: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.969021: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:183, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   409.979909: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:185, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.979920: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.979922: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:185, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   409.990744: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:184, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   409.990757: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   409.990759: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:184, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   410.001619: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:186, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   410.001629: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   410.001631: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:186, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   410.012490: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:185, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   410.012502: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   410.012504: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:185, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   410.023417: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:187, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   410.023427: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   410.023429: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:187, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   410.034299: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:186, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   410.034312: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   410.034314: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:186, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   410.046506: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:188, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:2-3613    [004] .....   410.046517: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:2-3613    [004] .....   410.046519: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:188, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   410.058719: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:187, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:1-13      [002] .....   410.058736: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:1-13      [002] .....   410.058740: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:187, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   410.085972: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:189, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:1-13      [002] .....   410.085984: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:1-13      [002] .....   410.085987: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:189, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   410.113035: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:188, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:1-13      [002] .....   410.113048: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:1-13      [002] .....   410.113051: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:188, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4316    [005] .....   410.138176: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=367:190, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:1-13      [002] .....   410.138192: amdgpu_vm_grab_id: pasid=9, ring=gfx_0.0.0, id=1, hub=0, pd_addr=046ffe0001 needs_flush=0
+   kworker/u48:1-13      [002] .....   410.138196: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=367:190, ring_name=gfx_0.0.0, num_ibs=2
+         vkmembw-4317    [006] .....   410.142826: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=369:189, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:1-13      [002] .....   410.142840: amdgpu_vm_grab_id: pasid=10, ring=gfx_0.0.0, id=2, hub=0, pd_addr=046ffdd001 needs_flush=0
+   kworker/u48:1-13      [002] .....   410.142842: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=369:189, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:1-13      [002] .....   410.165322: amdgpu_sched_run_job: timeline=sdma0, fence=357:29, ring_name=sdma0, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165359: amdgpu_sched_run_job: timeline=sdma0, fence=305:20, ring_name=sdma0, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165361: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:1-13      [002] .....   410.165373: amdgpu_sched_run_job: timeline=sdma0, fence=357:30, ring_name=sdma0, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165596: amdgpu_sched_run_job: timeline=sdma1, fence=363:29, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165635: amdgpu_sched_run_job: timeline=sdma1, fence=363:30, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165663: amdgpu_sched_run_job: timeline=sdma1, fence=363:31, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165673: amdgpu_sched_run_job: timeline=sdma1, fence=363:32, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165691: amdgpu_sched_run_job: timeline=sdma1, fence=363:33, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165726: amdgpu_sched_run_job: timeline=sdma1, fence=363:34, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165749: amdgpu_sched_run_job: timeline=sdma1, fence=363:35, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165773: amdgpu_sched_run_job: timeline=sdma1, fence=363:36, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165794: amdgpu_sched_run_job: timeline=sdma1, fence=363:37, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165801: amdgpu_sched_run_job: timeline=sdma1, fence=363:38, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165826: amdgpu_sched_run_job: timeline=sdma1, fence=363:39, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165848: amdgpu_sched_run_job: timeline=sdma1, fence=363:40, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165869: amdgpu_sched_run_job: timeline=sdma1, fence=363:41, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165898: amdgpu_sched_run_job: timeline=sdma1, fence=363:42, ring_name=sdma1, num_ibs=1
+   kworker/u48:1-13      [002] .....   410.165933: amdgpu_sched_run_job: timeline=sdma1, fence=363:43, ring_name=sdma1, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.170936: amdgpu_sched_run_job: timeline=sdma0, fence=303:5, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.170939: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.170952: amdgpu_sched_run_job: timeline=sdma0, fence=303:6, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.170953: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.170975: amdgpu_sched_run_job: timeline=sdma0, fence=305:21, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.170976: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.170987: amdgpu_sched_run_job: timeline=sdma0, fence=357:31, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176546: amdgpu_sched_run_job: timeline=sdma0, fence=305:22, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176547: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.176564: amdgpu_sched_run_job: timeline=sdma0, fence=357:32, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176929: amdgpu_sched_run_job: timeline=sdma0, fence=357:33, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176940: amdgpu_sched_run_job: timeline=sdma0, fence=357:34, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176951: amdgpu_sched_run_job: timeline=sdma0, fence=357:35, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176963: amdgpu_sched_run_job: timeline=sdma0, fence=357:36, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176974: amdgpu_sched_run_job: timeline=sdma0, fence=305:23, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.176976: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.176988: amdgpu_sched_run_job: timeline=sdma0, fence=357:37, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177009: amdgpu_sched_run_job: timeline=sdma0, fence=305:24, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177011: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.177022: amdgpu_sched_run_job: timeline=sdma0, fence=357:38, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177042: amdgpu_sched_run_job: timeline=sdma0, fence=357:39, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177053: amdgpu_sched_run_job: timeline=sdma0, fence=357:40, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177065: amdgpu_sched_run_job: timeline=sdma0, fence=357:41, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177076: amdgpu_sched_run_job: timeline=sdma0, fence=357:42, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177087: amdgpu_sched_run_job: timeline=sdma0, fence=305:25, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177089: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.177102: amdgpu_sched_run_job: timeline=sdma0, fence=305:26, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177104: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.177126: amdgpu_sched_run_job: timeline=sdma0, fence=305:27, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.177128: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.182676: amdgpu_sched_run_job: timeline=sdma0, fence=305:28, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.182677: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.188220: amdgpu_sched_run_job: timeline=sdma0, fence=305:29, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.188221: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.188576: amdgpu_sched_run_job: timeline=sdma0, fence=305:30, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.188578: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.188592: amdgpu_sched_run_job: timeline=sdma0, fence=305:31, ring_name=sdma0, num_ibs=1
+   kworker/u48:2-3613    [004] .....   410.188594: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u48:2-3613    [004] .....   410.188606: amdgpu_sched_run_job: timeline=sdma0, fence=357:43, ring_name=sdma0, num_ibs=1
+              sh-4304    [010] ...1.   413.637722: tracing_mark_write: bc250 end l25

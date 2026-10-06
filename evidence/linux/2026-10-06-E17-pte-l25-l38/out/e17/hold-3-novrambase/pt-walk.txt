@@ -1,0 +1,39 @@
+# client-5: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3727 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+va 0x0000000200000000  pfn 0x200000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200001000  pfn 0x200001  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200002000  pfn 0x200002  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200003000  pfn 0x200003  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200010000  pfn 0x200010  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200200000  pfn 0x200200  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200800000  pfn 0x200800  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000200c00000  pfn 0x200c00  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000240000000  pfn 0x240000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000008200000000  pfn 0x8200000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000201000000  pfn 0x201000  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+
+va 0x0000000201400000  pfn 0x201400  root level 0, 3 levels, block_size 9
+  level 0: vram read at 0x46ffe0000 failed: errno 6
+

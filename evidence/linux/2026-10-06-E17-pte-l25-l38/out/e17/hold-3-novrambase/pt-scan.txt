@@ -1,0 +1,4 @@
+# client-5: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3727 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+root: vram read at 0x46ffe0000 failed: errno 6

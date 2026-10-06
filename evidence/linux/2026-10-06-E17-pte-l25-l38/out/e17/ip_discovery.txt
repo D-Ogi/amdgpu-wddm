@@ -1,0 +1,305 @@
+ip_discovery/die/0/0/0/base_addr 0x0001B800 0x01440000 0x01480000 0x014C0000 0x02411000 
+ip_discovery/die/0/0/0/harvest 0x0 
+ip_discovery/die/0/0/0/hw_id 0 
+ip_discovery/die/0/0/0/major 11 
+ip_discovery/die/0/0/0/minor 0 
+ip_discovery/die/0/0/0/num_base_addresses 5 
+ip_discovery/die/0/0/0/num_instance 0 
+ip_discovery/die/0/0/0/revision 1 
+ip_discovery/die/0/0/1/base_addr 0x0001BA00 0x01500000 0x01540000 0x01580000 0x02411400 
+ip_discovery/die/0/0/1/harvest 0x0 
+ip_discovery/die/0/0/1/hw_id 0 
+ip_discovery/die/0/0/1/major 11 
+ip_discovery/die/0/0/1/minor 0 
+ip_discovery/die/0/0/1/num_base_addresses 5 
+ip_discovery/die/0/0/1/num_instance 1 
+ip_discovery/die/0/0/1/revision 1 
+ip_discovery/die/0/1/0/base_addr 0x00016000 0x00DC0000 0x00E00000 0x00E40000 0x0243FC00 
+ip_discovery/die/0/1/0/harvest 0x0 
+ip_discovery/die/0/1/0/hw_id 1 
+ip_discovery/die/0/1/0/major 11 
+ip_discovery/die/0/1/0/minor 0 
+ip_discovery/die/0/1/0/num_base_addresses 5 
+ip_discovery/die/0/1/0/num_instance 0 
+ip_discovery/die/0/1/0/revision 8 
+ip_discovery/die/0/108/0/base_addr 0x00000000 0x00000014 0x00000D20 0x00010400 0x0241B000 0x04040000 
+ip_discovery/die/0/108/0/harvest 0x0 
+ip_discovery/die/0/108/0/hw_id 108 
+ip_discovery/die/0/108/0/major 2 
+ip_discovery/die/0/108/0/minor 1 
+ip_discovery/die/0/108/0/num_base_addresses 6 
+ip_discovery/die/0/108/0/num_instance 0 
+ip_discovery/die/0/108/0/revision 1 
+ip_discovery/die/0/11/0/base_addr 0x00001260 0x0000A000 0x02402C00 
+ip_discovery/die/0/11/0/harvest 0x0 
+ip_discovery/die/0/11/0/hw_id 11 
+ip_discovery/die/0/11/0/major 10 
+ip_discovery/die/0/11/0/minor 1 
+ip_discovery/die/0/11/0/num_base_addresses 3 
+ip_discovery/die/0/11/0/num_instance 0 
+ip_discovery/die/0/11/0/revision 3 
+ip_discovery/die/0/12/0/base_addr 0x00007800 0x00007E00 0x02403000 
+ip_discovery/die/0/12/0/harvest 0x0 
+ip_discovery/die/0/12/0/hw_id 12 
+ip_discovery/die/0/12/0/major 2 
+ip_discovery/die/0/12/0/minor 0 
+ip_discovery/die/0/12/0/num_base_addresses 3 
+ip_discovery/die/0/12/0/num_instance 0 
+ip_discovery/die/0/12/0/revision 3 
+ip_discovery/die/0/128/0/base_addr 0x00000EA0 0x00500000 0x02420000 
+ip_discovery/die/0/128/0/harvest 0x0 
+ip_discovery/die/0/128/0/hw_id 128 
+ip_discovery/die/0/128/0/major 2 
+ip_discovery/die/0/128/0/minor 1 
+ip_discovery/die/0/128/0/num_base_addresses 3 
+ip_discovery/die/0/128/0/num_instance 0 
+ip_discovery/die/0/128/0/revision 0 
+ip_discovery/die/0/14/0/base_addr 0x00480000 0x02403800 
+ip_discovery/die/0/14/0/harvest 0x0 
+ip_discovery/die/0/14/0/hw_id 14 
+ip_discovery/die/0/14/0/major 4 
+ip_discovery/die/0/14/0/minor 0 
+ip_discovery/die/0/14/0/num_base_addresses 2 
+ip_discovery/die/0/14/0/num_instance 0 
+ip_discovery/die/0/14/0/revision 0 
+ip_discovery/die/0/150/0/base_addr 0x00014000 0x02425800 
+ip_discovery/die/0/150/0/harvest 0x0 
+ip_discovery/die/0/150/0/hw_id 150 
+ip_discovery/die/0/150/0/major 8 
+ip_discovery/die/0/150/0/minor 1 
+ip_discovery/die/0/150/0/num_base_addresses 2 
+ip_discovery/die/0/150/0/num_instance 0 
+ip_discovery/die/0/150/0/revision 1 
+ip_discovery/die/0/150/1/base_addr 0x00054000 0x02425C00 
+ip_discovery/die/0/150/1/harvest 0x0 
+ip_discovery/die/0/150/1/hw_id 150 
+ip_discovery/die/0/150/1/major 8 
+ip_discovery/die/0/150/1/minor 1 
+ip_discovery/die/0/150/1/num_base_addresses 2 
+ip_discovery/die/0/150/1/num_instance 1 
+ip_discovery/die/0/150/1/revision 1 
+ip_discovery/die/0/170/0/base_addr 0x0242A800 0x05B00000 
+ip_discovery/die/0/170/0/harvest 0x0 
+ip_discovery/die/0/170/0/hw_id 170 
+ip_discovery/die/0/170/0/major 4 
+ip_discovery/die/0/170/0/minor 5 
+ip_discovery/die/0/170/0/num_base_addresses 2 
+ip_discovery/die/0/170/0/num_instance 0 
+ip_discovery/die/0/170/0/revision 0 
+ip_discovery/die/0/170/1/base_addr 0x0242AC00 0x05B80000 
+ip_discovery/die/0/170/1/harvest 0x0 
+ip_discovery/die/0/170/1/hw_id 170 
+ip_discovery/die/0/170/1/major 4 
+ip_discovery/die/0/170/1/minor 5 
+ip_discovery/die/0/170/1/num_base_addresses 2 
+ip_discovery/die/0/170/1/num_instance 1 
+ip_discovery/die/0/170/1/revision 0 
+ip_discovery/die/0/24/0/base_addr 0x00010000 0x02406000 0x04EC0000 
+ip_discovery/die/0/24/0/harvest 0x0 
+ip_discovery/die/0/24/0/hw_id 24 
+ip_discovery/die/0/24/0/major 0 
+ip_discovery/die/0/24/0/minor 0 
+ip_discovery/die/0/24/0/num_base_addresses 3 
+ip_discovery/die/0/24/0/num_instance 0 
+ip_discovery/die/0/24/0/revision 0 
+ip_discovery/die/0/255/0/base_addr 0x00016000 0x00DC0000 0x00E00000 0x00E40000 0x0243FC00 
+ip_discovery/die/0/255/0/harvest 0x0 
+ip_discovery/die/0/255/0/hw_id 255 
+ip_discovery/die/0/255/0/major 11 
+ip_discovery/die/0/255/0/minor 0 
+ip_discovery/die/0/255/0/num_base_addresses 5 
+ip_discovery/die/0/255/0/num_instance 0 
+ip_discovery/die/0/255/0/revision 8 
+ip_discovery/die/0/271/0/base_addr 0x00000012 0x000000C0 0x000034C0 0x00009000 0x02403C00 
+ip_discovery/die/0/271/0/harvest 0x0 
+ip_discovery/die/0/271/0/hw_id 271 
+ip_discovery/die/0/271/0/major 2 
+ip_discovery/die/0/271/0/minor 0 
+ip_discovery/die/0/271/0/num_base_addresses 5 
+ip_discovery/die/0/271/0/num_instance 0 
+ip_discovery/die/0/271/0/revision 3 
+ip_discovery/die/0/272/0/base_addr 0x02404000 
+ip_discovery/die/0/272/0/harvest 0x0 
+ip_discovery/die/0/272/0/hw_id 272 
+ip_discovery/die/0/272/0/major 127 
+ip_discovery/die/0/272/0/minor 127 
+ip_discovery/die/0/272/0/num_base_addresses 1 
+ip_discovery/die/0/272/0/num_instance 0 
+ip_discovery/die/0/272/0/revision 63 
+ip_discovery/die/0/274/0/base_addr 0x004C0000 0x02404800 
+ip_discovery/die/0/274/0/harvest 0x0 
+ip_discovery/die/0/274/0/hw_id 274 
+ip_discovery/die/0/274/0/major 127 
+ip_discovery/die/0/274/0/minor 127 
+ip_discovery/die/0/274/0/num_base_addresses 2 
+ip_discovery/die/0/274/0/num_instance 0 
+ip_discovery/die/0/274/0/revision 63 
+ip_discovery/die/0/28/0/base_addr 0x00007DC0 0x00900000 0x02407000 0x04FC0000 0x055C0000 
+ip_discovery/die/0/28/0/harvest 0x0 
+ip_discovery/die/0/28/0/hw_id 28 
+ip_discovery/die/0/28/0/major 0 
+ip_discovery/die/0/28/0/minor 0 
+ip_discovery/die/0/28/0/num_base_addresses 5 
+ip_discovery/die/0/28/0/num_instance 0 
+ip_discovery/die/0/28/0/revision 0 
+ip_discovery/die/0/3/0/base_addr 0x00016600 0x02400C00 
+ip_discovery/die/0/3/0/harvest 0x0 
+ip_discovery/die/0/3/0/hw_id 3 
+ip_discovery/die/0/3/0/major 11 
+ip_discovery/die/0/3/0/minor 0 
+ip_discovery/die/0/3/0/num_base_addresses 2 
+ip_discovery/die/0/3/0/num_instance 0 
+ip_discovery/die/0/3/0/revision 1 
+ip_discovery/die/0/34/0/base_addr 0x0001A000 0x02408800 
+ip_discovery/die/0/34/0/harvest 0x0 
+ip_discovery/die/0/34/0/hw_id 34 
+ip_discovery/die/0/34/0/major 2 
+ip_discovery/die/0/34/0/minor 0 
+ip_discovery/die/0/34/0/num_base_addresses 2 
+ip_discovery/die/0/34/0/num_instance 0 
+ip_discovery/die/0/34/0/revision 3 
+ip_discovery/die/0/35/0/base_addr 0x00000C00 0x02408C00 
+ip_discovery/die/0/35/0/harvest 0x0 
+ip_discovery/die/0/35/0/hw_id 35 
+ip_discovery/die/0/35/0/major 2 
+ip_discovery/die/0/35/0/minor 0 
+ip_discovery/die/0/35/0/num_base_addresses 2 
+ip_discovery/die/0/35/0/num_instance 0 
+ip_discovery/die/0/35/0/revision 3 
+ip_discovery/die/0/36/0/base_addr 0x000001C0 
+ip_discovery/die/0/36/0/harvest 0x0 
+ip_discovery/die/0/36/0/hw_id 36 
+ip_discovery/die/0/36/0/major 3 
+ip_discovery/die/0/36/0/minor 0 
+ip_discovery/die/0/36/0/num_base_addresses 1 
+ip_discovery/die/0/36/0/num_instance 0 
+ip_discovery/die/0/36/0/revision 0 
+ip_discovery/die/0/37/0/base_addr 0x00000580 0x02409400 
+ip_discovery/die/0/37/0/harvest 0x0 
+ip_discovery/die/0/37/0/hw_id 37 
+ip_discovery/die/0/37/0/major 2 
+ip_discovery/die/0/37/0/minor 0 
+ip_discovery/die/0/37/0/num_base_addresses 2 
+ip_discovery/die/0/37/0/num_instance 0 
+ip_discovery/die/0/37/0/revision 0 
+ip_discovery/die/0/4/0/base_addr 0x00016800 0x00016A00 0x00440000 0x02401000 
+ip_discovery/die/0/4/0/harvest 0x0 
+ip_discovery/die/0/4/0/hw_id 4 
+ip_discovery/die/0/4/0/major 11 
+ip_discovery/die/0/4/0/minor 0 
+ip_discovery/die/0/4/0/num_base_addresses 4 
+ip_discovery/die/0/4/0/num_instance 0 
+ip_discovery/die/0/4/0/revision 8 
+ip_discovery/die/0/40/0/base_addr 0x000010A0 0x0240A000 
+ip_discovery/die/0/40/0/harvest 0x0 
+ip_discovery/die/0/40/0/hw_id 40 
+ip_discovery/die/0/40/0/major 5 
+ip_discovery/die/0/40/0/minor 0 
+ip_discovery/die/0/40/0/num_base_addresses 2 
+ip_discovery/die/0/40/0/num_instance 0 
+ip_discovery/die/0/40/0/revision 1 
+ip_discovery/die/0/41/0/base_addr 0x00000F20 0x0240A400 
+ip_discovery/die/0/41/0/harvest 0x0 
+ip_discovery/die/0/41/0/hw_id 41 
+ip_discovery/die/0/41/0/major 5 
+ip_discovery/die/0/41/0/minor 0 
+ip_discovery/die/0/41/0/num_base_addresses 2 
+ip_discovery/die/0/41/0/num_instance 0 
+ip_discovery/die/0/41/0/revision 1 
+ip_discovery/die/0/42/0/base_addr 0x00001260 0x0000A000 0x02402C00 
+ip_discovery/die/0/42/0/harvest 0x0 
+ip_discovery/die/0/42/0/hw_id 42 
+ip_discovery/die/0/42/0/major 5 
+ip_discovery/die/0/42/0/minor 0 
+ip_discovery/die/0/42/0/num_base_addresses 3 
+ip_discovery/die/0/42/0/num_instance 0 
+ip_discovery/die/0/42/0/revision 1 
+ip_discovery/die/0/43/0/base_addr 0x00001260 0x0000A000 0x02402C00 
+ip_discovery/die/0/43/0/harvest 0x0 
+ip_discovery/die/0/43/0/hw_id 43 
+ip_discovery/die/0/43/0/major 5 
+ip_discovery/die/0/43/0/minor 0 
+ip_discovery/die/0/43/0/num_base_addresses 3 
+ip_discovery/die/0/43/0/num_instance 0 
+ip_discovery/die/0/43/0/revision 1 
+ip_discovery/die/0/45/0/base_addr 0x000001E0 
+ip_discovery/die/0/45/0/harvest 0x0 
+ip_discovery/die/0/45/0/hw_id 45 
+ip_discovery/die/0/45/0/major 3 
+ip_discovery/die/0/45/0/minor 0 
+ip_discovery/die/0/45/0/num_base_addresses 1 
+ip_discovery/die/0/45/0/num_instance 0 
+ip_discovery/die/0/45/0/revision 0 
+ip_discovery/die/0/46/0/base_addr 0x00007000 0x0240B800 
+ip_discovery/die/0/46/0/harvest 0x0 
+ip_discovery/die/0/46/0/hw_id 46 
+ip_discovery/die/0/46/0/major 3 
+ip_discovery/die/0/46/0/minor 5 
+ip_discovery/die/0/46/0/num_base_addresses 2 
+ip_discovery/die/0/46/0/num_instance 0 
+ip_discovery/die/0/46/0/revision 0 
+ip_discovery/die/0/47/0/base_addr 0x00017E00 0x0240BC00 
+ip_discovery/die/0/47/0/harvest 0x0 
+ip_discovery/die/0/47/0/hw_id 47 
+ip_discovery/die/0/47/0/major 11 
+ip_discovery/die/0/47/0/minor 0 
+ip_discovery/die/0/47/0/num_base_addresses 2 
+ip_discovery/die/0/47/0/num_instance 0 
+ip_discovery/die/0/47/0/revision 1 
+ip_discovery/die/0/49/0/base_addr 0x000005A0 0x00B80000 0x0240C400 
+ip_discovery/die/0/49/0/harvest 0x0 
+ip_discovery/die/0/49/0/hw_id 49 
+ip_discovery/die/0/49/0/major 2 
+ip_discovery/die/0/49/0/minor 0 
+ip_discovery/die/0/49/0/num_base_addresses 3 
+ip_discovery/die/0/49/0/num_instance 0 
+ip_discovery/die/0/49/0/revision 0 
+ip_discovery/die/0/5/0/base_addr 0x00017400 0x02401400 
+ip_discovery/die/0/5/0/harvest 0x0 
+ip_discovery/die/0/5/0/hw_id 5 
+ip_discovery/die/0/5/0/major 11 
+ip_discovery/die/0/5/0/minor 0 
+ip_discovery/die/0/5/0/num_base_addresses 2 
+ip_discovery/die/0/5/0/num_instance 0 
+ip_discovery/die/0/5/0/revision 1 
+ip_discovery/die/0/6/0/base_addr 0x00016C00 0x02401800 
+ip_discovery/die/0/6/0/harvest 0x0 
+ip_discovery/die/0/6/0/hw_id 6 
+ip_discovery/die/0/6/0/major 11 
+ip_discovery/die/0/6/0/minor 0 
+ip_discovery/die/0/6/0/num_base_addresses 2 
+ip_discovery/die/0/6/0/num_instance 0 
+ip_discovery/die/0/6/0/revision 1 
+ip_discovery/die/0/6/1/base_addr 0x00016E00 0x02401C00 
+ip_discovery/die/0/6/1/harvest 0x0 
+ip_discovery/die/0/6/1/hw_id 6 
+ip_discovery/die/0/6/1/major 11 
+ip_discovery/die/0/6/1/minor 0 
+ip_discovery/die/0/6/1/num_base_addresses 2 
+ip_discovery/die/0/6/1/num_instance 1 
+ip_discovery/die/0/6/1/revision 1 
+ip_discovery/die/0/6/2/base_addr 0x00017000 0x02402000 
+ip_discovery/die/0/6/2/harvest 0x0 
+ip_discovery/die/0/6/2/hw_id 6 
+ip_discovery/die/0/6/2/major 11 
+ip_discovery/die/0/6/2/minor 0 
+ip_discovery/die/0/6/2/num_base_addresses 2 
+ip_discovery/die/0/6/2/num_instance 2 
+ip_discovery/die/0/6/2/revision 1 
+ip_discovery/die/0/70/0/base_addr 0x02411800 0x04440000 
+ip_discovery/die/0/70/0/harvest 0x0 
+ip_discovery/die/0/70/0/hw_id 70 
+ip_discovery/die/0/70/0/major 4 
+ip_discovery/die/0/70/0/minor 2 
+ip_discovery/die/0/70/0/num_base_addresses 2 
+ip_discovery/die/0/70/0/num_instance 0 
+ip_discovery/die/0/70/0/revision 0 
+ip_discovery/die/0/80/0/base_addr 0x02414000 0x04680000 
+ip_discovery/die/0/80/0/harvest 0x0 
+ip_discovery/die/0/80/0/hw_id 80 
+ip_discovery/die/0/80/0/major 3 
+ip_discovery/die/0/80/0/minor 6 
+ip_discovery/die/0/80/0/num_base_addresses 2 
+ip_discovery/die/0/80/0/num_instance 0 
+ip_discovery/die/0/80/0/revision 0 
+ip_discovery/die/0/num_ips 38 

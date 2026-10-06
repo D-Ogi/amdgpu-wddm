@@ -1,0 +1,84 @@
+# client-6: pd_address=0x46ffe0001 max_pfn=0x1000000000 num_level=0x3 block_size=0x9 fragment_size=0x9
+# pid: 3827 | comm: python3
+# debugfs /sys/kernel/debug/dri/0000:01:00.0, amdgpu_vram fd 3, amdgpu_iomem present
+va 0x0000000200000000  pfn 0x200000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffdb000: 000000016db36077  addr=0x00016db36000 VALID SYSTEM SNOOPED EXECUTABLE READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x00016db36000, page size 0x1000
+
+va 0x0000000200001000  pfn 0x200001  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     1 @ vram 0x00046ffdb008: 000000016db3e027  addr=0x00016db3e000 VALID SYSTEM SNOOPED READABLE MTYPE=MTYPE_NC
+  -> system 0x00016db3e000, page size 0x1000
+
+va 0x0000000200002000  pfn 0x200002  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     2 @ vram 0x00046ffdb010: 000000016d562067  addr=0x00016d562000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x00016d562000, page size 0x1000
+
+va 0x0000000200003000  pfn 0x200003  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index     3 @ vram 0x00046ffdb018: 0400000107c96067  addr=0x000107c96000 VALID SYSTEM SNOOPED READABLE WRITEABLE NOALLOC MTYPE=MTYPE_NC
+  -> system 0x000107c96000, page size 0x1000
+
+va 0x0000000200010000  pfn 0x200010  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffdc000: 000000046ffdb001  addr=0x00046ffdb000 VALID
+  level 3 shift  0 index    16 @ vram 0x00046ffdb080: 000000010f1e0267  addr=0x00010f1e0000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC FRAG=4 (0x10000 bytes)
+  -> system 0x00010f1e0000, page size 0x10000
+
+va 0x0000000200200000  pfn 0x200200  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     1 @ vram 0x00046ffdc008: 00400001092004e7  addr=0x000109200000 VALID SYSTEM SNOOPED READABLE WRITEABLE PDE_PTE MTYPE=MTYPE_NC FRAG=9 (0x200000 bytes)
+  -> system 0x000109200000, page size 0x200000
+
+va 0x0000000200800000  pfn 0x200800  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     4 @ vram 0x00046ffdc020: 000000046ffd9001  addr=0x00046ffd9000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd9000: 000000046ffda061  addr=0x00046ffda000 VALID READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> vram 0x00046ffda000, page size 0x1000
+
+va 0x0000000200c00000  pfn 0x200c00  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     6 @ vram 0x00046ffdc030: 004000046fc004e1  addr=0x00046fc00000 VALID READABLE WRITEABLE PDE_PTE MTYPE=MTYPE_NC FRAG=9 (0x200000 bytes)
+  -> vram 0x00046fc00000, page size 0x200000
+
+va 0x0000000240000000  pfn 0x240000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     9 @ vram 0x00046ffdd048: 000000046ffd8001  addr=0x00046ffd8000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffd8000: 000000046ffd7001  addr=0x00046ffd7000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd7000: 0000000102ef6067  addr=0x000102ef6000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x000102ef6000, page size 0x1000
+
+va 0x0000008200000000  pfn 0x8200000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     1 @ vram 0x00046ffe0008: 000000046ffd6001  addr=0x00046ffd6000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffd6040: 000000046ffd5001  addr=0x00046ffd5000 VALID
+  level 2 shift  9 index     0 @ vram 0x00046ffd5000: 000000046ffd4001  addr=0x00046ffd4000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd4000: 00000001096e4067  addr=0x0001096e4000 VALID SYSTEM SNOOPED READABLE WRITEABLE MTYPE=MTYPE_NC
+  -> system 0x0001096e4000, page size 0x1000
+
+va 0x0000000201000000  pfn 0x201000  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index     8 @ vram 0x00046ffdc040: 000000046ffd3001  addr=0x00046ffd3000 VALID
+  level 3 shift  0 index     0 @ vram 0x00046ffd3000: 0088000000000006  addr=0x000000000000 SYSTEM SNOOPED PRT LOG MTYPE=MTYPE_NC
+  -> system 0x000000000000, page size 0x1000
+
+va 0x0000000201400000  pfn 0x201400  root level 0, 3 levels, block_size 9
+  level 0 shift 27 index     0 @ vram 0x00046ffe0000: 000000046ffdd001  addr=0x00046ffdd000 VALID
+  level 1 shift 18 index     8 @ vram 0x00046ffdd040: 000000046ffdc001  addr=0x00046ffdc000 VALID
+  level 2 shift  9 index    10 @ vram 0x00046ffdc050: 00c8000000000486  addr=0x000000000000 SYSTEM SNOOPED PRT PDE_PTE LOG MTYPE=MTYPE_NC FRAG=9 (0x200000 bytes)
+  -> system 0x000000000000, page size 0x200000
+
