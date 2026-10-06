@@ -141,9 +141,11 @@ namespace Bc250Mon
             { "EnableGpuPresentBlit", 1 },      // interop_policy.c Switch(): ABSENT means the switch is on
             { "EnableCddDwmInterop", 1 },
             { "OfferComposedSourceModes", 1 },  // wddm.c: GuardReadSetting(..., 1)
+            { "EnableScanoutAdmit", 1 },        // wddm.c: GuardReadSetting(..., 1), the M15.14 scan-out gate
             { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
             { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
             { "DpmMaxMHz", 1500 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ
+            { "DpmIdleMHz", 500 },              // dpm.c: BC250_DPM_IDLE_MHZ, the idle point when the name is absent
             { "EnableMmio", 0 }, { "EnableMmioWrite", 0 }, { "EnableVram", 0 }, { "EnableVramWrite", 0 },
             { "EnableGart", 0 }, { "EnablePsp", 0 }, { "EnableGfx", 0 }, { "EnableIh", 0 },
             { "EnableDcnWrite", 0 }, { "EnableVidPnFlip", 0 }, { "EnableGpuVa", 0 }, { "EnableGpuSubmit", 0 },

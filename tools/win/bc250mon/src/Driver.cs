@@ -23,7 +23,8 @@ namespace Bc250Mon
         public ulong ExpectedGeneration, ExpectedEpoch;
         public uint Reserved0, Reserved1;
     }
-    // BC250_ESCAPE_DPM, ABI 1, 160 bytes (driver/kmd/bc250kmd_escape.h of KMD 0.7.175 and later; test_telemetry.py).
+    // BC250_ESCAPE_DPM, ABI 2, 192 bytes (driver/kmd/bc250kmd_escape.h of KMD 0.7.207 and later; test_telemetry.py).
+    // The first 160 bytes are the ABI 1 prefix every KMD from 0.7.175 answers, so ReadDpm falls back to that size.
     [StructLayout(LayoutKind.Sequential)]
     public struct DpmSnapshot
     {
@@ -42,8 +43,13 @@ namespace Bc250Mon
         public ulong ExpectedGeneration;
         public uint SubmitBusyPermille;
         public uint SdmaBusyPermille;
+        // ABI 2 from here (0.7.207, the idle state), all out. Zero after an ABI 1 read.
+        public uint IdleMHz;                // the idle point in force, 0 when the state is off for this start
+        public uint IdleHoldMs, IdleBusyPermille;        // DpmIdleHoldMs and DpmIdleBusyPermille in force
+        public uint IdleEntries, IdleExits, IdleRefusals;
+        public ulong IdleMs;                // time the governor held the idle point
 
-        public const uint FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512;
+        public const uint FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512, FlagIdle = 1024;
     }
     // BC250_ESCAPE_CU_MODE, ABI 1, 184 bytes (driver/kmd/bc250kmd_escape.h; test_lab_state.py keeps the two
     // layouts equal). The snapshot the start's GFX bring-up left behind: how many compute units this start
@@ -217,10 +223,21 @@ namespace Bc250Mon
         public ClockSnapshot SetClock(uint mhz, uint mv) { lock (_lock) { return Request(1, mhz, mv); } }
 
         // The governor's published snapshot: no SMU message, no BAR access (bc250kmd_cli.c, Bc250Dpm).
+        // ABI 2 (192 bytes) carries the idle state. A KMD or a bc250control.dll from before 0.7.207 refuses that
+        // size with STATUS_INVALID_PARAMETER, so the read repeats with the 160-byte ABI 1 prefix; the reply's
+        // AbiVersion says which one answered.
         public DpmSnapshot ReadDpm()
         {
             DpmSnapshot data;
-            int status = Bc250Dpm(out data, 160);
+            int status = Bc250Dpm(out data, 192);
+            if (status == unchecked((int)0xC000000D))
+            {
+                status = Bc250Dpm(out data, 160);
+                // The reply ends at SdmaBusyPermille: nothing wrote the idle fields, so they read as "no state".
+                data.IdleMHz = data.IdleHoldMs = data.IdleBusyPermille = 0;
+                data.IdleEntries = data.IdleExits = data.IdleRefusals = 0;
+                data.IdleMs = 0;
+            }
             if (status < 0) throw new InvalidOperationException("KMD DPM snapshot unavailable (0x" + status.ToString("X8") + ")");
             return data;
         }
