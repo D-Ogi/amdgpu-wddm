@@ -13,12 +13,12 @@ NoAdapterSynchronization refusal; the CLI builds the request in one place and se
 From 0.7.213.1 the four escapes that had no gate here get one, as a table of what every operation admits and what it
 refuses (FlagContractTest): BC250_ESCAPE_RUN_HWMON (27), BC250_ESCAPE_RUN_DPM_CURVE (28), BC250_ESCAPE_RUN_CPU (29)
 and BC250_ESCAPE_RUN_START_HEALTH (21). The product rule behind the table: no shipped component sends HardwareAccess
-on a repeating schedule (one exception is left, named in docs/design/paging-journal.md: the overlay's graphics panel
-polls `log summary only` while it is open), and no HardwareAccess escape holds the GPU scheduler across a registry
-flush. So
+on a repeating schedule, and no HardwareAccess escape holds the GPU scheduler across a registry flush. So
 RUN_START_HEALTH's CONFIRM and RUN_CPU's KEEP, which write the registry and touch no register, moved to
 NoAdapterSynchronization and keep their old word admitted for one release; RUN_CPU's other writes send mailbox
-messages and stay HardwareAccess. The behavioural half of the RUN_START_HEALTH contract, every operation against
+messages and stay HardwareAccess. The schedule rule has no exception left: the last one was the overlay's graphics
+panel, which polled `log summary only` every 5 s and now reads the ring with `log 0` and asks for a summary only
+when an operator does (tools/win/bc250mon/src/GraphicsPipelineProvider.cs, docs/design/paging-journal.md). The behavioural half of the RUN_START_HEALTH contract, every operation against
 every flag word, is in driver/kmd/test/start_health_test.c, which builds the actual handler.
 
     python -m unittest discover -s tools/win/bc250kmd_cli
