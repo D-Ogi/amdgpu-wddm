@@ -22,6 +22,8 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
 | `test-wow64.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-064): every image under `payload\wow64` and `payload\syswow64` is x86 and every other payload image x64, the x86 entry points are exported undecorated, the `manifest.json` install paths, and verify's 32-bit registration check (`Test-WowRegistration`) against the scratch key `HKCU:\Software\amdgpu-wddm-installer-test-wow` and files under `-WorkRoot`, both removed at the end. |
 | `test-filesafe.ps1` | Called by `test-dryrun.ps1` under 5.1, inside a scratch folder: equal-SHA256 skip, replacement of a file in use by rename, a re-run over a partial install, and the failed-step message with its re-run hint. |
+| `test-marker-guard.ps1`, `marker_guard.py`, `marker-guard-sources.json` | Gate (build): no fix lost its comment on the way into this release. See "Marker guard" below. |
+| `test-kmd-compile.ps1` | Gate (build): `driver\kmd\build.ps1 -CompileOnly` against the WDK in `<BC250_ROOT>\toolchain\nuget`, so a release is never cut from kernel sources that do not compile. The same compile is the `kmd-compile` check of `tools\quality\quick.ps1`, which until 0.7.213 only exported the compile commands. |
 
 ```
 pwsh -File tools\release\new-release-cert.ps1                 # once
@@ -125,6 +127,26 @@ and the boot).
 
 `build-release.ps1` and `test-dryrun.ps1` need PowerShell 7 (`headless.ps1` starts every child process without a
 window, with stdin closed and a time bound). The installer itself is Windows PowerShell 5.1.
+
+## Marker guard
+
+A fix or an optimisation in this project leaves a comment with its id (`BD-075`, `C50`, `K184`, `M779`, `E52`, or a
+`TODO`/`FIXME`). A train merge or a rebase can drop such a comment together with the code it explains, and the host
+tests of the losing side go with it, so nothing else in the gate set notices. `marker_guard.py` takes every anchored
+comment of every revision in `marker-guard-sources.json`, together with the code that follows it, and looks for it in
+the release head:
+
+| Finding | Meaning | Effect |
+|---|---|---|
+| `GONE` | an id occurs fewer times in a file of the head than in that file of a source, and the file did not just move: a fix or its explanation was dropped (a merge took the other side, a rebase lost a hunk) | fails the gate and the release build |
+| `REWORDED` | the anchored comment line is not in the head verbatim, but the id is still in the file as often as before: usually a rewrap or a deliberate update | printed |
+| `CHANGED` | the comment is there, and the code right after it matches no source's version: a merge result nobody wrote | printed, and the release review reads it |
+
+`marker-guard-sources.json` names each source by its commit, never by a branch: another workflow deletes a branch and
+would take the gate with it, and the commit is what was merged. A wagon gets its row in the commit that merges it into
+the train. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
+(`<id> <path> <reason>`); without that file the gate runs with no exceptions. The fork repositories take the same run
+with `--paths src`. One run over `driver` and `tools` takes about 15 s.
 
 PROVENANCE: vulkaninfo.exe 1.4.335 from Khronos Vulkan-Tools (LunarG build), Apache-2.0.
 PROVENANCE: linux-firmware `amdgpu/cyan_skillfish2_*.bin` at 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, redistributable per `LICENSE.amdgpu`. Not in the package and never committed: the installer downloads the files (kernel.org, GitLab mirror) or takes them from `-FirmwareDir`, checked against `tools/firmware/cyan_skillfish2.json`.

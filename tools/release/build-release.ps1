@@ -13,8 +13,10 @@
 # Gates: the work ledger (every check rule, plus no finished but unlanded work for a component of this release;
 # override with -AllowLedgerDebt -LedgerDebtReason, or -NoLedger -NoLedgerReason in a workspace without the
 # ledger; manifest.json records which of the three happened), every source hash, signer of .sys and .cat = the release certificate, no private-key material in the
-# package, every installer script parses under Windows PowerShell 5.1. Nothing here opens a window: child processes
-# run with CreateNoWindow and redirected output.
+# package, every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
+# packaged CLI, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
+# kernel compile (driver\kmd and driver\shim build with the WDK of this workspace: test-kmd-compile.ps1). Nothing here
+# opens a window: child processes run with CreateNoWindow and redirected output.
 [CmdletBinding()]
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
@@ -277,6 +279,17 @@ if ($r.code -ne 0) { throw 'a script does not parse under Windows PowerShell 5.1
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $pkg 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json')) -TimeoutSeconds 60
 $r.text
 if ($r.code -ne 0) { throw 'bc250kmd_cli.exe lacks a form of cli-commands.json, or the CLI and the control DLL come from different builds' }
+# No fix lost its comment on the way into this release (test-marker-guard.ps1). A train merge or a rebase can drop
+# a fix together with the host tests that covered it, and then nothing else here notices.
+$pwshExe = (Get-Process -Id $PID).Path
+$r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-marker-guard.ps1'), '-Repo', $repo, '-Out', (Join-Path $Out 'marker-guard')) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'marker guard: a fix named in a source revision has no comment in this release (see above)' }
+# The kernel sources of this repository compile and link with the WDK of this workspace (test-kmd-compile.ps1).
+# quick.ps1 only exports the compile commands, so without this gate a C error in driver\kmd reached the release.
+$r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-kmd-compile.ps1'), '-Root', $Root, '-Out', (Join-Path $Out 'kmd-compile'), '-KitVersion', $KitVersion) -TimeoutSeconds 900
+$r.text
+if ($r.code -ne 0) { throw 'the kernel driver of this repository does not compile and link (see above)' }
 
 Write-Host 'manifest'
 # Where each payload directory lands on the tester PC (install.ps1 does the copying).
