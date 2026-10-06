@@ -414,11 +414,24 @@ void CSDeblockRows(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
         //
         // [allow_uav_condition] is required: without it fxc refuses a loop whose exit condition reads
         // an unordered access view.
+        //
+        // The wait is bounded, and the bound is not a formality. Forward progress rests on every one
+        // of the heightMb groups being resident at once, which the API does not promise; a scheduler
+        // that disagrees would leave a group waiting for a count no running group will ever publish.
+        // An unbounded spin is then a hung GPU, which on unit A is the documented 0x116 path and which
+        // gfx1013 cannot preempt its way out of. The bound turns that into a filtered-too-early
+        // macroblock instead: the picture is wrong, every --encode and sweep case is bit exact against
+        // the inbox decoder and fails loudly, and the machine is still there to say so. 1<<22 reads of
+        // one cache line are some milliseconds, far beyond any legitimate wait and far inside the
+        // driver's timeout.
         uint seen = 0u;
         [allow_uav_condition]
-        do {
+        for (uint spin = 0u; spin < (1u << 22); ++spin) {
             rwProgress.InterlockedAdd(mby * 4u, 0u, seen);
-        } while (seen < need);
+            if (seen >= need) {
+                break;
+            }
+        }
         // The acquire: the samples of the row above are read after the counter that announced them.
         DeviceMemoryBarrier();
         DeblockMacroblock(mbx, mby, tid);
@@ -426,7 +439,14 @@ void CSDeblockRows(uint3 gid : SV_GroupID, uint tid : SV_GroupIndex)
         // finished reading the groupshared window, before lane 0 publishes the count.
         AllMemoryBarrierWithGroupSync();
         if (tid == 0u) {
-            rwProgress.Store((mby + 1u) * 4u, mbx + 1u);
+            // An atomic, for the same reason the wait above is one. The wait had to be an atomic
+            // because a plain Load of this globallycoherent buffer read a stale cache line; a plain
+            // Store travels the same cache hierarchy in the other direction, so the measured fix
+            // covered one side of the pair only and the other side could keep a published count in a
+            // cache the waiter does not read - a wait that lasts far longer than it should, or one that
+            // reaches the bound above. InterlockedMax costs what the wait's InterlockedAdd costs, is
+            // performed where the counters live, and is monotonic, which this count is: mbx only grows.
+            rwProgress.InterlockedMax((mby + 1u) * 4u, mbx + 1u);
         }
     }
 }
