@@ -35,7 +35,42 @@
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
 #define BC250_ESCAPE_RUN_DPM_TUNE 26u           // DPM governor thresholds, floor, thermal timing: read, set, reset (not persisted)
-#define BC250_KMD_VERSION 0x000700CFu       // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
+#define BC250_ESCAPE_RUN_HWMON 27u              // Super I/O hardware monitor: fan speed, duty read-back, its own temperatures
+#define BC250_KMD_VERSION 0x000700D0u       // revision 208 (INF 0.7.208.1, on 207.1): the board's own hardware
+                                            // monitor becomes readable. The ASRock BC-250 carries a Nuvoton
+                                            // NCT6686D Super I/O. Its embedded controller turns the case fan
+                                            // from the BIOS "Fan Setting" curve, and until this revision
+                                            // nothing in Windows could read it, so the control application
+                                            // said "The driver cannot read it yet".
+                                            //
+                                            // The reader is read-only and gated. EnableHwmon 0 (the INF
+                                            // default) means no port access happens at all. With the gate
+                                            // open the start proves the chip from the EC window alone
+                                            // (firmware version, build date, customer ID, the monitor's own
+                                            // run bit and the two present masks) and refuses to read a
+                                            // window that does not answer like this chip. The governor
+                                            // thread then samples once a second, publishes one snapshot
+                                            // under a spin lock, and RUN_HWMON hands that snapshot out.
+                                            // The escape reads no port, so it keeps
+                                            // NoAdapterSynchronization alone and never stalls a frame.
+                                            //
+                                            // What is read: every present tachometer (raw RPM), every
+                                            // present duty output (read-back only), the fan mode mask, the
+                                            // fan engine status and the monitor's own temperature channels,
+                                            // which on unit A are the APU over SB-TSI and two board
+                                            // thermistors. Nothing is ever written: there is no duty write,
+                                            // no mode write, no limit write and no HWM_CFG write, and the
+                                            // allowlist in driver/shim/bc250_hwmon.c refuses every write by
+                                            // rule with a host test behind it. The Super I/O configuration
+                                            // ports 0x2E/0x2F are never touched either, because the DSDT
+                                            // drives that pair under an ACPI mutex this driver cannot take.
+                                            //
+                                            // The reading changes no decision in the driver: DPM thresholds,
+                                            // the thermal cap, the ramp and the idle point are unchanged,
+                                            // and bc250_dpm_step gains no fan input. The BIOS still owns
+                                            // the fan. No other escape structure and no other ABI changed.
+                                            //
+                                            // revision 207 (INF 0.7.207.1, on 205.1): the b18 train driver. It
                                             // carries three changes that were written apart as 0.7.195.1,
                                             // 0.7.206.1 and 0.7.206.2. None of those three revisions was
                                             // ever deployed. The train keeps all three and takes the next
@@ -416,6 +451,70 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
     unsigned long DefaultHotStepMs, DefaultSoftReleaseDeltaMc, DefaultSoftReleaseStepMs;    // out
     unsigned long Reserved2[2];             // zero in, zero out
 } BC250_ESCAPE_DPM_TUNE; // 152 bytes on Windows, ABI 2 (the first 120 are ABI 1)
+
+// The board's hardware monitor (driver/kmd/hwmon.c, driver/shim/bc250_hwmon.c, docs/design/fan.md). The
+// ASRock BC-250 carries a Nuvoton NCT6686D Super I/O. Its embedded controller turns the case fan from the
+// BIOS "Fan Setting" curve; this escape only reports what the chip says. Adapter-owned software snapshot,
+// published by the governor thread once a second: the escape reads no port and sends no message, so it takes
+// NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, exactly as RUN_DPM. READ is the
+// only operation and is open to every caller; there is no write operation at all, here or anywhere else in
+// the driver.
+//
+// Rpm[i] is raw RPM of tachometer i; 0 means either a channel that does not turn or a value this driver
+// refused, and the two are told apart by FanPresentMask and by the counters. DutyPermille[i] is the duty
+// READ-BACK of output i, 0..1000. Until DUTY_PROVEN is set the duty is a number the chip reports and not a
+// proven description of the fan that turns: at E01 all five duty channels read 245 of 255 (96 %) while the
+// fan turned at 1589 RPM, which is about half of this board's measured full-duty speed, and those two do not
+// belong to the same fan. One lab trial settles it, and HwmonDutyProven then opens the flag.
+// TemperatureMc[i] is the monitor's own channel i with its source code in TemperatureSource[i]: 0x46 is the
+// APU over SB-TSI (an independent second reading of the temperature the SMU reports as Tctl), 0x08 and 0x09
+// are board thermistors. ModeMask is 0xA00 as read, one bit per channel, set meaning manual; it is
+// documented by the out-of-tree nct6687d alone, so it is UNPROVEN on this board and no decision reads it.
+// AgeMs counts from the last accepted sample at the time of the escape, so a stopped sampler shows its age
+// growing. Reason is enum bc250_hwmon_reason (driver/shim/include/bc250_hwmon.h) and says why VALID is clear.
+#define BC250_HWMON_ABI 1u
+#define BC250_HWMON_OP_READ 0u
+#define BC250_HWMON_FAN_SLOTS 8u             // tachometer and duty slots on the wire
+#define BC250_HWMON_TEMP_SLOTS 4u            // temperature channels on the wire
+#define BC250_HWMON_FLAG_VALID 1u            // the identity passed and the reader is online
+#define BC250_HWMON_FLAG_MONITORING 2u        // HWM_CFG bit 7 was set at start: the firmware monitors
+#define BC250_HWMON_FLAG_FRESH 4u            // AgeMs is inside the freshness window (three missed samples)
+#define BC250_HWMON_FLAG_GATED 8u            // EnableHwmon is 0: no port access ever happened
+#define BC250_HWMON_FLAG_ID_PINNED 16u       // HwmonExpectId was set and matched
+#define BC250_HWMON_FLAG_DUTY_PROVEN 32u     // HwmonDutyProven is 1: a lab trial proved the duty read-back
+#define BC250_HWMON_FLAG_STOPPED 64u         // a duty output runs and no tachometer turns
+// Monitor source codes, so that a tool can name a channel without the shim header. Identical definitions live in
+// driver/shim/include/bc250_hwmon.h, which the driver includes beside this file; the guard keeps that legal and
+// the values are the ones measured on unit A through the Linux labels (E01 sensors-all.txt).
+#ifndef BC250_HWMON_SOURCE_APU
+#define BC250_HWMON_SOURCE_APU 0x46u         // AMD TSI at SMBus 0x98: the APU die, 83.0 C at E01
+#endif
+#ifndef BC250_HWMON_SOURCE_THERMISTOR14
+#define BC250_HWMON_SOURCE_THERMISTOR14 0x08u
+#endif
+#ifndef BC250_HWMON_SOURCE_THERMISTOR15
+#define BC250_HWMON_SOURCE_THERMISTOR15 0x09u
+#endif
+typedef struct _BC250_ESCAPE_HWMON {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long BasePort;                 // the EC window in use, 0 when the reader is offline
+    unsigned long CustomerId;               // EC 0x602
+    unsigned long EcVersion;                // high << 8 | low
+    unsigned long EcBuild;                  // year << 16 | month << 8 | day
+    unsigned long FanPresentMask;           // bit i: tachometer i exists
+    unsigned long DutyPresentMask;          // bit i: duty output i exists
+    unsigned long ModeMask;                 // 0xA00 as read; UNPROVEN on this board
+    unsigned long Rpm[BC250_HWMON_FAN_SLOTS];
+    unsigned long DutyPermille[BC250_HWMON_FAN_SLOTS];
+    long TemperatureMc[BC250_HWMON_TEMP_SLOTS];
+    unsigned long TemperatureSource[BC250_HWMON_TEMP_SLOTS];
+    unsigned long AgeMs;                    // since the last accepted sample
+    unsigned long long Samples, Errors, Retries;
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long Reason;                   // enum bc250_hwmon_reason when VALID is clear
+    unsigned long Reserved;                 // zero in, zero out
+} BC250_ESCAPE_HWMON; // 200 bytes on Windows, ABI 1
 
 // GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
 // software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes

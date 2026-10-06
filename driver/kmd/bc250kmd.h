@@ -72,6 +72,7 @@
 #include "progress.h"
 #include "cumode.h"
 #include "dpm.h"
+#include "hwmon.h"
 #include "interop.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
@@ -155,6 +156,7 @@ typedef struct _BC250_DEVICE {
     BC250_CU_MODE_STATE CuMode;        // cumode.c: 24 or 40 CUs, the boot guard, what the caps report
     BC250_DPM_STATE Dpm;               // dpm.c: the load-driven clock governor, its guard and telemetry
     BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
+    BC250_HWMON_OWNER Hwmon;           // hwmon.c: the board's own hardware monitor, read only, gated
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -364,6 +366,15 @@ void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 void DpmTuneRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM_TUNE* Data, ULONG Size, BOOLEAN Admin,
                     ULONG EscapeFlags);
+
+// hwmon.c
+struct _BC250_ESCAPE_HWMON;
+void HwmonInitialize(BC250_HWMON_OWNER* Owner);
+void HwmonStart(BC250_DEVICE* Device);
+void HwmonStop(BC250_HWMON_OWNER* Owner);
+void HwmonSample(BC250_DEVICE* Device);                 // the governor thread, PASSIVE_LEVEL, once a second
+void HwmonLogLine(BC250_DEVICE* Device, _In_z_ const char* What);
+void HwmonRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_HWMON* Data, ULONG EscapeFlags);
 
 // interop.c
 struct _BC250_ESCAPE_INTEROP;

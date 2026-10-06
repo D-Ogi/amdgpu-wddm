@@ -233,6 +233,7 @@ static ULONGLONG DpmBusyTotal(BC250_DEVICE* Device, BC250_DPM_STATE* S, ULONGLON
 
 typedef struct _DPM_TICK {
     ULONGLONG Begin, Last, LastBusy, NextVerify, NextLog, Ticks, ClockAt;
+    ULONGLONG NextHwmon;                    // the board's hardware monitor, its own cadence (hwmon.c)
     ULONG Permille, ObservedMHz, ObservedVid, Target;
     ULONG SubmitPermille, SdmaPermille, HwSamples;
     enum bc250_dpm_busy_source Source;
@@ -588,6 +589,15 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
             }
         }
     }
+    if (now >= T->NextHwmon) {
+        // The board's own hardware monitor (hwmon.c): the fan speed, the duty read-back and the chip's own
+        // temperature channels. Its own counter and not NextVerify, so a change to the SMU readback period
+        // cannot move the fan cadence. This thread is an ordinary system thread at PASSIVE_LEVEL, which is
+        // what the chip's port sequence needs, and it runs in fixed-lab mode as well as under DPM. The gate
+        // EnableHwmon decides whether anything happens at all; HwmonSample returns at once when it is closed.
+        T->NextHwmon = now + 10000ull * BC250_HWMON_PERIOD_MS;
+        HwmonSample(Device);
+    }
     DpmPublish(Device, S, T, TRUE);
     if (now >= T->NextLog) {
         BC250_DPM_SNAP snap;
@@ -601,6 +611,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         KeReleaseSpinLock(&S->SnapLock, irql);
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
+        HwmonLogLine(Device, "telemetry");
         // A tuned governor says so next to every telemetry line (a trial's kernel stream then shows what ran).
         bc250_dpm_tune_default(&defaults);
         if (!TuneEqual(&S->Gov.tune, &defaults) || serial != S->TuneTaken)
@@ -620,6 +631,7 @@ static void DpmThread(_In_ PVOID Context)
     tick.Begin = tick.Last = KeQueryInterruptTime();
     tick.LastBusy = DpmBusyTotal(device, s, tick.Begin, NULL);
     tick.NextVerify = tick.Begin;
+    tick.NextHwmon = tick.Begin;
     tick.NextLog = tick.Begin + 10000ull * BC250_DPM_LOG_MS;
     period.QuadPart = -10000ll * BC250_DPM_TICK_MS;
     while (KeWaitForSingleObject(&s->StopEvent, Executive, KernelMode, FALSE, &period) == STATUS_TIMEOUT) {
@@ -913,6 +925,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
+    HwmonLogLine(Device, "summary");
     // The values the escape stored (the governor takes them at its next tick: applied == serial once it has).
     DpmLogTune("summary tune", &tune, serial, snap.TuneApplied, snap.FloorTicks, snap.SoftReleases);
 }

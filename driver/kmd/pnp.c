@@ -15,6 +15,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     DpmInitialize(device);
     InteropInitialize(device);
     SmuOwnerInitialize(&device->Smu);
+    HwmonInitialize(&device->Hwmon);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
@@ -96,6 +97,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
     NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
+    HwmonStart(device);     // the board's hardware monitor, read only; same rule, and gated to off
     // Set only after removing the legacy bc250rd mailbox writer. No implicit
     // fallback: full-WDDM startup requires this owner through SmuPrepareClock.
     if (GuardReadSetting(L"EnableNativeSmu",0)==1) {
@@ -158,6 +160,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     GuardStage(StageStopEnter);
     device->InheritedSignalValid=FALSE;
     DpmStop(device);        // the floor while the owner is still online, then no governor tick
+    HwmonStop(&device->Hwmon);  // after DpmStop: the governor thread is the one that samples it
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
     device->SystemDisplayReady=FALSE;
     device->PostDisplayStopAttempted=FALSE;
