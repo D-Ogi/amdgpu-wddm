@@ -201,10 +201,10 @@ int main() {
               "decode: a surface with no bind flag is admitted");
     }
 
-    // Which check decided, by name. One status for sixteen checks is unreadable in a log: a cross-API open that
-    // declined "at record" cost a lab pass and a 1.4 MB DDI trace before anyone knew that the other shell had
-    // written a 16-byte E26R v2 record (BD-075 round 2, 2026-10-06). These names are what the driver's refusal line
-    // prints and what the lab kit matches, so they are part of the contract.
+    // Which check decided, by name. One status for seventeen checks puts the reason behind one word: a cross-API
+    // open that declined "at record" had written "resource private data 16 bytes (version 2)" on the same line, and
+    // what cost a lab pass was that the kit never surfaced that line (BD-075 round 2, 2026-10-06). These names are
+    // what the driver's refusal line prints and what the lab kit matches, so they are part of the contract.
     {
         BC250_SHARED_SURFACE out;
         const char* why = 0;
@@ -217,13 +217,20 @@ int main() {
         check(is(why, BC250_SHARED_SURFACE_WHY_LENGTH), "why: a 16-byte E26R v2 record is \"record length\"");
         why = 0;
         Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), kAllocation, 31, &out, &why);
-        check(is(why, BC250_SHARED_SURFACE_WHY_LENGTH), "why: a short allocation record is \"record length\"");
+        check(is(why, BC250_SHARED_SURFACE_WHY_ALLOCATION_LENGTH),
+              "why: a short allocation record is \"allocation length\"");
         why = 0;
         Bc250SharedSurfaceDecodeWhy(0, sizeof(kResource), kAllocation, sizeof(kAllocation), &out, &why);
         check(is(why, BC250_SHARED_SURFACE_WHY_ARGUMENTS), "why: a null blob is \"record arguments\"");
         check(is(why_with(4, 2), BC250_SHARED_SURFACE_WHY_VERSION), "why: version 2 in 64 bytes is \"record version\"");
         check(is(why_with(0, 0x52363246ul), BC250_SHARED_SURFACE_WHY_MAGIC), "why: another magic is \"record magic\"");
         check(is(why_with(8, 0), BC250_SHARED_SURFACE_WHY_SHARED), "why: Shared 0 is \"record shared\"");
+        // The kernel driver's own parser, before any field of ours: Shared above 1 and a SCANOUT intent with no
+        // PRIMARY are both records it refuses, and an opener that admitted one would describe memory the kernel
+        // placed by another rule. Pinned because the name is part of the contract (BD-075 review, 2026-10-06).
+        check(is(why_with(8, 2), BC250_SHARED_SURFACE_WHY_POLICY), "why: Shared 2 is \"record policy\"");
+        check(is(why_with(12, BC250_SURFACE_RESOURCE_SCANOUT), BC250_SHARED_SURFACE_WHY_POLICY),
+              "why: a SCANOUT intent with no PRIMARY is \"record policy\"");
         check(is(why_with(12, BC250_SURFACE_RESOURCE_CPU_READ), BC250_SHARED_SURFACE_WHY_ACCESS),
               "why: a CPU_READ intent is \"record access\"");
         check(is(why_with(16, 255), BC250_SHARED_SURFACE_WHY_GEOMETRY),
@@ -253,6 +260,20 @@ int main() {
         Bc250SharedSurfaceDecodeWhy(kResource, sizeof(kResource), lb7a, sizeof(lb7a), &out, &why);
         check(is(why, BC250_SHARED_SURFACE_WHY_ALLOCATION_GEOMETRY),
               "why: a pitch below one row is \"allocation geometry\"");
+        // The extent check needs the edge wrong in BOTH records: an edge wrong in one of them is the geometry
+        // disagreement above, which decides first. 20000 is past BC250_SHARED_MAX_EDGE (16384), and the kernel
+        // driver's policy does not read the width, so the extent name is what the refusal says. Pinned because
+        // the name is part of the contract (BD-075 review, 2026-10-06).
+        unsigned char wide[64];
+        std::memcpy(wide, kResource, sizeof(wide));
+        wide[16] = 0x20;                                // Width 20000 (0x4E20) in the resource record
+        wide[17] = 0x4E;
+        std::memcpy(lb7a, kAllocation, sizeof(lb7a));
+        lb7a[8] = 0x20;                                 // and the same width in the allocation record
+        lb7a[9] = 0x4E;
+        why = 0;
+        Bc250SharedSurfaceDecodeWhy(wide, sizeof(wide), lb7a, sizeof(lb7a), &out, &why);
+        check(is(why, BC250_SHARED_SURFACE_WHY_EXTENT), "why: an edge past 16384 in both records is \"record extent\"");
     }
 
     // The allocation record's geometry, against the row the resource record names: 4 bytes a pixel here.

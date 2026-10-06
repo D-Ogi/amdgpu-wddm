@@ -59,15 +59,19 @@ extern "C" {
 #define BC250_SHARED_SURFACE_MALFORMED 1
 #define BC250_SHARED_SURFACE_FORMAT    2
 
-/* Which check a decode decided at. One status covers sixteen checks, and an opener's refusal line
- * that says only "record" cannot be read: round 1 of BD-075 took a lab pass and a trace to learn
- * that a cross-API open declines because the other shell wrote a 16-byte E26R v2 record where this
- * one admits 64-byte v3 (2026-10-06). Every string is a literal of this header, so a caller may
- * keep the pointer and print it. They are also what docs/d3d12-shared-resources.md lists and what
- * the lab kit matches, so a name is part of the contract and is not renamed silently. */
+/* Which check a decode decided at. One status covers seventeen checks, and a refusal line that says
+ * only "record" makes a reader derive the reason from the fields printed beside it: in round 1 of
+ * BD-075 a cross-API open declined because the other shell wrote a 16-byte E26R v2 record where this
+ * one admits 64-byte v3, and the line did carry "resource private data 16 bytes (version 2)" - what
+ * cost a lab pass was that the kit never surfaced the line (2026-10-06). The name puts the reason
+ * first; it adds no information the record did not already have. Every string is a literal of this
+ * header, so a caller may keep the pointer and print it. They are also what
+ * docs/d3d12-shared-resources.md lists and what the lab kit matches, so a name is part of the
+ * contract and is not renamed silently. */
 #define BC250_SHARED_SURFACE_WHY_OK                   "record"
 #define BC250_SHARED_SURFACE_WHY_ARGUMENTS            "record arguments"
 #define BC250_SHARED_SURFACE_WHY_LENGTH               "record length"
+#define BC250_SHARED_SURFACE_WHY_ALLOCATION_LENGTH    "allocation length"
 #define BC250_SHARED_SURFACE_WHY_ALLOCATION_RECORD    "allocation record"
 #define BC250_SHARED_SURFACE_WHY_MAGIC                "record magic"
 #define BC250_SHARED_SURFACE_WHY_VERSION              "record version"
@@ -198,8 +202,7 @@ static __inline int Bc250SharedSurfaceEncode(const BC250_SHARED_SURFACE *Surface
  * written only on success. Why, when it is given, is set on every path to the check that decided -
  * one of the BC250_SHARED_SURFACE_WHY_* strings above - so that an opener's refusal line names the
  * field the producer got wrong instead of the word "record". The cross-API failures of BD-075 round
- * 1 all declined here, and one shared name for sixteen checks cost a lab pass to tell apart
- * (2026-10-06). */
+ * 1 all declined here, which is seventeen checks behind one word (2026-10-06). */
 static __inline int Bc250SharedSurfaceDecodeDetail(const void *ResourceData, unsigned int ResourceBytes,
                                                    const void *AllocationData, unsigned int AllocationBytes,
                                                    const BC250_SHARED_SURFACE_ADMIT *Admit,
@@ -225,8 +228,14 @@ static __inline int Bc250SharedSurfaceDecodeDetail(const void *ResourceData, uns
     for (;;) {
         if (!Out || !Admit || !ResourceData || !AllocationData)
             break;
+        /* The two blobs come from two producers' code paths and are two separate refusals: a 16-byte E26R
+         * v2 resource record (the Mesa CPU UMD's, BD-075 round 1) and a short or long LB7A are different
+         * mistakes, and one name for both would let a regression in either print the other's reason. */
         why = BC250_SHARED_SURFACE_WHY_LENGTH;
-        if (ResourceBytes != (unsigned int)sizeof(r) || AllocationBytes != (unsigned int)sizeof(a))
+        if (ResourceBytes != (unsigned int)sizeof(r))
+            break;
+        why = BC250_SHARED_SURFACE_WHY_ALLOCATION_LENGTH;
+        if (AllocationBytes != (unsigned int)sizeof(a))
             break;
         /* Byte copies: the blobs are the runtime's memory and need no alignment of ours. */
         src = (const unsigned char *)AllocationData;
