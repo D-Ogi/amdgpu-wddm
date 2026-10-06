@@ -391,8 +391,20 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // buffer is admitted as a scan-out primary instead, so the display pipeline can read it
         // directly. The mode is off by default; the kernel driver decides whether any flip of the
         // surface is admitted, against the POST geometry and the segment the allocation landed in.
-        const auto* composed=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
-                                                       AMDGPU_WDDM_SURFACE_COMPOSED);
+        // BD-075 round 2 (2026-10-06): a shared surface is looked up with Bc250SharedSurfaceFormat, which admits
+        // a storage format OR the sRGB view that shares that storage and that LB7A row - the same lookup the wire's
+        // encoder, the D3D11 shell and engine-ddi's composed_format use. This gate was the last caller of
+        // amdgpu_wddm_surface_format_by_dxgi for a shared surface, the storage column alone, and it is where
+        // s12to11-srgb died: engine-ddi admitted B8G8R8A8_UNORM_SRGB (91) and retried, the shell found no row and
+        // refused with "shared surface format" E_NOTIMPL, which the create slot reported as E_OUTOFMEMORY. A format
+        // the wire admits and this gate refuses is uncreatable with nothing saying why.
+        // A primary keeps the storage column: a primary's D3DDDIFORMAT cannot express an sRGB view, and the
+        // SCANOUT_PRIMARY X8 row has no DXGI format at all (dxgi == 0), so Bc250SharedSurfaceFormat would never
+        // return it.
+        const auto* composed=shared_surface
+            ?Bc250SharedSurfaceFormat(static_cast<unsigned long>(r->Format))
+            :amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
+                                       AMDGPU_WDDM_SURFACE_COMPOSED);
         const auto* row=composed;
         // present-cached and present-noprimary describe the opposite intent for the same buffer, so
         // scan-out stands down rather than failing the allocation when either is also listed. The mode

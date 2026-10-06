@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cstdio>
 #include <string>
+#include <tuple>
 #include <utility>
 using namespace native12;
 template<class T> T handle(uintptr_t n){return reinterpret_cast<T>(n);}
@@ -339,6 +340,11 @@ int main(){
    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
   target.Width=256;surface_width=256;surface_format=D3DDDIFMT_A8B8G8R8;
   target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  // A primary keeps the storage column: there is no D3DDDIFORMAT for an sRGB view, so a primary asked for in one
+  // is refused here and not quietly given the UNORM row (BD-075 round 2, where the shared surface moved to
+  // Bc250SharedSurfaceFormat and the primary did not).
+  target.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;refused(E_NOTIMPL);
+  target.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
   target.MipLevels=2;refused(E_NOTIMPL);target.MipLevels=1;
   target.SampleDesc.Count=4;refused(E_NOTIMPL);target.SampleDesc.Count=1;
   target.DepthOrArraySize=2;refused(E_NOTIMPL);target.DepthOrArraySize=1;
@@ -449,6 +455,22 @@ int main(){
   // The geometry and the format are the surface rules, under the shared names.
   target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL,"shared surface format");
   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  // BD-075 round 2: a shared surface's format is Bc250SharedSurfaceFormat's, so the sRGB view of either 8-bit row
+  // is admitted and publishes its storage row - the LB7A format and the record's own DXGI number, which is the
+  // view the creator asked for. This gate was the storage column alone, and s12to11-srgb died here with
+  // "shared surface format" after engine-ddi had already admitted the description and retried (lab 03:06Z).
+  // The other COMPOSED rows have no sRGB sibling, so there is nothing more to admit.
+  for(const auto row:{std::tuple<DXGI_FORMAT,DXGI_FORMAT,unsigned long>
+                      {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8},
+                      {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8}}){
+   target.Format=std::get<0>(row);shared_dxgi=std::get<1>(row);surface_format=std::get<2>(row);
+   const auto before=shared_created;events.clear();
+   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   assert(shared_created==before+1);
+   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+  }
+  target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;
+  surface_format=D3DDDIFMT_A8R8G8B8;
   s.surface_layout_size=65537;refused(E_INVALIDARG,"shared surface layout");s.surface_layout_size=65536;
   s.surface_row_pitch=0;refused(E_INVALIDARG,"shared surface layout");s.surface_row_pitch=1024;
   target.MipLevels=2;refused(E_NOTIMPL,"shared surface shape");target.MipLevels=1;
