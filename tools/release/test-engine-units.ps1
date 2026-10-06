@@ -309,6 +309,29 @@ Check ((-not @($sp.remove).Count) -and ($sp.why -match 'oem20\.inf')) "a package
 $sp = Get-DriverStoreRemovePlan -Packages @($store[2]) -BoundPublished 'oem15.inf' -PreviousVersion '0.7.208.100'
 Check ((-not @($sp.remove).Count) -and ((@($sp.keep) -join ',') -eq 'oem15.inf')) 'a first install leaves one package and removes nothing'
 
+'[BD-089] what is left of this release (the list uninstall.ps1 prints at the end)'
+$saveStateDir = $script:StateDir
+$script:StateDir = Join-Path $work 'footprint-state\installer'
+$fpRoot = Join-Path $work 'footprint\install-root'
+$fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
+$items = @($fp | ForEach-Object { $_.item })
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'certificates', 'GPU firmware', 'control application data')
+Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
+Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
+$byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
+Check ((-not $byItem['install root'].present) -and ($byItem['install root'].detail -match 'is gone')) 'an install root that is not there is gone'
+Check ((@($byItem['H.264 encoder keys']).present) -and ($byItem['H.264 encoder keys'].detail -match '\{test\}')) 'the encoder keys come from the caller (uninstall.ps1 reads them with the classes key it uses)'
+Check (($byItem['GPU firmware'].kept) -and ($byItem['control application data'].kept) -and -not @($fp | Where-Object { $_.kept -and $_.item -notin @('GPU firmware', 'control application data') }).Count) 'only the firmware folder that was there before the install and the control data are kept on purpose'
+Write-Text (Join-Path $fpRoot 'manifest.json') '{}'
+Write-Text (Join-Path $script:StateDir 'state.json') '{}'
+$fp2 = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State $null)
+$byItem2 = @{}; foreach ($row in $fp2) { $byItem2[$row.item] = $row }
+Check ($byItem2['install root'].present -and ($byItem2['install root'].detail -match 'is there')) 'an install root that is there is reported as there'
+Check ($byItem2['installer state'].present -and -not $byItem2['installer state'].kept) 'the installer state folder is reported, and it is not a kept item'
+Check (-not $byItem2['GPU firmware'].kept) 'a firmware folder that the install created itself is not a kept item'
+Check (-not @($fp2 | Where-Object { $_.item -eq 'H.264 encoder keys' } | Where-Object { $_.present }).Count) 'no encoder key given: the row says none'
+$script:StateDir = $saveStateDir
+
 $saveStateDir = $script:StateDir
 $script:StateDir = Join-Path $work 'bd089-state'
 Write-Text (Join-Path (Get-ClosureDir '0.7.208.100-tester.13') 'manifest.json') '{ "version": "0.7.208.100-tester.13", "kmd_version": "0.7.208.100" }'

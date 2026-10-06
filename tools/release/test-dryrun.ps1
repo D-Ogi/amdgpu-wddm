@@ -169,7 +169,12 @@ Check ($bad.Count -eq 0) "no installer script stops or restarts DWM, a service o
 $bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
 Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
 $pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, "Invoke-Native pnputil\.exe @\('(/[a-z-]+)'")) { "$($s.name) $($mm.Groups[1].Value)" } })
-Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'common.ps1 /enum-drivers, install.ps1 /add-driver, install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+# BD-089: the install deletes an older package of ours from the driver store, and it must not touch the device while
+# it does it. The uninstall takes the GPU off our driver on purpose, so there both switches belong.
+Check (($src -match "Invoke-Native pnputil\.exe @\('/delete-driver', \`$oldPackage\)") -and ($src -notmatch "'/delete-driver'[^\r\n]*/uninstall")) 'install.ps1 deletes an older driver package without /uninstall and without /force'
+$unsrc = [IO.File]::ReadAllText((Join-Path $Package 'installer\uninstall.ps1'))
+Check ($unsrc -match "@\('/delete-driver', \`$p, '/uninstall', '/force'\)") 'uninstall.ps1 removes the package of the GPU with /uninstall /force (the GPU goes back to Microsoft Basic Display Adapter)'
 $pos = @('Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile))', "Invoke-Change 'pnputil /add-driver") | ForEach-Object { $src.IndexOf($_) }
 Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1])) 'install.ps1 refuses a package INF without the Reboot directive before pnputil'
 Check ($r.text -match 'would: pnputil /add-driver payload\\kmd\\bc250kmd\.inf /install \(the GPU changes to it at the next restart\)') 'the walk-through shows the driver package for the next restart'
@@ -503,6 +508,15 @@ $mftAt = $r.text.IndexOf('would: remove the H.264 encoder MFT registration')
 $rootAt = $r.text.IndexOf('would: remove ' + (Join-Path $env:ProgramFiles 'amdgpu-wddm'))
 Check (($mftAt -gt 0) -and ($rootAt -gt $mftAt)) 'the encoder keys go before the install root, so no COM registration points at a DLL that is gone'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
+# BD-089, the clean slate: every item of ours goes, and the uninstaller ends with the list of what is on the computer.
+Check ($r.text -match "would: unregister our scheduled task\(s\): (none on this computer \(this release registers 'amdgpu-wddm start confirm'\)|[^\r\n]*amdgpu-wddm)") 'every scheduled task of ours is unregistered, not only the one of this release'
+Check ($r.text -match 'would: remove HKLM:\\SOFTWARE\\amdgpu-wddm \(router policy, application profile, release record\), HKLM:\\SOFTWARE\\WOW6432Node\\amdgpu-wddm and HKCU:\\Software\\amdgpu-wddm') 'the policy keys of both registry views and the app preferences of this account go'
+Check ($r.text -match 'would: remove the bc250kmd service entry and its settings in HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd') 'the service key goes with its Parameters, which a next install would otherwise keep as the tester''s own settings'
+Check (($r.text -match 'would: remove certificate [0-9A-F]{40} from LocalMachine Root and TrustedPublisher') -and ($r.text -match 'no other test certificate of ours in Root or TrustedPublisher|would: remove \d+ more test certificate\(s\) of ours')) 'the certificate of this release goes, and so does one of an older release of ours'
+$fpItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'certificates', 'GPU firmware', 'control application data')
+$fpMissing = @($fpItems | Where-Object { $r.text -notmatch ('(?m)^\s*\[(gone|kept|LEFT)\] ' + [regex]::Escape($_) + '\s') })
+Check (($r.text -match '== What is left of this release') -and -not $fpMissing.Count) "the uninstaller ends with the list of what is left, all $($fpItems.Count) items$(if ($fpMissing.Count) { '; missing: ' + ($fpMissing -join ', ') })"
+Check ($r.text -match 'Dry run complete: nothing was changed, so the list above is this computer as it is now \(\d+ item\(s\) of this release\)') 'the dry run says that the list is the computer as it is now'
 if ($r.code -ne 0) { $r.text }
 Remove-Item -LiteralPath $dir -Recurse -Force
 $after = Get-Footprint
