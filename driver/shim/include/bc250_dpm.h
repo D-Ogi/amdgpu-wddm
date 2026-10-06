@@ -96,6 +96,8 @@ struct bc250_dpm_request {
 	unsigned int	confirmed;
 	int		session_present;	/* DpmSession: a start ran above the floor and did not end */
 	unsigned int	session;
+	int		closed_present;		/* DpmClosedReason: the driver itself wrote the fixed mode (0.7.208) */
+	unsigned int	closed;
 };
 
 struct bc250_dpm_decision {
@@ -109,6 +111,15 @@ struct bc250_dpm_decision {
 	int		clear_pending;		/* a stale mark of a request that is no longer made */
 	int		clear_session;		/* a stale marker of a fixed start (nothing ran above the floor) */
 	int		confirmed;		/* Confirmed == encoded: no pending mark for this start */
+	/* The durable record of a fallback (0.7.208), the way interop_policy.c keeps InteropClosedReason.
+	 * force_fixed writes closed_reason into DpmClosedReason, so the next boot still knows that the driver
+	 * wrote DpmMode 0 and the release installer does not read the 0 as a setting of the tester (BD-069).
+	 * DpmLastReason cannot carry that: every start overwrites it, and a start that reads DpmMode 0 writes
+	 * NOT_REQUESTED over the fallback. */
+	unsigned int	closed_reason;		/* the record after this start: force_fixed writes this value into
+						 * DpmClosedReason (driver/kmd/dpm.c PersistFallback), every other
+						 * start reports here what the key keeps. 0 for no record */
+	int		clear_closed;		/* delete DpmClosedReason: DpmMode is not the fixed mode any more */
 };
 
 void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decision *d);

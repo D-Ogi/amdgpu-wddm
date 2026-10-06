@@ -657,15 +657,37 @@ class Run(object):
 
     @property
     def objects_summary(self):
-        """The driver's own count, written into the log at the stop."""
+        """The driver's own count, written into the log at the stop.
+
+        One line up to KMD 0.7.207, two from 0.7.208 on: the nine counters at their widest did
+        not fit the 160-byte log line, so the allocation pair moved to a second line of the same
+        name (BD-070). The driver writes the allocation line first and the line that ends in
+        "N alive" last, so one stop summary is one block of one or two lines.
+
+        This reads the FIRST block and stops there, exactly where the one-line parser stopped. A
+        ring can hold several stop summaries, from an adapter that was started and stopped more
+        than once, and numbers from two of them must never be mixed into one row: merging the
+        whole ring changed what 119 of the 1104 archived logs report.
+
+        A block without its "N alive" line gives (pairs, None). A 0.7.207 line that the log
+        truncated reads that way, so every caller has to handle the missing count.
+        """
+        pairs = {}
         for entry in self.ring.sequence():
             if entry.kind != "summary":
                 continue
-            m = re.search(r"objects created/destroyed: (.+?), (\d+) alive", entry.text)
-            if m:
-                pairs = re.findall(r"(\w+) (\d+)/(\d+)", m.group(1))
-                return {what: (int(a), int(b)) for what, a, b in pairs}, int(m.group(2))
-        return None, None
+            m = re.search(r"objects created/destroyed: (.+)$", entry.text)
+            if not m:
+                continue
+            body = m.group(1)
+            tail = re.search(r", (\d+) alive$", body)
+            if tail:
+                body = body[:tail.start()]
+            pairs.update({what: (int(a), int(b))
+                          for what, a, b in re.findall(r"(\w+) (\d+)/(\d+)", body)})
+            if tail:
+                return (pairs or None), int(tail.group(1))
+        return (pairs or None), None
 
     @property
     def summary_ddi_calls(self):
@@ -1125,8 +1147,11 @@ def show_report(run):
     tail = []
     summary_objects, alive = run.objects_summary
     if summary_objects:
-        tail.append(("objects", "%s, %d alive  (counted by the driver at the stop)" % (
-            ", ".join("%s %d/%d" % (k, v[0], v[1]) for k, v in summary_objects.items()), alive)))
+        # The live count can be missing: a truncated 0.7.207 line, or a ring that kept the
+        # allocation line of a 0.7.208 pair and lost the other one. Say so instead of crashing.
+        tail.append(("objects", "%s%s  (counted by the driver at the stop)" % (
+            ", ".join("%s %d/%d" % (k, v[0], v[1]) for k, v in summary_objects.items()),
+            ", %d alive" % alive if alive is not None else ", the live count is not in the log")))
     tail.append(("last stage", stage_label(run.last_stage) if run.last_stage is not None else "none"))
     tail.append(("stage history", " ".join(str(s) for s in run.stages)))
 

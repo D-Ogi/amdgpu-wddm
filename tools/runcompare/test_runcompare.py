@@ -233,6 +233,61 @@ class TestNormalize(unittest.TestCase):
         self.assertEqual(rc.normalize_log_lines(MINIMAL), rc.normalize_log_lines(later))
 
 
+class TestObjectsSummary(unittest.TestCase):
+    """One line up to KMD 0.7.207, two from 0.7.208 on (BD-070): both read the same."""
+
+    ONE = MINIMAL[:7] + [
+        "    14      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1 "
+        "alloc 7/6, 3 alive",
+    ]
+    # The driver writes the allocation pair first and the line that ends in "alive" last, so one
+    # stop summary is one block, and a reader which keeps the last line of this name still gets
+    # the live count.
+    TWO = MINIMAL[:7] + [
+        "    14      0.300 wddm summary: objects created/destroyed: alloc 7/6",
+        "    15      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1, "
+        "3 alive",
+    ]
+    # Two starts and two stops in one ring. Only the first block may reach the caller.
+    TWICE = TWO + [
+        "    16      0.400 wddm summary: objects created/destroyed: alloc 90/80",
+        "    17      0.400 wddm summary: objects created/destroyed: dev 9/8 ctx 7/6 proc 5/4, "
+        "11 alive",
+    ]
+    # A 0.7.207 line that the 159-character log line cut short: the pairs are there, the live
+    # count is gone. BD-070 is exactly this shape.
+    TRUNCATED = MINIMAL[:7] + [
+        "    14      0.300 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1 "
+        "alloc 7/6",
+    ]
+
+    def test_one_line_and_two_lines_agree(self):
+        for lines in (self.ONE, self.TWO):
+            pairs, alive = run_from(lines).objects_summary
+            self.assertEqual(pairs, {"dev": (2, 2), "ctx": (1, 1), "proc": (1, 1),
+                                     "alloc": (7, 6)})
+            self.assertEqual(alive, 3)
+
+    def test_a_second_stop_summary_does_not_reach_the_first_row(self):
+        pairs, alive = run_from(self.TWICE).objects_summary
+        self.assertEqual(pairs, {"dev": (2, 2), "ctx": (1, 1), "proc": (1, 1), "alloc": (7, 6)})
+        self.assertEqual(alive, 3)
+
+    def test_a_truncated_line_gives_the_pairs_and_no_live_count(self):
+        pairs, alive = run_from(self.TRUNCATED).objects_summary
+        self.assertEqual(pairs, {"dev": (2, 2), "ctx": (1, 1), "proc": (1, 1), "alloc": (7, 6)})
+        self.assertIsNone(alive)
+
+    def test_a_missing_live_count_is_reported_and_does_not_raise(self):
+        report = rc.show_report(run_from(self.TRUNCATED))
+        rows = dict(item for _, body in report for item in body
+                    if isinstance(item, tuple) and len(item) == 2)
+        self.assertIn("the live count is not in the log", rows["objects"])
+
+    def test_no_summary_at_all(self):
+        self.assertEqual(run_from(MINIMAL[:7]).objects_summary, (None, None))
+
+
 class TestDiffSynthetic(unittest.TestCase):
     def test_identical_runs(self):
         diff = rc.Difference(run_from(MINIMAL), run_from(MINIMAL))
