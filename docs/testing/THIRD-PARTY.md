@@ -23,7 +23,7 @@ and NOTICE in the package root).
 | `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `70b6f8388309888690a854ddf4cdf5ab35ea594f` (branch `m15/video-encode-mft`, `driver/umd/mft-h264`) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `3ef45a0f92f71980bdaa053be1d5b64c02f1b103` (branch `train/b19-setup`, `tools/win/amdgpu_wddm_control`) |
-| `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
+| `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `tools\release-witness.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 
 ## Third-party code in the package
 
